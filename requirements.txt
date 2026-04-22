@@ -1,5 +1,5 @@
 cleopatra >=0.2.7
-gdal >=3.5.3
+gdal >=3.12.3
 geopandas >=0.12.2
 geoplot >=0.5.1
 loguru >=0.6.0
