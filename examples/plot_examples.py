@@ -18,8 +18,8 @@ fig, ax = StaticGlyph.plot(
     dataset_1, title="Flow Accumulation", cbar_label="Flow Accumulation"
 )
 #%% rhine river
-dataset_1 = Dataset.read_file("exampxles/data/DEM5km_Rhine_burned_fill.tif")
-src_no_data_value = dataset_1.GetRasterBand(1).GetNoDataValue()
+dataset_1 = Dataset.read_file("examples/data/DEM5km_Rhine_burned_fill.tif")
+src_no_data_value = dataset_1.no_data_value[0]
 cmap = "terrain"
 #%%
 fig, ax = StaticGlyph.plot(
@@ -63,7 +63,7 @@ point_size = 100
 id_color = "yellow"
 id_size = 20
 
-display_cellvalue = True
+display_cell_value = True
 num_size = 8
 background_color_threshold = None
 ticks_spacing = 500
@@ -75,7 +75,7 @@ fig, ax = StaticGlyph.plot(
     pid_color=id_color,
     pid_size=id_size,
     points=points,
-    display_cellvalue=display_cellvalue,
+    display_cell_value=display_cell_value,
     num_size=num_size,
     background_color_threshold=background_color_threshold,
     ticks_spacing=ticks_spacing,

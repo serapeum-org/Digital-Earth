@@ -1,0 +1,3 @@
+# StaticGlyph
+
+::: digitalearth.static.StaticGlyph

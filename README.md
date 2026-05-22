@@ -66,9 +66,10 @@ Quick start
 ===========
 
 ```
-from digitalearth.map import Map
-src = gdal.Open("examples/data/acc4000.tif")
-fig, ax = Map.plot(src, title="Flow Accumulation", cbar_label="Flow Accumulation")  
+from pyramids.dataset import Dataset
+from digitalearth.static import StaticGlyph
+src = Dataset.read_file("examples/data/acc4000.tif")
+fig, ax = StaticGlyph.plot(src, title="Flow Accumulation", cbar_label="Flow Accumulation")
 ```
 ![Flowaccumulation](examples/images/flow_accumulation.png)
 ```
@@ -78,19 +79,19 @@ point_size = 100
 id_color = "yellow"
 id_size = 20
 
-display_cellvalue = True
+display_cell_value = True
 num_size = 8
 background_color_threshold = None
 ticks_spacing = 500
 
-fig, ax = Map.plot(
+fig, ax = StaticGlyph.plot(
             src,
             point_color=point_color,
             point_size=point_size,
             pid_color=id_color,
             pid_size=id_size,
             points=points,
-            display_cellvalue=display_cellvalue,
+            display_cell_value=display_cell_value,
             num_size=num_size,
             background_color_threshold=background_color_threshold,
             ticks_spacing=ticks_spacing,

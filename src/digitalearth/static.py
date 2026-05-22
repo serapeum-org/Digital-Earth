@@ -3,7 +3,7 @@ from typing import Any, List, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-from cleopatra.array import Array
+from cleopatra.array_glyph import ArrayGlyph
 from geopandas import GeoDataFrame
 from loguru import logger
 from pyramids.dataset import Dataset
@@ -83,7 +83,7 @@ class StaticGlyph:
                 linscale: Union[int, float] = 0.001,
                 linthresh: Union[int, float] = 0.0001,
                 midpoint: int = 0,
-                display_cellvalue: bool = False,
+                display_cell_value: bool = False,
                 background_color_threshold=None,
 
         Returns
@@ -111,21 +111,30 @@ class StaticGlyph:
         if no_data_value is not None:
             arr[np.isclose(arr, no_data_value, rtol=0.001)] = np.nan
 
-        if "points" in kwargs.keys():
-            points = kwargs["points"]
+        # Pop `points` out of kwargs: cleopatra's ArrayGlyph.plot now has a
+        # native `points` parameter expecting a 3-column [value, row, col]
+        # ndarray, whereas here `points` is a GeoDataFrame overlaid manually
+        # below. Keeping it in kwargs would clash with that native parameter.
+        points = kwargs.pop("points", None)
+        if points is not None:
             points["rows"] = np.nan
             points["col"] = np.nan
-            # to locte the points in the array
-            points.loc[:, ["rows", "col"]] = src.locate_points(points)
+            # locate the points in the array (row, col indices)
+            points.loc[:, ["rows", "col"]] = src.map_to_array_coordinates(points)
 
-        array = Array(arr, exclude_value=[no_data_value])
+        array = ArrayGlyph(arr, exclude_value=[no_data_value])
         fig, ax = array.plot(**kwargs)
 
         points_ids = list()
-        if "points" in kwargs.keys():
+        if points is not None:
             row = points.loc[:, "rows"].tolist()
             col = points.loc[:, "col"].tolist()
-            i_ds = points.loc[:, "id"].tolist()
+            # label each point with its "id" column when present, otherwise
+            # fall back to the GeoDataFrame index (data may use "fid" or none)
+            if "id" in points.columns:
+                i_ds = points.loc[:, "id"].tolist()
+            else:
+                i_ds = points.index.tolist()
             ax.scatter(col, row, color=point_color, s=point_size)
             # TODO: Points = ax.scatter(col, rows, color=point_color, s=point_size)
             #  return the scatter plot object (Points)
