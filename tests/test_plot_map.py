@@ -1,20 +1,19 @@
-import pandas as pd
+from geopandas.geodataframe import GeoDataFrame
 from matplotlib.figure import Figure
-from osgeo.gdal import Dataset
-
-from digitalearth.static import Map
+from pyramids.dataset import Dataset
+from digitalearth.static import StaticGlyph
 
 
 class TestPlotArray:
-    def test_plot(self, src: Dataset):
-        fig, ax = Map.plot(src, title="Flow Accumulation")
+    def test_plot(self, dataset: Dataset):
+        fig, ax = StaticGlyph.plot(dataset, title="Flow Accumulation")
         assert isinstance(fig, Figure)
 
     def test_plot_with_points(
         self,
-        src: Dataset,
+        dataset: Dataset,
         display_cellvalue: bool,
-        points: pd.DataFrame,
+        points: GeoDataFrame,
         num_size: int,
         background_color_threshold,
         ticks_spacing: int,
@@ -23,14 +22,14 @@ class TestPlotArray:
         point_size: int,
         point_color: str,
     ):
-        fig, ax = Map.plot(
-            src,
+        fig, ax = StaticGlyph.plot(
+            dataset,
             point_color=point_color,
             point_size=point_size,
             pid_color=pid_color,
             pid_size=pid_size,
             points=points,
-            display_cellvalue=display_cellvalue,
+            display_cell_value=display_cellvalue,
             num_size=num_size,
             background_color_threshold=background_color_threshold,
             ticks_spacing=ticks_spacing,

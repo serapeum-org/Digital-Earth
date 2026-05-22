@@ -1,25 +1,62 @@
 import matplotlib
-
 matplotlib.use("TkAgg")
 import geopandas as gpd
 import mapclassify as mc
-
-# import matplotlib.pyplot as plt
 import pandas as pd
-from osgeo import gdal
-
-from digitalearth.static import Map
-
+from pyramids.dataset import Dataset
+from digitalearth.static import StaticGlyph
 saveto = r"examples\data\results"
-#%%
-src = gdal.Open("examples/data/acc4000.tif")
-src_no_data_value = src.GetRasterBand(1).GetNoDataValue()
+#%% small map
+dataset_1 = Dataset.read_file("examples/data/acc4000.tif")
+dataset_2 = Dataset.read_file("examples/data/DEM5km_Rhine_burned_acc.tif")
+arr = dataset_2.read_array()
+no_data_val = dataset_2.no_data_value[0]
+src_no_data_value = dataset_1.no_data_value[0]
 cmap = "terrain"
 #%%
-fig, ax = Map.plot(src, title="Flow Accumulation", cbar_label="Flow Accumulation")
+fig, ax = StaticGlyph.plot(
+    dataset_1, title="Flow Accumulation", cbar_label="Flow Accumulation"
+)
+#%% rhine river
+dataset_1 = Dataset.read_file("exampxles/data/DEM5km_Rhine_burned_fill.tif")
+src_no_data_value = dataset_1.GetRasterBand(1).GetNoDataValue()
+cmap = "terrain"
+#%%
+fig, ax = StaticGlyph.plot(
+    dataset_1, title="Flow Accumulation", cbar_label="Flow Accumulation"
+)
+#%%
+bounds = [-600, 0, 100, 300, 500, 700, 900, 1100, 2000, 2500, 3000, 3500]
+
+fig, ax = StaticGlyph.plot(
+    dataset_2,
+    title="Flow Accumulation",
+    cbar_label="Flow Accumulation",
+    ticks_spacing=500,
+    color_scale=4,
+    bounds=bounds,
+)
+#%% manual normalization
+fig, ax = StaticGlyph.plot(
+    dataset_2,
+    title="Flow Accumulation",
+    cbar_label="Flow Accumulation",
+    ticks_spacing=500,
+    color_scale=5,
+    midpoint=20,
+)
+#%%
+fig, ax = StaticGlyph.plot(
+    dataset_2,
+    title="Flow Accumulation",
+    cbar_label="Flow Accumulation",
+    ticks_spacing=500,
+    color_scale=5,
+    midpoint=20,
+)
 #%%
 points = pd.read_csv("examples/data/points.csv")
-# fig, ax = Map.plot(src, title="Flow Accumulation", points=points)
+# fig, ax = StaticGlyph.plot(dataset_1, title="Flow Accumulation", points=points)
 
 point_color = "blue"
 point_size = 100
@@ -31,8 +68,8 @@ num_size = 8
 background_color_threshold = None
 ticks_spacing = 500
 
-fig, ax = Map.plot(
-    src,
+fig, ax = StaticGlyph.plot(
+    dataset_1,
     point_color=point_color,
     point_size=point_size,
     pid_color=id_color,
@@ -115,7 +152,7 @@ legend_labels = [1, 0.8, 0.6, 0.4, 0.2, 0.1]
 cmap = "Blues"
 linewidth = 0.2
 
-fig, ax = Map.plotCatchment(
+fig, ax = StaticGlyph.plotCatchment(
     metrix,
     new_col,
     rhine_basin,
@@ -135,7 +172,7 @@ title = f"Quantiles-{plot_column}"
 cmap = "Blues"
 linewidth = 0.2
 
-fig, ax = Map.plotCatchment(
+fig, ax = StaticGlyph.plotCatchment(
     metrix,
     plot_column,
     rhine_basin,
@@ -155,7 +192,7 @@ scale_func = scale_func
 cmap = "Blues"
 linewidth = 0.2
 
-fig, ax = Map.plotCatchment(
+fig, ax = StaticGlyph.plotCatchment(
     metrix,
     plot_column,
     rhine_basin,

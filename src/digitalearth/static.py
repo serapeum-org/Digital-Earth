@@ -1,3 +1,4 @@
+""" StaticGlyph."""
 from typing import Any, List, Tuple, Union
 
 import matplotlib.pyplot as plt
@@ -5,15 +6,13 @@ import numpy as np
 from cleopatra.array import Array
 from geopandas import GeoDataFrame
 from loguru import logger
-from osgeo.gdal import Dataset
-from pyramids.catchment import Catchment as GC
-from pyramids.raster import Raster
+from pyramids.dataset import Dataset
 
-# from Hapi.plot.visualizer import MidpointNormalize, Map
+# from Hapi.plot.visualizer import MidpointNormalize, Glyph
 
 
-class Map:
-    """Map."""
+class StaticGlyph:
+    """Glyph."""
 
     figure_default_options = dict(
         ylabel="",
@@ -36,6 +35,7 @@ class Map:
     @staticmethod
     def plot(
         src: Union[Dataset, np.ndarray],
+        band: int = 1,
         point_color: str = "red",
         point_size: Union[int, float] = 100,
         pid_color="blue",
@@ -48,8 +48,10 @@ class Map:
 
         Parameters
         ----------
-        src : [array/gdal.Dataset]
+        src : [array/Dataset]
             the array/gdal raster you want to plot.
+        band: [int]
+            band index. Default is 1.
         point_color : [str], optional
             color of the points. The default is 'red'.
         point_size : [integer], optional
@@ -63,7 +65,8 @@ class Map:
 
         **kwargs : [dict]
             keys:
-                nodataval: Union[int, float] = np.nan,
+                nodataval: [int, float]
+                    the no_data_value in case the first parameter is an array. Default is np.nan.
                 figsize: Tuple[int, int] = (8, 8),
                 title: Any = "Total Discharge",
                 title_size: Union[int, float] = 15,
@@ -91,40 +94,40 @@ class Map:
             the figure object
         """
         if isinstance(src, Dataset):
-            arr, nodataval = Raster.getRasterData(src)
+            arr = src.read_array()
+            no_data_value = src.no_data_value[band - 1]
         else:
             arr = src
-            if "nodataval" not in kwargs.keys():
+            if "no_data_value" not in kwargs.keys():
                 raise ValueError(
-                    "If the first parameter is a numpy.ndarray object you have to enter a kwargs 'nodataval'"
+                    "If the first parameter is a numpy.ndarray object you have to enter a kwargs 'no_data_value'"
                     "value"
                 )
             else:
-                nodataval = kwargs["nodataval"]
+                no_data_value = kwargs["no_data_value"]
         # convert the array to float as integer array gives error when compared to float
         arr = arr.astype(np.float32)
 
-        if nodataval is not None:
-            arr[np.isclose(arr, nodataval, rtol=0.001)] = np.nan
+        if no_data_value is not None:
+            arr[np.isclose(arr, no_data_value, rtol=0.001)] = np.nan
 
         if "points" in kwargs.keys():
             points = kwargs["points"]
-            points["row"] = np.nan
+            points["rows"] = np.nan
             points["col"] = np.nan
             # to locte the points in the array
-            points.loc[:, ["row", "col"]] = GC.nearestCell(
-                src, points[["x", "y"]][:]
-            ).values
+            points.loc[:, ["rows", "col"]] = src.locate_points(points)
 
-        fig, ax = Array.plot(arr, nodataval, **kwargs)
+        array = Array(arr, exclude_value=[no_data_value])
+        fig, ax = array.plot(**kwargs)
 
         points_ids = list()
         if "points" in kwargs.keys():
-            row = points.loc[:, "row"].tolist()
+            row = points.loc[:, "rows"].tolist()
             col = points.loc[:, "col"].tolist()
-            IDs = points.loc[:, "id"].tolist()
+            i_ds = points.loc[:, "id"].tolist()
             ax.scatter(col, row, color=point_color, s=point_size)
-            # TODO: Points = ax.scatter(col, row, color=point_color, s=point_size)
+            # TODO: Points = ax.scatter(col, rows, color=point_color, s=point_size)
             #  return the scatter plot object (Points)
 
             for i in range(len(row)):
@@ -132,7 +135,7 @@ class Map:
                     ax.text(
                         col[i],
                         row[i],
-                        IDs[i],
+                        i_ds[i],
                         ha="center",
                         va="center",
                         color=pid_color,

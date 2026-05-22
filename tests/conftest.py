@@ -1,15 +1,12 @@
-from typing import List
-
-import numpy as np
-import pandas as pd
 import pytest
-from osgeo import gdal
-from osgeo.gdal import Dataset
+import geopandas as gpd
+from geopandas.geodataframe import GeoDataFrame
+from pyramids.dataset import Dataset
 
 
 @pytest.fixture(scope="module")
-def src() -> Dataset:
-    return gdal.Open("examples/data/acc4000.tif")
+def dataset() -> Dataset:
+    return Dataset.read_file("examples/data/acc4000.tif")
 
 
 @pytest.fixture(scope="module")
@@ -33,8 +30,8 @@ def ticks_spacing() -> int:
 
 
 @pytest.fixture(scope="module")
-def points() -> pd.DataFrame:
-    return pd.read_csv("examples/data/points.csv")
+def points() -> GeoDataFrame:
+    return gpd.read_file("tests/data/points.geojson")
 
 
 @pytest.fixture(scope="module")
