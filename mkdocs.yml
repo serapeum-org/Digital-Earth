@@ -1,8 +1,8 @@
 site_name: Digital-Earth
 site_description: Geospatial visualization package for rasters and vector data
-site_url: https://MAfarrag.github.io/Digital-Earth/
-repo_url: https://github.com/MAfarrag/Digital-Earth
-repo_name: MAfarrag/Digital-Earth
+site_url: https://serapeum-org.github.io/Digital-Earth/
+repo_url: https://github.com/serapeum-org/Digital-Earth
+repo_name: serapeum-org/Digital-Earth
 
 theme:
   name: material
@@ -118,7 +118,7 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/MAfarrag/Digital-Earth
+      link: https://github.com/serapeum-org/Digital-Earth
   version:
       provider: mike
       version_selector: true

@@ -1,4 +1,4 @@
-[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=github&logoColor=white)](https://MAfarrag.github.io/Digital-Earth/)
+[![Documentation](https://img.shields.io/badge/Documentation-blue?logo=github&logoColor=white)](https://serapeum-org.github.io/Digital-Earth/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/digitalearth.png)](https://img.shields.io/pypi/pyversions/digitalearth)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
@@ -7,8 +7,8 @@
 # Digital-Earth
 
 **digitalearth** is a Python package providing different plots for rasters and
-vector data, built on top of [cleopatra](https://github.com/Serapieum-of-alex/cleopatra),
-[pyramids](https://github.com/Serapieum-of-alex/pyramids), matplotlib, and geopandas.
+vector data, built on top of [cleopatra](https://github.com/serapeum-org/cleopatra),
+[pyramids](https://github.com/serapeum-org/pyramids), matplotlib, and geopandas.
 
 ## Main Features
 

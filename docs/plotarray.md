@@ -1,7 +1,7 @@
 # Plot raster/array
 
 `digitalearth` plots rasters and arrays through the `StaticGlyph` class. It
-accepts either a [pyramids](https://github.com/Serapieum-of-alex/pyramids)
+accepts either a [pyramids](https://github.com/serapeum-org/pyramids)
 `Dataset` or a raw NumPy array.
 
 ## Read the raster

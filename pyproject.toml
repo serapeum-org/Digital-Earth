@@ -83,10 +83,10 @@ notebook = [
 
 
 [project.urls]
-homepage = "https://github.com/MAfarrag/Digital-Earth"
-repository = "https://github.com/MAfarrag/Digital-Earth"
-documentation = "https://MAfarrag.github.io/Digital-Earth"
-Changelog = "https://github.com/MAfarrag/Digital-Earth/blob/main/docs/change-log.md"
+homepage = "https://github.com/serapeum-org/Digital-Earth"
+repository = "https://github.com/serapeum-org/Digital-Earth"
+documentation = "https://serapeum-org.github.io/Digital-Earth"
+Changelog = "https://github.com/serapeum-org/Digital-Earth/blob/main/docs/change-log.md"
 
 
 [build-system]

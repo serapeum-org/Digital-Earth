@@ -37,7 +37,7 @@ This repository is configured with [pixi](https://pixi.sh). To set up a
 development environment that manages GDAL via conda-forge:
 
 ```console
-git clone https://github.com/MAfarrag/Digital-Earth.git
+git clone https://github.com/serapeum-org/Digital-Earth.git
 cd Digital-Earth
 pixi install -e dev
 pixi run -e dev main      # runs the test suite
@@ -57,13 +57,13 @@ Pixi environments available:
 Latest `main`:
 
 ```console
-pip install "git+https://github.com/MAfarrag/Digital-Earth.git"
+pip install "git+https://github.com/serapeum-org/Digital-Earth.git"
 ```
 
 A specific tagged release:
 
 ```console
-pip install "git+https://github.com/MAfarrag/Digital-Earth.git@<version>"
+pip install "git+https://github.com/serapeum-org/Digital-Earth.git@<version>"
 ```
 
 ## Verify the install
