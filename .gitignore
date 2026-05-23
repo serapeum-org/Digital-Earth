@@ -130,3 +130,17 @@ dmypy.json
 .idea/
 conda/*
 tests/mo/*
+
+# IDE run configs
+.run/
+.DS_Store
+
+# Large example/training data (kept out of git history)
+*.npy
+examples/medium/SWED/
+examples/data/SWED_sample.zip
+examples/data/DEM100_Rhine.tif
+
+# Claude Code files (kept local only, never tracked)
+.claude/
+CLAUDE.md

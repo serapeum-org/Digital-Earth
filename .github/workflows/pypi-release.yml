@@ -1,0 +1,25 @@
+name: pypi-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref }}
+
+      - name: Build and publish to PyPI
+        uses: serapeum-org/github-actions/actions/release/pypi@pypi-release/v1
+        with:
+          pypi-username: __token__
+          pypi-password: ${{ secrets.PYPI_PUBLISH }}
+          package-manager: 'pixi'
+          install-groups: 'dev'
+          verify-lock: 'false'

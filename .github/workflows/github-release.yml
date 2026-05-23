@@ -1,0 +1,81 @@
+name: github-release
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-branch:
+        description: "Branch to create release from"
+        required: false
+        default: "main"
+      increment:
+        description: "Version increment type"
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: "patch"
+      prerelease_type:
+        description: "Prerelease type"
+        required: false
+        type: choice
+        options:
+          - none
+          - alpha
+          - beta
+          - rc
+        default: "none"
+      draft:
+        description: "Create as draft release"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.release-branch }}
+
+      - name: Check actor is a repository admin
+        run: |
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq '.permission')
+          echo "Permission level for ${{ github.actor }}: $PERMISSION"
+          if [ "$PERMISSION" != "admin" ]; then
+            echo "::error::${{ github.actor }} is not a repository admin. Only admins can trigger releases."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release with Commitizen
+        uses: serapeum-org/github-actions/actions/release/github@6823246a90df2963d1576ef6de875e10467c64aa #github-release/v1.3.5
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          increment: ${{ github.event.inputs.increment }}
+          prerelease-type: ${{ github.event.inputs.prerelease_type }}
+          draft: ${{ github.event.inputs.draft }}
+          package-manager: pixi
+          install-groups: "dev"
+
+      - name: Update lockfile after version bump
+        run: pixi lock
+
+      - name: Commit and push updated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pixi.lock
+          git diff --cached --quiet && echo "No lockfile changes" && exit 0
+          git commit -m "build: sync pixi.lock after version bump"
+          git push origin ${{ inputs.release-branch }}
