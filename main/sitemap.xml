@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/CODE_OF_CONDUCT/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/LICENSE/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/change-log/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/contributing/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/installation/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/plotarray/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/main/reference/static/</loc>
+         <lastmod>2026-05-23</lastmod>
+    </url>
+</urlset>
