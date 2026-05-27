@@ -12,11 +12,13 @@ from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.array_glyph import ArrayGlyph
+from cleopatra.mesh_glyph import MeshGlyph
 from cleopatra.polygon_glyph import PolygonGlyph
 from cleopatra.scatter_glyph import ScatterGlyph
 from cleopatra.vector_glyph import VectorGlyph
 from cleopatra.tiles import add_tiles
 from pyramids.basemap import natural_earth
+from pyramids.dataset import Dataset
 
 from digitalearth.scene.scene import Scene
 from digitalearth.sources import get_source
@@ -322,6 +324,47 @@ class Map(Scene):
     def streamplot(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``)."""
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
+
+    def _scattered(self, data: Any) -> tuple:
+        """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection)."""
+        if isinstance(data, Dataset):
+            xyz = self._reproject(data).to_xyz()
+            return (
+                xyz.iloc[:, 0].to_numpy(),
+                xyz.iloc[:, 1].to_numpy(),
+                xyz.iloc[:, 2].to_numpy(),
+            )
+        src = get_source(data.to_crs(self.crs))
+        if src.z is None:
+            raise ValueError("FeatureCollection has no numeric value column to contour")
+        return src.x.values, src.y.values, src.z.values
+
+    def _tri(self, data: Any, *, kind: str, **opts) -> Any:
+        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``."""
+        from matplotlib.tri import Triangulation
+
+        x, y, z = self._scattered(data)
+        tri = Triangulation(x, y)
+        glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
+        if kind == "tripcolor":
+            face_values = z[tri.triangles].mean(axis=1)
+            _, ax = glyph.plot(face_values, location="face", colorbar=False, **opts)
+        else:
+            _, ax = glyph.plot(z, location="node", filled=(kind == "tricontourf"), colorbar=False, **opts)
+        mappable = ax.collections[-1] if ax.collections else None
+        return self._add_layer(glyph, mappable)
+
+    def tricontourf(self, data: Any, **kwargs) -> Any:
+        """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``)."""
+        return self._tri(data, kind="tricontourf", **kwargs)
+
+    def tricontour(self, data: Any, **kwargs) -> Any:
+        """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``)."""
+        return self._tri(data, kind="tricontour", **kwargs)
+
+    def tripcolor(self, data: Any, **kwargs) -> Any:
+        """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data)."""
+        return self._tri(data, kind="tripcolor", **kwargs)
 
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS."""
