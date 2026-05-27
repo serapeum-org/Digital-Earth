@@ -23,6 +23,18 @@ from digitalearth.sources import get_source
 from digitalearth.sources.source import Source
 
 
+def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
+    """Per-channel 2-98 percentile contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``."""
+    out = np.empty(stack.shape, dtype="float64")
+    for i in range(stack.shape[2]):
+        band = stack[..., i].astype("float64")
+        lo, hi = np.nanpercentile(band, [2, 98])
+        if hi <= lo:
+            hi = lo + 1.0
+        out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
+    return out
+
+
 class Map(Scene):
     """A geospatial :class:`~digitalearth.scene.scene.Scene` that reprojects to a display CRS.
 
@@ -219,6 +231,54 @@ class Map(Scene):
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
+
+    def _extent(self, ds: Any) -> List[float]:
+        """Return ``[xmin, xmax, ymin, ymax]`` of a (reprojected) dataset's cell-centre coordinates."""
+        x, y = ds.x, ds.y
+        return [float(x.min()), float(x.max()), float(y.min()), float(y.max())]
+
+    def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
+        """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
+
+        Args:
+            dataset: A multiband pyramids ``Dataset`` (reprojected to the display CRS first).
+            bands: Three 1-based band indices mapped to R, G, B. Defaults to ``(1, 2, 3)``.
+            **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
+
+        Returns:
+            The image mappable (registered as a Scene layer).
+        """
+        ds = self._reproject(dataset)
+        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])
+        glyph = ArrayGlyph(
+            _stretch_to_unit(stack), rgb=list(range(len(bands))), extent=self._extent(ds),
+            ax=self.ax, fig=self.fig, **ArrayGlyph.filter_kwargs(opts),
+        )
+        glyph.plot()
+        return self._add_layer(glyph, glyph.im)
+
+    def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
+        """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
+
+        Args:
+            dataset: A multiband pyramids ``Dataset`` (reprojected to the display CRS first).
+            bands: Three 1-based band indices mapped to H, S, V. Defaults to ``(1, 2, 3)``.
+            **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
+
+        Returns:
+            The image mappable (registered as a Scene layer).
+        """
+        from matplotlib.colors import hsv_to_rgb
+
+        ds = self._reproject(dataset)
+        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])
+        rgb = hsv_to_rgb(_stretch_to_unit(stack))
+        glyph = ArrayGlyph(
+            rgb, rgb=[0, 1, 2], extent=self._extent(ds), ax=self.ax, fig=self.fig,
+            **ArrayGlyph.filter_kwargs(opts),
+        )
+        glyph.plot()
+        return self._add_layer(glyph, glyph.im)
 
     def _vector(self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts) -> Any:
         """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
