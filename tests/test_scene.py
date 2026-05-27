@@ -42,6 +42,28 @@ def test_colorbar_adds_an_axes():
     assert len(scene.fig.axes) == 2
 
 
+def test_colorbar_with_label():
+    """colorbar(label=...) sets the colorbar's label text."""
+    scene = Scene()
+    _render(scene, np.random.rand(8, 8))
+    cbar = scene.colorbar(label="discharge")
+    assert cbar.ax.get_ylabel() == "discharge" or cbar.ax.get_xlabel() == "discharge"
+
+
+def test_colorbars_one_per_layer():
+    """colorbars() draws one colorbar for every registered layer."""
+    scene = Scene()
+    _render(scene, np.random.rand(8, 8))
+    _render(scene, np.random.rand(8, 8))
+    cbars = scene.colorbars()
+    assert len(cbars) == 2
+
+
+def test_colorbars_empty_without_layers():
+    """colorbars() returns an empty list when there are no layers."""
+    assert Scene().colorbars() == []
+
+
 def test_colorbar_without_layers_raises():
     """Asking for a colorbar with no layers is an error."""
     scene = Scene()

@@ -82,11 +82,12 @@ class Scene:
         self.layers.append((glyph, mappable))
         return mappable
 
-    def colorbar(self, layer: int = -1, **kwargs) -> Any:
+    def colorbar(self, layer: int = -1, label: Optional[str] = None, **kwargs) -> Any:
         """Draw one colorbar for a registered layer (delegates to ``cleopatra.styles.colorbar_legend``).
 
         Args:
             layer: Index into :attr:`layers` (default ``-1``, the most recent layer).
+            label: Optional text label drawn alongside the colorbar.
             **kwargs: Forwarded to ``colorbar_legend`` / ``matplotlib`` colorbar.
 
         Returns:
@@ -97,7 +98,21 @@ class Scene:
         """
         if not self.layers:
             raise ValueError("no layers to draw a colorbar for; add a glyph first")
-        return colorbar_legend(self.layers[layer][1], ax=self.ax, **kwargs)
+        cbar = colorbar_legend(self.layers[layer][1], ax=self.ax, **kwargs)
+        if label is not None:
+            cbar.set_label(label)
+        return cbar
+
+    def colorbars(self, **kwargs) -> List[Any]:
+        """Draw one colorbar per registered layer (aggregation across all layers).
+
+        Args:
+            **kwargs: Forwarded to :meth:`colorbar` for every layer.
+
+        Returns:
+            The list of created colorbars, one per layer (empty when there are no layers).
+        """
+        return [self.colorbar(layer=i, **kwargs) for i in range(len(self.layers))]
 
     def legend(self, colors: Sequence, labels: Sequence[str], **kwargs) -> Any:
         """Attach a categorical (disjoint) swatch legend (delegates to ``cleopatra.styles.disjoint_legend``).
