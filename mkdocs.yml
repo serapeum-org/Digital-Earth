@@ -107,6 +107,14 @@ nav:
   - Home: index.md
   - Installation: installation.md
   - Plot raster/array: plotarray.md
+  - Examples:
+    - Sources (data wrapper): examples/01_sources.ipynb
+    - Maps & raster fields: examples/02_maps_and_fields.ipynb
+    - Points, cells & vectors: examples/03_points_cells_vectors.ipynb
+    - RGB/HSV composites & mesh: examples/04_composites_and_mesh.ipynb
+    - Choropleth & decoration: examples/05_choropleth_and_decoration.ipynb
+    - Temporal & series: examples/06_temporal_and_series.ipynb
+    - One-call quickplot: examples/07_quickplot.ipynb
   - Reference:
     - StaticGlyph: reference/static.md
   - About:
