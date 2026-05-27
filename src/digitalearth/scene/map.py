@@ -22,6 +22,7 @@ from pyramids.basemap import natural_earth
 from pyramids.dataset import Dataset
 
 from digitalearth.autostyle import auto_style
+from digitalearth.preprocess import add_cyclic_column
 from digitalearth.scene.domains import DomainLike, resolve_domain
 from digitalearth.scene.scene import Scene
 from digitalearth.sources import get_source
@@ -125,9 +126,12 @@ class Map(Scene):
             The glyph's mappable (also registered as a Scene layer).
         """
         src = self._prepare(dataset, band)
+        z_values, x_values = src.z.values, src.x.values
+        if opts.pop("cyclic", False):  # close the antimeridian seam for global fields (T5.2)
+            z_values, x_values = add_cyclic_column(z_values, x_values)
         extent = [
-            float(src.x.values.min()),
-            float(src.x.values.max()),
+            float(x_values.min()),
+            float(x_values.max()),
             float(src.y.values.min()),
             float(src.y.values.max()),
         ]
@@ -138,7 +142,7 @@ class Map(Scene):
         if levels is not None:
             opts["levels"] = levels
         glyph = ArrayGlyph(
-            src.z.values,
+            z_values,
             exclude_value=[float("nan")],
             extent=extent,
             ax=self.ax,
