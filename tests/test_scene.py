@@ -66,6 +66,20 @@ def test_save_writes_a_file(tmp_path):
     assert out.exists() and out.stat().st_size > 0
 
 
+def test_set_title():
+    """Scene.set_title sets the axes title."""
+    scene = Scene()
+    scene.set_title("my map")
+    assert scene.ax.get_title() == "my map"
+
+
+def test_show_invokes_pyplot(mocker):
+    """Scene.show delegates to matplotlib.pyplot.show without raising under Agg."""
+    spy = mocker.patch("matplotlib.pyplot.show")
+    Scene().show()
+    spy.assert_called_once()
+
+
 def test_accepts_external_axes():
     """A Scene can wrap a caller-supplied fig/ax instead of creating one."""
     import matplotlib.pyplot as plt

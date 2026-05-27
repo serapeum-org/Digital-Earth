@@ -63,3 +63,26 @@ def test_natural_earth_overlays(dataset, layer):
         pytest.skip(f"Natural Earth {layer} unavailable offline: {exc}")
     # the vector layer added at least one artist (collection/line) to the axes
     assert m.ax.collections or m.ax.lines
+
+
+@pytest.mark.parametrize("layer", ["land", "ocean"])
+def test_natural_earth_fills(dataset, layer):
+    """Land/ocean polygon fills overlay when reachable; skipped offline."""
+    m = Map(crs=3857)
+    m.imshow(dataset)
+    try:
+        getattr(m, layer)()
+    except Exception as exc:  # network/download unavailable in this environment
+        pytest.skip(f"Natural Earth {layer} unavailable offline: {exc}")
+    assert m.ax.collections
+
+
+def test_basemap_tiles(dataset):
+    """A tile basemap is added when tile servers are reachable; skipped offline."""
+    m = Map(crs=3857)
+    m.imshow(dataset)
+    try:
+        m.basemap()
+    except Exception as exc:  # network unavailable in this environment
+        pytest.skip(f"basemap tiles unavailable offline: {exc}")
+    assert m.ax.images  # tile imagery added at least one AxesImage

@@ -123,6 +123,65 @@ def test_dimension_info_dataclass():
     np.testing.assert_array_equal(di.values, [1.0, 2.0])
 
 
+class TestExtractorHelpers:
+    """Tests for the private helpers in digitalearth.sources.extractors."""
+
+    def test_band_item_normal(self):
+        """_band_item returns seq[index] for a valid index."""
+        from digitalearth.sources.extractors import _band_item
+
+        assert _band_item(("a", "b"), 1) == "b"
+
+    def test_band_item_empty_returns_default(self):
+        """_band_item returns the default for an empty/None sequence."""
+        from digitalearth.sources.extractors import _band_item
+
+        assert _band_item((), 0, default="x") == "x"
+        assert _band_item(None, 0, default="x") == "x"
+
+    def test_band_item_out_of_range_returns_default(self):
+        """_band_item returns the default when the index is out of range."""
+        from digitalearth.sources.extractors import _band_item
+
+        assert _band_item(("a",), 5, default=None) is None
+
+    def test_mask_nodata_passthrough_when_none(self):
+        """_mask_nodata returns the array unchanged (as float) when nodata is None."""
+        from digitalearth.sources.extractors import _mask_nodata
+
+        out = _mask_nodata(np.array([1, 2, 3]), None)
+        np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
+
+    def test_mask_nodata_replaces_with_nan(self):
+        """_mask_nodata replaces cells matching nodata with NaN."""
+        from digitalearth.sources.extractors import _mask_nodata
+
+        out = _mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
+        assert np.isnan(out[1]) and not np.isnan(out[0])
+
+    def test_from_netcdf_no_variables_raises(self):
+        """_from_netcdf raises ValueError when the NetCDF exposes no variables."""
+        from digitalearth.sources.extractors import _from_netcdf
+
+        class _StubNetCDF:
+            variable_names: list = []
+
+        with pytest.raises(ValueError, match="no variables"):
+            _from_netcdf(_StubNetCDF(), None, None)
+
+
+def test_feature_source_polygon_uses_centroid():
+    """A non-point FeatureCollection falls back to geometry centroids for x/y."""
+    from pyramids.feature import FeatureCollection
+
+    fc = FeatureCollection.read_file("tests/data/points.geojson")
+    polys = fc.copy()
+    polys["geometry"] = fc.geometry.buffer(100.0)  # points -> polygons
+    src = get_source(polys)
+    assert src.metadata("kind") == "vector"
+    assert src.x.values.shape == (len(fc),)
+
+
 def test_no_competitor_imports():
     """The sources package must not import xarray/rasterio/fiona/etc. (CLAUDE.md: pyramids is the only GIS dep)."""
     forbidden = ("xarray", "rasterio", "rioxarray", "fiona", "netCDF4", "cfgrib", "osgeo", "cartopy")
