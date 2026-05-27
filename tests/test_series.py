@@ -40,6 +40,17 @@ class TestEnvelope:
         _, _, pc = series.quantile_band(ensemble, lower=0.1, upper=0.9, ax=ax)
         assert pc in ax.collections
 
+    def test_quantile_band_explicit_x(self):
+        """quantile_band accepts explicit x coordinates instead of the default index."""
+        import matplotlib.pyplot as plt
+
+        _, ax = plt.subplots()
+        rng = np.random.default_rng(1)
+        ensemble = rng.normal(size=(10, 5))
+        x = np.array([10.0, 20.0, 30.0, 40.0, 50.0])
+        _, _, pc = series.quantile_band(ensemble, x=x, ax=ax)
+        assert pc in ax.collections
+
 
 class TestStatistical:
     """Tests for series.boxplot / multiboxplot / stripes."""

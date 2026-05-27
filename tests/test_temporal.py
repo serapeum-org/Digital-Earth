@@ -45,6 +45,21 @@ class TestTimeSeries:
         assert result[1] is ax
         assert ax.lines
 
+    def test_plot_with_explicit_times(self, collection):
+        """plot accepts explicit x (time) values instead of the default integer index."""
+        import matplotlib.pyplot as plt
+
+        _, ax = plt.subplots()
+        times = [2000, 2001, 2002, 2003, 2004, 2005]
+        TimeSeries(collection).plot(times=times, ax=ax)
+        assert list(ax.lines[0].get_xdata()) == times
+
+    def test_plot_creates_own_axes(self, collection):
+        """plot creates its own figure/axes when none is supplied."""
+        result = TimeSeries(collection).plot()
+        fig, ax = result[0], result[1]
+        assert ax.lines and fig is not None
+
 
 class TestClimatology:
     """Tests for Climatology."""
