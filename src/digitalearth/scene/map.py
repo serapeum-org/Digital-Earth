@@ -102,6 +102,22 @@ class Map(Scene):
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``)."""
         return self._field(dataset, kind="imshow", **kwargs)
 
+    def contourf(self, dataset: Any, **kwargs) -> Any:
+        """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``)."""
+        return self._field(dataset, kind="contourf", **kwargs)
+
+    def contour(self, dataset: Any, **kwargs) -> Any:
+        """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``)."""
+        return self._field(dataset, kind="contour", **kwargs)
+
+    def pcolormesh(self, dataset: Any, **kwargs) -> Any:
+        """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``)."""
+        return self._field(dataset, kind="pcolormesh", **kwargs)
+
+    def block(self, dataset: Any, **kwargs) -> Any:
+        """Render a raster as discrete cell blocks (pcolormesh on cell edges)."""
+        return self._field(dataset, kind="pcolormesh", **kwargs)
+
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS."""
         fc = natural_earth(layer, resolution)
