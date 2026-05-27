@@ -66,6 +66,14 @@ class TestAutoStyle:
         """The internal 'match' key is never returned in the resolved style."""
         assert "match" not in auto_style(_source("t2m"))
 
+    def test_string_match_pattern(self, mocker):
+        """A group whose 'match' is a bare string (not a list) is handled."""
+        mocker.patch(
+            "digitalearth.autostyle.load_library",
+            return_value={"default": {"cmap": "viridis"}, "ice": {"match": "siconc", "cmap": "Blues_r"}},
+        )
+        assert auto_style(_source("siconc"))["cmap"] == "Blues_r"
+
 
 def test_field_uses_auto_style_cmap(dataset):
     """A field method with no explicit cmap picks up the auto-style default for the variable."""
