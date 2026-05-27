@@ -309,9 +309,12 @@ class Map(Scene):
                 ```
         """
         ds = self._reproject(dataset)
-        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])
+        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])  # (rows, cols, n)
+        # cleopatra's rgb= path is band-FIRST: it does array[rgb].transpose(1, 2, 0), so feed
+        # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
+        band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
         glyph = ArrayGlyph(
-            _stretch_to_unit(stack), rgb=list(range(len(bands))), extent=self._extent(ds),
+            band_first, rgb=list(range(len(bands))), extent=self._extent(ds),
             ax=self.ax, fig=self.fig, **ArrayGlyph.filter_kwargs(opts),
         )
         glyph.plot()
@@ -331,10 +334,12 @@ class Map(Scene):
         from matplotlib.colors import hsv_to_rgb
 
         ds = self._reproject(dataset)
-        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])
-        rgb = hsv_to_rgb(_stretch_to_unit(stack))
+        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])  # (rows, cols, n)
+        rgb = hsv_to_rgb(_stretch_to_unit(stack))                      # (rows, cols, 3) RGB
+        # band-FIRST for cleopatra's rgb= path (see rgb_composite); it transposes back to band-last.
+        band_first = np.moveaxis(rgb, -1, 0)
         glyph = ArrayGlyph(
-            rgb, rgb=[0, 1, 2], extent=self._extent(ds), ax=self.ax, fig=self.fig,
+            band_first, rgb=[0, 1, 2], extent=self._extent(ds), ax=self.ax, fig=self.fig,
             **ArrayGlyph.filter_kwargs(opts),
         )
         glyph.plot()

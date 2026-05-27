@@ -37,19 +37,22 @@ def test_stretch_to_unit_constant_band():
 
 
 def test_rgb_composite(rgb_dataset):
-    """rgb_composite renders a 3-band raster as a single RGB image layer."""
+    """rgb_composite renders a 3-band raster as a single RGB image with correct (rows, cols, 3) shape."""
     m = Map(crs=rgb_dataset.epsg)
     m.rgb_composite(rgb_dataset)
     assert len(m.layers) == 1
     assert len(m.ax.images) == 1
+    # band-first must be transposed back to band-last (rows, cols, 3), not a garbled (cols, 3, 3)
+    assert m.ax.images[-1].get_array().shape == (rgb_dataset.rows, rgb_dataset.columns, 3)
 
 
 def test_hsv_composite(rgb_dataset):
-    """hsv_composite renders a 3-band raster as an HSV-derived RGB image layer."""
+    """hsv_composite renders a 3-band raster as an HSV-derived RGB image with correct shape."""
     m = Map(crs=rgb_dataset.epsg)
     m.hsv_composite(rgb_dataset)
     assert len(m.layers) == 1
     assert len(m.ax.images) == 1
+    assert m.ax.images[-1].get_array().shape == (rgb_dataset.rows, rgb_dataset.columns, 3)
 
 
 def test_rgb_composite_custom_band_order(rgb_dataset):
