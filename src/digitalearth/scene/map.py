@@ -446,6 +446,22 @@ class Map(Scene):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+
+        Examples:
+            - Colour buffered point features by their ``fid`` column and count the drawn polygons:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.scene import Map
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+                >>> fc["geometry"] = fc.geometry.buffer(500.0)
+                >>> m = Map(crs=fc.epsg)
+                >>> pc = m.choropleth(fc, column="fid")
+                >>> len(pc.get_paths()) >= len(fc)
+                True
+
+                ```
         """
         gdf = features.to_crs(self.crs)
         polygons, repeats = self._polygon_vertices(gdf.geometry)
@@ -524,6 +540,21 @@ class Map(Scene):
             domain: A registered region name (e.g. ``"Europe"``), an explicit ``(west, south, east, north)``
                 bbox in EPSG:4326, or ``None`` to fall back to the domain passed at construction. A no-op
                 when neither resolves to a domain.
+
+        Examples:
+            - In a geographic CRS the axes limits equal the named region's bounds:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.scene import Map
+                >>> m = Map(crs=4326)
+                >>> m.set_domain("europe")
+                >>> [float(v) for v in m.ax.get_xlim()]
+                [-25.0, 45.0]
+                >>> [float(v) for v in m.ax.get_ylim()]
+                [34.0, 72.0]
+
+                ```
         """
         bbox = resolve_domain(domain if domain is not None else self.domain)
         if bbox is None:
