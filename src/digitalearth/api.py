@@ -69,6 +69,34 @@ def quickmap(
 
     Returns:
         The decorated :class:`Map` (with ``.fig`` / ``.ax`` / ``.save``).
+
+    Examples:
+        - One call turns a raster into a finished map with a colorbar:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.api import quickmap
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> m = quickmap(ds, crs=ds.epsg)
+            >>> len(m.layers)
+            1
+            >>> len(m.fig.axes)  # main axes + colorbar
+            2
+
+            ```
+        - Disable the colorbar to keep a single axes:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.api import quickmap
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> m = quickmap(ds, crs=ds.epsg, colorbar=False)
+            >>> len(m.fig.axes)
+            1
+
+            ```
     """
     scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)

@@ -23,6 +23,21 @@ class Climatology:
 
     Attributes:
         labels: The per-member group labels.
+
+    Examples:
+        - Group a 6-step collection by a 3-season cycle into three group means:
+            ```python
+            >>> from pyramids.dataset.collection import DatasetCollection
+            >>> from digitalearth.temporal import Climatology
+            >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 6)
+            >>> clim = Climatology(dc, ["djf", "jja", "son", "djf", "jja", "son"])
+            >>> groups, mean, low, high = clim.climatology()
+            >>> groups
+            ['djf', 'jja', 'son']
+            >>> mean.shape
+            (3,)
+
+            ```
     """
 
     def __init__(self, collection: Any, labels: Sequence, band: int = 1, reducer: str = "mean"):

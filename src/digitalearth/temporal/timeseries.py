@@ -21,6 +21,29 @@ class TimeSeries:
         collection: The source collection.
         band: The band index used.
         reducer: The configured reducer name.
+
+    Examples:
+        - Reduce a 3-step collection to one spatial-mean value per step:
+            ```python
+            >>> from pyramids.dataset.collection import DatasetCollection
+            >>> from digitalearth.temporal import TimeSeries
+            >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
+            >>> ts = TimeSeries(dc, reducer="mean")
+            >>> ts.values().shape
+            (3,)
+
+            ```
+        - Identical members give a constant series:
+            ```python
+            >>> import numpy as np
+            >>> from pyramids.dataset.collection import DatasetCollection
+            >>> from digitalearth.temporal import TimeSeries
+            >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
+            >>> vals = TimeSeries(dc).values()
+            >>> bool(np.allclose(vals, vals[0]))
+            True
+
+            ```
     """
 
     _REDUCERS = {"mean": np.nanmean, "sum": np.nansum, "min": np.nanmin, "max": np.nanmax}
