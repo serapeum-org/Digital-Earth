@@ -10,7 +10,10 @@ The field methods here (``imshow`` and the private ``_field`` recipe) are the fo
 """
 from typing import Any, List, Optional, Sequence, Tuple
 
+import numpy as np
 from cleopatra.array_glyph import ArrayGlyph
+from cleopatra.polygon_glyph import PolygonGlyph
+from cleopatra.scatter_glyph import ScatterGlyph
 from cleopatra.tiles import add_tiles
 from pyramids.basemap import natural_earth
 
@@ -144,6 +147,77 @@ class Map(Scene):
     def block(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as discrete cell blocks (pcolormesh on cell edges)."""
         return self._field(dataset, kind="pcolormesh", **kwargs)
+
+    def _reproject(self, dataset: Any) -> Any:
+        """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
+        return dataset if dataset.epsg == self.crs else dataset.to_crs(self.crs)
+
+    def scatter(self, features: Any, **opts) -> Any:
+        """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
+            **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options.
+
+        Returns:
+            The scatter ``PathCollection`` (registered as a Scene layer).
+        """
+        src = get_source(features.to_crs(self.crs))
+        values = src.z.values if src.z is not None else None
+        glyph = ScatterGlyph(
+            src.x.values, src.y.values, values=values, ax=self.ax, fig=self.fig,
+            **ScatterGlyph.filter_kwargs(opts),
+        )
+        _, _, pc = glyph.plot()
+        return self._add_layer(glyph, pc)
+
+    def grid_points(self, dataset: Any, **opts) -> Any:
+        """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
+
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options.
+
+        Returns:
+            The scatter ``PathCollection`` (registered as a Scene layer).
+        """
+        xyz = self._reproject(dataset).to_xyz()
+        x = xyz.iloc[:, 0].to_numpy()
+        y = xyz.iloc[:, 1].to_numpy()
+        z = xyz.iloc[:, 2].to_numpy()
+        glyph = ScatterGlyph(
+            x, y, values=z, ax=self.ax, fig=self.fig, **ScatterGlyph.filter_kwargs(opts)
+        )
+        _, _, pc = glyph.plot()
+        return self._add_layer(glyph, pc)
+
+    def point_cloud(self, dataset: Any, **opts) -> Any:
+        """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value."""
+        return self.grid_points(dataset, **opts)
+
+    def grid_cells(self, dataset: Any, band: int = 1, **opts) -> Any:
+        """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
+
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            band: 1-based band whose values colour the cells.
+            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+        """
+        ds = self._reproject(dataset)
+        polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
+        values = ds.read_array(band=band - 1).astype("float64").ravel()
+        nodata = ds.no_data_value[band - 1]
+        if nodata is not None:
+            values = np.where(np.isclose(values, nodata, rtol=1e-3), np.nan, values)
+        glyph = PolygonGlyph(
+            polygons, values=values, ax=self.ax, fig=self.fig,
+            **PolygonGlyph.filter_kwargs(opts),
+        )
+        _, _, pc = glyph.plot()
+        return self._add_layer(glyph, pc)
 
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS."""
