@@ -31,6 +31,14 @@ def test_stretch_to_unit_range():
     assert out.shape == stack.shape
 
 
+def test_stretch_to_unit_constant_band():
+    """A constant channel (equal percentiles) stretches to all-zeros without dividing by zero."""
+    stack = np.dstack([np.full((4, 4), 7.0), np.zeros((4, 4)), np.ones((4, 4))])
+    out = _stretch_to_unit(stack)
+    assert np.all(out[..., 0] == 0.0)
+    assert np.isfinite(out).all()
+
+
 def test_rgb_composite(rgb_dataset):
     """rgb_composite renders a 3-band raster as a single RGB image layer."""
     m = Map(crs=rgb_dataset.epsg)
