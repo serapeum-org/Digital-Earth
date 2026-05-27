@@ -21,6 +21,7 @@ from pyramids.base.crs import reproject_coordinates
 from pyramids.basemap import natural_earth
 from pyramids.dataset import Dataset
 
+from digitalearth.autostyle import auto_style
 from digitalearth.scene.domains import DomainLike, resolve_domain
 from digitalearth.scene.scene import Scene
 from digitalearth.sources import get_source
@@ -130,6 +131,8 @@ class Map(Scene):
             float(src.y.values.min()),
             float(src.y.values.max()),
         ]
+        if cmap is None:
+            cmap = auto_style(src).get("cmap")  # per-variable default (T6.2)
         if cmap is not None:
             opts["cmap"] = cmap
         if levels is not None:

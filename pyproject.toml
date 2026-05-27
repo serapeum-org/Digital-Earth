@@ -34,6 +34,7 @@ dependencies = [
     "cleopatra >=0.10.0",
     "pyramids-gis >=0.25.0",
     "loguru >=0.7.3",
+    "pyyaml >=6.0",
 ]
 
 [project.optional-dependencies]
@@ -97,6 +98,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["digitalearth", "digitalearth.*"]
+
+[tool.setuptools.package-data]
+"digitalearth.autostyle" = ["library/*.yml"]
 
 [tool.flake8]
 ignore = ["E203", "E266", "E501", "W503", "E722", "C901", "E741", "E731"]
