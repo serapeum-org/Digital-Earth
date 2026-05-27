@@ -17,9 +17,11 @@ from cleopatra.polygon_glyph import PolygonGlyph
 from cleopatra.scatter_glyph import ScatterGlyph
 from cleopatra.vector_glyph import VectorGlyph
 from cleopatra.tiles import add_tiles
+from pyramids.base.crs import reproject_coordinates
 from pyramids.basemap import natural_earth
 from pyramids.dataset import Dataset
 
+from digitalearth.scene.domains import DomainLike, resolve_domain
 from digitalearth.scene.scene import Scene
 from digitalearth.sources import get_source
 from digitalearth.sources.source import Source
@@ -511,3 +513,20 @@ class Map(Scene):
         """
         self.ax.set_xlim(bbox[0], bbox[1])
         self.ax.set_ylim(bbox[2], bbox[3])
+
+    def set_domain(self, domain: Optional[DomainLike] = None) -> None:
+        """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
+
+        Args:
+            domain: A registered region name (e.g. ``"Europe"``), an explicit ``(west, south, east, north)``
+                bbox in EPSG:4326, or ``None`` to fall back to the domain passed at construction. A no-op
+                when neither resolves to a domain.
+        """
+        bbox = resolve_domain(domain if domain is not None else self.domain)
+        if bbox is None:
+            return
+        west, south, east, north = bbox
+        xs, ys = reproject_coordinates(
+            [west, east, west, east], [south, south, north, north], from_crs=4326, to_crs=self.crs
+        )
+        self.set_extent([min(xs), max(xs), min(ys), max(ys)])
