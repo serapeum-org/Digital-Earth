@@ -29,6 +29,32 @@ class Scene:
         fig: The matplotlib figure.
         ax: The matplotlib axes all layers render onto.
         layers: Registered ``(glyph, mappable)`` pairs, in draw order, used for legends/colorbars.
+
+    Examples:
+        - Create a scene; it owns exactly one axes until a colorbar is added:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.scene import Scene
+            >>> scene = Scene()
+            >>> len(scene.fig.axes)
+            1
+            >>> scene.layers
+            []
+
+            ```
+        - Wrap a caller-supplied figure/axes instead of creating one:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from digitalearth.scene import Scene
+            >>> fig, ax = plt.subplots()
+            >>> scene = Scene(ax=ax, fig=fig)
+            >>> scene.ax is ax
+            True
+
+            ```
     """
 
     def __init__(

@@ -26,6 +26,36 @@ class Source:
         crs: The CRS as an EPSG integer or WKT string (whatever pyramids reported), or ``None``.
         metadata: Free-form metadata dict (e.g. ``variable``, ``kind``, ``time``, ``member``).
         units: Unit string for the data values, or ``None``.
+
+    Examples:
+        - Build a raster Source by hand and read its grid + axes:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.sources import Source, DimensionInfo
+            >>> z = DimensionInfo(np.arange(6.0).reshape(2, 3), "z", "mm")
+            >>> src = Source(z, DimensionInfo(np.array([0.0, 1.0, 2.0]), "x"),
+            ...              DimensionInfo(np.array([0.0, 1.0]), "y"), crs=4326,
+            ...              metadata={"variable": "rain"}, units="mm")
+            >>> src.z.values.shape
+            (2, 3)
+            >>> src.crs
+            4326
+            >>> src.metadata("variable")
+            'rain'
+
+            ```
+        - Missing metadata keys fall back to the supplied default:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.sources import Source, DimensionInfo
+            >>> src = Source(None, DimensionInfo(np.array([0.0]), "x"),
+            ...              DimensionInfo(np.array([0.0]), "y"))
+            >>> src.metadata("variable", "unknown")
+            'unknown'
+            >>> src.units is None
+            True
+
+            ```
     """
 
     def __init__(

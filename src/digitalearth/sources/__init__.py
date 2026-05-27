@@ -42,5 +42,32 @@ def get_source(
 
     Returns:
         Source: the uniform wrapper the glyph wiring consumes.
+
+    Examples:
+        - Wrap a raw 2-D numpy array (pixel-index axes, no CRS):
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.sources import get_source
+            >>> src = get_source(np.arange(12.0).reshape(3, 4))
+            >>> src.z.values.shape
+            (3, 4)
+            >>> src.x.values.tolist()
+            [0.0, 1.0, 2.0, 3.0]
+            >>> src.crs is None
+            True
+
+            ```
+        - Supply explicit coordinates for a numpy array:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.sources import get_source
+            >>> src = get_source(np.zeros((2, 2)), x=np.array([10.0, 20.0]),
+            ...                  y=np.array([5.0, 6.0]))
+            >>> src.x.values.tolist()
+            [10.0, 20.0]
+            >>> src.metadata("kind")
+            'raster'
+
+            ```
     """
     return extract(data, band=band, variable=variable, x=x, y=y, metadata=metadata)

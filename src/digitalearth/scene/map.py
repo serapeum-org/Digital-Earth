@@ -32,6 +32,33 @@ class Map(Scene):
     Attributes:
         crs: The display CRS every layer is reprojected to.
         domain: The configured domain (or ``None``).
+
+    Examples:
+        - Create a map in Web Mercator and read its display CRS:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.scene import Map
+            >>> m = Map(crs=3857)
+            >>> m.crs
+            3857
+            >>> m.layers
+            []
+
+            ```
+        - Render a reprojected raster, then iterate the registered layers:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.scene import Map
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> m = Map(crs=ds.epsg)          # same CRS -> no reprojection
+            >>> _ = m.imshow(ds)
+            >>> len(m.layers)
+            1
+
+            ```
     """
 
     def __init__(
