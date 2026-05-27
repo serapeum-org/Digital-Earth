@@ -34,3 +34,9 @@ if missing_dependencies:
 __doc__ = """
 digitalearth - visualization package
 """
+
+from digitalearth.api import quickmap, quickplot  # noqa: E402
+from digitalearth.scene import Map, Scene  # noqa: E402
+from digitalearth.sources import get_source  # noqa: E402
+
+__all__ = ["quickplot", "quickmap", "Map", "Scene", "get_source"]
