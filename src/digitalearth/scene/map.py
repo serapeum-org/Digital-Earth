@@ -195,6 +195,21 @@ class Map(Scene):
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+
+        Examples:
+            - Scatter the raster's valid cell centres and count the resulting layer:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.scene import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> m = Map(crs=ds.epsg)
+                >>> _ = m.grid_points(ds)
+                >>> len(m.layers)
+                1
+
+                ```
         """
         xyz = self._reproject(dataset).to_xyz()
         x = xyz.iloc[:, 0].to_numpy()
@@ -220,6 +235,21 @@ class Map(Scene):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+
+        Examples:
+            - Draw one polygon per raster cell and confirm the count equals rows*columns:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.scene import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> m = Map(crs=ds.epsg)
+                >>> pc = m.grid_cells(ds)
+                >>> len(pc.get_paths()) == ds.rows * ds.columns
+                True
+
+                ```
         """
         ds = self._reproject(dataset)
         polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
@@ -249,6 +279,25 @@ class Map(Scene):
 
         Returns:
             The image mappable (registered as a Scene layer).
+
+        Examples:
+            - Composite three bands of a multiband raster into one RGB image:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.scene import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> rgb = Dataset.create_from_array(arr=np.stack([base, base, base]),
+                ...                                 geo=ds.geotransform, epsg=ds.epsg)
+                >>> m = Map(crs=rgb.epsg)
+                >>> _ = m.rgb_composite(rgb)
+                >>> len(m.ax.images)
+                1
+
+                ```
         """
         ds = self._reproject(dataset)
         stack = np.dstack([ds.read_array(band=b - 1) for b in bands])
