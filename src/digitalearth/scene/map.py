@@ -14,6 +14,7 @@ import numpy as np
 from cleopatra.array_glyph import ArrayGlyph
 from cleopatra.polygon_glyph import PolygonGlyph
 from cleopatra.scatter_glyph import ScatterGlyph
+from cleopatra.vector_glyph import VectorGlyph
 from cleopatra.tiles import add_tiles
 from pyramids.basemap import natural_earth
 
@@ -218,6 +219,49 @@ class Map(Scene):
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
+
+    def _vector(self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts) -> Any:
+        """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
+
+        Args:
+            u_dataset: pyramids ``Dataset`` of the u (eastward) component.
+            v_dataset: pyramids ``Dataset`` of the v (northward) component.
+            kind: ``"quiver"``, ``"barbs"`` or ``"streamplot"``.
+            band: 1-based band index read from each dataset.
+            **opts: Styling kwargs, filtered to ``VectorGlyph``'s accepted options.
+
+        Returns:
+            The vector mappable (registered as a Scene layer).
+        """
+        su = self._prepare(u_dataset, band)
+        sv = self._prepare(v_dataset, band)
+        xs, ys = su.x.values, su.y.values
+        u, v = su.z.values, sv.z.values
+        # streamplot (and a tidy grid generally) needs strictly increasing axes; raster y runs
+        # north->south, so flip any descending axis and its data columns/rows to match.
+        if xs[0] > xs[-1]:
+            xs, u, v = xs[::-1], u[:, ::-1], v[:, ::-1]
+        if ys[0] > ys[-1]:
+            ys, u, v = ys[::-1], u[::-1, :], v[::-1, :]
+        x_grid, y_grid = np.meshgrid(xs, ys)
+        glyph = VectorGlyph(
+            x_grid, y_grid, u, v, ax=self.ax, fig=self.fig,
+            **VectorGlyph.filter_kwargs(opts),
+        )
+        _, _, im = glyph.plot(kind=kind)
+        return self._add_layer(glyph, im)
+
+    def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
+        """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``)."""
+        return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
+
+    def barbs(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
+        """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``)."""
+        return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
+
+    def streamplot(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
+        """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``)."""
+        return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS."""
