@@ -415,6 +415,61 @@ class Map(Scene):
         """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data)."""
         return self._tri(data, kind="tripcolor", **kwargs)
 
+    @staticmethod
+    def _polygon_vertices(geometry: Any) -> tuple:
+        """Return (vertex-arrays, repeat-counts) for a geopandas geometry series.
+
+        Polygons contribute their exterior ring; MultiPolygons contribute one ring per part (so a single
+        feature can map to several drawn polygons). The repeat count per feature lets callers expand a
+        per-feature value array to per-polygon.
+        """
+        polygons: List[np.ndarray] = []
+        repeats: List[int] = []
+        for geom in geometry:
+            parts = list(geom.geoms) if geom.geom_type == "MultiPolygon" else [geom]
+            polygons.extend(np.asarray(p.exterior.coords) for p in parts)
+            repeats.append(len(parts))
+        return polygons, repeats
+
+    def choropleth(self, features: Any, column: str, **opts) -> Any:
+        """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
+            column: Name of the numeric column whose values colour the polygons.
+            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+        """
+        gdf = features.to_crs(self.crs)
+        polygons, repeats = self._polygon_vertices(gdf.geometry)
+        values = np.repeat(gdf[column].to_numpy(), repeats)
+        glyph = PolygonGlyph(
+            polygons, values=values, ax=self.ax, fig=self.fig,
+            **PolygonGlyph.filter_kwargs(opts),
+        )
+        _, _, pc = glyph.plot()
+        return self._add_layer(glyph, pc)
+
+    def shapes(self, features: Any, **opts) -> Any:
+        """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
+            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+        """
+        gdf = features.to_crs(self.crs)
+        polygons, _ = self._polygon_vertices(gdf.geometry)
+        glyph = PolygonGlyph(
+            polygons, ax=self.ax, fig=self.fig, **PolygonGlyph.filter_kwargs(opts)
+        )
+        _, _, pc = glyph.plot(outline_only=True)
+        return self._add_layer(glyph, pc)
+
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS."""
         fc = natural_earth(layer, resolution)
