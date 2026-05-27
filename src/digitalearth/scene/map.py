@@ -340,6 +340,22 @@ class Map(Scene):
         glyph.plot()
         return self._add_layer(glyph, glyph.im)
 
+    def spaghetti(self, collection: Any, band: int = 1, **opts) -> List[Any]:
+        """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).
+
+        Args:
+            collection: A pyramids ``DatasetCollection`` whose members share a grid.
+            band: 1-based band read from each member.
+            **opts: Styling kwargs forwarded to the per-member contour call.
+
+        Returns:
+            The list of per-member contour mappables (each also registered as a Scene layer).
+        """
+        return [
+            self._field(member, kind="contour", band=band, add_colorbar=False, **opts)
+            for member in collection.datasets
+        ]
+
     def _vector(self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts) -> Any:
         """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
 
