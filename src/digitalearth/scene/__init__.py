@@ -4,6 +4,7 @@
 layers stack (e.g. a filled field + line contours + points). ``Map`` (see :mod:`digitalearth.scene.map`)
 adds geospatial behaviour (display CRS, reprojection, basemap/coastlines).
 """
+from digitalearth.scene.map import Map
 from digitalearth.scene.scene import Scene
 
-__all__ = ["Scene"]
+__all__ = ["Scene", "Map"]
