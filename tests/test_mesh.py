@@ -1,7 +1,4 @@
 """Tests for T4.1 — Map unstructured methods (tricontourf/tricontour/tripcolor) via MeshGlyph."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import pytest
 

@@ -1,7 +1,4 @@
 """Tests for T5.1 — named domains and Map.set_domain extent setting."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import pytest
 

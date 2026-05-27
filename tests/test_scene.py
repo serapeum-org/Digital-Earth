@@ -1,7 +1,4 @@
 """Tests for digitalearth.scene.Scene — the shared-axes glyph host."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 import pytest

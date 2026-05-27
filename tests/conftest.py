@@ -1,10 +1,7 @@
-import matplotlib
 import pytest
 import geopandas as gpd
 from geopandas.geodataframe import GeoDataFrame
 from pyramids.dataset import Dataset
-
-matplotlib.use("Agg")
 
 
 @pytest.fixture(autouse=True)

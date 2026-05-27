@@ -1,7 +1,4 @@
 """Tests for T7.1 — Map RGB/HSV composites from a multiband pyramids raster."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 import pytest

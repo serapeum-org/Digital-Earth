@@ -1,7 +1,4 @@
 """Tests for T3.2 — Map vector methods (quiver/barbs/streamplot) from two pyramids rasters."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 import pytest

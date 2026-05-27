@@ -1,7 +1,4 @@
 """Tests for T7.3 — ensemble/statistical series (spaghetti/envelope/quantiles/boxplot/multiboxplot/stripes)."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 import pytest

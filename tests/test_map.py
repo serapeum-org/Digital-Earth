@@ -1,9 +1,6 @@
 """Tests for digitalearth.scene.Map — display-CRS reprojection + decoration (no Cartopy)."""
 from pathlib import Path
 
-import matplotlib
-
-matplotlib.use("Agg")
 
 import pytest
 

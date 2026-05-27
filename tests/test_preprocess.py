@@ -1,7 +1,4 @@
 """Tests for T5.2 — longitude wrap, cyclic column, and the cyclic field option."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 from pyramids.dataset import Dataset

@@ -1,7 +1,4 @@
 """Tests for T9.1 — quickplot/quickmap one-call entry points and module functions."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import pytest
 

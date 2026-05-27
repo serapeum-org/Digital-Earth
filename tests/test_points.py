@@ -1,8 +1,4 @@
 """Tests for T2.2 — Map point/cell methods (scatter/grid_points/point_cloud/grid_cells)."""
-import matplotlib
-
-matplotlib.use("Agg")
-
 
 from digitalearth.scene import Map
 

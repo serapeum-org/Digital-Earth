@@ -1,7 +1,4 @@
 """Tests for T6.2 — auto-style: Source metadata -> cleopatra style params."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 import pytest

@@ -1,7 +1,4 @@
 """Tests for T1.1 — Map field methods (contourf/contour/pcolormesh/imshow/block) over a pyramids raster."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import pytest
 

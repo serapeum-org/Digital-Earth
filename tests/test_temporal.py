@@ -1,7 +1,4 @@
 """Tests for T8.1 — TimeSeries and Climatology over a pyramids DatasetCollection."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import numpy as np
 import pytest

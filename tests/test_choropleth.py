@@ -1,7 +1,4 @@
 """Tests for T7.2 — Map choropleth/shapes from a pyramids FeatureCollection of polygons."""
-import matplotlib
-
-matplotlib.use("Agg")
 
 import pytest
 
