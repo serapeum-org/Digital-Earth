@@ -144,3 +144,6 @@ examples/data/DEM100_Rhine.tif
 # Claude Code files (kept local only, never tracked)
 .claude/
 CLAUDE.md
+
+# Planning / design notes (kept local only, never tracked)
+planning/
