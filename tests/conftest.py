@@ -1,7 +1,19 @@
+import matplotlib
 import pytest
 import geopandas as gpd
 from geopandas.geodataframe import GeoDataFrame
 from pyramids.dataset import Dataset
+
+matplotlib.use("Agg")
+
+
+@pytest.fixture(autouse=True)
+def _close_figures():
+    """Close all matplotlib figures after each test to avoid the >20-open-figures warning/leak."""
+    yield
+    import matplotlib.pyplot as plt
+
+    plt.close("all")
 
 
 @pytest.fixture(scope="module")
