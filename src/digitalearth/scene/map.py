@@ -520,9 +520,21 @@ class Map(Scene):
         return self._add_layer(glyph, pc)
 
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
-        """Draw a Natural-Earth vector layer reprojected to the display CRS."""
+        """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
+
+        Natural Earth layers are global, and ``GeoDataFrame.plot`` autoscales the axes to the whole layer —
+        which would shrink an already-drawn data layer (e.g. a regional DEM) to an invisible speck. So when a
+        layer is already present, preserve its axes limits: the coastlines/borders decorate the data's view
+        rather than zooming out to the world.
+        """
         fc = natural_earth(layer, resolution)
-        return fc.to_crs(self.crs).plot(ax=self.ax, **{**defaults, **kwargs})
+        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
+        artist = fc.to_crs(self.crs).plot(ax=self.ax, **{**defaults, **kwargs})
+        if has_data:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+        return artist
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth coastlines (``pyramids.basemap.natural_earth("coastline")``)."""

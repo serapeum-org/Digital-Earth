@@ -62,6 +62,31 @@ def test_natural_earth_overlays(dataset, layer):
     assert m.ax.collections or m.ax.lines
 
 
+def test_coastlines_preserve_data_extent(dataset, mocker):
+    """A global Natural Earth layer must NOT zoom the axes out past the already-drawn data.
+
+    Guards the regression where coastlines/borders autoscaled the axes to the whole world, shrinking a
+    regional DEM to an invisible speck. Mocks the (network) Natural Earth fetch with a global line.
+    """
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    world = gpd.GeoDataFrame(
+        geometry=[LineString([(-179, -89), (179, 89)])], crs=4326
+    )
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=world)
+
+    m = Map(crs=3857)
+    m.imshow(dataset)
+    xlim_before, ylim_before = m.ax.get_xlim(), m.ax.get_ylim()
+    m.coastlines()
+    # the global layer was drawn, but the view stayed on the data
+    assert m.ax.get_xlim() == xlim_before, "coastlines blew out the x extent"
+    assert m.ax.get_ylim() == ylim_before, "coastlines blew out the y extent"
+    # and the data raster is still the only image, intact
+    assert len(m.ax.images) == 1
+
+
 @pytest.mark.parametrize("layer", ["land", "ocean"])
 def test_natural_earth_fills(dataset, layer):
     """Land/ocean polygon fills overlay when reachable; skipped offline."""
