@@ -3,6 +3,25 @@
 import pytest
 
 from digitalearth.scene import Map
+from digitalearth.sources import get_source
+
+
+@pytest.mark.parametrize("kind", ["imshow", "contourf", "contour", "pcolormesh", "block"])
+def test_field_extent_matches_data_bbox(dataset, kind):
+    """Each field method places the data at its true coordinate bbox (cleopatra wants [xmin,ymin,xmax,ymax]).
+
+    Guards the extent-ordering bug where passing matplotlib-order [xmin,xmax,ymin,ymax] put the raster at the
+    wrong location/zoom (x-span exploding to thousands of km).
+    """
+    src = get_source(dataset)
+    xmin, xmax = float(src.x.values.min()), float(src.x.values.max())
+    ymin, ymax = float(src.y.values.min()), float(src.y.values.max())
+    m = Map(crs=dataset.epsg)
+    getattr(m, kind)(dataset)
+    xlim, ylim = sorted(m.ax.get_xlim()), sorted(m.ax.get_ylim())
+    # axes span should match the data span (within a cell), not be wildly larger
+    assert abs((xlim[1] - xlim[0]) - (xmax - xmin)) < 2 * dataset.cell_size, f"x-span off: {xlim}"
+    assert abs((ylim[1] - ylim[0]) - (ymax - ymin)) < 2 * dataset.cell_size, f"y-span off: {ylim}"
 
 
 @pytest.mark.parametrize("kind", ["imshow", "contourf", "contour", "pcolormesh", "block"])
@@ -30,8 +49,8 @@ def test_field_accepts_cmap_and_levels(dataset):
     assert len(m.layers) == 1
 
 
-def test_field_filters_unknown_kwargs(dataset):
-    """Unknown styling kwargs are filtered out (ArrayGlyph.filter_kwargs) rather than raising."""
+def test_field_rejects_unknown_kwargs(dataset):
+    """An unknown styling kwarg is forwarded to cleopatra, which raises loudly (no silent drop)."""
     m = Map(crs=dataset.epsg)
-    m.imshow(dataset, not_a_real_option=123)
-    assert len(m.layers) == 1
+    with pytest.raises(ValueError):
+        m.imshow(dataset, not_a_real_option=123)

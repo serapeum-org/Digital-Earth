@@ -126,28 +126,33 @@ class Map(Scene):
             The glyph's mappable (also registered as a Scene layer).
         """
         src = self._prepare(dataset, band)
-        z_values, x_values = src.z.values, src.x.values
+        z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
         if opts.pop("cyclic", False):  # close the antimeridian seam for global fields (T5.2)
             z_values, x_values = add_cyclic_column(z_values, x_values)
-        extent = [
-            float(x_values.min()),
-            float(x_values.max()),
-            float(src.y.values.min()),
-            float(src.y.values.max()),
-        ]
         if cmap is None:
             cmap = auto_style(src).get("cmap")  # per-variable default (T6.2)
         if cmap is not None:
             opts["cmap"] = cmap
         if levels is not None:
             opts["levels"] = levels
+        # Geo-reference the data. cleopatra honours `extent` only for imshow (bbox order
+        # [xmin, ymin, xmax, ymax]); contour/contourf/pcolormesh plot in array-index space unless
+        # given `coords=(x, y)`. The two are mutually exclusive, so pick by kind — otherwise the
+        # field lands at the wrong location/zoom.
+        if kind == "imshow":
+            placement = {"extent": [
+                float(x_values.min()), float(y_values.min()),
+                float(x_values.max()), float(y_values.max()),
+            ]}
+        else:
+            placement = {"coords": (x_values, y_values)}
         glyph = ArrayGlyph(
             z_values,
             exclude_value=[float("nan")],
-            extent=extent,
             ax=self.ax,
             fig=self.fig,
-            **ArrayGlyph.filter_kwargs(opts),
+            **placement,
+            **opts,
         )
         glyph.plot(kind=kind, add_colorbar=add_colorbar)
         return self._add_layer(glyph, glyph.im)
@@ -188,9 +193,9 @@ class Map(Scene):
         """
         src = get_source(features.to_crs(self.crs))
         values = src.z.values if src.z is not None else None
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = ScatterGlyph(
-            src.x.values, src.y.values, values=values, ax=self.ax, fig=self.fig,
-            **ScatterGlyph.filter_kwargs(opts),
+            src.x.values, src.y.values, values=values, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
@@ -224,9 +229,8 @@ class Map(Scene):
         x = xyz.iloc[:, 0].to_numpy()
         y = xyz.iloc[:, 1].to_numpy()
         z = xyz.iloc[:, 2].to_numpy()
-        glyph = ScatterGlyph(
-            x, y, values=z, ax=self.ax, fig=self.fig, **ScatterGlyph.filter_kwargs(opts)
-        )
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
 
@@ -266,17 +270,17 @@ class Map(Scene):
         nodata = ds.no_data_value[band - 1]
         if nodata is not None:
             values = np.where(np.isclose(values, nodata, rtol=1e-3), np.nan, values)
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = PolygonGlyph(
-            polygons, values=values, ax=self.ax, fig=self.fig,
-            **PolygonGlyph.filter_kwargs(opts),
+            polygons, values=values, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
 
     def _extent(self, ds: Any) -> List[float]:
-        """Return ``[xmin, xmax, ymin, ymax]`` of a (reprojected) dataset's cell-centre coordinates."""
+        """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
         x, y = ds.x, ds.y
-        return [float(x.min()), float(x.max()), float(y.min()), float(y.max())]
+        return [float(x.min()), float(y.min()), float(x.max()), float(y.max())]
 
     def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
@@ -315,7 +319,7 @@ class Map(Scene):
         band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
         glyph = ArrayGlyph(
             band_first, rgb=list(range(len(bands))), extent=self._extent(ds),
-            ax=self.ax, fig=self.fig, **ArrayGlyph.filter_kwargs(opts),
+            ax=self.ax, fig=self.fig, **opts,
         )
         glyph.plot()
         return self._add_layer(glyph, glyph.im)
@@ -340,7 +344,7 @@ class Map(Scene):
         band_first = np.moveaxis(rgb, -1, 0)
         glyph = ArrayGlyph(
             band_first, rgb=[0, 1, 2], extent=self._extent(ds), ax=self.ax, fig=self.fig,
-            **ArrayGlyph.filter_kwargs(opts),
+            **opts,
         )
         glyph.plot()
         return self._add_layer(glyph, glyph.im)
@@ -385,9 +389,9 @@ class Map(Scene):
         if ys[0] > ys[-1]:
             ys, u, v = ys[::-1], u[::-1, :], v[::-1, :]
         x_grid, y_grid = np.meshgrid(xs, ys)
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = VectorGlyph(
-            x_grid, y_grid, u, v, ax=self.ax, fig=self.fig,
-            **VectorGlyph.filter_kwargs(opts),
+            x_grid, y_grid, u, v, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, im = glyph.plot(kind=kind)
         return self._add_layer(glyph, im)
@@ -427,11 +431,12 @@ class Map(Scene):
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
         if kind == "tripcolor":
             face_values = z[tri.triangles].mean(axis=1)
-            _, ax = glyph.plot(face_values, location="face", colorbar=False, **opts)
+            glyph.plot(face_values, location="face", colorbar=False, **opts)
         else:
-            _, ax = glyph.plot(z, location="node", filled=(kind == "tricontourf"), colorbar=False, **opts)
-        mappable = ax.collections[-1] if ax.collections else None
-        return self._add_layer(glyph, mappable)
+            glyph.plot(z, location="node", filled=(kind == "tricontourf"), colorbar=False, **opts)
+        # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2),
+        # so we no longer scrape ax.collections[-1].
+        return self._add_layer(glyph, glyph.im)
 
     def tricontourf(self, data: Any, **kwargs) -> Any:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``)."""
@@ -491,9 +496,9 @@ class Map(Scene):
         gdf = features.to_crs(self.crs)
         polygons, repeats = self._polygon_vertices(gdf.geometry)
         values = np.repeat(gdf[column].to_numpy(), repeats)
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = PolygonGlyph(
-            polygons, values=values, ax=self.ax, fig=self.fig,
-            **PolygonGlyph.filter_kwargs(opts),
+            polygons, values=values, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
@@ -510,9 +515,7 @@ class Map(Scene):
         """
         gdf = features.to_crs(self.crs)
         polygons, _ = self._polygon_vertices(gdf.geometry)
-        glyph = PolygonGlyph(
-            polygons, ax=self.ax, fig=self.fig, **PolygonGlyph.filter_kwargs(opts)
-        )
+        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         _, _, pc = glyph.plot(outline_only=True)
         return self._add_layer(glyph, pc)
 
