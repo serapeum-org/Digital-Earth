@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -554,7 +554,7 @@
   <span class="md-ellipsis">
     
   
-    1 · Sources — one wrapper over every input
+    1 · Sources — one uniform wrapper over every input
   
 
     
@@ -1934,13 +1934,56 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6e9d63fc">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9f9465f0">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="2-maps-raster-field-plots">2 · Maps &amp; raster field plots<a class="anchor-link" href="#2-maps-raster-field-plots">¶</a></h1><p><code>Map</code> reprojects via pyramids and lays cleopatra glyphs on one shared axes. Field methods: <code>imshow</code>, <code>contourf</code>, <code>contour</code>, <code>pcolormesh</code>, <code>block</code>. Rendered on the full-resolution Lisbon DEM.</p>
+<h1 id="2-maps-raster-field-plots">2 · Maps &amp; raster field plots<a class="anchor-link" href="#2-maps-raster-field-plots">¶</a></h1><p><code>Map</code> is the workhorse. It holds one matplotlib axes, <strong>reprojects</strong> each input to a chosen display CRS via pyramids (<code>Dataset.to_crs</code>), and renders <a href="https://github.com/serapeum-org/cleopatra">cleopatra</a> glyphs onto that shared axes — <strong>no Cartopy</strong>: the projection is applied to the <em>data</em>, not the axes.</p>
+<p>The raster <strong>field methods</strong> all wrap one cleopatra <code>ArrayGlyph</code> and differ only in <code>kind</code>:</p>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>renders as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>imshow</code></td>
+<td>pixel grid (honours <code>extent</code>)</td>
+</tr>
+<tr>
+<td><code>contourf</code></td>
+<td>filled contours</td>
+</tr>
+<tr>
+<td><code>contour</code></td>
+<td>line contours</td>
+</tr>
+<tr>
+<td><code>pcolormesh</code></td>
+<td>quadrilateral mesh</td>
+</tr>
+<tr>
+<td><code>block</code></td>
+<td>discrete cell blocks</td>
+</tr>
+</tbody>
+</table>
+<p>Each call registers a <strong>layer</strong>; <code>Map.colorbar()</code> then draws a single aggregated colorbar for the layer of interest. Everything below runs on the full-resolution Lisbon DEM.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=70183114">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Setup.</strong> Inline plots + resolve the DEM path from the repo root.</p>
 </div>
 </div>
 </div>
@@ -2002,6 +2045,17 @@ print("DEM:", DEM)</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=871856b3">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Read the DEM once; every cell below renders it a different way.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=37b604df">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2056,6 +2110,17 @@ ds = Dataset.read_file(DEM)</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="imshow-pixel-grid-an-aggregated-colorbar">imshow (pixel grid) + an aggregated colorbar<a class="anchor-link" href="#imshow-pixel-grid-an-aggregated-colorbar">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8a18a8f1">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>imshow</strong> — create a <code>Map</code> in the DEM's own CRS (no reprojection) and draw the raster as a pixel grid. <code>colorbar(label=…)</code> adds one aggregated colorbar for the layer; <code>cmap='terrain'</code> is an elevation-friendly colormap.</p>
 </div>
 </div>
 </div>
@@ -2117,6 +2182,17 @@ m.fig;</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6e4ae160">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>contourf</strong> — the same data as filled contours. <code>levels=12</code> sets the number of class breaks; the colorbar becomes discrete to match.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=ec0e10e7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2172,6 +2248,17 @@ m.fig;</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="line-contours">Line contours<a class="anchor-link" href="#line-contours">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=db805c53">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>contour</strong> — line contours (isolines) of elevation. No fill, so no colorbar is needed here.</p>
 </div>
 </div>
 </div>
@@ -2231,6 +2318,17 @@ m.fig;</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6edb5d2a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>pcolormesh</strong> — a quadrilateral mesh; like <code>imshow</code> but each cell is a true quad (correct for non-uniform/curvilinear grids). <code>block</code> is the same renderer on cell edges.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=45a45b90">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2286,6 +2384,17 @@ m.fig;</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="reproject-to-a-display-crs-web-mercator">Reproject to a display CRS (Web Mercator)<a class="anchor-link" href="#reproject-to-a-display-crs-web-mercator">¶</a></h2><p>pyramids does the reprojection; we render on a plain axes (no Cartopy).</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1940fc46">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Reprojection</strong> — set the display CRS to Web Mercator (<code>crs=3857</code>). pyramids reprojects the DEM to that CRS and the axis units become metres; the map is rendered on a plain axes (no Cartopy).</p>
 </div>
 </div>
 </div>
@@ -2379,7 +2488,7 @@ m.fig;</div>
       <nav class="md-footer__inner md-grid" aria-label="Footer" >
         
           
-          <a href="../01_sources/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 1 · Sources — one wrapper over every input">
+          <a href="../01_sources/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 1 · Sources — one uniform wrapper over every input">
             <div class="md-footer__button md-icon">
               
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
@@ -2389,7 +2498,7 @@ m.fig;</div>
                 Previous
               </span>
               <div class="md-ellipsis">
-                1 · Sources — one wrapper over every input
+                1 · Sources — one uniform wrapper over every input
               </div>
             </div>
           </a>

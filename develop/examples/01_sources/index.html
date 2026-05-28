@@ -27,7 +27,7 @@
     
     
       
-        <title>1 · Sources — one wrapper over every input - Digital-Earth</title>
+        <title>1 · Sources — one uniform wrapper over every input - Digital-Earth</title>
       
     
     
@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -83,7 +83,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#1-sources-one-wrapper-over-every-input" class="md-skip">
+        <a href="#1-sources-one-uniform-wrapper-over-every-input" class="md-skip">
           Skip to content
         </a>
       
@@ -123,7 +123,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              1 · Sources — one wrapper over every input
+              1 · Sources — one uniform wrapper over every input
             
           </span>
         </div>
@@ -563,7 +563,7 @@
   <span class="md-ellipsis">
     
   
-    1 · Sources — one wrapper over every input
+    1 · Sources — one uniform wrapper over every input
   
 
     
@@ -581,7 +581,7 @@
   <span class="md-ellipsis">
     
   
-    1 · Sources — one wrapper over every input
+    1 · Sources — one uniform wrapper over every input
   
 
     
@@ -1890,14 +1890,27 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=305b106a">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9eaf7e96">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="1-sources-one-wrapper-over-every-input">1 · Sources — one wrapper over every input<a class="anchor-link" href="#1-sources-one-wrapper-over-every-input">¶</a></h1><p><code>digitalearth.sources</code> turns any pyramids object (or a raw numpy array) into a uniform <code>Source</code> of <code>(z, x, y, crs, metadata)</code> — the data layer every plot method reads from. pyramids is the only GIS dependency (no xarray/rasterio).</p>
-<p>The sample data is a <strong>real elevation DEM of the Lisbon region</strong> (421×547 cells, EPSG:4326).</p>
+<h1 id="1-sources-one-uniform-wrapper-over-every-input">1 · Sources — one uniform wrapper over every input<a class="anchor-link" href="#1-sources-one-uniform-wrapper-over-every-input">¶</a></h1><p>Every Digital-Earth plot reads from a <strong><code>Source</code></strong>: a small object holding the data grid <code>z</code>, the coordinate axes <code>x</code>/<code>y</code>, the <code>crs</code>, and free-form <code>metadata</code>. <code>digitalearth.sources.get_source</code> builds one from <em>any</em> supported input — a pyramids <code>Dataset</code> (raster), <code>NetCDF</code>, <code>DatasetCollection</code>, <code>FeatureCollection</code>, or a raw NumPy array — so the rest of the library never has to care where the data came from.</p>
+<p><strong>pyramids is the only GIS dependency</strong> (no xarray/rasterio): coordinates, CRS and nodata all come from the pyramids object.</p>
+<p>This notebook builds a <code>Source</code> from each input type and inspects what comes out. The sample data is a <strong>real elevation DEM of the Lisbon region</strong> (421×547 cells, EPSG:4326).</p>
+<p><strong>Covered here:</strong> raster <code>Dataset</code> → <code>Source</code>, NaN-masking of nodata, coordinate vectors, a raw NumPy array, and one member of a <code>DatasetCollection</code>.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e205008e">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Setup.</strong> Enable inline plots and locate the bundled DEM by walking up to the repo root, so the notebook runs both from <code>docs/examples/</code> (mkdocs) and from the repository root.</p>
 </div>
 </div>
 </div>
@@ -1967,6 +1980,17 @@ print("DEM:", DEM)</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="from-a-pyramids-dataset-the-dem-raster">From a pyramids <code>Dataset</code> (the DEM raster)<a class="anchor-link" href="#from-a-pyramids-dataset-the-dem-raster">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=566f5901">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Read the DEM as a pyramids <code>Dataset</code> and wrap it with <code>get_source</code>. The <code>Source</code> exposes the data grid (<code>z</code>), the 1-D coordinate axes (<code>x</code>/<code>y</code>), the CRS, and a <code>metadata</code> dict — note <code>kind=raster</code>.</p>
 </div>
 </div>
 </div>
@@ -2047,6 +2071,17 @@ crs      : 4326
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e27cb19d">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Inspect the wrapped values: nodata cells have been replaced with <code>NaN</code>, and <code>x</code>/<code>y</code> are the cell-centre longitude/latitude vectors (lengths = columns/rows).</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=4ae74285">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2108,6 +2143,17 @@ lat range: 38.68 .. 38.797
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2d3cbaee">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>The same wrapper accepts a <strong>raw NumPy array</strong> — useful for quick, non-georeferenced data. With no CRS and no coordinates given, the axes default to pixel indices and <code>crs</code> is <code>None</code>.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=60cb0503">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2160,6 +2206,17 @@ print('x:', s.x.values.tolist(), ' crs:', s.crs)</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="from-a-datasetcollection-one-member">From a <code>DatasetCollection</code> (one member)<a class="anchor-link" href="#from-a-datasetcollection-one-member">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=a093757c">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>A <code>DatasetCollection</code> (a stack of rasters) yields a <code>Source</code> for one member; the metadata records which member (<code>member</code>) and how many there are (<code>n_members</code>) so callers can iterate the rest.</p>
 </div>
 </div>
 </div>

@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -554,7 +554,7 @@
   <span class="md-ellipsis">
     
   
-    1 · Sources — one wrapper over every input
+    1 · Sources — one uniform wrapper over every input
   
 
     
@@ -1912,13 +1912,31 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=da7d6d07">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=8e653a05">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="5-choropleth-shapes-map-decoration">5 · Choropleth, shapes &amp; map decoration<a class="anchor-link" href="#5-choropleth-shapes-map-decoration">¶</a></h1><p><code>choropleth</code> / <code>shapes</code> for vector polygons, plus named domains and coastlines / borders / basemap. The polygons here are the DEM's own cells, vectorised by pyramids and coloured by elevation. Network-dependent overlays are wrapped so the notebook always renders.</p>
+<h1 id="5-choropleth-shapes-map-decoration">5 · Choropleth, shapes &amp; map decoration<a class="anchor-link" href="#5-choropleth-shapes-map-decoration">¶</a></h1><p>Vector-polygon rendering and map context:</p>
+<ul>
+<li><code>choropleth</code> — fill polygons by an attribute column (cleopatra <code>PolygonGlyph</code>).</li>
+<li><code>shapes</code> — draw polygon outlines only.</li>
+<li><code>set_domain</code> — crop the view to a named region (e.g. <code>"europe"</code>), reprojected via pyramids.</li>
+<li><code>coastlines</code> / <code>borders</code> / <code>land</code> / <code>ocean</code> — Natural Earth vector context from <code>pyramids.basemap</code>.</li>
+</ul>
+<p>The polygons here are the DEM's own cells, vectorised by pyramids and coloured by elevation. Natural-Earth overlays need network access, so they are wrapped in <code>try/except</code> and the view is always clipped to the data (a global layer never blows the zoom out to the whole world).</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ba9dff0b">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Setup.</strong> Inline plots + resolve the DEM path.</p>
 </div>
 </div>
 </div>
@@ -1977,6 +1995,17 @@ print("DEM:", DEM)</div>
 </pre>
 </div>
 </div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ec72a86b">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Resample the DEM coarse, <strong>vectorise its cells</strong> to polygons with pyramids' <code>get_cell_polygons</code>, and attach the per-cell elevation as the value column the choropleth will colour by.</p>
 </div>
 </div>
 </div>
@@ -2056,6 +2085,17 @@ print('polygons:', len(cells))</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1878d26a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>choropleth</strong> — fill each polygon by its <code>elevation</code> value (cleopatra <code>PolygonGlyph</code>), with an aggregated colorbar.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=1fa1b7c7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2114,6 +2154,17 @@ m.fig;</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d90264a6">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>shapes</strong> — the same polygons drawn as outlines only (no fill), e.g. for administrative or mesh boundaries.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=f3cadf00">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2167,6 +2218,17 @@ m.fig;</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="named-domains-extent-from-a-region-reprojected-via-pyramids">Named domains (extent from a region, reprojected via pyramids)<a class="anchor-link" href="#named-domains-extent-from-a-region-reprojected-via-pyramids">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b929a3f7">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Named domains</strong> — draw Natural Earth land/coastlines/borders for context, then <code>set_domain('europe')</code> crops the view to that region (reprojected to the display CRS via pyramids). The global layers are clipped to the domain, not zoomed out to the whole world.</p>
 </div>
 </div>
 </div>
@@ -2235,6 +2297,17 @@ m.fig;</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="dem-coastlines-borders-need-network-guarded">DEM + coastlines / borders (need network — guarded)<a class="anchor-link" href="#dem-coastlines-borders-need-network-guarded">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=37a927ae">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Decoration</strong> — overlay coastlines and borders on the DEM. They are fetched from Natural Earth (network), so the calls are guarded; the view stays clipped to the DEM's extent.</p>
 </div>
 </div>
 </div>

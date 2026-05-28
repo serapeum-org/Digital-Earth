@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -554,7 +554,7 @@
   <span class="md-ellipsis">
     
   
-    1 · Sources — one wrapper over every input
+    1 · Sources — one uniform wrapper over every input
   
 
     
@@ -1890,13 +1890,25 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e56e8b6f">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4150790a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="7-one-call-api-quickplot-quickmap">7 · One-call API — quickplot / quickmap<a class="anchor-link" href="#7-one-call-api-quickplot-quickmap">¶</a></h1><p><code>digitalearth.quickplot</code> builds a finished, decorated <code>Map</code> in one call, dispatching on input type. Module functions (<code>imshow</code>, <code>contourf</code>, ...) mirror the methods.</p>
+<h1 id="7-one-call-api-quickplot-quickmap">7 · One-call API — quickplot / quickmap<a class="anchor-link" href="#7-one-call-api-quickplot-quickmap">¶</a></h1><p><code>digitalearth.quickplot</code> (alias <code>quickmap</code>) builds a <strong>finished, decorated <code>Map</code> in a single call</strong>: it dispatches on the input type (raster → field, points → scatter, polygons → choropleth), auto-styles by variable, draws, and adds a colorbar — returning the <code>Map</code> so you can keep tweaking it.</p>
+<p>Module-level functions (<code>api.imshow</code>, <code>api.contourf</code>, …) mirror the <code>Map</code> methods for a terse functional style. This is the highest-level entry point; everything in notebooks 2–6 is what it orchestrates under the hood.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d57be67e">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>Setup.</strong> Inline plots + resolve the DEM path.</p>
 </div>
 </div>
 </div>
@@ -1955,6 +1967,17 @@ print("DEM:", DEM)</div>
 </pre>
 </div>
 </div>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=2a619d34">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Import the one-call API (<code>digitalearth.quickplot</code>/<code>quickmap</code>) and the module-function namespace (<code>digitalearth.api</code>), and read the DEM.</p>
 </div>
 </div>
 </div>
@@ -2017,6 +2040,17 @@ ds = Dataset.read_file(DEM)</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4017ef2a">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p><strong>quickplot(dataset)</strong> — one call builds a <code>Map</code>, auto-styles, draws the raster and adds a colorbar, returning the finished <code>Map</code> (so <code>set_title</code> still works afterwards).</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=7320f44a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2071,6 +2105,17 @@ m.fig;</div>
 </div>
 </div>
 </div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=77d4f1cb">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Pick the renderer with a module function — <code>api.contourf</code> is the functional twin of <code>Map.contourf</code>; the same <code>levels</code>/<code>cmap</code> kwargs apply.</p>
+</div>
+</div>
+</div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
 <div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=9052bfd9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
@@ -2122,6 +2167,17 @@ m.fig;</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="reproject-colorbar-in-one-call">Reproject + colorbar in one call<a class="anchor-link" href="#reproject-colorbar-in-one-call">¶</a></h2>
+</div>
+</div>
+</div>
+</div>
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=454b9e79">
+<div class="jp-Cell-inputWrapper" tabindex="0">
+<div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
+</div>
+<div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
+</div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
+<p>Reproject in the same one call — <code>api.imshow(..., crs=3857)</code> builds the map directly in Web Mercator.</p>
 </div>
 </div>
 </div>
