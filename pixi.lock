@@ -5911,7 +5911,7 @@ packages:
 - pypi: ./
   name: digitalearth
   version: 0.1.11
-  sha256: be688f0ec114e66f5df4271e97638a6b130d005a7e08ffcc3d90d73c678cdfab
+  sha256: df9725ec4d873e6851ca1bc40d9f89d0f9117d6e95f91903bfec1a86e49e0185
   requires_dist:
   - numpy>=2.0.0
   - geopandas>=1.1.3
