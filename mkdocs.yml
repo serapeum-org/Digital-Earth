@@ -115,6 +115,41 @@ nav:
     - Choropleth & decoration: examples/05_choropleth_and_decoration.ipynb
     - Temporal & series: examples/06_temporal_and_series.ipynb
     - One-call quickplot: examples/07_quickplot.ipynb
+    - Plot gallery:
+      - Fields:
+        - imshow: examples/plots/01_imshow.ipynb
+        - contourf: examples/plots/02_contourf.ipynb
+        - contour: examples/plots/03_contour.ipynb
+        - pcolormesh: examples/plots/04_pcolormesh.ipynb
+        - block: examples/plots/05_block.ipynb
+      - Points & cells:
+        - grid_points: examples/plots/06_grid_points.ipynb
+        - scatter: examples/plots/07_scatter.ipynb
+        - grid_cells: examples/plots/08_grid_cells.ipynb
+      - Vector fields:
+        - quiver: examples/plots/09_quiver.ipynb
+        - streamplot: examples/plots/10_streamplot.ipynb
+        - barbs: examples/plots/11_barbs.ipynb
+      - Mesh (unstructured):
+        - tricontourf: examples/plots/12_tricontourf.ipynb
+        - tricontour: examples/plots/13_tricontour.ipynb
+        - tripcolor: examples/plots/14_tripcolor.ipynb
+      - Composites:
+        - rgb_composite: examples/plots/15_rgb_composite.ipynb
+        - hsv_composite: examples/plots/16_hsv_composite.ipynb
+      - Polygons:
+        - choropleth: examples/plots/17_choropleth.ipynb
+        - shapes: examples/plots/18_shapes.ipynb
+      - Ensemble & series:
+        - spaghetti: examples/plots/19_spaghetti.ipynb
+        - envelope: examples/plots/20_envelope.ipynb
+        - quantile_band: examples/plots/21_quantile_band.ipynb
+        - boxplot: examples/plots/22_boxplot.ipynb
+        - multiboxplot: examples/plots/23_multiboxplot.ipynb
+        - stripes: examples/plots/24_stripes.ipynb
+      - Temporal:
+        - timeseries: examples/plots/25_timeseries.ipynb
+        - climatology: examples/plots/26_climatology.ipynb
   - Reference:
     - StaticGlyph: reference/static.md
   - About:
