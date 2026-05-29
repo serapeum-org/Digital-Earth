@@ -530,15 +530,43 @@ class Map(Scene):
         _, _, pc = glyph.plot(outline_only=True)
         return self._add_layer(glyph, pc)
 
+    def _project_line_features(self, fc: Any) -> List[np.ndarray]:
+        """Project a line FeatureCollection (lon/lat) to the display CRS, split at the projection limb.
+
+        Reprojecting a global line to a clipped projection (e.g. orthographic) sends the far side to
+        non-finite coordinates; per-line splitting at those gaps keeps the visible arcs and avoids the
+        ``NaN/Inf`` errors geopandas' ``clip``/``plot`` raise on such geometry.
+        """
+        from_crs = fc.epsg if fc.epsg is not None else 4326
+        segments: List[np.ndarray] = []
+        for geom in fc.geometry:
+            if geom is None:
+                continue
+            parts = geom.geoms if geom.geom_type.startswith("Multi") else [geom]
+            for part in parts:
+                xy = np.asarray(part.coords, dtype=float)
+                if xy.size == 0:
+                    continue
+                x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
+                                             from_crs=from_crs, to_crs=self.crs)
+                segments += projections._split_finite(np.asarray(x, float), np.asarray(y, float))
+        return segments
+
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
 
-        Natural Earth layers are global, and ``GeoDataFrame.plot`` autoscales the axes to the whole layer —
-        which would shrink an already-drawn data layer (e.g. a regional DEM) to an invisible speck. So when a
-        layer is already present, preserve its axes limits: the coastlines/borders decorate the data's view
-        rather than zooming out to the world.
+        On a **globe** map, line layers (coastline/borders/rivers) are projected per-line and split at the
+        projection limb (the far side reprojects to non-finite coords); they are drawn as plain polylines and
+        clipped to the boundary when the frame is applied. On a **flat** map, the layer is reprojected with
+        ``GeoDataFrame.plot``; since Natural Earth is global and that autoscales the axes, the data's limits
+        are preserved when a data layer is already present.
         """
         fc = natural_earth(layer, resolution)
+        if self.globe:
+            style = {**defaults, **kwargs}
+            style.pop("edgecolor", None); style.pop("facecolor", None)
+            artists = [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in self._project_line_features(fc)]
+            return artists
         has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
         xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
         artist = fc.to_crs(self.crs).plot(ax=self.ax, **{**defaults, **kwargs})
@@ -560,16 +588,26 @@ class Map(Scene):
         )
 
     def land(self, resolution: str = "110m", **kwargs) -> Any:
-        """Fill Natural-Earth land polygons."""
+        """Fill Natural-Earth land polygons (flat maps only — see note)."""
+        self._require_flat_polygons("land")
         return self._natural_earth(
             "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, **kwargs
         )
 
     def ocean(self, resolution: str = "110m", **kwargs) -> Any:
-        """Fill Natural-Earth ocean polygons."""
+        """Fill Natural-Earth ocean polygons (flat maps only — see note)."""
+        self._require_flat_polygons("ocean")
         return self._natural_earth(
             "ocean", resolution, {"color": "#cfe6f5", "edgecolor": "none"}, **kwargs
         )
+
+    def _require_flat_polygons(self, layer: str) -> None:
+        """Polygon fills (land/ocean) are not yet supported on a globe (need limb polygon-clipping)."""
+        if self.globe:
+            raise NotImplementedError(
+                f"{layer!r} polygon fill is not supported on a globe map yet; use coastlines()/borders() "
+                "(line features) for projected/globe maps."
+            )
 
     def basemap(self, source: Any = None, **kwargs) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.tiles.add_tiles`` in the display CRS."""

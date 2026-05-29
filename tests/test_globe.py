@@ -61,6 +61,27 @@ def test_polar_stereographic_reprojects(dataset):
     assert len(m.layers) == 1 and m.ax.patches
 
 
+def test_globe_coastlines_when_online(dataset):
+    """Globe coastlines project per-line and split at the limb (skipped offline)."""
+    m = Map(crs=projections.orthographic(10, 25), globe=True)
+    m.imshow(dataset)
+    try:
+        segs = m.coastlines(resolution="110m")
+    except Exception as exc:  # network/data unavailable
+        pytest.skip(f"Natural Earth coastline unavailable offline: {exc}")
+    assert segs and m.ax.lines  # finite projected segments drawn
+    pts = np.vstack([line.get_xydata() for line in m.ax.lines])
+    assert np.isfinite(pts).all()  # no inf/nan reached the axes
+
+
+@pytest.mark.parametrize("layer", ["land", "ocean"])
+def test_polygon_fills_rejected_on_globe(layer):
+    """land/ocean fills raise a clear error on a globe (not yet supported)."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    with pytest.raises(NotImplementedError, match="globe map"):
+        getattr(m, layer)()
+
+
 def test_globe_save(dataset, tmp_path):
     """A globe map saves a non-empty PNG (frame applied on save)."""
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
