@@ -5,6 +5,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -121,7 +123,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/99/68/1237369725aa617bb358263d535803e3053fdbc593513ec5ed9c9896b5b6/pandas-3.0.3-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/09/c4/240a165442f8bfc5ab80c851b6327920bfb2801e19dc7ab504c8c389c85a/pyramids_gis-0.27.0-cp313-cp313-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f5/5f/f17563f28ff03c7b6799c50d01d5d856a1d55f2676f537ca8d28c7f627cd/scipy-1.17.1-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: ./
@@ -234,7 +236,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c5/90/62d8302883c44308c477e222c3daf7c813a34c8e96985882fbd53d964352/pandas-3.0.3-cp313-cp313-macosx_10_13_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/5e/17/7c4ea20120b8b1da066e6fa8d0e620a4ef1caac31c6a02625bf322e09c14/pyramids_gis-0.26.0-cp313-cp313-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/b3/74/938bd602916ba810216f5f6e96a9dbb300b541650df71542f6a969a42d7f/pyramids_gis-0.27.0-cp313-cp313-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d1/11/0fd08f8192109f7169db964b5707a2f1e8b745d4e239b784a5a1dd80d1db/pyyaml-6.0.3-cp313-cp313-macosx_10_13_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/76/27/07ee1b57b65e92645f219b37148a7e7928b82e2b5dbeccecb4dff7c64f0b/scipy-1.17.1-cp313-cp313-macosx_10_14_x86_64.whl
       - pypi: ./
@@ -345,7 +347,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/20/559ace4200982c3887d0b86bfd0d856a2143ef8ddab63cc07934951a964c/pandas-3.0.3-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/b0/e0/3c90c7d8a71353b2e9f00ddd7f70b6d6e7b67639d99721e2398b107fa39d/pyramids_gis-0.26.0-cp313-cp313-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/a7/abe2016777bb73d320f31bea1f0bb76549db17393813f71cb845a920b3dc/pyramids_gis-0.27.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/97/c9/39d5b874e8b28845e4ec2202b5da735d0199dbe5b8fb85f91398814a9a46/pyyaml-6.0.3-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/35/e5/d6d0e51fc888f692a35134336866341c08655d92614f492c6860dc45bb2c/scipy-1.17.1-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl
@@ -356,6 +358,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -492,8 +496,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/4a/6b/fab5a7a0e9d05aeade48af4e4ec4a09b61fd1ef5b13ee43cd46ef638e3f6/commitizen-4.16.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/6a/bb/6c824d0da874eef900ecf0a71e0889f0d4624560b0160fd9e333a146ee4f/contextily-1.7.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/51/8c/23faf6a2343a0d17f960a4bd56c43bc7eb4cf312f774dd6ceebd82c7d8fc/coverage-7.14.1-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/95/38/0d29a6fd7d0d1373f0c0c88a04ba20e359b257753ac497564cd660fc1d55/cryptography-48.0.0-cp311-abi3-manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/e0/c3/7f67dea8ccf8fdcb9c99033bbe3e90b9e7395415843accb81428c441be2d/debugpy-1.8.20-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/d0/c0/7101d3b7215edcdc90c45da544961fd8ed2d6448f77577460fa75a8443f7/cryptography-48.0.0-cp311-abi3-manylinux_2_34_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/90/83/fb33dcea789ed6018f8da20c5a9bc9d82adc65c0c990faed43f7c955da46/debugpy-1.8.20-cp313-cp313-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d8/fa/ec878c28bc7f65b77e7e17af3522c9948a9711b9fa7fc4c5e3140a7e3578/decli-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl
@@ -588,7 +592,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/09/c4/240a165442f8bfc5ab80c851b6327920bfb2801e19dc7ab504c8c389c85a/pyramids_gis-0.27.0-cp313-cp313-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -865,7 +869,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/5e/17/7c4ea20120b8b1da066e6fa8d0e620a4ef1caac31c6a02625bf322e09c14/pyramids_gis-0.26.0-cp313-cp313-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/b3/74/938bd602916ba810216f5f6e96a9dbb300b541650df71542f6a969a42d7f/pyramids_gis-0.27.0-cp313-cp313-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -1135,7 +1139,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/b0/e0/3c90c7d8a71353b2e9f00ddd7f70b6d6e7b67639d99721e2398b107fa39d/pyramids_gis-0.26.0-cp313-cp313-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/a7/abe2016777bb73d320f31bea1f0bb76549db17393813f71cb845a920b3dc/pyramids_gis-0.27.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -1195,6 +1199,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -1297,7 +1303,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/60/97/891a0971e1e4a8c5d2b20bbe0e524dc04548d2307fee33cdeba148fd4fc7/comm-0.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4b/32/e0f13a1c5b0f8572d0ec6ae2f6c677b7991fafd95da523159c19eff0696a/contourpy-1.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e0/c3/7f67dea8ccf8fdcb9c99033bbe3e90b9e7395415843accb81428c441be2d/debugpy-1.8.20-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/90/83/fb33dcea789ed6018f8da20c5a9bc9d82adc65c0c990faed43f7c955da46/debugpy-1.8.20-cp313-cp313-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/96/fd/a40c621ff207f3ce8e484aa0fc8ba4eb6e3ecf52e15b42ba764b457a9550/editorconfig-0.17.1-py3-none-any.whl
@@ -1387,7 +1393,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/85/545a951eecc270fcd688288c600017e2050a1aacb56c711d208586d3e470/pymdown_extensions-10.21.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f8/85/c2b1706e51942de19076eff082f8495e57d5151364e78b5bef4af4a1d94a/pyproj-3.7.2-cp313-cp313-manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/09/c4/240a165442f8bfc5ab80c851b6327920bfb2801e19dc7ab504c8c389c85a/pyramids_gis-0.27.0-cp313-cp313-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
@@ -1610,7 +1616,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/85/545a951eecc270fcd688288c600017e2050a1aacb56c711d208586d3e470/pymdown_extensions-10.21.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/14/faf1b90d267cea68d7e70662e7f88cefdb1bc890bd596c74b959e0517a72/pyproj-3.7.2-cp313-cp313-macosx_13_0_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/5e/17/7c4ea20120b8b1da066e6fa8d0e620a4ef1caac31c6a02625bf322e09c14/pyramids_gis-0.26.0-cp313-cp313-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/b3/74/938bd602916ba810216f5f6e96a9dbb300b541650df71542f6a969a42d7f/pyramids_gis-0.27.0-cp313-cp313-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d1/11/0fd08f8192109f7169db964b5707a2f1e8b745d4e239b784a5a1dd80d1db/pyyaml-6.0.3-cp313-cp313-macosx_10_13_x86_64.whl
@@ -1824,7 +1830,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/85/545a951eecc270fcd688288c600017e2050a1aacb56c711d208586d3e470/pymdown_extensions-10.21.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/0f/747974129cf0d800906f81cd25efd098c96509026e454d4b66868779ab04/pyproj-3.7.2-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/b0/e0/3c90c7d8a71353b2e9f00ddd7f70b6d6e7b67639d99721e2398b107fa39d/pyramids_gis-0.26.0-cp313-cp313-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/a7/abe2016777bb73d320f31bea1f0bb76549db17393813f71cb845a920b3dc/pyramids_gis-0.27.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e5/cb/58d6ed3fd429c96a90ef01ac9a617af10a6d41469219c25e7dc162abbb71/pywinpty-3.0.3-cp313-cp313-win_amd64.whl
@@ -1868,6 +1874,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -1991,7 +1999,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/fa/07/330e3a0dda4c404d6da83b327270906e9654a24f6c546dc886a0eb0ffb23/charset_normalizer-3.4.7-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/5d/f5/1d865437a5b467caf727e7daabf8a3aead5b737d232819900940ac93a67c/cleopatra-0.12.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/60/97/891a0971e1e4a8c5d2b20bbe0e524dc04548d2307fee33cdeba148fd4fc7/comm-0.2.3-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e0/c3/7f67dea8ccf8fdcb9c99033bbe3e90b9e7395415843accb81428c441be2d/debugpy-1.8.20-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/90/83/fb33dcea789ed6018f8da20c5a9bc9d82adc65c0c990faed43f7c955da46/debugpy-1.8.20-cp313-cp313-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
@@ -2052,7 +2060,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8e/37/efad0257dc6e593a18957422533ff0f87ede7c9c6ea010a2177d738fb82f/pure_eval-0.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/09/c4/240a165442f8bfc5ab80c851b6327920bfb2801e19dc7ab504c8c389c85a/pyramids_gis-0.27.0-cp313-cp313-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/74/27/e5b8f34d02d9995b80abcef563ea1f8b56d20134d8f4e5e81733b1feceb2/pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f8/9b/c108cdb55560eaf253f0cbdb61b29971e9fb34d9c3499b0e96e4e60ed8a5/pyzmq-27.1.0-cp312-abi3-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl
@@ -2259,7 +2267,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8e/37/efad0257dc6e593a18957422533ff0f87ede7c9c6ea010a2177d738fb82f/pure_eval-0.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/5e/17/7c4ea20120b8b1da066e6fa8d0e620a4ef1caac31c6a02625bf322e09c14/pyramids_gis-0.26.0-cp313-cp313-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/b3/74/938bd602916ba810216f5f6e96a9dbb300b541650df71542f6a969a42d7f/pyramids_gis-0.27.0-cp313-cp313-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d1/11/0fd08f8192109f7169db964b5707a2f1e8b745d4e239b784a5a1dd80d1db/pyyaml-6.0.3-cp313-cp313-macosx_10_13_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/92/e7/038aab64a946d535901103da16b953c8c9cc9c961dadcbf3609ed6428d23/pyzmq-27.1.0-cp312-abi3-macosx_10_15_universal2.whl
@@ -2461,7 +2469,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/8e/37/efad0257dc6e593a18957422533ff0f87ede7c9c6ea010a2177d738fb82f/pure_eval-0.2.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0c/c3/44f3fbbfa403ea2a7c779186dc20772604442dde72947e7d01069cbe98e3/pycparser-3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/b0/e0/3c90c7d8a71353b2e9f00ddd7f70b6d6e7b67639d99721e2398b107fa39d/pyramids_gis-0.26.0-cp313-cp313-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/a7/abe2016777bb73d320f31bea1f0bb76549db17393813f71cb845a920b3dc/pyramids_gis-0.27.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e5/cb/58d6ed3fd429c96a90ef01ac9a617af10a6d41469219c25e7dc162abbb71/pywinpty-3.0.3-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/97/c9/39d5b874e8b28845e4ec2202b5da735d0199dbe5b8fb85f91398814a9a46/pyyaml-6.0.3-cp313-cp313-win_amd64.whl
@@ -2497,6 +2505,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -2604,9 +2614,9 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/4a/6b/fab5a7a0e9d05aeade48af4e4ec4a09b61fd1ef5b13ee43cd46ef638e3f6/commitizen-4.16.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5f/4b/6157f24ca425b89fe2eb7e7be642375711ab671135be21e6faa100f7448c/contourpy-1.3.3-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/77/63/e77aaacd491182210d639636b7a8bba23ffffa9b82aa3762da9431855fa9/coverage-7.14.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/95/38/0d29a6fd7d0d1373f0c0c88a04ba20e359b257753ac497564cd660fc1d55/cryptography-48.0.0-cp311-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/d0/c0/7101d3b7215edcdc90c45da544961fd8ed2d6448f77577460fa75a8443f7/cryptography-48.0.0-cp311-abi3-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e0/c3/7f67dea8ccf8fdcb9c99033bbe3e90b9e7395415843accb81428c441be2d/debugpy-1.8.20-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/9a/7d/4fa79a57a8e69fe0d9763e98d1110320f9ecd7f1f362572e3aafd7417c9d/debugpy-1.8.20-cp311-cp311-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d8/fa/ec878c28bc7f65b77e7e17af3522c9948a9711b9fa7fc4c5e3140a7e3578/decli-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl
@@ -2702,7 +2712,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ad/ab/9bdb4a6216b712a1f9aab1c0fcbee5d3726f34a366f29c3e8c08a78d6b70/pyproj-3.7.2-cp311-cp311-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/78/dc/558219c66e1b29d804dbab7893496f7bf1f438ca6c660d7a3aa7e86a04f7/pyramids_gis-0.27.0-cp311-cp311-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -2950,7 +2960,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a6/bd/f205552cd1713b08f93b09e39a3ec99edef0b3ebbbca67b486fdf1abe2de/pyproj-3.7.2-cp311-cp311-macosx_13_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/43/14/894a15cd6c8681ab5ceebee1873001539b2453fbd66d0fb1b4538439c3e9/pyramids_gis-0.26.0-cp311-cp311-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/db/84/0a3be1b3710667641da75f6887f9a75ec2e4e46cabb71f9dd549d531e37e/pyramids_gis-0.27.0-cp311-cp311-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -3188,7 +3198,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/e0/b95584605cec9ed50b7ebaf7975d1c4ddeec5a86b7a20554ed8b60042bd7/pyproj-3.7.2-cp311-cp311-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ec/35/771c61e0e0c9d9ddbd34c6b0a6f602463b9593f00caf294e77824ee8233b/pyramids_gis-0.26.0-cp311-cp311-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/00/03/f70cd2bd0a9bb8a2c44dd2cf0b87e7a8bef1db97e933044f34cb8d97d5a6/pyramids_gis-0.27.0-cp311-cp311-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -3247,6 +3257,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -3353,9 +3365,9 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/4a/6b/fab5a7a0e9d05aeade48af4e4ec4a09b61fd1ef5b13ee43cd46ef638e3f6/commitizen-4.16.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/cc/8f/ec6289987824b29529d0dfda0d74a07cec60e54b9c92f3c9da4c0ac732de/contourpy-1.3.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/28/30/300c343f68beb9d4cbb64ec81e58c5b6b80b56927f72d2b38654ac26e013/coverage-7.14.1-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/95/38/0d29a6fd7d0d1373f0c0c88a04ba20e359b257753ac497564cd660fc1d55/cryptography-48.0.0-cp311-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/d0/c0/7101d3b7215edcdc90c45da544961fd8ed2d6448f77577460fa75a8443f7/cryptography-48.0.0-cp311-abi3-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e0/c3/7f67dea8ccf8fdcb9c99033bbe3e90b9e7395415843accb81428c441be2d/debugpy-1.8.20-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ab/78/b193a3975ca34458f6f0e24aaf5c3e3da72f5401f6054c0dfd004b41726f/debugpy-1.8.20-cp312-cp312-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d8/fa/ec878c28bc7f65b77e7e17af3522c9948a9711b9fa7fc4c5e3140a7e3578/decli-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl
@@ -3449,7 +3461,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b8/be/212882c450bba74fc8d7d35cbd57e4af84792f0a56194819d98106b075af/pyproj-3.7.2-cp312-cp312-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/73/93/00c57ba0471d82d13c5bb8b64a64e7dc59008cad1cf18d00dcb556fc3c68/pyramids_gis-0.27.0-cp312-cp312-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -3693,7 +3705,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/8d/ab/9893ea9fb066be70ed9074ae543914a618c131ed8dff2da1e08b3a4df4db/pyproj-3.7.2-cp312-cp312-macosx_13_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/cf/13/afdaa42a10513ec0a63846ed9efca6b9c1ab819bbf2e2d1d853fff54582c/pyramids_gis-0.26.0-cp312-cp312-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/e5/09/884ae596d43649f177fdee569fb7b82b1d79dc1dc4486e3727c708def318/pyramids_gis-0.27.0-cp312-cp312-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -3927,7 +3939,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4a/a6/6fe724b72b70f2b00152d77282e14964d60ab092ec225e67c196c9b463e5/pyproj-3.7.2-cp312-cp312-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/ee/4d/1516ad041fb1d6328a3abffe72ea60dc64218a62ee72ad2037b0074298b0/pyramids_gis-0.26.0-cp312-cp312-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/0f/0e/45dfae6141d0f77ce3a268c9ae45c11ad7a722e414481cf8864c07f2e9c2/pyramids_gis-0.27.0-cp312-cp312-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -3985,6 +3997,8 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
+    options:
+      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -4091,9 +4105,9 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/4a/6b/fab5a7a0e9d05aeade48af4e4ec4a09b61fd1ef5b13ee43cd46ef638e3f6/commitizen-4.16.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/4b/32/e0f13a1c5b0f8572d0ec6ae2f6c677b7991fafd95da523159c19eff0696a/contourpy-1.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/51/8c/23faf6a2343a0d17f960a4bd56c43bc7eb4cf312f774dd6ceebd82c7d8fc/coverage-7.14.1-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/95/38/0d29a6fd7d0d1373f0c0c88a04ba20e359b257753ac497564cd660fc1d55/cryptography-48.0.0-cp311-abi3-manylinux_2_28_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/d0/c0/7101d3b7215edcdc90c45da544961fd8ed2d6448f77577460fa75a8443f7/cryptography-48.0.0-cp311-abi3-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/e0/c3/7f67dea8ccf8fdcb9c99033bbe3e90b9e7395415843accb81428c441be2d/debugpy-1.8.20-py2.py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/90/83/fb33dcea789ed6018f8da20c5a9bc9d82adc65c0c990faed43f7c955da46/debugpy-1.8.20-cp313-cp313-manylinux_2_34_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d8/fa/ec878c28bc7f65b77e7e17af3522c9948a9711b9fa7fc4c5e3140a7e3578/decli-0.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl
@@ -4187,7 +4201,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f8/85/c2b1706e51942de19076eff082f8495e57d5151364e78b5bef4af4a1d94a/pyproj-3.7.2-cp313-cp313-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+      - pypi: https://files.pythonhosted.org/packages/09/c4/240a165442f8bfc5ab80c851b6327920bfb2801e19dc7ab504c8c389c85a/pyramids_gis-0.27.0-cp313-cp313-manylinux_2_39_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -4432,7 +4446,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/14/faf1b90d267cea68d7e70662e7f88cefdb1bc890bd596c74b959e0517a72/pyproj-3.7.2-cp313-cp313-macosx_13_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/5e/17/7c4ea20120b8b1da066e6fa8d0e620a4ef1caac31c6a02625bf322e09c14/pyramids_gis-0.26.0-cp313-cp313-macosx_11_0_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/b3/74/938bd602916ba810216f5f6e96a9dbb300b541650df71542f6a969a42d7f/pyramids_gis-0.27.0-cp313-cp313-macosx_11_0_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -4667,7 +4681,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/0f/747974129cf0d800906f81cd25efd098c96509026e454d4b66868779ab04/pyproj-3.7.2-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/b0/e0/3c90c7d8a71353b2e9f00ddd7f70b6d6e7b67639d99721e2398b107fa39d/pyramids_gis-0.26.0-cp313-cp313-win_amd64.whl
+      - pypi: https://files.pythonhosted.org/packages/2f/a7/abe2016777bb73d320f31bea1f0bb76549db17393813f71cb845a920b3dc/pyramids_gis-0.27.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/d4/24/a372aaf5c9b7208e7112038812994107bc65a84cd00e0354a88c2c77a617/pytest-9.0.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/9d/7a/d968e294073affff457b041c2be9868a40c1c71f4a35fcc1e45e5493067b/pytest_cov-7.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/16/ad52f56b96d851a2bcfdc1e754c3531341885bd7177a128c13ff2ca72ab4/pytest_env-1.6.0-py3-none-any.whl
@@ -5826,10 +5840,10 @@ packages:
   requires_dist:
   - tomli ; python_full_version <= '3.11' and extra == 'toml'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/95/38/0d29a6fd7d0d1373f0c0c88a04ba20e359b257753ac497564cd660fc1d55/cryptography-48.0.0-cp311-abi3-manylinux_2_28_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/d0/c0/7101d3b7215edcdc90c45da544961fd8ed2d6448f77577460fa75a8443f7/cryptography-48.0.0-cp311-abi3-manylinux_2_34_x86_64.whl
   name: cryptography
   version: 48.0.0
-  sha256: a0e692c683f4df67815a2d258b324e66f4738bd7a96a218c826dce4f4bd05d8f
+  sha256: bd72e68b06bb1e96913f97dd4901119bc17f39d4586a5adf2d3e47bc2b9d58b5
   requires_dist:
   - cffi>=2.0.0 ; platform_python_implementation != 'PyPy'
   - typing-extensions>=4.13.2 ; python_full_version < '3.11'
@@ -5865,10 +5879,25 @@ packages:
   version: 1.8.20
   sha256: eb506e45943cab2efb7c6eafdd65b842f3ae779f020c82221f55aca9de135ed7
   requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/90/83/fb33dcea789ed6018f8da20c5a9bc9d82adc65c0c990faed43f7c955da46/debugpy-1.8.20-cp313-cp313-manylinux_2_34_x86_64.whl
+  name: debugpy
+  version: 1.8.20
+  sha256: 84562982dd7cf5ebebfdea667ca20a064e096099997b175fe204e86817f64eaf
+  requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/9a/7d/4fa79a57a8e69fe0d9763e98d1110320f9ecd7f1f362572e3aafd7417c9d/debugpy-1.8.20-cp311-cp311-manylinux_2_34_x86_64.whl
+  name: debugpy
+  version: 1.8.20
+  sha256: 7de0b7dfeedc504421032afba845ae2a7bcc32ddfb07dae2c3ca5442f821c344
+  requires_python: '>=3.8'
 - pypi: https://files.pythonhosted.org/packages/a1/39/2bef246368bd42f9bd7cba99844542b74b84dacbdbea0833e610f384fee8/debugpy-1.8.20-cp312-cp312-win_amd64.whl
   name: debugpy
   version: 1.8.20
   sha256: a1a8f851e7cf171330679ef6997e9c579ef6dd33c9098458bd9986a0f4ca52e3
+  requires_python: '>=3.8'
+- pypi: https://files.pythonhosted.org/packages/ab/78/b193a3975ca34458f6f0e24aaf5c3e3da72f5401f6054c0dfd004b41726f/debugpy-1.8.20-cp312-cp312-manylinux_2_34_x86_64.whl
+  name: debugpy
+  version: 1.8.20
+  sha256: 88f47850a4284b88bd2bfee1f26132147d5d504e4e86c22485dfa44b97e19b4b
   requires_python: '>=3.8'
 - pypi: https://files.pythonhosted.org/packages/d5/92/1cb532e88560cbee973396254b21bece8c5d7c2ece958a67afa08c9f10dc/debugpy-1.8.20-cp311-cp311-win_amd64.whl
   name: debugpy
@@ -5911,17 +5940,16 @@ packages:
 - pypi: ./
   name: digitalearth
   version: 0.1.11
-  sha256: 9637cf5bcea753a6744f64245551bb3124ff73feedd4fb6541c43ddd4e0cb950
+  sha256: 089850e7e5def1dac020410812285c03844dd8ed8e2cf75e1a5c6821881761c4
   requires_dist:
   - numpy>=2.0.0
   - geopandas>=1.1.3
   - cleopatra>=0.12.0
-  - pyramids-gis>=0.25.0
+  - pyramids-gis>=0.27.0
   - loguru>=0.7.3
   - pyyaml>=6.0
   - geoplot>=0.5.1 ; extra == 'geoplot'
   requires_python: '>=3.11,<4'
-  editable: true
 - pypi: https://files.pythonhosted.org/packages/33/6b/e0547afaf41bf2c42e52430072fa5658766e3d65bd4b03a563d1b6336f57/distlib-0.4.0-py2.py3-none-any.whl
   name: distlib
   version: 0.4.0
@@ -13578,10 +13606,10 @@ packages:
   version: 1.2.0
   sha256: 9e5c6bfa8dcc30091c74b0cf803c81fdd29d94f01992a7707bc97babb1141913
   requires_python: '>=3.7'
-- pypi: https://files.pythonhosted.org/packages/43/14/894a15cd6c8681ab5ceebee1873001539b2453fbd66d0fb1b4538439c3e9/pyramids_gis-0.26.0-cp311-cp311-macosx_11_0_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/00/03/f70cd2bd0a9bb8a2c44dd2cf0b87e7a8bef1db97e933044f34cb8d97d5a6/pyramids_gis-0.27.0-cp311-cp311-win_amd64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: a9fd323bade812d1e5ba82deafa33733232410f6a41abbc0218b4538692019f5
+  version: 0.27.0
+  sha256: ae4c06efd1d3f66d1afdc8de87ed5e5c1038620a1330b17124b51dc2701b09b5
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
@@ -13608,10 +13636,10 @@ packages:
   - pystac-client>=0.8.0 ; extra == 'stac'
   - stac-asset>=0.4.7 ; extra == 'stac'
   requires_python: '>=3.11,<4'
-- pypi: https://files.pythonhosted.org/packages/5e/17/7c4ea20120b8b1da066e6fa8d0e620a4ef1caac31c6a02625bf322e09c14/pyramids_gis-0.26.0-cp313-cp313-macosx_11_0_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/09/c4/240a165442f8bfc5ab80c851b6327920bfb2801e19dc7ab504c8c389c85a/pyramids_gis-0.27.0-cp313-cp313-manylinux_2_39_x86_64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: 8c4d96f806a838bb6347e01ee5a5bdcea770ae4df497180a19e8bdc2d570a2bc
+  version: 0.27.0
+  sha256: b36b7173b3727236295636c7ada160469f184ae9bfed63411e3496f1a875539b
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
@@ -13638,10 +13666,10 @@ packages:
   - pystac-client>=0.8.0 ; extra == 'stac'
   - stac-asset>=0.4.7 ; extra == 'stac'
   requires_python: '>=3.11,<4'
-- pypi: https://files.pythonhosted.org/packages/a3/76/b89791c86f80559745e24d980b6493650e0ed3bb2891085987396a1f6128/pyramids_gis-0.26.0.tar.gz
+- pypi: https://files.pythonhosted.org/packages/0f/0e/45dfae6141d0f77ce3a268c9ae45c11ad7a722e414481cf8864c07f2e9c2/pyramids_gis-0.27.0-cp312-cp312-win_amd64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: c15be251c3a04cd47c8242119737e454a0df79fbfe8b7d30a98e2702c5644025
+  version: 0.27.0
+  sha256: ded2570165e4a5984c49679a07ab08999c5797bac3e6baa982e0db8ab56dc730
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
@@ -13668,10 +13696,10 @@ packages:
   - pystac-client>=0.8.0 ; extra == 'stac'
   - stac-asset>=0.4.7 ; extra == 'stac'
   requires_python: '>=3.11,<4'
-- pypi: https://files.pythonhosted.org/packages/b0/e0/3c90c7d8a71353b2e9f00ddd7f70b6d6e7b67639d99721e2398b107fa39d/pyramids_gis-0.26.0-cp313-cp313-win_amd64.whl
+- pypi: https://files.pythonhosted.org/packages/2f/a7/abe2016777bb73d320f31bea1f0bb76549db17393813f71cb845a920b3dc/pyramids_gis-0.27.0-cp313-cp313-win_amd64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: e1fae3a194ebd2884bcd40920b24fb842ecfcebd8ac615ca461915d137e0cd93
+  version: 0.27.0
+  sha256: 37c4e1c9ecb4ab860dbc5a902928d9c460dced6a0223ea48be618460172f029c
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
@@ -13698,10 +13726,10 @@ packages:
   - pystac-client>=0.8.0 ; extra == 'stac'
   - stac-asset>=0.4.7 ; extra == 'stac'
   requires_python: '>=3.11,<4'
-- pypi: https://files.pythonhosted.org/packages/cf/13/afdaa42a10513ec0a63846ed9efca6b9c1ab819bbf2e2d1d853fff54582c/pyramids_gis-0.26.0-cp312-cp312-macosx_11_0_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/73/93/00c57ba0471d82d13c5bb8b64a64e7dc59008cad1cf18d00dcb556fc3c68/pyramids_gis-0.27.0-cp312-cp312-manylinux_2_39_x86_64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: e69e3dcf2b970a65ae00e7cf990f4307d8e02e4f297b5d10f304d1599c86e6fb
+  version: 0.27.0
+  sha256: 152eb9a7f0fd07dce5333b9caf543201fc02daf373c994aaf5a3f7e0929b887b
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
@@ -13728,10 +13756,10 @@ packages:
   - pystac-client>=0.8.0 ; extra == 'stac'
   - stac-asset>=0.4.7 ; extra == 'stac'
   requires_python: '>=3.11,<4'
-- pypi: https://files.pythonhosted.org/packages/ec/35/771c61e0e0c9d9ddbd34c6b0a6f602463b9593f00caf294e77824ee8233b/pyramids_gis-0.26.0-cp311-cp311-win_amd64.whl
+- pypi: https://files.pythonhosted.org/packages/78/dc/558219c66e1b29d804dbab7893496f7bf1f438ca6c660d7a3aa7e86a04f7/pyramids_gis-0.27.0-cp311-cp311-manylinux_2_39_x86_64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: fdd17f5042450f585f34d43a6a336dfebeb870fe8bd9dc08c175fa6b5da88c74
+  version: 0.27.0
+  sha256: 2db4e194c0905e16aa790f4b8271eac0f575720f343397879ff9f7e845f0af0c
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
@@ -13758,10 +13786,70 @@ packages:
   - pystac-client>=0.8.0 ; extra == 'stac'
   - stac-asset>=0.4.7 ; extra == 'stac'
   requires_python: '>=3.11,<4'
-- pypi: https://files.pythonhosted.org/packages/ee/4d/1516ad041fb1d6328a3abffe72ea60dc64218a62ee72ad2037b0074298b0/pyramids_gis-0.26.0-cp312-cp312-win_amd64.whl
+- pypi: https://files.pythonhosted.org/packages/b3/74/938bd602916ba810216f5f6e96a9dbb300b541650df71542f6a969a42d7f/pyramids_gis-0.27.0-cp313-cp313-macosx_11_0_x86_64.whl
   name: pyramids-gis
-  version: 0.26.0
-  sha256: ffd64751816aa079adc1c066dd7db82651231d03fa60aab374d9e61aabe02878
+  version: 0.27.0
+  sha256: 9e4e4bf0f1fe87f7dda1436f1055653c55a5f184797846b21868d883e3ed9ed0
+  requires_dist:
+  - cftime>=1.6.4
+  - geopandas>=1.0.0
+  - hpc-utils>=0.1.5
+  - numpy>=2.0.0
+  - pandas>=2.0.0
+  - pyproj>=3.7.0
+  - pyyaml>=6.0.0
+  - shapely>=2.0.0
+  - scipy>=1.10.0
+  - cleopatra[tiles]>=0.8.0 ; extra == 'viz'
+  - dask>=2024.1.0 ; extra == 'lazy'
+  - distributed>=2024.1.0 ; extra == 'lazy'
+  - zarr>=3 ; extra == 'lazy'
+  - fsspec>=2024.1.0 ; extra == 'lazy'
+  - flox>=0.9.0 ; extra == 'lazy'
+  - xarray>=2023.1.0 ; extra == 'xarray'
+  - pyramids-gis[lazy] ; extra == 'netcdf-lazy'
+  - kerchunk>=0.2.10 ; extra == 'netcdf-lazy'
+  - h5py>=3.8.0 ; extra == 'netcdf-lazy'
+  - pyarrow>=10.0.0 ; extra == 'parquet'
+  - pyramids-gis[lazy,parquet] ; extra == 'parquet-lazy'
+  - dask-geopandas>=0.5.0 ; extra == 'parquet-lazy'
+  - pystac-client>=0.8.0 ; extra == 'stac'
+  - stac-asset>=0.4.7 ; extra == 'stac'
+  requires_python: '>=3.11,<4'
+- pypi: https://files.pythonhosted.org/packages/db/84/0a3be1b3710667641da75f6887f9a75ec2e4e46cabb71f9dd549d531e37e/pyramids_gis-0.27.0-cp311-cp311-macosx_11_0_x86_64.whl
+  name: pyramids-gis
+  version: 0.27.0
+  sha256: 690a114491dd93ed5ca94c2d358ec130b4eb6c4f61b8cdde34d10f1c58c20a6b
+  requires_dist:
+  - cftime>=1.6.4
+  - geopandas>=1.0.0
+  - hpc-utils>=0.1.5
+  - numpy>=2.0.0
+  - pandas>=2.0.0
+  - pyproj>=3.7.0
+  - pyyaml>=6.0.0
+  - shapely>=2.0.0
+  - scipy>=1.10.0
+  - cleopatra[tiles]>=0.8.0 ; extra == 'viz'
+  - dask>=2024.1.0 ; extra == 'lazy'
+  - distributed>=2024.1.0 ; extra == 'lazy'
+  - zarr>=3 ; extra == 'lazy'
+  - fsspec>=2024.1.0 ; extra == 'lazy'
+  - flox>=0.9.0 ; extra == 'lazy'
+  - xarray>=2023.1.0 ; extra == 'xarray'
+  - pyramids-gis[lazy] ; extra == 'netcdf-lazy'
+  - kerchunk>=0.2.10 ; extra == 'netcdf-lazy'
+  - h5py>=3.8.0 ; extra == 'netcdf-lazy'
+  - pyarrow>=10.0.0 ; extra == 'parquet'
+  - pyramids-gis[lazy,parquet] ; extra == 'parquet-lazy'
+  - dask-geopandas>=0.5.0 ; extra == 'parquet-lazy'
+  - pystac-client>=0.8.0 ; extra == 'stac'
+  - stac-asset>=0.4.7 ; extra == 'stac'
+  requires_python: '>=3.11,<4'
+- pypi: https://files.pythonhosted.org/packages/e5/09/884ae596d43649f177fdee569fb7b82b1d79dc1dc4486e3727c708def318/pyramids_gis-0.27.0-cp312-cp312-macosx_11_0_x86_64.whl
+  name: pyramids-gis
+  version: 0.27.0
+  sha256: e7ec5e2324c36ac9ad2d810c940c8d1f3c728e880d38cd2c5c3df5f18299f92a
   requires_dist:
   - cftime>=1.6.4
   - geopandas>=1.0.0
