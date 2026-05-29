@@ -16,6 +16,7 @@ from cleopatra.mesh_glyph import MeshGlyph
 from cleopatra.polygon_glyph import PolygonGlyph
 from cleopatra.scatter_glyph import ScatterGlyph
 from cleopatra.vector_glyph import VectorGlyph
+from cleopatra.projection import apply_projection_frame
 from cleopatra.tiles import add_tiles
 from pyramids.base.crs import reproject_coordinates
 from pyramids.basemap import natural_earth
@@ -23,6 +24,7 @@ from pyramids.dataset import Dataset
 
 from digitalearth.autostyle import auto_style
 from digitalearth.preprocess import add_cyclic_column
+from digitalearth.scene import projections
 from digitalearth.scene.domains import DomainLike, resolve_domain
 from digitalearth.scene.scene import Scene
 from digitalearth.sources import get_source
@@ -90,14 +92,23 @@ class Map(Scene):
         ax: Any = None,
         fig: Any = None,
         figsize: Tuple[float, float] = (8, 8),
+        globe: bool = False,
     ):
         super().__init__(ax=ax, fig=fig, figsize=figsize)
         self.crs = crs
         self.domain = domain
+        self.globe = globe
+        self._graticule_lines: Optional[List[np.ndarray]] = None  # set by graticule()
+        self._framed = False
 
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
-        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`."""
-        ds = dataset if dataset.epsg == self.crs else dataset.to_crs(self.crs)
+        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
+
+        The CRS-equality check compares against an EPSG int only; for a proj4/string display CRS (e.g. an
+        orthographic globe) the comparison is always False, so the source is reprojected via pyramids.
+        """
+        same = isinstance(self.crs, int) and dataset.epsg == self.crs
+        ds = dataset if same else dataset.to_crs(self.crs)
         return get_source(ds, band=band)
 
     def _field(
@@ -604,3 +615,45 @@ class Map(Scene):
             [west, east, west, east], [south, south, north, north], from_crs=4326, to_crs=self.crs
         )
         self.set_extent([min(xs), max(xs), min(ys), max(ys)])
+
+    # ------------------------------------------------------------------ globe / projection frame
+
+    def graticule(self, lon_step: float = 30.0, lat_step: float = 30.0) -> None:
+        """Add a lon/lat graticule to a projected map (drawn when the frame is applied).
+
+        Args:
+            lon_step: Meridian spacing in degrees.
+            lat_step: Parallel spacing in degrees.
+        """
+        self._graticule_lines = projections.graticule(self.crs, lon_step=lon_step, lat_step=lat_step)
+
+    def set_global(self) -> None:
+        """Set the axes extent to the full projection domain (the whole globe/world)."""
+        _, xlim, ylim = projections.projection_frame(self.crs)
+        self.set_extent([xlim[0], xlim[1], ylim[0], ylim[1]])
+
+    def _apply_frame(self) -> Any:
+        """Draw the projection boundary + graticule and clip the layers to it (once, at render time)."""
+        if not self.globe or self._framed:
+            return None
+        boundary, xlim, ylim = projections.projection_frame(self.crs)
+        patch = apply_projection_frame(
+            self.ax, boundary_xy=boundary, xlim=xlim, ylim=ylim,
+            graticule_lines=self._graticule_lines,
+        )
+        self._framed = True
+        return patch
+
+    def render(self) -> None:
+        """Apply the projection frame if this is a globe map (idempotent). Call before showing/saving."""
+        self._apply_frame()
+
+    def save(self, path: str, **kwargs) -> None:
+        """Apply the projection frame (for a globe map) then save the figure."""
+        self._apply_frame()
+        super().save(path, **kwargs)
+
+    def show(self) -> None:
+        """Apply the projection frame (for a globe map) then show the figure."""
+        self._apply_frame()
+        super().show()
