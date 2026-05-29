@@ -115,6 +115,7 @@ nav:
     - Choropleth & decoration: examples/05_choropleth_and_decoration.ipynb
     - Temporal & series: examples/06_temporal_and_series.ipynb
     - One-call quickplot: examples/07_quickplot.ipynb
+    - Projected & globe maps: examples/08_projected_globe_maps.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb
