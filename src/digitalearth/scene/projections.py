@@ -176,6 +176,8 @@ def projection_frame(crs: Any, n: int = 720) -> Tuple[np.ndarray, Tuple[float, f
                                    from_crs=4326, to_crs=crs)
     px, py = np.asarray(px, dtype=float), np.asarray(py, dtype=float)
     mask = np.isfinite(px) & np.isfinite(py)
+    if not mask.any():
+        raise ValueError(f"CRS {crs!r} has no finite projected domain over the sphere")
     pts = np.column_stack([px[mask], py[mask]])
     ring = _convex_hull(pts)
     return ring, (float(pts[:, 0].min()), float(pts[:, 0].max())), (float(pts[:, 1].min()), float(pts[:, 1].max()))

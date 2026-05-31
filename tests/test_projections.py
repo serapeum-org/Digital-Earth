@@ -49,6 +49,13 @@ class TestProjectionFrame:
         ring, _, _ = projections.projection_frame(projections.orthographic(-9, 39), n=120)
         np.testing.assert_allclose(ring[0], ring[-1])
 
+    def test_empty_domain_raises_clearly(self, mocker):
+        """A CRS that projects every sample to non-finite coords raises a clear error, not min() on empty."""
+        mocker.patch("digitalearth.scene.projections.reproject_coordinates",
+                     return_value=([float("inf")] * 4, [float("nan")] * 4))
+        with pytest.raises(ValueError, match="no finite projected domain"):
+            projections.projection_frame(3857, n=4)
+
 
 class TestGraticule:
     """Tests for graticule."""
