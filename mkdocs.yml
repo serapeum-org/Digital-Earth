@@ -116,6 +116,7 @@ nav:
     - Temporal & series: examples/06_temporal_and_series.ipynb
     - One-call quickplot: examples/07_quickplot.ipynb
     - Projected & globe maps: examples/08_projected_globe_maps.ipynb
+    - Globe base maps (ocean/land): examples/09_globe_basemaps.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb
