@@ -336,3 +336,25 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
     artists = m.rivers()
     assert artists and m.ax.lines
+
+
+def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
+    """land() fills finite rings on a cylindrical (rectangular-boundary) framed map, not just a disc."""
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    m = Map(crs=3857, globe=True)  # Web-Mercator boundary is a rectangle, not a circle
+    pc = m.land()
+    assert pc is not None and pc.get_paths()
+    assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
+
+
+def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
+    """A globe base map (ocean + land + coastlines + data) frames and saves a non-empty PNG."""
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    m = Map(crs=projections.orthographic(-30, 20), globe=True)
+    m.ocean()
+    m.imshow(dataset)
+    m.land()
+    out = tmp_path / "globe_fills.png"
+    m.save(str(out))
+    assert out.exists() and out.stat().st_size > 0
+    assert m._framed is True
