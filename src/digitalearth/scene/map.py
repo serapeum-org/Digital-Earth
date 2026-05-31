@@ -620,6 +620,37 @@ class Map(Scene):
                 segments += projections._split_finite(np.asarray(x, float), np.asarray(y, float))
         return segments
 
+    def _project_polygon_features(self, fc: Any) -> List[np.ndarray]:
+        """Project a polygon FeatureCollection (lon/lat) to the display CRS as finite, limb-clipped fill rings.
+
+        The fill analogue of :meth:`_project_line_features`: each exterior ring is densified, reprojected, and
+        re-closed against the projection boundary (``self._frame()[0]``) so a polygon straddling the limb
+        becomes one or more closed, fully-finite rings instead of injecting ``inf``/``nan`` into the fill.
+        Interior rings (holes) are dropped in v1 — see Digital-Earth#43.
+
+        Args:
+            fc: A pyramids ``FeatureCollection`` of polygons in lon/lat (or any CRS via ``fc.epsg``).
+
+        Returns:
+            A list of closed ``(N, 2)`` projected fill rings (empty when nothing is on the near side).
+        """
+        from_crs = fc.epsg if fc.epsg is not None else 4326
+        boundary = self._frame()[0]
+        rings: List[np.ndarray] = []
+        for geom in fc.geometry:
+            if geom is None:
+                continue
+            parts = geom.geoms if geom.geom_type.startswith("Multi") else [geom]
+            for part in parts:
+                xy = np.asarray(part.exterior.coords, dtype=float)
+                if xy.size == 0:
+                    continue
+                xy = projections.densify_lonlat(xy, step_deg=1.0)
+                x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
+                                             from_crs=from_crs, to_crs=self.crs)
+                rings += projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
+        return rings
+
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
 

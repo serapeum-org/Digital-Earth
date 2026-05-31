@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Sequence, Tuple
 import numpy as np
 from pyramids.base.crs import reproject_coordinates
 
-__all__ = ["PROJECTIONS", "get", "projection_frame", "graticule",
+__all__ = ["PROJECTIONS", "get", "projection_frame", "graticule", "densify_lonlat", "close_visible_runs",
            "orthographic", "robinson", "mollweide", "polar_north", "polar_south", "web_mercator"]
 
 
@@ -210,6 +210,109 @@ def _split_finite(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:
     if run:
         out.append(np.asarray(run))
     return [r for r in out if len(r) > 1]
+
+
+def densify_lonlat(xy: np.ndarray, step_deg: float = 1.0) -> np.ndarray:
+    """Insert intermediate lon/lat vertices so each segment spans at most ``step_deg`` degrees.
+
+    A straight lon/lat edge curves under most projections, and a coarse edge crossing the projection limb
+    gives a ragged finite/non-finite transition. Densifying first makes the reprojected outline smooth and
+    the limb crossing sharp, so :func:`close_visible_runs` re-closes it cleanly.
+
+    Args:
+        xy: An ``(N, 2)`` array of ``(lon, lat)`` vertices (e.g. a polygon's exterior ring).
+        step_deg: Maximum spacing between consecutive output vertices, in degrees.
+
+    Returns:
+        An ``(M, 2)`` array with ``M >= N`` vertices; the original vertices are preserved in order.
+
+    Examples:
+        - A single 3-degree edge is split so no sub-segment exceeds the 1-degree step:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.scene.projections import densify_lonlat
+            >>> out = densify_lonlat(np.array([[0.0, 0.0], [3.0, 0.0]]), step_deg=1.0)
+            >>> out[:, 0].tolist()
+            [0.0, 1.0, 2.0, 3.0]
+
+            ```
+    """
+    xy = np.asarray(xy, dtype=float)
+    if len(xy) < 2:
+        return xy
+    out: List[np.ndarray] = []
+    for a, b in zip(xy[:-1], xy[1:]):
+        seg = max(int(np.ceil(np.hypot(*(b - a)) / max(step_deg, 1e-9))), 1)
+        ts = np.linspace(0.0, 1.0, seg, endpoint=False)
+        out.append(a + np.outer(ts, b - a))
+    out.append(xy[-1:])
+    return np.vstack(out)
+
+
+def _nearest_boundary_index(boundary_open: np.ndarray, pt: np.ndarray) -> int:
+    """Index of the boundary vertex nearest ``pt`` (in projected coordinates)."""
+    return int(np.argmin(np.hypot(boundary_open[:, 0] - pt[0], boundary_open[:, 1] - pt[1])))
+
+
+def _boundary_arc(boundary_open: np.ndarray, i: int, j: int) -> np.ndarray:
+    """Return the **shorter** cyclic arc of boundary vertices from index ``i`` to ``j`` (inclusive)."""
+    n = len(boundary_open)
+    fwd, bwd = (j - i) % n, (i - j) % n
+    if fwd <= bwd:
+        idx = [(i + k) % n for k in range(fwd + 1)]
+    else:
+        idx = [(i - k) % n for k in range(bwd + 1)]
+    return boundary_open[idx]
+
+
+def close_visible_runs(x: np.ndarray, y: np.ndarray, boundary: np.ndarray) -> List[np.ndarray]:
+    """Turn a reprojected polygon ring into finite, closed, limb-clipped fill rings.
+
+    The far hemisphere of a global polygon reprojects to ``inf``/``nan``; the visible part is one or more
+    finite runs (via :func:`_split_finite`). A fully-finite ring is simply closed. A ring that crosses the
+    projection limb has each visible run re-closed along the **shorter** ``boundary`` arc between the run's
+    endpoints (the limb maps to the boundary). The shorter-arc rule is exact when the visible span is under
+    half the limb (most continents in a hemisphere view); a span over half the limb may mis-close — a known
+    v1 limit, and the caller's boundary clip keeps every result inside the disc regardless.
+
+    Args:
+        x: Projected x coordinates of the densified ring (non-finite on the far side).
+        y: Projected y coordinates, parallel to ``x``.
+        boundary: The closed convex boundary ring ``(B, 2)`` from :func:`projection_frame` (first vertex
+            repeated at the end).
+
+    Returns:
+        A list of closed, fully-finite ``(M, 2)`` fill rings (empty when the polygon is entirely far-side).
+
+    Examples:
+        - A fully-visible ring is returned closed, unchanged in shape:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.scene.projections import close_visible_runs, projection_frame
+            >>> boundary, _, _ = projection_frame(3857, n=180)
+            >>> x = np.array([0.0, 1.0, 1.0, 0.0])
+            >>> y = np.array([0.0, 0.0, 1.0, 1.0])
+            >>> rings = close_visible_runs(x, y, boundary)
+            >>> len(rings)
+            1
+            >>> bool(np.allclose(rings[0][0], rings[0][-1]))
+            True
+
+            ```
+    """
+    runs = _split_finite(x, y)
+    fully = bool((np.isfinite(x) & np.isfinite(y)).all())
+    boundary_open = np.asarray(boundary)[:-1]
+    out: List[np.ndarray] = []
+    for run in runs:
+        if fully:
+            ring = np.vstack([run, run[:1]])
+        else:
+            arc = _boundary_arc(boundary_open, _nearest_boundary_index(boundary_open, run[-1]),
+                                _nearest_boundary_index(boundary_open, run[0]))
+            ring = np.vstack([run, arc, run[:1]])
+        out.append(ring)
+    return out
 
 
 def projection_frame(crs: Any, n: int = 720) -> Tuple[np.ndarray, Tuple[float, float], Tuple[float, float]]:
