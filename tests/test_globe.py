@@ -347,6 +347,34 @@ def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
     assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
 
 
+def test_land_flat_uses_natural_earth(mocker):
+    """On a flat map, land() reprojects and fills the Natural-Earth polygons (not the globe path)."""
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    poly = gpd.GeoDataFrame(geometry=[Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])], crs=4326)
+    spy = mocker.patch("digitalearth.scene.map.natural_earth", return_value=poly)
+    m = Map(crs=4326)  # flat -> _natural_earth flat branch even with polygon=True
+    m.land()
+    spy.assert_called_once()
+    assert m.ax.collections
+
+
+def test_polygon_with_hole_uses_exterior_only(mocker):
+    """_project_polygon_features drops interior rings (holes) and still emits a finite exterior ring (v1)."""
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    shell = [(-20, -20), (20, -20), (20, 20), (-20, 20)]
+    hole = [(-5, -5), (5, -5), (5, 5), (-5, 5)]
+    gdf = gpd.GeoDataFrame({"geometry": [Polygon(shell, [hole])]}, crs=4326)
+    gdf.epsg = 4326
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    rings = m._project_polygon_features(gdf)
+    assert len(rings) == 1, f"a single polygon (hole dropped) should yield one ring, got {len(rings)}"
+    assert np.isfinite(np.vstack(rings)).all(), "exterior ring must be finite"
+
+
 def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     """A globe base map (ocean + land + coastlines + data) frames and saves a non-empty PNG."""
     mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
