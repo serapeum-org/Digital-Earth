@@ -14,6 +14,14 @@ def test_needs_reproject(dataset):
     assert Map(crs="+proj=ortho +lat_0=0 +lon_0=0")._needs_reproject(dataset) is True
 
 
+def test_render_without_auto_cmap(dataset, mocker):
+    """When auto_style supplies no cmap, _render leaves cmap unset (no opts['cmap']) and still draws."""
+    mocker.patch("digitalearth.scene.map.auto_style", return_value={})
+    m = Map(crs=dataset.epsg)
+    m.imshow(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
+    assert len(m.layers) == 1 and len(m.ax.images) == 1
+
+
 def test_prepare_reprojects(dataset):
     """A dataset in a different CRS is reprojected to the Map's display CRS."""
     m = Map(crs=3857)

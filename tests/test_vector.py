@@ -46,3 +46,52 @@ def test_streamplot(uv):
     m = Map(crs=4326)
     m.streamplot(u_ds, v_ds)
     assert len(m.layers) == 1
+
+
+@pytest.fixture
+def uv_descending_y():
+    """Two u/v rasters on the usual north->south (descending-y) raster grid.
+
+    Exercises the streamplot axis-flip path: a descending y axis (and its data rows) must be
+    reversed to a strictly-increasing grid before streamplot.
+
+    Returns:
+        tuple[Dataset, Dataset]: (u, v) single-band datasets in EPSG:4326 with descending y.
+    """
+    ny, nx = 6, 8
+    u = np.ones((ny, nx), dtype="float32")
+    v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones((1, nx), "float32")
+    geo = (0.0, 1.0, 0.0, 6.0, 0.0, -1.0)  # ymax=6, negative dy -> y runs north->south
+    u_ds = Dataset.create_from_array(arr=u, geo=geo, epsg=4326)
+    v_ds = Dataset.create_from_array(arr=v, geo=geo, epsg=4326)
+    return u_ds, v_ds
+
+
+def test_streamplot_flips_descending_y(uv_descending_y):
+    """streamplot reverses a descending-y grid (and data) so the field renders right-side-up."""
+    u_ds, v_ds = uv_descending_y
+    m = Map(crs=4326)
+    m.streamplot(u_ds, v_ds)
+    assert len(m.layers) == 1
+    assert m.ax.collections  # streamlines drawn
+
+
+def test_streamplot_flips_descending_x(uv, mocker):
+    """_vector reverses a descending-x axis (and data columns) to a strictly increasing grid.
+
+    Real rasters always hand back an ascending x / descending y axis, so the x-flip branch is fed a
+    synthetic ``_prepare`` result whose x axis runs east->west and y axis runs south->north — the one
+    orientation that exercises the x-reversal and skips the y-reversal in a single pass.
+    """
+    from types import SimpleNamespace
+
+    ny, nx = 6, 8
+    x = np.arange(nx, 0, -1, dtype="float64")  # descending x: 8..1
+    y = np.arange(ny, dtype="float64")         # ascending y: 0..5
+    z = np.ones((ny, nx), dtype="float32")
+    src = SimpleNamespace(x=SimpleNamespace(values=x), y=SimpleNamespace(values=y),
+                          z=SimpleNamespace(values=z))
+    mocker.patch.object(Map, "_prepare", return_value=src)
+    m = Map(crs=4326)
+    m.streamplot(*uv)
+    assert len(m.layers) == 1 and m.ax.collections

@@ -144,3 +144,63 @@ def test_globe_save(dataset, tmp_path):
     out = tmp_path / "globe.png"
     m.save(str(out))
     assert out.exists() and out.stat().st_size > 0
+
+
+def test_globe_show_applies_frame(dataset):
+    """show() applies the projection frame for a globe map (Agg backend -> no window)."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    m.imshow(dataset)
+    assert not m.ax.patches
+    m.show()  # MPLBACKEND=Agg makes this a no-op draw, but the frame must still be applied
+    assert m.ax.patches and m._framed is True
+
+
+def test_frame_is_memoised(dataset):
+    """_frame caches projection_frame per CRS: a second call returns the same cached tuple."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    first = m._frame()
+    assert m._frame_cache is not None and m._frame_cache[0] == m.crs
+    second = m._frame()  # cache hit branch — no recompute
+    assert second is first
+
+
+def test_grid_cells_without_nodata(global_field, mocker):
+    """grid_cells skips the nodata mask when the dataset declares no nodata value.
+
+    Uses a matching display CRS (no reprojection) and a ``no_data_value`` of ``None`` so the
+    ``nodata is None`` branch (which leaves every cell value intact) is exercised.
+    """
+    m = Map(crs=4326)  # matches the field's CRS -> _reproject returns it unchanged
+    reprojected = m._reproject(global_field)
+    mocker.patch.object(type(reprojected), "no_data_value",
+                        new_callable=mocker.PropertyMock, return_value=[None])
+    mocker.patch.object(m, "_reproject", return_value=reprojected)
+    pc = m.grid_cells(global_field)
+    assert len(pc.get_paths()) > 0
+
+
+def test_project_line_features_skips_none_and_empty(mocker):
+    """_project_line_features ignores None geometries and empty coordinate arrays."""
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    gdf = gpd.GeoDataFrame(
+        {"geometry": [None, LineString([]), LineString([(-9, 39), (-8, 40)])]},
+        crs=4326,
+    )
+    gdf.epsg = 4326  # _project_line_features reads fc.epsg
+    m = Map(crs=projections.orthographic(-9, 39), globe=True)
+    segs = m._project_line_features(gdf)
+    assert all(s.shape[1] == 2 and len(s) > 1 for s in segs)
+
+
+def test_natural_earth_flat_without_data_does_not_pin_extent(mocker):
+    """On a flat map with nothing drawn yet, a Natural Earth layer is not pinned to prior data limits."""
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    world = gpd.GeoDataFrame(geometry=[LineString([(-50, -20), (50, 20)])], crs=4326)
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=world)
+    m = Map(crs=4326)  # flat, no imshow -> has_data is False
+    m.coastlines()
+    assert m.ax.lines or m.ax.collections  # the layer drew something

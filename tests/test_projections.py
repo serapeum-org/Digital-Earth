@@ -27,6 +27,36 @@ class TestRegistry:
         with pytest.raises(KeyError, match="unknown projection"):
             projections.get("atlantis")
 
+    def test_polar_north_epsg(self):
+        """polar_north resolves to the NSIDC north EPSG code (3413)."""
+        assert projections.get("polar_north") == 3413
+        assert projections.polar_north() == 3413
+
+    def test_mollweide_proj4(self):
+        """mollweide builds a centred equal-area proj4 string."""
+        spec = projections.get("mollweide", lon=20)
+        assert "+proj=moll" in spec and "+lon_0=20" in spec
+
+
+class TestConvexHull:
+    """Tests for the pure-numpy convex-hull helper (degenerate small-point cases)."""
+
+    def test_single_point_closes_to_itself(self):
+        """A single point returns itself repeated (a closed degenerate ring)."""
+        ring = projections._convex_hull(np.array([[1.0, 2.0]]))
+        assert ring.shape[1] == 2 and len(ring) == 2
+        np.testing.assert_allclose(ring[0], ring[-1])
+
+    def test_two_points_close(self):
+        """Two distinct points return a 2-vertex ring (fewer than 3 points -> no hull)."""
+        ring = projections._convex_hull(np.array([[0.0, 0.0], [1.0, 1.0]]))
+        assert len(ring) == 3 and ring.shape[1] == 2  # [p0, p1, p0]
+
+    def test_empty_returns_empty(self):
+        """Zero points return an empty (0, 2) array without raising."""
+        ring = projections._convex_hull(np.empty((0, 2)))
+        assert ring.shape == (0, 2)
+
 
 class TestProjectionFrame:
     """Tests for projection_frame."""
