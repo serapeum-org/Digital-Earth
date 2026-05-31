@@ -110,3 +110,99 @@ class TestGraticule:
         """Each returned polyline is fully finite (splitting removed off-domain gaps)."""
         lines = projections.graticule(projections.orthographic(0, 0))
         assert all(np.isfinite(line).all() for line in lines)
+
+
+class TestDensifyLonlat:
+    """Tests for densify_lonlat (#43 T2 — globe polygon fill)."""
+
+    def test_inserts_intermediate_vertices(self):
+        """A long edge is split so no sub-segment exceeds step_deg, preserving the endpoints."""
+        out = projections.densify_lonlat(np.array([[0.0, 0.0], [3.0, 0.0]]), step_deg=1.0)
+        assert out[:, 0].tolist() == [0.0, 1.0, 2.0, 3.0], f"unexpected densified xs: {out[:, 0]}"
+
+    def test_preserves_original_vertices(self):
+        """Each original vertex survives densification (the polyline shape is unchanged)."""
+        ring = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]])
+        out = projections.densify_lonlat(ring, step_deg=0.5)
+        for v in ring:
+            assert np.any(np.all(np.isclose(out, v), axis=1)), f"vertex {v} lost in densification"
+
+    @pytest.mark.parametrize("pts", [np.empty((0, 2)), np.array([[1.0, 2.0]])])
+    def test_short_input_returned_unchanged(self, pts):
+        """Fewer than two vertices cannot be densified and are returned as-is.
+
+        Args:
+            pts: A 0- or 1-vertex array.
+        """
+        out = projections.densify_lonlat(pts, step_deg=1.0)
+        assert out.shape == pts.shape, f"short input changed shape: {out.shape} != {pts.shape}"
+
+
+class TestBoundaryArcHelpers:
+    """Tests for _nearest_boundary_index and _boundary_arc (shorter-arc closure)."""
+
+    def _octagon(self):
+        """Eight points on a unit circle (open ring) for arc-direction tests."""
+        ang = np.linspace(0, 2 * np.pi, 8, endpoint=False)
+        return np.column_stack([np.cos(ang), np.sin(ang)])
+
+    def test_nearest_index_picks_closest_vertex(self):
+        """_nearest_boundary_index returns the index of the geometrically closest boundary vertex."""
+        ring = self._octagon()
+        idx = projections._nearest_boundary_index(ring, np.array([1.0, 0.05]))
+        assert idx == 0, f"expected vertex 0 nearest, got {idx}"
+
+    def test_arc_takes_forward_when_shorter(self):
+        """When the forward hop count is <= backward, the forward arc i..j is returned."""
+        ring = self._octagon()
+        arc = projections._boundary_arc(ring, 0, 2)
+        assert len(arc) == 3, f"forward arc 0->2 should have 3 vertices, got {len(arc)}"
+        np.testing.assert_allclose(arc[0], ring[0])
+        np.testing.assert_allclose(arc[-1], ring[2])
+
+    def test_arc_takes_backward_when_shorter(self):
+        """When the backward hop count is shorter, the wrap-around arc is returned instead."""
+        ring = self._octagon()
+        arc = projections._boundary_arc(ring, 0, 6)  # fwd=6, bwd=2 -> backward [0, 7, 6]
+        assert len(arc) == 3, f"backward arc 0->6 should have 3 vertices, got {len(arc)}"
+        np.testing.assert_allclose(arc[-1], ring[6])
+
+
+class TestCloseVisibleRuns:
+    """Tests for close_visible_runs (re-close limb-crossing fill rings)."""
+
+    def test_fully_finite_ring_closed_unchanged(self):
+        """A ring entirely on the near side is returned as a single closed ring (no boundary arc added)."""
+        boundary, _, _ = projections.projection_frame(3857, n=120)
+        x = np.array([0.0, 1.0, 1.0, 0.0])
+        y = np.array([0.0, 0.0, 1.0, 1.0])
+        rings = projections.close_visible_runs(x, y, boundary)
+        assert len(rings) == 1, f"expected one ring, got {len(rings)}"
+        np.testing.assert_allclose(rings[0][0], rings[0][-1])
+        assert len(rings[0]) == 5, f"closed quad should have 5 vertices, got {len(rings[0])}"
+
+    def test_all_far_side_returns_empty(self):
+        """A ring with no finite vertices (all far-side) yields no fill rings."""
+        boundary, _, _ = projections.projection_frame(projections.orthographic(0, 0), n=120)
+        x = np.full(6, np.inf)
+        y = np.full(6, np.inf)
+        assert projections.close_visible_runs(x, y, boundary) == []
+
+    def test_limb_crossing_is_finite_closed_in_disc(self):
+        """A limb-crossing ring re-closes into finite rings that stay within the projection disc."""
+        crs = projections.orthographic(0, 0)
+        boundary, xlim, ylim = projections.projection_frame(crs, n=360)
+        lons = np.linspace(60, 120, 40)
+        ring = np.vstack([
+            np.column_stack([lons, np.full_like(lons, -30.0)]),
+            np.column_stack([lons[::-1], np.full_like(lons, 30.0)]),
+        ])
+        x, y = projections.reproject_coordinates(ring[:, 0].tolist(), ring[:, 1].tolist(),
+                                                 from_crs=4326, to_crs=crs)
+        rings = projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
+        allv = np.vstack(rings)
+        assert rings, "expected at least one closed visible ring"
+        assert np.isfinite(allv).all(), "closure emitted inf/nan"
+        assert all(np.allclose(r[0], r[-1]) for r in rings), "rings not closed"
+        radius = max(xlim[1], ylim[1])
+        assert (np.hypot(allv[:, 0], allv[:, 1]) <= radius * 1.001).all(), "ring left the disc"

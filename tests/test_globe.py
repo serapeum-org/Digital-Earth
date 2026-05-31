@@ -205,3 +205,111 @@ def test_natural_earth_flat_without_data_does_not_pin_extent(mocker):
     m = Map(crs=4326)  # flat, no imshow -> has_data is False
     m.coastlines()
     assert m.ax.lines or m.ax.collections  # the layer drew something
+
+
+# --------------------------------------------------------------------- #43 globe land/ocean fills
+
+
+@pytest.fixture
+def land_fc():
+    """A synthetic polygon FeatureCollection in lon/lat with a limb-crossing 'continent'.
+
+    Returns:
+        geopandas.GeoDataFrame: polygons (with `.epsg` set) spanning both hemispheres of an ortho globe.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    near = Polygon([(-20, -20), (20, -20), (20, 20), (-20, 20)])      # near side of ortho(0, 0)
+    straddle = Polygon([(60, -30), (120, -30), (120, 30), (60, 30)])  # crosses the limb
+    gdf = gpd.GeoDataFrame({"geometry": [near, straddle]}, crs=4326)
+    gdf.epsg = 4326
+    return gdf
+
+
+def test_project_polygon_features_finite_and_closed(land_fc):
+    """_project_polygon_features returns finite, closed projected rings for a limb-crossing layer."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    rings = m._project_polygon_features(land_fc)
+    assert rings, "expected at least one fill ring"
+    verts = np.vstack(rings)
+    assert np.isfinite(verts).all(), "fill rings must not contain inf/nan"
+    assert all(np.allclose(r[0], r[-1]) for r in rings), "fill rings must be closed"
+
+
+def test_project_polygon_features_skips_none_and_empty(mocker):
+    """_project_polygon_features ignores None geometries and empty polygons."""
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    gdf = gpd.GeoDataFrame(
+        {"geometry": [None, Polygon(), Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])]},
+        crs=4326,
+    )
+    gdf.epsg = 4326
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    rings = m._project_polygon_features(gdf)
+    assert len(rings) == 1 and np.isfinite(np.vstack(rings)).all()
+
+
+def test_project_polygon_features_handles_multipolygon():
+    """A MultiPolygon contributes one fill ring per finite part."""
+    import geopandas as gpd
+    from shapely.geometry import MultiPolygon, Polygon
+
+    mp = MultiPolygon([
+        Polygon([(-20, -20), (-10, -20), (-10, -10), (-20, -10)]),
+        Polygon([(10, 10), (20, 10), (20, 20), (10, 20)]),
+    ])
+    gdf = gpd.GeoDataFrame({"geometry": [mp]}, crs=4326)
+    gdf.epsg = 4326
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    rings = m._project_polygon_features(gdf)
+    assert len(rings) == 2 and np.isfinite(np.vstack(rings)).all()
+
+
+def test_land_fill_finite_on_globe(land_fc, mocker):
+    """land() on a globe draws a finite, closed PolyCollection (Natural Earth mocked, no network)."""
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    pc = m.land()
+    assert pc is not None and pc.get_paths()
+    verts = np.vstack([p.vertices for p in pc.get_paths()])
+    assert np.isfinite(verts).all()
+
+
+def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
+    """land() keeps the axes limits and sits below the data raster (background z-order)."""
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    m = Map(crs=projections.orthographic(-75, 42), globe=True)
+    img = m.imshow(dataset)
+    xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
+    pc = m.land()
+    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, "land() blew out the extent"
+    assert pc.get_zorder() < img.get_zorder(), "land must draw beneath the data raster"
+
+
+def test_ocean_below_land_zorder():
+    """ocean() draws below land() (ocean is the deepest background layer)."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    ocean = m.ocean()
+    assert ocean.get_zorder() < -1.5, f"ocean zorder should sit below land (-1.5), got {ocean.get_zorder()}"
+
+
+def test_ocean_flat_uses_natural_earth(mocker):
+    """On a flat map, ocean() reprojects the Natural-Earth ocean polygons (not the disc shortcut)."""
+    import geopandas as gpd
+    from shapely.geometry import Polygon
+
+    poly = gpd.GeoDataFrame(geometry=[Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])], crs=4326)
+    spy = mocker.patch("digitalearth.scene.map.natural_earth", return_value=poly)
+    m = Map(crs=4326)  # flat
+    m.ocean()
+    spy.assert_called_once()  # flat path goes through natural_earth("ocean", ...)
+    assert m.ax.collections
+
+
+def test_fill_globe_polygons_empty_returns_none():
+    """_fill_globe_polygons short-circuits to None when there are no rings to draw."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    assert m._fill_globe_polygons([], facecolor="#ccc", zorder=-1.0) is None
