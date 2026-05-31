@@ -12,7 +12,9 @@ from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 from matplotlib.animation import FuncAnimation
+from matplotlib.cm import ScalarMappable
 from matplotlib.collections import PolyCollection
+from matplotlib.colors import Normalize
 from cleopatra.array_glyph import ArrayGlyph
 from cleopatra.mesh_glyph import MeshGlyph
 from cleopatra.polygon_glyph import PolygonGlyph
@@ -890,9 +892,46 @@ class Map(Scene):
 
         return FuncAnimation(self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False)
 
+    @staticmethod
+    def _stack_clim(datasets: Sequence[Any]) -> Tuple[float, float]:
+        """Return the ``(min, max)`` of the first band across ``datasets``, ignoring nodata/non-finite."""
+        lows: List[float] = []
+        highs: List[float] = []
+        for ds in datasets:
+            arr = np.asarray(ds.read_array(band=0), dtype="float64")
+            nodata = ds.no_data_value[0]
+            if nodata is not None:
+                arr = arr[arr != nodata]
+            arr = arr[np.isfinite(arr)]
+            if arr.size:
+                lows.append(float(arr.min()))
+                highs.append(float(arr.max()))
+        return (min(lows), max(highs)) if lows else (0.0, 1.0)
+
+    def _animation_colorbar(self, datasets: Sequence[Any], opts: dict, label: Optional[str]) -> Any:
+        """Add one static colorbar for an animation, resolving a shared cmap/clim used by every frame.
+
+        The colorbar lives on its own figure axes (not the data axes that each frame clears), so it persists
+        across frames. ``vmin``/``vmax`` are taken from ``opts`` when given, else computed once from the data
+        so colours stay stable across the animation; both are written back into ``opts`` so the frames match.
+        """
+        cmap = opts.setdefault("cmap", "viridis")
+        vmin, vmax = opts.get("vmin"), opts.get("vmax")
+        if vmin is None or vmax is None:
+            lo, hi = self._stack_clim(datasets)
+            vmin = lo if vmin is None else vmin
+            vmax = hi if vmax is None else vmax
+            opts["vmin"], opts["vmax"] = vmin, vmax
+        mappable = ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap)
+        mappable.set_array([])
+        cbar = self.fig.colorbar(mappable, ax=self.ax)
+        if label is not None:
+            cbar.set_label(label)
+        return cbar
+
     def animate(self, stack: Any, *, kind: str = "imshow", fps: float = 3.0,
                 titles: Optional[Sequence[str]] = None, ocean: bool = False, coastlines: bool = False,
-                **kwargs) -> FuncAnimation:
+                colorbar: bool = False, cbar_label: Optional[str] = None, **kwargs) -> FuncAnimation:
         """Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.
 
         Each frame reprojects ``stack[i]`` to the display CRS (pyramids), renders it with the ``kind`` method
@@ -908,6 +947,10 @@ class Map(Scene):
             titles: Optional per-frame titles; must match the stack length when given.
             ocean: When True, fill the ocean disc behind each frame (globe maps only).
             coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).
+            colorbar: When True, add one static colorbar (drawn once, not per frame). The ``vmin``/``vmax``
+                are taken from ``kwargs`` if given, else computed from the stack so colours stay stable
+                across frames (and written back so the frames match the bar).
+            cbar_label: Optional label for the colorbar.
             **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
 
         Returns:
@@ -921,6 +964,8 @@ class Map(Scene):
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):
             raise ValueError(f"titles length ({len(titles)}) must match the stack length ({len(frames)})")
+        if colorbar:
+            self._animation_colorbar(frames, kwargs, cbar_label)
 
         def draw_one(i: int) -> None:
             if ocean and self.globe:
@@ -938,7 +983,7 @@ class Map(Scene):
 
     def rotate(self, dataset: Any, *, lat: float = 15.0, n_frames: int = 24, fps: float = 8.0,
                lon0: float = -180.0, kind: str = "imshow", ocean: bool = False, coastlines: bool = False,
-               **kwargs) -> FuncAnimation:
+               colorbar: bool = False, cbar_label: Optional[str] = None, **kwargs) -> FuncAnimation:
         """Spin an orthographic globe over a single field by sweeping the centre longitude.
 
         Forces a globe map and redraws ``dataset`` on ``n_frames`` orthographic projections whose centre
@@ -954,6 +999,9 @@ class Map(Scene):
             kind: The field method used to draw the data (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"``).
             ocean: When True, fill the ocean disc behind the data each frame.
             coastlines: When True, overlay coastlines each frame (best-effort).
+            colorbar: When True, add one static colorbar (drawn once); ``vmin``/``vmax`` come from ``kwargs``
+                or are computed from ``dataset`` and written back so the frames match the bar.
+            cbar_label: Optional label for the colorbar.
             **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
 
         Returns:
@@ -965,6 +1013,8 @@ class Map(Scene):
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
         self.globe = True
+        if colorbar:
+            self._animation_colorbar([dataset], kwargs, cbar_label)
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
 
         def draw_one(i: int) -> None:

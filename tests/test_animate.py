@@ -82,6 +82,55 @@ class TestAnimate:
         with pytest.raises(ValueError, match="titles length"):
             m.animate(stack, titles=["only-one"])
 
+    def test_colorbar_adds_single_static_axes(self, stack, tmp_path):
+        """colorbar=True adds exactly one colorbar axes that persists (not re-added) across all frames."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        anim = m.animate(stack, fps=2, colorbar=True, cbar_label="T", cmap="RdYlBu_r", vmin=-40, vmax=70)
+        assert len(m.fig.axes) == 2, "colorbar should add one axes (data + colorbar)"
+        out = tmp_path / "cbar.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert len(m.fig.axes) == 2, "the colorbar must not be re-added per frame"
+        assert out.stat().st_size > 0
+
+    def test_colorbar_computes_clim_from_stack(self, stack):
+        """Without vmin/vmax, the colorbar resolves the clim from the stack and writes it back to opts."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        opts = {"cmap": "viridis"}
+        m._animation_colorbar(stack, opts, "auto")
+        lo, hi = Map._stack_clim(stack)
+        assert opts["vmin"] == lo and opts["vmax"] == hi, "computed clim should be injected into opts"
+        assert len(m.fig.axes) == 2, "a colorbar axes should be present"
+
+    def test_stack_clim_ignores_nodata(self):
+        """_stack_clim excludes nodata cells when computing the range (create_from_array defaults to -9999)."""
+        arr = np.array([[0.0, 5.0], [10.0, -9999.0]], dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+        assert ds.no_data_value[0] == -9999.0
+        lo, hi = Map._stack_clim([ds])
+        assert (lo, hi) == (0.0, 10.0), f"nodata -9999 should be ignored, got ({lo}, {hi})"
+
+    def test_stack_clim_no_nodata_uses_full_range(self):
+        """When a dataset declares no nodata, every finite cell counts toward the range."""
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+                             no_data_value=[None])
+        assert Map._stack_clim([ds]) == (1.0, 4.0)
+
+    def test_stack_clim_all_nodata_falls_back(self):
+        """An all-nodata stack has no finite cells, so _stack_clim returns the (0, 1) default."""
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(read_array=lambda band=0: np.array([[-9999.0, -9999.0]]),
+                             no_data_value=[-9999.0])
+        assert Map._stack_clim([ds]) == (0.0, 1.0)
+
+    def test_colorbar_without_label(self, stack):
+        """A colorbar with no label still adds exactly one colorbar axes."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        m._animation_colorbar(stack, {"cmap": "viridis", "vmin": 0, "vmax": 60}, None)
+        assert len(m.fig.axes) == 2, "colorbar axes should be added even without a label"
+
     def test_coastlines_best_effort_swallows_failure(self, stack, tmp_path, mocker):
         """coastlines=True still renders when the (network) coastline fetch raises — the error is swallowed."""
         mocker.patch.object(Map, "coastlines", side_effect=RuntimeError("offline"))
@@ -125,6 +174,16 @@ class TestRotate:
         m = Map(crs=projections.orthographic(0, 0), globe=True)
         with pytest.raises(ValueError, match="n_frames"):
             m.rotate(_field(0.0), n_frames=0)
+
+    def test_colorbar_static(self, tmp_path):
+        """rotate(colorbar=True) adds one persistent colorbar axes across the rotation frames."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        anim = m.rotate(_field(5.0), n_frames=3, fps=4, colorbar=True, cbar_label="elev",
+                        cmap="terrain", vmin=-40, vmax=70)
+        assert len(m.fig.axes) == 2, "rotate colorbar should add one axes"
+        out = tmp_path / "rotcbar.gif"
+        anim.save(str(out), writer=PillowWriter(fps=4))
+        assert len(m.fig.axes) == 2 and out.stat().st_size > 0, "colorbar must stay single after rendering"
 
     def test_rotate_coastlines_best_effort(self, tmp_path, mocker):
         """rotate(coastlines=True) attempts coastlines each frame and still renders when they fail offline."""
