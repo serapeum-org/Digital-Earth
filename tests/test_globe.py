@@ -74,12 +74,13 @@ def test_globe_coastlines_when_online(dataset):
     assert np.isfinite(pts).all()  # no inf/nan reached the axes
 
 
-@pytest.mark.parametrize("layer", ["land", "ocean"])
-def test_polygon_fills_rejected_on_globe(layer):
-    """land/ocean fills raise a clear error on a globe (not yet supported)."""
+def test_ocean_fills_disc_on_globe():
+    """ocean() fills the whole projection disc on a globe with a single finite ring (no network)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    with pytest.raises(NotImplementedError, match="globe map"):
-        getattr(m, layer)()
+    pc = m.ocean()
+    assert pc is not None and len(pc.get_paths()) == 1
+    verts = np.vstack([p.vertices for p in pc.get_paths()])
+    assert np.isfinite(verts).all()
 
 
 @pytest.fixture

@@ -11,6 +11,7 @@ The field methods here (``imshow`` and the private ``_field`` recipe) are the fo
 from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
+from matplotlib.collections import PolyCollection
 from cleopatra.array_glyph import ArrayGlyph
 from cleopatra.mesh_glyph import MeshGlyph
 from cleopatra.polygon_glyph import PolygonGlyph
@@ -651,18 +652,59 @@ class Map(Scene):
                 rings += projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
         return rings
 
-    def _natural_earth(self, layer: str, resolution: str, defaults: dict, **kwargs) -> Any:
+    def _fill_globe_polygons(self, rings: List[np.ndarray], *, facecolor: Any, zorder: float) -> Any:
+        """Fill projected rings with a solid colour on a globe (map-specific overlay; clipped at frame time).
+
+        cleopatra ``PolygonGlyph`` only fills when given per-polygon *values*, so a uniform land/ocean fill is
+        drawn as a plain ``PolyCollection`` directly on the axes — exactly like the globe coastline ``ax.plot``
+        overlay. ``apply_projection_frame(clip_artists=True)`` clips it to the boundary at render time. The
+        view limits are preserved so a global fill never autoscales the axes out.
+
+        Args:
+            rings: Closed, finite projected fill rings (from :meth:`_project_polygon_features`).
+            facecolor: Solid fill colour.
+            zorder: Draw order (ocean below land below data below coastlines).
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer), or ``None`` when ``rings`` is empty.
+        """
+        if not rings:
+            return None
+        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
+        pc = PolyCollection(rings, facecolors=facecolor, edgecolors="none", zorder=zorder)
+        self.ax.add_collection(pc)
+        if has_data:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+        return self._add_layer(None, pc)
+
+    def _natural_earth(self, layer: str, resolution: str, defaults: dict, *, polygon: bool = False,
+                       zorder: float = 0.5, **kwargs) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
 
         On a **globe** map, line layers (coastline/borders/rivers) are projected per-line and split at the
-        projection limb (the far side reprojects to non-finite coords); they are drawn as plain polylines and
-        clipped to the boundary when the frame is applied. On a **flat** map, the layer is reprojected with
-        ``GeoDataFrame.plot``; since Natural Earth is global and that autoscales the axes, the data's limits
-        are preserved when a data layer is already present.
+        projection limb (the far side reprojects to non-finite coords) and drawn as plain polylines; polygon
+        layers (``polygon=True``: land/lakes) are projected and re-closed at the limb into finite rings and
+        filled via :meth:`_fill_globe_polygons`. Both are clipped to the boundary when the frame is applied.
+        On a **flat** map, the layer is reprojected with ``GeoDataFrame.plot``; since Natural Earth is global
+        and that autoscales the axes, the data's limits are preserved when a data layer is already present.
+
+        Args:
+            layer: Natural-Earth layer name (e.g. ``"coastline"``, ``"land"``).
+            resolution: Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
+            defaults: Base style; ``color``/``facecolor`` is the globe fill colour for polygon layers.
+            polygon: When True, treat the layer as filled polygons on a globe (else as lines).
+            zorder: Globe draw order for polygon fills.
+            **kwargs: Style overrides merged over ``defaults``.
         """
         fc = natural_earth(layer, resolution)
         if self.globe:
             style = {**defaults, **kwargs}
+            if polygon:
+                facecolor = style.get("facecolor", style.get("color", "#efefdb"))
+                return self._fill_globe_polygons(self._project_polygon_features(fc),
+                                                 facecolor=facecolor, zorder=zorder)
             style.pop("edgecolor", None); style.pop("facecolor", None)
             artists = [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in self._project_line_features(fc)]
             return artists
@@ -677,36 +719,38 @@ class Map(Scene):
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth coastlines (``pyramids.basemap.natural_earth("coastline")``)."""
         return self._natural_earth(
-            "coastline", resolution, {"color": "black", "linewidth": 0.5}, **kwargs
+            "coastline", resolution, {"color": "black", "linewidth": 0.5}, zorder=2.5, **kwargs
         )
 
     def borders(self, resolution: str = "110m", **kwargs) -> Any:
         """Overlay Natural-Earth country borders."""
         return self._natural_earth(
-            "borders", resolution, {"color": "gray", "linewidth": 0.4}, **kwargs
+            "borders", resolution, {"color": "gray", "linewidth": 0.4}, zorder=2.5, **kwargs
         )
 
     def land(self, resolution: str = "110m", **kwargs) -> Any:
-        """Fill Natural-Earth land polygons (flat maps only — see note)."""
-        self._require_flat_polygons("land")
+        """Fill Natural-Earth land polygons.
+
+        On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
+        re-closed at the projection limb into finite rings and filled as a map-specific overlay (drawn below
+        data and coastlines, clipped to the boundary). Interior rings (holes) are dropped in v1 — see #43.
+        """
         return self._natural_earth(
-            "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, **kwargs
+            "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, polygon=True, zorder=0.6, **kwargs
         )
 
     def ocean(self, resolution: str = "110m", **kwargs) -> Any:
-        """Fill Natural-Earth ocean polygons (flat maps only — see note)."""
-        self._require_flat_polygons("ocean")
-        return self._natural_earth(
-            "ocean", resolution, {"color": "#cfe6f5", "edgecolor": "none"}, **kwargs
-        )
+        """Fill Natural-Earth ocean polygons.
 
-    def _require_flat_polygons(self, layer: str) -> None:
-        """Polygon fills (land/ocean) are not yet supported on a globe (need limb polygon-clipping)."""
+        On a **globe** map, ``ocean`` fills the whole projection disc (the boundary ring) with the ocean
+        colour and lets land overlay it — exact and far cheaper than clipping the global ocean polygon. On a
+        **flat** map, the Natural-Earth ocean polygons are reprojected and filled directly.
+        """
+        color = kwargs.pop("color", "#cfe6f5")
         if self.globe:
-            raise NotImplementedError(
-                f"{layer!r} polygon fill is not supported on a globe map yet; use coastlines()/borders() "
-                "(line features) for projected/globe maps."
-            )
+            boundary = self._frame()[0]
+            return self._fill_globe_polygons([np.asarray(boundary)], facecolor=color, zorder=0.4)
+        return self._natural_earth("ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs)
 
     def basemap(self, source: Any = None, **kwargs) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.tiles.add_tiles`` in the display CRS."""
