@@ -54,6 +54,15 @@ def test_quickmap_rejects_unsupported_type():
         qp.quickmap("not data")
 
 
+def test_quickmap_rejects_empty_features():
+    """quickmap raises a clear error on an empty FeatureCollection (not silently treated as polygons)."""
+    from pyramids.feature import FeatureCollection
+
+    empty = FeatureCollection.read_file("tests/data/points.geojson").iloc[0:0]
+    with pytest.raises(ValueError, match="empty FeatureCollection"):
+        qp.quickmap(empty, crs=4326)
+
+
 def test_module_function_contourf(dataset):
     """The module-level contourf builds a finished Map via the contourf kind."""
     m = qp.contourf(dataset, crs=dataset.epsg)

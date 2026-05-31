@@ -28,6 +28,8 @@ __all__ = [
 def _draw(scene: Map, data: Any, kind: str, **kwargs) -> None:
     """Draw ``data`` on ``scene`` using the renderer implied by its type and ``kind``."""
     if isinstance(data, FeatureCollection):
+        if len(data) == 0:
+            raise ValueError("quickmap got an empty FeatureCollection (nothing to draw)")
         if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
             column = kwargs.pop("column", None)
             if column is not None:
