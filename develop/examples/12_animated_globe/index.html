@@ -926,10 +926,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-animation-helper" class="md-nav__link">
+  <a href="#embedding-helper" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The animation helper
+        Embedding helper
       
     </span>
   </a>
@@ -937,10 +937,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-seasonal-time-animation-a-stack-of-12-grids" class="md-nav__link">
+  <a href="#1-seasonal-time-animation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Seasonal time animation (a stack of 12 grids)
+        1. Seasonal time animation —
       
     </span>
   </a>
@@ -948,10 +948,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-rotating-globe-one-field-swept-longitude" class="md-nav__link">
+  <a href="#2-rotating-globe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Rotating globe (one field, swept longitude)
+        2. Rotating globe —
       
     </span>
   </a>
@@ -2527,10 +2527,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-animation-helper" class="md-nav__link">
+  <a href="#embedding-helper" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The animation helper
+        Embedding helper
       
     </span>
   </a>
@@ -2538,10 +2538,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#1-seasonal-time-animation-a-stack-of-12-grids" class="md-nav__link">
+  <a href="#1-seasonal-time-animation" class="md-nav__link">
     <span class="md-ellipsis">
       
-        1. Seasonal time animation (a stack of 12 grids)
+        1. Seasonal time animation —
       
     </span>
   </a>
@@ -2549,10 +2549,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#2-rotating-globe-one-field-swept-longitude" class="md-nav__link">
+  <a href="#2-rotating-globe" class="md-nav__link">
     <span class="md-ellipsis">
       
-        2. Rotating globe (one field, swept longitude)
+        2. Rotating globe —
       
     </span>
   </a>
@@ -3324,18 +3324,18 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=f2056b9b">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d29ad0ef">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="12-animating-data-on-the-globe">12 — Animating data on the globe<a class="anchor-link" href="#12-animating-data-on-the-globe">¶</a></h1><p>The globe is a static frame, but nothing stops us <strong>animating a stack of rasters</strong> over it. This notebook shows two kinds of globe animation, both built on <code>matplotlib.animation.FuncAnimation</code>:</p>
-<ol>
-<li><strong>Time animation</strong> — step a <em>stack</em> of grids (the 12 monthly WorldClim temperature fields) frame by frame to watch the seasons move.</li>
-<li><strong>Rotating globe</strong> — keep one field (global elevation) and sweep the orthographic centre longitude to spin the Earth.</li>
-</ol>
-<p>Each frame is a full <code>Map(globe=True)</code> draw — pyramids reprojects the grid, cleopatra renders it, and the projection frame is applied — so animations get coastlines, graticule, and limb-clipping for free. (cleopatra's <code>ArrayGlyph.animate</code> animates a plain 3-D array; the globe needs this per-frame reproject-and-frame orchestration, so we drive <code>FuncAnimation</code> here.)</p>
+<h1 id="12-animating-data-on-the-globe">12 — Animating data on the globe<a class="anchor-link" href="#12-animating-data-on-the-globe">¶</a></h1><p>The globe is a static frame, but a <strong>stack of rasters</strong> can be animated over it. Digital-Earth ships two globe-animation methods on <code>Map</code>:</p>
+<ul>
+<li><strong><code>Map.animate(stack, ...)</code></strong> — step a stack of grids (here the 12 monthly WorldClim temperature fields) frame by frame.</li>
+<li><strong><code>Map.rotate(dataset, ...)</code></strong> — keep one field and sweep the orthographic centre longitude to spin the Earth.</li>
+</ul>
+<p>Both return a <code>matplotlib.animation.FuncAnimation</code>. Internally each frame is a full <code>Map(globe=True)</code> draw — <strong>pyramids</strong> reprojects, <strong>cleopatra</strong> renders, and the projection frame is applied — so frames get coastlines, graticule, and limb-clipping for free.</p>
 <blockquote>
 <p>The GIFs are written to a temp file and embedded into the notebook output, so nothing extra is committed. WorldClim downloads on first run (cached, git-ignored).</p>
 </blockquote>
@@ -3343,7 +3343,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=9fd55e7d">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=16379d52">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3354,7 +3354,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=b5f97878">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=90c8d76e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3376,7 +3376,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">import</span><span class="w"> </span><span class="nn">io</span><span class="o">,</span><span class="w"> </span><span class="nn">os</span><span class="o">,</span><span class="w"> </span><span class="nn">zipfile</span><span class="o">,</span><span class="w"> </span><span class="nn">tempfile</span><span class="o">,</span><span class="w"> </span><span class="nn">urllib.request</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">u</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.animation</span><span class="w"> </span><span class="kn">import</span> <span class="n">FuncAnimation</span><span class="p">,</span> <span class="n">PillowWriter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.animation</span><span class="w"> </span><span class="kn">import</span> <span class="n">PillowWriter</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">IPython.display</span><span class="w"> </span><span class="kn">import</span> <span class="n">Image</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">projections</span>
@@ -3406,7 +3406,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 import io, os, zipfile, tempfile, urllib.request as u
 from pathlib import Path
 import matplotlib.pyplot as plt
-from matplotlib.animation import FuncAnimation, PillowWriter
+from matplotlib.animation import PillowWriter
 from IPython.display import Image
 from pyramids.dataset import Dataset
 from digitalearth.scene import Map, projections
@@ -3442,7 +3442,7 @@ print('stack:', len(tavg), 'monthly grids; elevation:', elevation.rows, 'x', ele
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>2026-05-31 22:46:12 | <span class="ansi-green-fg">INFO</span> | pyramids.base.config | Logging is configured.
+<pre>2026-05-31 23:19:58 | <span class="ansi-green-fg">INFO</span> | pyramids.base.config | Logging is configured.
 </pre>
 </div>
 </div>
@@ -3457,18 +3457,18 @@ print('stack:', len(tavg), 'monthly grids; elevation:', elevation.rows, 'x', ele
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=d0e1e621">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=bb974461">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="the-animation-helper">The animation helper<a class="anchor-link" href="#the-animation-helper">¶</a></h2><p>One small driver: it clears the axes, calls a per-frame <code>draw(ax, fig, i)</code> that builds a globe, saves the frames to a GIF with <code>PillowWriter</code>, and embeds the GIF bytes into the notebook output. A <code>safe_coast</code> helper keeps coastlines from breaking the run offline.</p>
+<h2 id="embedding-helper">Embedding helper<a class="anchor-link" href="#embedding-helper">¶</a></h2><p><code>Map.animate</code> / <code>Map.rotate</code> return a <code>FuncAnimation</code>; this tiny helper saves it to a GIF with <code>PillowWriter</code> and embeds the bytes into the notebook output (so no file is committed).</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=d0d838d4">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=67ec957b">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3486,60 +3486,22 @@ print('stack:', len(tavg), 'monthly grids; elevation:', elevation.rows, 'x', ele
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">safe_coast</span><span class="p">(</span><span class="n">m</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">"""Draw coastlines if Natural Earth is reachable; never raise."""</span>
-    <span class="k">try</span><span class="p">:</span>
-        <span class="n">m</span><span class="o">.</span><span class="n">coastlines</span><span class="p">(</span><span class="n">resolution</span><span class="o">=</span><span class="s1">'110m'</span><span class="p">)</span>
-    <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
-        <span class="k">pass</span>
-
-<span class="k">def</span><span class="w"> </span><span class="nf">animate_globe</span><span class="p">(</span><span class="n">draw</span><span class="p">,</span> <span class="n">n_frames</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">5.5</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">)):</span>
-<span class="w">    </span><span class="sd">"""Render an `n_frames` globe animation via FuncAnimation and embed it as a GIF in the output.</span>
-
-<span class="sd">    Args:</span>
-<span class="sd">        draw: callback ``draw(ax, fig, i)`` that builds frame ``i`` on the given axes.</span>
-<span class="sd">        n_frames: number of frames.</span>
-<span class="sd">        fps: frames per second of the saved GIF.</span>
-<span class="sd">        figsize: figure size in inches.</span>
-<span class="sd">    Returns:</span>
-<span class="sd">        IPython.display.Image wrapping the animated GIF (embedded, no file committed).</span>
-<span class="sd">    """</span>
-    <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="n">figsize</span><span class="p">)</span>
-    <span class="n">anim</span> <span class="o">=</span> <span class="n">FuncAnimation</span><span class="p">(</span><span class="n">fig</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">i</span><span class="p">:</span> <span class="p">(</span><span class="n">ax</span><span class="o">.</span><span class="n">clear</span><span class="p">(),</span> <span class="n">draw</span><span class="p">(</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="p">,</span> <span class="n">i</span><span class="p">)),</span> <span class="n">frames</span><span class="o">=</span><span class="n">n_frames</span><span class="p">,</span>
-                         <span class="n">interval</span><span class="o">=</span><span class="mi">1000</span> <span class="o">/</span> <span class="n">fps</span><span class="p">,</span> <span class="n">blit</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">show</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="n">fps</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Render a FuncAnimation to a GIF and embed it in the notebook output."""</span>
     <span class="n">tmp</span> <span class="o">=</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">NamedTemporaryFile</span><span class="p">(</span><span class="n">suffix</span><span class="o">=</span><span class="s1">'.gif'</span><span class="p">,</span> <span class="n">delete</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n">name</span>
     <span class="n">anim</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">tmp</span><span class="p">,</span> <span class="n">writer</span><span class="o">=</span><span class="n">PillowWriter</span><span class="p">(</span><span class="n">fps</span><span class="o">=</span><span class="n">fps</span><span class="p">))</span>
-    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
+    <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="s1">'all'</span><span class="p">)</span>
     <span class="n">data</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tmp</span><span class="p">)</span><span class="o">.</span><span class="n">read_bytes</span><span class="p">();</span> <span class="n">os</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">tmp</span><span class="p">)</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">n_frames</span><span class="si">}</span><span class="s1"> frames, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e3</span><span class="si">:</span><span class="s1">.0f</span><span class="si">}</span><span class="s1"> kB'</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">1e3</span><span class="si">:</span><span class="s1">.0f</span><span class="si">}</span><span class="s1"> kB'</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">Image</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s1">'gif'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-2">def safe_coast(m):
-    """Draw coastlines if Natural Earth is reachable; never raise."""
-    try:
-        m.coastlines(resolution='110m')
-    except Exception:
-        pass
-
-def animate_globe(draw, n_frames, *, fps=3, figsize=(5.5, 5.5)):
-    """Render an `n_frames` globe animation via FuncAnimation and embed it as a GIF in the output.
-
-    Args:
-        draw: callback ``draw(ax, fig, i)`` that builds frame ``i`` on the given axes.
-        n_frames: number of frames.
-        fps: frames per second of the saved GIF.
-        figsize: figure size in inches.
-    Returns:
-        IPython.display.Image wrapping the animated GIF (embedded, no file committed).
-    """
-    fig, ax = plt.subplots(figsize=figsize)
-    anim = FuncAnimation(fig, lambda i: (ax.clear(), draw(ax, fig, i)), frames=n_frames,
-                         interval=1000 / fps, blit=False)
+<div class="clipboard-copy-txt" id="cell-2">def show(anim, fps):
+    """Render a FuncAnimation to a GIF and embed it in the notebook output."""
     tmp = tempfile.NamedTemporaryFile(suffix='.gif', delete=False).name
     anim.save(tmp, writer=PillowWriter(fps=fps))
-    plt.close(fig)
+    plt.close('all')
     data = Path(tmp).read_bytes(); os.remove(tmp)
-    print(f'{n_frames} frames, {len(data) / 1e3:.0f} kB')
+    print(f'{len(data) / 1e3:.0f} kB')
     return Image(data=data, format='gif')</div>
 </div>
 </div>
@@ -3547,18 +3509,18 @@ def animate_globe(draw, n_frames, *, fps=3, figsize=(5.5, 5.5)):
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=32eac27b">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=38c8acb9">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="1-seasonal-time-animation-a-stack-of-12-grids">1. Seasonal time animation (a stack of 12 grids)<a class="anchor-link" href="#1-seasonal-time-animation-a-stack-of-12-grids">¶</a></h2><p>Step the monthly temperature stack on a fixed orthographic globe centred on Africa. Watch the warm band swing north in July and south in January. A fixed <code>vmin</code>/<code>vmax</code> keeps the colours comparable across frames.</p>
+<h2 id="1-seasonal-time-animation-mapanimate">1. Seasonal time animation — <code>Map.animate</code><a class="anchor-link" href="#1-seasonal-time-animation-mapanimate">¶</a></h2><p>Pass the 12-month stack to <code>Map.animate</code>. A fixed <code>vmin</code>/<code>vmax</code> keeps colours comparable; <code>ocean=True</code> fills the disc and <code>coastlines=True</code> overlays the coast each frame. Watch the warm band swing north in July and south in January.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=d1cc81af">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=fee9ec86">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3576,33 +3538,23 @@ def animate_globe(draw, n_frames, *, fps=3, figsize=(5.5, 5.5)):
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">CRS</span> <span class="o">=</span> <span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
-
-<span class="k">def</span><span class="w"> </span><span class="nf">draw_month</span><span class="p">(</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">CRS</span><span class="p">,</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">tavg</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">)</span>
-    <span class="n">safe_coast</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">MONTHS</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">}</span><span class="s1"> mean temperature'</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
-
-<span class="n">animate_globe</span><span class="p">(</span><span class="n">draw_month</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tavg</span><span class="p">),</span> <span class="n">fps</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">FPS</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">5.5</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">))</span>
+<span class="n">anim</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span>
+    <span class="n">tavg</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s1">'imshow'</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="n">FPS</span><span class="p">,</span>
+    <span class="n">titles</span><span class="o">=</span><span class="p">[</span><span class="sa">f</span><span class="s1">'</span><span class="si">{</span><span class="n">mo</span><span class="si">}</span><span class="s1"> mean temperature'</span> <span class="k">for</span> <span class="n">mo</span> <span class="ow">in</span> <span class="n">MONTHS</span><span class="p">],</span>
+    <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdYlBu_r'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">40</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">40</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">show</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="n">FPS</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3">CRS = projections.orthographic(lon=10, lat=15)
-
-def draw_month(ax, fig, i):
-    m = Map(crs=CRS, globe=True, ax=ax, fig=fig)
-    m.ocean()
-    m.imshow(tavg[i], cmap='RdYlBu_r', vmin=-40, vmax=40)
-    safe_coast(m)
-    m.graticule(lon_step=30, lat_step=30)
-    m.set_global()
-    m.set_title(f'{MONTHS[i]} mean temperature')
-    m.render()
-
-animate_globe(draw_month, len(tavg), fps=3)</div>
+<div class="clipboard-copy-txt" id="cell-3">FPS = 3
+m = Map(crs=projections.orthographic(lon=10, lat=15), globe=True, figsize=(5.5, 5.5))
+anim = m.animate(
+    tavg, kind='imshow', fps=FPS,
+    titles=[f'{mo} mean temperature' for mo in MONTHS],
+    ocean=True, coastlines=True, cmap='RdYlBu_r', vmin=-40, vmax=40,
+)
+show(anim, FPS)</div>
 </div>
 </div>
 </div>
@@ -3614,7 +3566,7 @@ animate_globe(draw_month, len(tavg), fps=3)</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>12 frames, 733 kB
+<pre>659 kB
 </pre>
 </div>
 </div>
@@ -3628,18 +3580,18 @@ animate_globe(draw_month, len(tavg), fps=3)</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b7ad9aa9">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=fa8534a5">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="2-rotating-globe-one-field-swept-longitude">2. Rotating globe (one field, swept longitude)<a class="anchor-link" href="#2-rotating-globe-one-field-swept-longitude">¶</a></h2><p>Keep the global elevation field and sweep the orthographic centre longitude through 360 degrees to spin the Earth. Ocean cells are nodata, so the <code>ocean()</code> disc shows through the sea.</p>
+<h2 id="2-rotating-globe-maprotate">2. Rotating globe — <code>Map.rotate</code><a class="anchor-link" href="#2-rotating-globe-maprotate">¶</a></h2><p><code>Map.rotate</code> sweeps the orthographic centre longitude through 360 degrees over a single field. Ocean cells are nodata, so the <code>ocean()</code> disc shows through the sea.</p>
 </div>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=2adc515c">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell" id="cell-id=1951ea6c">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3657,35 +3609,19 @@ animate_globe(draw_month, len(tavg), fps=3)</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">N</span> <span class="o">=</span> <span class="mi">24</span>
-
-<span class="k">def</span><span class="w"> </span><span class="nf">draw_spin</span><span class="p">(</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="p">,</span> <span class="n">i</span><span class="p">):</span>
-    <span class="n">lon</span> <span class="o">=</span> <span class="o">-</span><span class="mi">180</span> <span class="o">+</span> <span class="n">i</span> <span class="o">*</span> <span class="p">(</span><span class="mi">360</span> <span class="o">/</span> <span class="n">N</span><span class="p">)</span>
-    <span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ax</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span> <span class="n">fig</span><span class="o">=</span><span class="n">fig</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">ocean</span><span class="p">()</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">imshow</span><span class="p">(</span><span class="n">elevation</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gist_earth'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">3000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5000</span><span class="p">)</span>
-    <span class="n">safe_coast</span><span class="p">(</span><span class="n">m</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">graticule</span><span class="p">(</span><span class="n">lon_step</span><span class="o">=</span><span class="mi">30</span><span class="p">,</span> <span class="n">lat_step</span><span class="o">=</span><span class="mi">30</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">set_global</span><span class="p">()</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">set_title</span><span class="p">(</span><span class="s1">'rotating Earth - elevation'</span><span class="p">)</span>
-    <span class="n">m</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>
-
-<span class="n">animate_globe</span><span class="p">(</span><span class="n">draw_spin</span><span class="p">,</span> <span class="n">N</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">m</span> <span class="o">=</span> <span class="n">Map</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="n">projections</span><span class="o">.</span><span class="n">orthographic</span><span class="p">(</span><span class="n">lon</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">),</span> <span class="n">globe</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mf">5.5</span><span class="p">,</span> <span class="mf">5.5</span><span class="p">))</span>
+<span class="n">anim</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">rotate</span><span class="p">(</span>
+    <span class="n">elevation</span><span class="p">,</span> <span class="n">lat</span><span class="o">=</span><span class="mi">15</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">24</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+    <span class="n">ocean</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'gist_earth'</span><span class="p">,</span> <span class="n">vmin</span><span class="o">=-</span><span class="mi">3000</span><span class="p">,</span> <span class="n">vmax</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">show</span><span class="p">(</span><span class="n">anim</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-4">N = 24
-
-def draw_spin(ax, fig, i):
-    lon = -180 + i * (360 / N)
-    m = Map(crs=projections.orthographic(lon=lon, lat=15), globe=True, ax=ax, fig=fig)
-    m.ocean()
-    m.imshow(elevation, cmap='gist_earth', vmin=-3000, vmax=5000)
-    safe_coast(m)
-    m.graticule(lon_step=30, lat_step=30)
-    m.set_global()
-    m.set_title('rotating Earth - elevation')
-    m.render()
-
-animate_globe(draw_spin, N, fps=8)</div>
+<div class="clipboard-copy-txt" id="cell-4">m = Map(crs=projections.orthographic(lon=0, lat=15), globe=True, figsize=(5.5, 5.5))
+anim = m.rotate(
+    elevation, lat=15, n_frames=24, fps=8,
+    ocean=True, coastlines=True, cmap='gist_earth', vmin=-3000, vmax=5000,
+)
+show(anim, 8)</div>
 </div>
 </div>
 </div>
@@ -3697,7 +3633,7 @@ animate_globe(draw_spin, N, fps=8)</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>24 frames, 1511 kB
+<pre>1267 kB
 </pre>
 </div>
 </div>
@@ -3711,7 +3647,7 @@ animate_globe(draw_spin, N, fps=8)</div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=e8958d10">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=dc94887a">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3719,8 +3655,8 @@ animate_globe(draw_spin, N, fps=8)</div>
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="notes">Notes<a class="anchor-link" href="#notes">¶</a></h2><ul>
 <li><strong>Stacks.</strong> Here the stack is a list of <code>Dataset</code>s; pyramids' <code>DatasetCollection</code> (a datacube) is the natural container for a real time stack and indexes the same way.</li>
-<li><strong>Cost.</strong> Each frame is a full reproject + frame, so animations are heavier than a single map; keep the frame count and figure size modest, or pre-reproject once and swap the image array for speed.</li>
-<li><strong>Where it could live.</strong> A reusable <code>Map.animate(stack, ...)</code> belongs in Digital-Earth as orchestration over cleopatra's animation + pyramids' reprojection — this notebook is the working recipe for it.</li>
+<li><strong>Cost.</strong> Each frame is a full reproject + frame, so animations are heavier than a single map — keep the frame count and figure size modest.</li>
+<li><strong>No per-frame colorbar.</strong> <code>animate</code>/<code>rotate</code> skip colorbars (they would stack axes); pass a fixed <code>vmin</code>/<code>vmax</code> for stable colours, and add a single static colorbar afterwards if you need one.</li>
 </ul>
 </div>
 </div>
