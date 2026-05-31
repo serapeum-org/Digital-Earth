@@ -736,7 +736,7 @@ class Map(Scene):
         data and coastlines, clipped to the boundary). Interior rings (holes) are dropped in v1 — see #43.
         """
         return self._natural_earth(
-            "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, polygon=True, zorder=0.6, **kwargs
+            "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, polygon=True, zorder=-1.5, **kwargs
         )
 
     def ocean(self, resolution: str = "110m", **kwargs) -> Any:
@@ -749,7 +749,7 @@ class Map(Scene):
         color = kwargs.pop("color", "#cfe6f5")
         if self.globe:
             boundary = self._frame()[0]
-            return self._fill_globe_polygons([np.asarray(boundary)], facecolor=color, zorder=0.4)
+            return self._fill_globe_polygons([np.asarray(boundary)], facecolor=color, zorder=-2.0)
         return self._natural_earth("ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs)
 
     def basemap(self, source: Any = None, **kwargs) -> Any:
