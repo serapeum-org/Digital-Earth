@@ -313,3 +313,26 @@ def test_fill_globe_polygons_empty_returns_none():
     """_fill_globe_polygons short-circuits to None when there are no rings to draw."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     assert m._fill_globe_polygons([], facecolor="#ccc", zorder=-1.0) is None
+
+
+def test_lakes_fill_on_globe_above_land(land_fc, mocker):
+    """lakes() fills polygons on a globe and sits just above land (so lakes show on the land)."""
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    pc = m.lakes()
+    assert pc is not None and pc.get_paths()
+    assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
+    assert pc.get_zorder() > -1.5, "lakes should draw above land (-1.5)"
+
+
+def test_rivers_drawn_as_lines_on_globe(mocker):
+    """rivers() draws projected line segments (split at the limb) on a globe."""
+    import geopandas as gpd
+    from shapely.geometry import LineString
+
+    rv = gpd.GeoDataFrame(geometry=[LineString([(-9, 39), (-8, 40), (-7, 41)])], crs=4326)
+    rv.epsg = 4326
+    mocker.patch("digitalearth.scene.map.natural_earth", return_value=rv)
+    m = Map(crs=projections.orthographic(-9, 39), globe=True)
+    artists = m.rivers()
+    assert artists and m.ax.lines

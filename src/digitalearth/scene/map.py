@@ -752,6 +752,22 @@ class Map(Scene):
             return self._fill_globe_polygons([np.asarray(boundary)], facecolor=color, zorder=-2.0)
         return self._natural_earth("ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs)
 
+    def lakes(self, resolution: str = "110m", **kwargs) -> Any:
+        """Fill Natural-Earth lake polygons.
+
+        Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
+        still below data and coastlines. On a globe the polygons are re-closed at the projection limb.
+        """
+        return self._natural_earth(
+            "lakes", resolution, {"color": "#cfe6f5", "edgecolor": "none"}, polygon=True, zorder=-1.4, **kwargs
+        )
+
+    def rivers(self, resolution: str = "110m", **kwargs) -> Any:
+        """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe."""
+        return self._natural_earth(
+            "rivers", resolution, {"color": "#5a8fcf", "linewidth": 0.4}, zorder=2.4, **kwargs
+        )
+
     def basemap(self, source: Any = None, **kwargs) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.tiles.add_tiles`` in the display CRS."""
         return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
