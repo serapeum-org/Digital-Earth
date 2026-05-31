@@ -117,6 +117,7 @@ nav:
     - One-call quickplot: examples/07_quickplot.ipynb
     - Projected & globe maps: examples/08_projected_globe_maps.ipynb
     - Globe base maps (ocean/land): examples/09_globe_basemaps.ipynb
+    - Globe internals (under the hood): examples/10_globe_under_the_hood.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb
