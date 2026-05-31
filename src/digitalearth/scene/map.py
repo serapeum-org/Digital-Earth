@@ -109,6 +109,13 @@ class Map(Scene):
         display CRS (e.g. an orthographic globe) we always reproject — and ``dataset.epsg`` is unreliable for
         non-EPSG results anyway (pyramids returns 4326 for a no-code projection), so we never compare against
         a proj4 CRS structurally here.
+
+        Args:
+            dataset: A pyramids ``Dataset`` whose ``.epsg`` is compared against the display CRS.
+
+        Returns:
+            ``False`` only when the display CRS is an ``int`` equal to ``dataset.epsg`` (data already in the
+            display CRS); ``True`` otherwise — i.e. for a differing EPSG code or any proj4/string CRS.
         """
         return not (isinstance(self.crs, int) and dataset.epsg == self.crs)
 
@@ -492,7 +499,43 @@ class Map(Scene):
 
         On a projected/globe map the far hemisphere reprojects to non-finite coordinates; matplotlib's
         ``PolyCollection`` would otherwise receive ``inf``/``nan`` vertices and fail or draw garbage. Keeps
-        only fully-finite rings.
+        only fully-finite rings, preserving order and the positional alignment between rings and ``values``.
+
+        Args:
+            polygons: Polygon rings as ``(N, 2)`` vertex arrays; any ring with an ``inf``/``nan`` vertex is
+                dropped.
+            values: Optional per-polygon scalar values, positionally aligned with ``polygons``. When given,
+                the same rings are dropped from it so the two stay aligned.
+
+        Returns:
+            ``(kept_polygons, kept_values)`` — the surviving rings, and either the filtered ``values`` array
+            or ``None`` when ``values`` was ``None``.
+
+        Examples:
+            - A ring with an ``inf`` vertex is dropped along with its value:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.scene import Map
+                >>> good = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
+                >>> bad = np.array([[0.0, 0.0], [np.inf, 0.0], [1.0, 1.0]])
+                >>> kept, vals = Map._finite_polygons([good, bad, good], np.array([10.0, 20.0, 30.0]))
+                >>> len(kept)
+                2
+                >>> vals.tolist()
+                [10.0, 30.0]
+
+                ```
+            - Without values, only the finite rings come back and the second slot is ``None``:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.scene import Map
+                >>> good = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
+                >>> bad = np.array([[np.nan, 0.0], [1.0, 0.0], [1.0, 1.0]])
+                >>> kept, vals = Map._finite_polygons([good, bad])
+                >>> len(kept), vals
+                (1, None)
+
+                ```
         """
         keep = [i for i, p in enumerate(polygons) if np.isfinite(p).all()]
         kept = [polygons[i] for i in keep]
@@ -694,7 +737,13 @@ class Map(Scene):
         """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).
 
         ``projection_frame`` reprojects a dense lon/lat sample of the whole sphere, so it is memoised here to
-        avoid recomputing it for both ``set_global`` and ``_apply_frame``.
+        avoid recomputing it for both ``set_global`` and ``_apply_frame``. The cache is keyed on the display
+        CRS and recomputed only when the CRS changes.
+
+        Returns:
+            The ``(boundary_xy, (xmin, xmax), (ymin, ymax))`` tuple from
+            :func:`digitalearth.scene.projections.projection_frame` for the current display CRS — a closed
+            ``(N, 2)`` boundary ring plus the projected x/y limits.
         """
         if self._frame_cache is None or self._frame_cache[0] != self.crs:
             self._frame_cache = (self.crs, projections.projection_frame(self.crs))

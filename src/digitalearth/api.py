@@ -26,7 +26,24 @@ __all__ = [
 
 
 def _draw(scene: Map, data: Any, kind: str, **kwargs) -> None:
-    """Draw ``data`` on ``scene`` using the renderer implied by its type and ``kind``."""
+    """Draw ``data`` on ``scene`` using the renderer implied by its type and ``kind``.
+
+    Dispatch is by input type: a ``FeatureCollection`` of polygons becomes a ``choropleth`` (when a
+    ``column`` kwarg is given) or outline ``shapes``; any other geometry becomes a ``scatter``; a
+    ``Dataset`` is rendered with the ``kind`` method (``imshow`` for ``"auto"``). An empty
+    ``FeatureCollection`` is rejected up front — without the guard its all-``True`` empty ``geom_type``
+    check would misclassify it as polygons and silently draw nothing.
+
+    Args:
+        scene: The :class:`Map` to draw on.
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
+        kind: Raster renderer name (``"auto"`` → ``imshow``); ignored for vector input.
+        **kwargs: Forwarded to the chosen ``Map`` draw method (e.g. ``column``, ``cmap``, ``levels``).
+
+    Raises:
+        ValueError: if ``data`` is an empty ``FeatureCollection`` (nothing to draw).
+        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
+    """
     if isinstance(data, FeatureCollection):
         if len(data) == 0:
             raise ValueError("quickmap got an empty FeatureCollection (nothing to draw)")

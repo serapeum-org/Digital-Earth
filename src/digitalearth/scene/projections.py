@@ -103,7 +103,40 @@ def get(name: str, **kwargs) -> Any:
 
 
 def _convex_hull(points: np.ndarray) -> np.ndarray:
-    """Return the convex-hull ring (closed) of 2-D ``points`` via Andrew's monotone chain (pure numpy)."""
+    """Return the convex-hull ring (closed) of 2-D ``points`` via Andrew's monotone chain (pure numpy).
+
+    Fewer than three (unique) points cannot form a polygon, so the degenerate input is returned closed as-is:
+    one point repeats to a 2-vertex ring, an empty input stays empty.
+
+    Args:
+        points: An ``(N, 2)`` array of 2-D points (duplicates are collapsed before hulling).
+
+    Returns:
+        The closed hull ring as an ``(M, 2)`` array whose first vertex repeats at the end; an empty
+        ``(0, 2)`` array when ``points`` is empty.
+
+    Examples:
+        - The hull of a filled square is its four corners, closed back to the start:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.scene.projections import _convex_hull
+            >>> sq = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [0.5, 0.5]])
+            >>> ring = _convex_hull(sq)
+            >>> bool(np.allclose(ring[0], ring[-1]))
+            True
+            >>> len(ring)
+            5
+
+            ```
+        - A single point is returned as a closed degenerate ring (itself, repeated):
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.scene.projections import _convex_hull
+            >>> _convex_hull(np.array([[2.0, 3.0]])).tolist()
+            [[2.0, 3.0], [2.0, 3.0]]
+
+            ```
+    """
     pts = np.unique(points, axis=0)
     if len(pts) < 3:
         return np.vstack([pts, pts[:1]]) if len(pts) else pts
@@ -128,7 +161,43 @@ def _convex_hull(points: np.ndarray) -> np.ndarray:
 
 
 def _split_finite(x: np.ndarray, y: np.ndarray) -> List[np.ndarray]:
-    """Split parallel x/y into contiguous finite-run polylines (drops off-domain / antimeridian gaps)."""
+    """Split parallel x/y into contiguous finite-run polylines (drops off-domain / antimeridian gaps).
+
+    A line crossing the projection limb (or the antimeridian) reprojects to runs of finite points separated
+    by ``inf``/``nan``; this keeps each finite run as its own polyline so nothing wraps across the figure.
+    Single-point runs are discarded — a polyline needs at least two vertices to draw.
+
+    Args:
+        x: X coordinates of the polyline, in order; non-finite entries mark the breaks.
+        y: Y coordinates, parallel to ``x`` (the same index is a break if either ``x`` or ``y`` is
+            non-finite).
+
+    Returns:
+        A list of ``(M, 2)`` arrays, one per contiguous finite run of length ≥ 2 (empty list if none).
+
+    Examples:
+        - A gap (``nan``) splits one line into two separate finite polylines:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.scene.projections import _split_finite
+            >>> x = np.array([0.0, 1.0, np.nan, 3.0, 4.0])
+            >>> y = np.array([0.0, 1.0, 2.0, 3.0, 4.0])
+            >>> segs = _split_finite(x, y)
+            >>> [seg.tolist() for seg in segs]
+            [[[0.0, 0.0], [1.0, 1.0]], [[3.0, 3.0], [4.0, 4.0]]]
+
+            ```
+        - An isolated finite point (length-1 run) is dropped:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.scene.projections import _split_finite
+            >>> x = np.array([np.inf, 5.0, np.inf])
+            >>> y = np.array([0.0, 5.0, 0.0])
+            >>> _split_finite(x, y)
+            []
+
+            ```
+    """
     finite = np.isfinite(x) & np.isfinite(y)
     out: List[np.ndarray] = []
     run: List[Tuple[float, float]] = []
@@ -156,6 +225,10 @@ def projection_frame(crs: Any, n: int = 720) -> Tuple[np.ndarray, Tuple[float, f
 
     Returns:
         ``(boundary_xy, (xmin, xmax), (ymin, ymax))`` — an ``(N, 2)`` closed ring + projected limits.
+
+    Raises:
+        ValueError: if every sphere sample projects to a non-finite coordinate, so the CRS has no finite
+            projected domain (rather than letting ``min()``/``max()`` fail on an empty array).
 
     Examples:
         - The Web-Mercator domain is a rectangle whose limits are symmetric about 0:
