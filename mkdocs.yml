@@ -118,6 +118,7 @@ nav:
     - Projected & globe maps: examples/08_projected_globe_maps.ipynb
     - Globe base maps (ocean/land): examples/09_globe_basemaps.ipynb
     - Globe internals (under the hood): examples/10_globe_under_the_hood.ipynb
+    - Global data on the globe: examples/11_global_data_on_globe.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb

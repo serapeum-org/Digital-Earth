@@ -140,6 +140,8 @@ tests/mo/*
 examples/medium/SWED/
 examples/data/SWED_sample.zip
 examples/data/DEM100_Rhine.tif
+# Global rasters downloaded by docs/examples/11_global_data_on_globe.ipynb (WorldClim, ~40 MB)
+examples/data/global/
 
 # Claude Code files (kept local only, never tracked)
 .claude/
