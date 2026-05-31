@@ -7,6 +7,13 @@ import pytest
 from digitalearth.scene import Map
 
 
+def test_needs_reproject(dataset):
+    """_needs_reproject is False only for a matching EPSG-int CRS; True for a different int or any proj4."""
+    assert Map(crs=dataset.epsg)._needs_reproject(dataset) is False
+    assert Map(crs=3857)._needs_reproject(dataset) is True
+    assert Map(crs="+proj=ortho +lat_0=0 +lon_0=0")._needs_reproject(dataset) is True
+
+
 def test_prepare_reprojects(dataset):
     """A dataset in a different CRS is reprojected to the Map's display CRS."""
     m = Map(crs=3857)

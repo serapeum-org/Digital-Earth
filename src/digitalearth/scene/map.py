@@ -102,14 +102,19 @@ class Map(Scene):
         self._framed = False
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
-    def _prepare(self, dataset: Any, band: int = 1) -> Source:
-        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
+    def _needs_reproject(self, dataset: Any) -> bool:
+        """Whether ``dataset`` must be reprojected to the display CRS.
 
-        The CRS-equality check compares against an EPSG int only; for a proj4/string display CRS (e.g. an
-        orthographic globe) the comparison is always False, so the source is reprojected via pyramids.
+        Only an EPSG-int display CRS can be compared cheaply against ``dataset.epsg``. For a proj4/string
+        display CRS (e.g. an orthographic globe) we always reproject — and ``dataset.epsg`` is unreliable for
+        non-EPSG results anyway (pyramids returns 4326 for a no-code projection), so we never compare against
+        a proj4 CRS structurally here.
         """
-        same = isinstance(self.crs, int) and dataset.epsg == self.crs
-        ds = dataset if same else dataset.to_crs(self.crs)
+        return not (isinstance(self.crs, int) and dataset.epsg == self.crs)
+
+    def _prepare(self, dataset: Any, band: int = 1) -> Source:
+        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`."""
+        ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
         return get_source(ds, band=band)
 
     def _field(
@@ -191,7 +196,7 @@ class Map(Scene):
 
     def _reproject(self, dataset: Any) -> Any:
         """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
-        return dataset if dataset.epsg == self.crs else dataset.to_crs(self.crs)
+        return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
 
     def scatter(self, features: Any, **opts) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
