@@ -281,6 +281,7 @@ class Map(Scene):
         nodata = ds.no_data_value[band - 1]
         if nodata is not None:
             values = np.where(np.isclose(values, nodata, rtol=1e-3), np.nan, values)
+        polygons, values = self._finite_polygons(polygons, values)  # drop far-side cells on a globe
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = PolygonGlyph(
             polygons, values=values, ax=self.ax, fig=self.fig, **opts,
@@ -438,6 +439,8 @@ class Map(Scene):
         from matplotlib.tri import Triangulation
 
         x, y, z = self._scattered(data)
+        finite = np.isfinite(x) & np.isfinite(y)  # drop far-side points on a globe (Triangulation needs finite)
+        x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
         if kind == "tripcolor":
@@ -477,6 +480,20 @@ class Map(Scene):
             repeats.append(len(parts))
         return polygons, repeats
 
+    @staticmethod
+    def _finite_polygons(polygons: List[np.ndarray], values: Optional[np.ndarray] = None) -> tuple:
+        """Drop polygons with any non-finite vertex (and the matching values).
+
+        On a projected/globe map the far hemisphere reprojects to non-finite coordinates; matplotlib's
+        ``PolyCollection`` would otherwise receive ``inf``/``nan`` vertices and fail or draw garbage. Keeps
+        only fully-finite rings.
+        """
+        keep = [i for i, p in enumerate(polygons) if np.isfinite(p).all()]
+        kept = [polygons[i] for i in keep]
+        if values is None:
+            return kept, None
+        return kept, np.asarray(values)[keep]
+
     def choropleth(self, features: Any, column: str, **opts) -> Any:
         """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
 
@@ -507,6 +524,7 @@ class Map(Scene):
         gdf = features.to_crs(self.crs)
         polygons, repeats = self._polygon_vertices(gdf.geometry)
         values = np.repeat(gdf[column].to_numpy(), repeats)
+        polygons, values = self._finite_polygons(polygons, values)  # drop far-side polygons on a globe
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = PolygonGlyph(
             polygons, values=values, ax=self.ax, fig=self.fig, **opts,
@@ -526,6 +544,7 @@ class Map(Scene):
         """
         gdf = features.to_crs(self.crs)
         polygons, _ = self._polygon_vertices(gdf.geometry)
+        polygons, _ = self._finite_polygons(polygons)  # drop far-side polygons on a globe
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         _, _, pc = glyph.plot(outline_only=True)
         return self._add_layer(glyph, pc)

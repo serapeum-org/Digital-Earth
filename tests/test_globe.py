@@ -82,6 +82,59 @@ def test_polygon_fills_rejected_on_globe(layer):
         getattr(m, layer)()
 
 
+@pytest.fixture
+def global_field():
+    """A 2-degree global lon/lat raster (covers the whole sphere, so a globe has a far side).
+
+    Returns:
+        Dataset: a global EPSG:4326 field.
+    """
+    ny, nx = 90, 180
+    lat = np.linspace(90, -90, ny)[:, None]
+    z = (np.cos(np.deg2rad(lat)) * 30) * np.ones((ny, nx), "float32")
+    return Dataset.create_from_array(arr=z.astype("float32"), geo=(-180.0, 2.0, 0.0, 90.0, 0.0, -2.0), epsg=4326)
+
+
+def test_finite_polygons_drops_nonfinite():
+    """_finite_polygons drops rings with any inf/nan vertex and the matching values."""
+    good = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
+    bad = np.array([[0.0, 0.0], [np.inf, 0.0], [1.0, 1.0]])
+    polys, vals = Map._finite_polygons([good, bad, good], np.array([10.0, 20.0, 30.0]))
+    assert len(polys) == 2
+    assert vals.tolist() == [10.0, 30.0]
+    polys_only, none_vals = Map._finite_polygons([good, bad])
+    assert len(polys_only) == 1 and none_vals is None
+
+
+def test_globe_choropleth_drops_far_side():
+    """choropleth on a globe drops polygons whose vector reprojection lands off the disc (no inf vertices)."""
+    from pyramids.feature import FeatureCollection
+
+    fc = FeatureCollection.read_file("tests/data/points.geojson")
+    fc = fc.to_crs(4326)
+    fc["geometry"] = fc.geometry.buffer(2.0)  # ~2-degree polygons in lon/lat
+    fc["val"] = range(len(fc))
+    m = Map(crs=projections.orthographic(lon=-9, lat=39), globe=True)
+    pc = m.choropleth(fc, column="val")
+    verts = np.vstack([p.vertices for p in pc.get_paths()]) if pc.get_paths() else np.zeros((1, 2))
+    assert np.isfinite(verts).all()  # no inf reached the PolyCollection
+
+
+def test_globe_grid_cells_finite(global_field):
+    """grid_cells on a globe renders finite cells (raster reprojection yields a finite projected grid)."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    pc = m.grid_cells(global_field)
+    verts = np.vstack([p.vertices for p in pc.get_paths()])
+    assert len(pc.get_paths()) > 0 and np.isfinite(verts).all()
+
+
+def test_globe_tricontourf_finite(global_field):
+    """tricontourf on a globe triangulates only finite points."""
+    m = Map(crs=projections.orthographic(0, 0), globe=True)
+    m.tricontourf(global_field)
+    assert len(m.layers) == 1
+
+
 def test_globe_save(dataset, tmp_path):
     """A globe map saves a non-empty PNG (frame applied on save)."""
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
