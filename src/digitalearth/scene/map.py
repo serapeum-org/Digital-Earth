@@ -100,6 +100,7 @@ class Map(Scene):
         self.globe = globe
         self._graticule_lines: Optional[List[np.ndarray]] = None  # set by graticule()
         self._framed = False
+        self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
         """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
@@ -684,16 +685,26 @@ class Map(Scene):
         """
         self._graticule_lines = projections.graticule(self.crs, lon_step=lon_step, lat_step=lat_step)
 
+    def _frame(self) -> tuple:
+        """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).
+
+        ``projection_frame`` reprojects a dense lon/lat sample of the whole sphere, so it is memoised here to
+        avoid recomputing it for both ``set_global`` and ``_apply_frame``.
+        """
+        if self._frame_cache is None or self._frame_cache[0] != self.crs:
+            self._frame_cache = (self.crs, projections.projection_frame(self.crs))
+        return self._frame_cache[1]
+
     def set_global(self) -> None:
         """Set the axes extent to the full projection domain (the whole globe/world)."""
-        _, xlim, ylim = projections.projection_frame(self.crs)
+        _, xlim, ylim = self._frame()
         self.set_extent([xlim[0], xlim[1], ylim[0], ylim[1]])
 
     def _apply_frame(self) -> Any:
         """Draw the projection boundary + graticule and clip the layers to it (once, at render time)."""
         if not self.globe or self._framed:
             return None
-        boundary, xlim, ylim = projections.projection_frame(self.crs)
+        boundary, xlim, ylim = self._frame()
         patch = apply_projection_frame(
             self.ax, boundary_xy=boundary, xlim=xlim, ylim=ylim,
             graticule_lines=self._graticule_lines,
