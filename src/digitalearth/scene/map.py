@@ -11,6 +11,7 @@ The field methods here (``imshow`` and the private ``_field`` recipe) are the fo
 from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
+from matplotlib.animation import FuncAnimation
 from matplotlib.collections import PolyCollection
 from cleopatra.array_glyph import ArrayGlyph
 from cleopatra.mesh_glyph import MeshGlyph
@@ -870,3 +871,111 @@ class Map(Scene):
         """Apply the projection frame (for a globe map) then show the figure."""
         self._apply_frame()
         super().show()
+
+    def _animate_frames(self, draw_one: Any, n_frames: int, fps: float) -> FuncAnimation:
+        """Drive ``n_frames`` of ``draw_one(i)`` on this Map's axes as a :class:`FuncAnimation`.
+
+        Each frame clears the axes and resets the per-frame layer/frame state, calls ``draw_one(i)`` to draw
+        frame ``i``, then (on a globe) sets the full-domain extent and applies the projection frame. No
+        colorbar is added per frame — pass a fixed ``vmin``/``vmax`` to keep colours stable instead.
+        """
+        def _f(i: int) -> None:
+            self.ax.clear()
+            self.layers = []
+            self._framed = False
+            draw_one(i)
+            if self.globe:
+                self.set_global()
+                self._apply_frame()
+
+        return FuncAnimation(self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False)
+
+    def animate(self, stack: Any, *, kind: str = "imshow", fps: float = 3.0,
+                titles: Optional[Sequence[str]] = None, ocean: bool = False, coastlines: bool = False,
+                **kwargs) -> FuncAnimation:
+        """Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.
+
+        Each frame reprojects ``stack[i]`` to the display CRS (pyramids), renders it with the ``kind`` method
+        (cleopatra), optionally draws the ocean disc / coastlines, and — on a globe — applies the projection
+        frame, so every frame gets the boundary, graticule, and limb-clipping for free. The returned
+        animation is lazy: call ``anim.save("out.gif", writer=PillowWriter(fps=...))`` or display it.
+
+        Args:
+            stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
+                ``DatasetCollection`` datacube) — one raster per animation frame.
+            kind: The field method used to draw each frame (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"``).
+            fps: Frames per second (sets the inter-frame interval).
+            titles: Optional per-frame titles; must match the stack length when given.
+            ocean: When True, fill the ocean disc behind each frame (globe maps only).
+            coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).
+            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
+
+        Returns:
+            A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames.
+
+        Raises:
+            ValueError: if ``stack`` is empty, or ``titles`` is given with a mismatched length.
+        """
+        frames = list(stack)
+        if not frames:
+            raise ValueError("animate got an empty stack (nothing to animate)")
+        if titles is not None and len(titles) != len(frames):
+            raise ValueError(f"titles length ({len(titles)}) must match the stack length ({len(frames)})")
+
+        def draw_one(i: int) -> None:
+            if ocean and self.globe:
+                self.ocean()
+            getattr(self, kind)(frames[i], **kwargs)
+            if coastlines:
+                try:
+                    self.coastlines()
+                except Exception:  # network/data unavailable — decoration is best-effort
+                    pass
+            if titles is not None:
+                self.set_title(titles[i])
+
+        return self._animate_frames(draw_one, len(frames), fps)
+
+    def rotate(self, dataset: Any, *, lat: float = 15.0, n_frames: int = 24, fps: float = 8.0,
+               lon0: float = -180.0, kind: str = "imshow", ocean: bool = False, coastlines: bool = False,
+               **kwargs) -> FuncAnimation:
+        """Spin an orthographic globe over a single field by sweeping the centre longitude.
+
+        Forces a globe map and redraws ``dataset`` on ``n_frames`` orthographic projections whose centre
+        longitude steps a full 360 degrees from ``lon0``. The display CRS (:attr:`crs`) is swept as the
+        animation renders, so after rendering it holds the last frame's projection.
+
+        Args:
+            dataset: The pyramids ``Dataset`` to spin (reprojected per frame).
+            lat: Centre latitude of every orthographic view.
+            n_frames: Number of frames spanning the full 360-degree turn.
+            fps: Frames per second.
+            lon0: Starting centre longitude.
+            kind: The field method used to draw the data (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"``).
+            ocean: When True, fill the ocean disc behind the data each frame.
+            coastlines: When True, overlay coastlines each frame (best-effort).
+            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
+
+        Returns:
+            A :class:`matplotlib.animation.FuncAnimation` over ``n_frames`` frames.
+
+        Raises:
+            ValueError: if ``n_frames`` is less than 1.
+        """
+        if n_frames < 1:
+            raise ValueError("rotate needs n_frames >= 1")
+        self.globe = True
+        lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
+
+        def draw_one(i: int) -> None:
+            self.crs = projections.orthographic(lon=lons[i], lat=lat)
+            if ocean:
+                self.ocean()
+            getattr(self, kind)(dataset, **kwargs)
+            if coastlines:
+                try:
+                    self.coastlines()
+                except Exception:  # network/data unavailable — decoration is best-effort
+                    pass
+
+        return self._animate_frames(draw_one, n_frames, fps)
