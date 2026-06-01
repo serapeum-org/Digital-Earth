@@ -6,6 +6,17 @@ from matplotlib.axes import Axes
 from digitalearth import charts
 
 
+def test_top_level_exports():
+    """line/bar/histogram (and the layout helpers) are importable from the top-level package."""
+    import digitalearth
+
+    for name in ("line", "bar", "histogram", "grid", "shared_colorbar"):
+        assert hasattr(digitalearth, name), f"digitalearth.{name} should be exported"
+        assert name in digitalearth.__all__, f"{name} should be in digitalearth.__all__"
+    assert digitalearth.line is charts.line, "top-level line must be the charts.line function"
+    assert digitalearth.histogram is charts.histogram, "top-level histogram must be charts.histogram"
+
+
 class TestLine:
     """Tests for charts.line."""
 

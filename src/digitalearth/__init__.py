@@ -36,7 +36,11 @@ digitalearth - visualization package
 """
 
 from digitalearth.api import quickmap, quickplot  # noqa: E402
-from digitalearth.scene import Map, Scene  # noqa: E402
+from digitalearth.charts import bar, histogram, line  # noqa: E402
+from digitalearth.scene import Map, Scene, grid, shared_colorbar  # noqa: E402
 from digitalearth.sources import get_source  # noqa: E402
 
-__all__ = ["quickplot", "quickmap", "Map", "Scene", "get_source"]
+__all__ = [
+    "quickplot", "quickmap", "Map", "Scene", "get_source",
+    "line", "bar", "histogram", "grid", "shared_colorbar",
+]
