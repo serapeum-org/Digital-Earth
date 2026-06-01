@@ -8,6 +8,7 @@ projection is applied to the *data* upstream, not to the axes (see plan §2.4).
 The field methods here (``imshow`` and the private ``_field`` recipe) are the foundation T1.1 extends with
 ``contourf``/``contour``/``pcolormesh``/``block``.
 """
+import logging
 from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -33,6 +34,14 @@ from digitalearth.scene.domains import DomainLike, resolve_domain
 from digitalearth.scene.scene import Scene
 from digitalearth.sources import get_source
 from digitalearth.sources.source import Source
+
+logger = logging.getLogger(__name__)
+
+#: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
+_CLIM_SCAN_CAP = 24
+
+#: Field-render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
+_ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
 
 
 def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
@@ -104,6 +113,7 @@ class Map(Scene):
         self.globe = globe
         self._graticule_lines: Optional[List[np.ndarray]] = None  # set by graticule()
         self._last_vector: Optional[tuple] = None  # (glyph, artist, kind) of the most recent vector layer
+        self._animation: Optional[FuncAnimation] = None  # last animate()/rotate() result (kept alive, L3)
         self._framed = False
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
@@ -539,7 +549,8 @@ class Map(Scene):
         if dataset is None:
             try:
                 return self.basemap(**kwargs)
-            except Exception:  # tile servers unavailable — best-effort backdrop
+            except Exception as exc:  # tile servers unavailable — best-effort backdrop
+                logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
         has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
         xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
@@ -1003,7 +1014,9 @@ class Map(Scene):
                 self.set_global()
                 self._apply_frame()
 
-        return FuncAnimation(self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False)
+        anim = FuncAnimation(self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False)
+        self._animation = anim  # keep a strong reference so it isn't garbage-collected before save (L3)
+        return anim
 
     @staticmethod
     def _stack_clim(datasets: Sequence[Any]) -> Tuple[float, float]:
@@ -1026,12 +1039,15 @@ class Map(Scene):
 
         Without this, each frame's renderer auto-scales to its own data range, so the colours (and any
         colorbar) flicker between frames. Any ``vmin``/``vmax`` already in ``opts`` is kept; a missing bound
-        is filled once from the whole stack (ignoring nodata/non-finite) and written back, so all frames —
-        and the colorbar — share it.
+        is filled once from the stack (ignoring nodata/non-finite) and written back, so all frames — and the
+        colorbar — share it. Passing both ``vmin`` and ``vmax`` skips the scan entirely. To bound the cost on
+        large stacks, at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames are scanned (L2).
         """
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
-            lo, hi = self._stack_clim(datasets)
+            seq = list(datasets)
+            stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
+            lo, hi = self._stack_clim(seq[::stride])
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
@@ -1065,7 +1081,8 @@ class Map(Scene):
         Args:
             stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
                 ``DatasetCollection`` datacube) — one raster per animation frame.
-            kind: The field method used to draw each frame (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"``).
+            kind: The field method used to draw each frame — one of ``"imshow"`` / ``"contourf"`` /
+                ``"contour"`` / ``"pcolormesh"`` / ``"block"``.
             fps: Frames per second (sets the inter-frame interval).
             titles: Optional per-frame titles; must match the stack length when given.
             ocean: When True, fill the ocean disc behind each frame (globe maps only).
@@ -1076,11 +1093,15 @@ class Map(Scene):
             **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
 
         Returns:
-            A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames.
+            A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames (also kept on
+            ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``stack`` is empty, or ``titles`` is given with a mismatched length.
+            ValueError: if ``kind`` is not a known field renderer, ``stack`` is empty, or ``titles`` is given
+                with a mismatched length.
         """
+        if kind not in _ANIMATION_KINDS:
+            raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
         frames = list(stack)
         if not frames:
             raise ValueError("animate got an empty stack (nothing to animate)")
@@ -1110,8 +1131,11 @@ class Map(Scene):
         """Spin an orthographic globe over a single field by sweeping the centre longitude.
 
         Forces a globe map and redraws ``dataset`` on ``n_frames`` orthographic projections whose centre
-        longitude steps a full 360 degrees from ``lon0``. The display CRS (:attr:`crs`) is swept as the
-        animation renders, so after rendering it holds the last frame's projection.
+        longitude steps a full 360 degrees from ``lon0``.
+
+        **Terminal for this Map's projection:** ``rotate`` sets ``globe=True`` and sweeps the display CRS
+        (:attr:`crs`) as the animation renders, leaving the Map centred on the **final** frame. Treat a
+        rotated Map as consumed by the animation — create a fresh ``Map`` if you need the original projection.
 
         Args:
             dataset: The pyramids ``Dataset`` to spin (reprojected per frame).
@@ -1119,7 +1143,8 @@ class Map(Scene):
             n_frames: Number of frames spanning the full 360-degree turn.
             fps: Frames per second.
             lon0: Starting centre longitude.
-            kind: The field method used to draw the data (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"``).
+            kind: The field method used to draw the data (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"`` /
+                ``"contour"`` / ``"block"``).
             ocean: When True, fill the ocean disc behind the data each frame.
             coastlines: When True, overlay coastlines each frame (best-effort).
             colorbar: When True, add one static colorbar (drawn once) using the shared colour scale.
@@ -1127,13 +1152,16 @@ class Map(Scene):
             **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
 
         Returns:
-            A :class:`matplotlib.animation.FuncAnimation` over ``n_frames`` frames.
+            A :class:`matplotlib.animation.FuncAnimation` over ``n_frames`` frames (also kept on
+            ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``n_frames`` is less than 1.
+            ValueError: if ``n_frames`` is less than 1, or ``kind`` is not a known field renderer.
         """
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
+        if kind not in _ANIMATION_KINDS:
+            raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
         self.globe = True
         self._resolve_animation_clim([dataset], kwargs)  # one colour scale for every frame
         if colorbar:

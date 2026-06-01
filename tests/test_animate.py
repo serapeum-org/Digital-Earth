@@ -76,6 +76,31 @@ class TestAnimate:
         with pytest.raises(ValueError, match="empty stack"):
             m.animate([])
 
+    def test_unknown_kind_raises_up_front(self, stack):
+        """An invalid kind fails fast at the animate() call, not later during render (N1)."""
+        m = Map(crs=projections.orthographic(0, 0), globe=True)
+        with pytest.raises(ValueError, match="unknown animation kind"):
+            m.animate(stack, kind="imshowx")
+
+    def test_animation_kept_on_self(self, stack):
+        """The returned FuncAnimation is also held on self._animation so it is not GC'd (L3)."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        anim = m.animate(stack, fps=2, vmin=-40, vmax=70)
+        assert m._animation is anim, "animate must keep a strong reference to the animation"
+
+    def test_resolve_clim_caps_scan(self, mocker):
+        """_resolve_animation_clim scans at most _CLIM_SCAN_CAP frames of a large stack (L2)."""
+        from digitalearth.scene import map as map_mod
+
+        spy = mocker.spy(map_mod.Map, "_stack_clim")
+        m = Map(crs=4326)
+        big = [_field(float(o)) for o in range(map_mod._CLIM_SCAN_CAP * 3)]
+        opts = {}
+        m._resolve_animation_clim(big, opts)
+        scanned = len(spy.call_args.args[0])
+        assert scanned <= map_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {map_mod._CLIM_SCAN_CAP}"
+        assert "vmin" in opts and "vmax" in opts, "clim should still be resolved from the sampled frames"
+
     def test_titles_length_mismatch_raises(self, stack):
         """A titles list of the wrong length raises ValueError."""
         m = Map(crs=projections.orthographic(0, 0), globe=True)
@@ -206,6 +231,12 @@ class TestRotate:
         m = Map(crs=projections.orthographic(0, 0), globe=True)
         with pytest.raises(ValueError, match="n_frames"):
             m.rotate(_field(0.0), n_frames=0)
+
+    def test_unknown_kind_raises_up_front(self):
+        """An invalid kind fails fast at the rotate() call (N1)."""
+        m = Map(crs=projections.orthographic(0, 0), globe=True)
+        with pytest.raises(ValueError, match="unknown animation kind"):
+            m.rotate(_field(0.0), kind="bogus")
 
     def test_colorbar_static(self, tmp_path):
         """rotate(colorbar=True) adds one persistent colorbar axes across the rotation frames."""

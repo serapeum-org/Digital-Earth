@@ -181,11 +181,16 @@ def test_stock_img_on_empty_map(dataset):
     assert back.get_zorder() == -3.0
 
 
-def test_stock_img_tiles_graceful_offline(mocker):
-    """stock_img() with no dataset falls back to tiles and returns None when they are unavailable."""
+def test_stock_img_tiles_graceful_offline(mocker, caplog):
+    """stock_img() with no dataset returns None when tiles are unavailable and logs the cause (L1)."""
+    import logging
+
     mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
     m = Map(crs=3857)
-    assert m.stock_img() is None
+    with caplog.at_level(logging.DEBUG, logger="digitalearth.scene.map"):
+        assert m.stock_img() is None
+    assert any("tile basemap unavailable" in r.message for r in caplog.records), \
+        "the swallowed exception should be logged at DEBUG so failures are diagnosable"
 
 
 def test_stock_img_tiles_path(mocker):
