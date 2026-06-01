@@ -160,3 +160,37 @@ def test_annotate_far_side_globe_skipped():
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     assert m.annotate(180.0, 0.0, "hidden") is None
+
+
+def test_stock_img_dataset_backdrop(dataset):
+    """stock_img(dataset) draws a backdrop AxesImage below data and keeps the data extent."""
+    m = Map(crs=dataset.epsg)
+    data_im = m.imshow(dataset)
+    xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
+    back = m.stock_img(dataset)
+    assert back is not None and back in m.ax.images
+    assert back.get_zorder() < data_im.get_zorder(), "backdrop must sit below the data"
+    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, "stock_img blew out the extent"
+
+
+def test_stock_img_on_empty_map(dataset):
+    """stock_img(dataset) on a map with no prior data still draws the backdrop (no extent to preserve)."""
+    m = Map(crs=dataset.epsg)
+    back = m.stock_img(dataset)
+    assert back is not None and back in m.ax.images
+    assert back.get_zorder() == -3.0
+
+
+def test_stock_img_tiles_graceful_offline(mocker):
+    """stock_img() with no dataset falls back to tiles and returns None when they are unavailable."""
+    mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
+    m = Map(crs=3857)
+    assert m.stock_img() is None
+
+
+def test_stock_img_tiles_path(mocker):
+    """stock_img() with no dataset delegates to basemap when tiles are reachable."""
+    sentinel = object()
+    spy = mocker.patch.object(Map, "basemap", return_value=sentinel)
+    m = Map(crs=3857)
+    assert m.stock_img() is sentinel and spy.called

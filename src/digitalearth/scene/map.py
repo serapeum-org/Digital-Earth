@@ -513,6 +513,43 @@ class Map(Scene):
             return None
         return self.ax.annotate(s, xy=(x[0], y[0]), xytext=xytext, **kwargs)
 
+    def stock_img(self, dataset: Any = None, *, zorder: float = -3.0, cmap: str = "gist_earth",
+                  **kwargs) -> Any:
+        """Draw a background raster (a "stock image" backdrop) beneath all data layers.
+
+        Pass a pyramids ``Dataset`` (e.g. a low-res relief/imagery raster) to draw as the backdrop — it is
+        reprojected to the display CRS and drawn at a low ``zorder`` so data layers sit on top, and the current
+        view is preserved so a global backdrop never autoscales a regional view out. With ``dataset=None`` a
+        best-effort XYZ-tile basemap is used instead (network; skipped offline).
+
+        Note: pyramids/cleopatra ship no bundled relief raster yet, so the no-argument form relies on tiles;
+        a bundled low-res relief raster is tracked upstream (see ``stock_img`` task in the remaining-plots
+        plan). Until then, supply your own backdrop ``Dataset``.
+
+        Args:
+            dataset: A pyramids ``Dataset`` to use as the backdrop, or ``None`` to try a tile basemap.
+            zorder: Draw order for the backdrop (default ``-3.0``, below data/coastlines).
+            cmap: Colormap for a raster backdrop (ignored for the tile path).
+            **kwargs: Forwarded to :meth:`imshow` (raster) or :meth:`basemap` (tiles).
+
+        Returns:
+            The backdrop ``AxesImage`` (raster path), the tile artist, or ``None`` if a tile backdrop is
+            unavailable offline.
+        """
+        if dataset is None:
+            try:
+                return self.basemap(**kwargs)
+            except Exception:  # tile servers unavailable — best-effort backdrop
+                return None
+        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
+        im = self.imshow(dataset, cmap=cmap, **kwargs)
+        im.set_zorder(zorder)
+        if has_data:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+        return im
+
     def _scattered(self, data: Any) -> tuple:
         """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection)."""
         if isinstance(data, Dataset):
