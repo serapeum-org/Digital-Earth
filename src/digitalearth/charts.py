@@ -11,7 +11,7 @@ import numpy as np
 from cleopatra.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
-__all__ = ["line"]
+__all__ = ["line", "bar"]
 
 
 def _fig_of(ax: Optional[Axes]):
@@ -60,4 +60,44 @@ def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color:
     """
     glyph = LineGlyph(np.asarray(x), np.asarray(y), ax=ax, fig=_fig_of(ax))
     _, ax, _ = glyph.line(ax=ax, label=label, color=color, **kwargs)
+    return ax
+
+
+def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, **kwargs) -> Axes:
+    """Draw a bar chart of a single series (cleopatra ``LineGlyph.bar``); returns the Axes.
+
+    Args:
+        x: 1-D sequence of bar positions / categories.
+        heights: 1-D sequence of bar heights, the same length as ``x``.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        color: Bar colour(s) passed through to the glyph.
+        **kwargs: Forwarded to ``LineGlyph.bar`` / ``Axes.bar`` (e.g. ``width``, ``alpha``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` the bars were drawn on (one bar per element of ``x``).
+
+    Examples:
+        - A four-category bar chart adds four bars:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.charts import bar
+            >>> ax = bar([0, 1, 2, 3], [3, 1, 4, 1])
+            >>> len(ax.containers[0])
+            4
+
+            ```
+        - The drawn heights match the input:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.charts import bar
+            >>> ax = bar([0, 1, 2], [2.0, 5.0, 3.0])
+            >>> [round(float(rect.get_height()), 1) for rect in ax.containers[0]]
+            [2.0, 5.0, 3.0]
+
+            ```
+    """
+    glyph = LineGlyph(np.asarray(x), np.asarray(heights), ax=ax, fig=_fig_of(ax))
+    _, ax, _ = glyph.bar(ax=ax, color=color, **kwargs)
     return ax

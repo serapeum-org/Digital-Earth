@@ -44,6 +44,37 @@ class TestLine:
         assert ax.lines[0].get_color() in ("red", to_rgba("red")), f"colour not applied: {ax.lines[0].get_color()}"
 
 
+class TestBar:
+    """Tests for charts.bar."""
+
+    def test_bar_count_matches_x(self):
+        """A bar chart adds one bar per element of x and returns the Axes."""
+        ax = charts.bar([0, 1, 2, 3], [3, 1, 4, 1])
+        assert isinstance(ax, Axes), f"expected an Axes, got {type(ax)}"
+        assert len(ax.containers[0]) == 4, f"expected 4 bars, got {len(ax.containers[0])}"
+
+    def test_bar_heights_match_input(self):
+        """The drawn bar heights equal the supplied heights, in order."""
+        ax = charts.bar([0, 1, 2], [2.0, 5.0, 3.0])
+        heights = [round(rect.get_height(), 1) for rect in ax.containers[0]]
+        assert heights == [2.0, 5.0, 3.0], f"heights mismatch: {heights}"
+
+    def test_bar_color_passthrough(self):
+        """An explicit colour reaches the drawn bars."""
+        from matplotlib.colors import to_rgba
+
+        ax = charts.bar([0, 1], [1, 2], color="green")
+        assert ax.containers[0][0].get_facecolor() == to_rgba("green"), "bar colour not applied"
+
+    def test_bar_on_supplied_axes(self):
+        """When an axes is supplied, the bars are drawn on it."""
+        import matplotlib.pyplot as plt
+
+        fig, ax0 = plt.subplots()
+        ax = charts.bar([0, 1], [1, 2], ax=ax0)
+        assert ax is ax0, "should draw on the supplied axes"
+
+
 class TestFigOf:
     """Tests for the _fig_of helper."""
 
