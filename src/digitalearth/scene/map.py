@@ -908,21 +908,28 @@ class Map(Scene):
                 highs.append(float(arr.max()))
         return (min(lows), max(highs)) if lows else (0.0, 1.0)
 
-    def _animation_colorbar(self, datasets: Sequence[Any], opts: dict, label: Optional[str]) -> Any:
-        """Add one static colorbar for an animation, resolving a shared cmap/clim used by every frame.
+    def _resolve_animation_clim(self, datasets: Sequence[Any], opts: dict) -> None:
+        """Ensure ``opts`` carries a shared ``vmin``/``vmax`` so every animation frame uses one colour scale.
 
-        The colorbar lives on its own figure axes (not the data axes that each frame clears), so it persists
-        across frames. ``vmin``/``vmax`` are taken from ``opts`` when given, else computed once from the data
-        so colours stay stable across the animation; both are written back into ``opts`` so the frames match.
+        Without this, each frame's renderer auto-scales to its own data range, so the colours (and any
+        colorbar) flicker between frames. Any ``vmin``/``vmax`` already in ``opts`` is kept; a missing bound
+        is filled once from the whole stack (ignoring nodata/non-finite) and written back, so all frames —
+        and the colorbar — share it.
         """
-        cmap = opts.setdefault("cmap", "viridis")
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
             lo, hi = self._stack_clim(datasets)
-            vmin = lo if vmin is None else vmin
-            vmax = hi if vmax is None else vmax
-            opts["vmin"], opts["vmax"] = vmin, vmax
-        mappable = ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap)
+            opts["vmin"] = lo if vmin is None else vmin
+            opts["vmax"] = hi if vmax is None else vmax
+
+    def _animation_colorbar(self, opts: dict, label: Optional[str]) -> Any:
+        """Add one static colorbar for an animation from the already-resolved ``cmap``/``vmin``/``vmax``.
+
+        The colorbar lives on its own figure axes (not the data axes that each frame clears), so it persists
+        across frames. Call :meth:`_resolve_animation_clim` first so ``opts`` has the shared clim.
+        """
+        cmap = opts.setdefault("cmap", "viridis")
+        mappable = ScalarMappable(norm=Normalize(vmin=opts.get("vmin"), vmax=opts.get("vmax")), cmap=cmap)
         mappable.set_array([])
         cbar = self.fig.colorbar(mappable, ax=self.ax)
         if label is not None:
@@ -939,6 +946,9 @@ class Map(Scene):
         frame, so every frame gets the boundary, graticule, and limb-clipping for free. The returned
         animation is lazy: call ``anim.save("out.gif", writer=PillowWriter(fps=...))`` or display it.
 
+        All frames share **one colour scale**: ``vmin``/``vmax`` from ``kwargs`` if given, else computed once
+        from the whole stack — so the colours (and the colorbar) do not flicker between frames.
+
         Args:
             stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
                 ``DatasetCollection`` datacube) — one raster per animation frame.
@@ -947,9 +957,8 @@ class Map(Scene):
             titles: Optional per-frame titles; must match the stack length when given.
             ocean: When True, fill the ocean disc behind each frame (globe maps only).
             coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).
-            colorbar: When True, add one static colorbar (drawn once, not per frame). The ``vmin``/``vmax``
-                are taken from ``kwargs`` if given, else computed from the stack so colours stay stable
-                across frames (and written back so the frames match the bar).
+            colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared
+                colour scale.
             cbar_label: Optional label for the colorbar.
             **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
 
@@ -964,8 +973,9 @@ class Map(Scene):
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):
             raise ValueError(f"titles length ({len(titles)}) must match the stack length ({len(frames)})")
+        self._resolve_animation_clim(frames, kwargs)  # one colour scale for every frame
         if colorbar:
-            self._animation_colorbar(frames, kwargs, cbar_label)
+            self._animation_colorbar(kwargs, cbar_label)
 
         def draw_one(i: int) -> None:
             if ocean and self.globe:
@@ -999,8 +1009,7 @@ class Map(Scene):
             kind: The field method used to draw the data (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"``).
             ocean: When True, fill the ocean disc behind the data each frame.
             coastlines: When True, overlay coastlines each frame (best-effort).
-            colorbar: When True, add one static colorbar (drawn once); ``vmin``/``vmax`` come from ``kwargs``
-                or are computed from ``dataset`` and written back so the frames match the bar.
+            colorbar: When True, add one static colorbar (drawn once) using the shared colour scale.
             cbar_label: Optional label for the colorbar.
             **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
 
@@ -1013,8 +1022,9 @@ class Map(Scene):
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
         self.globe = True
+        self._resolve_animation_clim([dataset], kwargs)  # one colour scale for every frame
         if colorbar:
-            self._animation_colorbar([dataset], kwargs, cbar_label)
+            self._animation_colorbar(kwargs, cbar_label)
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
 
         def draw_one(i: int) -> None:

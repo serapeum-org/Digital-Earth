@@ -92,13 +92,45 @@ class TestAnimate:
         assert len(m.fig.axes) == 2, "the colorbar must not be re-added per frame"
         assert out.stat().st_size > 0
 
+    def test_shares_clim_across_frames(self):
+        """Every frame uses one global colour scale — even with no colorbar and no vmin/vmax (the fix)."""
+        def fld(lo, hi):
+            ny, nx = 30, 60
+            z = np.linspace(lo, hi, ny * nx).reshape(ny, nx).astype("float32")
+            return Dataset.create_from_array(arr=z, geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326)
+
+        frames = [fld(0, 10), fld(0, 100), fld(0, 1000)]   # wildly different per-frame ranges
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        anim = m.animate(frames, fps=2, cmap="viridis")    # no colorbar, no vmin/vmax
+        clims = []
+        for i in range(len(frames)):
+            anim._func(i)
+            clims.append(tuple(round(c) for c in m.ax.images[0].get_clim()))
+        assert len(set(clims)) == 1, f"frames must share one colour scale, got {clims}"
+        assert clims[0] == (0, 1000), f"shared clim should span the whole stack, got {clims[0]}"
+
+    def test_resolve_clim_fills_missing_bounds(self, stack):
+        """_resolve_animation_clim computes a global clim only for the missing bound(s)."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        lo, hi = Map._stack_clim(stack)
+        both = {}
+        m._resolve_animation_clim(stack, both)
+        assert (both["vmin"], both["vmax"]) == (lo, hi), "both bounds should be filled from the stack"
+        one = {"vmin": -100.0}
+        m._resolve_animation_clim(stack, one)
+        assert one["vmin"] == -100.0 and one["vmax"] == hi, "only the missing bound should be filled"
+        explicit = {"vmin": -5.0, "vmax": 5.0}
+        m._resolve_animation_clim(stack, explicit)
+        assert (explicit["vmin"], explicit["vmax"]) == (-5.0, 5.0), "explicit bounds must be left untouched"
+
     def test_colorbar_computes_clim_from_stack(self, stack):
-        """Without vmin/vmax, the colorbar resolves the clim from the stack and writes it back to opts."""
+        """colorbar=True draws one bar over the resolved clim and adds a single colorbar axes."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
         opts = {"cmap": "viridis"}
-        m._animation_colorbar(stack, opts, "auto")
+        m._resolve_animation_clim(stack, opts)
         lo, hi = Map._stack_clim(stack)
-        assert opts["vmin"] == lo and opts["vmax"] == hi, "computed clim should be injected into opts"
+        assert opts["vmin"] == lo and opts["vmax"] == hi, "resolved clim should be injected into opts"
+        m._animation_colorbar(opts, "auto")
         assert len(m.fig.axes) == 2, "a colorbar axes should be present"
 
     def test_stack_clim_ignores_nodata(self):
@@ -125,10 +157,10 @@ class TestAnimate:
                              no_data_value=[-9999.0])
         assert Map._stack_clim([ds]) == (0.0, 1.0)
 
-    def test_colorbar_without_label(self, stack):
+    def test_colorbar_without_label(self):
         """A colorbar with no label still adds exactly one colorbar axes."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        m._animation_colorbar(stack, {"cmap": "viridis", "vmin": 0, "vmax": 60}, None)
+        m._animation_colorbar({"cmap": "viridis", "vmin": 0, "vmax": 60}, None)
         assert len(m.fig.axes) == 2, "colorbar axes should be added even without a label"
 
     def test_coastlines_best_effort_swallows_failure(self, stack, tmp_path, mocker):
