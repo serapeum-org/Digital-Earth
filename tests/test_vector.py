@@ -48,6 +48,33 @@ def test_streamplot(uv):
     assert len(m.layers) == 1
 
 
+def test_quiverkey_after_quiver(uv):
+    """quiverkey adds a reference arrow keyed to the most recent quiver layer."""
+    from matplotlib.quiver import QuiverKey
+
+    u_ds, v_ds = uv
+    m = Map(crs=4326)
+    m.quiver(u_ds, v_ds)
+    key = m.quiverkey(1.0, "1 m/s")
+    assert isinstance(key, QuiverKey), f"expected a QuiverKey, got {type(key)}"
+
+
+def test_quiverkey_without_quiver_raises():
+    """quiverkey before any quiver layer raises a clear error."""
+    m = Map(crs=4326)
+    with pytest.raises(ValueError, match="needs a prior quiver"):
+        m.quiverkey(1.0, "1 m/s")
+
+
+def test_quiverkey_rejects_barbs_streamplot(uv):
+    """barbs/streamplot have no quiver key, so quiverkey raises after them."""
+    u_ds, v_ds = uv
+    m = Map(crs=4326)
+    m.barbs(u_ds, v_ds)
+    with pytest.raises(ValueError, match="needs a prior quiver"):
+        m.quiverkey(1.0, "1 m/s")
+
+
 @pytest.fixture
 def uv_descending_y():
     """Two u/v rasters on the usual north->south (descending-y) raster grid.

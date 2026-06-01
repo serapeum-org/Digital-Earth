@@ -103,6 +103,7 @@ class Map(Scene):
         self.domain = domain
         self.globe = globe
         self._graticule_lines: Optional[List[np.ndarray]] = None  # set by graticule()
+        self._last_vector: Optional[tuple] = None  # (glyph, artist, kind) of the most recent vector layer
         self._framed = False
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
@@ -423,6 +424,7 @@ class Map(Scene):
             x_grid, y_grid, u, v, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, im = glyph.plot(kind=kind)
+        self._last_vector = (glyph, im, kind)  # remembered for quiverkey()
         return self._add_layer(glyph, im)
 
     def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
@@ -436,6 +438,33 @@ class Map(Scene):
     def streamplot(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``)."""
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
+
+    def quiverkey(self, value: float, text: str, *, x: float = 0.9, y: float = 0.95, labelpos: str = "E",
+                  **kwargs) -> Any:
+        """Draw the labelled reference arrow for the most recent :meth:`quiver` layer.
+
+        Places a sample arrow of known magnitude with a label (via ``Axes.quiverkey`` on the stored quiver
+        artist), so readers can scale the field. Only ``quiver`` arrows carry a key; ``barbs``/``streamplot``
+        do not.
+
+        Args:
+            value: The reference magnitude the sample arrow represents (data units, e.g. ``10`` for 10 m/s).
+            text: The label drawn next to the arrow (e.g. ``"10 m/s"``).
+            x: Arrow x position in axes fraction (0–1). Default ``0.9``.
+            y: Arrow y position in axes fraction (0–1). Default ``0.95``.
+            labelpos: Side of the arrow for the label (``"N"``/``"S"``/``"E"``/``"W"``). Default ``"E"``.
+            **kwargs: Forwarded to ``Axes.quiverkey`` (e.g. ``coordinates``, ``color``, ``fontproperties``).
+
+        Returns:
+            The :class:`matplotlib.quiver.QuiverKey` added to the axes.
+
+        Raises:
+            ValueError: if no :meth:`quiver` layer has been drawn yet (``barbs``/``streamplot`` have no key).
+        """
+        if self._last_vector is None or self._last_vector[2] != "quiver":
+            raise ValueError("quiverkey() needs a prior quiver(...) layer (barbs/streamplot have no key)")
+        _, artist, _ = self._last_vector
+        return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
 
     def _scattered(self, data: Any) -> tuple:
         """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection)."""
