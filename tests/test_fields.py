@@ -54,3 +54,17 @@ def test_field_rejects_unknown_kwargs(dataset):
     m = Map(crs=dataset.epsg)
     with pytest.raises(ValueError):
         m.imshow(dataset, not_a_real_option=123)
+
+
+def test_contour_labels(dataset):
+    """contour(labels=True) draws inline isoline labels (cleopatra 0.14.0 / cleopatra#148, RP.6)."""
+    m = Map(crs=dataset.epsg)
+    m.contour(dataset, labels=True)
+    assert len(m.ax.texts) > 0, "labels=True should add inline contour-label Text artists"
+
+
+def test_contour_no_labels_by_default(dataset):
+    """contour without labels= draws no inline labels (no behaviour change)."""
+    m = Map(crs=dataset.epsg)
+    m.contour(dataset)
+    assert len(m.ax.texts) == 0, "default contour must not add label artists"
