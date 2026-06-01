@@ -75,6 +75,48 @@ class TestBar:
         assert ax is ax0, "should draw on the supplied axes"
 
 
+class TestHistogram:
+    """Tests for charts.histogram and the _as_finite_array helper."""
+
+    def test_array_histogram_bins(self):
+        """A 1-D array histogram honours the requested bin count."""
+        fig, ax, hist = charts.histogram([1, 1, 2, 3, 3, 3], bins=3)
+        assert len(ax.patches) == 3, f"expected 3 bins, got {len(ax.patches)}"
+
+    def test_dataset_input_drops_nodata(self):
+        """A pyramids Dataset is histogrammed over its first band with nodata excluded."""
+        from pyramids.dataset import Dataset
+
+        arr = np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+        finite = charts._as_finite_array(ds)
+        assert sorted(finite.tolist()) == [1.0, 2.0, 3.0], f"nodata not dropped: {finite}"
+        fig, ax, hist = charts.histogram(ds, bins=3)
+        assert len(ax.patches) == 3
+
+    def test_2d_values_overlaid(self):
+        """A 2-D array draws an overlaid histogram per column (one colour per series, as cleopatra needs)."""
+        vals = np.column_stack([[1, 2, 3, 4], [2, 3, 4, 5]])
+        out = charts._as_finite_array(vals)
+        assert out.shape == (4, 2), f"2-D input should be preserved, got {out.shape}"
+        fig, ax, hist = charts.histogram(vals, bins=4, color=["#1f77b4", "#ff7f0e"])
+        assert ax.patches, "overlaid histograms should add patches"
+
+    def test_as_finite_array_passthrough_drops_nonfinite_only_for_dataset(self):
+        """A raw list is returned as-is by np.asarray (no nodata/finite filtering)."""
+        out = charts._as_finite_array([1.0, np.nan, 3.0])
+        assert out.shape == (3,) and np.isnan(out[1]), "raw arrays must pass through unfiltered"
+
+    def test_as_finite_array_dataset_without_nodata(self):
+        """A dataset declaring no nodata keeps every finite cell (skips the nodata filter)."""
+        from types import SimpleNamespace
+
+        ds = SimpleNamespace(read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+                             no_data_value=[None])
+        out = charts._as_finite_array(ds)
+        assert sorted(out.tolist()) == [1.0, 2.0, 3.0, 4.0], f"all cells should be kept, got {out}"
+
+
 class TestFigOf:
     """Tests for the _fig_of helper."""
 

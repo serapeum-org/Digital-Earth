@@ -9,14 +9,31 @@ from typing import Any, Optional
 
 import numpy as np
 from cleopatra.line_glyph import LineGlyph
+from cleopatra.statistical_glyph import StatisticalGlyph
 from matplotlib.axes import Axes
 
-__all__ = ["line", "bar"]
+__all__ = ["line", "bar", "histogram"]
 
 
 def _fig_of(ax: Optional[Axes]):
     """Return the figure owning ``ax`` (or ``None`` when ``ax`` is ``None``)."""
     return ax.get_figure() if ax is not None else None
+
+
+def _as_finite_array(values: Any) -> np.ndarray:
+    """Coerce ``values`` to a numpy array for histogramming.
+
+    A pyramids ``Dataset`` (duck-typed by ``read_array``/``no_data_value``) contributes its first band with
+    the nodata fill and non-finite cells dropped — flattened to 1-D. Anything else is passed straight to
+    ``numpy.asarray`` (so a raw 2-D array stays 2-D for overlaid histograms).
+    """
+    if hasattr(values, "read_array") and hasattr(values, "no_data_value"):
+        arr = np.asarray(values.read_array(band=0), dtype="float64")
+        nodata = values.no_data_value[0]
+        if nodata is not None:
+            arr = arr[arr != nodata]
+        return arr[np.isfinite(arr)]
+    return np.asarray(values)
 
 
 def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color: Any = None,
@@ -101,3 +118,47 @@ def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, *
     glyph = LineGlyph(np.asarray(x), np.asarray(heights), ax=ax, fig=_fig_of(ax))
     _, ax, _ = glyph.bar(ax=ax, color=color, **kwargs)
     return ax
+
+
+def histogram(values: Any, *, bins: int = 15, ax: Optional[Axes] = None, **kwargs):
+    """Draw a histogram of array or raster values (cleopatra ``StatisticalGlyph.histogram``).
+
+    Args:
+        values: A 1-D/2-D sequence of numbers, or a pyramids ``Dataset`` (its first band is used, with nodata
+            and non-finite cells dropped). A 2-D array draws one overlaid histogram per column.
+        bins: Number of histogram bins.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to ``StatisticalGlyph.histogram`` (e.g. ``color``, ``alpha``, ``rwidth``).
+
+    Returns:
+        ``(fig, ax, hist)`` — the figure, the axes, and the histogram info dict from cleopatra.
+
+    Examples:
+        - A histogram of 1-D values returns the figure/axes and counts that sum to the sample size:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.charts import histogram
+            >>> fig, ax, hist = histogram([1, 1, 2, 3, 3, 3], bins=3)
+            >>> len(ax.patches)
+            3
+
+            ```
+        - A pyramids Dataset is histogrammed over its first band (nodata dropped):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.charts import histogram
+            >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
+            >>> ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+            >>> fig, ax, hist = histogram(ds, bins=4)
+            >>> len(ax.patches)
+            4
+
+            ```
+    """
+    arr = _as_finite_array(values)
+    glyph = StatisticalGlyph(arr, ax=ax, fig=_fig_of(ax))
+    return glyph.histogram(bins=bins, **kwargs)
