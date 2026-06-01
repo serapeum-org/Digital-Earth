@@ -123,3 +123,40 @@ def test_basemap_tiles(dataset):
     except Exception as exc:  # network unavailable in this environment
         pytest.skip(f"basemap tiles unavailable offline: {exc}")
     assert m.ax.images  # tile imagery added at least one AxesImage
+
+
+def test_text_at_lonlat(dataset):
+    """text() places a Text at the reprojected lon/lat on a flat map."""
+    m = Map(crs=dataset.epsg)
+    m.imshow(dataset)
+    txt = m.text(float(dataset.x.mean()) if hasattr(dataset, "x") else 0.0, 0.0, "x", crs=dataset.epsg)
+    # on a matching CRS the point is finite -> a Text is added
+    assert txt is not None and txt in m.ax.texts
+
+
+def test_text_far_side_globe_skipped():
+    """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (returns None)."""
+    from digitalearth.scene import projections
+
+    m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
+    # (180, 0) is the antipode of the ortho centre -> off the visible disc
+    assert m.text(180.0, 0.0, "hidden") is None
+
+
+def test_annotate_with_arrow(dataset):
+    """annotate() adds an Annotation with an arrow when xytext/arrowprops are given."""
+    from matplotlib.text import Annotation
+
+    m = Map(crs=dataset.epsg)
+    m.imshow(dataset)
+    ann = m.annotate(0.0, 0.0, "here", xytext=(20, 20), textcoords="offset points",
+                     arrowprops={"arrowstyle": "->"}, crs=dataset.epsg)
+    assert isinstance(ann, Annotation) and ann in m.ax.texts
+
+
+def test_annotate_far_side_globe_skipped():
+    """annotate() also skips an off-globe point."""
+    from digitalearth.scene import projections
+
+    m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
+    assert m.annotate(180.0, 0.0, "hidden") is None

@@ -466,6 +466,53 @@ class Map(Scene):
         _, artist, _ = self._last_vector
         return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
 
+    def text(self, lon: float, lat: float, s: str, *, crs: Any = 4326, **kwargs) -> Any:
+        """Place a text label at a ``lon``/``lat`` location (reprojected to the display CRS).
+
+        The point is reprojected from ``crs`` (lon/lat by default) into the display CRS via pyramids, then
+        drawn with ``Axes.text``. On a globe, a point on the **far side** reprojects to non-finite coordinates
+        and is skipped (no artist, returns ``None``).
+
+        Args:
+            lon: Longitude (x) of the label, in ``crs``.
+            lat: Latitude (y) of the label, in ``crs``.
+            s: The text to draw.
+            crs: CRS of ``lon``/``lat`` (default ``4326`` = WGS84 lon/lat).
+            **kwargs: Forwarded to ``Axes.text`` (e.g. ``ha``, ``va``, ``fontsize``, ``color``).
+
+        Returns:
+            The :class:`matplotlib.text.Text`, or ``None`` if the point is off the visible globe.
+        """
+        x, y = reproject_coordinates([lon], [lat], from_crs=crs, to_crs=self.crs)
+        if not (np.isfinite(x[0]) and np.isfinite(y[0])):
+            return None
+        return self.ax.text(x[0], y[0], s, **kwargs)
+
+    def annotate(self, lon: float, lat: float, s: str, *, xytext: Any = None, crs: Any = 4326,
+                 **kwargs) -> Any:
+        """Annotate a ``lon``/``lat`` location (reprojected), optionally with an arrow.
+
+        Like :meth:`text` but via ``Axes.annotate``: the annotated point ``xy`` is the reprojected
+        ``lon``/``lat``; pass ``xytext`` (with ``arrowprops``) to draw an arrow from the label to the point.
+        A far-side point on a globe is skipped (returns ``None``).
+
+        Args:
+            lon: Longitude (x) of the annotated point, in ``crs``.
+            lat: Latitude (y) of the annotated point, in ``crs``.
+            s: The annotation text.
+            xytext: Optional text position (in the coordinate system given by ``textcoords``/``kwargs``); with
+                ``arrowprops`` an arrow is drawn from there to the point.
+            crs: CRS of ``lon``/``lat`` (default ``4326``).
+            **kwargs: Forwarded to ``Axes.annotate`` (e.g. ``arrowprops``, ``textcoords``, ``fontsize``).
+
+        Returns:
+            The :class:`matplotlib.text.Annotation`, or ``None`` if the point is off the visible globe.
+        """
+        x, y = reproject_coordinates([lon], [lat], from_crs=crs, to_crs=self.crs)
+        if not (np.isfinite(x[0]) and np.isfinite(y[0])):
+            return None
+        return self.ax.annotate(s, xy=(x[0], y[0]), xytext=xytext, **kwargs)
+
     def _scattered(self, data: Any) -> tuple:
         """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection)."""
         if isinstance(data, Dataset):
