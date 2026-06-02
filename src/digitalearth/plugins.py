@@ -94,6 +94,24 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
             'magma'
 
             ```
+        - A plugin whose ``load()`` raises is skipped so the healthy ones still load:
+            ```python
+            >>> class BrokenEP:
+            ...     name = "broken"
+            ...     def load(self):
+            ...         raise RuntimeError("boom")
+            >>> class GoodEP:
+            ...     name = "good"
+            ...     def load(self):
+            ...         return {"cmap": "viridis"}
+            >>> from digitalearth.plugins import load_plugins
+            >>> load_plugins("digitalearth.styles", eps=[BrokenEP(), GoodEP()])
+            {'good': {'cmap': 'viridis'}}
+
+            ```
+
+    See Also:
+        iter_plugins: Yields the same entry points without importing their targets.
     """
     loaded: Dict[str, Any] = {}
     for ep in iter_plugins(group, eps=eps):

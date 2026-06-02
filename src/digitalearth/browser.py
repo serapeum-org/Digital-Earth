@@ -95,6 +95,24 @@ def gallery(
             True
 
             ```
+        - Special characters in titles/captions are HTML-escaped, so the page is safe to open in a browser:
+            ```python
+            >>> import matplotlib, tempfile
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from pathlib import Path
+            >>> from digitalearth.browser import gallery
+            >>> d = Path(tempfile.mkdtemp())
+            >>> fig = plt.figure(); _ = fig.subplots().plot([0, 1], [1, 0]); img = d / "a.png"
+            >>> fig.savefig(img); plt.close(fig)
+            >>> page = gallery([img], d / "g.html", title="Tom & Jerry", captions=['a" b'])
+            >>> "Tom &amp; Jerry" in page.read_text() and 'a&quot; b' in page.read_text()
+            True
+
+            ```
+
+    See Also:
+        digitalearth.batch.Batch: produces the PNG series this page typically embeds.
     """
     images = [Path(p) for p in images]
     if captions is not None and len(captions) != len(images):
