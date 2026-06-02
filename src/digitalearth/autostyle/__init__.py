@@ -41,6 +41,9 @@ def load_library() -> Dict[str, dict]:
             True
 
             ```
+
+    See Also:
+        load_magics_library: The richer ECMWF Magics operational library (loaded separately).
     """
     library: Dict[str, dict] = {}
     for path in sorted(_LIBRARY_DIR.glob("*.yml")):
@@ -102,6 +105,10 @@ def auto_style(source: Source) -> Dict[str, Any]:
             ('hPa', 960)
 
             ```
+
+    See Also:
+        magics_style: The ECMWF Magics identity matcher consulted first.
+        load_library: The lighter ``variables.yml`` fallback library.
     """
     library = load_library()
     variable_raw = str(source.metadata("variable") or "")

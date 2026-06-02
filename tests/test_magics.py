@@ -62,6 +62,10 @@ class TestLoadMagicsLibrary:
         for name, params in load_magics_library().items():
             assert "cmap" in params and "magics_name" in params, name
 
+    def test_is_cached(self):
+        """load_magics_library is lru_cached, so repeated calls return the same object."""
+        assert load_magics_library() is load_magics_library()
+
 
 class TestMagicsStyle:
     """Tests for magics_style identity matching."""
@@ -89,6 +93,38 @@ class TestMagicsStyle:
         """Name matching wins even when a (conflicting) standard_name is also supplied."""
         style = magics_style("tp", standard_name="air_temperature")
         assert style["magics_name"] == "tp"
+
+    def test_standard_name_takes_precedence_over_units(self):
+        """With no name, standard_name is tried before units (and a conflicting unit is ignored)."""
+        style = magics_style(standard_name="air_temperature", units="gpm")
+        assert style["magics_name"] == "t2m", "standard_name (t2m) must win over the gpm unit (z)"
+
+    @pytest.mark.parametrize(
+        "name, standard_name, units, expected",
+        [
+            ("T2M", None, None, "t2m"),                                  # name, upper-case
+            ("Total_Precipitation", None, None, "tp"),                   # name, mixed-case substring
+            (None, "AIR_PRESSURE_AT_MEAN_SEA_LEVEL", None, "msl"),       # standard_name, upper-case
+            (None, None, "GPM", "z"),                                    # units, upper-case
+        ],
+    )
+    def test_matching_is_case_insensitive(self, name, standard_name, units, expected):
+        """Every identity key (name, standard_name, units) matches case-insensitively.
+
+        Args:
+            name: The variable/short name identity (or None).
+            standard_name: The CF standard_name identity (or None).
+            units: The units identity (or None).
+            expected: The magics_name the field should resolve to.
+        """
+        style = magics_style(name, standard_name=standard_name, units=units)
+        assert style is not None and style["magics_name"] == expected, (
+            f"{name!r}/{standard_name!r}/{units!r} -> {style}"
+        )
+
+    def test_match_by_real_units(self):
+        """A genuine field unit (K, in temperature's match_units) resolves via the units pass."""
+        assert magics_style(units="K")["magics_name"] == "t2m"
 
     def test_no_match_returns_none(self):
         """An unrecognised field returns None so the caller can fall back."""

@@ -60,6 +60,16 @@ def load_magics_library() -> Dict[str, dict]:
             't2m'
 
             ```
+        - Read a field's canonical contour interval straight from the library:
+            ```python
+            >>> from digitalearth.autostyle.magics import load_magics_library
+            >>> load_magics_library()["total_precipitation"]["levels"][:4]
+            [0, 1, 2, 5]
+
+            ```
+
+    See Also:
+        magics_style: Identity-matches a field (name/standard_name/units) against this library.
     """
     return yaml.safe_load(_MAGICS_LIBRARY.read_text(encoding="utf-8")) or {}
 
@@ -117,6 +127,10 @@ def magics_style(
             True
 
             ```
+
+    See Also:
+        auto_style: Resolves a full style for a Source, consulting this matcher first.
+        load_magics_library: The operational style library this matcher reads.
     """
     lib = library if library is not None else load_magics_library()
     name_l = str(name or "").lower()
