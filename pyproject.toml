@@ -95,7 +95,7 @@ Changelog = "https://github.com/serapeum-org/Digital-Earth/blob/main/docs/change
 
 
 [build-system]
-requires = ["setuptools>=80.0.0", "wheel"]
+requires = ["setuptools>=82.0.1", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
