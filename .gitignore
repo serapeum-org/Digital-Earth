@@ -140,7 +140,14 @@ tests/mo/*
 examples/medium/SWED/
 examples/data/SWED_sample.zip
 examples/data/DEM100_Rhine.tif
+# Global rasters downloaded by docs/examples/11_global_data_on_globe.ipynb (WorldClim/ETOPO, ~50 MB).
+# The second path covers the nested copy nbconvert creates when it runs the kernel from docs/examples/.
+examples/data/global/
+docs/examples/examples/
 
 # Claude Code files (kept local only, never tracked)
 .claude/
 CLAUDE.md
+
+# Planning / design notes (kept local only, never tracked)
+planning/

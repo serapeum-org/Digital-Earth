@@ -4,6 +4,15 @@ from geopandas.geodataframe import GeoDataFrame
 from pyramids.dataset import Dataset
 
 
+@pytest.fixture(autouse=True)
+def _close_figures():
+    """Close all matplotlib figures after each test to avoid the >20-open-figures warning/leak."""
+    yield
+    import matplotlib.pyplot as plt
+
+    plt.close("all")
+
+
 @pytest.fixture(scope="module")
 def dataset() -> Dataset:
     return Dataset.read_file("examples/data/acc4000.tif")

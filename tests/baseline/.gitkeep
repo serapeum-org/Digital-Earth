@@ -1,0 +1,3 @@
+# pytest-mpl baseline images live here.
+# Generate/update with:  pixi run -e dev pytest --mpl-generate-path=tests/baseline
+# Compare against them with:  pixi run -e dev pytest --mpl

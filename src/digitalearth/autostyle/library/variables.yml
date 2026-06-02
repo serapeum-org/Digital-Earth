@@ -1,0 +1,36 @@
+# Per-variable default styles: variable name -> cleopatra Style params.
+# Each non-default entry has a `match` list of case-insensitive substrings tested against the Source's
+# variable name; the first match wins. `default` is the fallback. Keys other than `match` are returned
+# verbatim as cleopatra ArrayGlyph options (cmap, etc.), plus an optional `units` hint.
+default:
+  cmap: viridis
+
+temperature:
+  match: [temp, t2m, "2t", sst, tas, skt]
+  cmap: coolwarm
+  units: celsius
+
+precipitation:
+  match: [precip, "tp", rain, pr, mtpr]
+  cmap: Blues
+  units: mm
+
+elevation:
+  match: [dem, elev, orog, topo, height, altitude]
+  cmap: terrain
+  units: m
+
+discharge:
+  match: [acc, discharge, runoff, "q_", streamflow]
+  cmap: Blues
+  units: m3/s
+
+wind:
+  match: [wind, "u10", "v10", "ws", speed]
+  cmap: viridis
+  units: m/s
+
+pressure:
+  match: [pressure, "msl", "sp", slp]
+  cmap: cividis
+  units: hPa
