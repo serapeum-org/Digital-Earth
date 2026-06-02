@@ -1,5 +1,14 @@
 # Change log
 
+## 0.2.0 (2026-06-02)
+
+### Feat
+
+- geospatial plotting suite (maps, fields, vectors, mesh, temporal, projected/globe, animation, charts, auto-styling, batch/CLI) (#36)
+
+
+- migrate to pyproject/pixi/mkdocs and modernize the toolchain (#23)
+
 ## 0.1.11 (2023-01-31)
 
 - bump up cleopatra version
