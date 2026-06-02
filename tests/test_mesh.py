@@ -33,3 +33,24 @@ def test_tri_requires_value_column():
     m = Map(crs=fc.epsg)
     with pytest.raises(ValueError, match="no numeric value column"):
         m.tricontourf(fc)
+
+
+def test_tricontour_labels(dataset):
+    """tricontour(labels=True) draws inline isoline labels (cleopatra 0.15.0 / cleopatra#151)."""
+    m = Map(crs=dataset.epsg)
+    m.tricontour(dataset, labels=True)
+    assert len(m.ax.texts) > 0, "labels=True should add inline tricontour-label Text artists"
+
+
+def test_tricontour_no_labels_by_default(dataset):
+    """tricontour without labels= draws no inline labels (no behaviour change)."""
+    m = Map(crs=dataset.epsg)
+    m.tricontour(dataset)
+    assert len(m.ax.texts) == 0, "default tricontour must not add label artists"
+
+
+def test_tricontourf_labels_is_noop(dataset):
+    """tricontourf(labels=True) is a no-op — filled tri-contours are not line-labelled."""
+    m = Map(crs=dataset.epsg)
+    m.tricontourf(dataset, labels=True)
+    assert len(m.ax.texts) == 0, "filled tricontourf must ignore labels= (no label artists)"
