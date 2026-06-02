@@ -1,0 +1,133 @@
+"""Tests for RP.10 — ECMWF Magics-style identity matching (autostyle/magics.py + auto_style wiring)."""
+
+import numpy as np
+import pytest
+
+from digitalearth.autostyle import auto_style
+from digitalearth.autostyle.magics import (
+    _as_list,
+    _style_of,
+    load_magics_library,
+    magics_style,
+)
+from digitalearth.sources import DimensionInfo, Source
+
+
+def _source(variable="", standard_name=None, units=None):
+    """Build a minimal raster Source carrying an identity (variable / standard_name / units)."""
+    meta = {"variable": variable}
+    if standard_name is not None:
+        meta["standard_name"] = standard_name
+    return Source(
+        DimensionInfo(np.zeros((2, 2)), "z"),
+        DimensionInfo(np.array([0.0, 1.0]), "x"),
+        DimensionInfo(np.array([0.0, 1.0]), "y"),
+        metadata=meta,
+        units=units,
+    )
+
+
+class TestHelpers:
+    """Tests for the small matching helpers."""
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [(None, []), ("x", ["x"]), (["a", "b"], ["a", "b"]), (("a",), ["a"])],
+    )
+    def test_as_list(self, value, expected):
+        """_as_list coerces None / scalar / sequence into a list.
+
+        Args:
+            value: The input to coerce.
+            expected: The expected list form.
+        """
+        assert _as_list(value) == expected
+
+    def test_style_of_strips_match_keys(self):
+        """_style_of drops the match-only keys, keeping just the renderable style."""
+        params = {"match": ["x"], "standard_name": ["y"], "match_units": ["K"], "cmap": "viridis", "units": "m"}
+        assert _style_of(params) == {"cmap": "viridis", "units": "m"}
+
+
+class TestLoadMagicsLibrary:
+    """Tests for load_magics_library."""
+
+    def test_covers_common_fields(self):
+        """The shipped library defines the common operational fields."""
+        lib = load_magics_library()
+        assert {"temperature_2m", "mean_sea_level_pressure", "total_precipitation"} <= set(lib)
+
+    def test_entries_carry_canonical_style(self):
+        """Every entry carries a colormap and a magics_name (its canonical style identity)."""
+        for name, params in load_magics_library().items():
+            assert "cmap" in params and "magics_name" in params, name
+
+
+class TestMagicsStyle:
+    """Tests for magics_style identity matching."""
+
+    def test_match_by_name_exact_alias(self):
+        """An exact short name matches its alias and yields the canonical style."""
+        style = magics_style("t2m")
+        assert style["cmap"] == "coolwarm" and style["magics_name"] == "t2m"
+        assert style["levels"][0] == -40 and "match" not in style
+
+    def test_match_by_name_substring(self):
+        """A decorated name (e.g. a daily-mean suffix) still matches by substring."""
+        assert magics_style("2t_daily_mean")["magics_name"] == "t2m"
+
+    def test_match_by_standard_name(self):
+        """When the short name is unknown, the CF standard_name resolves the field."""
+        style = magics_style("unknown", standard_name="air_pressure_at_mean_sea_level")
+        assert style["magics_name"] == "msl" and style["units"] == "hPa"
+
+    def test_match_by_units_fallback(self):
+        """Units are a last-resort match (here, gpm -> geopotential height)."""
+        assert magics_style(units="gpm")["magics_name"] == "z"
+
+    def test_name_takes_precedence_over_standard_name(self):
+        """Name matching wins even when a (conflicting) standard_name is also supplied."""
+        style = magics_style("tp", standard_name="air_temperature")
+        assert style["magics_name"] == "tp"
+
+    def test_no_match_returns_none(self):
+        """An unrecognised field returns None so the caller can fall back."""
+        assert magics_style("mystery", standard_name="nope", units="parsecs") is None
+
+    def test_all_none_returns_none(self):
+        """With no identity at all, nothing matches (every strategy is skipped)."""
+        assert magics_style() is None
+
+    def test_library_override(self):
+        """A caller-supplied library overrides the shipped one."""
+        lib = {"x": {"match": ["foo"], "cmap": "magma", "magics_name": "x"}}
+        assert magics_style("foo_bar", library=lib)["cmap"] == "magma"
+        assert magics_style("other", library=lib) is None
+
+
+class TestAutoStyleIntegration:
+    """Tests for auto_style consulting the Magics layer before the lighter library."""
+
+    def test_magics_supplies_levels(self):
+        """A recognised field carries canonical contour levels, not just a colormap."""
+        style = auto_style(_source("msl"))
+        assert style["units"] == "hPa" and style["levels"][0] == 960 and style["magics_name"] == "msl"
+
+    def test_resolves_by_standard_name(self):
+        """auto_style matches on the Source's standard_name when the variable name is opaque."""
+        style = auto_style(_source("var123", standard_name="air_temperature"))
+        assert style["cmap"] == "coolwarm" and style["magics_name"] == "t2m"
+
+    def test_resolves_by_units(self):
+        """auto_style falls through to units matching for an otherwise-unknown field."""
+        style = auto_style(_source("opaque", units="gpm"))
+        assert style["magics_name"] == "z"
+
+    def test_falls_back_to_variables_library(self):
+        """A field only the lighter library knows (discharge) still resolves there."""
+        style = auto_style(_source("discharge_acc"))
+        assert style["cmap"] == "Blues" and "magics_name" not in style
+
+    def test_unknown_field_uses_default(self):
+        """A wholly unknown field falls back to the default colormap."""
+        assert auto_style(_source("mystery_variable"))["cmap"] == "viridis"

@@ -1,0 +1,94 @@
+# magics.yml — ECMWF Magics-style operational library: field identity -> canonical style.
+#
+# Each entry is one meteorological field. The *match* keys identify a field; the remaining keys are the
+# canonical style returned verbatim (passed through to cleopatra as ArrayGlyph options, plus hints):
+#   match         : case-insensitive substrings tested against the field's *name* (primary Magics key).
+#   standard_name : CF standard_name values matched exactly (case-insensitive).
+#   match_units   : units matched exactly (case-insensitive) — a deliberately narrow last-resort fallback;
+#                   only distinctive units are listed (never bare "m", which collides with elevation).
+#   cmap          : the canonical colormap.
+#   levels        : the canonical contour interval (operational fidelity — the heart of a Magics style).
+#   units         : the units the field is conventionally displayed in.
+#   magics_name   : the short ECMWF/Magics style id this entry corresponds to.
+#
+# This is a representative, extensible subset of the ECMWF Magics catalogue — add fields here, not in code.
+
+temperature_2m:
+  match: [t2m, "2t", tas, skt, temp, air_temperature]
+  standard_name: [air_temperature]
+  match_units: [K, kelvin, celsius, degc]
+  cmap: coolwarm
+  levels: [-40, -36, -32, -28, -24, -20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40]
+  units: celsius
+  magics_name: t2m
+
+sea_surface_temperature:
+  match: [sst, sea_surface_temp]
+  standard_name: [sea_surface_temperature, sea_water_temperature]
+  cmap: RdYlBu_r
+  levels: [-2, 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]
+  units: celsius
+  magics_name: sst
+
+mean_sea_level_pressure:
+  match: [msl, mslp, prmsl, mean_sea_level, slp]
+  standard_name: [air_pressure_at_mean_sea_level, air_pressure_at_sea_level]
+  match_units: [hPa, Pa, mbar]
+  cmap: Spectral_r
+  levels: [960, 964, 968, 972, 976, 980, 984, 988, 992, 996, 1000, 1004, 1008, 1012, 1016, 1020, 1024, 1028,
+           1032, 1036, 1040, 1044, 1048, 1052]
+  units: hPa
+  magics_name: msl
+
+geopotential_height:
+  match: [z500, geopotential, geopot]
+  standard_name: [geopotential_height, geopotential]
+  match_units: [gpm]
+  cmap: viridis
+  levels: [4800, 4860, 4920, 4980, 5040, 5100, 5160, 5220, 5280, 5340, 5400, 5460, 5520, 5580, 5640, 5700,
+           5760, 5820, 5880, 5940, 6000]
+  units: gpm
+  magics_name: z
+
+total_precipitation:
+  match: [tp, total_precip, precip, lsp, rain, mtpr]
+  standard_name: [precipitation_amount, lwe_thickness_of_precipitation_amount, precipitation_flux]
+  match_units: [mm]
+  cmap: Blues
+  levels: [0, 1, 2, 5, 10, 15, 20, 30, 40, 50, 75, 100]
+  units: mm
+  magics_name: tp
+
+wind_speed_10m:
+  match: [wind_speed, windspeed, ws10, "10si", 10m_wind]
+  standard_name: [wind_speed]
+  match_units: [m/s, "m s-1"]
+  cmap: YlGnBu
+  levels: [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+  units: m/s
+  magics_name: ws10
+
+relative_humidity:
+  match: [relative_humidity, "2r"]
+  standard_name: [relative_humidity]
+  match_units: ["%", percent]
+  cmap: BrBG
+  levels: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+  units: "%"
+  magics_name: r
+
+total_cloud_cover:
+  match: [tcc, total_cloud, cloud_cover, clt]
+  standard_name: [cloud_area_fraction]
+  cmap: Greys
+  levels: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+  units: fraction
+  magics_name: tcc
+
+snow_depth:
+  match: [sde, snow_depth, snowdepth]
+  standard_name: [surface_snow_thickness, lwe_thickness_of_surface_snow_amount]
+  cmap: Blues
+  levels: [0, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0]
+  units: m
+  magics_name: sd
