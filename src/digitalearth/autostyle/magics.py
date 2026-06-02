@@ -46,8 +46,11 @@ def _alias_in(alias: str, name: str) -> bool:
 
     This keeps prefix matches within a token (``"precip"`` matches ``"precipitation"``) and across separators
     (``"2t"`` matches ``"2t_daily_mean"``) while rejecting mid-token coincidences — e.g. ``"tp"`` must not
-    match ``"output"`` or ``"footprint"``.
+    match ``"output"`` or ``"footprint"``. An empty ``alias`` never matches (so a stray empty token in the
+    library cannot turn a style into a catch-all).
     """
+    if not alias:
+        return False
     start = 0
     while True:
         i = name.find(alias, start)

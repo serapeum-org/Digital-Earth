@@ -5,6 +5,7 @@ import pytest
 
 from digitalearth.autostyle import auto_style
 from digitalearth.autostyle.magics import (
+    _alias_in,
     _as_list,
     _style_of,
     load_magics_library,
@@ -47,6 +48,26 @@ class TestHelpers:
         """_style_of drops the match-only keys, keeping just the renderable style."""
         params = {"match": ["x"], "standard_name": ["y"], "match_units": ["K"], "cmap": "viridis", "units": "m"}
         assert _style_of(params) == {"cmap": "viridis", "units": "m"}
+
+    @pytest.mark.parametrize(
+        "alias, name, expected",
+        [
+            ("precip", "precipitation", True),   # prefix within a token
+            ("2t", "2t_daily_mean", True),        # at a token start after the boundary
+            ("tp", "output", False),              # mid-token coincidence is rejected
+            ("rain", "terrain", False),           # mid-token coincidence is rejected
+            ("", "anything", False),              # an empty alias never matches (N1 guard)
+        ],
+    )
+    def test_alias_in(self, alias, name, expected):
+        """_alias_in matches only at a token start, and an empty alias never matches.
+
+        Args:
+            alias: The candidate alias.
+            name: The (lower-cased) variable name to test against.
+            expected: Whether the alias should be considered present.
+        """
+        assert _alias_in(alias, name) is expected, f"_alias_in({alias!r}, {name!r})"
 
 
 class TestLoadMagicsLibrary:
