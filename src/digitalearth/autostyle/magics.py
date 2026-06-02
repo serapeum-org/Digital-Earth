@@ -41,6 +41,23 @@ def _style_of(params: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in params.items() if k not in _MATCH_KEYS}
 
 
+def _alias_in(alias: str, name: str) -> bool:
+    """Return True if ``alias`` occurs in ``name`` at a token start (index 0 or after a non-alphanumeric).
+
+    This keeps prefix matches within a token (``"precip"`` matches ``"precipitation"``) and across separators
+    (``"2t"`` matches ``"2t_daily_mean"``) while rejecting mid-token coincidences — e.g. ``"tp"`` must not
+    match ``"output"`` or ``"footprint"``.
+    """
+    start = 0
+    while True:
+        i = name.find(alias, start)
+        if i == -1:
+            return False
+        if i == 0 or not name[i - 1].isalnum():
+            return True
+        start = i + 1
+
+
 @lru_cache(maxsize=1)
 def load_magics_library() -> Dict[str, dict]:
     """Load the Magics operational style library from ``library/magics.yml`` (cached).
@@ -86,8 +103,9 @@ def magics_style(
     Matching is tried in the order Magics itself prefers — **name first**, then CF ``standard_name``, then
     ``units`` as a deliberately narrow last resort — and the first hit wins:
 
-    1. ``name`` — case-insensitive *substring* against each entry's ``match`` aliases (so ``"2t_daily_mean"``
-       matches the ``"2t"`` alias).
+    1. ``name`` — each entry's ``match`` aliases, case-insensitive and **anchored at a token start** (so
+       ``"2t_daily_mean"`` matches ``"2t"`` and ``"precip"`` matches ``"precipitation"``, but a mid-token
+       coincidence such as ``"tp"`` inside ``"output"`` does not match).
     2. ``standard_name`` — exact (case-insensitive) against each entry's ``standard_name`` list.
     3. ``units`` — exact (case-insensitive) against each entry's ``match_units`` list (only distinctive units
        are listed in the library, to avoid e.g. plain ``"m"`` colliding with elevation).
@@ -125,6 +143,8 @@ def magics_style(
             >>> from digitalearth.autostyle.magics import magics_style
             >>> magics_style("mystery_field") is None
             True
+            >>> magics_style("output") is None  # "tp" is not matched mid-token
+            True
 
             ```
 
@@ -137,10 +157,10 @@ def magics_style(
     sname_l = str(standard_name or "").lower()
     units_l = str(units or "").lower()
 
-    # 1) by name — case-insensitive substring against each entry's aliases (the primary Magics key).
+    # 1) by name — each entry's aliases, case-insensitive and anchored at a token start (the primary key).
     if name_l:
         for params in lib.values():
-            if any(str(pat).lower() in name_l for pat in _as_list(params.get("match"))):
+            if any(_alias_in(str(pat).lower(), name_l) for pat in _as_list(params.get("match"))):
                 return _style_of(params)
     # 2) by CF standard_name — exact, case-insensitive.
     if sname_l:

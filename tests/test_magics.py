@@ -126,6 +126,28 @@ class TestMagicsStyle:
         """A genuine field unit (K, in temperature's match_units) resolves via the units pass."""
         assert magics_style(units="K")["magics_name"] == "t2m"
 
+    @pytest.mark.parametrize("name", ["output", "footprint"])
+    def test_no_mid_token_false_match(self, name):
+        """A short alias must not match a mid-token coincidence (e.g. 'tp' inside 'output') (L2).
+
+        Args:
+            name: A variable name that merely contains an alias as a mid-token substring.
+        """
+        assert magics_style(name) is None, f"{name!r} should not resolve to any field"
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [("precipitation", "tp"), ("temperature", "t2m"), ("geopotential_height", "z")],
+    )
+    def test_token_prefix_still_matches(self, name, expected):
+        """An alias that is a prefix of a token still matches (anchored, not whole-token equality).
+
+        Args:
+            name: A field name whose leading token starts with an alias.
+            expected: The magics_name it should resolve to.
+        """
+        assert magics_style(name)["magics_name"] == expected, f"{name!r} -> {magics_style(name)}"
+
     def test_no_match_returns_none(self):
         """An unrecognised field returns None so the caller can fall back."""
         assert magics_style("mystery", standard_name="nope", units="parsecs") is None

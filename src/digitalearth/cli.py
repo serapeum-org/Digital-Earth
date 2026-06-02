@@ -16,14 +16,11 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
 import matplotlib
+from pyramids.dataset import Dataset
 
-matplotlib.use("Agg")  # the CLI only ever saves to a file — force a headless backend before pyplot loads
-
-from pyramids.dataset import Dataset  # noqa: E402
-
-from digitalearth.api import quickmap  # noqa: E402
-from digitalearth.batch import Batch  # noqa: E402
-from digitalearth.browser import gallery  # noqa: E402
+from digitalearth.api import quickmap
+from digitalearth.batch import Batch
+from digitalearth.browser import gallery
 
 __all__ = ["build_parser", "main"]
 
@@ -34,13 +31,20 @@ def _parse_crs(value: str) -> Any:
 
 
 def _load(path: Any) -> Any:
-    """Load a raster as a pyramids ``Dataset``, falling back to a vector ``FeatureCollection``."""
+    """Load a raster as a pyramids ``Dataset``, falling back to a vector ``FeatureCollection``.
+
+    If both reads fail, the vector error is raised **chained** from the raster error (``raise ... from``) so
+    neither cause is hidden behind the other.
+    """
     try:
         return Dataset.read_file(str(path))
-    except Exception:  # not a raster pyramids can open — try it as vector
+    except Exception as raster_error:  # not a raster pyramids can open — try it as vector
         from pyramids.feature import FeatureCollection
 
-        return FeatureCollection.read_file(str(path))
+        try:
+            return FeatureCollection.read_file(str(path))
+        except Exception as vector_error:
+            raise vector_error from raster_error
 
 
 def _add_plot_options(parser: argparse.ArgumentParser) -> None:
@@ -163,6 +167,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             ```
     """
+    matplotlib.use("Agg", force=True)  # render headless to a file — set on invocation, never on import
     args = build_parser().parse_args(argv)
     exit_code: int = args.func(args)
     return exit_code

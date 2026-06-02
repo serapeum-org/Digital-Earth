@@ -7,6 +7,7 @@ file with a responsive CSS grid. The file has no external assets, so it opens in
 emailed or archived as-is.
 """
 from base64 import b64encode
+import html
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Sequence
 
@@ -38,11 +39,16 @@ _PAGE = """<!doctype html>
 
 
 def _card(image: Path, caption: str) -> str:
-    """Base64-embed one PNG into a ``<figure>`` card (no external file reference)."""
+    """Base64-embed one PNG into a ``<figure>`` card (no external file reference).
+
+    The caption (often a file name) is HTML-escaped before interpolation so that a value containing
+    ``&``/``<``/``>``/``"`` cannot break the markup or inject attributes/scripts.
+    """
     data = b64encode(image.read_bytes()).decode("ascii")
+    safe = html.escape(caption, quote=True)
     return (
-        f'  <figure><img alt="{caption}" src="data:image/png;base64,{data}">'
-        f"<figcaption>{caption}</figcaption></figure>"
+        f'  <figure><img alt="{safe}" src="data:image/png;base64,{data}">'
+        f"<figcaption>{safe}</figcaption></figure>"
     )
 
 
@@ -97,5 +103,6 @@ def gallery(
     cards = "\n".join(_card(img, label) for img, label in zip(images, labels))
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(_PAGE.format(title=title, columns=columns, cards=cards), encoding="utf-8")
+    page = _PAGE.format(title=html.escape(title, quote=True), columns=columns, cards=cards)
+    out.write_text(page, encoding="utf-8")
     return out

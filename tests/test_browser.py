@@ -52,3 +52,14 @@ class TestGallery:
         with pytest.raises(ValueError, match=r"captions .* must match images") as exc:
             gallery([png], tmp_path / "x.html", captions=["a", "b"])
         assert "must match" in str(exc.value), f"unexpected message: {exc.value}"
+
+    def test_html_special_characters_are_escaped(self, tmp_path, png):
+        """Titles and captions are HTML-escaped so they cannot inject markup or attributes (M1)."""
+        page = gallery(
+            [png], tmp_path / "x.html", title="Tom & Jerry <hi>", captions=['x" onerror="alert(1)']
+        )
+        text = page.read_text(encoding="utf-8")
+        assert 'onerror="alert(1)' not in text, "an injected attribute must not survive verbatim"
+        assert "Tom & Jerry <hi>" not in text, "raw special characters in the title must be escaped"
+        assert "Tom &amp; Jerry &lt;hi&gt;" in text, "the title should be present in escaped form"
+        assert "onerror=&quot;alert(1)" in text, "the caption should be present in escaped form"

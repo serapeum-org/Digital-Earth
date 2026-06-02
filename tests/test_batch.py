@@ -72,3 +72,12 @@ class TestBatch:
         b = Batch(crs=dataset.epsg, kind="imshow", colorbar=False, ext="png")
         paths = b.run([dataset], tmp_path, kind="contourf")
         assert paths[0].exists(), "the override run should still produce an image"
+
+    def test_run_disambiguates_colliding_stems(self, tmp_path, dataset):
+        """Inputs whose namer returns the same stem get index-suffixed names — no silent overwrite (L1)."""
+        paths = Batch(crs=dataset.epsg, colorbar=False).run(
+            [dataset, dataset], tmp_path, namer=lambda item, i: "dup"
+        )
+        assert [p.name for p in paths] == ["dup.png", "dup_1.png"], f"unexpected names: {paths}"
+        assert len({p.name for p in paths}) == 2, "the two outputs must be distinct files"
+        assert all(p.stat().st_size > 0 for p in paths), "both images must be written and non-empty"

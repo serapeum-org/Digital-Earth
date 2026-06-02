@@ -40,6 +40,14 @@ class TestLoad:
         loaded = _load("tests/data/points.geojson")
         assert isinstance(loaded, FeatureCollection), f"expected FeatureCollection, got {type(loaded)}"
 
+    def test_both_loaders_fail_chains_errors(self, tmp_path):
+        """A path that is neither raster nor vector raises the vector error chained from the raster one (L4)."""
+        bogus = tmp_path / "not_geo.tif"
+        bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
+        with pytest.raises(Exception) as exc:
+            _load(str(bogus))
+        assert exc.value.__cause__ is not None, "the raster cause should be chained onto the vector error"
+
 
 class TestPlotKwargs:
     """Tests for _plot_kwargs."""
@@ -132,3 +140,28 @@ class TestMain:
 
         mod = importlib.import_module("digitalearth.__main__")
         assert hasattr(mod, "main"), "the module should expose main without executing the CLI on import"
+
+
+class TestBackend:
+    """Tests for headless backend handling (M2 — no global side effect on import)."""
+
+    def test_backend_switch_is_not_at_import_scope(self):
+        """matplotlib.use must run inside a function, never at module import scope."""
+        import inspect
+
+        import digitalearth.cli as climod
+
+        for line in inspect.getsource(climod).splitlines():
+            if "matplotlib.use(" in line:
+                assert line.startswith(" "), f"matplotlib.use must not run at import scope: {line!r}"
+
+    def test_main_forces_agg_on_invocation(self, tmp_path, dataset, mocker):
+        """main() selects the Agg backend when invoked (force=True), not merely on import."""
+        spy = mocker.patch("digitalearth.cli.matplotlib.use")
+        src = tmp_path / "in.tif"
+        dataset.to_file(str(src))
+        rc = main(
+            ["plot", str(src), "-o", str(tmp_path / "m.png"), "--crs", str(dataset.epsg), "--no-colorbar"]
+        )
+        assert rc == 0, "the command should still succeed"
+        spy.assert_any_call("Agg", force=True)

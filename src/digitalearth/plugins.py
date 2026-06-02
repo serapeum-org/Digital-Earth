@@ -11,10 +11,13 @@ At runtime :func:`load_plugins` discovers and loads those entry points. This is 
 ``importlib.metadata`` plumbing — no third-party dependency — and is the mechanism behind earthkit-plots'
 ``_plugins.py``, scoped here to the extension points Digital-Earth actually offers.
 """
+import logging
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, Dict, Iterator, Optional, Sequence
 
 __all__ = ["GROUPS", "iter_plugins", "load_plugins"]
+
+logger = logging.getLogger(__name__)
 
 #: The entry-point groups Digital-Earth looks up. ``styles`` extend the autostyle library; ``sources``
 #: register new input adapters. A plugin package targets one of these group names.
@@ -59,7 +62,9 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
     """Discover and **load** every plugin registered under ``group``.
 
     Each entry point is imported via ``EntryPoint.load()`` and collected by its name. Loading is what
-    actually runs the plugin's target (e.g. resolves ``my_pkg.styles:LIBRARY`` to the object it names).
+    actually runs the plugin's target (e.g. resolves ``my_pkg.styles:LIBRARY`` to the object it names). A
+    plugin whose ``load()`` raises is skipped (logged at ``WARNING``) so one broken third-party plugin cannot
+    abort discovery of the healthy ones.
 
     Args:
         group: The entry-point group to load (e.g. ``"digitalearth.styles"``).
@@ -90,4 +95,10 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
 
             ```
     """
-    return {ep.name: ep.load() for ep in iter_plugins(group, eps=eps)}
+    loaded: Dict[str, Any] = {}
+    for ep in iter_plugins(group, eps=eps):
+        try:
+            loaded[ep.name] = ep.load()
+        except Exception as exc:  # one broken plugin must not abort discovery of the rest
+            logger.warning("skipping plugin %r in group %r: %s", ep.name, group, exc)
+    return loaded

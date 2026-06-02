@@ -6,8 +6,9 @@ directory, and it renders + saves one figure per input, closing each figure so a
 memory-bounded. It is the operational counterpart of earthkit-plots' ``Batch``/``workflows`` — pure
 orchestration over the existing visualization API (no new GIS or matplotlib machinery).
 """
+import logging
 from pathlib import Path
-from typing import Any, Callable, Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional, Set
 
 import matplotlib.pyplot as plt
 from pyramids.dataset import Dataset
@@ -16,6 +17,8 @@ from digitalearth.api import quickmap
 from digitalearth.scene import Map
 
 __all__ = ["Batch"]
+
+logger = logging.getLogger(__name__)
 
 
 def _default_namer(item: Any, index: int) -> str:
@@ -105,7 +108,9 @@ class Batch:
             items: Iterable of inputs (paths or pyramids objects).
             outdir: Directory to write images into (created if missing).
             namer: ``(item, index) -> stem`` naming each output file (no extension). Defaults to the input's
-                file stem, or ``figure_<index>`` for in-memory inputs.
+                file stem, or ``figure_<index>`` for in-memory inputs. Colliding stems (e.g. same file name
+                from different directories) are disambiguated with the input index so no earlier image is
+                silently overwritten.
             **overrides: Plot options merged over the batch ``defaults`` for this whole run.
 
         Returns:
@@ -132,9 +137,15 @@ class Batch:
         out = Path(outdir)
         out.mkdir(parents=True, exist_ok=True)
         written: List[Path] = []
+        used: Set[str] = set()
         for index, item in enumerate(items):
             scene = self.render_one(item, **overrides)
-            path = out / f"{namer(item, index)}.{self.ext}"
+            stem = namer(item, index)
+            if stem in used:  # disambiguate a colliding name so an earlier image is not overwritten
+                logger.warning("batch output name %r already used; disambiguating with index %d", stem, index)
+                stem = f"{stem}_{index}"
+            used.add(stem)
+            path = out / f"{stem}.{self.ext}"
             scene.save(str(path))
             plt.close(scene.fig)
             written.append(path)
