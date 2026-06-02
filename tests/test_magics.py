@@ -126,7 +126,7 @@ class TestMagicsStyle:
         """A genuine field unit (K, in temperature's match_units) resolves via the units pass."""
         assert magics_style(units="K")["magics_name"] == "t2m"
 
-    @pytest.mark.parametrize("name", ["output", "footprint"])
+    @pytest.mark.parametrize("name", ["output", "footprint", "OUTPUT", "FootPrint"])
     def test_no_mid_token_false_match(self, name):
         """A short alias must not match a mid-token coincidence (e.g. 'tp' inside 'output') (L2).
 
