@@ -47,7 +47,7 @@ Pixi environments available:
 
 | Environment | Purpose |
 |-------------|---------|
-| `dev` | Default development env (test tooling + geoplot extra) |
+| `dev` | Default development env (test tooling) |
 | `docs` | Documentation toolchain (mkdocs + plugins) |
 | `notebook` | Jupyter notebook environment |
 | `py311`, `py312`, `py313` | Single-Python-version test envs |

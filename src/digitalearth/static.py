@@ -1,14 +1,13 @@
 """ StaticGlyph."""
-from typing import Any, List, Tuple, Union
+from typing import Any, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.collections import LineCollection, PolyCollection
 from cleopatra.array_glyph import ArrayGlyph
+from cleopatra.scatter_glyph import ScatterGlyph
 from geopandas import GeoDataFrame
-from loguru import logger
 from pyramids.dataset import Dataset
-
-# from Hapi.plot.visualizer import MidpointNormalize, Glyph
 
 
 class StaticGlyph:
@@ -161,139 +160,103 @@ class StaticGlyph:
         poly: GeoDataFrame,
         line: GeoDataFrame,
         scheme: Any = None,
-        scale_func: Any = None,
         cmap: str = "viridis",
-        legend_values: List = [],
-        legend_labels: List = [],
+        size_limits: Tuple[float, float] = (20, 200),
         figsize: Tuple = (8, 8),
         title: Any = "title",
-        title_size: int = 500,
+        title_size: int = 15,
         linewidth: float = 0.5,
         save: Union[bool, str] = False,
     ):
-        """PlotCatchment.
+        """Plot a catchment: gauge points over a grey sub-catchment fill and a river network.
+
+        Reimplemented on **cleopatra + matplotlib** (no geoplot, no Cartopy). The gauge ``points`` are drawn as
+        a value-coloured, value-scaled scatter (``cleopatra.scatter_glyph.ScatterGlyph``), the ``poly`` features
+        as a uniform grey fill, and the ``line`` features as a river network. All three inputs are reprojected to
+        the points' CRS; the projection is applied to the data, not to the axes.
 
         Parameters
         ----------
-        points:[GeoDataFrame]
-            geodataframe contains values to plot in one of its columns.
-        column_name: [str]
-            name of the column you want to plot its values.
-        poly: [GeoDataFrame]
-            geodataframe contains polygon geometries.
-        line: [GeoDataFrame]
-            geodataframe contains linestring geometries.
-        linewidth:
-        title_size:
-        legend_labels:
-        legend_values:
-        cmap:
-        scale_func:
-        scheme:
-        figsize: [Tuple]
-            fize oif the figure.
-        title:[str]
-            title of the figure.
-        save: [bool/str]
-            if you want to save the plot provide the path with the extention,
-            Default is False.
+        points : [GeoDataFrame]
+            geodataframe whose ``column_name`` holds the per-point values to plot.
+        column_name : [str]
+            name of the numeric column that drives both the colour and the marker size of the points.
+        poly : [GeoDataFrame]
+            geodataframe of polygon geometries (drawn as a uniform grey fill).
+        line : [GeoDataFrame]
+            geodataframe of line geometries (drawn as the river network).
+        scheme : [str], optional
+            categorical classification scheme passed to ``ScatterGlyph`` (e.g. ``"quantiles"`` /
+            ``"fisher_jenks"``); ``None`` (default) colours on a continuous scale.
+        cmap : [str], optional
+            colormap for the point values. Default ``"viridis"``.
+        size_limits : [tuple], optional
+            ``(min, max)`` marker area (points²) mapped to the smallest/largest value. Default ``(20, 200)``.
+        figsize : [tuple], optional
+            size of the figure. Default ``(8, 8)``.
+        title : [str], optional
+            title of the figure. Default ``"title"``.
+        title_size : [int], optional
+            font size of the title. Default ``15``.
+        linewidth : [float], optional
+            edge width of the grey catchment polygons. Default ``0.5``.
+        save : [bool/str], optional
+            path (with extension) to save the figure to, or ``False`` (default) to skip saving.
+
+        Returns
+        -------
+        fig, ax : the matplotlib figure and axes.
         """
-        import geoplot as gplt
-        import geoplot.crs as gcrs
+        # Unify the projection by reprojecting every layer to the points' CRS (non-mutating).
+        crs = points.crs if points.crs is not None else 4326
+        poly = poly.to_crs(crs)
+        line = line.to_crs(crs)
+        points = points.to_crs(crs)
 
-        # unify the projection
-        if not poly.crs.is_geographic:
-            logger.debug(
-                "The coordinate system of the poly geodataframe is not geographic "
-                "SO, it will be reprojected to WGS-84"
-            )
-            poly.to_crs(4326, inplace=True)
+        fig, ax = plt.subplots(1, 1, figsize=figsize)
 
-        epsg = poly.crs.to_json()
-        line.to_crs(epsg, inplace=True)
-        points.to_crs(epsg, inplace=True)
-
-        pointplot_kwargs = {
-            "edgecolor": "white",
-            "linewidth": 0.9,
-        }  # 'color': "crimson"
-
-        # make sure that the plotted column is numeric
-        points[column_name] = points[column_name].map(float)
-
-        fig, ax = plt.subplots(
-            1, 1, figsize=figsize, subplot_kw={"projection": gcrs.AlbersEqualArea()}
-        )
-
-        if scheme:
-            gplt.pointplot(
-                points,
-                projection=gcrs.AlbersEqualArea(),
-                hue=column_name,
-                cmap=cmap,
-                scale=column_name,
-                limits=(4, 20),
-                scheme=scheme,
-                legend=True,
-                legend_var="scale",
-                legend_kwargs={"bbox_to_anchor": (1, 0.35)},  # 'loc': 'upper right',
-                ax=ax,
-                **pointplot_kwargs  # ,
-            )
-        else:
-            if scale_func:
-                gplt.pointplot(
-                    points,
-                    projection=gcrs.AlbersEqualArea(),
-                    hue=column_name,
-                    cmap=cmap,
-                    scale=column_name,
-                    limits=(4, 20),
-                    scale_func=scale_func,
-                    legend=True,
-                    legend_var="scale",
-                    legend_values=legend_values,
-                    legend_labels=legend_labels,
-                    legend_kwargs={  # 'loc': 'upper right',
-                        "bbox_to_anchor": (1, 0.35)
-                    },
-                    ax=ax,
-                    **pointplot_kwargs  # ,
+        # Sub-catchment polygons: uniform grey fill (exterior rings, MultiPolygon expanded).
+        poly_rings = [
+            np.asarray(part.exterior.coords)
+            for geom in poly.geometry
+            for part in (geom.geoms if geom.geom_type == "MultiPolygon" else [geom])
+        ]
+        if poly_rings:
+            ax.add_collection(
+                PolyCollection(
+                    poly_rings, facecolors="grey", edgecolors="grey", linewidths=linewidth, zorder=0,
                 )
-            else:
-                gplt.pointplot(
-                    points,
-                    projection=gcrs.AlbersEqualArea(),
-                    hue=column_name,
-                    cmap=cmap,
-                    scale=column_name,
-                    limits=(4, 20),
-                    # scale_func=scale_func,
-                    legend=True,
-                    legend_var="scale",
-                    legend_values=legend_values,
-                    legend_labels=legend_labels,
-                    legend_kwargs={  # 'loc': 'upper right',
-                        "bbox_to_anchor": (1, 0.35)
-                    },
-                    ax=ax,
-                    **pointplot_kwargs  # ,
-                )
+            )
 
-        gplt.polyplot(
-            poly,
+        # River network: line geometries (MultiLineString expanded).
+        line_paths = [
+            np.asarray(part.coords)
+            for geom in line.geometry
+            for part in (geom.geoms if geom.geom_type.startswith("Multi") else [geom])
+        ]
+        if line_paths:
+            ax.add_collection(LineCollection(line_paths, colors="C0", linewidths=2.0, zorder=1))
+
+        # Gauge points: coloured and sized by the chosen column (optionally classified by `scheme`).
+        values = points[column_name].astype(float).to_numpy()
+        glyph = ScatterGlyph(
+            points.geometry.x.to_numpy(),
+            points.geometry.y.to_numpy(),
+            values=values,
+            sizes=values,
             ax=ax,
-            edgecolor="grey",
-            facecolor="grey",  # 'lightgray',
-            linewidth=0.5,
-            extent=poly.total_bounds,
-        )  # # , zorder=0
+            fig=fig,
+            cmap=cmap,
+            scheme=scheme,
+            size_limits=size_limits,
+            size_legend=True,
+        )
+        glyph.plot(title=title)
 
-        gplt.polyplot(line, ax=ax, linewidth=10)
-
-        plt.title(title, fontsize=title_size)
-        # plt.subplots_adjust(top=0.99999, right=0.9999, left=0.000005, bottom=0.000005)
+        ax.set_title(title, fontsize=title_size)
+        ax.set_aspect("equal")
+        ax.autoscale_view()
         if save:
-            plt.savefig(save, bbox_inches="tight", transparent=True)
+            fig.savefig(save, bbox_inches="tight", transparent=True)
 
         return fig, ax

@@ -37,9 +37,6 @@ dependencies = [
     "pyyaml >=6.0",
 ]
 
-[project.optional-dependencies]
-geoplot = ["geoplot >=0.5.1"]
-
 [project.scripts]
 digitalearth = "digitalearth.cli:main"
 
@@ -205,7 +202,7 @@ mypy = { cmd = "mypy", description = "Run mypy type checking" }
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
-dev = { features = ["dev", "geoplot"], solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
 notebook = { features = ["notebook"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "docs" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
@@ -219,14 +216,6 @@ python = "3.11.*"
 python = "3.12.*"
 [tool.pixi.feature.py313.dependencies]
 python = "3.13.*"
-
-# geoplot (the [geoplot] extra) pulls in cartopy, whose `trace` C extension
-# has no Windows wheel for every Python and otherwise compiles from a PyPI
-# sdist against GEOS headers (which fails on Windows). Pull cartopy from
-# conda-forge as a prebuilt binary so nothing is built from source.
-[tool.pixi.feature.geoplot.dependencies]
-cartopy = ">=0.25.0"
-
 
 [tool.pixi.dependencies]
 # Cap Python below 3.14 for the unpinned envs (default/dev/docs/notebook):
