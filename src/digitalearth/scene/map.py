@@ -693,7 +693,8 @@ class Map(Scene):
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
             column: Name of the numeric column whose values colour the polygons.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -772,7 +773,8 @@ class Map(Scene):
             clip: Optional boundary the cells are clipped to — a ``FeatureCollection``/``GeoDataFrame`` (reprojected
                 to the display CRS) or a shapely geometry already in the display CRS. ``None`` leaves shapely's
                 default bounded cells.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -856,7 +858,8 @@ class Map(Scene):
             scale: Name of the numeric column whose value sets each feature's size (normalised to ``limits``).
             column: Optional column whose value colours each scaled polygon, or ``None`` for outlines only.
             limits: ``(min, max)`` scale factors mapped to the smallest/largest ``scale`` value.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -967,7 +970,8 @@ class Map(Scene):
             nmin: Cells with fewer than this many points are dropped.
             clip: Optional boundary the cells are clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` keeps the full rectangular cells.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
