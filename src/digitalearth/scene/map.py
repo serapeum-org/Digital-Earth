@@ -236,21 +236,27 @@ class Map(Scene):
         """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
         return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
 
-    def scatter(self, features: Any, **opts) -> Any:
+    def scatter(self, features: Any, *, scale: Optional[str] = None, **opts) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
 
         Args:
             features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
-            **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options.
+            scale: Optional column name whose values set the per-point marker size (geoplot's ``scale``). Pair
+                it with ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
+                legend. ``None`` (default) uses a single uniform marker size.
+            **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``size_limits``,
+                ``size_scale``, ``size_legend``, ``size_legend_values``, …).
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
         """
-        src = get_source(features.to_crs(self.crs))
+        fc = features.to_crs(self.crs)
+        src = get_source(fc)
         values = src.z.values if src.z is not None else None
+        sizes = np.asarray(fc[scale], dtype=float) if scale is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = ScatterGlyph(
-            src.x.values, src.y.values, values=values, ax=self.ax, fig=self.fig, **opts,
+            src.x.values, src.y.values, values=values, sizes=sizes, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
