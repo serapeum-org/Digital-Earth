@@ -241,7 +241,7 @@ class Map(Scene):
 
         Args:
             features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
-            scale: Optional column name whose values set the per-point marker size (geoplot's ``scale``). Pair
+            scale: Optional column name whose values set the per-point marker size. Pair
                 it with ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
                 legend. ``None`` (default) uses a single uniform marker size.
             **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``size_limits``,

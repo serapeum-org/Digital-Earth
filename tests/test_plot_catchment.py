@@ -1,4 +1,4 @@
-"""Tests for StaticGlyph.plotCatchment — geoplot-free catchment plot (points + polygons + lines)."""
+"""Tests for StaticGlyph.plotCatchment — catchment plot (points + polygons + lines)."""
 
 import geopandas as gpd
 import numpy as np
@@ -25,7 +25,7 @@ def catchment():
 
 
 def test_plot_catchment(catchment):
-    """plotCatchment draws the three layers and returns (fig, ax) without geoplot."""
+    """plotCatchment draws the three layers and returns (fig, ax)."""
     pts, poly, lines = catchment
     fig, ax = StaticGlyph.plotCatchment(pts, "value", poly, lines, title="Catchment")
     assert isinstance(fig, Figure)
@@ -74,10 +74,10 @@ def test_plot_catchment_save(catchment, tmp_path):
     assert out.exists(), f"expected saved figure at {out}"
 
 
-def test_static_module_has_no_geoplot():
-    """Regression: static.py no longer imports geoplot (the dependency was dropped)."""
+def test_static_uses_native_scatter_backend():
+    """Regression: plotCatchment renders points via cleopatra ScatterGlyph (no external plotting backend)."""
     import digitalearth.static as static_mod
 
     text = open(static_mod.__file__, encoding="utf-8").read()
-    assert "import geoplot" not in text
-    assert "geoplot.crs" not in text
+    assert "from cleopatra.scatter_glyph import ScatterGlyph" in text
+    assert "import cartopy" not in text and " as gplt" not in text

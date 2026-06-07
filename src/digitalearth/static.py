@@ -174,7 +174,7 @@ class StaticGlyph:
     ):
         """Plot a catchment: gauge points over a grey sub-catchment fill and a river network.
 
-        Reimplemented on **cleopatra + matplotlib** (no geoplot, no Cartopy). The gauge ``points`` are drawn as
+        Built on **cleopatra + matplotlib**. The gauge ``points`` are drawn as
         a value-coloured, value-scaled scatter (``cleopatra.scatter_glyph.ScatterGlyph``), the ``poly`` features
         as a uniform grey fill, and the ``line`` features as a river network. All three inputs are reprojected to
         the points' CRS; the projection is applied to the data, not to the axes.
