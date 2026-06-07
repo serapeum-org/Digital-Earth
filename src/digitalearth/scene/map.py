@@ -1610,6 +1610,36 @@ class Map(Scene):
             cbar.set_label(label)
         return cbar
 
+    def _prime_animation(self, datasets: Sequence[Any], opts: dict, *, colorbar: bool,
+                         cbar_label: Optional[str]) -> None:
+        """Resolve one shared colour scale into ``opts`` and, if asked, add the single static colorbar.
+
+        The setup shared by :meth:`animate` and :meth:`rotate`: fill a missing ``vmin``/``vmax`` once from the
+        stack so colours don't flicker between frames, then optionally draw one persistent colorbar.
+        """
+        self._resolve_animation_clim(datasets, opts)
+        if colorbar:
+            self._animation_colorbar(opts, cbar_label)
+
+    def _draw_animation_frame(self, data: Any, kind: str, opts: dict, *, ocean: bool, coastlines: bool,
+                              title: Optional[str] = None) -> None:
+        """Draw one animation frame: optional ocean disc, the field, optional coastlines, optional title.
+
+        The per-frame body shared by :meth:`animate` and :meth:`rotate`. Ocean fill and coastlines are
+        decoration: the ocean disc is drawn only on a globe, and a coastline failure (no network/data) is
+        swallowed so the animation still renders.
+        """
+        if ocean and self.globe:
+            self.ocean()
+        getattr(self, kind)(data, **opts)
+        if coastlines:
+            try:
+                self.coastlines()
+            except Exception:  # network/data unavailable — decoration is best-effort
+                pass
+        if title is not None:
+            self.set_title(title)
+
     def animate(self, stack: Any, *, kind: str = "imshow", fps: float = 3.0,
                 titles: Optional[Sequence[str]] = None, ocean: bool = False, coastlines: bool = False,
                 colorbar: bool = False, cbar_label: Optional[str] = None, **kwargs) -> FuncAnimation:
@@ -1652,21 +1682,12 @@ class Map(Scene):
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):
             raise ValueError(f"titles length ({len(titles)}) must match the stack length ({len(frames)})")
-        self._resolve_animation_clim(frames, kwargs)  # one colour scale for every frame
-        if colorbar:
-            self._animation_colorbar(kwargs, cbar_label)
+        self._prime_animation(frames, kwargs, colorbar=colorbar, cbar_label=cbar_label)
 
         def draw_one(i: int) -> None:
-            if ocean and self.globe:
-                self.ocean()
-            getattr(self, kind)(frames[i], **kwargs)
-            if coastlines:
-                try:
-                    self.coastlines()
-                except Exception:  # network/data unavailable — decoration is best-effort
-                    pass
-            if titles is not None:
-                self.set_title(titles[i])
+            title = titles[i] if titles is not None else None
+            self._draw_animation_frame(frames[i], kind, kwargs, ocean=ocean, coastlines=coastlines,
+                                       title=title)
 
         return self._animate_frames(draw_one, len(frames), fps)
 
@@ -1708,20 +1729,11 @@ class Map(Scene):
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
         self.globe = True
-        self._resolve_animation_clim([dataset], kwargs)  # one colour scale for every frame
-        if colorbar:
-            self._animation_colorbar(kwargs, cbar_label)
+        self._prime_animation([dataset], kwargs, colorbar=colorbar, cbar_label=cbar_label)
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
 
         def draw_one(i: int) -> None:
             self.crs = projections.orthographic(lon=lons[i], lat=lat)
-            if ocean:
-                self.ocean()
-            getattr(self, kind)(dataset, **kwargs)
-            if coastlines:
-                try:
-                    self.coastlines()
-                except Exception:  # network/data unavailable — decoration is best-effort
-                    pass
+            self._draw_animation_frame(dataset, kind, kwargs, ocean=ocean, coastlines=coastlines)
 
         return self._animate_frames(draw_one, n_frames, fps)

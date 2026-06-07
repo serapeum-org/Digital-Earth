@@ -257,3 +257,29 @@ class TestRotate:
         anim.save(str(out), writer=PillowWriter(fps=4))
         assert out.stat().st_size > 0, "rotation should still render when coastlines fail"
         assert coast.call_count >= 2, "coastlines should be attempted on each frame"
+
+
+class TestDrawAnimationFrame:
+    """Tests for the shared Map._draw_animation_frame helper (PB-4)."""
+
+    def test_sets_title_and_draws_field(self):
+        """_draw_animation_frame draws the field and sets the title when given.
+
+        Test scenario:
+            On a flat map (globe=False) the field is drawn as one layer and the title is applied;
+            ocean is skipped because it is globe-only.
+        """
+        m = Map(crs=4326)
+        m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=True, coastlines=False, title="frame-0")
+        assert m.ax.get_title() == "frame-0", f"title not set, got {m.ax.get_title()!r}"
+        assert len(m.layers) == 1, f"expected one drawn field layer, got {len(m.layers)}"
+
+    def test_no_title_leaves_title_empty(self):
+        """_draw_animation_frame leaves the title untouched when none is given.
+
+        Test scenario:
+            Omitting title draws the field without setting any axes title.
+        """
+        m = Map(crs=4326)
+        m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=False, coastlines=False)
+        assert m.ax.get_title() == "", f"title should be empty, got {m.ax.get_title()!r}"
