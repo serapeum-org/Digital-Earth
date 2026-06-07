@@ -83,6 +83,30 @@ class Scene:
         self.layers.append((glyph, mappable))
         return mappable
 
+    def _render_glyph(self, glyph: Any, *plot_args: Any, artist: str = "im", **plot_kwargs: Any) -> Any:
+        """Plot ``glyph`` on the shared axes, register the produced mappable, and return it.
+
+        Consolidates the recipe every plot method shared — call ``glyph.plot(...)``, find the mappable it
+        produced, then :meth:`_add_layer` — so it lives in one place. cleopatra glyphs expose their mappable in
+        one of two ways, selected by ``artist``:
+
+        - ``"im"`` (default): the mappable is ``glyph.im`` (``ArrayGlyph`` / ``MeshGlyph``).
+        - ``"plot"``: ``glyph.plot()`` returns ``(fig, ax, artist)`` and the mappable is that third element
+          (``Scatter`` / ``Polygon`` / ``Vector`` / ``KDE`` / ``Flow`` glyphs).
+
+        Args:
+            glyph: An already-constructed cleopatra glyph bound to this Scene's ``ax``/``fig``.
+            *plot_args: Positional arguments forwarded to ``glyph.plot`` (e.g. the data array for a mesh).
+            artist: Which return convention to read the mappable from (``"im"`` or ``"plot"``).
+            **plot_kwargs: Keyword arguments forwarded to ``glyph.plot`` (e.g. ``kind``, ``outline_only``).
+
+        Returns:
+            The registered mappable/artist (so callers can chain a colorbar or keep a reference).
+        """
+        result = glyph.plot(*plot_args, **plot_kwargs)
+        mappable = glyph.im if artist == "im" else result[2]
+        return self._add_layer(glyph, mappable)
+
     @contextmanager
     def _preserve_view(self) -> Iterator[None]:
         """Hold the current axes limits across the block, but only when data is already drawn.

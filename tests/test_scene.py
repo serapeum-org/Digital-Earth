@@ -108,6 +108,81 @@ def test_accepts_external_axes():
     assert scene.ax is ax and scene.fig is fig
 
 
+class _FakeGlyph:
+    """Minimal cleopatra-glyph stand-in for _render_glyph tests.
+
+    Records the args its ``plot`` received, exposes a mappable on ``im``, and returns the cleopatra
+    ``(fig, ax, artist)`` tuple so both artist-resolution conventions can be exercised.
+    """
+
+    def __init__(self, im="IM", tuple_artist="ARTIST"):
+        self.im = im
+        self._tuple_artist = tuple_artist
+        self.plot_args = None
+        self.plot_kwargs = None
+
+    def plot(self, *args, **kwargs):
+        """Record the call and return a cleopatra-style (fig, ax, artist) triple."""
+        self.plot_args = args
+        self.plot_kwargs = kwargs
+        return ("FIG", "AX", self._tuple_artist)
+
+
+class TestRenderGlyph:
+    """Tests for Scene._render_glyph (PA-3)."""
+
+    def test_im_convention_registers_glyph_im(self):
+        """artist='im' (default) registers and returns glyph.im.
+
+        Test scenario:
+            The ArrayGlyph/MeshGlyph convention exposes the mappable on .im; that object is the layer.
+        """
+        scene = Scene()
+        glyph = _FakeGlyph(im="THE_IMAGE")
+        out = scene._render_glyph(glyph)
+        assert out == "THE_IMAGE", f"expected glyph.im returned, got {out}"
+        assert scene.layers[-1] == (glyph, "THE_IMAGE"), f"layer not registered correctly: {scene.layers[-1]}"
+
+    def test_plot_convention_registers_third_element(self):
+        """artist='plot' registers and returns the third element of plot()'s return.
+
+        Test scenario:
+            Scatter/Polygon/Vector/KDE/Flow glyphs return (fig, ax, artist); the artist is the layer.
+        """
+        scene = Scene()
+        glyph = _FakeGlyph(tuple_artist="THE_COLLECTION")
+        out = scene._render_glyph(glyph, artist="plot")
+        assert out == "THE_COLLECTION", f"expected plot()[2] returned, got {out}"
+        assert scene.layers[-1] == (glyph, "THE_COLLECTION"), f"layer wrong: {scene.layers[-1]}"
+
+    def test_forwards_positional_and_keyword_args(self):
+        """_render_glyph forwards *plot_args and **plot_kwargs to glyph.plot.
+
+        Test scenario:
+            A positional data array and keyword options must reach glyph.plot unchanged, while the
+            artist selector itself is consumed and not forwarded.
+        """
+        scene = Scene()
+        glyph = _FakeGlyph()
+        scene._render_glyph(glyph, [1, 2, 3], artist="im", kind="contourf", outline_only=True)
+        assert glyph.plot_args == ([1, 2, 3],), f"positional args not forwarded: {glyph.plot_args}"
+        assert glyph.plot_kwargs == {"kind": "contourf", "outline_only": True}, (
+            f"kwargs not forwarded cleanly: {glyph.plot_kwargs}"
+        )
+
+    def test_returned_mappable_is_added_once(self):
+        """Each _render_glyph call appends exactly one layer.
+
+        Test scenario:
+            Two renders produce two distinct registered layers in call order.
+        """
+        scene = Scene()
+        scene._render_glyph(_FakeGlyph(im="A"))
+        scene._render_glyph(_FakeGlyph(im="B"))
+        ims = [mappable for _, mappable in scene.layers]
+        assert ims == ["A", "B"], f"layers not registered in order: {ims}"
+
+
 class TestPreserveView:
     """Tests for Scene._preserve_view (PA-2)."""
 

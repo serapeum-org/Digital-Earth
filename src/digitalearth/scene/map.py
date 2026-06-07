@@ -209,8 +209,7 @@ class Map(Scene):
             **placement,
             **opts,
         )
-        glyph.plot(kind=kind, add_colorbar=add_colorbar)
-        return self._add_layer(glyph, glyph.im)
+        return self._render_glyph(glyph, kind=kind, add_colorbar=add_colorbar)
 
     def imshow(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``)."""
@@ -258,8 +257,7 @@ class Map(Scene):
         glyph = ScatterGlyph(
             src.x.values, src.y.values, values=values, sizes=sizes, ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, pc = glyph.plot()
-        return self._add_layer(glyph, pc)
+        return self._render_glyph(glyph, artist="plot")
 
     def grid_points(self, dataset: Any, **opts) -> Any:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
@@ -292,8 +290,7 @@ class Map(Scene):
         z = xyz.iloc[:, 2].to_numpy()
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
-        _, _, pc = glyph.plot()
-        return self._add_layer(glyph, pc)
+        return self._render_glyph(glyph, artist="plot")
 
     def point_cloud(self, dataset: Any, **opts) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value."""
@@ -336,8 +333,7 @@ class Map(Scene):
         glyph = PolygonGlyph(
             polygons, values=values, ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, pc = glyph.plot()
-        return self._add_layer(glyph, pc)
+        return self._render_glyph(glyph, artist="plot")
 
     def _extent(self, ds: Any) -> List[float]:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
@@ -383,8 +379,7 @@ class Map(Scene):
             band_first, rgb=list(range(len(bands))), extent=self._extent(ds),
             ax=self.ax, fig=self.fig, **opts,
         )
-        glyph.plot()
-        return self._add_layer(glyph, glyph.im)
+        return self._render_glyph(glyph)
 
     def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
@@ -408,8 +403,7 @@ class Map(Scene):
             band_first, rgb=[0, 1, 2], extent=self._extent(ds), ax=self.ax, fig=self.fig,
             **opts,
         )
-        glyph.plot()
-        return self._add_layer(glyph, glyph.im)
+        return self._render_glyph(glyph)
 
     def spaghetti(self, collection: Any, band: int = 1, **opts) -> List[Any]:
         """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).
@@ -455,9 +449,9 @@ class Map(Scene):
         glyph = VectorGlyph(
             x_grid, y_grid, u, v, ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, im = glyph.plot(kind=kind)
+        im = self._render_glyph(glyph, artist="plot", kind=kind)
         self._last_vector = (glyph, im, kind)  # remembered for quiverkey()
-        return self._add_layer(glyph, im)
+        return im
 
     def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``)."""
@@ -602,14 +596,13 @@ class Map(Scene):
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
+        # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
         if kind == "tripcolor":
             face_values = z[tri.triangles].mean(axis=1)
-            glyph.plot(face_values, location="face", colorbar=False, **opts)
-        else:
-            glyph.plot(z, location="node", filled=(kind == "tricontourf"), colorbar=False, **opts)
-        # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2),
-        # so we no longer scrape ax.collections[-1].
-        return self._add_layer(glyph, glyph.im)
+            return self._render_glyph(glyph, face_values, location="face", colorbar=False, **opts)
+        return self._render_glyph(
+            glyph, z, location="node", filled=(kind == "tricontourf"), colorbar=False, **opts
+        )
 
     def tricontourf(self, data: Any, **kwargs) -> Any:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``)."""
@@ -725,8 +718,7 @@ class Map(Scene):
         glyph = PolygonGlyph(
             polygons, values=values, ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, pc = glyph.plot()
-        return self._add_layer(glyph, pc)
+        return self._render_glyph(glyph, artist="plot")
 
     def shapes(self, features: Any, **opts) -> Any:
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
@@ -742,8 +734,7 @@ class Map(Scene):
         polygons, _ = self._polygon_vertices(gdf.geometry)
         polygons, _ = self._finite_polygons(polygons)  # drop far-side polygons on a globe
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        _, _, pc = glyph.plot(outline_only=True)
-        return self._add_layer(glyph, pc)
+        return self._render_glyph(glyph, artist="plot", outline_only=True)
 
     def _clip_geometry(self, clip: Any) -> Any:
         """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.
@@ -865,11 +856,9 @@ class Map(Scene):
             glyph = PolygonGlyph(
                 polygons, values=values_arr, ax=self.ax, fig=self.fig, **opts,
             )
-            _, _, pc = glyph.plot()
-        else:
-            glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-            _, _, pc = glyph.plot(outline_only=True)
-        return self._add_layer(glyph, pc)
+            return self._render_glyph(glyph, artist="plot")
+        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
+        return self._render_glyph(glyph, artist="plot", outline_only=True)
 
     @staticmethod
     def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
@@ -948,12 +937,10 @@ class Map(Scene):
             glyph = PolygonGlyph(
                 polygons, values=values, ax=self.ax, fig=self.fig, **opts,
             )
-            _, _, pc = glyph.plot()
-        else:
-            polygons, _ = self._finite_polygons(polygons)
-            glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-            _, _, pc = glyph.plot(outline_only=True)
-        return self._add_layer(glyph, pc)
+            return self._render_glyph(glyph, artist="plot")
+        polygons, _ = self._finite_polygons(polygons)
+        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
+        return self._render_glyph(glyph, artist="plot", outline_only=True)
 
     @staticmethod
     def _quadtree_cells(
@@ -1106,8 +1093,7 @@ class Map(Scene):
         glyph = PolygonGlyph(
             polygons, values=values_arr, ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, pc = glyph.plot()
-        return self._add_layer(glyph, pc)
+        return self._render_glyph(glyph, artist="plot")
 
     @staticmethod
     def _polygons_of(geom: Any) -> list:
@@ -1205,8 +1191,7 @@ class Map(Scene):
         glyph = KDEGlyph(
             xs, ys, clip_path=self._clip_path(clip), ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, cs = glyph.plot()
-        return self._add_layer(glyph, cs)
+        return self._render_glyph(glyph, artist="plot")
 
     def sankey(
         self, features: Any, column: Optional[str] = None, scale: Optional[str] = None, **opts,
@@ -1270,8 +1255,7 @@ class Map(Scene):
         glyph = FlowGlyph(
             paths, values=values, widths=widths, ax=self.ax, fig=self.fig, **opts,
         )
-        _, _, lc = glyph.plot()
-        return self._add_layer(glyph, lc)
+        return self._render_glyph(glyph, artist="plot")
 
     def _project_line_features(self, fc: Any) -> List[np.ndarray]:
         """Project a line FeatureCollection (lon/lat) to the display CRS, split at the projection limb.
