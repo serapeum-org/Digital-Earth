@@ -754,6 +754,13 @@ class Map(Scene):
 
         Accepts a pyramids ``FeatureCollection`` / geopandas ``GeoDataFrame``/``GeoSeries`` (reprojected to the
         display CRS and unioned) or a shapely geometry (assumed already in the display CRS). ``None`` → no clip.
+
+        Args:
+            clip: A ``FeatureCollection``/``GeoDataFrame``/``GeoSeries`` (reprojected + unioned), a shapely
+                geometry already in the display CRS, or ``None``.
+
+        Returns:
+            A single shapely geometry in the display CRS, or ``None`` when ``clip`` is ``None``.
         """
         if clip is None:
             return None
@@ -770,6 +777,13 @@ class Map(Scene):
         Points that reproject to non-finite coordinates (the far side of a clipped/globe display CRS) are
         dropped — together with their matching ``values`` — so downstream tessellation / binning / KDE never
         receives ``inf`` / ``nan``.
+
+        Args:
+            geom: A geopandas point ``GeoSeries`` (already in the display CRS).
+            values: Optional per-point array aligned with ``geom``; filtered by the same finite mask.
+
+        Returns:
+            tuple: ``(xs, ys, values)`` numpy arrays of finite points; ``values`` is ``None`` when not given.
         """
         xs = np.asarray(geom.x, dtype=float)
         ys = np.asarray(geom.y, dtype=float)
@@ -863,7 +877,15 @@ class Map(Scene):
 
     @staticmethod
     def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
-        """Linearly map ``values`` onto ``limits`` (a constant input maps to the midpoint factor)."""
+        """Linearly map ``values`` onto ``limits`` (a constant input maps to the midpoint factor).
+
+        Args:
+            values: Per-feature magnitudes to normalise.
+            limits: ``(min, max)`` output range the smallest / largest value map to.
+
+        Returns:
+            np.ndarray: Per-feature scale factors spanning ``limits``, the same shape as ``values``.
+        """
         lo, hi = limits
         vmin, vmax = np.nanmin(values), np.nanmax(values)
         if vmax > vmin:
@@ -946,6 +968,17 @@ class Map(Scene):
         Returns ``(xmin, ymin, xmax, ymax, value)`` per kept cell, where ``value = agg_fn(point_indices)``.
         A cell with fewer than ``nmin`` points is dropped; splitting stops at ``max_depth`` and when a split
         makes no progress (all points fall in one child), so coincident points cannot recurse forever.
+
+        Args:
+            xs: Finite point x-coordinates.
+            ys: Finite point y-coordinates, aligned with ``xs``.
+            agg_fn: Callable mapping an index array of the points in a cell to that cell's scalar value.
+            nmax: Maximum points in a cell before it is split.
+            nmin: Cells with fewer than this many points are dropped.
+            max_depth: Hard recursion-depth cap guarding against coincident points. Default 20.
+
+        Returns:
+            list[tuple]: ``(xmin, ymin, xmax, ymax, value)`` for each kept cell.
         """
         x0, x1 = float(np.min(xs)), float(np.max(xs))
         y0, y1 = float(np.min(ys)), float(np.max(ys))
@@ -1082,7 +1115,15 @@ class Map(Scene):
 
     @staticmethod
     def _polygons_of(geom: Any) -> list:
-        """Return the ``Polygon`` parts of a shapely geometry (``[]`` for non-polygonal input)."""
+        """Return the ``Polygon`` parts of a shapely geometry (``[]`` for non-polygonal input).
+
+        Args:
+            geom: Any shapely geometry, or ``None``.
+
+        Returns:
+            list: ``[geom]`` for a Polygon, each Polygon part of a MultiPolygon / GeometryCollection, or
+            ``[]`` for ``None`` / non-polygonal geometry.
+        """
         if geom is None:
             return []
         kind = geom.geom_type
@@ -1097,6 +1138,13 @@ class Map(Scene):
 
         Reuses :meth:`_clip_geometry` to reproject/union the boundary, then turns each polygon exterior ring
         into a sub-path so a ``MultiPolygon`` clips correctly.
+
+        Args:
+            clip: A clip boundary accepted by :meth:`_clip_geometry`, or ``None``.
+
+        Returns:
+            matplotlib.path.Path | None: A path (in data coords) covering the boundary polygons, or ``None``
+            when there is no usable boundary.
         """
         polys = self._polygons_of(self._clip_geometry(clip))
         verts: List[list] = []
