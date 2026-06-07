@@ -32,7 +32,7 @@ from pyramids.base.crs import reproject_coordinates
 from pyramids.basemap import natural_earth
 from pyramids.dataset import Dataset
 
-from digitalearth._arrays import NAN_REDUCERS
+from digitalearth._arrays import NAN_REDUCERS, finite, read_masked_band
 from digitalearth.autostyle import auto_style
 from digitalearth.preprocess import add_cyclic_column
 from digitalearth.scene import projections
@@ -368,10 +368,7 @@ class Map(Scene):
         """
         ds = self._reproject(dataset)
         polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
-        values = ds.read_array(band=band - 1).astype("float64").ravel()
-        nodata = ds.no_data_value[band - 1]
-        if nodata is not None:
-            values = np.where(np.isclose(values, nodata, rtol=1e-3), np.nan, values)
+        values = read_masked_band(ds, band).ravel()  # 1-based band, nodata -> NaN (shared helper)
         polygons, values = self._finite_polygons(polygons, values)  # drop far-side cells on a globe
         return self._polygon_layer(polygons, values, **opts)
 
@@ -1548,11 +1545,7 @@ class Map(Scene):
         lows: List[float] = []
         highs: List[float] = []
         for ds in datasets:
-            arr = np.asarray(ds.read_array(band=0), dtype="float64")
-            nodata = ds.no_data_value[0]
-            if nodata is not None:
-                arr = arr[arr != nodata]
-            arr = arr[np.isfinite(arr)]
+            arr = finite(read_masked_band(ds, band=1))
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))

@@ -46,3 +46,24 @@ def test_grid_cells_polygon_count(dataset):
     pc = m.grid_cells(dataset)
     paths = pc.get_paths()
     assert len(paths) == dataset.rows * dataset.columns
+
+
+def test_grid_cells_nulls_nodata_cells():
+    """grid_cells routes band values through the shared nodata mask (PA-7): nodata cells become NaN.
+
+    Test scenario:
+        A 2x2 raster with one cell equal to the nodata sentinel still draws four polygons, but exactly
+        that one cell carries a non-finite (masked/NaN) face value.
+    """
+    import numpy as np
+    from pyramids.dataset import Dataset
+
+    arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
+    ds = Dataset.create_from_array(
+        arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326, no_data_value=-9999.0
+    )
+    m = Map(crs=4326)
+    pc = m.grid_cells(ds)
+    values = np.ma.filled(np.asarray(pc.get_array(), dtype="float64"), np.nan)
+    assert len(pc.get_paths()) == 4, f"all four cells should be drawn, got {len(pc.get_paths())}"
+    assert int(np.isfinite(values).sum()) == 3, f"exactly the nodata cell should be nulled, got {values}"
