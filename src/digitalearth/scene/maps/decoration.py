@@ -232,13 +232,23 @@ class DecorationMixin:
         return artist
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
-        """Overlay Natural-Earth coastlines (``pyramids.basemap.natural_earth("coastline")``)."""
+        """Overlay Natural-Earth coastlines (``pyramids.basemap.natural_earth("coastline")``).
+
+        Returns:
+            The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
+            on a flat map).
+        """
         return self._natural_earth(
             "coastline", resolution, {"color": "black", "linewidth": 0.5}, zorder=2.5, **kwargs
         )
 
     def borders(self, resolution: str = "110m", **kwargs) -> Any:
-        """Overlay Natural-Earth country borders."""
+        """Overlay Natural-Earth country borders.
+
+        Returns:
+            The drawn border artist (a list of polyline artists on a globe; the reprojected plot artist on a
+            flat map).
+        """
         return self._natural_earth(
             "borders", resolution, {"color": "gray", "linewidth": 0.4}, zorder=2.5, **kwargs
         )
@@ -249,6 +259,10 @@ class DecorationMixin:
         On a **flat** map the polygons are reprojected and filled directly. On a **globe** map they are
         re-closed at the projection limb into finite rings and filled as a map-specific overlay (drawn below
         data and coastlines, clipped to the boundary). Interior rings (holes) are dropped in v1 — see #43.
+
+        Returns:
+            The land fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
+            the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
             "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, polygon=True, zorder=-1.5, **kwargs
@@ -260,6 +274,10 @@ class DecorationMixin:
         On a **globe** map, ``ocean`` fills the whole projection disc (the boundary ring) with the ocean
         colour and lets land overlay it — exact and far cheaper than clipping the global ocean polygon. On a
         **flat** map, the Natural-Earth ocean polygons are reprojected and filled directly.
+
+        Returns:
+            The ocean fill layer (a ``PolyCollection`` disc on a globe; the reprojected plot artist on a flat
+            map).
         """
         color = kwargs.pop("color", "#cfe6f5")
         if self.globe:
@@ -272,18 +290,31 @@ class DecorationMixin:
 
         Like :meth:`land`, but with a water colour and drawn just above land (so lakes sit on the land) and
         still below data and coastlines. On a globe the polygons are re-closed at the projection limb.
+
+        Returns:
+            The lake fill layer (a ``PolyCollection`` on a globe, ``None`` when nothing is on the near side;
+            the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
             "lakes", resolution, {"color": "#cfe6f5", "edgecolor": "none"}, polygon=True, zorder=-1.4, **kwargs
         )
 
     def rivers(self, resolution: str = "110m", **kwargs) -> Any:
-        """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe."""
+        """Overlay Natural-Earth rivers (line centerlines), split at the projection limb on a globe.
+
+        Returns:
+            The drawn river artist (a list of polyline artists on a globe; the reprojected plot artist on a
+            flat map).
+        """
         return self._natural_earth(
             "rivers", resolution, {"color": "#5a8fcf", "linewidth": 0.4}, zorder=2.4, **kwargs
         )
 
     def basemap(self, source: Any = None, **kwargs) -> Any:
-        """Add an XYZ-tile basemap to the axes via ``cleopatra.tiles.add_tiles`` in the display CRS."""
+        """Add an XYZ-tile basemap to the axes via ``cleopatra.tiles.add_tiles`` in the display CRS.
+
+        Returns:
+            The tile artist ``add_tiles`` added to the axes.
+        """
         return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
 

@@ -83,19 +83,35 @@ class RasterMixin:
         return self._render_glyph(glyph, kind=kind, add_colorbar=add_colorbar)
 
     def imshow(self, dataset: Any, **kwargs) -> Any:
-        """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``)."""
+        """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
+
+        Returns:
+            The image mappable (registered as a Scene layer).
+        """
         return self._field(dataset, kind="imshow", **kwargs)
 
     def contourf(self, dataset: Any, **kwargs) -> Any:
-        """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``)."""
+        """Render a raster as filled contours (``ArrayGlyph`` ``kind="contourf"``).
+
+        Returns:
+            The filled-contour mappable (registered as a Scene layer).
+        """
         return self._field(dataset, kind="contourf", **kwargs)
 
     def contour(self, dataset: Any, **kwargs) -> Any:
-        """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``)."""
+        """Render a raster as line contours (``ArrayGlyph`` ``kind="contour"``).
+
+        Returns:
+            The line-contour mappable (registered as a Scene layer).
+        """
         return self._field(dataset, kind="contour", **kwargs)
 
     def pcolormesh(self, dataset: Any, **kwargs) -> Any:
-        """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``)."""
+        """Render a raster as a quadrilateral mesh (``ArrayGlyph`` ``kind="pcolormesh"``).
+
+        Returns:
+            The ``QuadMesh`` mappable (registered as a Scene layer).
+        """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
     def block(self, dataset: Any, **kwargs) -> Any:
@@ -106,6 +122,9 @@ class RasterMixin:
         ``n + 1``), so true edge-aligned blocks need an upstream cleopatra option; until that lands ``block``
         draws the same filled mesh as :meth:`pcolormesh`. It is kept as a distinct, stable entry point so
         callers and examples can switch to true blocks transparently once cleopatra supports them.
+
+        Returns:
+            The ``QuadMesh`` mappable (registered as a Scene layer).
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 

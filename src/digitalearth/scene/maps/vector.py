@@ -137,7 +137,11 @@ class VectorMixin:
         return self._render_glyph(glyph, artist="plot")
 
     def point_cloud(self, dataset: Any, **opts) -> Any:
-        """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value."""
+        """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
+
+        Returns:
+            The scatter ``PathCollection`` (registered as a Scene layer).
+        """
         return self.grid_points(dataset, **opts)
 
     def grid_cells(self, dataset: Any, band: int = 1, **opts) -> Any:
@@ -206,15 +210,27 @@ class VectorMixin:
         return im
 
     def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
-        """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``)."""
+        """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
+
+        Returns:
+            The ``Quiver`` mappable (registered as a Scene layer; carries the key for :meth:`quiverkey`).
+        """
         return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
 
     def barbs(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
-        """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``)."""
+        """Draw a vector field as wind barbs (``VectorGlyph`` ``kind="barbs"``).
+
+        Returns:
+            The ``Barbs`` mappable (registered as a Scene layer).
+        """
         return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
 
     def streamplot(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
-        """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``)."""
+        """Draw a vector field as streamlines (``VectorGlyph`` ``kind="streamplot"``).
+
+        Returns:
+            The streamplot mappable (registered as a Scene layer).
+        """
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
     def quiverkey(self, value: float, text: str, *, x: float = 0.9, y: float = 0.95, labelpos: str = "E",
@@ -277,15 +293,27 @@ class VectorMixin:
         )
 
     def tricontourf(self, data: Any, **kwargs) -> Any:
-        """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``)."""
+        """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
+
+        Returns:
+            The tricontourf mappable (registered as a Scene layer).
+        """
         return self._tri(data, kind="tricontourf", **kwargs)
 
     def tricontour(self, data: Any, **kwargs) -> Any:
-        """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``)."""
+        """Line contours of unstructured/point data (``MeshGlyph`` node data, ``filled=False``).
+
+        Returns:
+            The tricontour mappable (registered as a Scene layer).
+        """
         return self._tri(data, kind="tricontour", **kwargs)
 
     def tripcolor(self, data: Any, **kwargs) -> Any:
-        """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data)."""
+        """Flat-shaded triangles of unstructured/point data (``MeshGlyph`` face data).
+
+        Returns:
+            The tripcolor mappable (registered as a Scene layer).
+        """
         return self._tri(data, kind="tripcolor", **kwargs)
 
     @staticmethod
