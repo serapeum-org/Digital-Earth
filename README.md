@@ -65,39 +65,50 @@ pip install digitalearth==0.1.11
 Quick start
 ===========
 
+The entry points are `quickmap` (one call) and the `Map` scene. Build a finished map from a raster and save it:
+
+```python
+from pyramids.dataset import Dataset
+from digitalearth import quickmap
+
+src = Dataset.read_file("examples/data/acc4000.tif")
+m = quickmap(src, crs=src.epsg)   # finished Map with a colorbar
+m.set_title("Flow Accumulation")
+m.save("flow_accumulation.png")
 ```
+![Flowaccumulation](examples/images/flow_accumulation.png)
+
+For more control, compose layers on a `Map` directly — e.g. overlay points on a raster:
+
+```python
+from pyramids.dataset import Dataset
+from pyramids.feature import FeatureCollection
+from digitalearth import Map
+
+src = Dataset.read_file("examples/data/acc4000.tif")
+points = FeatureCollection.read_file("tests/data/points.geojson")
+
+m = Map(crs=src.epsg)
+m.imshow(src)
+m.scatter(points)
+m.colorbar(layer=0)
+m.set_title("Flow Accumulation")
+m.save("flow_accumulation_with_labels.png")
+```
+![Flowaccumulation](examples/images/flow_accumulation_with_labels.png)
+
+[other code samples](https://digitalearth.readthedocs.io/en/latest/?badge=latest)
+
+Legacy API (deprecated)
+-----------------------
+
+`StaticGlyph` is the original entry point and is **deprecated** — it emits a `DeprecationWarning` and will be
+removed in a future release. Prefer `quickmap` / `Map` above. It still works for now:
+
+```python
 from pyramids.dataset import Dataset
 from digitalearth.static import StaticGlyph
+
 src = Dataset.read_file("examples/data/acc4000.tif")
 fig, ax = StaticGlyph.plot(src, title="Flow Accumulation", cbar_label="Flow Accumulation")
 ```
-![Flowaccumulation](examples/images/flow_accumulation.png)
-```
-points = pd.read_csv("examples/data/points.csv")
-point_color = "blue"
-point_size = 100
-id_color = "yellow"
-id_size = 20
-
-display_cell_value = True
-num_size = 8
-background_color_threshold = None
-ticks_spacing = 500
-
-fig, ax = StaticGlyph.plot(
-            src,
-            point_color=point_color,
-            point_size=point_size,
-            pid_color=id_color,
-            pid_size=id_size,
-            points=points,
-            display_cell_value=display_cell_value,
-            num_size=num_size,
-            background_color_threshold=background_color_threshold,
-            ticks_spacing=ticks_spacing,
-            title="Flow Accumulation",
-            cbar_label="Flow Accumulation"
-        )
-```
-![Flowaccumulation](examples/images/flow_accumulation_with_labels.png)
-[other code samples](https://digitalearth.readthedocs.io/en/latest/?badge=latest)
