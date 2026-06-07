@@ -1,5 +1,11 @@
 # Change log
 
+## 0.3.0 (2026-06-07)
+
+### Feat
+
+- **vector**: add Voronoi, cartogram, quadtree, KDE and flow/Sankey map plots (#49)
+
 ## 0.2.0 (2026-06-02)
 
 ### Feat
