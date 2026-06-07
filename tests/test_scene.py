@@ -106,3 +106,64 @@ def test_accepts_external_axes():
     fig, ax = plt.subplots()
     scene = Scene(ax=ax, fig=fig)
     assert scene.ax is ax and scene.fig is fig
+
+
+class TestPreserveView:
+    """Tests for Scene._preserve_view (PA-2)."""
+
+    def test_restores_limits_when_layer_present(self):
+        """A registered layer counts as data, so the block's autoscaling is undone.
+
+        Test scenario:
+            With a layer drawn and explicit limits set, plotting far-away points inside the block must
+            not move the view — the pre-block limits are restored on exit.
+        """
+        scene = Scene()
+        _render(scene, np.random.rand(8, 8))
+        scene.ax.set_xlim(0, 10)
+        scene.ax.set_ylim(0, 5)
+        with scene._preserve_view():
+            scene.ax.plot([100, 200], [100, 200])
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 10.0)), f"xlim moved: {scene.ax.get_xlim()}"
+        assert scene.ax.get_ylim() == pytest.approx((0.0, 5.0)), f"ylim moved: {scene.ax.get_ylim()}"
+
+    def test_restores_limits_when_image_present(self):
+        """An axes image (no registered layer) still counts as data.
+
+        Test scenario:
+            ``ax.images`` being non-empty is enough for _preserve_view to restore the view.
+        """
+        scene = Scene()
+        scene.ax.imshow(np.random.rand(4, 4))
+        scene.ax.set_xlim(0, 3)
+        scene.ax.set_ylim(0, 3)
+        with scene._preserve_view():
+            scene.ax.plot([100, 200], [100, 200])
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), f"xlim moved: {scene.ax.get_xlim()}"
+
+    def test_restores_limits_when_collection_present(self):
+        """An axes collection (no registered layer) counts as data.
+
+        Test scenario:
+            ``ax.collections`` being non-empty (here a scatter) triggers limit restoration.
+        """
+        scene = Scene()
+        scene.ax.scatter([1, 2], [1, 2])
+        scene.ax.set_xlim(0, 3)
+        scene.ax.set_ylim(0, 3)
+        with scene._preserve_view():
+            scene.ax.plot([100, 200], [100, 200])
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), f"xlim moved: {scene.ax.get_xlim()}"
+
+    def test_empty_axes_keeps_new_extent(self):
+        """On an empty axes the block is free to set the initial extent.
+
+        Test scenario:
+            With no data present, limits set inside the block survive (no restoration).
+        """
+        scene = Scene()
+        with scene._preserve_view():
+            scene.ax.set_xlim(50, 60)
+            scene.ax.set_ylim(70, 80)
+        assert scene.ax.get_xlim() == pytest.approx((50.0, 60.0)), f"xlim not kept: {scene.ax.get_xlim()}"
+        assert scene.ax.get_ylim() == pytest.approx((70.0, 80.0)), f"ylim not kept: {scene.ax.get_ylim()}"

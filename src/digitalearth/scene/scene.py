@@ -9,7 +9,8 @@ Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can sup
 (``add_colorbar=False`` on ``ArrayGlyph``), the Scene can stack any number of layers on one axes and draw a
 single colorbar for the layer of interest.
 """
-from typing import Any, List, Optional, Sequence, Tuple
+from contextlib import contextmanager
+from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 from cleopatra.styles import colorbar_legend, disjoint_legend
@@ -81,6 +82,25 @@ class Scene:
         """
         self.layers.append((glyph, mappable))
         return mappable
+
+    @contextmanager
+    def _preserve_view(self) -> Iterator[None]:
+        """Hold the current axes limits across the block, but only when data is already drawn.
+
+        A global backdrop or decoration (basemap, coastlines, ocean fill, a Natural-Earth layer) would
+        otherwise autoscale a regional view back out to the whole world. When the axes already holds a data
+        layer (a registered layer, an image, or a collection), the pre-block x/y limits are captured and
+        restored on exit; on an otherwise-empty axes the block is free to set the initial extent.
+
+        Yields:
+            None — run the drawing code inside the ``with`` block.
+        """
+        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
+        yield
+        if has_data:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
 
     def colorbar(self, layer: int = -1, label: Optional[str] = None, **kwargs) -> Any:
         """Draw one colorbar for a registered layer (delegates to ``cleopatra.styles.colorbar_legend``).

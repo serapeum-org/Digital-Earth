@@ -574,13 +574,9 @@ class Map(Scene):
             except Exception as exc:  # tile servers unavailable — best-effort backdrop
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
-        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
-        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
-        im = self.imshow(dataset, cmap=cmap, **kwargs)
-        im.set_zorder(zorder)
-        if has_data:
-            self.ax.set_xlim(xlim)
-            self.ax.set_ylim(ylim)
+        with self._preserve_view():
+            im = self.imshow(dataset, cmap=cmap, **kwargs)
+            im.set_zorder(zorder)
         return im
 
     def _scattered(self, data: Any) -> tuple:
@@ -1348,13 +1344,9 @@ class Map(Scene):
         """
         if not rings:
             return None
-        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
-        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
-        pc = PolyCollection(rings, facecolors=facecolor, edgecolors="none", zorder=zorder)
-        self.ax.add_collection(pc)
-        if has_data:
-            self.ax.set_xlim(xlim)
-            self.ax.set_ylim(ylim)
+        with self._preserve_view():
+            pc = PolyCollection(rings, facecolors=facecolor, edgecolors="none", zorder=zorder)
+            self.ax.add_collection(pc)
         return self._add_layer(None, pc)
 
     def _natural_earth(self, layer: str, resolution: str, defaults: dict, *, polygon: bool = False,
@@ -1386,12 +1378,8 @@ class Map(Scene):
             style.pop("edgecolor", None); style.pop("facecolor", None)
             artists = [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in self._project_line_features(fc)]
             return artists
-        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
-        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
-        artist = fc.to_crs(self.crs).plot(ax=self.ax, **{**defaults, **kwargs})
-        if has_data:
-            self.ax.set_xlim(xlim)
-            self.ax.set_ylim(ylim)
+        with self._preserve_view():
+            artist = fc.to_crs(self.crs).plot(ax=self.ax, **{**defaults, **kwargs})
         return artist
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
