@@ -69,6 +69,16 @@ class TestStaticGlyphPlotEdges:
         fig, ax = StaticGlyph.plot(arr, no_data_value=-9999.0)
         assert isinstance(fig, Figure), "expected a Figure from the ndarray path"
 
+    def test_plot_ndarray_no_data_value_none(self):
+        """``no_data_value=None`` skips masking and renders without an exclude_value crash.
+
+        Test scenario:
+            A ``None`` nodata must not reach ``ArrayGlyph(exclude_value=[None])`` (which raises in np.isclose);
+            it is dropped so the array renders unmasked.
+        """
+        fig, ax = StaticGlyph.plot(np.ones((4, 4), dtype="float32"), no_data_value=None)
+        assert isinstance(fig, Figure), "expected a Figure when no_data_value is None"
+
     def test_plot_points_with_id_column(self, dataset: Dataset, points: GeoDataFrame):
         """Points carrying an ``id`` column are labelled by that column, not the index.
 

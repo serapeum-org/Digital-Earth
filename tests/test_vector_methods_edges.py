@@ -225,6 +225,52 @@ class TestApiWrappersNoColumn:
         assert len(m.layers) == 1, "expected one sankey layer"
 
 
+class TestDefensiveBranches:
+    """Cover the previously-uncovered defensive branches (clip drops, no-progress drop, colorbar errors)."""
+
+    def test_voronoi_clip_drops_disjoint_cells(self, value_points):
+        """A clip box overlapping only one cell drops the others (empty-intersection continue)."""
+        pc = Map(crs=value_points.epsg).voronoi(value_points, column="v", clip=box(0, 0, 1, 1))
+        assert len(pc.get_paths()) == 1, "only the cell overlapping the clip should survive"
+
+    def test_quadtree_clip_drops_disjoint_cells(self, value_points):
+        """A clip box overlapping only one cell drops the others (empty-intersection continue)."""
+        pc = Map(crs=value_points.epsg).quadtree(value_points, column="v", nmax=1, clip=box(0, 0, 1, 1))
+        assert len(pc.get_paths()) >= 1, "at least the overlapping cell should survive"
+
+    def test_quadtree_cells_no_progress_below_nmin_dropped(self):
+        """Coincident points that cannot split are dropped when their count is below nmin."""
+        xs = np.zeros(3)
+        ys = np.zeros(3)
+        kept = Map._quadtree_cells(xs, ys, agg_fn=lambda idx: float(len(idx)), nmax=1, nmin=5)
+        assert kept == [], f"expected no cells (3 < nmin 5 at the no-progress stop), got {kept}"
+
+    def test_api_wrappers_swallow_colorbar_errors(self, monkeypatch, value_points):
+        """Every api.* wrapper returns its Map even if the aggregated colorbar raises (except: pass)."""
+        from digitalearth import api
+        from digitalearth.scene import Map as MapCls
+
+        def boom(self, *args, **kwargs):
+            raise RuntimeError("colorbar boom")
+
+        monkeypatch.setattr(MapCls, "colorbar", boom)
+        polys = _fc(
+            gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=[box(0, 0, 1, 1), box(2, 2, 3, 3)], crs="EPSG:32618")
+        )
+        lines = _fc(
+            gpd.GeoDataFrame(
+                {"w": [1.0, 2.0]},
+                geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 2)])],
+                crs="EPSG:32618",
+            )
+        )
+        assert isinstance(api.voronoi(value_points, column="v", crs=value_points.epsg), MapCls)
+        assert isinstance(api.cartogram(polys, scale="v", column="v", crs=polys.epsg), MapCls)
+        assert isinstance(api.quadtree(value_points, column="v", nmax=1, crs=value_points.epsg), MapCls)
+        assert isinstance(api.kde(value_points, crs=value_points.epsg), MapCls)
+        assert isinstance(api.sankey(lines, column="w", scale="w", crs=lines.epsg), MapCls)
+
+
 class TestVectorHelpers:
     """Direct unit tests for the private helpers backing the new methods."""
 

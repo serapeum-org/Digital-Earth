@@ -122,7 +122,10 @@ class StaticGlyph:
             # locate the points in the array (row, col indices)
             points.loc[:, ["rows", "col"]] = src.map_to_array_coordinates(points)
 
-        array = ArrayGlyph(arr, exclude_value=[no_data_value])
+        # Avoid a None no_data_value reaching ArrayGlyph's exclude_value: it compares with np.isclose
+        # (raises on None). np.nan is ArrayGlyph's "no exclusion" sentinel (an empty list would IndexError).
+        exclude = [no_data_value] if no_data_value is not None else np.nan
+        array = ArrayGlyph(arr, exclude_value=exclude)
         fig, ax = array.plot(**kwargs)
 
         points_ids = list()
