@@ -235,6 +235,56 @@ class Map(Scene):
         """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
         return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
 
+    def _vector_input(self, features: Any, *, geom_types: Optional[Sequence[str]] = None,
+                      name: str = "layer", geom_label: Optional[str] = None) -> Any:
+        """Reproject a ``FeatureCollection`` to the display CRS, reject empty, and validate its geometry type.
+
+        Consolidates the preamble shared by the validating vector methods. Reprojects ``features`` to
+        :attr:`crs`, raises on an empty collection, and — when ``geom_types`` is given — requires every
+        geometry to be one of those types.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` (reprojected to the display CRS).
+            geom_types: Allowed shapely ``geom_type`` names (e.g. ``("Point",)``); ``None`` skips the check.
+            name: The calling method's name, used in error messages.
+            geom_label: Human label for the allowed geometry in the error (defaults to the joined types).
+
+        Returns:
+            The reprojected GeoDataFrame.
+
+        Raises:
+            ValueError: if the collection is empty, or a geometry is not one of ``geom_types``.
+        """
+        gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError(f"{name} got an empty FeatureCollection (nothing to draw)")
+        if geom_types is not None and not gdf.geometry.geom_type.isin(list(geom_types)).all():
+            label = geom_label or " / ".join(geom_types)
+            raise ValueError(f"{name} requires a FeatureCollection of {label} geometries")
+        return gdf
+
+    def _polygon_layer(self, polygons: List[np.ndarray], values: Optional[np.ndarray] = None, **opts) -> Any:
+        """Draw polygons as a value-filled (``values`` given) or outline-only ``PolygonGlyph`` layer.
+
+        Consolidates the fill-vs-outline branch shared by :meth:`grid_cells`, :meth:`choropleth`,
+        :meth:`shapes`, :meth:`voronoi`, :meth:`cartogram` and :meth:`quadtree`. The Scene owns the
+        aggregated colorbar, so the glyph's own colorbar is suppressed by default.
+
+        Args:
+            polygons: Polygon rings as ``(N, 2)`` vertex arrays.
+            values: Optional per-polygon scalar values; when ``None`` only the outlines are drawn.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+        """
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        if values is not None:
+            glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
+            return self._render_glyph(glyph, artist="plot")
+        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
+        return self._render_glyph(glyph, artist="plot", outline_only=True)
+
     def scatter(self, features: Any, *, scale: Optional[str] = None, **opts) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
 
@@ -329,11 +379,7 @@ class Map(Scene):
         if nodata is not None:
             values = np.where(np.isclose(values, nodata, rtol=1e-3), np.nan, values)
         polygons, values = self._finite_polygons(polygons, values)  # drop far-side cells on a globe
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        glyph = PolygonGlyph(
-            polygons, values=values, ax=self.ax, fig=self.fig, **opts,
-        )
-        return self._render_glyph(glyph, artist="plot")
+        return self._polygon_layer(polygons, values, **opts)
 
     def _extent(self, ds: Any) -> List[float]:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
@@ -714,11 +760,7 @@ class Map(Scene):
         polygons, repeats = self._polygon_vertices(gdf.geometry)
         values = np.repeat(gdf[column].to_numpy(), repeats)
         polygons, values = self._finite_polygons(polygons, values)  # drop far-side polygons on a globe
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        glyph = PolygonGlyph(
-            polygons, values=values, ax=self.ax, fig=self.fig, **opts,
-        )
-        return self._render_glyph(glyph, artist="plot")
+        return self._polygon_layer(polygons, values, **opts)
 
     def shapes(self, features: Any, **opts) -> Any:
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
@@ -733,8 +775,7 @@ class Map(Scene):
         gdf = features.to_crs(self.crs)
         polygons, _ = self._polygon_vertices(gdf.geometry)
         polygons, _ = self._finite_polygons(polygons)  # drop far-side polygons on a globe
-        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot", outline_only=True)
+        return self._polygon_layer(polygons, **opts)
 
     def _clip_geometry(self, clip: Any) -> Any:
         """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.
@@ -820,12 +861,8 @@ class Map(Scene):
 
                 ```
         """
-        gdf = features.to_crs(self.crs)
-        if len(gdf) == 0:
-            raise ValueError("voronoi got an empty FeatureCollection (nothing to draw)")
+        gdf = self._vector_input(features, geom_types=("Point",), name="voronoi", geom_label="point")
         geom = gdf.geometry
-        if not (geom.geom_type == "Point").all():
-            raise ValueError("voronoi requires a FeatureCollection of point geometries")
         col_vals = gdf[column].to_numpy() if column is not None else None
         # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
         # then keeps cell i aligned with input point i, so values map by position.
@@ -851,14 +888,7 @@ class Map(Scene):
                     values.append(col_vals[i])
         values_arr = np.asarray(values) if values is not None else None
         polygons, values_arr = self._finite_polygons(polygons, values_arr)  # drop far-side cells on a globe
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        if values_arr is not None:
-            glyph = PolygonGlyph(
-                polygons, values=values_arr, ax=self.ax, fig=self.fig, **opts,
-            )
-            return self._render_glyph(glyph, artist="plot")
-        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot", outline_only=True)
+        return self._polygon_layer(polygons, values_arr, **opts)
 
     @staticmethod
     def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
@@ -918,29 +948,21 @@ class Map(Scene):
 
                 ```
         """
-        gdf = features.to_crs(self.crs)
-        if len(gdf) == 0:
-            raise ValueError("cartogram got an empty FeatureCollection (nothing to draw)")
+        gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="cartogram",
+                                 geom_label="polygon")
         geom = gdf.geometry
-        if not geom.geom_type.isin(["Polygon", "MultiPolygon"]).all():
-            raise ValueError("cartogram requires a FeatureCollection of polygon geometries")
         factors = self._scale_factors(gdf[scale].to_numpy(dtype=float), limits)
         scaled = [
             affine_scale(g, xfact=f, yfact=f, origin="centroid")
             for g, f in zip(geom, factors)
         ]
         polygons, repeats = self._polygon_vertices(scaled)
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         if column is not None:
             values = np.repeat(gdf[column].to_numpy(), repeats)
             polygons, values = self._finite_polygons(polygons, values)
-            glyph = PolygonGlyph(
-                polygons, values=values, ax=self.ax, fig=self.fig, **opts,
-            )
-            return self._render_glyph(glyph, artist="plot")
+            return self._polygon_layer(polygons, values, **opts)
         polygons, _ = self._finite_polygons(polygons)
-        glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot", outline_only=True)
+        return self._polygon_layer(polygons, **opts)
 
     @staticmethod
     def _quadtree_cells(
@@ -1040,12 +1062,8 @@ class Map(Scene):
 
                 ```
         """
-        gdf = features.to_crs(self.crs)
-        if len(gdf) == 0:
-            raise ValueError("quadtree got an empty FeatureCollection (nothing to draw)")
+        gdf = self._vector_input(features, geom_types=("Point",), name="quadtree", geom_label="point")
         geom = gdf.geometry
-        if not (geom.geom_type == "Point").all():
-            raise ValueError("quadtree requires a FeatureCollection of point geometries")
         # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
         col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
         xs, ys, col_vals = self._finite_point_xy(geom, col_vals_full)
@@ -1089,11 +1107,7 @@ class Map(Scene):
                 values.append(val)
         values_arr = np.asarray(values, dtype=float)
         polygons, values_arr = self._finite_polygons(polygons, values_arr)
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        glyph = PolygonGlyph(
-            polygons, values=values_arr, ax=self.ax, fig=self.fig, **opts,
-        )
-        return self._render_glyph(glyph, artist="plot")
+        return self._polygon_layer(polygons, values_arr, **opts)
 
     @staticmethod
     def _polygons_of(geom: Any) -> list:
@@ -1177,12 +1191,8 @@ class Map(Scene):
 
                 ```
         """
-        gdf = features.to_crs(self.crs)
-        if len(gdf) == 0:
-            raise ValueError("kde got an empty FeatureCollection (nothing to draw)")
+        gdf = self._vector_input(features, geom_types=("Point",), name="kde", geom_label="point")
         geom = gdf.geometry
-        if not (geom.geom_type == "Point").all():
-            raise ValueError("kde requires a FeatureCollection of point geometries")
         # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before the KDE.
         xs, ys, _ = self._finite_point_xy(geom)
         if xs.size == 0:
@@ -1236,12 +1246,9 @@ class Map(Scene):
 
                 ```
         """
-        gdf = features.to_crs(self.crs)
-        if len(gdf) == 0:
-            raise ValueError("sankey got an empty FeatureCollection (nothing to draw)")
+        gdf = self._vector_input(features, geom_types=("LineString", "MultiLineString"), name="sankey",
+                                 geom_label="line")
         geom = gdf.geometry
-        if not geom.geom_type.isin(["LineString", "MultiLineString"]).all():
-            raise ValueError("sankey requires a FeatureCollection of line geometries")
         paths: List[np.ndarray] = []
         repeats: List[int] = []
         for g in geom:
