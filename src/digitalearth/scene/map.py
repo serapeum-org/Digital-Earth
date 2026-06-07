@@ -763,6 +763,21 @@ class Map(Scene):
             return geoms.union_all()
         return clip  # shapely geometry, assumed already in the display CRS
 
+    @staticmethod
+    def _finite_point_xy(geom: Any, values: Optional[np.ndarray] = None):
+        """Return ``(xs, ys, values)`` for points with finite coordinates.
+
+        Points that reproject to non-finite coordinates (the far side of a clipped/globe display CRS) are
+        dropped — together with their matching ``values`` — so downstream tessellation / binning / KDE never
+        receives ``inf`` / ``nan``.
+        """
+        xs = np.asarray(geom.x, dtype=float)
+        ys = np.asarray(geom.y, dtype=float)
+        mask = np.isfinite(xs) & np.isfinite(ys)
+        if values is not None:
+            values = np.asarray(values)[mask]
+        return xs[mask], ys[mask], values
+
     def voronoi(
         self, features: Any, column: Optional[str] = None, *, clip: Any = None, **opts
     ) -> Any:
@@ -771,7 +786,8 @@ class Map(Scene):
         Tessellates the points into Voronoi cells (``shapely.voronoi_polygons`` with ``ordered=True``, so cell
         *i* belongs to point *i*) and renders them. With ``column`` the cells are filled and coloured by that
         point's value (like :meth:`choropleth`); without it only the cell outlines are drawn (like
-        :meth:`shapes`).
+        :meth:`shapes`). Points that reproject to non-finite coordinates (the far side of a clipped/globe
+        display CRS), and duplicate points, produce no cell and are silently skipped.
 
         Args:
             features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
@@ -804,13 +820,19 @@ class Map(Scene):
                 ```
         """
         gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("voronoi got an empty FeatureCollection (nothing to draw)")
         geom = gdf.geometry
         if not (geom.geom_type == "Point").all():
             raise ValueError("voronoi requires a FeatureCollection of point geometries")
-        # ordered=True keeps cell i aligned with input point i, so values map by position.
-        cells = voronoi_polygons(MultiPoint(list(zip(geom.x, geom.y))), ordered=True)
-        boundary = self._clip_geometry(clip)
         col_vals = gdf[column].to_numpy() if column is not None else None
+        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
+        # then keeps cell i aligned with input point i, so values map by position.
+        xs, ys, col_vals = self._finite_point_xy(geom, col_vals)
+        if xs.size == 0:
+            raise ValueError("voronoi: no finite points in the display CRS")
+        cells = voronoi_polygons(MultiPoint(list(zip(xs, ys))), ordered=True)
+        boundary = self._clip_geometry(clip)
 
         polygons: List[np.ndarray] = []
         values: Optional[list] = [] if column is not None else None
@@ -890,6 +912,8 @@ class Map(Scene):
                 ```
         """
         gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("cartogram got an empty FeatureCollection (nothing to draw)")
         geom = gdf.geometry
         if not geom.geom_type.isin(["Polygon", "MultiPolygon"]).all():
             raise ValueError("cartogram requires a FeatureCollection of polygon geometries")
@@ -1001,10 +1025,16 @@ class Map(Scene):
                 ```
         """
         gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("quadtree got an empty FeatureCollection (nothing to draw)")
         geom = gdf.geometry
         if not (geom.geom_type == "Point").all():
             raise ValueError("quadtree requires a FeatureCollection of point geometries")
-        xs, ys = geom.x.to_numpy(), geom.y.to_numpy()
+        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
+        col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+        xs, ys, col_vals = self._finite_point_xy(geom, col_vals_full)
+        if xs.size == 0:
+            raise ValueError("quadtree: no finite points in the display CRS")
         if column is None:
             def agg_fn(idx):
                 return float(len(idx))
@@ -1017,7 +1047,6 @@ class Map(Scene):
                 raise ValueError(
                     f"unknown agg {agg!r}; choose one of {sorted(_QUADTREE_AGG)} or a callable"
                 )
-            col_vals = gdf[column].to_numpy(dtype=float)
 
             def agg_fn(idx):
                 return float(reducer(col_vals[idx]))
@@ -1094,8 +1123,8 @@ class Map(Scene):
             features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
             clip: Optional boundary the density is clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` draws the full grid.
-            **opts: Styling kwargs, filtered to ``KDEGlyph``'s accepted options (``levels``, ``shade``,
-                ``gridsize``, ``bw_method``, ``cmap``, …).
+            **opts: Styling kwargs forwarded to ``KDEGlyph`` (``levels``, ``shade``, ``gridsize``,
+                ``bw_method``, ``cmap``, …).
 
         Returns:
             The contour set (``QuadContourSet``) registered as a Scene layer.
@@ -1119,13 +1148,18 @@ class Map(Scene):
                 ```
         """
         gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("kde got an empty FeatureCollection (nothing to draw)")
         geom = gdf.geometry
         if not (geom.geom_type == "Point").all():
             raise ValueError("kde requires a FeatureCollection of point geometries")
+        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before the KDE.
+        xs, ys, _ = self._finite_point_xy(geom)
+        if xs.size == 0:
+            raise ValueError("kde: no finite points in the display CRS")
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = KDEGlyph(
-            geom.x.to_numpy(), geom.y.to_numpy(),
-            clip_path=self._clip_path(clip), ax=self.ax, fig=self.fig, **opts,
+            xs, ys, clip_path=self._clip_path(clip), ax=self.ax, fig=self.fig, **opts,
         )
         _, _, cs = glyph.plot()
         return self._add_layer(glyph, cs)
@@ -1143,8 +1177,8 @@ class Map(Scene):
                 (reprojected to the display CRS).
             column: Numeric column whose value colours each path, or ``None`` for a single colour.
             scale: Numeric column whose value sets each path's line width, or ``None`` for a uniform width.
-            **opts: Styling kwargs, filtered to ``FlowGlyph``'s accepted options (``width_limits``,
-                ``width_scale``, ``cmap``, ``size_legend``, …).
+            **opts: Styling kwargs forwarded to ``FlowGlyph`` (``width_limits``, ``width_scale``, ``cmap``,
+                ``size_legend``, …).
 
         Returns:
             The ``LineCollection`` (registered as a Scene layer).
@@ -1174,6 +1208,8 @@ class Map(Scene):
                 ```
         """
         gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("sankey got an empty FeatureCollection (nothing to draw)")
         geom = gdf.geometry
         if not geom.geom_type.isin(["LineString", "MultiLineString"]).all():
             raise ValueError("sankey requires a FeatureCollection of line geometries")

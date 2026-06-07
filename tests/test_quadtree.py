@@ -38,13 +38,25 @@ def test_quadtree_nmax_controls_resolution(points_fc):
     assert len(fine.get_paths()) > len(coarse.get_paths())
 
 
+def _drawn_area(pc):
+    """Total area of the polygons actually drawn by a PolyCollection (via matplotlib paths)."""
+    from shapely.geometry import Polygon
+
+    area = 0.0
+    for path in pc.get_paths():
+        for ring in path.to_polygons():
+            if len(ring) >= 4:
+                area += Polygon(ring).area
+    return area
+
+
 def test_quadtree_clip(points_fc):
-    """A clip boundary keeps the diagram drawable and bounded."""
+    """A convex-hull clip actually trims the cells: clipped area < unclipped area."""
     hull = points_fc.geometry.union_all().convex_hull
-    m = Map(crs=points_fc.epsg)
-    pc = m.quadtree(points_fc, nmax=1, clip=hull)
-    assert len(m.layers) == 1
-    assert len(pc.get_paths()) >= 1
+    clipped = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1, clip=hull)
+    unclipped = Map(crs=points_fc.epsg).quadtree(points_fc, nmax=1)
+    assert len(clipped.get_paths()) >= 1
+    assert _drawn_area(clipped) < _drawn_area(unclipped)
 
 
 def test_quadtree_requires_points(points_fc):

@@ -219,7 +219,7 @@ python = "3.13.*"
 
 [tool.pixi.dependencies]
 # Cap Python below 3.14 for the unpinned envs (default/dev/docs/notebook):
-# 3.14 is outside the supported range and many GIS deps (cartopy, ...) have
+# 3.14 is outside the supported range and many GIS deps (gdal, pyproj, ...) have
 # no 3.14 wheels yet, forcing source builds. py311/py312/py313 override this.
 python = ">=3.11,<3.14"
 gdal = ">=3.13.0,<4"

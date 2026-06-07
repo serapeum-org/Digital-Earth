@@ -251,7 +251,7 @@ class StaticGlyph:
             size_limits=size_limits,
             size_legend=True,
         )
-        glyph.plot(title=title)
+        glyph.plot()
 
         ax.set_title(title, fontsize=title_size)
         ax.set_aspect("equal")
