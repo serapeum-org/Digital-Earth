@@ -149,6 +149,28 @@ def quickplot(data: Any, **kwargs) -> Map:
     return quickmap(data, **kwargs)
 
 
+def _finish(scene: Map, *, colorbar: bool) -> Map:
+    """Add an aggregated colorbar to ``scene`` when requested and a mappable layer exists; return ``scene``.
+
+    The shared tail of the one-call wrappers: a colorbar is added only when ``colorbar`` is true and a layer
+    was drawn, and an outline-only / unmappable layer (which cannot carry a colorbar) is swallowed rather
+    than raised.
+
+    Args:
+        scene: The :class:`Map` a wrapper has already drawn on.
+        colorbar: Whether this plot kind should carry a colorbar (e.g. only when a value ``column`` was set).
+
+    Returns:
+        The same ``scene`` (so wrappers can ``return _finish(...)``).
+    """
+    if colorbar and scene.layers:
+        try:
+            scene.colorbar()
+        except Exception:  # outline-only / unmappable layer
+            pass
+    return scene
+
+
 def _method(name: str):
     """Build a module-level function that quick-draws via the ``Map`` method ``name``."""
 
@@ -175,12 +197,7 @@ def grid_cells(data: Any, **kwargs) -> Map:
     """Quick-draw raster cells as coloured polygons; returns the finished Map."""
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.grid_cells(data, **kwargs)
-    if scene.layers:
-        try:
-            scene.colorbar()
-        except Exception:
-            pass
-    return scene
+    return _finish(scene, colorbar=True)
 
 
 def choropleth(data: Any, column: str, **kwargs) -> Map:
@@ -196,12 +213,7 @@ def voronoi(data: Any, column: Optional[str] = None, **kwargs) -> Map:
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.voronoi(data, column=column, **kwargs)
-    if column is not None and scene.layers:
-        try:
-            scene.colorbar()
-        except Exception:
-            pass
-    return scene
+    return _finish(scene, colorbar=column is not None)
 
 
 def cartogram(data: Any, scale: str, column: Optional[str] = None, **kwargs) -> Map:
@@ -212,12 +224,7 @@ def cartogram(data: Any, scale: str, column: Optional[str] = None, **kwargs) -> 
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.cartogram(data, scale=scale, column=column, **kwargs)
-    if column is not None and scene.layers:
-        try:
-            scene.colorbar()
-        except Exception:
-            pass
-    return scene
+    return _finish(scene, colorbar=column is not None)
 
 
 def quadtree(data: Any, column: Optional[str] = None, **kwargs) -> Map:
@@ -228,12 +235,7 @@ def quadtree(data: Any, column: Optional[str] = None, **kwargs) -> Map:
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.quadtree(data, column=column, **kwargs)
-    if scene.layers:
-        try:
-            scene.colorbar()
-        except Exception:
-            pass
-    return scene
+    return _finish(scene, colorbar=True)
 
 
 def kde(data: Any, **kwargs) -> Map:
@@ -243,12 +245,7 @@ def kde(data: Any, **kwargs) -> Map:
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.kde(data, **kwargs)
-    if scene.layers:
-        try:
-            scene.colorbar()
-        except Exception:
-            pass
-    return scene
+    return _finish(scene, colorbar=True)
 
 
 def sankey(data: Any, column: Optional[str] = None, scale: Optional[str] = None, **kwargs) -> Map:
@@ -259,9 +256,4 @@ def sankey(data: Any, column: Optional[str] = None, scale: Optional[str] = None,
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.sankey(data, column=column, scale=scale, **kwargs)
-    if column is not None and scene.layers:
-        try:
-            scene.colorbar()
-        except Exception:
-            pass
-    return scene
+    return _finish(scene, colorbar=column is not None)
