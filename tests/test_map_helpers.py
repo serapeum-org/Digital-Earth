@@ -24,6 +24,61 @@ def polygons_fc(points_fc):
     return FeatureCollection(gdf)
 
 
+class TestPermissiveMethodValidation:
+    """The previously-unvalidated vector methods now validate input (review M1)."""
+
+    def test_choropleth_rejects_non_polygon(self, points_fc):
+        """choropleth rejects point geometry with a clear error instead of an opaque one.
+
+        Test scenario:
+            Passing points (not polygons) raises ValueError naming the method and required geometry.
+        """
+        m = Map(crs=points_fc.epsg)
+        with pytest.raises(ValueError, match="choropleth requires a FeatureCollection of polygon geometries"):
+            m.choropleth(points_fc, column="fid")
+
+    def test_shapes_rejects_non_polygon(self, points_fc):
+        """shapes rejects point geometry with a clear error.
+
+        Test scenario:
+            Passing points to the polygon-outline method raises a clear ValueError.
+        """
+        m = Map(crs=points_fc.epsg)
+        with pytest.raises(ValueError, match="shapes requires a FeatureCollection of polygon geometries"):
+            m.shapes(points_fc)
+
+    def test_choropleth_accepts_polygons(self, polygons_fc):
+        """choropleth still renders valid polygon input.
+
+        Test scenario:
+            A polygon FeatureCollection draws one layer (validation does not break the happy path).
+        """
+        m = Map(crs=polygons_fc.epsg)
+        m.choropleth(polygons_fc, column="fid")
+        assert len(m.layers) == 1, "valid polygons should still render"
+
+    def test_scatter_rejects_empty(self):
+        """scatter now guards against an empty FeatureCollection.
+
+        Test scenario:
+            An empty collection raises a clear ValueError naming scatter (no opaque downstream failure).
+        """
+        empty = FeatureCollection(FeatureCollection.read_file("tests/data/points.geojson").iloc[0:0].copy())
+        m = Map(crs=empty.epsg)
+        with pytest.raises(ValueError, match="scatter got an empty FeatureCollection"):
+            m.scatter(empty)
+
+    def test_scatter_accepts_points(self, points_fc):
+        """scatter still renders point input (no geometry restriction added).
+
+        Test scenario:
+            A point FeatureCollection draws one layer — scatter keeps its permissive geometry contract.
+        """
+        m = Map(crs=points_fc.epsg)
+        m.scatter(points_fc)
+        assert len(m.layers) == 1, "valid points should still render"
+
+
 class TestVectorInput:
     """Tests for Map._vector_input."""
 

@@ -93,7 +93,7 @@ class VectorMixin:
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
         """
-        fc = features.to_crs(self.crs)
+        fc = self._vector_input(features, name="scatter")  # empty-guard; any geometry (centroid fallback) OK
         src = get_source(fc)
         values = src.z.values if src.z is not None else None
         sizes = np.asarray(fc[scale], dtype=float) if scale is not None else None
@@ -410,7 +410,8 @@ class VectorMixin:
 
                 ```
         """
-        gdf = features.to_crs(self.crs)
+        gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="choropleth",
+                                 geom_label="polygon")
         polygons, repeats = self._polygon_vertices(gdf.geometry)
         values = np.repeat(gdf[column].to_numpy(), repeats)
         polygons, values = self._finite_polygons(polygons, values)  # drop far-side polygons on a globe
@@ -426,7 +427,8 @@ class VectorMixin:
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
         """
-        gdf = features.to_crs(self.crs)
+        gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="shapes",
+                                 geom_label="polygon")
         polygons, _ = self._polygon_vertices(gdf.geometry)
         polygons, _ = self._finite_polygons(polygons)  # drop far-side polygons on a globe
         return self._polygon_layer(polygons, **opts)
