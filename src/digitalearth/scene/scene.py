@@ -197,6 +197,12 @@ class Scene:
         The figure is closed whether or not the body raised; any exception propagates (``__exit__`` returns
         ``False``), so ``with`` never silences errors.
 
+        .. warning::
+            This closes the **entire** ``self.fig``. The panels returned by
+            :func:`~digitalearth.scene.figure.grid` share **one** figure, so using ``with`` on a single panel
+            would close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap
+            the whole workflow or call :meth:`save` then close the figure yourself instead.
+
         Returns:
             ``False`` — exceptions are not suppressed.
         """
