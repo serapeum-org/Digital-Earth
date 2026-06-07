@@ -220,7 +220,14 @@ class Map(Scene):
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
     def block(self, dataset: Any, **kwargs) -> Any:
-        """Render a raster as discrete cell blocks (pcolormesh on cell edges)."""
+        """Render a raster as a filled cell mesh — currently an alias of :meth:`pcolormesh`.
+
+        ``block`` is meant for *discrete* per-cell rectangles aligned to cell **edges**. cleopatra's
+        ``pcolormesh`` path accepts cell-**centre** coordinates only (it rejects edge arrays of length
+        ``n + 1``), so true edge-aligned blocks need an upstream cleopatra option; until that lands ``block``
+        draws the same filled mesh as :meth:`pcolormesh`. It is kept as a distinct, stable entry point so
+        callers and examples can switch to true blocks transparently once cleopatra supports them.
+        """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
     def _reproject(self, dataset: Any) -> Any:
