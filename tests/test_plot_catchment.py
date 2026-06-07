@@ -48,6 +48,32 @@ def test_plot_catchment_does_not_mutate_inputs(catchment):
     assert pts.crs == crs_before
 
 
+def test_plot_catchment_empty_poly_and_line(catchment):
+    """plotCatchment renders the gauge points even when poly/line layers are empty.
+
+    Test scenario:
+        Empty polygon and line GeoDataFrames take the ``if poly_rings:`` / ``if line_paths:`` false branches;
+        only the scatter layer is drawn and a Figure is returned.
+    """
+    pts, _poly, _lines = catchment
+    empty_poly = gpd.GeoDataFrame(geometry=[], crs=pts.crs)
+    empty_line = gpd.GeoDataFrame(geometry=[], crs=pts.crs)
+    fig, ax = StaticGlyph.plotCatchment(pts, "value", empty_poly, empty_line)
+    assert isinstance(fig, Figure), "expected a Figure with empty poly/line layers"
+
+
+def test_plot_catchment_save(catchment, tmp_path):
+    """plotCatchment writes the figure to disk when ``save`` is a path.
+
+    Test scenario:
+        A truthy ``save`` path takes the save branch and the file is created on disk.
+    """
+    pts, poly, lines = catchment
+    out = tmp_path / "catchment.png"
+    StaticGlyph.plotCatchment(pts, "value", poly, lines, save=str(out))
+    assert out.exists(), f"expected saved figure at {out}"
+
+
 def test_static_module_has_no_geoplot():
     """Regression: static.py no longer imports geoplot (the dependency was dropped)."""
     import digitalearth.static as static_mod

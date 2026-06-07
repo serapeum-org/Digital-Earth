@@ -1,3 +1,5 @@
+import numpy as np
+import pytest
 from geopandas.geodataframe import GeoDataFrame
 from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
@@ -36,3 +38,32 @@ class TestPlotArray:
         )
 
         assert isinstance(fig, Figure)
+
+
+class TestStaticGlyphPlotEdges:
+    """Edge cases of StaticGlyph (construction, ndarray input guard, id-labelled points)."""
+
+    def test_init(self):
+        """StaticGlyph is instantiable (covers the trivial constructor)."""
+        assert isinstance(StaticGlyph(), StaticGlyph), "StaticGlyph() should construct"
+
+    def test_plot_ndarray_requires_no_data_value(self):
+        """A bare ndarray without the required ``no_data_value`` kwarg raises ValueError.
+
+        Test scenario:
+            Passing a numpy array as ``src`` without ``no_data_value`` must raise a clear ValueError
+            naming the missing kwarg.
+        """
+        with pytest.raises(ValueError, match="no_data_value"):
+            StaticGlyph.plot(np.ones((4, 4), dtype="float32"))
+
+    def test_plot_points_with_id_column(self, dataset: Dataset, points: GeoDataFrame):
+        """Points carrying an ``id`` column are labelled by that column, not the index.
+
+        Test scenario:
+            With an ``id`` column present the id-branch of the label lookup is taken; the call renders a figure.
+        """
+        pts = points.copy()
+        pts["id"] = [f"g{i}" for i in range(len(pts))]
+        fig, ax = StaticGlyph.plot(dataset, points=pts)
+        assert isinstance(fig, Figure), "expected a Figure with id-labelled points"

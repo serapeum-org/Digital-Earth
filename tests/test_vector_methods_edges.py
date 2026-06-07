@@ -190,6 +190,41 @@ class TestGlobeNonFinite:
             getattr(Map(crs=ORTHO), method)(fc, **kwargs)
 
 
+class TestApiWrappersNoColumn:
+    """api.* wrappers take the no-colorbar branch when ``column`` is omitted (still produce a layer)."""
+
+    def test_api_voronoi_no_column(self, value_points):
+        """api.voronoi without a column draws outline cells and skips the colorbar."""
+        from digitalearth import api
+
+        m = api.voronoi(value_points, crs=value_points.epsg)
+        assert len(m.layers) == 1, "expected one voronoi layer"
+
+    def test_api_cartogram_no_column(self):
+        """api.cartogram without a column draws scaled outlines and skips the colorbar."""
+        from digitalearth import api
+
+        polys = _fc(
+            gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=[box(0, 0, 1, 1), box(2, 2, 3, 3)], crs="EPSG:32618")
+        )
+        m = api.cartogram(polys, scale="v", crs=polys.epsg)
+        assert len(m.layers) == 1, "expected one cartogram layer"
+
+    def test_api_sankey_no_column(self):
+        """api.sankey without a column draws uniform-colour flows and skips the colorbar."""
+        from digitalearth import api
+
+        lines = _fc(
+            gpd.GeoDataFrame(
+                {"w": [1.0, 2.0]},
+                geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 2)])],
+                crs="EPSG:32618",
+            )
+        )
+        m = api.sankey(lines, scale="w", crs=lines.epsg)
+        assert len(m.layers) == 1, "expected one sankey layer"
+
+
 class TestVectorHelpers:
     """Direct unit tests for the private helpers backing the new methods."""
 
