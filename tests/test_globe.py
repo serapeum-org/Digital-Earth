@@ -201,7 +201,7 @@ def test_natural_earth_flat_without_data_does_not_pin_extent(mocker):
     from shapely.geometry import LineString
 
     world = gpd.GeoDataFrame(geometry=[LineString([(-50, -20), (50, 20)])], crs=4326)
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=world)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=world)
     m = Map(crs=4326)  # flat, no imshow -> has_data is False
     m.coastlines()
     assert m.ax.lines or m.ax.collections  # the layer drew something
@@ -270,7 +270,7 @@ def test_project_polygon_features_handles_multipolygon():
 
 def test_land_fill_finite_on_globe(land_fc, mocker):
     """land() on a globe draws a finite, closed PolyCollection (Natural Earth mocked, no network)."""
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=land_fc)
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     pc = m.land()
     assert pc is not None and pc.get_paths()
@@ -280,7 +280,7 @@ def test_land_fill_finite_on_globe(land_fc, mocker):
 
 def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
     """land() keeps the axes limits and sits below the data raster (background z-order)."""
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=land_fc)
     m = Map(crs=projections.orthographic(-75, 42), globe=True)
     img = m.imshow(dataset)
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
@@ -302,7 +302,7 @@ def test_ocean_flat_uses_natural_earth(mocker):
     from shapely.geometry import Polygon
 
     poly = gpd.GeoDataFrame(geometry=[Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])], crs=4326)
-    spy = mocker.patch("digitalearth.scene.map.natural_earth", return_value=poly)
+    spy = mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=poly)
     m = Map(crs=4326)  # flat
     m.ocean()
     spy.assert_called_once()  # flat path goes through natural_earth("ocean", ...)
@@ -317,7 +317,7 @@ def test_fill_globe_polygons_empty_returns_none():
 
 def test_lakes_fill_on_globe_above_land(land_fc, mocker):
     """lakes() fills polygons on a globe and sits just above land (so lakes show on the land)."""
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=land_fc)
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     pc = m.lakes()
     assert pc is not None and pc.get_paths()
@@ -332,7 +332,7 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
 
     rv = gpd.GeoDataFrame(geometry=[LineString([(-9, 39), (-8, 40), (-7, 41)])], crs=4326)
     rv.epsg = 4326
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=rv)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=rv)
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
     artists = m.rivers()
     assert artists and m.ax.lines
@@ -340,7 +340,7 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
 
 def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
     """land() fills finite rings on a cylindrical (rectangular-boundary) framed map, not just a disc."""
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=land_fc)
     m = Map(crs=3857, globe=True)  # Web-Mercator boundary is a rectangle, not a circle
     pc = m.land()
     assert pc is not None and pc.get_paths()
@@ -353,7 +353,7 @@ def test_land_flat_uses_natural_earth(mocker):
     from shapely.geometry import Polygon
 
     poly = gpd.GeoDataFrame(geometry=[Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])], crs=4326)
-    spy = mocker.patch("digitalearth.scene.map.natural_earth", return_value=poly)
+    spy = mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=poly)
     m = Map(crs=4326)  # flat -> _natural_earth flat branch even with polygon=True
     m.land()
     spy.assert_called_once()
@@ -377,7 +377,7 @@ def test_polygon_with_hole_uses_exterior_only(mocker):
 
 def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     """A globe base map (ocean + land + coastlines + data) frames and saves a non-empty PNG."""
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=land_fc)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=land_fc)
     m = Map(crs=projections.orthographic(-30, 20), globe=True)
     m.ocean()
     m.imshow(dataset)

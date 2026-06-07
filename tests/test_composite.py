@@ -5,7 +5,7 @@ import pytest
 from pyramids.dataset import Dataset
 
 from digitalearth.scene import Map
-from digitalearth.scene.map import _stretch_to_unit
+from digitalearth.scene.maps.raster import _stretch_to_unit
 
 
 @pytest.fixture

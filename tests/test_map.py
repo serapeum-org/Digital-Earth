@@ -16,7 +16,7 @@ def test_needs_reproject(dataset):
 
 def test_render_without_auto_cmap(dataset, mocker):
     """When auto_style supplies no cmap, _render leaves cmap unset (no opts['cmap']) and still draws."""
-    mocker.patch("digitalearth.scene.map.auto_style", return_value={})
+    mocker.patch("digitalearth.scene.maps.raster.auto_style", return_value={})
     m = Map(crs=dataset.epsg)
     m.imshow(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
     assert len(m.layers) == 1 and len(m.ax.images) == 1
@@ -89,7 +89,7 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
     world = gpd.GeoDataFrame(
         geometry=[LineString([(-179, -89), (179, 89)])], crs=4326
     )
-    mocker.patch("digitalearth.scene.map.natural_earth", return_value=world)
+    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=world)
 
     m = Map(crs=3857)
     m.imshow(dataset)
@@ -187,7 +187,7 @@ def test_stock_img_tiles_graceful_offline(mocker, caplog):
 
     mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
     m = Map(crs=3857)
-    with caplog.at_level(logging.DEBUG, logger="digitalearth.scene.map"):
+    with caplog.at_level(logging.DEBUG, logger="digitalearth.scene.maps.decoration"):
         assert m.stock_img() is None
     assert any("tile basemap unavailable" in r.message for r in caplog.records), \
         "the swallowed exception should be logged at DEBUG so failures are diagnosable"

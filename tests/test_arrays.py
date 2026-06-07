@@ -232,7 +232,7 @@ class TestNanReducers:
         Test scenario:
             Every NAN_REDUCERS entry appears (same object) in _QUADTREE_AGG, which adds only 'count'=len.
         """
-        from digitalearth.scene.map import _QUADTREE_AGG
+        from digitalearth.scene.maps.vector import _QUADTREE_AGG
 
         for name, func in NAN_REDUCERS.items():
             assert _QUADTREE_AGG[name] is func, f"{name} differs from the shared registry"

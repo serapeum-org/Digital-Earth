@@ -90,15 +90,15 @@ class TestAnimate:
 
     def test_resolve_clim_caps_scan(self, mocker):
         """_resolve_animation_clim scans at most _CLIM_SCAN_CAP frames of a large stack (L2)."""
-        from digitalearth.scene import map as map_mod
+        from digitalearth.scene.maps import animation as anim_mod
 
-        spy = mocker.spy(map_mod.Map, "_stack_clim")
+        spy = mocker.spy(anim_mod.AnimationMixin, "_stack_clim")
         m = Map(crs=4326)
-        big = [_field(float(o)) for o in range(map_mod._CLIM_SCAN_CAP * 3)]
+        big = [_field(float(o)) for o in range(anim_mod._CLIM_SCAN_CAP * 3)]
         opts = {}
         m._resolve_animation_clim(big, opts)
         scanned = len(spy.call_args.args[0])
-        assert scanned <= map_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {map_mod._CLIM_SCAN_CAP}"
+        assert scanned <= anim_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
         assert "vmin" in opts and "vmax" in opts, "clim should still be resolved from the sampled frames"
 
     def test_titles_length_mismatch_raises(self, stack):
