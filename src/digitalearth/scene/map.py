@@ -33,6 +33,7 @@ from pyramids.basemap import natural_earth
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import NAN_REDUCERS, finite, read_masked_band
+from digitalearth._crs import source_epsg
 from digitalearth.autostyle import auto_style
 from digitalearth.preprocess import add_cyclic_column
 from digitalearth.scene import projections
@@ -529,6 +530,25 @@ class Map(Scene):
         _, artist, _ = self._last_vector
         return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
 
+    def _reproject_point(self, lon: float, lat: float, crs: Any) -> Optional[Tuple[float, float]]:
+        """Reproject one ``(lon, lat)`` in ``crs`` to the display CRS; ``None`` if it lands off the globe.
+
+        A point on the far side of a clipped/globe display CRS reprojects to non-finite coordinates, which
+        :meth:`text` / :meth:`annotate` skip rather than drawing garbage.
+
+        Args:
+            lon: Longitude (x) in ``crs``.
+            lat: Latitude (y) in ``crs``.
+            crs: CRS of ``lon``/``lat``.
+
+        Returns:
+            The ``(x, y)`` in the display CRS, or ``None`` when the reprojected point is non-finite.
+        """
+        x, y = reproject_coordinates([lon], [lat], from_crs=crs, to_crs=self.crs)
+        if not (np.isfinite(x[0]) and np.isfinite(y[0])):
+            return None
+        return x[0], y[0]
+
     def text(self, lon: float, lat: float, s: str, *, crs: Any = 4326, **kwargs) -> Any:
         """Place a text label at a ``lon``/``lat`` location (reprojected to the display CRS).
 
@@ -546,10 +566,10 @@ class Map(Scene):
         Returns:
             The :class:`matplotlib.text.Text`, or ``None`` if the point is off the visible globe.
         """
-        x, y = reproject_coordinates([lon], [lat], from_crs=crs, to_crs=self.crs)
-        if not (np.isfinite(x[0]) and np.isfinite(y[0])):
+        xy = self._reproject_point(lon, lat, crs)
+        if xy is None:
             return None
-        return self.ax.text(x[0], y[0], s, **kwargs)
+        return self.ax.text(xy[0], xy[1], s, **kwargs)
 
     def annotate(self, lon: float, lat: float, s: str, *, xytext: Any = None, crs: Any = 4326,
                  **kwargs) -> Any:
@@ -571,10 +591,10 @@ class Map(Scene):
         Returns:
             The :class:`matplotlib.text.Annotation`, or ``None`` if the point is off the visible globe.
         """
-        x, y = reproject_coordinates([lon], [lat], from_crs=crs, to_crs=self.crs)
-        if not (np.isfinite(x[0]) and np.isfinite(y[0])):
+        xy = self._reproject_point(lon, lat, crs)
+        if xy is None:
             return None
-        return self.ax.annotate(s, xy=(x[0], y[0]), xytext=xytext, **kwargs)
+        return self.ax.annotate(s, xy=xy, xytext=xytext, **kwargs)
 
     def stock_img(self, dataset: Any = None, *, zorder: float = -3.0, cmap: str = "gist_earth",
                   **kwargs) -> Any:
@@ -1262,7 +1282,7 @@ class Map(Scene):
         non-finite coordinates; per-line splitting at those gaps keeps the visible arcs and avoids the
         ``NaN/Inf`` errors geopandas' ``clip``/``plot`` raise on such geometry.
         """
-        from_crs = fc.epsg if fc.epsg is not None else 4326
+        from_crs = source_epsg(fc, 4326)
         segments: List[np.ndarray] = []
         for geom in fc.geometry:
             if geom is None:
@@ -1291,7 +1311,7 @@ class Map(Scene):
         Returns:
             A list of closed ``(N, 2)`` projected fill rings (empty when nothing is on the near side).
         """
-        from_crs = fc.epsg if fc.epsg is not None else 4326
+        from_crs = source_epsg(fc, 4326)
         boundary = self._frame()[0]
         rings: List[np.ndarray] = []
         for geom in fc.geometry:

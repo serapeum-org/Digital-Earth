@@ -14,6 +14,7 @@ import numpy as np
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import mask_nodata
+from digitalearth._crs import source_epsg
 from digitalearth.sources.dimension import DimensionInfo
 from digitalearth.sources.source import Source
 
@@ -170,16 +171,11 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
     column = value_cols[0] if value_cols else None
     z = _axis(fc[column].to_numpy(), "z") if column is not None else None
 
-    crs = (
-        fc.epsg
-        if fc.epsg is not None
-        else (fc.crs.to_epsg() if fc.crs is not None else None)
-    )
     return Source(
         z=z,
         x=_axis(xs, "x"),
         y=_axis(ys, "y"),
-        crs=crs,
+        crs=source_epsg(fc),
         metadata={"kind": "vector", "variable": column or "", **(metadata or {})},
     )
 
