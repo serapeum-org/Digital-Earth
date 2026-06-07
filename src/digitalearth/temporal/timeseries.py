@@ -5,7 +5,7 @@ import numpy as np
 from cleopatra.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
-from digitalearth._arrays import read_masked_band
+from digitalearth._arrays import NAN_REDUCERS, read_masked_band
 
 
 class TimeSeries:
@@ -48,7 +48,7 @@ class TimeSeries:
             ```
     """
 
-    _REDUCERS = {"mean": np.nanmean, "sum": np.nansum, "min": np.nanmin, "max": np.nanmax}
+    _REDUCERS = {name: NAN_REDUCERS[name] for name in ("mean", "sum", "min", "max")}
 
     def __init__(self, collection: Any, band: int = 1, reducer: str = "mean"):
         if reducer not in self._REDUCERS:

@@ -32,6 +32,7 @@ from pyramids.base.crs import reproject_coordinates
 from pyramids.basemap import natural_earth
 from pyramids.dataset import Dataset
 
+from digitalearth._arrays import NAN_REDUCERS
 from digitalearth.autostyle import auto_style
 from digitalearth.preprocess import add_cyclic_column
 from digitalearth.scene import projections
@@ -48,16 +49,9 @@ _CLIM_SCAN_CAP = 24
 #: Field-render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
 _ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
 
-#: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` (NaN-aware; ``"count"`` ignores the column).
-_QUADTREE_AGG = {
-    "mean": np.nanmean,
-    "sum": np.nansum,
-    "median": np.nanmedian,
-    "min": np.nanmin,
-    "max": np.nanmax,
-    "std": np.nanstd,
-    "count": len,
-}
+#: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
+#: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
+_QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
 
 def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:

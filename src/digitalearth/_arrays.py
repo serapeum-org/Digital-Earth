@@ -9,11 +9,23 @@ read straight from the dataset, so it is reproduced exactly in the array, and an
 legitimate values that merely sit close to the sentinel (which ``np.isclose`` could). This is pure numpy — no
 pyramids/cleopatra import — so the module stays a leaf consumable from anywhere.
 """
-from typing import Any, Optional
+from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+
+#: NaN-aware spatial/array reducers keyed by name — the single source consumed by the temporal time-series
+#: reducer and the quadtree per-cell aggregator (which adds its own ``"count"`` on top). Each maps a name to a
+#: callable taking a 1-D array and returning a scalar.
+NAN_REDUCERS: Dict[str, Callable[..., Any]] = {
+    "mean": np.nanmean,
+    "sum": np.nansum,
+    "median": np.nanmedian,
+    "min": np.nanmin,
+    "max": np.nanmax,
+    "std": np.nanstd,
+}
 
 
 def fig_of(ax: Optional[Axes]) -> Optional[Figure]:

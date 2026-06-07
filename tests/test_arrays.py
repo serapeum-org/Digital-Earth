@@ -11,7 +11,14 @@ import pytest
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from digitalearth._arrays import _band_nodata, finite, fig_of, mask_nodata, read_masked_band  # noqa: E402
+from digitalearth._arrays import (  # noqa: E402
+    NAN_REDUCERS,
+    _band_nodata,
+    finite,
+    fig_of,
+    mask_nodata,
+    read_masked_band,
+)
 
 
 class _FakeDataset:
@@ -172,6 +179,65 @@ class TestBandNodata:
         """
         ds = _FakeDataset([[0.0]], no_data_value=(None,))
         assert _band_nodata(ds, 0) is None, "None entry should return None"
+
+
+class TestNanReducers:
+    """Tests for the NAN_REDUCERS registry (PA-6)."""
+
+    def test_exact_key_set(self):
+        """NAN_REDUCERS exposes exactly the six NaN-aware reducer names.
+
+        Test scenario:
+            The registry's keys are mean/sum/median/min/max/std — no more, no less.
+        """
+        assert set(NAN_REDUCERS) == {"mean", "sum", "median", "min", "max", "std"}, (
+            f"unexpected reducer keys: {sorted(NAN_REDUCERS)}"
+        )
+
+    @pytest.mark.parametrize("name, expected", [
+        ("mean", 2.0),
+        ("sum", 4.0),
+        ("median", 2.0),
+        ("min", 1.0),
+        ("max", 3.0),
+        ("std", 1.0),
+    ])
+    def test_reducers_are_nan_aware(self, name, expected):
+        """Each reducer ignores NaN values.
+
+        Args:
+            name: Reducer key under test.
+            expected: Result of applying it to [1, nan, 3].
+
+        Test scenario:
+            Reducing [1, nan, 3] yields the same value as reducing [1, 3], proving NaN is skipped.
+        """
+        result = float(NAN_REDUCERS[name](np.array([1.0, np.nan, 3.0])))
+        assert result == pytest.approx(expected), f"{name} on [1, nan, 3] gave {result}, expected {expected}"
+
+    def test_timeseries_reducers_are_a_subset(self):
+        """TimeSeries._REDUCERS draws its functions from NAN_REDUCERS.
+
+        Test scenario:
+            Every TimeSeries reducer name is in NAN_REDUCERS and maps to the same callable object.
+        """
+        from digitalearth.temporal.timeseries import TimeSeries
+
+        for name, func in TimeSeries._REDUCERS.items():
+            assert func is NAN_REDUCERS[name], f"{name} not sourced from the shared registry"
+
+    def test_quadtree_agg_is_superset_with_count(self):
+        """map._QUADTREE_AGG is NAN_REDUCERS plus a special 'count'.
+
+        Test scenario:
+            Every NAN_REDUCERS entry appears (same object) in _QUADTREE_AGG, which adds only 'count'=len.
+        """
+        from digitalearth.scene.map import _QUADTREE_AGG
+
+        for name, func in NAN_REDUCERS.items():
+            assert _QUADTREE_AGG[name] is func, f"{name} differs from the shared registry"
+        assert set(_QUADTREE_AGG) - set(NAN_REDUCERS) == {"count"}, "quadtree should add only 'count'"
+        assert _QUADTREE_AGG["count"] is len, "'count' should be the builtin len"
 
 
 class TestReadMaskedBand:
