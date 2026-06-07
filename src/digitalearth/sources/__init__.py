@@ -15,10 +15,10 @@ from typing import Any, Optional
 import numpy as np
 
 from digitalearth.sources.dimension import DimensionInfo
-from digitalearth.sources.extractors import extract
+from digitalearth.sources.extractors import extract, get_stack
 from digitalearth.sources.source import Source
 
-__all__ = ["Source", "DimensionInfo", "get_source"]
+__all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
 
 
 def get_source(

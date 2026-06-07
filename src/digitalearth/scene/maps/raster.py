@@ -10,6 +10,7 @@ from cleopatra.array_glyph import ArrayGlyph
 
 from digitalearth.autostyle import auto_style
 from digitalearth.preprocess import add_cyclic_column
+from digitalearth.sources import get_stack
 
 
 def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
@@ -149,7 +150,7 @@ class RasterMixin:
                 ```
         """
         ds = self._reproject(dataset)
-        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])  # (rows, cols, n)
+        stack = get_stack(ds, bands)  # (rows, cols, n), nodata -> NaN via the sources layer
         # cleopatra's rgb= path is band-FIRST: it does array[rgb].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
         band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
@@ -173,7 +174,7 @@ class RasterMixin:
         from matplotlib.colors import hsv_to_rgb
 
         ds = self._reproject(dataset)
-        stack = np.dstack([ds.read_array(band=b - 1) for b in bands])  # (rows, cols, n)
+        stack = get_stack(ds, bands)  # (rows, cols, n), nodata -> NaN via the sources layer
         rgb = hsv_to_rgb(_stretch_to_unit(stack))                      # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's rgb= path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)

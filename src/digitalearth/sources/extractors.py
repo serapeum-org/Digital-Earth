@@ -13,10 +13,33 @@ from typing import Any, Optional
 import numpy as np
 from pyramids.dataset import Dataset
 
-from digitalearth._arrays import mask_nodata
+from digitalearth._arrays import mask_nodata, read_masked_band
 from digitalearth._crs import source_epsg
 from digitalearth.sources.dimension import DimensionInfo
 from digitalearth.sources.source import Source
+
+
+def get_stack(data: Any, bands: Any, *, mask: bool = True) -> np.ndarray:
+    """Read several raster bands into one band-last ``(rows, cols, n)`` ``float64`` stack.
+
+    The multiband companion to :func:`extract` / ``get_source`` (which model a single band): it gives the
+    composite renderers (``rgb_composite`` / ``hsv_composite``) a way to read a band stack through the sources
+    layer instead of calling pyramids' ``read_array`` directly.
+
+    Args:
+        data: A pyramids ``Dataset`` (duck-typed by ``read_array`` / ``no_data_value``).
+        bands: An ordered iterable of **1-based** band indices to stack (e.g. ``(1, 2, 3)``).
+        mask: When ``True`` (default) each band's nodata cells are set to ``NaN`` (consistent with the
+            single-band path); ``False`` returns the raw cast values.
+
+    Returns:
+        np.ndarray: a ``float64`` array of shape ``(rows, cols, len(bands))``.
+    """
+    layers = [
+        read_masked_band(data, b) if mask else np.asarray(data.read_array(band=b - 1), dtype="float64")
+        for b in bands
+    ]
+    return np.dstack(layers)
 
 
 def extract(
