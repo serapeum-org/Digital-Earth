@@ -10,6 +10,7 @@ from typing import Any, Optional
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
+from digitalearth._types import PlottableData
 from digitalearth.scene import Map
 
 __all__ = [
@@ -30,7 +31,7 @@ __all__ = [
 ]
 
 
-def _draw(scene: Map, data: Any, kind: str, **kwargs) -> None:
+def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
     """Draw ``data`` on ``scene`` using the renderer implied by its type and ``kind``.
 
     Dispatch is by input type: a ``FeatureCollection`` of polygons becomes a ``choropleth`` (when a
@@ -69,7 +70,7 @@ def _draw(scene: Map, data: Any, kind: str, **kwargs) -> None:
 
 
 def quickmap(
-    data: Any,
+    data: PlottableData,
     *,
     crs: Any = 3857,
     kind: str = "auto",
@@ -144,7 +145,7 @@ def quickmap(
     return scene
 
 
-def quickplot(data: Any, **kwargs) -> Map:
+def quickplot(data: PlottableData, **kwargs) -> Map:
     """Alias of :func:`quickmap` — build a finished map from ``data`` in one call."""
     return quickmap(data, **kwargs)
 
@@ -174,7 +175,7 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
 def _method(name: str):
     """Build a module-level function that quick-draws via the ``Map`` method ``name``."""
 
-    def _fn(data: Any, **kwargs) -> Map:
+    def _fn(data: PlottableData, **kwargs) -> Map:
         return quickmap(data, kind=name, **kwargs)
 
     _fn.__name__ = name
@@ -188,24 +189,24 @@ contour = _method("contour")
 pcolormesh = _method("pcolormesh")
 
 
-def scatter(data: Any, **kwargs) -> Map:
+def scatter(data: PlottableData, **kwargs) -> Map:
     """Quick-draw a FeatureCollection of points as a scatter map; returns the finished Map."""
     return quickmap(data, **kwargs)
 
 
-def grid_cells(data: Any, **kwargs) -> Map:
+def grid_cells(data: PlottableData, **kwargs) -> Map:
     """Quick-draw raster cells as coloured polygons; returns the finished Map."""
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.grid_cells(data, **kwargs)
     return _finish(scene, colorbar=True)
 
 
-def choropleth(data: Any, column: str, **kwargs) -> Map:
+def choropleth(data: PlottableData, column: str, **kwargs) -> Map:
     """Quick-draw a polygon FeatureCollection coloured by ``column``; returns the finished Map."""
     return quickmap(data, column=column, **kwargs)
 
 
-def voronoi(data: Any, column: Optional[str] = None, **kwargs) -> Map:
+def voronoi(data: PlottableData, column: Optional[str] = None, **kwargs) -> Map:
     """Quick-draw the Voronoi diagram of a point FeatureCollection; returns the finished Map.
 
     With ``column`` the cells are filled and coloured by that value (a colorbar is added); without it the cell
@@ -216,7 +217,7 @@ def voronoi(data: Any, column: Optional[str] = None, **kwargs) -> Map:
     return _finish(scene, colorbar=column is not None)
 
 
-def cartogram(data: Any, scale: str, column: Optional[str] = None, **kwargs) -> Map:
+def cartogram(data: PlottableData, scale: str, column: Optional[str] = None, **kwargs) -> Map:
     """Quick-draw a cartogram (polygons scaled by ``scale``); returns the finished Map.
 
     With ``column`` the scaled polygons are filled and coloured by that value (a colorbar is added); without it
@@ -227,7 +228,7 @@ def cartogram(data: Any, scale: str, column: Optional[str] = None, **kwargs) -> 
     return _finish(scene, colorbar=column is not None)
 
 
-def quadtree(data: Any, column: Optional[str] = None, **kwargs) -> Map:
+def quadtree(data: PlottableData, column: Optional[str] = None, **kwargs) -> Map:
     """Quick-draw a quadtree choropleth of a point FeatureCollection; returns the finished Map.
 
     Cells are coloured by an aggregate of ``column`` (or point count when ``None``) and a colorbar is added.
@@ -238,7 +239,7 @@ def quadtree(data: Any, column: Optional[str] = None, **kwargs) -> Map:
     return _finish(scene, colorbar=True)
 
 
-def kde(data: Any, **kwargs) -> Map:
+def kde(data: PlottableData, **kwargs) -> Map:
     """Quick-draw a 2-D kernel-density surface of a point FeatureCollection; returns the finished Map.
 
     ``clip`` and styling kwargs (``levels``/``shade``/``gridsize``/``cmap``/…) are forwarded to :meth:`Map.kde`.
@@ -248,7 +249,7 @@ def kde(data: Any, **kwargs) -> Map:
     return _finish(scene, colorbar=True)
 
 
-def sankey(data: Any, column: Optional[str] = None, scale: Optional[str] = None, **kwargs) -> Map:
+def sankey(data: PlottableData, column: Optional[str] = None, scale: Optional[str] = None, **kwargs) -> Map:
     """Quick-draw a spatial flow / Sankey map of a line FeatureCollection; returns the finished Map.
 
     ``column`` colours each path and ``scale`` sets its width (both optional); styling kwargs are forwarded to

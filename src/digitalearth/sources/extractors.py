@@ -15,11 +15,12 @@ from pyramids.dataset import Dataset
 
 from digitalearth._arrays import mask_nodata, read_masked_band
 from digitalearth._crs import source_epsg
+from digitalearth._types import PlottableData, RasterLike
 from digitalearth.sources.dimension import DimensionInfo
 from digitalearth.sources.source import Source
 
 
-def get_stack(data: Any, bands: Any, *, mask: bool = True) -> np.ndarray:
+def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
     """Read several raster bands into one band-last ``(rows, cols, n)`` ``float64`` stack.
 
     The multiband companion to :func:`extract` / ``get_source`` (which model a single band): it gives the
@@ -43,7 +44,7 @@ def get_stack(data: Any, bands: Any, *, mask: bool = True) -> np.ndarray:
 
 
 def extract(
-    data: Any,
+    data: PlottableData,
     *,
     band: int = 1,
     variable: Optional[str] = None,
