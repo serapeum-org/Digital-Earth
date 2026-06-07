@@ -13,6 +13,7 @@ from typing import Any, Optional
 import numpy as np
 from pyramids.dataset import Dataset
 
+from digitalearth._arrays import mask_nodata
 from digitalearth.sources.dimension import DimensionInfo
 from digitalearth.sources.source import Source
 
@@ -67,14 +68,6 @@ def _axis(values: Any, name: str, units: Optional[str] = None) -> DimensionInfo:
     return DimensionInfo(np.asarray(values), name, units)
 
 
-def _mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:
-    """Return ``arr`` as float with cells equal to ``nodata`` replaced by NaN."""
-    a = np.asarray(arr, dtype="float64")
-    if nodata is None:
-        return a
-    return np.where(np.isclose(a, nodata, rtol=1e-3), np.nan, a)
-
-
 def _band_item(seq: Any, index: int, default: Any = None) -> Any:
     """Safely read ``seq[index]`` from a per-band list/tuple, tolerating ``None``/short sequences."""
     if not seq:
@@ -89,7 +82,7 @@ def _from_raster(ds: Dataset, band: int, metadata: Optional[dict]) -> Source:
     """Build a raster :class:`Source` from a pyramids ``Dataset`` (1-based ``band``)."""
     idx = band - 1
     arr = ds.read_array(band=idx)
-    z = _mask_nodata(arr, _band_item(ds.no_data_value, idx))
+    z = mask_nodata(arr, _band_item(ds.no_data_value, idx))
     units = _band_item(ds.band_units, idx) or None
     return Source(
         z=_axis(z, "z", units),
@@ -117,7 +110,7 @@ def _from_netcdf(nc: Any, variable: Optional[str], metadata: Optional[dict]) -> 
     nodata = nc.no_data_value
     if isinstance(nodata, (list, tuple)):
         nodata = nodata[0] if len(nodata) else None
-    z = _mask_nodata(arr, nodata)
+    z = mask_nodata(arr, nodata)
     return Source(
         z=_axis(z, "z"),
         x=_axis(nc.lon, "x"),

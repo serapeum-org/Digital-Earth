@@ -5,6 +5,8 @@ import numpy as np
 from cleopatra.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
+from digitalearth._arrays import read_masked_band
+
 
 class TimeSeries:
     """A 1-D time series formed by reducing each member of a ``DatasetCollection`` to one value.
@@ -62,13 +64,7 @@ class TimeSeries:
             1-D array of length ``len(collection.datasets)``.
         """
         func = self._REDUCERS[self.reducer]
-        out = []
-        for member in self.collection.datasets:
-            arr = member.read_array(band=self.band - 1).astype("float64")
-            nodata = member.no_data_value[self.band - 1]
-            if nodata is not None:
-                arr = np.where(np.isclose(arr, nodata, rtol=1e-3), np.nan, arr)
-            out.append(func(arr))
+        out = [func(read_masked_band(member, self.band)) for member in self.collection.datasets]
         return np.asarray(out)
 
     def plot(self, times: Optional[Sequence] = None, ax: Optional[Axes] = None, **kwargs) -> Any:

@@ -146,17 +146,17 @@ class TestExtractorHelpers:
         assert _band_item(("a",), 5, default=None) is None
 
     def test_mask_nodata_passthrough_when_none(self):
-        """_mask_nodata returns the array unchanged (as float) when nodata is None."""
-        from digitalearth.sources.extractors import _mask_nodata
+        """mask_nodata returns the array unchanged (as float) when nodata is None."""
+        from digitalearth._arrays import mask_nodata
 
-        out = _mask_nodata(np.array([1, 2, 3]), None)
+        out = mask_nodata(np.array([1, 2, 3]), None)
         np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
 
     def test_mask_nodata_replaces_with_nan(self):
-        """_mask_nodata replaces cells matching nodata with NaN."""
-        from digitalearth.sources.extractors import _mask_nodata
+        """mask_nodata replaces cells matching nodata with NaN."""
+        from digitalearth._arrays import mask_nodata
 
-        out = _mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
+        out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
         assert np.isnan(out[1]) and not np.isnan(out[0])
 
     def test_from_netcdf_no_variables_raises(self):

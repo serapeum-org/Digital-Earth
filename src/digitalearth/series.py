@@ -11,10 +11,7 @@ from cleopatra.line_glyph import LineGlyph
 from cleopatra.statistical_glyph import StatisticalGlyph
 from matplotlib.axes import Axes
 
-
-def _fig_of(ax: Optional[Axes]):
-    """Return the figure owning ``ax`` (or ``None`` when ``ax`` is ``None``)."""
-    return ax.get_figure() if ax is not None else None
+from digitalearth._arrays import fig_of as _fig_of
 
 
 def envelope(
