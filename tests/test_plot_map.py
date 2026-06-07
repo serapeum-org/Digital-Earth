@@ -1,3 +1,5 @@
+import numpy as np
+import pytest
 from geopandas.geodataframe import GeoDataFrame
 from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
@@ -36,3 +38,54 @@ class TestPlotArray:
         )
 
         assert isinstance(fig, Figure)
+
+
+class TestStaticGlyphPlotEdges:
+    """Edge cases of StaticGlyph (construction, ndarray input guard, id-labelled points)."""
+
+    def test_init(self):
+        """StaticGlyph is instantiable (covers the trivial constructor)."""
+        assert isinstance(StaticGlyph(), StaticGlyph), "StaticGlyph() should construct"
+
+    def test_plot_ndarray_requires_no_data_value(self):
+        """A bare ndarray without the required ``no_data_value`` kwarg raises ValueError.
+
+        Test scenario:
+            Passing a numpy array as ``src`` without ``no_data_value`` must raise a clear ValueError
+            naming the missing kwarg.
+        """
+        with pytest.raises(ValueError, match="no_data_value"):
+            StaticGlyph.plot(np.ones((4, 4), dtype="float32"))
+
+    def test_plot_ndarray_with_no_data_value(self):
+        """A bare ndarray plots when ``no_data_value`` is supplied (and is not forwarded to ArrayGlyph).
+
+        Test scenario:
+            ``no_data_value`` is popped from kwargs, so the masked array renders without ArrayGlyph
+            rejecting an unexpected keyword.
+        """
+        arr = np.ones((4, 4), dtype="float32")
+        arr[0, 0] = -9999.0
+        fig, ax = StaticGlyph.plot(arr, no_data_value=-9999.0)
+        assert isinstance(fig, Figure), "expected a Figure from the ndarray path"
+
+    def test_plot_ndarray_no_data_value_none(self):
+        """``no_data_value=None`` skips masking and renders without an exclude_value crash.
+
+        Test scenario:
+            A ``None`` nodata must not reach ``ArrayGlyph(exclude_value=[None])`` (which raises in np.isclose);
+            it is dropped so the array renders unmasked.
+        """
+        fig, ax = StaticGlyph.plot(np.ones((4, 4), dtype="float32"), no_data_value=None)
+        assert isinstance(fig, Figure), "expected a Figure when no_data_value is None"
+
+    def test_plot_points_with_id_column(self, dataset: Dataset, points: GeoDataFrame):
+        """Points carrying an ``id`` column are labelled by that column, not the index.
+
+        Test scenario:
+            With an ``id`` column present the id-branch of the label lookup is taken; the call renders a figure.
+        """
+        pts = points.copy()
+        pts["id"] = [f"g{i}" for i in range(len(pts))]
+        fig, ax = StaticGlyph.plot(dataset, points=pts)
+        assert isinstance(fig, Figure), "expected a Figure with id-labelled points"

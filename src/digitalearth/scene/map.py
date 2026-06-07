@@ -12,11 +12,16 @@ import logging
 from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
+from shapely import MultiPoint, box, voronoi_polygons
+from shapely.affinity import scale as affine_scale
 from matplotlib.animation import FuncAnimation
 from matplotlib.cm import ScalarMappable
 from matplotlib.collections import PolyCollection
 from matplotlib.colors import Normalize
+from matplotlib.path import Path as MplPath
 from cleopatra.array_glyph import ArrayGlyph
+from cleopatra.flow_glyph import FlowGlyph
+from cleopatra.kde_glyph import KDEGlyph
 from cleopatra.mesh_glyph import MeshGlyph
 from cleopatra.polygon_glyph import PolygonGlyph
 from cleopatra.scatter_glyph import ScatterGlyph
@@ -42,6 +47,17 @@ _CLIM_SCAN_CAP = 24
 
 #: Field-render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
 _ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
+
+#: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` (NaN-aware; ``"count"`` ignores the column).
+_QUADTREE_AGG = {
+    "mean": np.nanmean,
+    "sum": np.nansum,
+    "median": np.nanmedian,
+    "min": np.nanmin,
+    "max": np.nanmax,
+    "std": np.nanstd,
+    "count": len,
+}
 
 
 def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
@@ -220,21 +236,27 @@ class Map(Scene):
         """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
         return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
 
-    def scatter(self, features: Any, **opts) -> Any:
+    def scatter(self, features: Any, *, scale: Optional[str] = None, **opts) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
 
         Args:
             features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
-            **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options.
+            scale: Optional column name whose values set the per-point marker size. Pair
+                it with ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
+                legend. ``None`` (default) uses a single uniform marker size.
+            **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``size_limits``,
+                ``size_scale``, ``size_legend``, ``size_legend_values``, …).
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
         """
-        src = get_source(features.to_crs(self.crs))
+        fc = features.to_crs(self.crs)
+        src = get_source(fc)
         values = src.z.values if src.z is not None else None
+        sizes = np.asarray(fc[scale], dtype=float) if scale is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         glyph = ScatterGlyph(
-            src.x.values, src.y.values, values=values, ax=self.ax, fig=self.fig, **opts,
+            src.x.values, src.y.values, values=values, sizes=sizes, ax=self.ax, fig=self.fig, **opts,
         )
         _, _, pc = glyph.plot()
         return self._add_layer(glyph, pc)
@@ -677,7 +699,8 @@ class Map(Scene):
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
             column: Name of the numeric column whose values colour the polygons.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -725,6 +748,534 @@ class Map(Scene):
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         _, _, pc = glyph.plot(outline_only=True)
         return self._add_layer(glyph, pc)
+
+    def _clip_geometry(self, clip: Any) -> Any:
+        """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.
+
+        Accepts a pyramids ``FeatureCollection`` / geopandas ``GeoDataFrame``/``GeoSeries`` (reprojected to the
+        display CRS and unioned) or a shapely geometry (assumed already in the display CRS). ``None`` → no clip.
+
+        Args:
+            clip: A ``FeatureCollection``/``GeoDataFrame``/``GeoSeries`` (reprojected + unioned), a shapely
+                geometry already in the display CRS, or ``None``.
+
+        Returns:
+            A single shapely geometry in the display CRS, or ``None`` when ``clip`` is ``None``.
+        """
+        if clip is None:
+            return None
+        if hasattr(clip, "to_crs"):  # FeatureCollection / GeoDataFrame / GeoSeries
+            geoms = clip.to_crs(self.crs)
+            geoms = geoms.geometry if hasattr(geoms, "geometry") else geoms
+            return geoms.union_all()
+        return clip  # shapely geometry, assumed already in the display CRS
+
+    @staticmethod
+    def _finite_point_xy(geom: Any, values: Optional[np.ndarray] = None):
+        """Return ``(xs, ys, values)`` for points with finite coordinates.
+
+        Points that reproject to non-finite coordinates (the far side of a clipped/globe display CRS) are
+        dropped — together with their matching ``values`` — so downstream tessellation / binning / KDE never
+        receives ``inf`` / ``nan``.
+
+        Args:
+            geom: A geopandas point ``GeoSeries`` (already in the display CRS).
+            values: Optional per-point array aligned with ``geom``; filtered by the same finite mask.
+
+        Returns:
+            tuple: ``(xs, ys, values)`` numpy arrays of finite points; ``values`` is ``None`` when not given.
+        """
+        xs = np.asarray(geom.x, dtype=float)
+        ys = np.asarray(geom.y, dtype=float)
+        mask = np.isfinite(xs) & np.isfinite(ys)
+        if values is not None:
+            values = np.asarray(values)[mask]
+        return xs[mask], ys[mask], values
+
+    def voronoi(
+        self, features: Any, column: Optional[str] = None, *, clip: Any = None, **opts
+    ) -> Any:
+        """Voronoi diagram of a point ``FeatureCollection`` (pyramids points → cells → ``PolygonGlyph``).
+
+        Tessellates the points into Voronoi cells (``shapely.voronoi_polygons`` with ``ordered=True``, so cell
+        *i* belongs to point *i*) and renders them. With ``column`` the cells are filled and coloured by that
+        point's value (like :meth:`choropleth`); without it only the cell outlines are drawn (like
+        :meth:`shapes`). Points that reproject to non-finite coordinates (the far side of a clipped/globe
+        display CRS), and duplicate points, produce no cell and are silently skipped.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
+            column: Name of the numeric column whose value colours each cell, or ``None`` for outlines only.
+            clip: Optional boundary the cells are clipped to — a ``FeatureCollection``/``GeoDataFrame`` (reprojected
+                to the display CRS) or a shapely geometry already in the display CRS. ``None`` leaves shapely's
+                default bounded cells.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+
+        Raises:
+            ValueError: if ``features`` is not all single ``Point`` geometries.
+
+        Examples:
+            - Tessellate the point fixture and colour the cells by ``fid``:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.scene import Map
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+                >>> m = Map(crs=fc.epsg)
+                >>> pc = m.voronoi(fc, column="fid")
+                >>> len(m.layers)
+                1
+
+                ```
+        """
+        gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("voronoi got an empty FeatureCollection (nothing to draw)")
+        geom = gdf.geometry
+        if not (geom.geom_type == "Point").all():
+            raise ValueError("voronoi requires a FeatureCollection of point geometries")
+        col_vals = gdf[column].to_numpy() if column is not None else None
+        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
+        # then keeps cell i aligned with input point i, so values map by position.
+        xs, ys, col_vals = self._finite_point_xy(geom, col_vals)
+        if xs.size == 0:
+            raise ValueError("voronoi: no finite points in the display CRS")
+        cells = voronoi_polygons(MultiPoint(list(zip(xs, ys))), ordered=True)
+        boundary = self._clip_geometry(clip)
+
+        polygons: List[np.ndarray] = []
+        values: Optional[list] = [] if column is not None else None
+        for i, cell in enumerate(cells.geoms):
+            if boundary is not None:
+                cell = cell.intersection(boundary)
+            if cell.is_empty:
+                continue
+            parts = cell.geoms if cell.geom_type.startswith("Multi") else [cell]
+            for part in parts:
+                if part.geom_type != "Polygon" or part.is_empty:
+                    continue
+                polygons.append(np.asarray(part.exterior.coords))
+                if values is not None:
+                    values.append(col_vals[i])
+        values_arr = np.asarray(values) if values is not None else None
+        polygons, values_arr = self._finite_polygons(polygons, values_arr)  # drop far-side cells on a globe
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        if values_arr is not None:
+            glyph = PolygonGlyph(
+                polygons, values=values_arr, ax=self.ax, fig=self.fig, **opts,
+            )
+            _, _, pc = glyph.plot()
+        else:
+            glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
+            _, _, pc = glyph.plot(outline_only=True)
+        return self._add_layer(glyph, pc)
+
+    @staticmethod
+    def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
+        """Linearly map ``values`` onto ``limits`` (a constant input maps to the midpoint factor).
+
+        Args:
+            values: Per-feature magnitudes to normalise.
+            limits: ``(min, max)`` output range the smallest / largest value map to.
+
+        Returns:
+            np.ndarray: Per-feature scale factors spanning ``limits``, the same shape as ``values``.
+        """
+        lo, hi = limits
+        vmin, vmax = np.nanmin(values), np.nanmax(values)
+        if vmax > vmin:
+            return lo + (values - vmin) * (hi - lo) / (vmax - vmin)
+        return np.full(values.shape, (lo + hi) / 2.0)
+
+    def cartogram(
+        self, features: Any, scale: str, column: Optional[str] = None, *,
+        limits: Tuple[float, float] = (0.2, 1.0), **opts,
+    ) -> Any:
+        """Cartogram: scale each polygon about its centroid by a value column (pyramids → ``PolygonGlyph``).
+
+        Each feature's geometry is affine-scaled about its own centroid by a factor derived from ``scale``
+        (linearly normalised across the layer to ``limits``), distorting area to encode magnitude. With
+        ``column`` the scaled polygons are filled and coloured by that column (like :meth:`choropleth`);
+        without it only the outlines are drawn (like :meth:`shapes`).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygon geometries (reprojected to the display CRS).
+            scale: Name of the numeric column whose value sets each feature's size (normalised to ``limits``).
+            column: Optional column whose value colours each scaled polygon, or ``None`` for outlines only.
+            limits: ``(min, max)`` scale factors mapped to the smallest/largest ``scale`` value.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+
+        Raises:
+            ValueError: if ``features`` contains non-polygon geometry.
+
+        Examples:
+            - Scale buffered points by ``fid`` and colour them by the same column:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.scene import Map
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+                >>> fc["geometry"] = fc.geometry.buffer(500.0)
+                >>> m = Map(crs=fc.epsg)
+                >>> pc = m.cartogram(fc, scale="fid", column="fid")
+                >>> len(m.layers)
+                1
+
+                ```
+        """
+        gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("cartogram got an empty FeatureCollection (nothing to draw)")
+        geom = gdf.geometry
+        if not geom.geom_type.isin(["Polygon", "MultiPolygon"]).all():
+            raise ValueError("cartogram requires a FeatureCollection of polygon geometries")
+        factors = self._scale_factors(gdf[scale].to_numpy(dtype=float), limits)
+        scaled = [
+            affine_scale(g, xfact=f, yfact=f, origin="centroid")
+            for g, f in zip(geom, factors)
+        ]
+        polygons, repeats = self._polygon_vertices(scaled)
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        if column is not None:
+            values = np.repeat(gdf[column].to_numpy(), repeats)
+            polygons, values = self._finite_polygons(polygons, values)
+            glyph = PolygonGlyph(
+                polygons, values=values, ax=self.ax, fig=self.fig, **opts,
+            )
+            _, _, pc = glyph.plot()
+        else:
+            polygons, _ = self._finite_polygons(polygons)
+            glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
+            _, _, pc = glyph.plot(outline_only=True)
+        return self._add_layer(glyph, pc)
+
+    @staticmethod
+    def _quadtree_cells(
+        xs: np.ndarray, ys: np.ndarray, agg_fn: Any, nmax: int, nmin: int, max_depth: int = 20,
+    ) -> List[Tuple[float, float, float, float, float]]:
+        """Recursively split the points' bbox into quadrants until each cell holds ``<= nmax`` points.
+
+        Returns ``(xmin, ymin, xmax, ymax, value)`` per kept cell, where ``value = agg_fn(point_indices)``.
+        A cell with fewer than ``nmin`` points is dropped; splitting stops at ``max_depth`` and when a split
+        makes no progress (all points fall in one child), so coincident points cannot recurse forever.
+
+        Args:
+            xs: Finite point x-coordinates.
+            ys: Finite point y-coordinates, aligned with ``xs``.
+            agg_fn: Callable mapping an index array of the points in a cell to that cell's scalar value.
+            nmax: Maximum points in a cell before it is split.
+            nmin: Cells with fewer than this many points are dropped.
+            max_depth: Hard recursion-depth cap guarding against coincident points. Default 20.
+
+        Returns:
+            list[tuple]: ``(xmin, ymin, xmax, ymax, value)`` for each kept cell.
+        """
+        x0, x1 = float(np.min(xs)), float(np.max(xs))
+        y0, y1 = float(np.min(ys)), float(np.max(ys))
+        if x1 <= x0:
+            x1 = x0 + 1.0
+        if y1 <= y0:
+            y1 = y0 + 1.0
+        out: List[Tuple[float, float, float, float, float]] = []
+        stack = [(x0, y0, x1, y1, np.arange(len(xs)), 0)]
+        while stack:
+            xmin, ymin, xmax, ymax, idx, depth = stack.pop()
+            n = len(idx)
+            if n == 0:
+                continue
+            if n <= nmax or depth >= max_depth:
+                if n >= nmin:
+                    out.append((xmin, ymin, xmax, ymax, float(agg_fn(idx))))
+                continue
+            xmid, ymid = 0.5 * (xmin + xmax), 0.5 * (ymin + ymax)
+            cx, cy = xs[idx], ys[idx]
+            quads = [
+                (xmin, ymin, xmid, ymid, idx[(cx <= xmid) & (cy <= ymid)]),
+                (xmid, ymin, xmax, ymid, idx[(cx > xmid) & (cy <= ymid)]),
+                (xmin, ymid, xmid, ymax, idx[(cx <= xmid) & (cy > ymid)]),
+                (xmid, ymid, xmax, ymax, idx[(cx > xmid) & (cy > ymid)]),
+            ]
+            nonempty = [q for q in quads if len(q[4]) > 0]
+            if len(nonempty) == 1 and len(nonempty[0][4]) == n:  # no progress (coincident points)
+                if n >= nmin:
+                    out.append((xmin, ymin, xmax, ymax, float(agg_fn(idx))))
+                continue
+            for qx0, qy0, qx1, qy1, qidx in quads:
+                stack.append((qx0, qy0, qx1, qy1, qidx, depth + 1))
+        return out
+
+    def quadtree(
+        self, features: Any, column: Optional[str] = None, *, agg: Any = "mean",
+        nmax: int = 100, nmin: int = 0, clip: Any = None, **opts,
+    ) -> Any:
+        """Quadtree choropleth: aggregate points into adaptive cells (pyramids points → ``PolygonGlyph``).
+
+        Recursively splits the points' bounding box into quadrants until each cell holds ``<= nmax`` points,
+        then colours each cell by an aggregate of ``column`` (or the point **count** when ``column`` is
+        ``None``). The cells are always filled (a quadtree is a choropleth).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
+            column: Numeric column aggregated per cell, or ``None`` to colour by point count (density).
+            agg: Per-cell reducer — one of ``"mean"``/``"sum"``/``"median"``/``"min"``/``"max"``/``"std"``/
+                ``"count"`` or a callable taking a 1-D array. Ignored when ``column`` is ``None`` (count).
+            nmax: Maximum points in a cell before it is split (smaller → finer grid).
+            nmin: Cells with fewer than this many points are dropped.
+            clip: Optional boundary the cells are clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
+                or a shapely geometry in the display CRS). ``None`` keeps the full rectangular cells.
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
+
+        Returns:
+            The ``PolyCollection`` (registered as a Scene layer).
+
+        Raises:
+            ValueError: if ``features`` is not all single ``Point`` geometries, or ``agg`` is an unknown name.
+
+        Examples:
+            - Aggregate the point fixture into a fine density grid:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.scene import Map
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+                >>> m = Map(crs=fc.epsg)
+                >>> pc = m.quadtree(fc, nmax=1)
+                >>> len(m.layers)
+                1
+
+                ```
+        """
+        gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("quadtree got an empty FeatureCollection (nothing to draw)")
+        geom = gdf.geometry
+        if not (geom.geom_type == "Point").all():
+            raise ValueError("quadtree requires a FeatureCollection of point geometries")
+        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
+        col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+        xs, ys, col_vals = self._finite_point_xy(geom, col_vals_full)
+        if xs.size == 0:
+            raise ValueError("quadtree: no finite points in the display CRS")
+        if column is None:
+            def agg_fn(idx):
+                return float(len(idx))
+        else:
+            if callable(agg):
+                reducer = agg
+            elif agg in _QUADTREE_AGG:
+                reducer = _QUADTREE_AGG[agg]
+            else:
+                raise ValueError(
+                    f"unknown agg {agg!r}; choose one of {sorted(_QUADTREE_AGG)} or a callable"
+                )
+
+            def agg_fn(idx):
+                return float(reducer(col_vals[idx]))
+
+        cells = self._quadtree_cells(xs, ys, agg_fn, nmax, nmin)
+        boundary = self._clip_geometry(clip)
+        polygons: List[np.ndarray] = []
+        values: List[float] = []
+        for xmin, ymin, xmax, ymax, val in cells:
+            if boundary is None:
+                polygons.append(
+                    np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
+                )
+                values.append(val)
+                continue
+            inter = box(xmin, ymin, xmax, ymax).intersection(boundary)
+            if inter.is_empty:
+                continue
+            parts = inter.geoms if inter.geom_type.startswith("Multi") else [inter]
+            for part in parts:
+                if part.geom_type != "Polygon" or part.is_empty:
+                    continue
+                polygons.append(np.asarray(part.exterior.coords))
+                values.append(val)
+        values_arr = np.asarray(values, dtype=float)
+        polygons, values_arr = self._finite_polygons(polygons, values_arr)
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        glyph = PolygonGlyph(
+            polygons, values=values_arr, ax=self.ax, fig=self.fig, **opts,
+        )
+        _, _, pc = glyph.plot()
+        return self._add_layer(glyph, pc)
+
+    @staticmethod
+    def _polygons_of(geom: Any) -> list:
+        """Return the ``Polygon`` parts of a shapely geometry (``[]`` for non-polygonal input).
+
+        Args:
+            geom: Any shapely geometry, or ``None``.
+
+        Returns:
+            list: ``[geom]`` for a Polygon, each Polygon part of a MultiPolygon / GeometryCollection, or
+            ``[]`` for ``None`` / non-polygonal geometry.
+        """
+        if geom is None:
+            return []
+        kind = geom.geom_type
+        if kind == "Polygon":
+            return [geom]
+        if kind in ("MultiPolygon", "GeometryCollection"):
+            return [g for g in geom.geoms if g.geom_type == "Polygon"]
+        return []
+
+    def _clip_path(self, clip: Any) -> Optional[MplPath]:
+        """Resolve a clip boundary to a matplotlib ``Path`` (data coords) for contour clipping, or ``None``.
+
+        Reuses :meth:`_clip_geometry` to reproject/union the boundary, then turns each polygon exterior ring
+        into a sub-path so a ``MultiPolygon`` clips correctly.
+
+        Args:
+            clip: A clip boundary accepted by :meth:`_clip_geometry`, or ``None``.
+
+        Returns:
+            matplotlib.path.Path | None: A path (in data coords) covering the boundary polygons, or ``None``
+            when there is no usable boundary.
+        """
+        polys = self._polygons_of(self._clip_geometry(clip))
+        verts: List[list] = []
+        codes: List[int] = []
+        for poly in polys:
+            ring = np.asarray(poly.exterior.coords)
+            if len(ring) < 3:
+                continue
+            verts.extend(ring.tolist())
+            codes.extend(
+                [MplPath.MOVETO] + [MplPath.LINETO] * (len(ring) - 2) + [MplPath.CLOSEPOLY]
+            )
+        if not verts:
+            return None
+        return MplPath(np.asarray(verts), codes)
+
+    def kde(self, features: Any, *, clip: Any = None, **opts) -> Any:
+        """2-D kernel-density (isochrone) plot of a point ``FeatureCollection`` (pyramids points → ``KDEGlyph``).
+
+        Estimates the point density on a grid and draws it as filled (``shade=True``) or line contours, coloured
+        through the shared scalar-mapping pipeline. The KDE is numpy-only (cleopatra ``KDEGlyph``).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of point geometries (reprojected to the display CRS).
+            clip: Optional boundary the density is clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
+                or a shapely geometry in the display CRS). ``None`` draws the full grid.
+            **opts: Styling kwargs forwarded to ``KDEGlyph`` (``levels``, ``shade``, ``gridsize``,
+                ``bw_method``, ``cmap``, …).
+
+        Returns:
+            The contour set (``QuadContourSet``) registered as a Scene layer.
+
+        Raises:
+            ValueError: if ``features`` is not all single ``Point`` geometries.
+
+        Examples:
+            - Draw a density surface for the point fixture:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.scene import Map
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+                >>> m = Map(crs=fc.epsg)
+                >>> cs = m.kde(fc)
+                >>> len(m.layers)
+                1
+
+                ```
+        """
+        gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("kde got an empty FeatureCollection (nothing to draw)")
+        geom = gdf.geometry
+        if not (geom.geom_type == "Point").all():
+            raise ValueError("kde requires a FeatureCollection of point geometries")
+        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before the KDE.
+        xs, ys, _ = self._finite_point_xy(geom)
+        if xs.size == 0:
+            raise ValueError("kde: no finite points in the display CRS")
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        glyph = KDEGlyph(
+            xs, ys, clip_path=self._clip_path(clip), ax=self.ax, fig=self.fig, **opts,
+        )
+        _, _, cs = glyph.plot()
+        return self._add_layer(glyph, cs)
+
+    def sankey(
+        self, features: Any, column: Optional[str] = None, scale: Optional[str] = None, **opts,
+    ) -> Any:
+        """Spatial flow / Sankey map of a line ``FeatureCollection`` (pyramids lines → ``FlowGlyph``).
+
+        Draws each line as a path whose **colour** encodes ``column`` and whose **width** encodes ``scale``
+        (each optional). MultiLineStrings contribute one path per part.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries
+                (reprojected to the display CRS).
+            column: Numeric column whose value colours each path, or ``None`` for a single colour.
+            scale: Numeric column whose value sets each path's line width, or ``None`` for a uniform width.
+            **opts: Styling kwargs forwarded to ``FlowGlyph`` (``width_limits``, ``width_scale``, ``cmap``,
+                ``size_legend``, …).
+
+        Returns:
+            The ``LineCollection`` (registered as a Scene layer).
+
+        Raises:
+            ValueError: if ``features`` contains non-line geometry.
+
+        Examples:
+            - Draw flow lines coloured and width-scaled by columns:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import LineString
+                >>> from pyramids.feature import FeatureCollection
+                >>> from digitalearth.scene import Map
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"flow": [1.0, 2.0]},
+                ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(0, 1), (1, 2)])],
+                ...     crs="EPSG:4326",
+                ... )
+                >>> m = Map(crs=4326)
+                >>> lc = m.sankey(FeatureCollection(gdf), column="flow", scale="flow")
+                >>> len(m.layers)
+                1
+
+                ```
+        """
+        gdf = features.to_crs(self.crs)
+        if len(gdf) == 0:
+            raise ValueError("sankey got an empty FeatureCollection (nothing to draw)")
+        geom = gdf.geometry
+        if not geom.geom_type.isin(["LineString", "MultiLineString"]).all():
+            raise ValueError("sankey requires a FeatureCollection of line geometries")
+        paths: List[np.ndarray] = []
+        repeats: List[int] = []
+        for g in geom:
+            parts = list(g.geoms) if g.geom_type == "MultiLineString" else [g]
+            paths.extend(np.asarray(p.coords) for p in parts)
+            repeats.append(len(parts))
+        rep = np.asarray(repeats)
+        values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
+        widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
+        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        glyph = FlowGlyph(
+            paths, values=values, widths=widths, ax=self.ax, fig=self.fig, **opts,
+        )
+        _, _, lc = glyph.plot()
+        return self._add_layer(glyph, lc)
 
     def _project_line_features(self, fc: Any) -> List[np.ndarray]:
         """Project a line FeatureCollection (lon/lat) to the display CRS, split at the projection limb.

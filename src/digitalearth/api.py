@@ -22,6 +22,11 @@ __all__ = [
     "scatter",
     "grid_cells",
     "choropleth",
+    "voronoi",
+    "cartogram",
+    "quadtree",
+    "kde",
+    "sankey",
 ]
 
 
@@ -181,3 +186,82 @@ def grid_cells(data: Any, **kwargs) -> Map:
 def choropleth(data: Any, column: str, **kwargs) -> Map:
     """Quick-draw a polygon FeatureCollection coloured by ``column``; returns the finished Map."""
     return quickmap(data, column=column, **kwargs)
+
+
+def voronoi(data: Any, column: Optional[str] = None, **kwargs) -> Map:
+    """Quick-draw the Voronoi diagram of a point FeatureCollection; returns the finished Map.
+
+    With ``column`` the cells are filled and coloured by that value (a colorbar is added); without it the cell
+    outlines are drawn. ``clip`` and styling kwargs are forwarded to :meth:`Map.voronoi`.
+    """
+    scene = Map(crs=kwargs.pop("crs", 3857))
+    scene.voronoi(data, column=column, **kwargs)
+    if column is not None and scene.layers:
+        try:
+            scene.colorbar()
+        except Exception:
+            pass
+    return scene
+
+
+def cartogram(data: Any, scale: str, column: Optional[str] = None, **kwargs) -> Map:
+    """Quick-draw a cartogram (polygons scaled by ``scale``); returns the finished Map.
+
+    With ``column`` the scaled polygons are filled and coloured by that value (a colorbar is added); without it
+    the outlines are drawn. ``limits`` and styling kwargs are forwarded to :meth:`Map.cartogram`.
+    """
+    scene = Map(crs=kwargs.pop("crs", 3857))
+    scene.cartogram(data, scale=scale, column=column, **kwargs)
+    if column is not None and scene.layers:
+        try:
+            scene.colorbar()
+        except Exception:
+            pass
+    return scene
+
+
+def quadtree(data: Any, column: Optional[str] = None, **kwargs) -> Map:
+    """Quick-draw a quadtree choropleth of a point FeatureCollection; returns the finished Map.
+
+    Cells are coloured by an aggregate of ``column`` (or point count when ``None``) and a colorbar is added.
+    ``agg``/``nmax``/``nmin``/``clip`` and styling kwargs are forwarded to :meth:`Map.quadtree`.
+    """
+    scene = Map(crs=kwargs.pop("crs", 3857))
+    scene.quadtree(data, column=column, **kwargs)
+    if scene.layers:
+        try:
+            scene.colorbar()
+        except Exception:
+            pass
+    return scene
+
+
+def kde(data: Any, **kwargs) -> Map:
+    """Quick-draw a 2-D kernel-density surface of a point FeatureCollection; returns the finished Map.
+
+    ``clip`` and styling kwargs (``levels``/``shade``/``gridsize``/``cmap``/…) are forwarded to :meth:`Map.kde`.
+    """
+    scene = Map(crs=kwargs.pop("crs", 3857))
+    scene.kde(data, **kwargs)
+    if scene.layers:
+        try:
+            scene.colorbar()
+        except Exception:
+            pass
+    return scene
+
+
+def sankey(data: Any, column: Optional[str] = None, scale: Optional[str] = None, **kwargs) -> Map:
+    """Quick-draw a spatial flow / Sankey map of a line FeatureCollection; returns the finished Map.
+
+    ``column`` colours each path and ``scale`` sets its width (both optional); styling kwargs are forwarded to
+    :meth:`Map.sankey`. A colorbar is added when ``column`` is given.
+    """
+    scene = Map(crs=kwargs.pop("crs", 3857))
+    scene.sankey(data, column=column, scale=scale, **kwargs)
+    if column is not None and scene.layers:
+        try:
+            scene.colorbar()
+        except Exception:
+            pass
+    return scene
