@@ -57,6 +57,18 @@ class TestStaticGlyphPlotEdges:
         with pytest.raises(ValueError, match="no_data_value"):
             StaticGlyph.plot(np.ones((4, 4), dtype="float32"))
 
+    def test_plot_ndarray_with_no_data_value(self):
+        """A bare ndarray plots when ``no_data_value`` is supplied (and is not forwarded to ArrayGlyph).
+
+        Test scenario:
+            ``no_data_value`` is popped from kwargs, so the masked array renders without ArrayGlyph
+            rejecting an unexpected keyword.
+        """
+        arr = np.ones((4, 4), dtype="float32")
+        arr[0, 0] = -9999.0
+        fig, ax = StaticGlyph.plot(arr, no_data_value=-9999.0)
+        assert isinstance(fig, Figure), "expected a Figure from the ndarray path"
+
     def test_plot_points_with_id_column(self, dataset: Dataset, points: GeoDataFrame):
         """Points carrying an ``id`` column are labelled by that column, not the index.
 

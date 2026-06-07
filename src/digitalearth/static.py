@@ -103,7 +103,8 @@ class StaticGlyph:
                     "value"
                 )
             else:
-                no_data_value = kwargs["no_data_value"]
+                # pop (not read) so the value is not forwarded to ArrayGlyph.plot, which would reject it.
+                no_data_value = kwargs.pop("no_data_value")
         # convert the array to float as integer array gives error when compared to float
         arr = arr.astype(np.float32)
 
