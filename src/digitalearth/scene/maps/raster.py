@@ -128,7 +128,6 @@ class RasterMixin:
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
-
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` from 1-D x/y coordinate arrays (cleopatra order)."""
@@ -138,12 +137,16 @@ class RasterMixin:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
         return self._extent_of(ds.x, ds.y)
 
-    def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
+    def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
+                      **opts) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
         Args:
             dataset: A multiband pyramids ``Dataset`` (reprojected to the display CRS first).
             bands: Three 1-based band indices mapped to R, G, B. Defaults to ``(1, 2, 3)``.
+            mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
+                percentile stretch (and render transparent). Pass ``False`` for the raw values (the
+                pre-mask behaviour, where the nodata sentinel participates in the stretch).
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -169,7 +172,7 @@ class RasterMixin:
                 ```
         """
         ds = self._reproject(dataset)
-        stack = get_stack(ds, bands)  # (rows, cols, n), nodata -> NaN via the sources layer
+        stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         # cleopatra's rgb= path is band-FIRST: it does array[rgb].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
         band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
@@ -179,12 +182,15 @@ class RasterMixin:
         )
         return self._render_glyph(glyph)
 
-    def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
+    def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
+                      **opts) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
         Args:
             dataset: A multiband pyramids ``Dataset`` (reprojected to the display CRS first).
             bands: Three 1-based band indices mapped to H, S, V. Defaults to ``(1, 2, 3)``.
+            mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
+                percentile stretch (and render transparent). Pass ``False`` for the raw pre-mask behaviour.
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -193,7 +199,7 @@ class RasterMixin:
         from matplotlib.colors import hsv_to_rgb
 
         ds = self._reproject(dataset)
-        stack = get_stack(ds, bands)  # (rows, cols, n), nodata -> NaN via the sources layer
+        stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         rgb = hsv_to_rgb(_stretch_to_unit(stack))                      # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's rgb= path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)
