@@ -182,3 +182,23 @@ class Scene:
     def show(self) -> None:
         """Show the figure via ``matplotlib.pyplot.show``."""
         plt.show()
+
+    def __enter__(self) -> "Scene":
+        """Enter the runtime context, returning the scene so ``with Scene(...) as s:`` binds it.
+
+        Returns:
+            This scene.
+        """
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        """Close the figure on exit so a long run of scenes stays memory-bounded.
+
+        The figure is closed whether or not the body raised; any exception propagates (``__exit__`` returns
+        ``False``), so ``with`` never silences errors.
+
+        Returns:
+            ``False`` — exceptions are not suppressed.
+        """
+        plt.close(self.fig)
+        return False

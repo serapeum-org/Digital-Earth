@@ -183,6 +183,48 @@ class TestRenderGlyph:
         assert ims == ["A", "B"], f"layers not registered in order: {ims}"
 
 
+class TestContextManager:
+    """Tests for Scene.__enter__/__exit__ (PC-2)."""
+
+    def test_enter_returns_self(self):
+        """``with Scene() as s`` binds the scene itself.
+
+        Test scenario:
+            __enter__ returns the same instance so it can be used as the ``as`` target.
+        """
+        scene = Scene()
+        with scene as bound:
+            assert bound is scene, "__enter__ should return the scene"
+
+    def test_exit_closes_figure(self):
+        """Leaving the context closes the scene's figure.
+
+        Test scenario:
+            After the with-block the figure number is no longer registered with pyplot.
+        """
+        import matplotlib.pyplot as plt
+
+        with Scene() as scene:
+            num = scene.fig.number
+            assert plt.fignum_exists(num), "figure should be open inside the context"
+        assert not plt.fignum_exists(num), "figure should be closed on exit"
+
+    def test_exit_does_not_suppress_exceptions(self):
+        """Exceptions raised in the body propagate (the figure is still closed).
+
+        Test scenario:
+            __exit__ returns False, so a body error is re-raised; the figure is closed regardless.
+        """
+        import matplotlib.pyplot as plt
+
+        scene = Scene()
+        num = scene.fig.number
+        with pytest.raises(ValueError, match="boom"):
+            with scene:
+                raise ValueError("boom")
+        assert not plt.fignum_exists(num), "figure should be closed even when the body raised"
+
+
 class TestPreserveView:
     """Tests for Scene._preserve_view (PA-2)."""
 
