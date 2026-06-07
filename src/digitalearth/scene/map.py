@@ -190,10 +190,7 @@ class Map(Scene):
         # given `coords=(x, y)`. The two are mutually exclusive, so pick by kind — otherwise the
         # field lands at the wrong location/zoom.
         if kind == "imshow":
-            placement = {"extent": [
-                float(x_values.min()), float(y_values.min()),
-                float(x_values.max()), float(y_values.max()),
-            ]}
+            placement = {"extent": self._extent_of(x_values, y_values)}
         else:
             placement = {"coords": (x_values, y_values)}
         glyph = ArrayGlyph(
@@ -373,10 +370,14 @@ class Map(Scene):
         polygons, values = self._finite_polygons(polygons, values)  # drop far-side cells on a globe
         return self._polygon_layer(polygons, values, **opts)
 
+    @staticmethod
+    def _extent_of(x: Any, y: Any) -> List[float]:
+        """Return bbox-order ``[xmin, ymin, xmax, ymax]`` from 1-D x/y coordinate arrays (cleopatra order)."""
+        return [float(np.min(x)), float(np.min(y)), float(np.max(x)), float(np.max(y))]
+
     def _extent(self, ds: Any) -> List[float]:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
-        x, y = ds.x, ds.y
-        return [float(x.min()), float(y.min()), float(x.max()), float(y.max())]
+        return self._extent_of(ds.x, ds.y)
 
     def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), **opts) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).

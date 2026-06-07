@@ -90,6 +90,32 @@ class TestVectorInput:
             m._vector_input(points_fc, geom_types=("LineString", "MultiLineString"), name="probe")
 
 
+class TestExtentOf:
+    """Tests for Map._extent_of (PA-9)."""
+
+    def test_bbox_order_from_arrays(self):
+        """_extent_of returns [xmin, ymin, xmax, ymax] from 1-D coordinate arrays.
+
+        Test scenario:
+            Unsorted x/y arrays still yield the correct min/max bbox in cleopatra order.
+        """
+        x = np.array([2.0, 0.0, 1.0])
+        y = np.array([5.0, 9.0, 7.0])
+        assert Map._extent_of(x, y) == [0.0, 5.0, 2.0, 9.0], "bbox order/values incorrect"
+
+    def test_extent_delegates_to_extent_of(self):
+        """_extent(ds) matches _extent_of(ds.x, ds.y).
+
+        Test scenario:
+            The dataset-based _extent is just _extent_of over the dataset's coordinate vectors.
+        """
+        from pyramids.dataset import Dataset
+
+        ds = Dataset.read_file("examples/data/acc4000.tif")
+        m = Map(crs=ds.epsg)
+        assert m._extent(ds) == Map._extent_of(ds.x, ds.y), "_extent should delegate to _extent_of"
+
+
 class TestPolygonLayer:
     """Tests for Map._polygon_layer."""
 
