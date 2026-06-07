@@ -26,6 +26,26 @@ class TestRasterLike:
         """
         assert not isinstance(object(), RasterLike), "a bare object must not satisfy RasterLike"
 
+    def test_netcdf_shaped_object_lacking_xy_is_not_rasterlike(self):
+        """An object with the raster methods but no x/y (NetCDF-shaped) is not RasterLike (review L3).
+
+        Test scenario:
+            NetCDF exposes lon/lat instead of x/y, so it does not structurally satisfy RasterLike — which is
+            why PlottableData is documented as an approximation; extract() still accepts NetCDF via isinstance.
+        """
+        class _NetCDFShaped:
+            epsg = 4326
+            no_data_value = (None,)
+            lon = lat = (0.0,)
+
+            def to_crs(self, crs):
+                return self
+
+            def read_array(self, band=0):
+                return None
+
+        assert not isinstance(_NetCDFShaped(), RasterLike), "no x/y -> must not satisfy RasterLike"
+
 
 class TestVectorLike:
     """Tests for the VectorLike protocol."""

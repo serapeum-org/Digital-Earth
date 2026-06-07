@@ -82,6 +82,12 @@ class VectorLike(Protocol):
         ...
 
 
-#: Anything the extractor / quick API can turn into something plottable: a raster, a vector layer, or a
-#: raw numpy array.
+#: Anything the extractor / quick API can turn into something plottable: a single-band raster
+#: (:class:`RasterLike`), a vector layer (:class:`VectorLike`), or a raw numpy array.
+#:
+#: This is a **documentation-grade approximation of the common case**, not the exhaustive accepted set.
+#: ``get_source`` / ``extract`` also dispatch on a pyramids ``NetCDF`` (a ``Dataset`` subclass that exposes
+#: ``lon``/``lat`` rather than ``x``/``y``, so it does *not* structurally satisfy :class:`RasterLike`) and a
+#: ``DatasetCollection`` (one member is extracted). Those are matched by ``isinstance`` inside ``extract``,
+#: not by this union; the annotation is a hint, never a runtime gate.
 PlottableData = Union[RasterLike, VectorLike, np.ndarray]
