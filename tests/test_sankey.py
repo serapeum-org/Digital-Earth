@@ -64,3 +64,22 @@ def test_api_sankey(lines_fc):
     m = api.sankey(lines_fc, column="flow", scale="w", crs=lines_fc.epsg)
     assert isinstance(m, Map)
     assert len(m.layers) == 1
+
+
+def test_sankey_multilinestring_expands_parts():
+    """sankey expands a MultiLineString into one drawn path per part (repeats align values/widths).
+
+    Test scenario:
+        A FeatureCollection with one MultiLineString of two parts plus one LineString yields three paths,
+        and the per-feature 'flow'/'w' columns are repeated across the MultiLineString's parts without error.
+    """
+    from shapely.geometry import MultiLineString
+    from pyramids.feature import FeatureCollection
+
+    multi = MultiLineString([[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 3.0)]])
+    single = LineString([(4.0, 4.0), (5.0, 5.0)])
+    gdf = gpd.GeoDataFrame({"flow": [1.0, 2.0], "w": [1.0, 2.0]}, geometry=[multi, single], crs="EPSG:4326")
+    m = Map(crs=4326)
+    lc = m.sankey(FeatureCollection(gdf), column="flow", scale="w")
+    assert len(m.layers) == 1, "sankey should register one layer"
+    assert len(lc.get_paths()) == 3, f"2 multi-parts + 1 line = 3 paths, got {len(lc.get_paths())}"

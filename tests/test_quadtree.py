@@ -92,3 +92,45 @@ def test_api_quadtree(points_fc):
     m = api.quadtree(points_fc, nmax=1, crs=points_fc.epsg)
     assert isinstance(m, Map)
     assert len(m.layers) == 1
+
+
+def test_quadtree_callable_agg(points_fc):
+    """quadtree accepts a callable ``agg`` (custom per-cell reducer), not just named ones.
+
+    Test scenario:
+        Passing ``agg=lambda a: float(np.max(a))`` exercises the ``callable(agg)`` branch and renders a layer
+        whose cell values never exceed the column max.
+    """
+    m = Map(crs=points_fc.epsg)
+    fid_max = float(np.asarray(points_fc["fid"], dtype=float).max())
+    pc = m.quadtree(points_fc, column="fid", agg=lambda a: float(np.max(a)), nmax=1)
+    assert len(m.layers) == 1, "callable agg should still produce one layer"
+    vals = np.ma.filled(np.asarray(pc.get_array(), dtype="float64"), np.nan)
+    assert np.nanmax(vals) <= fid_max + 1e-9, f"max-agg cells exceed column max: {np.nanmax(vals)} > {fid_max}"
+
+
+def test_quadtree_cells_coincident_points_terminate():
+    """_quadtree_cells terminates on coincident points (the no-progress branch), not infinite recursion.
+
+    Test scenario:
+        Many identical points with nmax=1 cannot be split further; the recursion must stop and emit a single
+        cell holding all of them rather than recursing forever.
+    """
+    xs = np.zeros(5)
+    ys = np.zeros(5)
+    cells = Map._quadtree_cells(xs, ys, agg_fn=lambda idx: float(len(idx)), nmax=1, nmin=0)
+    assert len(cells) == 1, f"coincident points should collapse to one cell, got {len(cells)}"
+    assert cells[0][4] == 5.0, f"the single cell should hold all 5 points, got value {cells[0][4]}"
+
+
+def test_quadtree_cells_nmin_drops_sparse_cells():
+    """_quadtree_cells drops cells with fewer than ``nmin`` points.
+
+    Test scenario:
+        With nmin larger than the point count, every candidate cell is below threshold and dropped (empty
+        result), exercising the nmin guard.
+    """
+    xs = np.array([0.0, 1.0, 2.0, 3.0])
+    ys = np.array([0.0, 1.0, 2.0, 3.0])
+    cells = Map._quadtree_cells(xs, ys, agg_fn=lambda idx: float(len(idx)), nmax=1, nmin=99)
+    assert cells == [], f"all cells should be dropped below nmin, got {cells}"

@@ -213,3 +213,53 @@ class TestPolygonLayer:
         before = len(m.fig.axes)
         m._polygon_layer(squares, np.array([1.0, 2.0]), add_colorbar=True)
         assert len(m.fig.axes) > before, "explicit add_colorbar=True should add a colorbar axes"
+
+
+class TestPolygonsOf:
+    """Tests for the Map._polygons_of static helper (used by _clip_path)."""
+
+    def test_none_returns_empty(self):
+        """_polygons_of(None) returns an empty list.
+
+        Test scenario:
+            A missing geometry yields no polygon parts.
+        """
+        assert Map._polygons_of(None) == [], "None should give []"
+
+    def test_single_polygon(self):
+        """_polygons_of returns a single Polygon as a one-element list.
+
+        Test scenario:
+            A plain Polygon is returned wrapped in a list.
+        """
+        from shapely.geometry import Polygon
+
+        poly = Polygon([(0, 0), (1, 0), (1, 1)])
+        out = Map._polygons_of(poly)
+        assert out == [poly], "a Polygon should return [itself]"
+
+    def test_multipolygon_and_geometrycollection_parts(self):
+        """_polygons_of extracts the Polygon parts of MultiPolygon and GeometryCollection.
+
+        Test scenario:
+            A MultiPolygon yields its parts; a GeometryCollection yields only its Polygon members (a
+            contained Point is ignored).
+        """
+        from shapely.geometry import GeometryCollection, MultiPolygon, Point, Polygon
+
+        a = Polygon([(0, 0), (1, 0), (1, 1)])
+        b = Polygon([(2, 2), (3, 2), (3, 3)])
+        assert len(Map._polygons_of(MultiPolygon([a, b]))) == 2, "MultiPolygon should give 2 parts"
+        gc = GeometryCollection([a, Point(5, 5)])
+        out = Map._polygons_of(gc)
+        assert len(out) == 1 and out[0].geom_type == "Polygon", "GeometryCollection should keep only polygons"
+
+    def test_non_polygon_returns_empty(self):
+        """_polygons_of returns [] for non-polygonal geometry.
+
+        Test scenario:
+            A LineString has no polygon parts.
+        """
+        from shapely.geometry import LineString
+
+        assert Map._polygons_of(LineString([(0, 0), (1, 1)])) == [], "a line should give []"
