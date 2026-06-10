@@ -180,31 +180,42 @@ def test_grid_cells_without_nodata(global_field, mocker):
     assert len(pc.get_paths()) > 0
 
 
-def test_project_line_features_skips_none_and_empty(mocker):
-    """_project_line_features ignores None geometries and empty coordinate arrays."""
-    import geopandas as gpd
-    from shapely.geometry import LineString
-
-    gdf = gpd.GeoDataFrame(
-        {"geometry": [None, LineString([]), LineString([(-9, 39), (-8, 40)])]},
-        crs=4326,
-    )
-    gdf.epsg = 4326  # _project_line_features reads fc.epsg
+def test_project_line_features_skips_empty(mocker):
+    """_project_line_features ignores empty coordinate arrays and projects the rest."""
+    parts = [np.empty((0, 2)), np.array([(-9, 39), (-8, 40)], dtype=float)]
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
-    segs = m._project_line_features(gdf)
+    segs = m._project_line_features(parts)
     assert all(s.shape[1] == 2 and len(s) > 1 for s in segs)
 
 
-def test_natural_earth_flat_without_data_does_not_pin_extent(mocker):
-    """On a flat map with nothing drawn yet, a Natural Earth layer is not pinned to prior data limits."""
-    import geopandas as gpd
-    from shapely.geometry import LineString
+def _add_features_drawing(*verts):
+    """Build an ``add_features`` stand-in that draws ``verts`` as a LineCollection, preserving the view.
 
-    world = gpd.GeoDataFrame(geometry=[LineString([(-50, -20), (50, 20)])], crs=4326)
-    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=world)
-    m = Map(crs=4326)  # flat, no imshow -> has_data is False
+    Mirrors the real ``cleopatra.reference.add_features`` contract used by the flat ``_natural_earth`` path:
+    it adds an artist to the axes and holds the current limits, so the decoration's own autoscale-when-empty
+    logic is what gets exercised — all without touching the network.
+    """
+    from matplotlib.collections import LineCollection
+
+    def fake(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        ax.add_collection(LineCollection([np.asarray(v, dtype=float) for v in verts]))
+        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        return ax
+
+    return fake
+
+
+def test_natural_earth_flat_without_data_autoscales_to_layer(mocker):
+    """On a flat map with nothing drawn yet, a Natural Earth layer autoscales the view to itself."""
+    mocker.patch(
+        "digitalearth.scene.maps.decoration.add_features",
+        side_effect=_add_features_drawing([(-50, -20), (50, 20)]),
+    )
+    m = Map(crs=4326)  # flat, no imshow -> had_data is False
     m.coastlines()
-    assert m.ax.lines or m.ax.collections  # the layer drew something
+    assert m.ax.collections  # the layer drew something
+    assert m.ax.get_xlim()[0] <= -50 and m.ax.get_xlim()[1] >= 50  # fitted to the layer, not pinned
 
 
 # --------------------------------------------------------------------- #43 globe land/ocean fills
@@ -212,19 +223,15 @@ def test_natural_earth_flat_without_data_does_not_pin_extent(mocker):
 
 @pytest.fixture
 def land_fc():
-    """A synthetic polygon FeatureCollection in lon/lat with a limb-crossing 'continent'.
+    """Synthetic lon/lat exterior rings (a limb-crossing 'continent'), as ``natural_earth`` now returns.
 
     Returns:
-        geopandas.GeoDataFrame: polygons (with `.epsg` set) spanning both hemispheres of an ortho globe.
+        list[numpy.ndarray]: closed `(N, 2)` lon/lat rings spanning both hemispheres of an ortho globe —
+            the coordinate-array shape ``cleopatra.reference.natural_earth`` yields for a polygon layer.
     """
-    import geopandas as gpd
-    from shapely.geometry import Polygon
-
-    near = Polygon([(-20, -20), (20, -20), (20, 20), (-20, 20)])      # near side of ortho(0, 0)
-    straddle = Polygon([(60, -30), (120, -30), (120, 30), (60, 30)])  # crosses the limb
-    gdf = gpd.GeoDataFrame({"geometry": [near, straddle]}, crs=4326)
-    gdf.epsg = 4326
-    return gdf
+    near = np.array([(-20, -20), (20, -20), (20, 20), (-20, 20), (-20, -20)], float)      # near side
+    straddle = np.array([(60, -30), (120, -30), (120, 30), (60, 30), (60, -30)], float)   # crosses the limb
+    return [near, straddle]
 
 
 def test_project_polygon_features_finite_and_closed(land_fc):
@@ -237,34 +244,22 @@ def test_project_polygon_features_finite_and_closed(land_fc):
     assert all(np.allclose(r[0], r[-1]) for r in rings), "fill rings must be closed"
 
 
-def test_project_polygon_features_skips_none_and_empty(mocker):
-    """_project_polygon_features ignores None geometries and empty polygons."""
-    import geopandas as gpd
-    from shapely.geometry import Polygon
-
-    gdf = gpd.GeoDataFrame(
-        {"geometry": [None, Polygon(), Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])]},
-        crs=4326,
-    )
-    gdf.epsg = 4326
+def test_project_polygon_features_skips_empty():
+    """_project_polygon_features ignores empty rings and projects the rest."""
+    parts = [np.empty((0, 2)), np.array([(-10, -10), (10, -10), (10, 10), (-10, 10), (-10, -10)], float)]
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    rings = m._project_polygon_features(gdf)
+    rings = m._project_polygon_features(parts)
     assert len(rings) == 1 and np.isfinite(np.vstack(rings)).all()
 
 
-def test_project_polygon_features_handles_multipolygon():
-    """A MultiPolygon contributes one fill ring per finite part."""
-    import geopandas as gpd
-    from shapely.geometry import MultiPolygon, Polygon
-
-    mp = MultiPolygon([
-        Polygon([(-20, -20), (-10, -20), (-10, -10), (-20, -10)]),
-        Polygon([(10, 10), (20, 10), (20, 20), (10, 20)]),
-    ])
-    gdf = gpd.GeoDataFrame({"geometry": [mp]}, crs=4326)
-    gdf.epsg = 4326
+def test_project_polygon_features_handles_multiple_parts():
+    """Each ring part (e.g. an exploded MultiPolygon) contributes one fill ring."""
+    parts = [
+        np.array([(-20, -20), (-10, -20), (-10, -10), (-20, -10), (-20, -20)], float),
+        np.array([(10, 10), (20, 10), (20, 20), (10, 20), (10, 10)], float),
+    ]
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    rings = m._project_polygon_features(gdf)
+    rings = m._project_polygon_features(parts)
     assert len(rings) == 2 and np.isfinite(np.vstack(rings)).all()
 
 
@@ -296,16 +291,16 @@ def test_ocean_below_land_zorder():
     assert ocean.get_zorder() < -1.5, f"ocean zorder should sit below land (-1.5), got {ocean.get_zorder()}"
 
 
-def test_ocean_flat_uses_natural_earth(mocker):
-    """On a flat map, ocean() reprojects the Natural-Earth ocean polygons (not the disc shortcut)."""
-    import geopandas as gpd
-    from shapely.geometry import Polygon
-
-    poly = gpd.GeoDataFrame(geometry=[Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])], crs=4326)
-    spy = mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=poly)
+def test_ocean_flat_uses_add_features(mocker):
+    """On a flat map, ocean() draws the Natural-Earth ocean layer via add_features (not the disc shortcut)."""
+    spy = mocker.patch(
+        "digitalearth.scene.maps.decoration.add_features",
+        side_effect=_add_features_drawing([(-10, -10), (10, -10), (10, 10), (-10, 10)]),
+    )
     m = Map(crs=4326)  # flat
     m.ocean()
-    spy.assert_called_once()  # flat path goes through natural_earth("ocean", ...)
+    spy.assert_called_once()
+    assert spy.call_args.args[1] == "ocean"  # add_features(ax, "ocean", ...)
     assert m.ax.collections
 
 
@@ -327,11 +322,7 @@ def test_lakes_fill_on_globe_above_land(land_fc, mocker):
 
 def test_rivers_drawn_as_lines_on_globe(mocker):
     """rivers() draws projected line segments (split at the limb) on a globe."""
-    import geopandas as gpd
-    from shapely.geometry import LineString
-
-    rv = gpd.GeoDataFrame(geometry=[LineString([(-9, 39), (-8, 40), (-7, 41)])], crs=4326)
-    rv.epsg = 4326
+    rv = [np.array([(-9, 39), (-8, 40), (-7, 41)], float)]
     mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=rv)
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
     artists = m.rivers()
@@ -347,31 +338,26 @@ def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
     assert np.isfinite(np.vstack([p.vertices for p in pc.get_paths()])).all()
 
 
-def test_land_flat_uses_natural_earth(mocker):
-    """On a flat map, land() reprojects and fills the Natural-Earth polygons (not the globe path)."""
-    import geopandas as gpd
-    from shapely.geometry import Polygon
-
-    poly = gpd.GeoDataFrame(geometry=[Polygon([(-10, -10), (10, -10), (10, 10), (-10, 10)])], crs=4326)
-    spy = mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=poly)
+def test_land_flat_uses_add_features(mocker):
+    """On a flat map, land() draws the Natural-Earth polygons via add_features (not the globe path)."""
+    spy = mocker.patch(
+        "digitalearth.scene.maps.decoration.add_features",
+        side_effect=_add_features_drawing([(-10, -10), (10, -10), (10, 10), (-10, 10)]),
+    )
     m = Map(crs=4326)  # flat -> _natural_earth flat branch even with polygon=True
     m.land()
     spy.assert_called_once()
+    assert spy.call_args.args[1] == "land"
     assert m.ax.collections
 
 
-def test_polygon_with_hole_uses_exterior_only(mocker):
-    """_project_polygon_features drops interior rings (holes) and still emits a finite exterior ring (v1)."""
-    import geopandas as gpd
-    from shapely.geometry import Polygon
-
-    shell = [(-20, -20), (20, -20), (20, 20), (-20, 20)]
-    hole = [(-5, -5), (5, -5), (5, 5), (-5, 5)]
-    gdf = gpd.GeoDataFrame({"geometry": [Polygon(shell, [hole])]}, crs=4326)
-    gdf.epsg = 4326
+def test_project_polygon_features_single_exterior_ring(mocker):
+    """_project_polygon_features emits one finite ring per exterior ring (holes are dropped at the source)."""
+    # natural_earth returns exterior rings only, so a holed polygon arrives here as its exterior alone.
+    exterior = np.array([(-20, -20), (20, -20), (20, 20), (-20, 20), (-20, -20)], float)
     m = Map(crs=projections.orthographic(0, 0), globe=True)
-    rings = m._project_polygon_features(gdf)
-    assert len(rings) == 1, f"a single polygon (hole dropped) should yield one ring, got {len(rings)}"
+    rings = m._project_polygon_features([exterior])
+    assert len(rings) == 1, f"a single exterior ring should yield one ring, got {len(rings)}"
     assert np.isfinite(np.vstack(rings)).all(), "exterior ring must be finite"
 
 

@@ -2,6 +2,10 @@
 
 Lon/lat text/annotate, a tile basemap, a backdrop ``stock_img``, and the Natural-Earth coastline/border/
 land/ocean/lake/river layers (with the globe limb-splitting/closing helpers behind them).
+
+The reference data comes from ``cleopatra.reference`` (``natural_earth`` raw lon/lat coordinate arrays for
+the globe limb-splitting; ``add_features`` for the flat, hole-aware reprojected render) — these helpers
+moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 """
 import logging
 from typing import Any, List, Optional, Tuple
@@ -9,13 +13,43 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from matplotlib.collections import PolyCollection
 from cleopatra.tiles import add_tiles
+from cleopatra.reference import add_features, natural_earth
 from pyramids.base.crs import reproject_coordinates
-from pyramids.basemap import natural_earth
 
-from digitalearth._crs import source_epsg
 from digitalearth.scene import projections
 
 logger = logging.getLogger(__name__)
+
+#: Natural-Earth layers that ``cleopatra.reference`` renders as filled polygons (vs. line layers); used to
+#: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
+_POLYGON_LAYERS = frozenset({"land", "ocean", "lakes"})
+
+
+def _to_feature_style(kind: str, style: dict) -> dict:
+    """Translate singular matplotlib style keys to the plural collection keys ``add_features`` expects.
+
+    ``add_features`` forwards to a ``LineCollection`` (line layers) or ``PathCollection`` (polygon layers),
+    whose constructors take plural keys (``colors``/``facecolors``/``edgecolors``/``linewidths``). Map the
+    singular ``color``/``facecolor``/``edgecolor``/``linewidth``/``linestyle`` that this package and its
+    callers use — ``color`` becomes ``facecolors`` for polygon layers and ``colors`` for line layers — and
+    pass anything else (e.g. ``alpha``, ``zorder``) through untouched.
+
+    Args:
+        kind: ``"polygon"`` or ``"line"`` — selects the destination for a bare ``color``.
+        style: The merged default/override style with singular matplotlib keys.
+
+    Returns:
+        A style dict keyed for the underlying matplotlib collection.
+    """
+    mapping = {"facecolor": "facecolors", "edgecolor": "edgecolors",
+               "linewidth": "linewidths", "linestyle": "linestyles"}
+    out: dict = {}
+    for key, value in style.items():
+        if key == "color":
+            out["facecolors" if kind == "polygon" else "colors"] = value
+        else:
+            out[mapping.get(key, key)] = value
+    return out
 
 
 class DecorationMixin:
@@ -96,9 +130,9 @@ class DecorationMixin:
         view is preserved so a global backdrop never autoscales a regional view out. With ``dataset=None`` a
         best-effort XYZ-tile basemap is used instead (network; skipped offline).
 
-        Note: pyramids/cleopatra ship no bundled relief raster yet, so the no-argument form relies on tiles;
-        a bundled low-res relief raster is tracked upstream (see ``stock_img`` task in the remaining-plots
-        plan). Until then, supply your own backdrop ``Dataset``.
+        Note: the no-argument form uses a tile basemap. cleopatra now ships a hypsometric relief backdrop
+        (``cleopatra.reference.add_relief``); wiring it in as the offline no-argument default is tracked
+        separately. For a raster backdrop today, supply your own ``Dataset``.
 
         Args:
             dataset: A pyramids ``Dataset`` to use as the backdrop, or ``None`` to try a tile basemap.
@@ -122,57 +156,56 @@ class DecorationMixin:
         return im
 
 
-    def _project_line_features(self, fc: Any) -> List[np.ndarray]:
-        """Project a line FeatureCollection (lon/lat) to the display CRS, split at the projection limb.
+    def _project_line_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
+        """Project lon/lat line parts to the display CRS, split at the projection limb.
 
         Reprojecting a global line to a clipped projection (e.g. orthographic) sends the far side to
-        non-finite coordinates; per-line splitting at those gaps keeps the visible arcs and avoids the
-        ``NaN/Inf`` errors geopandas' ``clip``/``plot`` raise on such geometry.
-        """
-        from_crs = source_epsg(fc, 4326)
-        segments: List[np.ndarray] = []
-        for geom in fc.geometry:
-            if geom is None:
-                continue
-            parts = geom.geoms if geom.geom_type.startswith("Multi") else [geom]
-            for part in parts:
-                xy = np.asarray(part.coords, dtype=float)
-                if xy.size == 0:
-                    continue
-                x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
-                                             from_crs=from_crs, to_crs=self.crs)
-                segments += projections._split_finite(np.asarray(x, float), np.asarray(y, float))
-        return segments
-
-    def _project_polygon_features(self, fc: Any) -> List[np.ndarray]:
-        """Project a polygon FeatureCollection (lon/lat) to the display CRS as finite, limb-clipped fill rings.
-
-        The fill analogue of :meth:`_project_line_features`: each exterior ring is densified, reprojected, and
-        re-closed against the projection boundary (``self._frame()[0]``) so a polygon straddling the limb
-        becomes one or more closed, fully-finite rings instead of injecting ``inf``/``nan`` into the fill.
-        Interior rings (holes) are dropped in v1 — see Digital-Earth#43.
+        non-finite coordinates; per-part splitting at those gaps keeps the visible arcs and avoids the
+        ``NaN/Inf`` matplotlib would otherwise draw.
 
         Args:
-            fc: A pyramids ``FeatureCollection`` of polygons in lon/lat (or any CRS via ``fc.epsg``).
+            parts: ``(N, 2)`` lon/lat arrays (EPSG:4326) as returned by
+                ``cleopatra.reference.natural_earth`` for a line layer.
 
         Returns:
-            A list of closed ``(N, 2)`` projected fill rings (empty when nothing is on the near side).
+            A list of finite ``(M, 2)`` projected polyline segments.
         """
-        from_crs = source_epsg(fc, 4326)
+        segments: List[np.ndarray] = []
+        for part in parts:
+            xy = np.asarray(part, dtype=float)
+            if xy.size == 0:
+                continue
+            x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
+                                         from_crs=4326, to_crs=self.crs)
+            segments += projections._split_finite(np.asarray(x, float), np.asarray(y, float))
+        return segments
+
+    def _project_polygon_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
+        """Project lon/lat polygon rings to the display CRS as finite, limb-clipped fill rings.
+
+        The fill analogue of :meth:`_project_line_features`: each exterior ring is densified, reprojected, and
+        re-closed against the projection boundary (``self._frame()[0]``) so a ring straddling the limb becomes
+        one or more closed, fully-finite rings instead of injecting ``inf``/``nan`` into the fill.
+        ``natural_earth`` returns exterior rings only, so interior rings (holes) are not represented on a
+        globe — see Digital-Earth#43.
+
+        Args:
+            parts: ``(N, 2)`` lon/lat exterior-ring arrays (EPSG:4326) as returned by
+                ``cleopatra.reference.natural_earth`` for a polygon layer.
+
+        Returns:
+            A list of closed ``(M, 2)`` projected fill rings (empty when nothing is on the near side).
+        """
         boundary = self._frame()[0]
         rings: List[np.ndarray] = []
-        for geom in fc.geometry:
-            if geom is None:
+        for part in parts:
+            xy = np.asarray(part, dtype=float)
+            if xy.size == 0:
                 continue
-            parts = geom.geoms if geom.geom_type.startswith("Multi") else [geom]
-            for part in parts:
-                xy = np.asarray(part.exterior.coords, dtype=float)
-                if xy.size == 0:
-                    continue
-                xy = projections.densify_lonlat(xy, step_deg=1.0)
-                x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
-                                             from_crs=from_crs, to_crs=self.crs)
-                rings += projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
+            xy = projections.densify_lonlat(xy, step_deg=1.0)
+            x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
+                                         from_crs=4326, to_crs=self.crs)
+            rings += projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
         return rings
 
     def _fill_globe_polygons(self, rings: List[np.ndarray], *, facecolor: Any, zorder: float) -> Any:
@@ -206,33 +239,39 @@ class DecorationMixin:
         projection limb (the far side reprojects to non-finite coords) and drawn as plain polylines; polygon
         layers (``polygon=True``: land/lakes) are projected and re-closed at the limb into finite rings and
         filled via :meth:`_fill_globe_polygons`. Both are clipped to the boundary when the frame is applied.
-        On a **flat** map, the layer is reprojected with ``GeoDataFrame.plot``; since Natural Earth is global
-        and that autoscales the axes, the data's limits are preserved when a data layer is already present.
+        On a **flat** map, the layer is drawn (and reprojected to the display CRS) by
+        ``cleopatra.reference.add_features`` — hole-aware for polygon layers. ``add_features`` holds the
+        current axis limits, so a global layer never autoscales an already-drawn data view out; on an
+        otherwise-empty axes the view is autoscaled to the new layer instead.
 
         Args:
             layer: Natural-Earth layer name (e.g. ``"coastline"``, ``"land"``).
             resolution: Natural-Earth resolution (``"110m"``/``"50m"``/``"10m"``).
-            defaults: Base style; ``color``/``facecolor`` is the globe fill colour for polygon layers.
+            defaults: Base style; ``color``/``facecolor`` is the fill colour for polygon layers.
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
-            zorder: Globe draw order for polygon fills.
+            zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
             **kwargs: Style overrides merged over ``defaults``.
         """
-        fc = natural_earth(layer, resolution)
         if self.globe:
+            parts = natural_earth(layer, resolution)
             style = {**defaults, **kwargs}
             if polygon:
                 facecolor = style.get("facecolor", style.get("color", "#efefdb"))
-                return self._fill_globe_polygons(self._project_polygon_features(fc),
+                return self._fill_globe_polygons(self._project_polygon_features(parts),
                                                  facecolor=facecolor, zorder=zorder)
             style.pop("edgecolor", None); style.pop("facecolor", None)
-            artists = [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in self._project_line_features(fc)]
-            return artists
-        with self._preserve_view():
-            artist = fc.to_crs(self.crs).plot(ax=self.ax, **{**defaults, **kwargs})
-        return artist
+            segments = self._project_line_features(parts)
+            return [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in segments]
+        kind = "polygon" if layer in _POLYGON_LAYERS else "line"
+        style = _to_feature_style(kind, {**defaults, **kwargs})
+        had_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        add_features(self.ax, layer, resolution, crs=self.crs, zorder=zorder, **style)
+        if not had_data:  # add_features pinned the (empty) view; fit it to the layer we just drew
+            self.ax.autoscale()
+        return self.ax
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
-        """Overlay Natural-Earth coastlines (``pyramids.basemap.natural_earth("coastline")``).
+        """Overlay Natural-Earth coastlines (``cleopatra.reference`` ``"coastline"`` layer).
 
         Returns:
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist

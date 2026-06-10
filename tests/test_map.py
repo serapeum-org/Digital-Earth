@@ -81,15 +81,19 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
     """A global Natural Earth layer must NOT zoom the axes out past the already-drawn data.
 
     Guards the regression where coastlines/borders autoscaled the axes to the whole world, shrinking a
-    regional DEM to an invisible speck. Mocks the (network) Natural Earth fetch with a global line.
+    regional DEM to an invisible speck. Mocks the (network) add_features with a global line that, like the
+    real helper, holds the current axis limits.
     """
-    import geopandas as gpd
-    from shapely.geometry import LineString
+    import numpy as np
+    from matplotlib.collections import LineCollection
 
-    world = gpd.GeoDataFrame(
-        geometry=[LineString([(-179, -89), (179, 89)])], crs=4326
-    )
-    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=world)
+    def fake_add_features(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        ax.add_collection(LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)]))
+        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        return ax
+
+    mocker.patch("digitalearth.scene.maps.decoration.add_features", side_effect=fake_add_features)
 
     m = Map(crs=3857)
     m.imshow(dataset)
