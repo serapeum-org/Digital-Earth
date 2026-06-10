@@ -66,13 +66,10 @@ def test_no_cartopy_import():
 
 @pytest.mark.parametrize("layer", ["coastlines", "borders"])
 def test_natural_earth_overlays(dataset, layer):
-    """Coastlines/borders overlay when Natural Earth data is reachable; skipped offline."""
+    """Coastlines/borders overlay the real 110m Natural-Earth lines (seeded cache, offline)."""
     m = Map(crs=3857)
     m.imshow(dataset)
-    try:
-        getattr(m, layer)()
-    except Exception as exc:  # network/download unavailable in this environment
-        pytest.skip(f"Natural Earth {layer} unavailable offline: {exc}")
+    getattr(m, layer)()
     # the vector layer added at least one artist (collection/line) to the axes
     assert m.ax.collections or m.ax.lines
 
@@ -81,15 +78,19 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
     """A global Natural Earth layer must NOT zoom the axes out past the already-drawn data.
 
     Guards the regression where coastlines/borders autoscaled the axes to the whole world, shrinking a
-    regional DEM to an invisible speck. Mocks the (network) Natural Earth fetch with a global line.
+    regional DEM to an invisible speck. Mocks the (network) add_features with a global line that, like the
+    real helper, holds the current axis limits.
     """
-    import geopandas as gpd
-    from shapely.geometry import LineString
+    import numpy as np
+    from matplotlib.collections import LineCollection
 
-    world = gpd.GeoDataFrame(
-        geometry=[LineString([(-179, -89), (179, 89)])], crs=4326
-    )
-    mocker.patch("digitalearth.scene.maps.decoration.natural_earth", return_value=world)
+    def fake_add_features(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        ax.add_collection(LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)]))
+        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        return ax
+
+    mocker.patch("digitalearth.scene.maps.decoration.add_features", side_effect=fake_add_features)
 
     m = Map(crs=3857)
     m.imshow(dataset)
@@ -102,27 +103,73 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
     assert len(m.ax.images) == 1
 
 
+def test_coastlines_preserve_extent_of_plain_line(mocker):
+    """A pre-drawn raw line artist (no registered layer) must also survive a Natural Earth overlay.
+
+    The flat ``had_data`` guard counts ``ax.lines`` too, so a view set by a bare ``ax.plot`` is held rather
+    than autoscaled out when the first overlay is added.
+    """
+    import numpy as np
+    from matplotlib.collections import LineCollection
+
+    def fake_add_features(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
+        xlim, ylim = ax.get_xlim(), ax.get_ylim()
+        ax.add_collection(LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)]))
+        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        return ax
+
+    mocker.patch("digitalearth.scene.maps.decoration.add_features", side_effect=fake_add_features)
+
+    m = Map(crs=3857)
+    m.ax.plot([0, 1], [0, 1])  # a raw line artist, not a registered data layer
+    m.ax.set_xlim(0, 1); m.ax.set_ylim(0, 1)
+    m.coastlines()
+    assert m.ax.get_xlim() == (0, 1), "coastlines blew out the x extent of a plain line"
+    assert m.ax.get_ylim() == (0, 1), "coastlines blew out the y extent of a plain line"
+
+
+def test_to_feature_style_routes_color_and_drops_line_fill():
+    """_to_feature_style maps singular keys to plural collection keys and ignores fill/edge on line layers."""
+    from digitalearth.scene.maps.decoration import _to_feature_style
+
+    poly = _to_feature_style("polygon", {"color": "red", "edgecolor": "k", "linewidth": 2, "alpha": 0.5})
+    assert poly == {"facecolors": "red", "edgecolors": "k", "linewidths": 2, "alpha": 0.5}
+
+    # On a line layer, a bare color becomes `colors` and fill/edge colours are dropped (no face on a line).
+    line = _to_feature_style("line", {"color": "blue", "facecolor": "red", "edgecolor": "k", "linewidth": 1})
+    assert line == {"colors": "blue", "linewidths": 1}
+
+
 @pytest.mark.parametrize("layer", ["land", "ocean"])
 def test_natural_earth_fills(dataset, layer):
-    """Land/ocean polygon fills overlay when reachable; skipped offline."""
+    """Land/ocean polygon fills overlay the real 110m Natural-Earth data (seeded cache, offline)."""
     m = Map(crs=3857)
     m.imshow(dataset)
-    try:
-        getattr(m, layer)()
-    except Exception as exc:  # network/download unavailable in this environment
-        pytest.skip(f"Natural Earth {layer} unavailable offline: {exc}")
+    getattr(m, layer)()
     assert m.ax.collections
 
 
-def test_basemap_tiles(dataset):
-    """A tile basemap is added when tile servers are reachable; skipped offline."""
+def test_basemap_tiles(dataset, mocker):
+    """basemap() wires the axes/CRS through to cleopatra's tile fetch and adds the returned imagery.
+
+    The tiles come from a live XYZ server, so there is no static asset to commit; mock the network boundary
+    (``decoration.add_tiles``) with a stand-in that adds an ``AxesImage`` — exactly the contract ``basemap``
+    relies on — so the wiring is asserted deterministically offline instead of skipped.
+    """
+    import numpy as np
+
+    def fake_add_tiles(ax, source=None, crs=None, **kwargs):
+        assert crs == 3857  # basemap must forward the display CRS to the tile fetch
+        return ax.imshow(np.zeros((2, 2, 3)))
+
+    spy = mocker.patch("digitalearth.scene.maps.decoration.add_tiles", side_effect=fake_add_tiles)
+
     m = Map(crs=3857)
     m.imshow(dataset)
-    try:
-        m.basemap()
-    except Exception as exc:  # network unavailable in this environment
-        pytest.skip(f"basemap tiles unavailable offline: {exc}")
-    assert m.ax.images  # tile imagery added at least one AxesImage
+    before = len(m.ax.images)
+    m.basemap()
+    spy.assert_called_once()
+    assert len(m.ax.images) == before + 1  # tile imagery added one AxesImage
 
 
 def test_text_at_lonlat(dataset):

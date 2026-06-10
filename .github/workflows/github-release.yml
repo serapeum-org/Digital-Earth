@@ -36,7 +36,14 @@ on:
         default: false
 
 jobs:
+  pure-wheel-test:
+    uses: ./.github/workflows/pure-wheel-test.yml
+    # Gate the exact branch the release is cut from, so the wheel that is tested is the commit being released.
+    with:
+      branch: ${{ inputs.release-branch }}
+
   release:
+    needs: pure-wheel-test
     runs-on: ubuntu-latest
     permissions:
       contents: write

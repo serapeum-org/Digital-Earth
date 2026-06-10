@@ -1,0 +1,124 @@
+name: Pure Wheel - Build & Test
+
+# Validates the PyPI install path: build digitalearth's pure-Python wheel and,
+# on a clean interpreter (no pixi, no conda, no editable src/ on the path),
+# `pip install` it and run the full test suite against the INSTALLED package.
+#
+# digitalearth ships no native code of its own, so there is nothing to compile
+# and no per-platform wheel — one pure-Python wheel serves every OS/Python. Its
+# native GDAL bits arrive transitively through the `pyramids-gis` and `pyogrio`
+# PyPI wheels (which vendor GDAL), so unlike pyramids' own pure-wheel-test this
+# job needs no conda-forge GDAL. The point is to catch packaging regressions the
+# pixi-based `tests.yml` cannot see: missing package data (the autostyle YAML
+# library), an import that only works from `src/`, or a runtime dependency that
+# is satisfied by the pixi env but absent from `[project.dependencies]`.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch / ref to build and test (defaults to the ref selected in the UI)"
+        required: false
+        default: ""
+        type: string
+  workflow_call:
+    inputs:
+      branch:
+        description: "Branch / ref to build and test (the caller forwards its release branch here)"
+        required: false
+        default: ""
+        type: string
+
+# Cancel superseded runs: a new push to a branch cancels the previous in-progress
+# run instead of letting both compete for the hosted-runner pool.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Set up Pixi
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+
+      - name: Build wheel
+        run: pixi run -e dev python -m build --wheel --outdir dist/
+
+      - name: Verify package data in wheel
+        # The autostyle YAML library is the only non-code payload; if it ever
+        # drops out of [tool.setuptools.package-data] the wheel still imports
+        # but styling breaks at runtime, so assert it is bundled.
+        run: |
+          pixi run -e dev python -m zipfile -l dist/*.whl | grep "digitalearth/autostyle/library/variables.yml"
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+
+  test-wheel:
+    needs: build-wheel
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+
+      - name: Install wheel + vector-IO backend
+        shell: bash
+        # `pyogrio` is the GeoDataFrame read/write backend (geopandas-base no
+        # longer pulls one in). It is a pixi/conda dependency, NOT a wheel
+        # runtime dep, so the clean-install path must add it explicitly — the
+        # geojson-reading tests fail without it.
+        run: |
+          pip install dist/*.whl pyogrio
+
+      - name: Verify package import
+        # __version__ is derived from installed metadata, so a successful
+        # install must report the real version (not "unknown").
+        run: python -c "import digitalearth; print(digitalearth.__version__)"
+
+      - name: Install test runner
+        run: pip install pytest pytest-env pytest-mock
+
+      - name: Run test suite against the installed wheel
+        shell: bash
+        # `-o pythonpath=` overrides the `pythonpath = ["src"]` in pyproject so
+        # `import digitalearth` resolves to the INSTALLED wheel, not the source
+        # tree. Tests read fixtures via repo-root-relative paths, so run from the
+        # checked-out root.
+        run: pytest -vvv -o "pythonpath=" tests/
