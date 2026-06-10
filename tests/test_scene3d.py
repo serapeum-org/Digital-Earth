@@ -81,10 +81,13 @@ def test_save_dispatches_png_vs_html(tmp_path):
     scene = Scene3D(off_screen=True)
     scene.add_mesh(_dem_grid(), scalars="z")
     png, html = tmp_path / "s.png", tmp_path / "s.html"
-    scene.save(str(png))
-    scene.save(str(html))
+    png_result = scene.save(str(png))
+    html_result = scene.save(str(html))
     assert png.exists() and png.stat().st_size > 0
     assert html.exists() and html.stat().st_size > 0
+    # save() returns the RGB frame for a raster path and None for the HTML path
+    assert png_result is not None and png_result.ndim == 3
+    assert html_result is None
     scene.close()
 
 

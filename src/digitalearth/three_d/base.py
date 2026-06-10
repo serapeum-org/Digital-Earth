@@ -126,7 +126,7 @@ class Scene3DBase:
         self.plotter.export_html(path)
         return path
 
-    def save(self, path: str, **kwargs: Any) -> np.ndarray:
+    def save(self, path: str, **kwargs: Any) -> Optional[np.ndarray]:
         """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
 
         Args:
@@ -134,11 +134,12 @@ class Scene3DBase:
             **kwargs: Forwarded to :meth:`screenshot` for the PNG path (ignored for HTML).
 
         Returns:
-            numpy.ndarray: the rendered frame for the PNG path; an empty array for the HTML path.
+            Optional[numpy.ndarray]: the rendered ``(H, W, 3)`` RGB frame for the PNG path, or ``None`` for the
+            HTML path (which writes an interactive page rather than a raster frame).
         """
         if str(path).lower().endswith(".html"):
             self.export_html(path)
-            return np.empty((0,))
+            return None
         return self.screenshot(path=path, **kwargs)
 
     def show(self, **kwargs: Any) -> Any:
