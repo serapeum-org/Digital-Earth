@@ -44,6 +44,8 @@ dependencies = [
     "pyvista >=0.48",
     "trame >=3.13",
     "geovista >=0.5.3",
+    "imageio >=2.34",
+    "imageio-ffmpeg >=0.5",
 ]
 
 [project.scripts]
@@ -231,6 +233,8 @@ py313 = { features = ["py313", "dev"], solve-group = "py313" }
 pyvista = ">=0.48"
 trame = ">=3.13"
 geovista = ">=0.5.3"
+imageio = ">=2.34"
+imageio-ffmpeg = ">=0.5"
 
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
