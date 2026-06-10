@@ -92,3 +92,12 @@ def test_jupyter_switches_backend(monkeypatch):
     scene.jupyter("static")
     assert captured["backend"] == "static"
     scene.close()
+
+
+def test_finalize_frames_noop_without_writer():
+    """_finalize_frames is a safe no-op when no GIF/MP4 writer was opened (defensive path)."""
+    from digitalearth.three_d.animation import _finalize_frames
+
+    scene = Scene3D(off_screen=True)  # never opened a writer -> plotter has no mwriter
+    _finalize_frames(scene.plotter)  # must not raise
+    scene.close()
