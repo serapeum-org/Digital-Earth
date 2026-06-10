@@ -15,7 +15,8 @@ import numpy as np
 
 from digitalearth.sources import Source, get_source
 
-#: Scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field.
+#: Fallback scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field (used only if the mesh
+#: exposes no active scalars). Prefer ``mesh.active_scalars_name`` so the binding tracks geovista's own choice.
 _GEOVISTA_DATA = "point_data"
 
 
@@ -117,7 +118,10 @@ class GlobeMixin:
         _check_geographic(lon, lat)
 
         mesh = gv.Transform.from_1d(lon, lat, data=field)
-        actor = self.add_mesh(mesh, scalars=_GEOVISTA_DATA, cmap=cmap, **kwargs)
+        # Colour by whatever scalar geovista set active, so the binding tracks geovista rather than a hardcoded
+        # array name; fall back to the documented constant only if no active scalar is present.
+        scalars = mesh.active_scalars_name or _GEOVISTA_DATA
+        actor = self.add_mesh(mesh, scalars=scalars, cmap=cmap, **kwargs)
 
         if coastlines:
             from geovista.geometry import coastlines as _load_coastlines
