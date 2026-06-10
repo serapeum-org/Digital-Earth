@@ -6,9 +6,13 @@ pyramids — a ``DatasetCollection`` (its ``.values`` stack) or a 3-D array read
 **never** xarray (the HARD RULE / ``test_no_competitor_imports`` guard); a ``DatasetCollection`` is duck-typed via
 ``hasattr(data, "values")`` so nothing GIS is imported.
 
-VTK fills a uniform grid in **Fortran order**, so the scalar attaches with ``ravel(order="F")``. Volume rendering
-uses ``cell_data`` on a grid sized ``shape + 1`` (one more point than cells per axis); isosurfacing uses
-``point_data`` on a grid sized ``shape``.
+**Axis convention.** A cube indexed ``(nz, ny, nx)`` — i.e. ``(level/time, lat/y, lon/x)`` — is laid out so that
+**lon → world X, lat → world Y, level → world Z**. This requires reversing the dimensions for VTK (which orders
+``dimensions`` as ``(X, Y, Z)``) and transposing the cube to match: the grid is sized ``shape[::-1]`` (``+1`` for
+the cell-data volume grid) and the scalar attaches as ``cube.transpose(2, 1, 0).ravel(order="F")`` (VTK fills a
+uniform grid in Fortran order). Without this, the first cube axis would land on X and lon would render vertically.
+Volume rendering uses ``cell_data`` on a grid sized ``shape[::-1] + 1`` (one more point than cells per axis);
+isosurfacing uses ``point_data`` on a grid sized ``shape[::-1]``.
 """
 from typing import Any, Optional, Sequence
 
@@ -38,17 +42,25 @@ def _cube(data: Any) -> np.ndarray:
     return arr
 
 
+def _to_vtk_axes(cube: np.ndarray) -> np.ndarray:
+    """Reorder a ``(nz, ny, nx)`` cube to VTK's ``(nx, ny, nz)`` Fortran-ravelled scalar (lon→X, lat→Y, level→Z)."""
+    return cube.transpose(2, 1, 0).ravel(order="F")
+
+
 def _volume_grid(cube: np.ndarray) -> pv.ImageData:
-    """Build a cell-data ``ImageData`` (dimensions ``shape + 1``) for ray-cast volume rendering."""
-    grid = pv.ImageData(dimensions=np.array(cube.shape) + 1)
-    grid.cell_data[FIELD] = cube.ravel(order="F")
+    """Build a cell-data ``ImageData`` (dimensions ``shape[::-1] + 1``) for ray-cast volume rendering.
+
+    The cube ``(nz, ny, nx)`` maps to world ``(x=lon, y=lat, z=level)`` — see the module docstring's axis note.
+    """
+    grid = pv.ImageData(dimensions=np.array(cube.shape[::-1]) + 1)
+    grid.cell_data[FIELD] = _to_vtk_axes(cube)
     return grid
 
 
 def _point_grid(cube: np.ndarray) -> pv.ImageData:
-    """Build a point-data ``ImageData`` (dimensions ``shape``) for isosurface extraction."""
-    grid = pv.ImageData(dimensions=cube.shape)
-    grid.point_data[FIELD] = cube.ravel(order="F")
+    """Build a point-data ``ImageData`` (dimensions ``shape[::-1]``) for isosurface extraction (lon→X, lat→Y)."""
+    grid = pv.ImageData(dimensions=cube.shape[::-1])
+    grid.point_data[FIELD] = _to_vtk_axes(cube)
     return grid
 
 

@@ -70,3 +70,19 @@ def test_isosurface_auto_levels():
     scene.isosurface(_gaussian_cube(12))
     assert scene.layers[0][0].n_points > 0
     scene.close()
+
+
+def test_cube_axes_map_lon_to_world_x():
+    """A `[level, lat, lon]` cube renders with lon→world-X, lat→world-Y (not axis-transposed).
+
+    Guards L1: a feature placed only at the max-lon / max-lat cell must land at the high-x / high-y corner of
+    the point grid, not on the vertical (z) axis.
+    """
+    from digitalearth.three_d.volume import _point_grid
+
+    cube = np.zeros((2, 3, 5))  # (nz=level, ny=lat, nx=lon)
+    cube[:, 2, 4] = 1.0  # max lat (idx 2) and max lon (idx 4)
+    grid = _point_grid(cube)
+    feature = grid.points[grid.point_data["field"] > 0.5]
+    assert set(feature[:, 0]) == {4.0}  # lon → world X
+    assert set(feature[:, 1]) == {2.0}  # lat → world Y
