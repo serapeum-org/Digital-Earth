@@ -88,6 +88,24 @@ def test_save_dispatches_png_vs_html(tmp_path):
     scene.close()
 
 
+def test_add_volume_registers_layer():
+    """add_volume() ray-casts a scalar field and registers it as a layer."""
+    scene = Scene3D(off_screen=True)
+    grid = pv.ImageData(dimensions=(6, 6, 6))
+    grid.cell_data["v"] = np.linspace(0.0, 1.0, 5 * 5 * 5)
+    actor = scene.add_volume(grid, cmap="viridis")
+    assert actor is not None and len(scene.layers) == 1
+    scene.close()
+
+
+def test_show_off_screen_does_not_block():
+    """show() renders a frame off-screen and returns without opening a blocking window."""
+    scene = Scene3D(off_screen=True)
+    scene.add_mesh(_dem_grid())
+    scene.show()  # must return (off-screen); no assertion beyond "did not hang/raise"
+    scene.close()
+
+
 def test_context_manager_closes_plotter():
     """The context manager closes the plotter on exit and does not suppress exceptions."""
     with Scene3D(off_screen=True) as scene:
