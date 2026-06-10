@@ -32,7 +32,8 @@ def _to_feature_style(kind: str, style: dict) -> dict:
     whose constructors take plural keys (``colors``/``facecolors``/``edgecolors``/``linewidths``). Map the
     singular ``color``/``facecolor``/``edgecolor``/``linewidth``/``linestyle`` that this package and its
     callers use — ``color`` becomes ``facecolors`` for polygon layers and ``colors`` for line layers — and
-    pass anything else (e.g. ``alpha``, ``zorder``) through untouched.
+    pass anything else (e.g. ``alpha``, ``zorder``) through untouched. Fill/edge colours are dropped for line
+    layers (a ``LineCollection`` has no face/edge), mirroring the globe line path which pops them.
 
     Args:
         kind: ``"polygon"`` or ``"line"`` — selects the destination for a bare ``color``.
@@ -45,6 +46,8 @@ def _to_feature_style(kind: str, style: dict) -> dict:
                "linewidth": "linewidths", "linestyle": "linestyles"}
     out: dict = {}
     for key, value in style.items():
+        if kind == "line" and key in ("facecolor", "edgecolor"):
+            continue  # a LineCollection has no fill/edge; ignore these (as the globe line path does)
         if key == "color":
             out["facecolors" if kind == "polygon" else "colors"] = value
         else:
@@ -264,7 +267,8 @@ class DecorationMixin:
             return [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in segments]
         kind = "polygon" if layer in _POLYGON_LAYERS else "line"
         style = _to_feature_style(kind, {**defaults, **kwargs})
-        had_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        had_data = (bool(self.layers) or bool(self.ax.images)
+                    or bool(self.ax.collections) or bool(self.ax.lines))
         add_features(self.ax, layer, resolution, crs=self.crs, zorder=zorder, **style)
         if not had_data:  # add_features pinned the (empty) view; fit it to the layer we just drew
             self.ax.autoscale()

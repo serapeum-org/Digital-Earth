@@ -27,6 +27,12 @@ on:
         default: ""
         type: string
   workflow_call:
+    inputs:
+      branch:
+        description: "Branch / ref to build and test (the caller forwards its release branch here)"
+        required: false
+        default: ""
+        type: string
 
 # Cancel superseded runs: a new push to a branch cancels the previous in-progress
 # run instead of letting both compete for the hosted-runner pool.
