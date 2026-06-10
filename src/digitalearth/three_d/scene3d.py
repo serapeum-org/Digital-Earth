@@ -5,23 +5,26 @@
 verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin, …)`` composition:
 
 - :class:`~digitalearth.three_d.terrain.TerrainMixin` → :meth:`terrain` (DEM/raster → 3-D relief).
+- :class:`~digitalearth.three_d.point_cloud.PointCloudMixin` → :meth:`point_cloud` (scattered points / LiDAR).
 
-Further mixins (point clouds, volumes, vectors, textured globe) are added as the tier is built.
+Further mixins (volumes, vectors, textured globe) are added as the tier is built.
 
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
 by ``tests/test_no_competitor_imports.py``); all CRS/reproject work stays in pyramids.
 """
 from digitalearth.three_d.base import Scene3DBase, house_theme
+from digitalearth.three_d.point_cloud import PointCloudMixin
 from digitalearth.three_d.terrain import TerrainMixin
 
 __all__ = ["Scene3D", "house_theme"]
 
 
-class Scene3D(Scene3DBase, TerrainMixin):
+class Scene3D(Scene3DBase, TerrainMixin, PointCloudMixin):
     """A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.
 
     Inherits the plotter/layer/render lifecycle from :class:`~digitalearth.three_d.base.Scene3DBase` and the
-    plot methods from the capability mixins (currently :meth:`terrain`). See those classes for the full surface.
+    plot methods from the capability mixins (:meth:`terrain`, :meth:`point_cloud`). See those classes for the
+    full surface.
 
     Examples:
         - Create a headless scene, render a DEM as 3-D relief, screenshot it:
