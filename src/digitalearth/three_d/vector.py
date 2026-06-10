@@ -35,8 +35,14 @@ def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
 
     Yields:
         numpy.ndarray: the ``(M, 2)`` exterior-ring coordinates of each polygon part.
+
+    Raises:
+        TypeError: if ``geom`` is not a ``Polygon`` or ``MultiPolygon`` (e.g. a ``Point``/``LineString``).
     """
-    parts = geom.geoms if geom.geom_type.startswith("Multi") else [geom]
+    geom_type = geom.geom_type
+    if geom_type not in ("Polygon", "MultiPolygon"):
+        raise TypeError(f"extruded_polygons expects Polygon/MultiPolygon geometries, got {geom_type}")
+    parts = geom.geoms if geom_type == "MultiPolygon" else [geom]
     for part in parts:
         yield np.asarray(part.exterior.coords, dtype="float64")
 

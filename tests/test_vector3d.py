@@ -101,3 +101,14 @@ def test_extruded_polygons_empty_raises():
     with pytest.raises(ValueError, match="no polygon"):
         scene.extruded_polygons(empty)
     scene.close()
+
+
+def test_extruded_polygons_rejects_non_polygon():
+    """extruded_polygons() raises a clear TypeError on non-polygon geometry (e.g. a Point)."""
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame({"pop": [1.0]}, geometry=[Point(0, 0)])
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(TypeError, match="Polygon"):
+        scene.extruded_polygons(gdf)
+    scene.close()
