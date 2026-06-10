@@ -227,9 +227,10 @@ py313 = { features = ["py313", "dev"], solve-group = "py313" }
 
 [tool.pixi.feature.viz3d.pypi-dependencies]
 # PyPI wheels (pyvista bundles a VTK wheel) — keeps the 3D tier installable without a heavy conda solve.
-# geovista (the optional textured globe, D3.5) is added when that task lands; it is imported lazily.
+# geovista powers the optional textured globe (D3.5); it is imported lazily inside Scene3D.globe().
 pyvista = ">=0.48"
 trame = ">=3.13"
+geovista = ">=0.5.3"
 
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
