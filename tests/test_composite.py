@@ -5,7 +5,7 @@ import pytest
 from pyramids.dataset import Dataset
 
 from digitalearth.scene import Map
-from digitalearth.scene.map import _stretch_to_unit
+from digitalearth.scene.maps.raster import _stretch_to_unit
 
 
 @pytest.fixture
@@ -60,3 +60,24 @@ def test_rgb_composite_custom_band_order(rgb_dataset):
     m = Map(crs=rgb_dataset.epsg)
     m.rgb_composite(rgb_dataset, bands=(3, 2, 1))
     assert len(m.ax.images) == 1
+
+
+def test_rgb_composite_mask_flag_controls_nodata(rgb_dataset):
+    """rgb_composite(mask_nodata=...) toggles whether nodata cells are excluded from the stretch (review L2).
+
+    The default masks nodata (cells can be NaN/transparent); mask_nodata=False keeps the raw values so the
+    rendered RGB array is fully finite.
+    """
+    import numpy as np
+
+    m = Map(crs=rgb_dataset.epsg)
+    m.rgb_composite(rgb_dataset, mask_nodata=False)
+    arr = np.asarray(m.ax.images[-1].get_array(), dtype="float64")
+    assert np.isfinite(arr).all(), "mask_nodata=False should keep every cell finite (raw stretch)"
+
+
+def test_hsv_composite_accepts_mask_flag(rgb_dataset):
+    """hsv_composite accepts the mask_nodata flag and still renders one image (review L2)."""
+    m = Map(crs=rgb_dataset.epsg)
+    m.hsv_composite(rgb_dataset, mask_nodata=False)
+    assert len(m.ax.images) == 1, "hsv_composite should still render with mask_nodata=False"

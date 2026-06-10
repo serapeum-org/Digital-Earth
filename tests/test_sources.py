@@ -146,17 +146,17 @@ class TestExtractorHelpers:
         assert _band_item(("a",), 5, default=None) is None
 
     def test_mask_nodata_passthrough_when_none(self):
-        """_mask_nodata returns the array unchanged (as float) when nodata is None."""
-        from digitalearth.sources.extractors import _mask_nodata
+        """mask_nodata returns the array unchanged (as float) when nodata is None."""
+        from digitalearth._arrays import mask_nodata
 
-        out = _mask_nodata(np.array([1, 2, 3]), None)
+        out = mask_nodata(np.array([1, 2, 3]), None)
         np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
 
     def test_mask_nodata_replaces_with_nan(self):
-        """_mask_nodata replaces cells matching nodata with NaN."""
-        from digitalearth.sources.extractors import _mask_nodata
+        """mask_nodata replaces cells matching nodata with NaN."""
+        from digitalearth._arrays import mask_nodata
 
-        out = _mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
+        out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
         assert np.isnan(out[1]) and not np.isnan(out[0])
 
     def test_from_netcdf_no_variables_raises(self):
@@ -193,3 +193,23 @@ def test_no_competitor_imports():
             if f"import {mod}" in text or f"from {mod}" in text:
                 offenders.append(f"{py.name}: {mod}")
     assert not offenders, f"competitor imports found: {offenders}"
+
+
+def test_raster_source_nodata_is_exact_not_tolerant():
+    """get_source masks nodata by exact match, keeping values merely *near* the sentinel (review L1).
+
+    Regression for the tolerant->exact change: a cell equal to the nodata sentinel becomes NaN, but a cell
+    0.01% away from it is preserved (the old isclose(rtol=1e-3) rule would have nulled it).
+    """
+    from pyramids.dataset import Dataset
+
+    nodata = -9999.0
+    near = nodata * (1 + 1e-4)  # within 0.1% of the sentinel, but not equal
+    arr = np.array([[1.0, nodata], [near, 4.0]], dtype="float64")
+    ds = Dataset.create_from_array(
+        arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326, no_data_value=nodata
+    )
+    z = get_source(ds).z.values
+    assert np.isnan(z[0, 1]), "exact nodata cell should be masked"
+    assert not np.isnan(z[1, 0]), "a value near (but != ) nodata must be kept under exact-compare"
+    assert z[0, 0] == 1.0 and z[1, 1] == 4.0, f"real values changed: {z}"

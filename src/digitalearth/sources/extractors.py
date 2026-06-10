@@ -13,12 +13,38 @@ from typing import Any, Optional
 import numpy as np
 from pyramids.dataset import Dataset
 
+from digitalearth._arrays import mask_nodata, read_masked_band
+from digitalearth._crs import source_epsg
+from digitalearth._types import PlottableData, RasterLike
 from digitalearth.sources.dimension import DimensionInfo
 from digitalearth.sources.source import Source
 
 
+def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
+    """Read several raster bands into one band-last ``(rows, cols, n)`` ``float64`` stack.
+
+    The multiband companion to :func:`extract` / ``get_source`` (which model a single band): it gives the
+    composite renderers (``rgb_composite`` / ``hsv_composite``) a way to read a band stack through the sources
+    layer instead of calling pyramids' ``read_array`` directly.
+
+    Args:
+        data: A pyramids ``Dataset`` (duck-typed by ``read_array`` / ``no_data_value``).
+        bands: An ordered iterable of **1-based** band indices to stack (e.g. ``(1, 2, 3)``).
+        mask: When ``True`` (default) each band's nodata cells are set to ``NaN`` (consistent with the
+            single-band path); ``False`` returns the raw cast values.
+
+    Returns:
+        np.ndarray: a ``float64`` array of shape ``(rows, cols, len(bands))``.
+    """
+    layers = [
+        read_masked_band(data, b) if mask else np.asarray(data.read_array(band=b - 1), dtype="float64")
+        for b in bands
+    ]
+    return np.dstack(layers)
+
+
 def extract(
-    data: Any,
+    data: PlottableData,
     *,
     band: int = 1,
     variable: Optional[str] = None,
@@ -67,14 +93,6 @@ def _axis(values: Any, name: str, units: Optional[str] = None) -> DimensionInfo:
     return DimensionInfo(np.asarray(values), name, units)
 
 
-def _mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:
-    """Return ``arr`` as float with cells equal to ``nodata`` replaced by NaN."""
-    a = np.asarray(arr, dtype="float64")
-    if nodata is None:
-        return a
-    return np.where(np.isclose(a, nodata, rtol=1e-3), np.nan, a)
-
-
 def _band_item(seq: Any, index: int, default: Any = None) -> Any:
     """Safely read ``seq[index]`` from a per-band list/tuple, tolerating ``None``/short sequences."""
     if not seq:
@@ -89,7 +107,7 @@ def _from_raster(ds: Dataset, band: int, metadata: Optional[dict]) -> Source:
     """Build a raster :class:`Source` from a pyramids ``Dataset`` (1-based ``band``)."""
     idx = band - 1
     arr = ds.read_array(band=idx)
-    z = _mask_nodata(arr, _band_item(ds.no_data_value, idx))
+    z = mask_nodata(arr, _band_item(ds.no_data_value, idx))
     units = _band_item(ds.band_units, idx) or None
     return Source(
         z=_axis(z, "z", units),
@@ -117,7 +135,7 @@ def _from_netcdf(nc: Any, variable: Optional[str], metadata: Optional[dict]) -> 
     nodata = nc.no_data_value
     if isinstance(nodata, (list, tuple)):
         nodata = nodata[0] if len(nodata) else None
-    z = _mask_nodata(arr, nodata)
+    z = mask_nodata(arr, nodata)
     return Source(
         z=_axis(z, "z"),
         x=_axis(nc.lon, "x"),
@@ -177,16 +195,11 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
     column = value_cols[0] if value_cols else None
     z = _axis(fc[column].to_numpy(), "z") if column is not None else None
 
-    crs = (
-        fc.epsg
-        if fc.epsg is not None
-        else (fc.crs.to_epsg() if fc.crs is not None else None)
-    )
     return Source(
         z=z,
         x=_axis(xs, "x"),
         y=_axis(ys, "y"),
-        crs=crs,
+        crs=source_epsg(fc),
         metadata={"kind": "vector", "variable": column or "", **(metadata or {})},
     )
 

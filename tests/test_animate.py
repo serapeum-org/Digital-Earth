@@ -90,15 +90,15 @@ class TestAnimate:
 
     def test_resolve_clim_caps_scan(self, mocker):
         """_resolve_animation_clim scans at most _CLIM_SCAN_CAP frames of a large stack (L2)."""
-        from digitalearth.scene import map as map_mod
+        from digitalearth.scene.maps import animation as anim_mod
 
-        spy = mocker.spy(map_mod.Map, "_stack_clim")
+        spy = mocker.spy(anim_mod.AnimationMixin, "_stack_clim")
         m = Map(crs=4326)
-        big = [_field(float(o)) for o in range(map_mod._CLIM_SCAN_CAP * 3)]
+        big = [_field(float(o)) for o in range(anim_mod._CLIM_SCAN_CAP * 3)]
         opts = {}
         m._resolve_animation_clim(big, opts)
         scanned = len(spy.call_args.args[0])
-        assert scanned <= map_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {map_mod._CLIM_SCAN_CAP}"
+        assert scanned <= anim_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
         assert "vmin" in opts and "vmax" in opts, "clim should still be resolved from the sampled frames"
 
     def test_titles_length_mismatch_raises(self, stack):
@@ -257,3 +257,29 @@ class TestRotate:
         anim.save(str(out), writer=PillowWriter(fps=4))
         assert out.stat().st_size > 0, "rotation should still render when coastlines fail"
         assert coast.call_count >= 2, "coastlines should be attempted on each frame"
+
+
+class TestDrawAnimationFrame:
+    """Tests for the shared Map._draw_animation_frame helper (PB-4)."""
+
+    def test_sets_title_and_draws_field(self):
+        """_draw_animation_frame draws the field and sets the title when given.
+
+        Test scenario:
+            On a flat map (globe=False) the field is drawn as one layer and the title is applied;
+            ocean is skipped because it is globe-only.
+        """
+        m = Map(crs=4326)
+        m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=True, coastlines=False, title="frame-0")
+        assert m.ax.get_title() == "frame-0", f"title not set, got {m.ax.get_title()!r}"
+        assert len(m.layers) == 1, f"expected one drawn field layer, got {len(m.layers)}"
+
+    def test_no_title_leaves_title_empty(self):
+        """_draw_animation_frame leaves the title untouched when none is given.
+
+        Test scenario:
+            Omitting title draws the field without setting any axes title.
+        """
+        m = Map(crs=4326)
+        m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=False, coastlines=False)
+        assert m.ax.get_title() == "", f"title should be empty, got {m.ax.get_title()!r}"

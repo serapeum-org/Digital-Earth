@@ -1,4 +1,5 @@
-""" StaticGlyph."""
+"""StaticGlyph — the legacy static plotter (deprecated; use ``digitalearth.Map`` / ``quickmap``)."""
+import warnings
 from typing import Any, Tuple, Union
 
 import matplotlib.pyplot as plt
@@ -9,9 +10,26 @@ from cleopatra.scatter_glyph import ScatterGlyph
 from geopandas import GeoDataFrame
 from pyramids.dataset import Dataset
 
+#: Message emitted by every StaticGlyph entry point (PD-1 / L-2).
+_DEPRECATION_MSG = (
+    "StaticGlyph is deprecated and will be removed in a future release; use digitalearth.Map "
+    "(or digitalearth.quickmap) instead."
+)
+
+
+def _warn_deprecated() -> None:
+    """Emit the StaticGlyph ``DeprecationWarning`` (``stacklevel=3`` to point at the caller)."""
+    warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=3)
+
 
 class StaticGlyph:
-    """Glyph."""
+    """Legacy static raster / catchment plotter.
+
+    .. deprecated::
+        ``StaticGlyph`` predates the :class:`~digitalearth.scene.map.Map` scene API and is retained only for
+        backward compatibility — every entry point emits a :class:`DeprecationWarning`. Prefer
+        :func:`~digitalearth.api.quickmap` or :class:`~digitalearth.scene.map.Map`.
+    """
 
     figure_default_options = dict(
         ylabel="",
@@ -29,7 +47,7 @@ class StaticGlyph:
     )
 
     def __init__(self):
-        pass
+        _warn_deprecated()
 
     @staticmethod
     def plot(
@@ -92,6 +110,7 @@ class StaticGlyph:
         fig: [matplotlib figure object]
             the figure object
         """
+        _warn_deprecated()
         if isinstance(src, Dataset):
             arr = src.read_array()
             no_data_value = src.no_data_value[band - 1]
@@ -211,6 +230,7 @@ class StaticGlyph:
         -------
         fig, ax : the matplotlib figure and axes.
         """
+        _warn_deprecated()
         # Unify the projection by reprojecting every layer to the points' CRS (non-mutating).
         crs = points.crs if points.crs is not None else 4326
         poly = poly.to_crs(crs)

@@ -9,7 +9,8 @@ Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can sup
 (``add_colorbar=False`` on ``ArrayGlyph``), the Scene can stack any number of layers on one axes and draw a
 single colorbar for the layer of interest.
 """
-from typing import Any, List, Optional, Sequence, Tuple
+from contextlib import contextmanager
+from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 from cleopatra.styles import colorbar_legend, disjoint_legend
@@ -82,6 +83,49 @@ class Scene:
         self.layers.append((glyph, mappable))
         return mappable
 
+    def _render_glyph(self, glyph: Any, *plot_args: Any, artist: str = "im", **plot_kwargs: Any) -> Any:
+        """Plot ``glyph`` on the shared axes, register the produced mappable, and return it.
+
+        Consolidates the recipe every plot method shared — call ``glyph.plot(...)``, find the mappable it
+        produced, then :meth:`_add_layer` — so it lives in one place. cleopatra glyphs expose their mappable in
+        one of two ways, selected by ``artist``:
+
+        - ``"im"`` (default): the mappable is ``glyph.im`` (``ArrayGlyph`` / ``MeshGlyph``).
+        - ``"plot"``: ``glyph.plot()`` returns ``(fig, ax, artist)`` and the mappable is that third element
+          (``Scatter`` / ``Polygon`` / ``Vector`` / ``KDE`` / ``Flow`` glyphs).
+
+        Args:
+            glyph: An already-constructed cleopatra glyph bound to this Scene's ``ax``/``fig``.
+            *plot_args: Positional arguments forwarded to ``glyph.plot`` (e.g. the data array for a mesh).
+            artist: Which return convention to read the mappable from (``"im"`` or ``"plot"``).
+            **plot_kwargs: Keyword arguments forwarded to ``glyph.plot`` (e.g. ``kind``, ``outline_only``).
+
+        Returns:
+            The registered mappable/artist (so callers can chain a colorbar or keep a reference).
+        """
+        result = glyph.plot(*plot_args, **plot_kwargs)
+        mappable = glyph.im if artist == "im" else result[2]
+        return self._add_layer(glyph, mappable)
+
+    @contextmanager
+    def _preserve_view(self) -> Iterator[None]:
+        """Hold the current axes limits across the block, but only when data is already drawn.
+
+        A global backdrop or decoration (basemap, coastlines, ocean fill, a Natural-Earth layer) would
+        otherwise autoscale a regional view back out to the whole world. When the axes already holds a data
+        layer (a registered layer, an image, or a collection), the pre-block x/y limits are captured and
+        restored on exit; on an otherwise-empty axes the block is free to set the initial extent.
+
+        Yields:
+            None — run the drawing code inside the ``with`` block.
+        """
+        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
+        yield
+        if has_data:
+            self.ax.set_xlim(xlim)
+            self.ax.set_ylim(ylim)
+
     def colorbar(self, layer: int = -1, label: Optional[str] = None, **kwargs) -> Any:
         """Draw one colorbar for a registered layer (delegates to ``cleopatra.styles.colorbar_legend``).
 
@@ -138,3 +182,29 @@ class Scene:
     def show(self) -> None:
         """Show the figure via ``matplotlib.pyplot.show``."""
         plt.show()
+
+    def __enter__(self) -> "Scene":
+        """Enter the runtime context, returning the scene so ``with Scene(...) as s:`` binds it.
+
+        Returns:
+            This scene.
+        """
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        """Close the figure on exit so a long run of scenes stays memory-bounded.
+
+        The figure is closed whether or not the body raised; any exception propagates (``__exit__`` returns
+        ``False``), so ``with`` never silences errors.
+
+        .. warning::
+            This closes the **entire** ``self.fig``. The panels returned by
+            :func:`~digitalearth.scene.figure.grid` share **one** figure, so using ``with`` on a single panel
+            would close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap
+            the whole workflow or call :meth:`save` then close the figure yourself instead.
+
+        Returns:
+            ``False`` — exceptions are not suppressed.
+        """
+        plt.close(self.fig)
+        return False

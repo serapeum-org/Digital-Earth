@@ -12,12 +12,10 @@ from cleopatra.line_glyph import LineGlyph
 from cleopatra.statistical_glyph import StatisticalGlyph
 from matplotlib.axes import Axes
 
+from digitalearth._arrays import fig_of as _fig_of
+from digitalearth._arrays import finite, read_masked_band
+
 __all__ = ["line", "bar", "histogram"]
-
-
-def _fig_of(ax: Optional[Axes]):
-    """Return the figure owning ``ax`` (or ``None`` when ``ax`` is ``None``)."""
-    return ax.get_figure() if ax is not None else None
 
 
 def _as_finite_array(values: Any) -> np.ndarray:
@@ -28,11 +26,7 @@ def _as_finite_array(values: Any) -> np.ndarray:
     ``numpy.asarray`` (so a raw 2-D array stays 2-D for overlaid histograms).
     """
     if hasattr(values, "read_array") and hasattr(values, "no_data_value"):
-        arr = np.asarray(values.read_array(band=0), dtype="float64")
-        nodata = values.no_data_value[0]
-        if nodata is not None:
-            arr = arr[arr != nodata]
-        return arr[np.isfinite(arr)]
+        return finite(read_masked_band(values, band=1))
     return np.asarray(values)
 
 

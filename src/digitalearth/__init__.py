@@ -40,11 +40,27 @@ from digitalearth.batch import Batch  # noqa: E402
 from digitalearth.browser import gallery  # noqa: E402
 from digitalearth.charts import bar, histogram, line  # noqa: E402
 from digitalearth.plugins import load_plugins  # noqa: E402
-from digitalearth.scene import Map, Scene, grid, shared_colorbar  # noqa: E402
-from digitalearth.sources import get_source  # noqa: E402
+from digitalearth.scene import Map, Scene, grid, projections, shared_colorbar  # noqa: E402
+from digitalearth.series import (  # noqa: E402
+    boxplot,
+    envelope,
+    multiboxplot,
+    quantile_band,
+    stripes,
+)
+from digitalearth.sources import DimensionInfo, Source, get_source  # noqa: E402
+from digitalearth.temporal import Climatology, TimeSeries  # noqa: E402
 
 __all__ = [
-    "quickplot", "quickmap", "Map", "Scene", "get_source",
-    "line", "bar", "histogram", "grid", "shared_colorbar",
+    # one-call API + composition
+    "quickplot", "quickmap", "Map", "Scene", "grid", "shared_colorbar", "projections",
+    # data view
+    "get_source", "Source", "DimensionInfo",
+    # charts and statistical series
+    "line", "bar", "histogram",
+    "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",
+    # temporal products
+    "TimeSeries", "Climatology",
+    # operational tier
     "Batch", "gallery", "load_plugins",
 ]

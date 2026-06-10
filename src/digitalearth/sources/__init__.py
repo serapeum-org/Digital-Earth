@@ -10,19 +10,20 @@ This package is a thin, pyramids-only extraction layer (no ``xarray``/``rasterio
 own leaf module (:mod:`digitalearth.sources.source`) so importing it here and from :mod:`.extractors` does
 not create a cycle.
 """
-from typing import Any, Optional
+from typing import Optional
 
 import numpy as np
 
+from digitalearth._types import PlottableData
 from digitalearth.sources.dimension import DimensionInfo
-from digitalearth.sources.extractors import extract
+from digitalearth.sources.extractors import extract, get_stack
 from digitalearth.sources.source import Source
 
-__all__ = ["Source", "DimensionInfo", "get_source"]
+__all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
 
 
 def get_source(
-    data: Any,
+    data: PlottableData,
     *,
     band: int = 1,
     variable: Optional[str] = None,

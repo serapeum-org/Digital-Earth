@@ -136,3 +136,66 @@ def test_module_grid_cells_swallows_colorbar_failure(dataset, mocker):
     mocker.patch.object(Map, "colorbar", side_effect=RuntimeError("bad mappable"))
     m = qp.grid_cells(dataset, crs=dataset.epsg)
     assert m.layers
+
+
+class _FakeScene:
+    """Minimal scene stand-in for _finish: a .layers list and a recording/optionally-raising .colorbar()."""
+
+    def __init__(self, layers, raises=False):
+        self.layers = list(layers)
+        self._raises = raises
+        self.colorbar_calls = 0
+
+    def colorbar(self):
+        """Record the call (and optionally raise to mimic an outline-only/unmappable layer)."""
+        self.colorbar_calls += 1
+        if self._raises:
+            raise ValueError("nothing mappable to colorbar")
+
+
+class TestFinish:
+    """Tests for api._finish (PA-5)."""
+
+    def test_adds_colorbar_when_requested_and_layers_present(self):
+        """_finish draws a colorbar when colorbar=True and a layer exists.
+
+        Test scenario:
+            A scene with one layer and colorbar=True gets exactly one colorbar() call.
+        """
+        scene = _FakeScene(layers=["layer"])
+        out = qp._finish(scene, colorbar=True)
+        assert scene.colorbar_calls == 1, f"expected one colorbar call, got {scene.colorbar_calls}"
+        assert out is scene, "the same scene must be returned"
+
+    def test_skips_colorbar_when_disabled(self):
+        """_finish never draws a colorbar when colorbar=False.
+
+        Test scenario:
+            Even with layers present, colorbar=False suppresses the colorbar() call.
+        """
+        scene = _FakeScene(layers=["layer"])
+        out = qp._finish(scene, colorbar=False)
+        assert scene.colorbar_calls == 0, "colorbar must not be drawn when disabled"
+        assert out is scene, "the same scene must be returned"
+
+    def test_skips_colorbar_when_no_layers(self):
+        """_finish skips the colorbar when there are no layers, even if requested.
+
+        Test scenario:
+            An empty scene with colorbar=True draws nothing (no layer to map).
+        """
+        scene = _FakeScene(layers=[])
+        out = qp._finish(scene, colorbar=True)
+        assert scene.colorbar_calls == 0, "colorbar must not be drawn without layers"
+        assert out is scene, "the same scene must be returned"
+
+    def test_swallows_colorbar_exception(self):
+        """_finish swallows an exception from colorbar() (outline-only/unmappable layer).
+
+        Test scenario:
+            colorbar() raising must not propagate; the scene is still returned.
+        """
+        scene = _FakeScene(layers=["layer"], raises=True)
+        out = qp._finish(scene, colorbar=True)
+        assert scene.colorbar_calls == 1, "colorbar() should have been attempted once"
+        assert out is scene, "the scene must be returned despite the swallowed error"
