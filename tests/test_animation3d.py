@@ -68,6 +68,8 @@ def test_writer_dispatch_movie_vs_gif():
     assert ".mp4" in _MOVIE_SUFFIXES
 
     class _Spy:
+        mwriter = object()  # satisfy the post-open writer guard added in _open_writer
+
         def __init__(self):
             self.opened = None
 
@@ -100,4 +102,20 @@ def test_finalize_frames_noop_without_writer():
 
     scene = Scene3D(off_screen=True)  # never opened a writer -> plotter has no mwriter
     _finalize_frames(scene.plotter)  # must not raise
+    scene.close()
+
+
+def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
+    """If the update callback raises mid-animation, the frame writer is still finalized (try/finally)."""
+    scene = _terrain_scene()
+    out = tmp_path / "boom.gif"
+
+    def boom(s, frame):
+        s.plotter.write_frame()
+        raise RuntimeError("frame blew up")
+
+    with pytest.raises(RuntimeError, match="blew up"):
+        scene.animate([1, 2], str(out), boom)
+    # finally-block ran: the writer was flushed/closed (no lingering open mwriter)
+    assert getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
     scene.close()

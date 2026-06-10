@@ -18,11 +18,21 @@ _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
 
 
 def _open_writer(plotter: Any, path: str, framerate: int) -> None:
-    """Open the right PyVista frame writer for ``path`` (movie for video suffixes, else GIF)."""
+    """Open the right PyVista frame writer for ``path`` (movie for video suffixes, else GIF).
+
+    Raises:
+        AttributeError: if PyVista did not attach its frame writer (``mwriter``) after opening — a fail-fast
+            guard against a future PyVista renaming the attribute :func:`_finalize_frames` relies on.
+    """
     if str(path).lower().endswith(_MOVIE_SUFFIXES):
         plotter.open_movie(path, framerate=framerate)
     else:
         plotter.open_gif(path, fps=framerate)
+    if not hasattr(plotter, "mwriter"):  # pragma: no cover - defensive against an upstream API change
+        raise AttributeError(
+            "PyVista did not expose a frame writer ('mwriter') after open_gif/open_movie; "
+            "the installed pyvista version may be incompatible with digitalearth's animation helpers."
+        )
 
 
 def _finalize_frames(plotter: Any) -> None:
@@ -71,9 +81,11 @@ class AnimationMixin:
                 ```
         """
         _open_writer(self.plotter, path, framerate)
-        orbital_path = self.plotter.generate_orbital_path(n_points=n_frames)
-        self.plotter.orbit_on_path(orbital_path, write_frames=True, **orbit_kwargs)
-        _finalize_frames(self.plotter)
+        try:
+            orbital_path = self.plotter.generate_orbital_path(n_points=n_frames)
+            self.plotter.orbit_on_path(orbital_path, write_frames=True, **orbit_kwargs)
+        finally:
+            _finalize_frames(self.plotter)  # always flush/close the writer, even if rendering raised
         return path
 
     def animate(
@@ -117,10 +129,12 @@ class AnimationMixin:
                 ```
         """
         _open_writer(self.plotter, path, framerate)
-        for frame in frames:
-            update(self, frame)
-            self.plotter.write_frame()
-        _finalize_frames(self.plotter)
+        try:
+            for frame in frames:
+                update(self, frame)
+                self.plotter.write_frame()
+        finally:
+            _finalize_frames(self.plotter)  # always flush/close the writer, even if a frame raised
         return path
 
     def jupyter(self, backend: str = "trame") -> None:
