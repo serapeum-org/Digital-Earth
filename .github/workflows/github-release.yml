@@ -36,7 +36,11 @@ on:
         default: false
 
 jobs:
+  pure-wheel-test:
+    uses: ./.github/workflows/pure-wheel-test.yml
+
   release:
+    needs: pure-wheel-test
     runs-on: ubuntu-latest
     permissions:
       contents: write
