@@ -136,6 +136,9 @@ skips = ["B101"]
 [tool.coverage.run]
 branch = true
 source = ["src/digitalearth"]
+# Emit repo-root-relative file paths in coverage.xml (e.g. src/digitalearth/...) so SonarCloud can map
+# coverage onto the analysed sources; Codecov handles either form.
+relative_files = true
 
 [tool.coverage.report]
 show_missing = true

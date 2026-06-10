@@ -1,0 +1,55 @@
+name: SonarCloud
+
+# Static analysis + coverage reporting to SonarQube Cloud (https://sonarcloud.io).
+#
+# Runs the full test suite ONCE in the `viz3d` pixi env (dev + the 3D extra, so the
+# `digitalearth.three_d` tier actually executes rather than skipping), producing a
+# repo-root-relative coverage.xml, then hands it to the Sonar scanner. Project key,
+# organization, sources, and coverage path live in `sonar-project.properties`.
+#
+# One-time manual setup required before this passes:
+#   1. Import / create the project on SonarCloud under the `serapeum-org` org
+#      (project key `serapeum-org_Digital-Earth` — adjust sonar-project.properties if it differs).
+#   2. Add the repository secret `SONAR_TOKEN` (a SonarCloud "Analyze project" token).
+#   3. Disable SonarCloud's "Automatic Analysis" for the project so this CI-based scan is used.
+
+permissions:
+  contents: read
+  pull-requests: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push to a branch/PR cancels the previous in-progress Sonar run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sonarcloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          # Full history so SonarCloud can attribute new-code and blame correctly.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: viz3d
+          activate-environment: viz3d
+          cache: true
+
+      - name: Run tests with coverage
+        # `main` = pytest --cov=src/digitalearth --cov-report=xml -> coverage.xml at the repo root.
+        run: pixi run -e viz3d main
+
+      - name: SonarCloud scan
+        # TODO: pin to a commit SHA to match this repo's action-pinning convention once selected.
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
