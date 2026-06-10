@@ -84,3 +84,20 @@ def test_multipolygon_yields_one_ring_per_part():
     rings = list(_exterior_rings(mp))
     assert len(rings) == 2
     assert all(r.shape[1] == 2 for r in rings)
+
+
+def test_vectors_length_mismatch_raises():
+    """vectors() rejects mismatched points/vectors shapes."""
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(ValueError, match="same shape"):
+        scene.vectors(np.zeros((5, 3)), np.zeros((4, 3)))
+    scene.close()
+
+
+def test_extruded_polygons_empty_raises():
+    """extruded_polygons() rejects an empty geometry set."""
+    empty = gpd.GeoDataFrame({"pop": []}, geometry=[])
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(ValueError, match="no polygon"):
+        scene.extruded_polygons(empty)
+    scene.close()

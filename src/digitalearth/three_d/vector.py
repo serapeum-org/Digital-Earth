@@ -97,8 +97,11 @@ class VectorMixin:
 
                 ```
         """
-        cloud = pv.PolyData(np.asarray(points, dtype="float64"))
+        pts = np.asarray(points, dtype="float64")
         vec = np.asarray(vectors, dtype="float64")
+        if pts.shape != vec.shape:
+            raise ValueError(f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}")
+        cloud = pv.PolyData(pts)
         cloud[VECTORS] = vec
         cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
         glyph = cloud.glyph(orient=VECTORS, scale=MAGNITUDE, factor=factor)
@@ -160,6 +163,8 @@ class VectorMixin:
                     prism.cell_data[VALUE] = np.full(prism.n_cells, float(colours[i]))
                 prisms.append(prism)
 
+        if not prisms:
+            raise ValueError("extruded_polygons received no polygon geometries to extrude")
         merged = pv.MultiBlock(prisms).combine()
         scalars = VALUE if colours is not None else None
         return self.add_mesh(merged, scalars=scalars, cmap=cmap, **kwargs)

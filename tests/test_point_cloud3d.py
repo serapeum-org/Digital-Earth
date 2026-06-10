@@ -72,3 +72,11 @@ def test_renders_a_nonempty_frame():
     img = scene.screenshot()
     assert img.ndim == 3 and bool(img.any())
     scene.close()
+
+
+def test_values_length_mismatch_raises():
+    """point_cloud() rejects a values array whose length does not match the points."""
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(ValueError, match="does not match"):
+        scene.point_cloud(np.zeros((10, 3)), values=np.zeros(7))
+    scene.close()

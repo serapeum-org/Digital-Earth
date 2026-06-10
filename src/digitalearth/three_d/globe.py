@@ -19,6 +19,27 @@ from digitalearth.sources import Source, get_source
 _GEOVISTA_DATA = "point_data"
 
 
+def _check_geographic(lon: np.ndarray, lat: np.ndarray) -> None:
+    """Validate that coordinates look like longitude/latitude, not projected metres.
+
+    geovista drapes ``(lon, lat)`` onto a WGS84 sphere; handing it projected coordinates silently places the
+    field in the wrong spot. Reprojection belongs in pyramids (``Dataset.to_crs(4326)``), so this guards the
+    boundary with a clear, actionable error rather than producing a broken globe.
+
+    Args:
+        lon: Longitude coordinate vector.
+        lat: Latitude coordinate vector.
+
+    Raises:
+        ValueError: if any coordinate falls outside geographic bounds (``|lon| > 360`` or ``|lat| > 90``).
+    """
+    if np.nanmax(np.abs(lon)) > 360.0 or np.nanmax(np.abs(lat)) > 90.0:
+        raise ValueError(
+            "globe() expects geographic lon/lat data, but the coordinates look projected. "
+            "Reproject in pyramids first, e.g. dataset.to_crs(4326), then call globe()."
+        )
+
+
 def _require_geovista():
     """Import and return geovista, or raise a clear, actionable error when it is not installed.
 
@@ -30,7 +51,7 @@ def _require_geovista():
     """
     try:
         import geovista as gv
-    except ImportError as exc:  # pragma: no cover - exercised via test monkeypatch
+    except ImportError as exc:
         raise ImportError(
             "Scene3D.globe() needs the optional textured-globe dependency 'geovista'. "
             "Install it with:  pip install 'digitalearth[3d]'"
@@ -93,6 +114,7 @@ class GlobeMixin:
         lon = np.asarray(src.x.values, dtype="float64")
         lat = np.asarray(src.y.values, dtype="float64")
         field = np.asarray(src.z.values, dtype="float64")
+        _check_geographic(lon, lat)
 
         mesh = gv.Transform.from_1d(lon, lat, data=field)
         actor = self.add_mesh(mesh, scalars=_GEOVISTA_DATA, cmap=cmap, **kwargs)

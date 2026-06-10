@@ -124,7 +124,10 @@ class PointCloudMixin:
 
         add_kwargs = dict(point_size=point_size, render_points_as_spheres=render_points_as_spheres, **kwargs)
         if scalar is not None:
-            cloud[SCALAR] = np.asarray(scalar, dtype="float64")
+            scalar = np.asarray(scalar, dtype="float64")
+            if scalar.shape[0] != len(points):
+                raise ValueError(f"values length {scalar.shape[0]} does not match {len(points)} points")
+            cloud[SCALAR] = scalar
             add_kwargs.update(scalars=SCALAR, cmap=cmap)
 
         actor = self.plotter.add_points(cloud, **add_kwargs)

@@ -75,3 +75,12 @@ def test_globe_accepts_a_source_directly():
     scene.globe(_global_field(), coastlines=False, cmap="cividis")
     assert globe_mod._GEOVISTA_DATA in scene.layers[0][0].point_data
     scene.close()
+
+
+def test_globe_rejects_projected_coordinates():
+    """globe() raises a clear error when coordinates look projected (not lon/lat)."""
+    proj = get_source(np.zeros((5, 5)), x=np.linspace(0, 5e5, 5), y=np.linspace(0, 5e5, 5))
+    scene = Scene3D(off_screen=True)
+    with pytest.raises(ValueError, match="to_crs"):
+        scene.globe(proj, coastlines=False)
+    scene.close()
