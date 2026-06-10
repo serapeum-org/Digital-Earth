@@ -1,5 +1,11 @@
 # Change log
 
+## 0.4.0 (2026-06-10)
+
+### Feat
+
+- decompose Map into a base + mixin architecture and tidy the package (#55)
+
 ## 0.3.0 (2026-06-07)
 
 ### Feat
