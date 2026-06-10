@@ -37,6 +37,15 @@ dependencies = [
     "pyyaml >=6.0",
 ]
 
+[project.optional-dependencies]
+# True-3D tier (PyVista). geovista (textured globe, D3.5) is folded in but imported lazily inside `globe()`,
+# so the rest of the tier works without it. None of these is a GIS competitor — pyramids stays the only GIS dep.
+"3d" = [
+    "pyvista >=0.48",
+    "trame >=3.13",
+    "geovista >=0.5.3",
+]
+
 [project.scripts]
 digitalearth = "digitalearth.cli:main"
 
@@ -208,10 +217,19 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 notebook = { features = ["notebook"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "docs" }
+# 3D tier (PyVista). Separate solve-group so VTK stays out of the lean default/dev envs.
+# Run the 3D tests with: pixi run -e viz3d pytest tests/test_scene3d.py
+viz3d = { features = ["dev", "viz3d"], solve-group = "viz3d" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }
 py313 = { features = ["py313", "dev"], solve-group = "py313" }
 
+
+[tool.pixi.feature.viz3d.pypi-dependencies]
+# PyPI wheels (pyvista bundles a VTK wheel) — keeps the 3D tier installable without a heavy conda solve.
+# geovista (the optional textured globe, D3.5) is added when that task lands; it is imported lazily.
+pyvista = ">=0.48"
+trame = ">=3.13"
 
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
