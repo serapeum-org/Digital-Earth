@@ -61,14 +61,11 @@ def test_polar_stereographic_reprojects(dataset):
     assert len(m.layers) == 1 and m.ax.patches
 
 
-def test_globe_coastlines_when_online(dataset):
-    """Globe coastlines project per-line and split at the limb (skipped offline)."""
+def test_globe_coastlines(dataset):
+    """Globe coastlines project per-line and split at the limb (real 110m data, seeded cache)."""
     m = Map(crs=projections.orthographic(10, 25), globe=True)
     m.imshow(dataset)
-    try:
-        segs = m.coastlines(resolution="110m")
-    except Exception as exc:  # network/data unavailable
-        pytest.skip(f"Natural Earth coastline unavailable offline: {exc}")
+    segs = m.coastlines(resolution="110m")
     assert segs and m.ax.lines  # finite projected segments drawn
     pts = np.vstack([line.get_xydata() for line in m.ax.lines])
     assert np.isfinite(pts).all()  # no inf/nan reached the axes

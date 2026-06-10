@@ -66,13 +66,10 @@ def test_no_cartopy_import():
 
 @pytest.mark.parametrize("layer", ["coastlines", "borders"])
 def test_natural_earth_overlays(dataset, layer):
-    """Coastlines/borders overlay when Natural Earth data is reachable; skipped offline."""
+    """Coastlines/borders overlay the real 110m Natural-Earth lines (seeded cache, offline)."""
     m = Map(crs=3857)
     m.imshow(dataset)
-    try:
-        getattr(m, layer)()
-    except Exception as exc:  # network/download unavailable in this environment
-        pytest.skip(f"Natural Earth {layer} unavailable offline: {exc}")
+    getattr(m, layer)()
     # the vector layer added at least one artist (collection/line) to the axes
     assert m.ax.collections or m.ax.lines
 
@@ -108,25 +105,34 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
 
 @pytest.mark.parametrize("layer", ["land", "ocean"])
 def test_natural_earth_fills(dataset, layer):
-    """Land/ocean polygon fills overlay when reachable; skipped offline."""
+    """Land/ocean polygon fills overlay the real 110m Natural-Earth data (seeded cache, offline)."""
     m = Map(crs=3857)
     m.imshow(dataset)
-    try:
-        getattr(m, layer)()
-    except Exception as exc:  # network/download unavailable in this environment
-        pytest.skip(f"Natural Earth {layer} unavailable offline: {exc}")
+    getattr(m, layer)()
     assert m.ax.collections
 
 
-def test_basemap_tiles(dataset):
-    """A tile basemap is added when tile servers are reachable; skipped offline."""
+def test_basemap_tiles(dataset, mocker):
+    """basemap() wires the axes/CRS through to cleopatra's tile fetch and adds the returned imagery.
+
+    The tiles come from a live XYZ server, so there is no static asset to commit; mock the network boundary
+    (``decoration.add_tiles``) with a stand-in that adds an ``AxesImage`` — exactly the contract ``basemap``
+    relies on — so the wiring is asserted deterministically offline instead of skipped.
+    """
+    import numpy as np
+
+    def fake_add_tiles(ax, source=None, crs=None, **kwargs):
+        assert crs == 3857  # basemap must forward the display CRS to the tile fetch
+        return ax.imshow(np.zeros((2, 2, 3)))
+
+    spy = mocker.patch("digitalearth.scene.maps.decoration.add_tiles", side_effect=fake_add_tiles)
+
     m = Map(crs=3857)
     m.imshow(dataset)
-    try:
-        m.basemap()
-    except Exception as exc:  # network unavailable in this environment
-        pytest.skip(f"basemap tiles unavailable offline: {exc}")
-    assert m.ax.images  # tile imagery added at least one AxesImage
+    before = len(m.ax.images)
+    m.basemap()
+    spy.assert_called_once()
+    assert len(m.ax.images) == before + 1  # tile imagery added one AxesImage
 
 
 def test_text_at_lonlat(dataset):
