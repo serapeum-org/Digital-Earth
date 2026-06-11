@@ -210,8 +210,8 @@ digitalearth = { path = ".", editable = true }
 [tool.pixi.tasks]
 main = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite" }
 test-all = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml --cov-report=term-missing", description = "Run all testsuite" }
-notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; and 3-D notebooks — those need the viz3d env, run via `notebooks-3d`)" }
-notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/15_3d_visualization.ipynb", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
+notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb' --ignore-glob='docs/examples/pyvista/**'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; and the 3-D/PyVista notebooks — those need the viz3d env, run via `notebooks-3d`)" }
+notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
 jupyter = { cmd = "jupyter lab --no-browser --IdentityProvider.token='' --ServerApp.password='' --port=8889", description = "launch jupyter lab" }
 build-dist = { cmd = "python -m build", description = "Build sdist and wheel for PyPI" }
 publish-pypi = { cmd = "twine upload --non-interactive --repository pypi dist/*", depends-on = ["build-dist"], description = "Build and upload package to PyPI" }
