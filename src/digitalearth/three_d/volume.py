@@ -103,6 +103,10 @@ class VolumeMixin:
 
                 ```
         """
+        # SSAA (the house theme's anti-aliasing) supersamples the frame, which washes a ray-cast volume out to
+        # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
+        # on other scenes — this only affects a plotter that's actually showing a volume).
+        self.plotter.disable_anti_aliasing()
         actor = self.add_volume(_volume_grid(_cube(data)), cmap=cmap, opacity=opacity, **kwargs)
         return actor
 
