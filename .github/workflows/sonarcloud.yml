@@ -43,6 +43,12 @@ jobs:
           activate-environment: viz3d
           cache: true
 
+      # The viz3d suite renders the 3-D tier off-screen through VTK's OpenGL, which needs a display even when
+      # off_screen=True; a virtual framebuffer (xvfb) provides one on the headless runner.
+      - name: Set up headless display
+        # TODO: pin to a commit SHA to match this repo's action-pinning convention.
+        uses: pyvista/setup-headless-display-action@v3
+
       - name: Run tests with coverage
         # `main` = pytest --cov=src/digitalearth --cov-report=xml -> coverage.xml at the repo root.
         run: pixi run -e viz3d main
