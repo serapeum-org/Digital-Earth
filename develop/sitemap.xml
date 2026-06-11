@@ -85,10 +85,6 @@
          <lastmod>2026-06-11</lastmod>
     </url>
     <url>
-         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/15_3d_visualization/</loc>
-         <lastmod>2026-06-11</lastmod>
-    </url>
-    <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/plots/01_imshow/</loc>
          <lastmod>2026-06-11</lastmod>
     </url>
@@ -190,6 +186,10 @@
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/plots/26_climatology/</loc>
+         <lastmod>2026-06-11</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/pyvista/15_3d_visualization/</loc>
          <lastmod>2026-06-11</lastmod>
     </url>
     <url>

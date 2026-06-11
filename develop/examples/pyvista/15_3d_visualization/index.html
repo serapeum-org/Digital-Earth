@@ -10,19 +10,15 @@
       
       
       
-        <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/develop/examples/15_3d_visualization/">
+        <link rel="canonical" href="https://serapeum-org.github.io/Digital-Earth/develop/examples/pyvista/15_3d_visualization/">
       
       
-        <link rel="prev" href="../13_charts_and_decorations/">
-      
-      
-        <link rel="next" href="../plots/01_imshow/">
       
       
         
       
       
-      <link rel="icon" href="../../assets/images/favicon.png">
+      <link rel="icon" href="../../../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
     
     
@@ -31,10 +27,10 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,18 +49,18 @@
       
     
     
-      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="../../assets/stylesheets/panzoom.css">
+      <link rel="stylesheet" href="../../../assets/stylesheets/panzoom.css">
     
-    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -103,7 +99,7 @@
 
 <header class="md-header md-header--shadow md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../.." title="Digital-Earth" class="md-header__button md-logo" aria-label="Digital-Earth" data-md-component="logo">
+    <a href="../../.." title="Digital-Earth" class="md-header__button md-logo" aria-label="Digital-Earth" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -240,7 +236,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../.." class="md-tabs__link">
+      <a href="../../.." class="md-tabs__link">
         
   
   
@@ -259,7 +255,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../installation/" class="md-tabs__link">
+      <a href="../../../installation/" class="md-tabs__link">
         
   
   
@@ -278,7 +274,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../plotarray/" class="md-tabs__link">
+      <a href="../../../plotarray/" class="md-tabs__link">
         
   
   
@@ -295,13 +291,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../01_sources/" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../01_sources/" class="md-tabs__link">
           
   
   
@@ -321,7 +315,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/static/" class="md-tabs__link">
+        <a href="../../../reference/static/" class="md-tabs__link">
           
   
   
@@ -341,7 +335,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../change-log/" class="md-tabs__link">
+        <a href="../../../change-log/" class="md-tabs__link">
           
   
   
@@ -381,7 +375,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../.." title="Digital-Earth" class="md-nav__button md-logo" aria-label="Digital-Earth" data-md-component="logo">
+    <a href="../../.." title="Digital-Earth" class="md-nav__button md-logo" aria-label="Digital-Earth" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -411,7 +405,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../.." class="md-nav__link">
+      <a href="../../.." class="md-nav__link">
         
   
   
@@ -438,7 +432,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../installation/" class="md-nav__link">
+      <a href="../../../installation/" class="md-nav__link">
         
   
   
@@ -465,7 +459,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../plotarray/" class="md-nav__link">
+      <a href="../../../plotarray/" class="md-nav__link">
         
   
   
@@ -489,29 +483,24 @@
       
   
   
-    
   
   
-  
     
     
     
     
       
-        
-        
-      
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
             
   
   
@@ -529,7 +518,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -547,7 +536,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../01_sources/" class="md-nav__link">
+      <a href="../../01_sources/" class="md-nav__link">
         
   
   
@@ -575,7 +564,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../02_maps_and_fields/" class="md-nav__link">
+      <a href="../../02_maps_and_fields/" class="md-nav__link">
         
   
   
@@ -603,7 +592,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../03_points_cells_vectors/" class="md-nav__link">
+      <a href="../../03_points_cells_vectors/" class="md-nav__link">
         
   
   
@@ -631,7 +620,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../04_composites_and_mesh/" class="md-nav__link">
+      <a href="../../04_composites_and_mesh/" class="md-nav__link">
         
   
   
@@ -659,7 +648,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../05_choropleth_and_decoration/" class="md-nav__link">
+      <a href="../../05_choropleth_and_decoration/" class="md-nav__link">
         
   
   
@@ -687,7 +676,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../06_temporal_and_series/" class="md-nav__link">
+      <a href="../../06_temporal_and_series/" class="md-nav__link">
         
   
   
@@ -715,7 +704,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../07_quickplot/" class="md-nav__link">
+      <a href="../../07_quickplot/" class="md-nav__link">
         
   
   
@@ -743,7 +732,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../08_projected_globe_maps/" class="md-nav__link">
+      <a href="../../08_projected_globe_maps/" class="md-nav__link">
         
   
   
@@ -771,7 +760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../09_globe_basemaps/" class="md-nav__link">
+      <a href="../../09_globe_basemaps/" class="md-nav__link">
         
   
   
@@ -799,7 +788,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../10_globe_under_the_hood/" class="md-nav__link">
+      <a href="../../10_globe_under_the_hood/" class="md-nav__link">
         
   
   
@@ -827,7 +816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../11_global_data_on_globe/" class="md-nav__link">
+      <a href="../../11_global_data_on_globe/" class="md-nav__link">
         
   
   
@@ -855,7 +844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../12_animated_globe/" class="md-nav__link">
+      <a href="../../12_animated_globe/" class="md-nav__link">
         
   
   
@@ -883,7 +872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../13_charts_and_decorations/" class="md-nav__link">
+      <a href="../../13_charts_and_decorations/" class="md-nav__link">
         
   
   
@@ -908,44 +897,17 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    15 · 3-D visualization with PyVista
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../15_3d_visualization.ipynb" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    15 · 3-D visualization with PyVista
+    3-D visualization (PyVista)
   
 
     
@@ -954,92 +916,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#terrain-a-dem-as-3-d-relief" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Terrain — a DEM as 3-D relief
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#point-cloud-scattered-points-with-eye-dome-lighting" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Point cloud — scattered points with eye-dome lighting
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#volume-isosurfaces-a-3-d-scalar-field" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Volume &amp; isosurfaces — a 3-D scalar field
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#vectors-extruded-polygons" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Vectors &amp; extruded polygons
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#globe-a-global-field-on-a-textured-sphere" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Globe — a global field on a textured sphere
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#animation-an-orbit-fly-through" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Animation — an orbit fly-through
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1152,7 +1028,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/01_imshow/" class="md-nav__link">
+      <a href="../../plots/01_imshow/" class="md-nav__link">
         
   
   
@@ -1180,7 +1056,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/02_contourf/" class="md-nav__link">
+      <a href="../../plots/02_contourf/" class="md-nav__link">
         
   
   
@@ -1208,7 +1084,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/03_contour/" class="md-nav__link">
+      <a href="../../plots/03_contour/" class="md-nav__link">
         
   
   
@@ -1236,7 +1112,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/04_pcolormesh/" class="md-nav__link">
+      <a href="../../plots/04_pcolormesh/" class="md-nav__link">
         
   
   
@@ -1264,7 +1140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/05_block/" class="md-nav__link">
+      <a href="../../plots/05_block/" class="md-nav__link">
         
   
   
@@ -1350,7 +1226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/06_grid_points/" class="md-nav__link">
+      <a href="../../plots/06_grid_points/" class="md-nav__link">
         
   
   
@@ -1378,7 +1254,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/07_scatter/" class="md-nav__link">
+      <a href="../../plots/07_scatter/" class="md-nav__link">
         
   
   
@@ -1406,7 +1282,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/08_grid_cells/" class="md-nav__link">
+      <a href="../../plots/08_grid_cells/" class="md-nav__link">
         
   
   
@@ -1492,7 +1368,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/09_quiver/" class="md-nav__link">
+      <a href="../../plots/09_quiver/" class="md-nav__link">
         
   
   
@@ -1520,7 +1396,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/10_streamplot/" class="md-nav__link">
+      <a href="../../plots/10_streamplot/" class="md-nav__link">
         
   
   
@@ -1548,7 +1424,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/11_barbs/" class="md-nav__link">
+      <a href="../../plots/11_barbs/" class="md-nav__link">
         
   
   
@@ -1634,7 +1510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/12_tricontourf/" class="md-nav__link">
+      <a href="../../plots/12_tricontourf/" class="md-nav__link">
         
   
   
@@ -1662,7 +1538,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/13_tricontour/" class="md-nav__link">
+      <a href="../../plots/13_tricontour/" class="md-nav__link">
         
   
   
@@ -1690,7 +1566,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/14_tripcolor/" class="md-nav__link">
+      <a href="../../plots/14_tripcolor/" class="md-nav__link">
         
   
   
@@ -1776,7 +1652,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/15_rgb_composite/" class="md-nav__link">
+      <a href="../../plots/15_rgb_composite/" class="md-nav__link">
         
   
   
@@ -1804,7 +1680,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/16_hsv_composite/" class="md-nav__link">
+      <a href="../../plots/16_hsv_composite/" class="md-nav__link">
         
   
   
@@ -1890,7 +1766,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/17_choropleth/" class="md-nav__link">
+      <a href="../../plots/17_choropleth/" class="md-nav__link">
         
   
   
@@ -1918,7 +1794,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/18_shapes/" class="md-nav__link">
+      <a href="../../plots/18_shapes/" class="md-nav__link">
         
   
   
@@ -2004,7 +1880,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/19_spaghetti/" class="md-nav__link">
+      <a href="../../plots/19_spaghetti/" class="md-nav__link">
         
   
   
@@ -2032,7 +1908,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/20_envelope/" class="md-nav__link">
+      <a href="../../plots/20_envelope/" class="md-nav__link">
         
   
   
@@ -2060,7 +1936,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/21_quantile_band/" class="md-nav__link">
+      <a href="../../plots/21_quantile_band/" class="md-nav__link">
         
   
   
@@ -2088,7 +1964,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/22_boxplot/" class="md-nav__link">
+      <a href="../../plots/22_boxplot/" class="md-nav__link">
         
   
   
@@ -2116,7 +1992,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/23_multiboxplot/" class="md-nav__link">
+      <a href="../../plots/23_multiboxplot/" class="md-nav__link">
         
   
   
@@ -2144,7 +2020,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/24_stripes/" class="md-nav__link">
+      <a href="../../plots/24_stripes/" class="md-nav__link">
         
   
   
@@ -2230,7 +2106,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/25_timeseries/" class="md-nav__link">
+      <a href="../../plots/25_timeseries/" class="md-nav__link">
         
   
   
@@ -2258,7 +2134,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../plots/26_climatology/" class="md-nav__link">
+      <a href="../../plots/26_climatology/" class="md-nav__link">
         
   
   
@@ -2359,7 +2235,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/static/" class="md-nav__link">
+      <a href="../../../reference/static/" class="md-nav__link">
         
   
   
@@ -2444,7 +2320,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../change-log/" class="md-nav__link">
+      <a href="../../../change-log/" class="md-nav__link">
         
   
   
@@ -2472,7 +2348,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../CODE_OF_CONDUCT/" class="md-nav__link">
+      <a href="../../../CODE_OF_CONDUCT/" class="md-nav__link">
         
   
   
@@ -2500,7 +2376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../contributing/" class="md-nav__link">
+      <a href="../../../contributing/" class="md-nav__link">
         
   
   
@@ -2528,7 +2404,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../LICENSE/" class="md-nav__link">
+      <a href="../../../LICENSE/" class="md-nav__link">
         
   
   
@@ -2665,7 +2541,7 @@
 
 
   
-    <a href="https://github.com/serapeum-org/Digital-Earth/edit/master/docs/examples/15_3d_visualization.ipynb" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/serapeum-org/Digital-Earth/edit/master/docs/examples/pyvista/15_3d_visualization.ipynb" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
     </a>
@@ -2674,7 +2550,7 @@
     
       
     
-    <a href="https://github.com/serapeum-org/Digital-Earth/raw/master/docs/examples/15_3d_visualization.ipynb" title="View source of this page" class="md-content__button md-icon">
+    <a href="https://github.com/serapeum-org/Digital-Earth/raw/master/docs/examples/pyvista/15_3d_visualization.ipynb" title="View source of this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M17 18c.56 0 1 .44 1 1s-.44 1-1 1-1-.44-1-1 .44-1 1-1m0-3c-2.73 0-5.06 1.66-6 4 .94 2.34 3.27 4 6 4s5.06-1.66 6-4c-.94-2.34-3.27-4-6-4m0 6.5a2.5 2.5 0 0 1-2.5-2.5 2.5 2.5 0 0 1 2.5-2.5 2.5 2.5 0 0 1 2.5 2.5 2.5 2.5 0 0 1-2.5 2.5M9.27 20H6V4h7v5h5v4.07c.7.08 1.36.25 2 .49V8l-6-6H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h4.5a8.2 8.2 0 0 1-1.23-2"/></svg>
     </a>
@@ -4091,44 +3967,6 @@ display(IPyImage(filename=gif))
         <footer class="md-footer">
   
     
-      
-      <nav class="md-footer__inner md-grid" aria-label="Footer" >
-        
-          
-          <a href="../13_charts_and_decorations/" class="md-footer__link md-footer__link--prev" aria-label="Previous: 13 — Charts &amp;amp; map decorations">
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-            </div>
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Previous
-              </span>
-              <div class="md-ellipsis">
-                13 — Charts &amp; map decorations
-              </div>
-            </div>
-          </a>
-        
-        
-          
-          <a href="../plots/01_imshow/" class="md-footer__link md-footer__link--next" aria-label="Next: 1 ·">
-            <div class="md-footer__title">
-              <span class="md-footer__direction">
-                Next
-              </span>
-              <div class="md-ellipsis">
-                1 ·
-              </div>
-            </div>
-            <div class="md-footer__button md-icon">
-              
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
-            </div>
-          </a>
-        
-      </nav>
-    
   
   <div class="md-footer-meta md-typeset">
     <div class="md-footer-meta__inner md-grid">
@@ -4171,14 +4009,14 @@ display(IPyImage(filename=gif))
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.footer", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.code.copy", "content.code.annotate", "content.action.edit", "content.action.view", "content.tooltips", "search.highlight", "search.suggest", "toc.follow", "announce.dismiss"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike", "version_selector": true}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.instant", "navigation.tracking", "navigation.footer", "navigation.tabs", "navigation.tabs.sticky", "navigation.top", "content.code.copy", "content.code.annotate", "content.action.edit", "content.action.view", "content.tooltips", "search.highlight", "search.suggest", "toc.follow", "announce.dismiss"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike", "version_selector": true}}</script>
     
     
-      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../assets/javascripts/panzoom.min.js"></script>
+        <script src="../../../assets/javascripts/panzoom.min.js"></script>
       
-        <script src="../../assets/javascripts/zoompan.js"></script>
+        <script src="../../../assets/javascripts/zoompan.js"></script>
       
     
   </body>
