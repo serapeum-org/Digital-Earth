@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3780,7 +3780,7 @@ def show(scene, title=''):
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>2026-06-11 21:05:50 | <span class="ansi-green-fg">INFO</span> | pyramids.base.config | Logging is configured.
+<pre>2026-06-11 22:45:50 | <span class="ansi-green-fg">INFO</span> | pyramids.base.config | Logging is configured.
 </pre>
 </div>
 </div>
@@ -3892,11 +3892,14 @@ display(IPyImage(filename=gif))</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">axis</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">24</span><span class="p">)</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># An asymmetric field (two Gaussians) so the spin actually shows the shape turning — a single Gaussian is a</span>
+<span class="c1"># sphere and looks identical from every angle. viridis + opacity&lt;1 so the nested shells read clearly instead of</span>
+<span class="c1"># a solid dark ball (magma's low end maps the outer 0.3 shell to near-black).</span>
+<span class="n">axis</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="o">-</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">28</span><span class="p">)</span>
 <span class="n">X</span><span class="p">,</span> <span class="n">Y</span><span class="p">,</span> <span class="n">Z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">axis</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">axis</span><span class="p">,</span> <span class="n">indexing</span><span class="o">=</span><span class="s1">'ij'</span><span class="p">)</span>
-<span class="n">cube</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">X</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">Y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">Z</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+<span class="n">cube</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">(</span><span class="n">X</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">Y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">Z</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> <span class="o">+</span> <span class="mf">0.6</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="p">((</span><span class="n">X</span> <span class="o">-</span> <span class="mf">1.7</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">Y</span> <span class="o">+</span> <span class="mf">1.2</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">Z</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">isosurface</span><span class="p">(</span><span class="n">cube</span><span class="p">,</span> <span class="n">isosurfaces</span><span class="o">=</span><span class="p">[</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'magma'</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">isosurface</span><span class="p">(</span><span class="n">cube</span><span class="p">,</span> <span class="n">isosurfaces</span><span class="o">=</span><span class="p">[</span><span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.6</span><span class="p">],</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.6</span><span class="p">)</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">spin</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">azimuth</span><span class="p">):</span>
     <span class="n">s</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">azimuth</span>
@@ -3907,11 +3910,14 @@ display(IPyImage(filename=gif))</div>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'animate GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
 <span class="n">display</span><span class="p">(</span><span class="n">IPyImage</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">gif</span><span class="p">))</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3">axis = np.linspace(-2, 2, 24)
+<div class="clipboard-copy-txt" id="cell-3"># An asymmetric field (two Gaussians) so the spin actually shows the shape turning — a single Gaussian is a
+# sphere and looks identical from every angle. viridis + opacity&lt;1 so the nested shells read clearly instead of
+# a solid dark ball (magma's low end maps the outer 0.3 shell to near-black).
+axis = np.linspace(-3, 3, 28)
 X, Y, Z = np.meshgrid(axis, axis, axis, indexing='ij')
-cube = np.exp(-(X**2 + Y**2 + Z**2))
+cube = np.exp(-(X**2 + Y**2 + Z**2)) + 0.6 * np.exp(-((X - 1.7)**2 + (Y + 1.2)**2 + Z**2))
 scene = Scene3D(off_screen=True)
-scene.isosurface(cube, isosurfaces=[0.3, 0.6], cmap='magma')
+scene.isosurface(cube, isosurfaces=[0.3, 0.6], cmap='viridis', opacity=0.6)
 
 def spin(s, azimuth):
     s.plotter.camera.azimuth = azimuth
@@ -3932,7 +3938,7 @@ display(IPyImage(filename=gif))</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
-<pre>animate GIF bytes: 213966
+<pre>animate GIF bytes: 890137
 </pre>
 </div>
 </div>
