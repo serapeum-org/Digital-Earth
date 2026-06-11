@@ -42,3 +42,29 @@ jobs:
 
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+
+  # The 3-D (PyVista) notebook needs VTK + the viz3d extra, so it is excluded from the default `notebooks`
+  # task and validated here in the viz3d env. One Linux runner is enough — PyVista renders headless via OSMesa.
+  notebooks-3d:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: viz3d
+          activate-environment: viz3d
+          cache: true
+
+      # PyVista renders off-screen through VTK's OpenGL, which needs a display even when off_screen=True;
+      # a virtual framebuffer (xvfb) provides one on the headless runner.
+      - name: Set up headless display
+        # TODO: pin to a commit SHA to match this repo's action-pinning convention.
+        uses: pyvista/setup-headless-display-action@v3
+
+      - name: Check the 3-D notebook renders
+        run: |
+          pixi run -e viz3d notebooks-3d
