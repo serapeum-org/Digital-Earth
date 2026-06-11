@@ -130,6 +130,9 @@ nav:
       - Vectors & extruded polygons: examples/pyvista/05_vectors_extruded.ipynb
       - Globe — data on a sphere: examples/pyvista/06_globe.ipynb
       - Animation — orbit & fly-through: examples/pyvista/07_animation.ipynb
+      - 'GIS data — rasters in 3-D': examples/pyvista/08_raster_3d.ipynb
+      - 'GIS data — vectors in 3-D': examples/pyvista/09_vector_3d.ipynb
+      - 'GIS data — combined raster + vector scene': examples/pyvista/10_gis_scene_3d.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb
