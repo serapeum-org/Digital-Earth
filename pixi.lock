@@ -4820,6 +4820,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a2/d7/b3416db96ac9dfcb21e19c9bee5194d1c32d7cc73c6eef65cd2d92314c12/trame_client-3.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/1f/1df4ac52479326b4c23661b5f1b0c703af4f3efb2d850e24e344f46af355/trame_common-1.2.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/12/8e/7ddb610d22f79e1537795cb8a8ca7d49b679b61398083b82e7cd048c1e8d/trame_server-3.12.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e0/13/cf68d5a79456ce24d195b0cdbb0d53f0914ec564ce65db36cd9fc5b24427/trame_vtk-2.11.11-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ac/3a/0dbff3ce4fd9cc6076fce8ef714c33796bd25d08b3d249ca78ea458a85fd/trame_vuetify-3.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/7a/882d99539b19b1490cac5d77c67338d126e4122c8276bf640e411650c830/twine-6.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl
@@ -5095,6 +5097,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a2/d7/b3416db96ac9dfcb21e19c9bee5194d1c32d7cc73c6eef65cd2d92314c12/trame_client-3.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/1f/1df4ac52479326b4c23661b5f1b0c703af4f3efb2d850e24e344f46af355/trame_common-1.2.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/12/8e/7ddb610d22f79e1537795cb8a8ca7d49b679b61398083b82e7cd048c1e8d/trame_server-3.12.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e0/13/cf68d5a79456ce24d195b0cdbb0d53f0914ec564ce65db36cd9fc5b24427/trame_vtk-2.11.11-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ac/3a/0dbff3ce4fd9cc6076fce8ef714c33796bd25d08b3d249ca78ea458a85fd/trame_vuetify-3.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/7a/882d99539b19b1490cac5d77c67338d126e4122c8276bf640e411650c830/twine-6.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl
@@ -5363,6 +5367,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a2/d7/b3416db96ac9dfcb21e19c9bee5194d1c32d7cc73c6eef65cd2d92314c12/trame_client-3.13.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/59/1f/1df4ac52479326b4c23661b5f1b0c703af4f3efb2d850e24e344f46af355/trame_common-1.2.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/12/8e/7ddb610d22f79e1537795cb8a8ca7d49b679b61398083b82e7cd048c1e8d/trame_server-3.12.5-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e0/13/cf68d5a79456ce24d195b0cdbb0d53f0914ec564ce65db36cd9fc5b24427/trame_vtk-2.11.11-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/ac/3a/0dbff3ce4fd9cc6076fce8ef714c33796bd25d08b3d249ca78ea458a85fd/trame_vuetify-3.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/3a/7a/882d99539b19b1490cac5d77c67338d126e4122c8276bf640e411650c830/twine-6.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/e4/dccd7f47c4b64213ac01ef921a1337ee6e30e8c6466046018326977efd95/tzdata-2026.2-py2.py3-none-any.whl
@@ -6535,7 +6541,7 @@ packages:
 - pypi: ./
   name: digitalearth
   version: 0.4.0
-  sha256: 9ea9835bb3ee1ed80182d6b12869c2366e6b34a08a8f428ae26c50c64c1d8737
+  sha256: 7764d57ac9267ee4b2b32029d9e46b117eaed10c715dc0af99eabacb8e26cb01
   requires_dist:
   - numpy>=2.0.0
   - geopandas>=1.1.3
@@ -6545,6 +6551,8 @@ packages:
   - pyyaml>=6.0
   - pyvista>=0.48 ; extra == '3d'
   - trame>=3.13 ; extra == '3d'
+  - trame-vtk>=2.8 ; extra == '3d'
+  - trame-vuetify>=2.7 ; extra == '3d'
   - geovista>=0.5.3 ; extra == '3d'
   - imageio>=2.34 ; extra == '3d'
   - imageio-ffmpeg>=0.5 ; extra == '3d'
@@ -15734,6 +15742,28 @@ packages:
   - ruff ; extra == 'dev'
   - trame ; extra == 'dev'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/e0/13/cf68d5a79456ce24d195b0cdbb0d53f0914ec564ce65db36cd9fc5b24427/trame_vtk-2.11.11-py3-none-any.whl
+  name: trame-vtk
+  version: 2.11.11
+  sha256: b01097ab01ccddd43f7d97abd1461cf0b2645bac13992a19931f96118913c329
+  requires_dist:
+  - trame-client>=3.4,<4
+  - nox ; extra == 'dev'
+  - pre-commit ; extra == 'dev'
+  - pytest-cov>=3 ; extra == 'dev'
+  - pytest>=6 ; extra == 'dev'
+  - ruff ; extra == 'dev'
+  requires_python: '>=3.9'
+- pypi: https://files.pythonhosted.org/packages/ac/3a/0dbff3ce4fd9cc6076fce8ef714c33796bd25d08b3d249ca78ea458a85fd/trame_vuetify-3.2.2-py3-none-any.whl
+  name: trame-vuetify
+  version: 3.2.2
+  sha256: b40ecfa30a675df4ce40d5161b9b6c040cfe5445599933c478a3359afbee91d3
+  requires_dist:
+  - trame-client>=3.7,<4
+  - pre-commit ; extra == 'dev'
+  - ruff ; extra == 'dev'
+  - pytest ; extra == 'dev'
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/3a/7a/882d99539b19b1490cac5d77c67338d126e4122c8276bf640e411650c830/twine-6.2.0-py3-none-any.whl
   name: twine
   version: 6.2.0
