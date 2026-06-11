@@ -140,8 +140,8 @@ skips = ["B101"]
 [tool.coverage.run]
 branch = true
 source = ["src/digitalearth"]
-# Emit repo-root-relative file paths in coverage.xml (e.g. src/digitalearth/...) so SonarCloud can map
-# coverage onto the analysed sources; Codecov handles either form.
+# Emit repo-root-relative file paths in coverage.xml (e.g. src/digitalearth/...) so Codecov merges the
+# coverage uploaded from the ubuntu/windows/macos matrix instead of treating the absolute paths as distinct.
 relative_files = true
 
 [tool.coverage.report]
