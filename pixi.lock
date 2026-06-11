@@ -6540,8 +6540,8 @@ packages:
   requires_python: '>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*'
 - pypi: ./
   name: digitalearth
-  version: 0.4.0
-  sha256: 320e82d5ff1495988b2b5c28eb847eaccc0f1b6ad798c2b699deaa0e3663ad24
+  version: 0.5.0
+  sha256: 9b7e07cc00d3945eb2e2872119ec782a762be17ff53b1a1e3897520e4e222936
   requires_dist:
   - numpy>=2.0.0
   - geopandas>=1.1.3
