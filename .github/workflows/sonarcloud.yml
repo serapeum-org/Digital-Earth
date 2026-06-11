@@ -7,7 +7,10 @@ name: SonarCloud
 # repo-root-relative coverage.xml, then hands it to the Sonar scanner. Project key,
 # organization, sources, and coverage path live in `sonar-project.properties`.
 #
-# One-time manual setup required before this passes:
+# Until SonarCloud is configured, the scan step is SKIPPED (not failed) when `SONAR_TOKEN` is absent, so this
+# workflow stays green and never blocks a merge. It activates automatically once the secret is added.
+#
+# One-time manual setup to turn the scan on:
 #   1. Import / create the project on SonarCloud under the `serapeum-org` org
 #      (project key `serapeum-org_Digital-Earth` — adjust sonar-project.properties if it differs).
 #   2. Add the repository secret `SONAR_TOKEN` (a SonarCloud "Analyze project" token).
@@ -30,6 +33,10 @@ concurrency:
 jobs:
   sonarcloud:
     runs-on: ubuntu-latest
+    # Lift the secret to a job-level env so step `if:` conditions can test whether it is set (secrets are not
+    # available directly in `if:` expressions, but the env context is).
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
@@ -57,8 +64,15 @@ jobs:
         run: xvfb-run -a pixi run -e viz3d main
 
       - name: SonarCloud scan
+        # Runs only once SONAR_TOKEN is configured; until then it is skipped so the check passes (see header).
+        if: ${{ env.SONAR_TOKEN != '' }}
         # TODO: pin to a commit SHA to match this repo's action-pinning convention once selected.
         uses: SonarSource/sonarqube-scan-action@v5
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
+
+      - name: SonarCloud scan skipped (no token)
+        if: ${{ env.SONAR_TOKEN == '' }}
+        run: |
+          echo "::notice title=SonarCloud::Scan skipped — repository secret SONAR_TOKEN is not set." \
+               "Complete the one-time setup in .github/workflows/sonarcloud.yml to enable analysis."
