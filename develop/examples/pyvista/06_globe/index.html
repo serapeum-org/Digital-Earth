@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3690,7 +3690,7 @@ def show(scene, title=''):
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>2026-06-11 21:05:40 | <span class="ansi-green-fg">INFO</span> | pyramids.base.config | Logging is configured.
+<pre>2026-06-11 21:45:44 | <span class="ansi-green-fg">INFO</span> | pyramids.base.config | Logging is configured.
 </pre>
 </div>
 </div>
@@ -3766,7 +3766,9 @@ scene.close()</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="real-global-data-worldclim-mean-january-temperature">Real global data (WorldClim mean January temperature)<a class="anchor-link" href="#real-global-data-worldclim-mean-january-temperature">¶</a></h2><p>A real lon/lat raster read through pyramids and draped on the globe.</p>
+<h2 id="real-global-data-worldclim-mean-january-temperature">Real global data (WorldClim mean January temperature)<a class="anchor-link" href="#real-global-data-worldclim-mean-january-temperature">¶</a></h2><p>A real lon/lat raster read through pyramids and draped on the globe. The WorldClim file is large sample data
+(gitignored, not committed), so this cell renders only when it's present locally and skips with a note otherwise
+— the stored output below was produced from a local run.</p>
 </div>
 </div>
 </div>
@@ -3789,17 +3791,30 @@ scene.close()</div>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="n">tavg</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'global'</span> <span class="o">/</span> <span class="s1">'wc2.1_10m_tavg_01.tif'</span><span class="p">))</span>
-<span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">globe</span><span class="p">(</span><span class="n">tavg</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdBu_r'</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastline_color</span><span class="o">=</span><span class="s1">'black'</span><span class="p">)</span>
-<span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'WorldClim January mean temperature'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="c1"># WorldClim is a large, gitignored sample (not committed to the repo). Render it when it's present locally;</span>
+<span class="c1"># in CI / a fresh clone the file is absent, so skip with a note rather than failing.</span>
+<span class="n">tavg_path</span> <span class="o">=</span> <span class="n">DATA</span> <span class="o">/</span> <span class="s1">'global'</span> <span class="o">/</span> <span class="s1">'wc2.1_10m_tavg_01.tif'</span>
+<span class="k">if</span> <span class="n">tavg_path</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
+    <span class="n">tavg</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tavg_path</span><span class="p">))</span>
+    <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">scene</span><span class="o">.</span><span class="n">globe</span><span class="p">(</span><span class="n">tavg</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'RdBu_r'</span><span class="p">,</span> <span class="n">coastlines</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">coastline_color</span><span class="o">=</span><span class="s1">'black'</span><span class="p">)</span>
+    <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'WorldClim January mean temperature'</span><span class="p">)</span>
+    <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">'skipped — </span><span class="si">{</span><span class="n">tavg_path</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s1"> is not bundled with the repo (gitignored sample data)'</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-3">tavg = Dataset.read_file(str(DATA / 'global' / 'wc2.1_10m_tavg_01.tif'))
-scene = Scene3D(off_screen=True)
-scene.globe(tavg, cmap='RdBu_r', coastlines=True, coastline_color='black')
-show(scene, 'WorldClim January mean temperature')
-scene.close()</div>
+<div class="clipboard-copy-txt" id="cell-3"># WorldClim is a large, gitignored sample (not committed to the repo). Render it when it's present locally;
+# in CI / a fresh clone the file is absent, so skip with a note rather than failing.
+tavg_path = DATA / 'global' / 'wc2.1_10m_tavg_01.tif'
+if tavg_path.exists():
+    tavg = Dataset.read_file(str(tavg_path))
+    scene = Scene3D(off_screen=True)
+    scene.globe(tavg, cmap='RdBu_r', coastlines=True, coastline_color='black')
+    show(scene, 'WorldClim January mean temperature')
+    scene.close()
+else:
+    print(f'skipped — {tavg_path.name} is not bundled with the repo (gitignored sample data)')
+</div>
 </div>
 </div>
 </div>
@@ -3866,20 +3881,6 @@ scene.close()</div>
 <div class="jp-Collapser jp-OutputCollapser jp-Cell-outputCollapser">
 </div>
 <div class="jp-OutputArea jp-Cell-outputArea">
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>Downloading file 'natural_earth/physical/ne_coastlines_50m.vtk.bz2' from 'https://github.com/bjlittle/geovista-data/raw/2024.07.0/assets/natural_earth/physical/ne_coastlines_50m.vtk.bz2' to 'C:\Users\main\AppData\Local\geovista\2024.07.0'.
-</pre>
-</div>
-</div>
-<div class="jp-OutputArea-child">
-<div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedText jp-OutputArea-output" data-mime-type="application/vnd.jupyter.stderr" tabindex="0">
-<pre>Decompressing 'C:\Users\main\AppData\Local\geovista\2024.07.0\natural_earth\physical\ne_coastlines_50m.vtk.bz2' to 'C:\Users\main\AppData\Local\geovista\2024.07.0\natural_earth\physical\ne_coastlines_50m.vtk' using method 'auto'.
-</pre>
-</div>
-</div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedImage jp-OutputArea-output" tabindex="0">
