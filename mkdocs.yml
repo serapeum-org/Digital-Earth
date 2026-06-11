@@ -121,6 +121,7 @@ nav:
     - Global data on the globe: examples/11_global_data_on_globe.ipynb
     - Animating data on the globe: examples/12_animated_globe.ipynb
     - Charts & map decorations: examples/13_charts_and_decorations.ipynb
+    - 3-D visualization (PyVista): examples/15_3d_visualization.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb
