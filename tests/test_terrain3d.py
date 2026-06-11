@@ -10,7 +10,12 @@ pv = pytest.importorskip("pyvista")
 
 from digitalearth.sources import get_source
 from digitalearth.three_d import Scene3D
-from digitalearth.three_d.terrain import ELEVATION, _terrain_mesh
+from digitalearth.three_d.terrain import (
+    ELEVATION,
+    _METRES_PER_DEGREE,
+    _terrain_mesh,
+    _vertical_unit_scale,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -66,3 +71,35 @@ def test_terrain_handles_nan_nodata():
     dem[0, 0] = np.nan
     mesh = _terrain_mesh(dem, np.arange(5.0), np.arange(5.0), z_exaggeration=1.0)
     assert np.isfinite(mesh.points).all()  # geometry has no NaN coordinates
+
+
+def test_vertical_unit_scale_geographic_vs_projected():
+    """A geographic CRS rescales metre elevation into degrees; a projected CRS leaves it alone."""
+    assert _vertical_unit_scale(4326) == pytest.approx(1.0 / _METRES_PER_DEGREE)  # WGS84 lon/lat
+    assert _vertical_unit_scale(3857) == 1.0  # Web Mercator (metres)
+    assert _vertical_unit_scale(None) == 1.0  # unknown CRS → no rescaling
+
+
+def test_geographic_dem_is_not_an_invisible_needle():
+    """A geographic DEM (degrees x/y, metre z) builds relief comparable to its footprint, not a spike.
+
+    Regression guard via the exact math terrain() composes (``_vertical_unit_scale`` x ``_terrain_mesh``): left
+    unscaled the metre elevation dwarfs the ~degree-wide footprint ~100 000:1, so the surface is an invisible
+    vertical needle. The geographic rescale must bring the relief into the footprint's order of magnitude.
+    """
+    # ~0.1 deg footprint, ~1000 m relief — the realistic geographic-DEM mismatch.
+    x = np.linspace(-9.2, -9.1, 16)
+    y = np.linspace(38.8, 38.7, 16)
+    dem = np.add.outer(np.linspace(0.0, 1000.0, 16), np.zeros(16))
+
+    scaled = _vertical_unit_scale(4326) * 1.0  # z_exaggeration=1.0, geographic CRS
+    mesh = _terrain_mesh(dem, x, y, z_exaggeration=scaled)
+    xmin, xmax, ymin, ymax, zmin, zmax = mesh.bounds
+    horizontal = max(xmax - xmin, ymax - ymin)
+    vertical = zmax - zmin
+    # Relief is brought into the same order of magnitude as the footprint (not ~10000x taller).
+    assert vertical < horizontal * 5.0
+
+    # And without the rescale it really is a needle — proving the guard is meaningful.
+    needle = _terrain_mesh(dem, x, y, z_exaggeration=1.0)
+    assert (needle.bounds[5] - needle.bounds[4]) > horizontal * 1000.0

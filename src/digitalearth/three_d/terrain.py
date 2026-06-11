@@ -19,6 +19,35 @@ from digitalearth.sources import Source, get_source
 #: Attribute name the elevation scalar is stored under on the generated mesh.
 ELEVATION = "elevation"
 
+#: Mean metres per degree of latitude (WGS84) — used to bring a geographic DEM's metre-valued
+#: elevation into the same (degree) units as its lon/lat coordinates, so the surface isn't a needle.
+_METRES_PER_DEGREE = 111_320.0
+
+
+def _vertical_unit_scale(crs: Any) -> float:
+    """Return the factor that converts metre-valued elevation into the horizontal coordinate units.
+
+    For a **projected** CRS the horizontal coordinates are already metres, so elevation needs no rescaling
+    (``1.0``). For a **geographic** CRS the coordinates are degrees while elevation is metres — left unscaled the
+    surface is ~100 000× taller than it is wide (an invisible vertical needle), so elevation is divided by the
+    mean metres-per-degree (:data:`_METRES_PER_DEGREE`). CRS interpretation goes through pyramids (the GIS engine);
+    an unknown/unparseable CRS falls back to ``1.0`` (treat as already-consistent units).
+
+    Args:
+        crs: The :class:`~digitalearth.sources.Source` CRS (an EPSG int, or anything pyramids can resolve).
+
+    Returns:
+        float: ``1 / _METRES_PER_DEGREE`` for a geographic CRS, else ``1.0``.
+    """
+    try:
+        from pyramids.base.crs import sr_from_epsg
+
+        if sr_from_epsg(int(crs)).IsGeographic():
+            return 1.0 / _METRES_PER_DEGREE
+    except Exception:  # noqa: BLE001 — any CRS-resolution failure: fall back to no rescaling.
+        pass
+    return 1.0
+
 
 def _terrain_mesh(z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: float) -> pv.StructuredGrid:
     """Build a ``StructuredGrid`` surface from a 2-D elevation array and 1-D coordinate vectors.
@@ -88,5 +117,8 @@ class TerrainMixin:
                 ```
         """
         src = data if isinstance(data, Source) else get_source(data, band=band)
-        mesh = _terrain_mesh(src.z.values, src.x.values, src.y.values, z_exaggeration)
+        # Geographic DEMs carry lon/lat (degrees) horizontally but metre elevation vertically; rescale the
+        # vertical so true-scale (z_exaggeration=1.0) is a faithful, *visible* surface rather than a needle.
+        vertical_scale = z_exaggeration * _vertical_unit_scale(src.crs)
+        mesh = _terrain_mesh(src.z.values, src.x.values, src.y.values, vertical_scale)
         return self.add_mesh(mesh, scalars=scalars, cmap=cmap, **kwargs)
