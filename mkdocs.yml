@@ -121,6 +121,18 @@ nav:
     - Global data on the globe: examples/11_global_data_on_globe.ipynb
     - Animating data on the globe: examples/12_animated_globe.ipynb
     - Charts & map decorations: examples/13_charts_and_decorations.ipynb
+    - 3-D visualization (PyVista):
+      - Overview (all plot types): examples/pyvista/15_3d_visualization.ipynb
+      - Scene3D — the 3-D host: examples/pyvista/01_scene3d_basics.ipynb
+      - Terrain — DEMs as relief: examples/pyvista/02_terrain.ipynb
+      - Point clouds: examples/pyvista/03_point_cloud.ipynb
+      - Volumes & isosurfaces: examples/pyvista/04_volume_isosurface.ipynb
+      - Vectors & extruded polygons: examples/pyvista/05_vectors_extruded.ipynb
+      - Globe — data on a sphere: examples/pyvista/06_globe.ipynb
+      - Animation — orbit & fly-through: examples/pyvista/07_animation.ipynb
+      - 'GIS data — rasters in 3-D': examples/pyvista/08_raster_3d.ipynb
+      - 'GIS data — vectors in 3-D': examples/pyvista/09_vector_3d.ipynb
+      - 'GIS data — combined raster + vector scene': examples/pyvista/10_gis_scene_3d.ipynb
     - Plot gallery:
       - Fields:
         - imshow: examples/plots/01_imshow.ipynb
