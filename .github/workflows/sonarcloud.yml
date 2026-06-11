@@ -43,15 +43,18 @@ jobs:
           activate-environment: viz3d
           cache: true
 
-      # The viz3d suite renders the 3-D tier off-screen through VTK's OpenGL, which needs a display even when
-      # off_screen=True; a virtual framebuffer (xvfb) provides one on the headless runner.
-      - name: Set up headless display
-        # TODO: pin to a commit SHA to match this repo's action-pinning convention.
-        uses: pyvista/setup-headless-display-action@v3
+      # The viz3d suite renders the 3-D tier off-screen through VTK's OpenGL, which still needs a display + a GL
+      # driver even when off_screen=True (without one VTK segfaults). Install a virtual framebuffer and Mesa's
+      # software GL, then run the suite under `xvfb-run`. Plain apt (no third-party action, which the org's
+      # Actions policy blocks at workflow start-up).
+      - name: Install a virtual framebuffer + software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
 
       - name: Run tests with coverage
         # `main` = pytest --cov=src/digitalearth --cov-report=xml -> coverage.xml at the repo root.
-        run: pixi run -e viz3d main
+        run: xvfb-run -a pixi run -e viz3d main
 
       - name: SonarCloud scan
         # TODO: pin to a commit SHA to match this repo's action-pinning convention once selected.

@@ -59,12 +59,15 @@ jobs:
           activate-environment: viz3d
           cache: true
 
-      # PyVista renders off-screen through VTK's OpenGL, which needs a display even when off_screen=True;
-      # a virtual framebuffer (xvfb) provides one on the headless runner.
-      - name: Set up headless display
-        # TODO: pin to a commit SHA to match this repo's action-pinning convention.
-        uses: pyvista/setup-headless-display-action@v3
+      # PyVista renders off-screen through VTK's OpenGL, which still needs a display + a GL driver even when
+      # off_screen=True (without one VTK segfaults). Install a virtual framebuffer and Mesa's software GL, then
+      # run the render under `xvfb-run`. Done with plain apt (no third-party action, which the org's Actions
+      # policy blocks) so the step can't be rejected at workflow start-up.
+      - name: Install a virtual framebuffer + software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
 
       - name: Check the 3-D notebook renders
         run: |
-          pixi run -e viz3d notebooks-3d
+          xvfb-run -a pixi run -e viz3d notebooks-3d
