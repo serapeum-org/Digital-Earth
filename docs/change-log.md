@@ -1,5 +1,15 @@
 # Change log
 
+## 0.5.0 (2026-06-11)
+
+### Feat
+
+- **three_d**: add the true-3D PyVista rendering tier (Scene3D) (#66)
+
+### Refactor
+
+- **decoration**: source Natural-Earth basemaps from cleopatra.reference (#63)
+
 ## 0.4.0 (2026-06-10)
 
 ### Feat
