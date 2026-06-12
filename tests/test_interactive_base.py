@@ -195,6 +195,156 @@ class TestRegistryAndRender:
         assert out.exists() and out.stat().st_size > 0
 
 
+class TestShowAndRepr:
+    """``show()`` display behaviour and the notebook ``_repr_mimebundle_`` hook."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("geoviews")
+
+    def test_show_returns_rendered_object_and_displays(self, monkeypatch):
+        """``show()`` returns the composed object and pushes it through IPython display.
+
+        Test scenario:
+            With IPython importable, ``show()`` must call ``IPython.display.display`` exactly
+            once with the rendered object, and return that object.
+        """
+        import holoviews as hv
+
+        shown = []
+        import IPython.display
+
+        monkeypatch.setattr(IPython.display, "display", shown.append)
+        el = hv.Points([(0, 0)])
+        out = InteractiveMap().add_element(el).show()
+        assert out is el, "show() must return the rendered object"
+        assert shown == [
+            el
+        ], f"display() should receive the rendered object once, got {shown}"
+
+    def test_show_without_ipython_still_returns_object(self, monkeypatch):
+        """``show()`` degrades to returning the object when IPython is absent.
+
+        Test scenario:
+            With ``IPython.display`` unimportable (plain-script use), ``show()`` must not raise
+            and must still return the composed HoloViews object.
+        """
+        import holoviews as hv
+
+        monkeypatch.setitem(sys.modules, "IPython.display", None)
+        monkeypatch.setitem(sys.modules, "IPython", None)
+        el = hv.Points([(0, 0)])
+        assert InteractiveMap().add_element(el).show() is el
+
+    def test_repr_mimebundle_delegates_to_element_hook(self):
+        """The map's mimebundle is the rendered element's mimebundle.
+
+        Test scenario:
+            A single registered element exposing ``_repr_mimebundle_`` is what ``render()``
+            returns, so the map must delegate to that hook and return its result.
+        """
+
+        class _FakeElement:
+            def _repr_mimebundle_(self, include=None, exclude=None):
+                return {"text/plain": "fake"}
+
+        bundle = InteractiveMap().add_element(_FakeElement())._repr_mimebundle_()
+        assert bundle == {
+            "text/plain": "fake"
+        }, f"hook result not passed through: {bundle}"
+
+    def test_repr_mimebundle_without_hook_is_empty(self):
+        """An element without a mimebundle hook degrades to an empty bundle.
+
+        Test scenario:
+            ``render()`` returning an object with no ``_repr_mimebundle_`` attribute must
+            yield ``{}`` rather than raising.
+        """
+        bundle = InteractiveMap().add_element(object())._repr_mimebundle_()
+        assert bundle == {}, f"expected empty bundle for hookless element, got {bundle}"
+
+
+class TestConstructionDefaults:
+    """Constructor defaults and the reproject predicate (no engine needed)."""
+
+    def test_default_configuration(self):
+        """Defaults match the documented Web-Mercator-first contract.
+
+        Test scenario:
+            A bare ``InteractiveMap()`` must default to EPSG:3857, 700x500, no tiles, no title.
+        """
+        m = InteractiveMap()
+        assert (m.crs, m.width, m.height, m.tiles, m.title) == (
+            3857,
+            700,
+            500,
+            None,
+            "",
+        )
+
+    @pytest.mark.parametrize(
+        "crs, data_epsg, expected",
+        [
+            (3857, 3857, False),  # already in the display CRS
+            (3857, 4326, True),  # differing EPSG -> reproject
+            ("ESRI:54009", 3857, True),  # string display CRS -> always reproject
+            (3857, None, True),  # no epsg attribute -> reproject path
+        ],
+    )
+    def test_needs_reproject_matrix(self, crs, data_epsg, expected):
+        """``_needs_reproject`` only short-circuits on an exact int-EPSG match.
+
+        Args:
+            crs: Display CRS configured on the map.
+            data_epsg: ``epsg`` the data object reports (``None`` = attribute absent).
+            expected: Whether a reproject is required.
+        """
+
+        class _Data:
+            pass
+
+        data = _Data()
+        if data_epsg is not None:
+            data.epsg = data_epsg
+        result = InteractiveMap(crs=crs)._needs_reproject(data)
+        assert (
+            result is expected
+        ), f"crs={crs!r}, data_epsg={data_epsg!r}: expected {expected}, got {result}"
+
+    def test_composition_includes_all_mixins(self):
+        """``InteractiveMap`` composes the base plus all nine capability mixins.
+
+        Test scenario:
+            The MRO must contain every mixin the architecture promises, so later DI tasks
+            can land methods on them without touching the composition.
+        """
+        from digitalearth.interactive.animation import AnimationMixin
+        from digitalearth.interactive.base import InteractiveMapBase
+        from digitalearth.interactive.bigdata import BigDataMixin
+        from digitalearth.interactive.dashboard import DashboardMixin
+        from digitalearth.interactive.decoration import DecorationMixin
+        from digitalearth.interactive.interaction import InteractionMixin
+        from digitalearth.interactive.projection import ProjectionMixin
+        from digitalearth.interactive.raster import RasterMixin
+        from digitalearth.interactive.temporal import TemporalMixin
+        from digitalearth.interactive.vector import VectorMixin
+
+        mro = InteractiveMap.__mro__
+        for cls in (
+            InteractiveMapBase,
+            RasterMixin,
+            VectorMixin,
+            BigDataMixin,
+            TemporalMixin,
+            DecorationMixin,
+            InteractionMixin,
+            ProjectionMixin,
+            AnimationMixin,
+            DashboardMixin,
+        ):
+            assert cls in mro, f"{cls.__name__} missing from InteractiveMap MRO"
+
+
 def test_reimport_is_stable():
     """The package re-imports cleanly (no import-time engine side effects)."""
     mod = importlib.reload(importlib.import_module("digitalearth.interactive"))
