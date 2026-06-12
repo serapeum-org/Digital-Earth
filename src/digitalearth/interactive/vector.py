@@ -84,6 +84,18 @@ class VectorMixin:
             cmap: Colormap used when ``value_column`` is given.
             **opts: Extra HoloViews style options applied to the element.
 
+        Examples:
+            - Colour gauging stations by an attribute column:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> m = InteractiveMap().points(fc, value_column="fid")         # doctest: +SKIP
+                >>> [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP
+                ['fid']
+
+                ```
+
         Returns:
             This map (chainable).
         """
@@ -104,6 +116,17 @@ class VectorMixin:
             features: A pyramids ``FeatureCollection`` of line geometries; reprojected through
                 pyramids when needed.
             **opts: Extra HoloViews style options applied to the element.
+
+        Examples:
+            - Draw river reaches as an interactive line layer:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> reaches = FeatureCollection.read_file("reaches.geojson")    # doctest: +SKIP
+                >>> InteractiveMap().path(reaches).save("reaches.html")         # doctest: +SKIP
+                'reaches.html'
+
+                ```
 
         Returns:
             This map (chainable).
@@ -130,6 +153,17 @@ class VectorMixin:
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
             **opts: Extra HoloViews style options applied to the element.
+
+        Examples:
+            - Outline catchment polygons over a basemap:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> basins = FeatureCollection.read_file("basins.geojson")      # doctest: +SKIP
+                >>> InteractiveMap().polygons(basins).tiles().save("m.html")    # doctest: +SKIP
+                'm.html'
+
+                ```
 
         Returns:
             This map (chainable).
@@ -169,6 +203,18 @@ class VectorMixin:
 
         Returns:
             This map (chainable).
+
+        Examples:
+            - Fill polygons by a population column with fixed colour limits:
+                ```python
+                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> admin = FeatureCollection.read_file("admin.geojson")        # doctest: +SKIP
+                >>> m = InteractiveMap().choropleth(admin, "pop", clim=(0, 1e6))  # doctest: +SKIP
+                >>> [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP
+                ['pop']
+
+                ```
 
         Raises:
             KeyError: when ``column`` is not a column of ``features``.

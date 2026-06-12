@@ -62,6 +62,18 @@ class RasterMixin:
             colorbar: Whether to draw a colorbar.
             **opts: Extra HoloViews style options applied to the element.
 
+        Examples:
+            - Render a DEM as a pan/zoom raster with explicit colour limits:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem, cmap="terrain", clim=(0, 60))  # doctest: +SKIP
+                >>> len(m.layers)                                               # doctest: +SKIP
+                1
+
+                ```
+
         Returns:
             This map (chainable).
         """
@@ -91,6 +103,18 @@ class RasterMixin:
 
         Returns:
             This map (chainable).
+
+        Examples:
+            - Compose three bands of a satellite stack into true colour:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> stack = Dataset.read_file("sentinel.tif")                   # doctest: +SKIP
+                >>> m = InteractiveMap().rgb(stack, bands=(4, 3, 2))            # doctest: +SKIP
+                >>> [d.name for d in m.layers[0].vdims]                         # doctest: +SKIP
+                ['R', 'G', 'B']
+
+                ```
 
         Raises:
             ValueError: when ``bands`` does not name exactly three bands.
@@ -137,6 +161,17 @@ class RasterMixin:
             cmap: Colormap name.
             **opts: Extra HoloViews style options applied to the element.
 
+        Examples:
+            - Draw an irregular grid without resampling to axis-aligned:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> grid = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> InteractiveMap().quadmesh(grid).save("mesh.html")           # doctest: +SKIP
+                'mesh.html'
+
+                ```
+
         Returns:
             This map (chainable).
         """
@@ -163,6 +198,18 @@ class RasterMixin:
             levels: Contour levels — an int (count) or explicit sequence; ``None`` uses 10.
             **opts: Extra HoloViews style options applied to the element.
 
+        Examples:
+            - Contour a raster at five levels:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> m = InteractiveMap().contours(dem, levels=5)                # doctest: +SKIP
+                >>> len(m.layers)                                               # doctest: +SKIP
+                1
+
+                ```
+
         Returns:
             This map (chainable).
         """
@@ -178,6 +225,17 @@ class RasterMixin:
             band: 1-based band to contour.
             levels: Contour levels — an int (count) or explicit sequence; ``None`` uses 10.
             **opts: Extra HoloViews style options applied to the element.
+
+        Examples:
+            - Fill the bands between contour levels:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> InteractiveMap().filled_contours(dem, levels=5).save("b.html")  # doctest: +SKIP
+                'b.html'
+
+                ```
 
         Returns:
             This map (chainable).
@@ -208,6 +266,18 @@ class RasterMixin:
             collection: A pyramids ``DatasetCollection`` whose members share a grid.
             band: 1-based band contoured in every member.
             **opts: Extra HoloViews style options applied to each member's contour element.
+
+        Examples:
+            - Overlay a three-member ensemble as spaghetti contours:
+                ```python
+                >>> from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)  # doctest: +SKIP
+                >>> m = InteractiveMap().spaghetti(dc, levels=4)                # doctest: +SKIP
+                >>> len(m.layers)                                               # doctest: +SKIP
+                3
+
+                ```
 
         Returns:
             This map (chainable) — one contour layer registered per member.

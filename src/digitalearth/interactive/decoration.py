@@ -28,6 +28,18 @@ class DecorationMixin:
         Returns:
             This map (chainable) — the tile layer is inserted *beneath* existing layers.
 
+        Examples:
+            - Put a light Carto basemap beneath a raster:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).tiles("CartoLight")         # doctest: +SKIP
+                >>> type(m.layers[0]).__name__                                  # doctest: +SKIP
+                'WMTS'
+
+                ```
+
         Raises:
             ValueError: when the display CRS is not Web Mercator (Bokeh tiles are 3857-only), or
                 when ``provider`` is not a known tile source.
@@ -57,6 +69,16 @@ class DecorationMixin:
 
         Returns:
             This map (chainable).
+
+        Examples:
+            - Add a medium-resolution coastline on top of the data:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> m = InteractiveMap().coastlines(resolution="50m")           # doctest: +SKIP
+                >>> len(m.layers)                                               # doctest: +SKIP
+                1
+
+                ```
 
         Raises:
             ValueError: when the display CRS is not Web Mercator.
@@ -94,6 +116,18 @@ class DecorationMixin:
         Returns:
             This map (chainable).
 
+        Examples:
+            - Underlay land and overlay country borders around a raster:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).features(land=True, borders=True)  # doctest: +SKIP
+                >>> len(m.layers)                                               # doctest: +SKIP
+                3
+
+                ```
+
         Raises:
             ValueError: when the display CRS is not Web Mercator.
         """
@@ -127,6 +161,17 @@ class DecorationMixin:
         Returns:
             This map (chainable).
 
+        Examples:
+            - Drop the colorbar from the last raster layer:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> InteractiveMap().image(dem).colorbar(False).save("m.html")  # doctest: +SKIP
+                'm.html'
+
+                ```
+
         Raises:
             ValueError: when no layer has been added yet.
         """
@@ -145,6 +190,17 @@ class DecorationMixin:
 
         Returns:
             This map (chainable).
+
+        Examples:
+            - Hide the legend of a contour layer:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> InteractiveMap().contours(dem).legend(False).save("m.html")  # doctest: +SKIP
+                'm.html'
+
+                ```
 
         Raises:
             ValueError: when no layer has been added yet.
