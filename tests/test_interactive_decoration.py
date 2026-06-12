@@ -99,6 +99,23 @@ class TestTogglesAndCompose:
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
         assert plot["show_legend"] is False
 
+    def test_legend_without_layers_raises(self, m):
+        with pytest.raises(ValueError, match="at least one layer"):
+            m.legend()
+
+    def test_tiles_style_opts_forwarded(self, m):
+        """Extra opts on tiles() reach the cloned element (the shared singleton stays pristine)."""
+        m.tiles("CartoLight", alpha=0.4)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert style["alpha"] == 0.4, f"tile opts not applied: {style.get('alpha')}"
+
+    def test_coastline_style_opts_forwarded(self, m):
+        m.coastlines(line_width=2.0)
+        style = hv.Store.lookup_options("bokeh", m.layers[-1], "style").kwargs
+        assert (
+            style["line_width"] == 2.0
+        ), f"feature opts not applied: {style.get('line_width')}"
+
     def test_image_tiles_coastlines_compose(self, m, dataset):
         """The DI.1 acceptance chain: raster + basemap + coastline in one ordered overlay."""
         m.image(dataset).tiles().coastlines()

@@ -195,6 +195,38 @@ class TestRegistryAndRender:
         assert out.exists() and out.stat().st_size > 0
 
 
+class TestStyledAndHelpers:
+    """``_styled`` frame opts and the ``_masked_to_nan`` nodata helper."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("geoviews")
+
+    def test_title_lands_in_bokeh_frame(self):
+        """A configured title must be recorded in the Bokeh plot options."""
+        import holoviews as hv
+
+        m = InteractiveMap(title="discharge")
+        element = m._styled(hv.Points([(0, 0)]))
+        plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
+        assert plot["title"] == "discharge", f"title not honoured: {plot.get('title')}"
+
+    def test_masked_to_nan_fills_masked_entries(self):
+        """A masked array becomes float with NaN at masked cells; plain arrays pass through."""
+        import numpy as np
+
+        from digitalearth.interactive.base import _masked_to_nan
+
+        masked = np.ma.masked_array([1.0, 2.0, 3.0], mask=[False, True, False])
+        out = _masked_to_nan(masked)
+        assert not np.ma.isMaskedArray(out), "output must be a plain ndarray"
+        assert np.isnan(out[1]) and out[0] == 1.0, f"masked cell not NaN-filled: {out}"
+        plain = np.array([4.0, 5.0])
+        assert np.array_equal(
+            _masked_to_nan(plain), plain
+        ), "plain arrays must pass through"
+
+
 class TestShowAndRepr:
     """``show()`` display behaviour and the notebook ``_repr_mimebundle_`` hook."""
 

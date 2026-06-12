@@ -98,6 +98,19 @@ class TestRgb:
         with pytest.raises(ValueError, match="three bands"):
             m.rgb(dataset, bands=(1, 2))
 
+    def test_already_display_crs_skips_reproject(self, m, dataset, monkeypatch):
+        """A dataset already in 3857 must not be warped again on the rgb path."""
+        mercator = dataset.to_crs(3857)
+
+        def _boom(*a, **k):  # pragma: no cover - only fires on regression
+            raise AssertionError(
+                "to_crs must not run for data already in the display CRS"
+            )
+
+        monkeypatch.setattr(type(mercator), "to_crs", _boom)
+        m.rgb(mercator, bands=(1, 1, 1))
+        assert isinstance(m.layers[0], hv.RGB)
+
 
 class TestQuadmeshAndContours:
     """``quadmesh`` / ``contours`` / ``filled_contours``."""

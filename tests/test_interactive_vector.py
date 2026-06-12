@@ -76,6 +76,19 @@ class TestPoints:
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         assert style["size"] == 12.0, f"size not honoured: {style.get('size')}"
 
+    def test_already_display_crs_passes_through(self, m, point_fc, monkeypatch):
+        """Features already in 3857 must not be reprojected again (pyramids to_crs untouched)."""
+        mercator = point_fc.to_crs(3857)
+
+        def _boom(*a, **k):  # pragma: no cover - only fires on regression
+            raise AssertionError(
+                "to_crs must not run for features already in the display CRS"
+            )
+
+        monkeypatch.setattr(type(mercator), "to_crs", _boom)
+        m.points(mercator)
+        assert isinstance(m.layers[0], gv.Points)
+
     def test_mpl_render_smoke(self, m, point_fc, tmp_path):
         out = tmp_path / "points.png"
         m.points(point_fc, value_column="fid").save(str(out))
