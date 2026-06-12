@@ -108,7 +108,7 @@ class InteractiveMapBase:
             >>> m = InteractiveMapBase()
             >>> m.crs
             3857
-            >>> m.tiles is None
+            >>> m._tiles_provider is None  # no basemap requested at construction
             True
 
             ```
@@ -130,7 +130,8 @@ class InteractiveMapBase:
         self.crs = crs
         self.width = width
         self.height = height
-        self.tiles = tiles
+        # Stored privately: the public name `tiles` is the DecorationMixin builder method.
+        self._tiles_provider = tiles
         self.title = title
         self.layers: List[Any] = []
 
@@ -289,6 +290,9 @@ class InteractiveMapBase:
                 ```
         """
         gv, hv = _require_holoviz()
+        if self._tiles_provider is not None and hasattr(self, "tiles"):
+            provider, self._tiles_provider = self._tiles_provider, None  # apply once
+            self.tiles(provider)
         if not self.layers:
             return hv.Overlay([])
         if len(self.layers) == 1:

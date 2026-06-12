@@ -272,9 +272,11 @@ class TestConstructionDefaults:
 
         Test scenario:
             A bare ``InteractiveMap()`` must default to EPSG:3857, 700x500, no tiles, no title.
+            (The tile provider is stored privately — the public ``tiles`` name is the builder.)
         """
         m = InteractiveMap()
-        assert (m.crs, m.width, m.height, m.tiles, m.title) == (
+        assert callable(m.tiles), "tiles must remain the DecorationMixin builder method"
+        assert (m.crs, m.width, m.height, m._tiles_provider, m.title) == (
             3857,
             700,
             500,

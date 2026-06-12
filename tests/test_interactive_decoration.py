@@ -1,0 +1,112 @@
+"""DI.1c — interactive decoration (tiles / coastlines / features / legend / colorbar).
+
+Type-level and overlay-order assertions only — constructing tile/feature elements touches no
+network (geometry/tiles are fetched by the renderer at display time, which these tests never do).
+Runs in the ``interactive`` pixi env; every test ``importorskip``s geoviews.
+"""
+
+import pytest
+
+from digitalearth.interactive import InteractiveMap
+
+hv = pytest.importorskip("holoviews")
+gv = pytest.importorskip("geoviews")
+
+
+@pytest.fixture()
+def m() -> InteractiveMap:
+    """A fresh Web-Mercator map for each test."""
+    return InteractiveMap()
+
+
+class TestTiles:
+    """``tiles`` — web-tile basemaps."""
+
+    def test_tiles_is_wmts_underlay(self, m, dataset):
+        m.image(dataset).tiles("CartoLight")
+        assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
+        assert isinstance(
+            m.layers[1], hv.Image
+        ), "tiles must insert beneath the data layers"
+
+    def test_unknown_provider_raises_with_catalog(self, m):
+        with pytest.raises(ValueError, match="unknown tile provider"):
+            m.tiles("NotARealProvider")
+
+    def test_non_mercator_map_raises(self):
+        with pytest.raises(ValueError, match="crs=3857"):
+            InteractiveMap(crs=4326).tiles()
+
+    def test_chains(self, m):
+        assert m.tiles() is m
+
+    def test_constructor_tiles_apply_once_at_render(self, dataset):
+        """``InteractiveMap(tiles=...)`` prepends the basemap on first render only."""
+        m = InteractiveMap(tiles="CartoLight")
+        m.image(dataset)
+        first = m.render()
+        assert isinstance(first, hv.Overlay) and len(first) == 2
+        assert isinstance(m.layers[0], gv.element.WMTS)
+        again = m.render()
+        assert len(again) == 2, "re-rendering must not stack a second tile layer"
+
+
+class TestCoastlinesAndFeatures:
+    """``coastlines`` / ``features`` — Natural-Earth context layers."""
+
+    def test_coastline_is_feature_overlay(self, m, dataset):
+        m.image(dataset).coastlines()
+        assert isinstance(m.layers[-1], gv.element.Feature), f"got {type(m.layers[-1])}"
+
+    def test_coastline_resolution_recorded(self, m):
+        m.coastlines(resolution="50m")
+        plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
+        assert plot["scale"] == "50m", f"scale not honoured: {plot.get('scale')}"
+
+    def test_features_underlay_vs_overlay_order(self, m, dataset):
+        m.image(dataset).features(land=True, borders=True)
+        assert isinstance(
+            m.layers[0], gv.element.Feature
+        ), "land must underlay the raster"
+        assert isinstance(m.layers[1], hv.Image)
+        assert isinstance(
+            m.layers[2], gv.element.Feature
+        ), "borders must overlay the raster"
+
+    def test_features_none_requested_is_noop(self, m):
+        m.features()
+        assert m.layers == []
+
+    def test_non_mercator_features_raise(self):
+        with pytest.raises(ValueError, match="crs=3857"):
+            InteractiveMap(crs=4326).coastlines()
+
+
+class TestTogglesAndCompose:
+    """``legend`` / ``colorbar`` toggles and the DI.1 acceptance overlay."""
+
+    def test_colorbar_toggle_rewrites_last_layer(self, m, dataset):
+        m.image(dataset).colorbar(False)
+        plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
+        assert plot["colorbar"] is False
+
+    def test_colorbar_without_layers_raises(self, m):
+        with pytest.raises(ValueError, match="at least one layer"):
+            m.colorbar()
+
+    def test_legend_toggle(self, m, dataset):
+        m.contours(dataset, levels=4).legend(False)
+        plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
+        assert plot["show_legend"] is False
+
+    def test_image_tiles_coastlines_compose(self, m, dataset):
+        """The DI.1 acceptance chain: raster + basemap + coastline in one ordered overlay."""
+        m.image(dataset).tiles().coastlines()
+        overlay = m.render()
+        assert isinstance(overlay, hv.Overlay)
+        kinds = [type(layer) for layer in overlay]
+        assert len(overlay) == 3, f"expected 3 layers, got {len(overlay)}"
+        assert issubclass(kinds[0], gv.element.WMTS), "tiles must be the bottom layer"
+        assert issubclass(
+            kinds[2], gv.element.Feature
+        ), "coastline must be the top layer"
