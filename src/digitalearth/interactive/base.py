@@ -48,7 +48,30 @@ def _require_holoviz() -> tuple:
         import holoviews as hv
     except ImportError as err:
         raise ImportError(_INSTALL_HINT) from err
+    if (
+        "bokeh" not in hv.Store.renderers
+    ):  # register Bokeh options once so backend="bokeh" opts apply
+        hv.renderer("bokeh")
     return gv, hv
+
+
+def _masked_to_nan(values: Any) -> Any:
+    """Return ``values`` as a float array with masked/nodata cells as ``NaN``.
+
+    HoloViews/Bokeh render ``NaN`` cells transparent, which is the tier's NoData contract
+    (pyramids hands rasters over as masked arrays).
+
+    Args:
+        values: A numpy (possibly masked) array.
+
+    Returns:
+        numpy.ndarray: a plain float array, masked entries filled with ``NaN``.
+    """
+    import numpy as np
+
+    if np.ma.isMaskedArray(values):
+        return values.astype(float).filled(np.nan)
+    return np.asarray(values)
 
 
 class InteractiveMapBase:
@@ -184,6 +207,55 @@ class InteractiveMapBase:
         ):
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
+
+    def _styled(
+        self, element: Any, common: Optional[dict] = None, bokeh: Optional[dict] = None
+    ) -> Any:
+        """Apply backend-agnostic style opts plus Bokeh-only frame opts to ``element``.
+
+        Backend-agnostic options (``cmap``/``clim``/``alpha``/…) apply to whichever backend renders;
+        the Bokeh-only frame (``width``/``height``/``tools``/``title``) is recorded for the Bokeh
+        backend specifically, so the matplotlib save path ignores it instead of erroring.
+
+        Args:
+            element: The HoloViews/GeoViews element to style.
+            common: Backend-agnostic options; ``None``-valued entries are dropped.
+            bokeh: Extra Bokeh-only options merged over the default frame.
+
+        Returns:
+            The styled element.
+        """
+        gv, hv = _require_holoviz()
+        common = {
+            key: value for key, value in (common or {}).items() if value is not None
+        }
+        if common:
+            element = element.opts(**common)
+        frame: dict = {"width": self.width, "height": self.height}
+        if self.title:
+            frame["title"] = self.title
+        frame.update(bokeh or {})
+        return element.opts(backend="bokeh", **frame)
+
+    def _require_web_mercator(self, method: str) -> None:
+        """Raise when a Web-Mercator-only decoration is requested on a non-3857 map.
+
+        Bokeh tile basemaps (and GeoViews' Bokeh feature rendering) are EPSG:3857-only; on any
+        other display CRS they would silently misalign with the pre-reprojected data layers, so
+        the tier fails loudly instead.
+
+        Args:
+            method: The calling method's name (quoted in the error).
+
+        Raises:
+            ValueError: when ``self.crs`` is not ``3857``.
+        """
+        if self.crs != 3857:
+            raise ValueError(
+                f"{method}() needs the Web-Mercator display CRS (crs=3857) — Bokeh renders tiles/"
+                f"features in EPSG:3857 only, and this map uses crs={self.crs!r}. Either build the "
+                "map with InteractiveMap(crs=3857) (the default) or drop the decoration."
+            )
 
     def render(self) -> Any:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
