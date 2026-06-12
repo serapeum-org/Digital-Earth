@@ -65,6 +65,34 @@ class InteractiveMapBase:
 
     Attributes:
         layers: Registered HoloViews/GeoViews elements, in add (= overlay) order.
+
+    Examples:
+        - Construct and inspect the display configuration (needs no HoloViz engine):
+            ```python
+            >>> from digitalearth.interactive.base import InteractiveMapBase
+            >>> m = InteractiveMapBase(crs=4326, width=800, height=400, title="rain")
+            >>> m.crs
+            4326
+            >>> (m.width, m.height, m.title)
+            (800, 400, 'rain')
+            >>> m.layers
+            []
+
+            ```
+        - Defaults target the Web-Mercator tile contract:
+            ```python
+            >>> from digitalearth.interactive.base import InteractiveMapBase
+            >>> m = InteractiveMapBase()
+            >>> m.crs
+            3857
+            >>> m.tiles is None
+            True
+
+            ```
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the public composition of this base
+            with the capability mixins.
     """
 
     def __init__(
@@ -93,6 +121,27 @@ class InteractiveMapBase:
 
         Returns:
             This map, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
+
+        Examples:
+            - Registration appends in order and returns the map for chaining (any object can
+              stand in for a HoloViews element here — the registry does not inspect it):
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap()
+                >>> m.add_element("raster-layer").add_element("vector-layer") is m
+                True
+                >>> m.layers
+                ['raster-layer', 'vector-layer']
+
+                ```
+            - With the engine installed, real elements register the same way:
+                ```python
+                >>> import holoviews as hv                       # doctest: +SKIP
+                >>> m = InteractiveMap()                         # doctest: +SKIP
+                >>> m.add_element(hv.Points([(0, 0)])).layers    # doctest: +SKIP
+                [:Points   [x,y]]
+
+                ```
         """
         self.layers.append(element)
         return self
@@ -145,6 +194,27 @@ class InteractiveMapBase:
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
+
+        Examples:
+            - Two registered layers compose into an overlay in add order (needs the engine):
+                ```python
+                >>> import holoviews as hv                                   # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
+                >>> m = InteractiveMap()                                     # doctest: +SKIP
+                >>> _ = m.add_element(hv.Points([(0, 0)]))                   # doctest: +SKIP
+                >>> _ = m.add_element(hv.Points([(1, 1)]))                   # doctest: +SKIP
+                >>> overlay = m.render()                                     # doctest: +SKIP
+                >>> len(overlay)                                             # doctest: +SKIP
+                2
+
+                ```
+            - An empty map renders as a blank overlay rather than raising:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
+                >>> len(InteractiveMap().render())                           # doctest: +SKIP
+                0
+
+                ```
         """
         gv, hv = _require_holoviz()
         if not self.layers:
@@ -167,6 +237,20 @@ class InteractiveMapBase:
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
+
+        Examples:
+            - The suffix picks the backend — ``.html`` is interactive Bokeh, ``.png`` renders
+              headless through matplotlib (needs the engine):
+                ```python
+                >>> import holoviews as hv                                   # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
+                >>> m = InteractiveMap().add_element(hv.Points([(0, 0)]))    # doctest: +SKIP
+                >>> m.save("map.html")                                       # doctest: +SKIP
+                'map.html'
+                >>> m.save("map.png")                                        # doctest: +SKIP
+                'map.png'
+
+                ```
         """
         gv, hv = _require_holoviz()
         obj = self.render()

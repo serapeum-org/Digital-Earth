@@ -51,4 +51,26 @@ class InteractiveMap(
             []
 
             ```
+        - Layers register in overlay order and the builders chain:
+            ```python
+            >>> from digitalearth.interactive import InteractiveMap
+            >>> m = InteractiveMap()
+            >>> m.add_element("dem").add_element("basemap") is m
+            True
+            >>> m.layers
+            ['dem', 'basemap']
+
+            ```
+        - With the ``interactive`` extra installed, a raster becomes a pan/zoom web map:
+            ```python
+            >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
+            >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
+            >>> InteractiveMap().image(dem).tiles().save("map.html")      # doctest: +SKIP
+            'map.html'
+
+            ```
+
+    See Also:
+        digitalearth.scene.map.Map: the static matplotlib sibling of this scene.
+        digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.
     """
