@@ -121,6 +121,16 @@ nav:
     - Global data on the globe: examples/11_global_data_on_globe.ipynb
     - Animating data on the globe: examples/12_animated_globe.ipynb
     - Charts & map decorations: examples/13_charts_and_decorations.ipynb
+    - Interactive web maps (HoloViz):
+      - Overview — InteractiveMap: examples/interactive/00_overview.ipynb
+      - Raster fields: examples/interactive/01_raster_fields.ipynb
+      - Vector layers: examples/interactive/02_vector_layers.ipynb
+      - Basemaps & decoration: examples/interactive/03_basemaps_and_decoration.ipynb
+      - Flow fields & networks: examples/interactive/04_flow_and_networks.ipynb
+      - Meshes & density: examples/interactive/05_mesh_and_density.ipynb
+      - Big data (Datashader/COG): examples/interactive/06_big_data.ipynb
+      - Time cubes & projections: examples/interactive/07_temporal_and_projections.ipynb
+      - Interaction & dashboards: examples/interactive/08_interaction_and_dashboards.ipynb
     - 3-D visualization (PyVista):
       - Overview (all plot types): examples/pyvista/15_3d_visualization.ipynb
       - Scene3D — the 3-D host: examples/pyvista/01_scene3d_basics.ipynb
