@@ -56,6 +56,14 @@ class TestHoverAndTap:
         with pytest.raises(ValueError, match="needs a source layer"):
             InteractiveMap().on_tap(lambda x, y: None)
 
+    def test_tap_profile_band_zero_raises(self, m):
+        """band is 1-based; band<1 must raise rather than underflow read_array (L1)."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 2)
+        with pytest.raises(ValueError, match="1-based"):
+            m.tap_profile(dc, band=0)
+
     def test_tap_profile_reads_collection_at_clicked_cell(self, m, dataset):
         from pyramids.dataset.collection import DatasetCollection
 

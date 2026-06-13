@@ -102,6 +102,8 @@ class InteractionMixin:
         import numpy as np
 
         gv, hv = _require_holoviz()
+        if band < 1:
+            raise ValueError(f"band is 1-based; got {band}")
         members = collection.datasets
 
         def _profile(x: float, y: float) -> Any:

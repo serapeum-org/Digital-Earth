@@ -162,7 +162,7 @@ class RasterMixin:
         return self.add_element(self._styled(element, common=opts or None))
 
     def quadmesh(
-        self, data: Any, *, band: int = 1, cmap: str = "viridis", **opts: Any
+        self, data: Any, *, band: int = 1, cmap: Optional[str] = None, **opts: Any
     ) -> "RasterMixin":
         """Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).
 
@@ -172,7 +172,8 @@ class RasterMixin:
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to render.
-            cmap: Colormap name.
+            cmap: Colormap name; ``None`` (default) resolves it from the variable via
+                ``autostyle.auto_style`` (DI.12) — consistent with :meth:`image`.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -197,7 +198,9 @@ class RasterMixin:
             (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
         )
         element = self._styled(
-            element, common={"cmap": cmap, **opts}, bokeh={"tools": ["hover"]}
+            element,
+            common={"cmap": self._auto_cmap(src, cmap), **opts},
+            bokeh={"tools": ["hover"]},
         )
         return self.add_element(element)
 

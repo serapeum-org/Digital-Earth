@@ -72,6 +72,15 @@ class TestStreamlinesAndBarbs:
         m.streamlines(u, v)
         assert isinstance(m.layers[0], gv.VectorField)
 
+    def test_streamlines_density_subsamples(self, m, uv):
+        """density must actually subsample (M1: it was a dead parameter)."""
+        u, v = uv
+        m.streamlines(u, v, density=1.0)
+        m.streamlines(u, v, density=0.25)
+        assert len(m.layers[1]) < len(
+            m.layers[0]
+        ), "lower density must mean fewer streamline seeds"
+
     def test_barbs_register_or_clear_error(self, m, uv):
         u, v = uv
         if hasattr(gv, "WindBarbs"):
@@ -149,3 +158,10 @@ class TestGraph:
         assert isinstance(
             m.layers[0], (hv.RGB, hv.DynamicMap)
         ), f"got {type(m.layers[0])}"
+
+    def test_weight_on_weightless_edges_draws_unweighted(self, m, nodes):
+        """weight= on 2-tuple edges draws unweighted (logged, not a crash) — L2."""
+        m.graph(nodes, [(0, 1), (1, 2)], weight="weight")
+        element = m.layers[0]
+        assert isinstance(element, gv.Graph)
+        assert "weight" not in [d.name for d in element.vdims]

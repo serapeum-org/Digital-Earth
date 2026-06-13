@@ -356,7 +356,8 @@ class VectorMixin:
             u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
             v: Northward-component ``Dataset`` / ``Source`` on the same grid.
             band: 1-based band read from each component.
-            density: Streamline density passed to the matplotlib backend.
+            density: Keep-fraction in ``(0, 1]`` subsampling the field before streamline
+                integration (same meaning as :meth:`vectorfield`'s ``density``).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -365,7 +366,7 @@ class VectorMixin:
         from loguru import logger
 
         gv, hv = _require_holoviz()
-        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=1.0)
+        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
         # VectorField carries the data; the matplotlib backend renders it as streamlines.
         element = gv.VectorField.from_uv(
             (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
@@ -633,6 +634,15 @@ class VectorMixin:
         edge_df = edge_df.iloc[:, : len(names)]
         edge_df.columns = names
         vdims = [weight] if (weight and weight in edge_df.columns) else []
+        if (
+            weight and not vdims
+        ):  # weight requested but the edges carry no weight column — say so
+            from loguru import logger
+
+            logger.info(
+                f"graph: weight={weight!r} requested but the edges have no weight column "
+                "(2-tuple edges) — drawing unweighted; pass (src, dst, weight) tuples to weight them"
+            )
         graph = gv.Graph((edge_df, gv_nodes), vdims=vdims, crs=crs)
         if bundle:
             # Datashade the straight edge paths into a density image (the cheap path; the heavy
