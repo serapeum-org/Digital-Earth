@@ -110,6 +110,11 @@ class TestDrawAOI:
         m.draw("box")
         assert m.drawn_geometry is None, "nothing drawn yet → None"
 
+    def test_drawn_geometry_none_without_any_draw_call(self, m):
+        """_draw_stream is initialized in __init__ (L1), so drawn_geometry is None pre-draw()."""
+        assert m._draw_stream is None, "_draw_stream must be initialized in __init__"
+        assert m.drawn_geometry is None, "no draw tool added yet → None (no AttributeError)"
+
     def test_box_event_yields_display_crs_bbox(self, m):
         m.draw("box")
         m._draw_stream.event(data={"x0": [1.0], "y0": [2.0], "x1": [3.0], "y1": [4.0]})

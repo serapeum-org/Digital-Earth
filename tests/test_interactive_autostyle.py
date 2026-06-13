@@ -111,3 +111,21 @@ class TestQuickplotBackend:
 
         with pytest.raises(ValueError, match="unknown backend"):
             quickplot(dataset, backend="webgl")
+
+    def test_colorbar_false_drops_colorbar_on_data_layer(self, dataset):
+        """quickplot(backend="interactive", colorbar=False) toggles the colorbar off (L2)."""
+        from digitalearth.api import quickplot
+
+        out = quickplot(
+            dataset, crs=dataset.epsg, backend="interactive", colorbar=False
+        )
+        plot = hv.Store.lookup_options("bokeh", out.layers[0], "plot").kwargs
+        assert plot["colorbar"] is False, "colorbar=False must reach the data layer"
+
+    def test_colorbar_true_keeps_builder_default(self, dataset):
+        """The default colorbar=True leaves the builder's colorbar in place."""
+        from digitalearth.api import quickplot
+
+        out = quickplot(dataset, crs=dataset.epsg, backend="interactive")
+        plot = hv.Store.lookup_options("bokeh", out.layers[0], "plot").kwargs
+        assert plot.get("colorbar") is not False, "default must keep the colorbar"

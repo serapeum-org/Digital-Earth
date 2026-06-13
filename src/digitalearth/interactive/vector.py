@@ -378,7 +378,9 @@ class VectorMixin:
         )
         return self.add_element(element)
 
-    def barbs(self, u: Any, v: Any, *, band: int = 1, **opts: Any) -> "VectorMixin":
+    def barbs(
+        self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
+    ) -> "VectorMixin":
         """Add wind barbs of a u/v field — **matplotlib backend only** (parity with ``Map.barbs``).
 
         ``gv.WindBarbs`` has no Bokeh renderer, so barbs are a static matplotlib layer; this logs
@@ -388,6 +390,8 @@ class VectorMixin:
             u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
             v: Northward-component ``Dataset`` / ``Source`` on the same grid.
             band: 1-based band read from each component.
+            density: Keep-fraction in ``(0, 1]`` subsampling the field before drawing barbs (same
+                meaning as :meth:`vectorfield`'s ``density``; ``1.0`` keeps every cell).
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -395,6 +399,7 @@ class VectorMixin:
 
         Raises:
             ImportError: when the installed GeoViews has no ``WindBarbs`` element.
+            ValueError: when ``density`` is not in ``(0, 1]``.
         """
         from loguru import logger
 
@@ -404,7 +409,7 @@ class VectorMixin:
                 "barbs need gv.WindBarbs (GeoViews ≥1.11 with the matplotlib backend); it is "
                 "absent in this GeoViews build"
             )
-        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=1.0)
+        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
         element = gv.WindBarbs.from_uv(
             (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
         )

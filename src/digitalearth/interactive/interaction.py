@@ -183,7 +183,7 @@ class InteractionMixin:
         Returns:
             The drawn geometry, or ``None``.
         """
-        stream = getattr(self, "_draw_stream", None)
+        stream = self._draw_stream
         if stream is None or not getattr(stream, "data", None):
             return None
         data = stream.data

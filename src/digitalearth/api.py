@@ -90,7 +90,8 @@ def quickmap(
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         crs: Display CRS for the map.
         kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
-        domain: Optional named region / bbox to set the extent.
+        domain: Optional named region / bbox to set the extent (``backend="matplotlib"`` only — the
+            interactive backend has no extent setter and ignores it).
         basemap: When True, add an XYZ-tile basemap (best-effort; ignored if tiles are unreachable).
         coastlines: When True, overlay coastlines (best-effort; ignored if unreachable).
         colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable).
@@ -135,7 +136,13 @@ def quickmap(
     """
     if backend == "interactive":
         return _quickmap_interactive(
-            data, crs=crs, kind=kind, basemap=basemap, coastlines=coastlines, **kwargs
+            data,
+            crs=crs,
+            kind=kind,
+            basemap=basemap,
+            coastlines=coastlines,
+            colorbar=colorbar,
+            **kwargs,
         )
     if backend != "matplotlib":
         raise ValueError(
@@ -175,6 +182,7 @@ def _quickmap_interactive(
     kind: str,
     basemap: bool,
     coastlines: bool,
+    colorbar: bool = True,
     **kwargs,
 ) -> Any:
     """Build a finished ``InteractiveMap`` from ``data`` (the ``backend="interactive"`` path, DX.1).
@@ -190,6 +198,8 @@ def _quickmap_interactive(
         kind: Raster renderer (``"auto"`` → ``image``; or ``contourf``/``contour``/``pcolormesh``).
         basemap: When True, add a tile basemap.
         coastlines: When True, overlay a coastline.
+        colorbar: When False, drop the colorbar the builder draws by default (mirrors the
+            matplotlib backend's ``colorbar`` toggle); ``True`` leaves the builder default in place.
         **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
 
     Returns:
@@ -226,6 +236,8 @@ def _quickmap_interactive(
         getattr(scene, _raster_kind.get(kind, "image"))(data, **kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    if not colorbar and scene.layers:  # builders draw a colorbar by default; drop it on the data layer
+        scene.colorbar(False)
     if basemap:
         scene.tiles()
     if coastlines:

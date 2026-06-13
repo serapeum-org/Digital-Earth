@@ -90,6 +90,25 @@ class TestStreamlinesAndBarbs:
             with pytest.raises(ImportError, match="WindBarbs"):
                 m.barbs(u, v)
 
+    def test_barbs_density_subsamples(self, m, uv):
+        """barbs exposes density for parity with vectorfield/streamlines (N1)."""
+        u, v = uv
+        if not hasattr(gv, "WindBarbs"):  # pragma: no cover - GeoViews without WindBarbs
+            pytest.skip("GeoViews build without WindBarbs")
+        m.barbs(u, v, density=1.0)
+        m.barbs(u, v, density=0.25)
+        assert len(m.layers[1]) < len(
+            m.layers[0]
+        ), "lower density must mean fewer barbs"
+
+    def test_barbs_density_out_of_range_raises(self, m, uv):
+        """density outside (0, 1] is rejected before building the element."""
+        u, v = uv
+        if not hasattr(gv, "WindBarbs"):  # pragma: no cover - GeoViews without WindBarbs
+            pytest.skip("GeoViews build without WindBarbs")
+        with pytest.raises(ValueError, match="density must be in"):
+            m.barbs(u, v, density=0.0)
+
     def test_streamlines_mpl_render_smoke(self, m, uv, tmp_path):
         u, v = uv
         out = tmp_path / "stream.png"

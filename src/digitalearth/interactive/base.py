@@ -135,6 +135,8 @@ class InteractiveMapBase:
         self.title = title
         # Display projection for the matplotlib-backend path (DI.9); None = Bokeh Web-Mercator.
         self._projection: Any = None
+        # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
+        self._draw_stream: Any = None
         self.layers: List[Any] = []
 
     def _raster_element(self, x: Any, y: Any, arr: Any, name: str) -> Any:
