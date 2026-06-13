@@ -1,18 +1,23 @@
 """VectorMixin — vector builders for :class:`~digitalearth.interactive.map.InteractiveMap`.
 
-Owns ``points`` / ``path`` / ``polygons`` / ``choropleth`` (DI.1b); vector fields (DI.5), meshes/density
-(DI.6) and graphs (DI.15) land later.
+Owns ``points`` / ``path`` / ``polygons`` / ``choropleth`` (DI.1b) and the u/v vector fields
+``vectorfield`` / ``streamlines`` / ``barbs`` (DI.5, recipe I6); meshes/density (DI.6) and graphs
+(DI.15) land later.
 
 Vector layers come straight from the GeoDataFrame pyramids hands over (``FeatureCollection`` *is a*
 GeoDataFrame) — GeoViews reads the geometry column natively, so **no shapely/geopandas import** is ever
 needed here. The data CRS is declared via ``gv.util.process_crs(self.crs)``: GeoViews builds the cartopy
 CRS object *internally* (the hvPlot pattern), keeping cartopy out of this package (DX.3). Reprojection to
 the display CRS happens upstream in pyramids (``FeatureCollection.to_crs``) before the element is built.
+
+**Barbs are matplotlib-only** — Bokeh has no wind-barb glyph, so ``barbs`` renders through HoloViews'
+matplotlib backend (a static PNG via ``save``); it logs that it is not interactive rather than silently
+producing an empty Bokeh layer.
 """
 
 from typing import Any, Optional, Tuple
 
-from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
 
 class VectorMixin:
@@ -274,3 +279,387 @@ class VectorMixin:
         if clim is not None:
             opts = {"clim": clim, **opts}
         return self.polygons(features, column=column, cmap=cmap, **opts)
+
+    def _uv_arrays(self, u: Any, v: Any, *, band: int, density: float) -> tuple:
+        """Extract subsampled ``(x, y, u, v)`` display-CRS arrays from two pyramids bands.
+
+        Args:
+            u: The eastward-component ``Dataset`` / ``Source`` (reprojected through pyramids).
+            v: The northward-component ``Dataset`` / ``Source`` (same grid as ``u``).
+            band: 1-based band read from each.
+            density: Keep-fraction in ``(0, 1]`` — the grid is strided by ``round(1/density)`` so the
+                field stays legible at web resolution (``1.0`` keeps every cell).
+
+        Returns:
+            ``(x, y, u, v)`` — 1-D ``x``/``y`` cell-centre coords and 2-D ``u``/``v`` arrays, strided.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
+        """
+        if not 0.0 < density <= 1.0:
+            raise ValueError(f"density must be in (0, 1], got {density!r}")
+        su = self._to_display_source(u, band=band)
+        sv = self._to_display_source(v, band=band)
+        step = max(1, round(1.0 / density))
+        x = su.x.values[::step]
+        y = su.y.values[::step]
+        u_arr = _masked_to_nan(su.z.values)[::step, ::step]
+        v_arr = _masked_to_nan(sv.z.values)[::step, ::step]
+        return x, y, u_arr, v_arr
+
+    def vectorfield(
+        self,
+        u: Any,
+        v: Any,
+        *,
+        band: int = 1,
+        density: float = 1.0,
+        color_by: Optional[str] = "magnitude",
+        cmap: str = "viridis",
+        **opts: Any,
+    ) -> "VectorMixin":
+        """Add a u/v vector field as interactive arrows (parity with ``Map.quiver``, recipe I6).
+
+        Args:
+            u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
+            v: Northward-component ``Dataset`` / ``Source`` on the same grid.
+            band: 1-based band read from each component.
+            density: Keep-fraction in ``(0, 1]`` controlling arrow density (``1.0`` = every cell).
+            color_by: ``"magnitude"`` colours arrows by speed; ``None`` draws uniform arrows.
+            cmap: Colormap used when ``color_by="magnitude"``.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+        """
+        gv, hv = _require_holoviz()
+        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
+        element = gv.VectorField.from_uv(
+            (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
+        )
+        common: dict = dict(opts)
+        if color_by == "magnitude":
+            common.update({"color": "Magnitude", "cmap": cmap, "colorbar": True})
+        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
+        return self.add_element(element)
+
+    def streamlines(
+        self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
+    ) -> "VectorMixin":
+        """Add streamlines of a u/v field via the matplotlib backend (parity with ``Map.streamplot``).
+
+        Bokeh has no streamline integrator, so streamlines render through HoloViews' matplotlib
+        backend (a static layer in the saved PNG). The element is built so ``save("x.png")`` works;
+        it is logged as non-interactive rather than emitting an empty Bokeh layer.
+
+        Args:
+            u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
+            v: Northward-component ``Dataset`` / ``Source`` on the same grid.
+            band: 1-based band read from each component.
+            density: Streamline density passed to the matplotlib backend.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+        """
+        from loguru import logger
+
+        gv, hv = _require_holoviz()
+        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=1.0)
+        # VectorField carries the data; the matplotlib backend renders it as streamlines.
+        element = gv.VectorField.from_uv(
+            (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
+        )
+        element = element.opts(backend="matplotlib", **opts) if opts else element
+        logger.info(
+            "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
+            "save to a .png/.svg, not interactive .html"
+        )
+        return self.add_element(element)
+
+    def barbs(self, u: Any, v: Any, *, band: int = 1, **opts: Any) -> "VectorMixin":
+        """Add wind barbs of a u/v field — **matplotlib backend only** (parity with ``Map.barbs``).
+
+        ``gv.WindBarbs`` has no Bokeh renderer, so barbs are a static matplotlib layer; this logs
+        that they are non-interactive rather than silently producing an empty Bokeh layer.
+
+        Args:
+            u: Eastward-component ``Dataset`` / ``Source``; reprojected through pyramids.
+            v: Northward-component ``Dataset`` / ``Source`` on the same grid.
+            band: 1-based band read from each component.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            ImportError: when the installed GeoViews has no ``WindBarbs`` element.
+        """
+        from loguru import logger
+
+        gv, hv = _require_holoviz()
+        if not hasattr(gv, "WindBarbs"):
+            raise ImportError(
+                "barbs need gv.WindBarbs (GeoViews ≥1.11 with the matplotlib backend); it is "
+                "absent in this GeoViews build"
+            )
+        x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=1.0)
+        element = gv.WindBarbs.from_uv(
+            (x, y, u_arr, v_arr), crs=gv.util.process_crs(self.crs)
+        )
+        element = element.opts(backend="matplotlib", **opts) if opts else element
+        logger.info(
+            "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
+            "save to a .png/.svg, not interactive .html"
+        )
+        return self.add_element(element)
+
+    def trimesh(
+        self,
+        data: Any,
+        *,
+        value_column: Optional[str] = None,
+        rasterize: Any = "auto",
+        rasterize_threshold: int = 50_000,
+        cmap: str = "viridis",
+        **opts: Any,
+    ) -> "VectorMixin":
+        """Add an unstructured triangular mesh (parity with ``Map.tricontour``/``tripcolor``, recipe I7).
+
+        Connectivity comes from one of two sources, both pyramids-fed:
+
+        - a **true UGRID mesh** (``pyramids.netcdf.ugrid.Mesh2d`` — anything exposing ``node_x`` /
+          ``node_y`` / ``fan_triangles``): nodes + triangles are taken straight off it, no
+          triangulation needed;
+        - a **point** ``FeatureCollection``: Delaunay-triangulated locally with ``matplotlib.tri``
+          (matplotlib is not a forbidden GIS engine), mirroring the static ``tri*`` path.
+
+        Above ``rasterize_threshold`` faces the mesh auto-``rasterize``s to a density image (logged).
+
+        Args:
+            data: A UGRID-mesh object or a point ``FeatureCollection`` (reprojected via pyramids).
+            value_column: Node-value column (for the FeatureCollection path) driving the colour.
+            rasterize: ``"auto"`` (default) rasterizes above the threshold; ``True``/``False`` force it.
+            rasterize_threshold: Face count above which ``"auto"`` rasterizes.
+            cmap: Colormap name.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+        """
+        gv, hv = _require_holoviz()
+        nodes, simplices, vdims = self._mesh_inputs(data, value_column)
+        trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
+        n_faces = len(simplices)
+        if rasterize is True or (rasterize == "auto" and n_faces > rasterize_threshold):
+            from loguru import logger
+
+            if rasterize == "auto":
+                logger.info(
+                    f"trimesh: {n_faces:,} faces exceed rasterize_threshold={rasterize_threshold:,}"
+                    " — rasterizing the mesh to a density image"
+                )
+            return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
+        common = {"cmap": cmap, **opts} if vdims else dict(opts)
+        element = self._styled(
+            trimesh, common=common or None, bokeh={"tools": ["hover"]}
+        )
+        return self.add_element(element)
+
+    def _mesh_inputs(self, data: Any, value_column: Optional[str]) -> tuple:
+        """Return ``(nodes_points, simplices, vdims)`` for :meth:`trimesh`.
+
+        Args:
+            data: A UGRID-mesh object (``node_x``/``node_y``/``fan_triangles``) or a point
+                ``FeatureCollection``.
+            value_column: Node-value column for the FeatureCollection path.
+
+        Returns:
+            ``(gv.Points nodes, (n_faces, 3) simplices, vdims list)``.
+        """
+        import numpy as np
+
+        gv, hv = _require_holoviz()
+        crs = gv.util.process_crs(self.crs)
+        if all(hasattr(data, attr) for attr in ("node_x", "node_y", "fan_triangles")):
+            x = np.asarray(data.node_x)
+            y = np.asarray(data.node_y)
+            simplices = np.asarray(data.fan_triangles)
+            nodes = gv.Points((x, y), crs=crs)
+            return nodes, simplices, []
+        from matplotlib.tri import (
+            Triangulation,
+        )  # matplotlib, not a forbidden GIS engine
+
+        gdf = self._display_gdf(data)
+        x = gdf.geometry.x.to_numpy()
+        y = gdf.geometry.y.to_numpy()
+        finite = np.isfinite(x) & np.isfinite(y)
+        x, y = x[finite], y[finite]
+        simplices = Triangulation(x, y).triangles
+        if value_column:
+            z = gdf[value_column].to_numpy()[finite]
+            nodes = gv.Points((x, y, z), vdims=[value_column], crs=crs)
+            return nodes, simplices, [value_column]
+        return gv.Points((x, y), crs=crs), simplices, []
+
+    def hexbin(
+        self,
+        features: Any,
+        *,
+        gridsize: int = 30,
+        aggregator: str = "mean",
+        column: Optional[str] = None,
+        cmap: str = "viridis",
+        **opts: Any,
+    ) -> "VectorMixin":
+        """Add an equal-area hex-bin density layer (honest no-overplot density, recipe I7).
+
+        Args:
+            features: A point ``FeatureCollection``; reprojected through pyramids.
+            gridsize: Number of hexagons across — higher is finer.
+            aggregator: Per-bin reducer (``"count"``/``"mean"``/``"sum"``/…); ``"count"`` ignores
+                ``column``.
+            column: Value column aggregated per bin (required for non-``count`` aggregators).
+            cmap: Colormap name.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+        """
+        gv, hv = _require_holoviz()
+        gdf = self._display_gdf(features)
+        vdims = [column] if column else []
+        element = gv.HexTiles(
+            gdf,
+            vdims=vdims,
+            crs=gv.util.process_crs(self.crs),
+            datatype=[
+                "geodataframe",
+                "multitabular",
+                "dictionary",
+                "dataframe",
+                "array",
+            ],
+        )
+        element = self._styled(
+            element,
+            common={"cmap": cmap, "colorbar": True, **opts},
+            bokeh={"gridsize": gridsize, "aggregator": aggregator, "tools": ["hover"]},
+        )
+        return self.add_element(element)
+
+    def kde(
+        self,
+        features: Any,
+        *,
+        filled: bool = True,
+        cmap: str = "viridis",
+        **opts: Any,
+    ) -> "VectorMixin":
+        """Add a 2-D kernel-density layer of point positions (parity with ``Map.kde``, recipe I7).
+
+        Args:
+            features: A point ``FeatureCollection``; reprojected through pyramids.
+            filled: Fill the density bands (``True``) or draw contour lines (``False``).
+            cmap: Colormap name.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+        """
+        gv, hv = _require_holoviz()
+        gdf = self._display_gdf(features)
+        x = gdf.geometry.x.to_numpy()
+        y = gdf.geometry.y.to_numpy()
+        element = hv.Bivariate((x, y))
+        element = self._styled(
+            element,
+            common={"cmap": cmap, **opts},
+            bokeh={"filled": filled, "colorbar": True},
+        )
+        return self.add_element(element)
+
+    def graph(
+        self,
+        nodes: Any,
+        edges: Any,
+        *,
+        weight: Optional[str] = None,
+        bundle: bool = False,
+        node_id: str = "id",
+        cmap: str = "viridis",
+        **opts: Any,
+    ) -> "VectorMixin":
+        """Add a network / origin-destination flow map (parity-plus for ``Map.sankey``, recipe I9).
+
+        Args:
+            nodes: A point ``FeatureCollection``/GeoDataFrame of network nodes; reprojected through
+                pyramids. Each node's ``node_id`` column is the index the edges reference.
+            edges: An iterable of ``(src_id, dst_id[, weight])`` tuples, or a DataFrame with those
+                columns.
+            weight: Optional edge-weight column driving line width/colour.
+            bundle: Bundle edges (``holoviews.operation.connect_edges``) then datashade them — for
+                dense networks. Note ``hammer_bundle`` (the heavy variant) is not used; this is the
+                cheap ``connect_edges``.
+            node_id: The node-id column name on ``nodes``.
+            cmap: Colormap used when ``weight`` is given.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+        """
+        import numpy as np
+        import pandas as pd
+
+        gv, hv = _require_holoviz()
+        gdf = self._display_gdf(nodes)
+        crs = gv.util.process_crs(self.crs)
+        ids = (
+            gdf[node_id].to_numpy()
+            if node_id in getattr(gdf, "columns", [])
+            else np.arange(len(gdf))
+        )
+        gv_nodes = gv.Nodes(
+            (gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy(), ids), crs=crs
+        )
+        # Normalise edges to a DataFrame with named columns — a 3-tuple (src, dst, weight) list with
+        # vdims trips gv.Graph's source/target merge, so build the frame explicitly.
+        edge_df = (
+            edges if isinstance(edges, pd.DataFrame) else pd.DataFrame(list(edges))
+        )
+        ncols = edge_df.shape[1]
+        names = ["source", "target"] + ([weight] if weight and ncols > 2 else [])
+        edge_df = edge_df.iloc[:, : len(names)]
+        edge_df.columns = names
+        vdims = [weight] if (weight and weight in edge_df.columns) else []
+        graph = gv.Graph((edge_df, gv_nodes), vdims=vdims, crs=crs)
+        if bundle:
+            # Datashade the straight edge paths into a density image (the cheap path; the heavy
+            # hammer_bundle is intentionally avoided — see the plan's DI.15 note).
+            from holoviews.operation.datashader import datashade
+
+            return self.add_element(
+                self._styled(datashade(graph.edgepaths), common=opts or None)
+            )
+        common: dict = dict(opts)
+        if weight:
+            common.update({"edge_color": weight, "edge_cmap": cmap, "colorbar": True})
+        element = self._styled(graph, common=common or None, bokeh={"tools": ["hover"]})
+        return self.add_element(element)
+
+    def flow(
+        self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any
+    ) -> "VectorMixin":
+        """Spatial-flow alias of :meth:`graph` mirroring ``Map.sankey``'s framing (DI.15).
+
+        Args:
+            nodes: A point ``FeatureCollection`` of flow endpoints.
+            edges: ``(src_id, dst_id[, weight])`` tuples.
+            weight: Optional flow-magnitude column.
+            **opts: Forwarded to :meth:`graph`.
+
+        Returns:
+            This map (chainable).
+        """
+        return self.graph(nodes, edges, weight=weight, **opts)

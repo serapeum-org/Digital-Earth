@@ -134,3 +134,60 @@ class TestCrossTierPane:
         assert (
             captured["window"] is sentinel
         ), "the plotter render window must be forwarded"
+
+
+class TestLayerControlAndTable:
+    """DI.13 — layer manager, attribute table, URL share."""
+
+    @pytest.fixture()
+    def multi(self, dataset):
+        from pyramids.feature import FeatureCollection
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson")
+        return InteractiveMap().image(dataset).points(fc)
+
+    def test_layer_control_is_viewable_with_toggles(self, multi):
+        panel_obj = multi.layer_control()
+        assert isinstance(panel_obj, pn.viewable.Viewable)
+        groups = panel_obj.select(pn.widgets.CheckBoxGroup)
+        assert groups and len(groups[0].options) == 2, "one toggle per layer expected"
+
+    def test_layer_control_has_opacity_and_basemap(self, multi):
+        panel_obj = multi.layer_control(opacity=True, basemap_switch=True)
+        assert panel_obj.select(pn.widgets.FloatSlider), "opacity slider missing"
+        assert panel_obj.select(pn.widgets.Select), "basemap switch missing"
+
+    def test_layer_control_without_layers_raises(self):
+        with pytest.raises(ValueError, match="at least one layer"):
+            InteractiveMap().layer_control()
+
+    def test_compose_visible_all_hidden_is_blank_overlay(self, multi):
+        """With nothing shown the layer-control view is a blank overlay (not an error)."""
+        out = multi._compose_visible_layers([], op=1.0)
+        assert isinstance(out, hv.Overlay) and len(out) == 0
+
+    def test_compose_visible_single_layer(self, multi):
+        out = multi._compose_visible_layers(["0: Image"], op=0.5)
+        assert isinstance(out, hv.core.Dimensioned)
+
+    def test_compose_visible_multiple_layers(self, multi):
+        out = multi._compose_visible_layers(["0: Image", "1: Points"], op=0.7)
+        assert isinstance(out, hv.Overlay) and len(out) == 2
+
+    def test_attribute_table_is_tabulator_without_geometry(self):
+        from pyramids.feature import FeatureCollection
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson")
+        table = InteractiveMap().attribute_table(fc)
+        assert isinstance(table, pn.widgets.Tabulator)
+        assert "geometry" not in list(
+            table.value.columns
+        ), "geometry column must be dropped"
+        assert "fid" in list(table.value.columns)
+
+    def test_share_off_server_returns_params(self, multi):
+        """Off a running server (no session), pn.state.location is None, so share() returns the
+        params it would sync rather than crashing."""
+        assert pn.state.location is None, "test assumes no active Panel session"
+        out = multi.share(params=("cmap", "extent"))
+        assert out == ("cmap", "extent")

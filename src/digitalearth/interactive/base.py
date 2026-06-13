@@ -133,7 +133,36 @@ class InteractiveMapBase:
         # Stored privately: the public name `tiles` is the DecorationMixin builder method.
         self._tiles_provider = tiles
         self.title = title
+        # Display projection for the matplotlib-backend path (DI.9); None = Bokeh Web-Mercator.
+        self._projection: Any = None
         self.layers: List[Any] = []
+
+    def _raster_element(self, x: Any, y: Any, arr: Any, name: str) -> Any:
+        """Build the raster element: plain ``hv.Image`` (Bokeh path) or ``gv.Image`` under a projection.
+
+        With no display projection set the element is a plain ``hv.Image`` already in the display CRS
+        (the interactive Bokeh path — option A, no re-projection). When a non-Mercator projection is
+        active (DI.9), it is a ``gv.Image`` carrying ``crs=self.crs`` so GeoViews' matplotlib backend
+        reprojects the display-CRS coordinates to the target projection at render time.
+
+        Args:
+            x: 1-D x / longitude cell-centre coordinates (display CRS).
+            y: 1-D y / latitude cell-centre coordinates (display CRS).
+            arr: 2-D value array (masked nodata already filled with ``NaN``).
+            name: Value-dimension name.
+
+        Returns:
+            An ``hv.Image`` or ``gv.Image`` element.
+        """
+        gv, hv = _require_holoviz()
+        if self._projection is None:
+            return hv.Image((x, y, arr), kdims=["x", "y"], vdims=[name])
+        return gv.Image(
+            (x, y, arr),
+            kdims=["x", "y"],
+            vdims=[name],
+            crs=gv.util.process_crs(self.crs),
+        )
 
     def add_element(self, element: Any) -> "InteractiveMapBase":
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
@@ -208,6 +237,26 @@ class InteractiveMapBase:
         ):
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
+
+    def _auto_cmap(self, source: Source, cmap: Optional[str]) -> str:
+        """Resolve a colormap: the caller's ``cmap`` if given, else the autostyle default (DI.12).
+
+        Defers to :func:`digitalearth.autostyle.auto_style` (the same variable→style lookup the static
+        ``Map`` uses, incl. the ECMWF-Magics match) so a variable looks the same across tiers; falls
+        back to ``"viridis"`` for an unrecognised field.
+
+        Args:
+            source: The display-CRS source whose variable drives the lookup.
+            cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
+
+        Returns:
+            The colormap name to use.
+        """
+        if cmap is not None:
+            return cmap
+        from digitalearth.autostyle import auto_style
+
+        return auto_style(source).get("cmap", "viridis")
 
     @staticmethod
     def _vdim_name(source: Source) -> str:
@@ -309,10 +358,18 @@ class InteractiveMapBase:
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
             self.tiles(provider)
         if not self.layers:
-            return hv.Overlay([])
-        if len(self.layers) == 1:
-            return self.layers[0]
-        return reduce(mul, self.layers)
+            obj = hv.Overlay([])
+        elif len(self.layers) == 1:
+            obj = self.layers[0]
+        else:
+            obj = reduce(mul, self.layers)
+        if self._projection is not None:
+            if (
+                "matplotlib" not in hv.Store.renderers
+            ):  # register mpl opts before applying them
+                hv.renderer("matplotlib")
+            obj = obj.opts(projection=self._projection, backend="matplotlib")
+        return obj
 
     def save(self, path: str, **kwargs: Any) -> str:
         """Save the composed map — interactive HTML (Bokeh) or a raster via the matplotlib backend.

@@ -5,6 +5,7 @@
 ``Map`` so callers can further tweak or ``save`` it. Module-level functions (``contourf``, ``imshow``,
 ``scatter``, ``choropleth``, …) mirror the ``Map`` methods for a terse functional API.
 """
+
 from typing import Any, Optional
 
 from pyramids.dataset import Dataset
@@ -52,7 +53,9 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
     """
     if isinstance(data, FeatureCollection):
         if len(data) == 0:
-            raise ValueError("quickmap got an empty FeatureCollection (nothing to draw)")
+            raise ValueError(
+                "quickmap got an empty FeatureCollection (nothing to draw)"
+            )
         if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
             column = kwargs.pop("column", None)
             if column is not None:
@@ -78,9 +81,10 @@ def quickmap(
     basemap: bool = False,
     coastlines: bool = False,
     colorbar: bool = True,
+    backend: str = "matplotlib",
     **kwargs,
-) -> Map:
-    """Build a finished :class:`Map` from a single pyramids object in one call.
+) -> Any:
+    """Build a finished map from a single pyramids object in one call.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
@@ -90,10 +94,16 @@ def quickmap(
         basemap: When True, add an XYZ-tile basemap (best-effort; ignored if tiles are unreachable).
         coastlines: When True, overlay coastlines (best-effort; ignored if unreachable).
         colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable).
-        **kwargs: Forwarded to the underlying ``Map`` draw method (e.g. ``cmap``, ``levels``, ``column``).
+        backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
+            pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
+            extra) fed from the same ``Source``/auto-style pipeline.
+        **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``).
 
     Returns:
-        The decorated :class:`Map` (with ``.fig`` / ``.ax`` / ``.save``).
+        The decorated :class:`Map`, or an :class:`InteractiveMap` when ``backend="interactive"``.
+
+    Raises:
+        ValueError: for an unknown ``backend``.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -123,6 +133,14 @@ def quickmap(
 
             ```
     """
+    if backend == "interactive":
+        return _quickmap_interactive(
+            data, crs=crs, kind=kind, basemap=basemap, coastlines=coastlines, **kwargs
+        )
+    if backend != "matplotlib":
+        raise ValueError(
+            f"unknown backend {backend!r}; choose 'matplotlib' (static) or 'interactive' (HoloViz)"
+        )
     scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
@@ -145,9 +163,74 @@ def quickmap(
     return scene
 
 
-def quickplot(data: PlottableData, **kwargs) -> Map:
+def quickplot(data: PlottableData, **kwargs) -> Any:
     """Alias of :func:`quickmap` — build a finished map from ``data`` in one call."""
     return quickmap(data, **kwargs)
+
+
+def _quickmap_interactive(
+    data: PlottableData,
+    *,
+    crs: Any,
+    kind: str,
+    basemap: bool,
+    coastlines: bool,
+    **kwargs,
+) -> Any:
+    """Build a finished ``InteractiveMap`` from ``data`` (the ``backend="interactive"`` path, DX.1).
+
+    Dispatches by input type exactly like :func:`_draw`: a polygon ``FeatureCollection`` with a
+    ``column`` becomes a ``choropleth`` (else ``polygons``); other vectors become ``points``; a raster
+    is drawn with the ``kind`` method (``"auto"`` → ``image``). The ``InteractiveMap`` import is lazy so
+    the core ``api`` works without the ``interactive`` extra.
+
+    Args:
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
+        crs: Display CRS for the interactive map.
+        kind: Raster renderer (``"auto"`` → ``image``; or ``contourf``/``contour``/``pcolormesh``).
+        basemap: When True, add a tile basemap.
+        coastlines: When True, overlay a coastline.
+        **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
+
+    Returns:
+        The decorated :class:`~digitalearth.interactive.map.InteractiveMap`.
+
+    Raises:
+        ValueError: if ``data`` is an empty ``FeatureCollection``.
+        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
+    """
+    from digitalearth.interactive import InteractiveMap
+
+    _raster_kind = {
+        "auto": "image",
+        "imshow": "image",
+        "contourf": "filled_contours",
+        "contour": "contours",
+        "pcolormesh": "quadmesh",
+    }
+    scene = InteractiveMap(crs=crs)
+    if isinstance(data, FeatureCollection):
+        if len(data) == 0:
+            raise ValueError(
+                "quickplot got an empty FeatureCollection (nothing to draw)"
+            )
+        if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
+            column = kwargs.pop("column", None)
+            if column is not None:
+                scene.choropleth(data, column=column, **kwargs)
+            else:
+                scene.polygons(data, **kwargs)
+        else:
+            scene.points(data, **kwargs)
+    elif isinstance(data, Dataset):
+        getattr(scene, _raster_kind.get(kind, "image"))(data, **kwargs)
+    else:
+        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    if basemap:
+        scene.tiles()
+    if coastlines:
+        scene.coastlines()
+    return scene
 
 
 def _finish(scene: Map, *, colorbar: bool) -> Map:
@@ -179,7 +262,9 @@ def _method(name: str):
         return quickmap(data, kind=name, **kwargs)
 
     _fn.__name__ = name
-    _fn.__doc__ = f"Quick-draw ``data`` with :meth:`Map.{name}` and return the finished Map."
+    _fn.__doc__ = (
+        f"Quick-draw ``data`` with :meth:`Map.{name}` and return the finished Map."
+    )
     return _fn
 
 
@@ -217,7 +302,9 @@ def voronoi(data: PlottableData, column: Optional[str] = None, **kwargs) -> Map:
     return _finish(scene, colorbar=column is not None)
 
 
-def cartogram(data: PlottableData, scale: str, column: Optional[str] = None, **kwargs) -> Map:
+def cartogram(
+    data: PlottableData, scale: str, column: Optional[str] = None, **kwargs
+) -> Map:
     """Quick-draw a cartogram (polygons scaled by ``scale``); returns the finished Map.
 
     With ``column`` the scaled polygons are filled and coloured by that value (a colorbar is added); without it
@@ -249,7 +336,12 @@ def kde(data: PlottableData, **kwargs) -> Map:
     return _finish(scene, colorbar=True)
 
 
-def sankey(data: PlottableData, column: Optional[str] = None, scale: Optional[str] = None, **kwargs) -> Map:
+def sankey(
+    data: PlottableData,
+    column: Optional[str] = None,
+    scale: Optional[str] = None,
+    **kwargs,
+) -> Map:
     """Quick-draw a spatial flow / Sankey map of a line FeatureCollection; returns the finished Map.
 
     ``column`` colours each path and ``scale`` sets its width (both optional); styling kwargs are forwarded to

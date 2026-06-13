@@ -41,16 +41,14 @@ class RasterMixin:
         src = self._to_display_source(data, band=band)
         arr = _masked_to_nan(src.z.values)
         name = vname or self._vdim_name(src)
-        return hv.Image(
-            (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
-        )
+        return self._raster_element(src.x.values, src.y.values, arr, name)
 
     def image(
         self,
         data: Any,
         *,
         band: int = 1,
-        cmap: str = "viridis",
+        cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
         alpha: float = 1.0,
         colorbar: bool = True,
@@ -62,7 +60,8 @@ class RasterMixin:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected to the display CRS
                 through pyramids when needed.
             band: 1-based band to render.
-            cmap: Colormap name.
+            cmap: Colormap name; ``None`` (default) resolves it from the variable via
+                ``autostyle.auto_style`` (DI.12) — the same lookup the static ``Map`` uses.
             clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales.
             alpha: Layer opacity in ``[0, 1]``.
             colorbar: Whether to draw a colorbar.
@@ -83,11 +82,15 @@ class RasterMixin:
         Returns:
             This map (chainable).
         """
-        element = self._image_element(data, band=band)
+        src = self._to_display_source(data, band=band)
+        arr = _masked_to_nan(src.z.values)
+        element = self._raster_element(
+            src.x.values, src.y.values, arr, self._vdim_name(src)
+        )
         element = self._styled(
             element,
             common={
-                "cmap": cmap,
+                "cmap": self._auto_cmap(src, cmap),
                 "clim": clim,
                 "alpha": alpha,
                 "colorbar": colorbar,
@@ -320,3 +323,78 @@ class RasterMixin:
                 ]
             self.contours(member, band=band, **member_opts)
         return self
+
+    def large_image(
+        self,
+        dataset: Any,
+        *,
+        band: int = 1,
+        max_pixels: int = 4_000_000,
+        dynamic: bool = True,
+        cmap: Optional[str] = None,
+        **opts: Any,
+    ) -> "RasterMixin":
+        """Add a large raster / COG by loading only the viewport at a decimated overview (DI.14).
+
+        The raster analogue of the vector Datashader path: instead of materialising a multi-GB raster,
+        it reads only the visible window at a suitable overview via **pyramids** and re-reads on pan/
+        zoom. All windowing/overview selection is pyramids' (``read_part`` / ``preview`` —
+        cloud-native partial reads for remote COGs over ``/vsicurl/`` come for free); this method only
+        drives the viewport loop and styles the result.
+
+        Args:
+            dataset: A pyramids ``Dataset`` (ideally a COG with overviews). Must expose ``read_part``.
+            band: 1-based band to read.
+            max_pixels: Pixel budget per rendered frame; the canvas is sized to stay under it.
+            dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream (needs a live server);
+                ``False`` renders one decimated ``preview`` frame (deterministic — what tests assert).
+            cmap: Colormap; ``None`` resolves from the variable via autostyle.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            AttributeError: when ``dataset`` lacks the pyramids COG/overview read surface
+                (``read_part``/``preview``) — file a pyramids issue rather than reaching around it.
+        """
+        import numpy as np
+
+        gv, hv = _require_holoviz()
+        if not hasattr(dataset, "read_part") or not hasattr(dataset, "preview"):
+            raise AttributeError(
+                "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
+                ".preview); upgrade pyramids or use image() for a small raster"
+            )
+        ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
+        side = max(64, int(np.sqrt(max_pixels)))
+
+        def _frame(x_range: Any = None, y_range: Any = None) -> Any:
+            if (
+                x_range is None or y_range is None
+            ):  # initial / static frame: a cheap overview preview
+                arr = _masked_to_nan(np.asarray(ds.preview(max_size=side, band=band)))
+                bounds = ds.bbox if hasattr(ds, "bbox") else None
+            else:
+                bbox = (x_range[0], y_range[0], x_range[1], y_range[1])
+                arr = _masked_to_nan(
+                    np.asarray(
+                        ds.read_part(
+                            bbox=bbox,
+                            dst_width=side,
+                            dst_height=side,
+                            bbox_crs=self.crs,
+                            band=band,
+                        )
+                    )
+                )
+                bounds = (bbox[0], bbox[1], bbox[2], bbox[3])
+            image = hv.Image(arr, bounds=bounds) if bounds else hv.Image(arr)
+            return image.opts(cmap=cmap or "viridis", colorbar=True, **opts)
+
+        if not dynamic:
+            return self.add_element(_frame())
+        from holoviews.streams import RangeXY
+
+        dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
+        return self.add_element(dmap)

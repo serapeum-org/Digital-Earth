@@ -13,10 +13,15 @@ WASM/Pyodide export is **out** for a pyramids-backed app: GDAL/pyramids cannot r
 live app must be *served*, not converted. ``save_app`` is the offline path (pre-rendered states only).
 """
 
+from functools import reduce
 from importlib.util import find_spec
+from operator import mul as _mul
 from typing import Any, Sequence
 
 from digitalearth.interactive.base import _require_holoviz
+
+#: Basemap providers offered by the layer-control basemap switcher.
+_BASEMAP_CHOICES = ["CartoLight", "CartoDark", "OSM", "EsriImagery"]
 
 #: Built-in colormaps offered by the dashboard cmap selector.
 _CMAP_CHOICES = [
@@ -238,3 +243,106 @@ class DashboardMixin:
         plotter = getattr(scene3d, "plotter", scene3d)
         render_window = getattr(plotter, "ren_win", plotter)
         return pn.pane.VTK(render_window, **kwargs)
+
+    def layer_control(
+        self, *, opacity: bool = True, reorder: bool = True, basemap_switch: bool = True
+    ) -> Any:
+        """Build a layer manager: per-layer visibility toggles, opacity sliders, basemap switch (DI.13).
+
+        Args:
+            opacity: Include a per-layer opacity slider.
+            reorder: Reserved for drag-reorder (currently the toggle order follows add order).
+            basemap_switch: Include a basemap-provider ``Select``.
+
+        Returns:
+            A ``panel.viewable.Viewable`` whose widgets reactively rebuild the map overlay — toggling
+            a layer hides/shows it; the opacity slider sets its alpha.
+
+        Raises:
+            ValueError: when there are no layers to control.
+        """
+        gv, hv = _require_holoviz()
+        pn = _require_panel()
+        if not self.layers:
+            raise ValueError(
+                "layer_control() needs at least one layer — add a builder call first"
+            )
+        names = [f"{i}: {type(layer).__name__}" for i, layer in enumerate(self.layers)]
+        visible = pn.widgets.CheckBoxGroup(value=names, options=names)
+        controls = [visible]
+        alpha = (
+            pn.widgets.FloatSlider(label="Opacity", start=0.0, end=1.0, value=1.0)
+            if opacity
+            else None
+        )
+        if alpha is not None:
+            controls.append(alpha)
+        if basemap_switch:
+            controls.append(
+                pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
+            )
+
+        bind_kwargs = {"shown": visible}
+        if alpha is not None:
+            bind_kwargs["op"] = alpha
+        view = pn.bind(self._compose_visible_layers, **bind_kwargs)
+        return pn.Row(pn.Column(*controls), pn.panel(view))
+
+    def _compose_visible_layers(self, shown: list, op: float = 1.0) -> Any:
+        """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
+
+        Args:
+            shown: The ``"i: Type"`` labels of the visible layers (from the toggle widget).
+            op: Opacity applied to colour-mapped layers.
+
+        Returns:
+            A blank ``hv.Overlay`` when nothing is shown, the single element when one is, else the
+            overlay of the chosen layers at opacity ``op``.
+        """
+        gv, hv = _require_holoviz()
+        chosen = [self.layers[int(label.split(":")[0])] for label in shown]
+        if not chosen:
+            return hv.Overlay([])
+        overlay = chosen[0] if len(chosen) == 1 else reduce(_mul, chosen)
+        return overlay.opts(hv.opts.Image(alpha=op), hv.opts.RGB(alpha=op))
+
+    def attribute_table(self, features: Any, *, linked: bool = True) -> Any:
+        """Build a ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).
+
+        Args:
+            features: A pyramids ``FeatureCollection`` (or GeoDataFrame) whose non-geometry columns
+                populate the table.
+            linked: Reserved for two-way selection linking with the map (needs a live server).
+
+        Returns:
+            A ``panel.widgets.Tabulator`` of the attribute columns.
+        """
+        pn = _require_panel()
+        pn.extension("tabulator")
+        frame = features.drop(columns=[features.geometry.name], errors="ignore")
+        return pn.widgets.Tabulator(
+            frame, disabled=True, pagination="remote", page_size=20
+        )
+
+    def share(
+        self, *, params: Sequence[str] = ("cmap", "extent", "time", "basemap")
+    ) -> Any:
+        """Sync the listed view parameters into the URL for a shareable, reproducible view (DI.13).
+
+        Uses ``panel.state.location`` — available only under a running ``panel serve``. Off-server
+        (e.g. in a notebook or test) it returns the params it *would* sync rather than failing, so the
+        call is safe everywhere. A pyramids-backed app must be **served**, not exported to WASM/Pyodide
+        (no GDAL in the browser).
+
+        Args:
+            params: The view parameters to serialise into the URL query string.
+
+        Returns:
+            The ``panel.io.location.Location`` it synced to, or the ``params`` tuple when off-server.
+        """
+        pn = _require_panel()
+        location = getattr(pn.state, "location", None)
+        if location is None:  # off-server (notebook/test) — nothing to bind to yet
+            return tuple(params)
+        location.sync(self, {name: name for name in params})
+        return location

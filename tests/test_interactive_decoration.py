@@ -57,6 +57,36 @@ class TestTiles:
         wmts = [layer for layer in overlay if isinstance(layer, gv.element.WMTS)]
         assert len(wmts) == 1, f"expected exactly one basemap, got {len(wmts)}"
 
+    def test_custom_xyz_url_builds_wmts(self, m):
+        """DI.10: a raw {Z}/{X}/{Y} URL template becomes a gv.WMTS without a catalog lookup."""
+        m.tiles("https://a.tile.example/{Z}/{X}/{Y}.png")
+        assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
+
+    def test_xyzservices_provider_builds_wmts(self, m):
+        """DI.10: an xyzservices TileProvider object resolves through gv.WMTS."""
+        xyz = pytest.importorskip("xyzservices")
+        m.tiles(xyz.providers.OpenStreetMap.Mapnik)
+        assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
+
+    def test_list_tile_providers_is_nonempty_sorted(self, m):
+        providers = m.list_tile_providers()
+        assert "CartoLight" in providers and "OSM" in providers
+        assert providers == sorted(providers), "provider catalog must be sorted"
+
+    def test_keyed_provider_without_key_raises(self, m):
+        """A Stadia provider used without an api_key raises rather than rendering blank tiles."""
+        providers = [p for p in m.list_tile_providers() if "stadia" in p.lower()]
+        if not providers:  # pragma: no cover - GeoViews build without Stadia sources
+            pytest.skip("no Stadia tile sources in this GeoViews build")
+        with pytest.raises(ImportError, match="api_key"):
+            m.tiles(providers[0])
+
+    def test_overlay_level_puts_tiles_on_top(self, m, dataset):
+        m.image(dataset).tiles("CartoLight", level="overlay")
+        assert isinstance(
+            m.layers[-1], gv.element.WMTS
+        ), "overlay tiles must be the top layer"
+
 
 class TestCoastlinesAndFeatures:
     """``coastlines`` / ``features`` — Natural-Earth context layers."""
