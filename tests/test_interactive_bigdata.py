@@ -91,6 +91,25 @@ class TestRasterize:
         with pytest.raises(ValueError, match="unknown aggregator"):
             m.rasterize(big_points, aggregator="median", dynamic=False)
 
+    def test_datashader_reduction_object_passes_through(self, m, big_points):
+        """A pre-built Datashader reduction is used verbatim (not name-resolved)."""
+        import datashader as ds
+
+        m.rasterize(
+            big_points, aggregator=ds.mean("value"), dynamic=False, width=40, height=30
+        )
+        grid = m.layers[0].dimension_values(2, flat=False)
+        assert grid.shape == (
+            30,
+            40,
+        ), f"reduction-object path canvas not pinned: {grid.shape}"
+
+    def test_prebuilt_element_is_rasterized_directly(self, m, big_points):
+        """Passing an already-built HoloViews element skips the GeoDataFrame plumbing."""
+        element = m._vector_element("Points", big_points)
+        m.rasterize(element, dynamic=False, width=40, height=30)
+        assert isinstance(m.layers[0], hv.Image), f"got {type(m.layers[0])}"
+
 
 class TestDatashade:
     """``datashade`` — shaded RGB, categorical color_key (DI.2a)."""
@@ -117,6 +136,20 @@ class TestDatashade:
         ), "fixture must start non-categorical"
         m.datashade(
             big_points,
+            color_key={"a": "#ff0000", "b": "#00ff00", "c": "#0000ff"},
+            column="cls",
+            dynamic=False,
+            width=40,
+            height=30,
+        )
+        assert isinstance(m.layers[0], hv.RGB)
+
+    def test_already_categorical_column_is_not_recopied(self, m, big_points):
+        """An already-categorical column skips the cast (the no-op _ensure_categorical branch)."""
+        gdf = big_points.copy()
+        gdf["cls"] = gdf["cls"].astype("category")
+        m.datashade(
+            gdf,
             color_key={"a": "#ff0000", "b": "#00ff00", "c": "#0000ff"},
             column="cls",
             dynamic=False,
@@ -215,5 +248,19 @@ class TestTrajectory:
     def test_single_track_without_track_column(self, m, tracks):
         m.trajectory(
             tracks[tracks["track"] == "t1"], dynamic=False, width=60, height=40
+        )
+        assert isinstance(m.layers[0], hv.RGB)
+
+    def test_trajectory_by_class_with_color_key(self, m, tracks):
+        """The ``by`` + ``color_key`` branch colours each track class explicitly."""
+        m.trajectory(
+            tracks,
+            track_column="track",
+            by="kind",
+            color_key={"ship": "#ff0000", "buoy": "#0000ff"},
+            dynamic=False,
+            dynspread=False,
+            width=80,
+            height=60,
         )
         assert isinstance(m.layers[0], hv.RGB)

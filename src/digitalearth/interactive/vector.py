@@ -207,10 +207,10 @@ class VectorMixin:
                     "polygon datashading needs the optional spatialpandas package "
                     "(pip install spatialpandas) — or pass rasterize=False to draw raw glyphs"
                 )
-            element = self._vector_element(
+            element = self._vector_element(  # pragma: no cover - needs optional spatialpandas
                 "Polygons", gdf, vdims=[column] if column else None
             )
-            return self.rasterize(
+            return self.rasterize(  # pragma: no cover - needs optional spatialpandas
                 element,
                 aggregator="mean" if column else "count",
                 column=column,
