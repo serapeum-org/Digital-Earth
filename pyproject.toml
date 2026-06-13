@@ -51,6 +51,16 @@ dependencies = [
     "imageio >=2.34",
     "imageio-ffmpeg >=0.5",
 ]
+# Interactive-2D tier (HoloViz: GeoViews -> HoloViews -> Bokeh, + Datashader + Panel). cartopy/pyproj arrive
+# transitively under geoviews as *its* deps and are never imported by us — pyramids stays the only GIS engine
+# (enforced by tests/test_no_competitor_imports.py).
+interactive = [
+    "geoviews >=1.15",
+    "holoviews >=1.22",
+    "hvplot >=0.12",
+    "datashader >=0.19",
+    "panel >=1.9",
+]
 
 [project.scripts]
 digitalearth = "digitalearth.cli:main"
@@ -212,6 +222,8 @@ main = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml", descri
 test-all = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml --cov-report=term-missing", description = "Run all testsuite" }
 notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb' --ignore-glob='docs/examples/pyvista/**'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; and the 3-D/PyVista notebooks — those need the viz3d env, run via `notebooks-3d`)" }
 notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
+test-interactive = { cmd = "pytest -vvv tests/test_interactive_*.py", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`)" }
+notebooks-interactive = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/interactive", description = "check the interactive (HoloViz) notebooks — run in the interactive env (`pixi run -e interactive notebooks-interactive`)" }
 jupyter = { cmd = "jupyter lab --no-browser --IdentityProvider.token='' --ServerApp.password='' --port=8889", description = "launch jupyter lab" }
 build-dist = { cmd = "python -m build", description = "Build sdist and wheel for PyPI" }
 publish-pypi = { cmd = "twine upload --non-interactive --repository pypi dist/*", depends-on = ["build-dist"], description = "Build and upload package to PyPI" }
@@ -230,10 +242,22 @@ docs = { features = ["docs"], solve-group = "docs" }
 # 3D tier (PyVista). Separate solve-group so VTK stays out of the lean default/dev envs.
 # Run the 3D tests with: pixi run -e viz3d pytest tests/test_scene3d.py
 viz3d = { features = ["dev", "viz3d"], solve-group = "viz3d" }
+# Interactive tier (HoloViz). Separate solve-group so geoviews/datashader/panel stay out of default/dev.
+# Run the interactive tests with: pixi run -e interactive test-interactive
+interactive = { features = ["dev", "interactive"], solve-group = "interactive" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }
 py313 = { features = ["py313", "dev"], solve-group = "py313" }
 
+
+[tool.pixi.feature.interactive.pypi-dependencies]
+# PyPI wheels (cartopy ships binary wheels; GEOS/PROJ are already present via the conda gdal/pyogrio stack).
+# cartopy/pyproj are geoviews' own transitive deps — never imported by Digital-Earth (DX.3 guard).
+geoviews = ">=1.15"
+holoviews = ">=1.22"
+hvplot = ">=0.12"
+datashader = ">=0.19"
+panel = ">=1.9"
 
 [tool.pixi.feature.viz3d.pypi-dependencies]
 # PyPI wheels (pyvista bundles a VTK wheel) — keeps the 3D tier installable without a heavy conda solve.
