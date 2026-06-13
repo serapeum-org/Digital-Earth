@@ -72,6 +72,8 @@ class VectorMixin:
         value_column: Optional[str] = None,
         size: float = 6.0,
         cmap: str = "viridis",
+        rasterize: Any = "auto",
+        rasterize_threshold: int = 50_000,
         **opts: Any,
     ) -> "VectorMixin":
         """Add a point layer, optionally coloured by an attribute column.
@@ -82,6 +84,9 @@ class VectorMixin:
             value_column: Optional numeric column colouring the points (also shown on hover).
             size: Marker size in screen pixels.
             cmap: Colormap used when ``value_column`` is given.
+            rasterize: ``"auto"`` (default) routes through Datashader above
+                ``rasterize_threshold`` rows — logged, never silent; ``True``/``False`` force it.
+            rasterize_threshold: Row count above which ``"auto"`` switches to Datashader.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -99,7 +104,17 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
+        from digitalearth.interactive.bigdata import _route_through_rasterize
+
         gdf = self._display_gdf(features)
+        if rasterize is True or (
+            rasterize == "auto"
+            and _route_through_rasterize(self, "points", len(gdf), rasterize_threshold)
+        ):
+            aggregator = "mean" if value_column else "count"
+            return self.rasterize(
+                gdf, aggregator=aggregator, column=value_column, cmap=cmap, **opts
+            )
         element = self._vector_element(
             "Points", gdf, vdims=[value_column] if value_column else None
         )
@@ -142,6 +157,8 @@ class VectorMixin:
         *,
         column: Optional[str] = None,
         cmap: str = "viridis",
+        rasterize: Any = "auto",
+        rasterize_threshold: int = 50_000,
         **opts: Any,
     ) -> "VectorMixin":
         """Add a polygon layer — outlines only, or filled by an attribute column.
@@ -152,6 +169,10 @@ class VectorMixin:
             column: Optional numeric column filling the polygons (also shown on hover); ``None``
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
+            rasterize: ``"auto"`` (default) routes through Datashader above
+                ``rasterize_threshold`` rows — logged, never silent; ``True``/``False`` force it.
+                Polygon datashading needs the optional ``spatialpandas`` package.
+            rasterize_threshold: Row count above which ``"auto"`` switches to Datashader.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -168,7 +189,34 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
+        from digitalearth.interactive.bigdata import _route_through_rasterize
+
         gdf = self._display_gdf(features)
+        if rasterize is True or (
+            rasterize == "auto"
+            and _route_through_rasterize(
+                self, "polygons", len(gdf), rasterize_threshold
+            )
+        ):
+            from importlib.util import find_spec
+
+            if (
+                find_spec("spatialpandas") is None
+            ):  # datashader's polygon backend (its dep, not ours)
+                raise ImportError(
+                    "polygon datashading needs the optional spatialpandas package "
+                    "(pip install spatialpandas) — or pass rasterize=False to draw raw glyphs"
+                )
+            element = self._vector_element(
+                "Polygons", gdf, vdims=[column] if column else None
+            )
+            return self.rasterize(
+                element,
+                aggregator="mean" if column else "count",
+                column=column,
+                cmap=cmap,
+                **opts,
+            )
         element = self._vector_element(
             "Polygons", gdf, vdims=[column] if column else None
         )
