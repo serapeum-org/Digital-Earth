@@ -292,17 +292,18 @@ class DecorationMixin:
                 f"labels column {column!r} not found in the feature attributes"
             )
         gdf = self._display_gdf(features)
+        # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
+        # geometry-bearing GeoDataFrame: gv.Labels mis-projects a GeoDataFrame's point geometry at
+        # render time (a boolean-mask length mismatch). The geometry is already in the display CRS
+        # (reprojected by _display_gdf), so its x/y are the label anchors directly.
+        xs = gdf.geometry.x.to_numpy()
+        ys = gdf.geometry.y.to_numpy()
+        texts = gdf[column].to_numpy()
         element = gv.Labels(
-            gdf,
+            (xs, ys, texts),
+            kdims=["x", "y"],
             vdims=[column],
             crs=gv.util.process_crs(self.crs),
-            datatype=[
-                "geodataframe",
-                "multitabular",
-                "dictionary",
-                "dataframe",
-                "array",
-            ],
         )
         if opts:
             element = element.opts(**opts)

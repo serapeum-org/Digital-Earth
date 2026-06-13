@@ -364,6 +364,8 @@ class RasterMixin:
         import numpy as np
 
         gv, hv = _require_holoviz()
+        if band < 1:
+            raise ValueError(f"band is 1-based; got {band!r}")
         if not hasattr(dataset, "read_part") or not hasattr(dataset, "preview"):
             raise AttributeError(
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
@@ -371,12 +373,15 @@ class RasterMixin:
             )
         ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
         side = max(64, int(np.sqrt(max_pixels)))
+        read_band = band - 1  # pyramids preview/read_part are 0-based (like Dataset.read_array)
 
         def _frame(x_range: Any = None, y_range: Any = None) -> Any:
             if (
                 x_range is None or y_range is None
             ):  # initial / static frame: a cheap overview preview
-                arr = _masked_to_nan(np.asarray(ds.preview(max_size=side, band=band)))
+                arr = _masked_to_nan(
+                    np.asarray(ds.preview(max_size=side, band=read_band))
+                )
                 bounds = ds.bbox if hasattr(ds, "bbox") else None
             else:
                 bbox = (x_range[0], y_range[0], x_range[1], y_range[1])
@@ -387,7 +392,7 @@ class RasterMixin:
                             dst_width=side,
                             dst_height=side,
                             bbox_crs=self.crs,
-                            band=band,
+                            band=read_band,
                         )
                     )
                 )

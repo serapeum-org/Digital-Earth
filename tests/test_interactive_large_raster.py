@@ -86,3 +86,36 @@ class TestLargeImage:
 
         with pytest.raises(AttributeError, match="read_part"):
             m.large_image(_Plain())
+
+    def test_real_dataset_static_frame_is_non_blank(self, dataset):
+        """A real pyramids Dataset renders a non-blank decimated preview (band default 1 → 0-based read).
+
+        Regression for the 1-based/0-based mismatch: pyramids ``preview``/``read_part`` are 0-based, so the
+        1-based ``band`` must be converted. The fake-COG tests ignore ``band`` and so could not catch this.
+        """
+        m = InteractiveMap(crs=dataset.epsg)
+        m.large_image(dataset, dynamic=False, max_pixels=80 * 80)
+        img = m.layers[0]
+        assert isinstance(img, hv.Image), f"got {type(img)}"
+        z = np.asarray(img.dimension_values(2, flat=False), dtype="float64")
+        finite = np.isfinite(z)
+        assert finite.sum() > 0, "static frame is all-NoData (blank)"
+        assert np.nanstd(z[finite]) > 0, "static frame is a single flat value (blank)"
+
+    def test_band_below_one_raises(self, m):
+        """``band`` is 1-based; a sub-1 value is rejected before any pyramids read."""
+        cog = _FakeCOG()
+        with pytest.raises(ValueError, match="band is 1-based"):
+            m.large_image(cog, band=0)
+
+    def test_band_passed_to_pyramids_is_zero_based(self, m):
+        """The 1-based default ``band=1`` reaches pyramids ``preview`` as 0-based ``band=0``."""
+        recorded = {}
+
+        class _BandCOG(_FakeCOG):
+            def preview(self, *, max_size=1024, band=1):
+                recorded["band"] = band
+                return np.random.default_rng(0).random((max_size, max_size))
+
+        m.large_image(_BandCOG(), dynamic=False, max_pixels=64 * 64)
+        assert recorded["band"] == 0, f"1-based band=1 must reach pyramids as 0-based 0, got {recorded['band']}"

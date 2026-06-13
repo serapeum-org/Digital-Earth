@@ -533,25 +533,34 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
+        import numpy as np
+
         gv, hv = _require_holoviz()
         gdf = self._display_gdf(features)
-        vdims = [column] if column else []
-        element = gv.HexTiles(
-            gdf,
-            vdims=vdims,
-            crs=gv.util.process_crs(self.crs),
-            datatype=[
-                "geodataframe",
-                "multitabular",
-                "dictionary",
-                "dataframe",
-                "array",
-            ],
-        )
+        # Build from explicit display-CRS x/y(/value) arrays, not the geometry GeoDataFrame: GeoViews
+        # mis-projects a GeoDataFrame's point geometry at bokeh render time. HoloViews' hex aggregation
+        # also needs the reducer as a numpy callable (np.size = count), not a string.
+        x = gdf.geometry.x.to_numpy()
+        y = gdf.geometry.y.to_numpy()
+        reducers = {
+            "count": np.size,
+            "mean": np.mean,
+            "sum": np.sum,
+            "min": np.min,
+            "max": np.max,
+            "std": np.std,
+        }
+        crs = gv.util.process_crs(self.crs)
+        if column:
+            reducer = reducers.get(aggregator, np.mean)
+            element = gv.HexTiles((x, y, gdf[column].to_numpy()), kdims=["x", "y"], vdims=[column], crs=crs)
+        else:  # no value column -> count points per hex (np.size), no value dimension
+            reducer = np.size
+            element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)
         element = self._styled(
             element,
             common={"cmap": cmap, "colorbar": True, **opts},
-            bokeh={"gridsize": gridsize, "aggregator": aggregator, "tools": ["hover"]},
+            bokeh={"gridsize": gridsize, "aggregator": reducer, "tools": ["hover"]},
         )
         return self.add_element(element)
 

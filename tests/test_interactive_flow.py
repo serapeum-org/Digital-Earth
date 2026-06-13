@@ -149,6 +149,20 @@ class TestTextAndLabels:
         with pytest.raises(KeyError, match="nope"):
             m.labels(fc, "nope")
 
+    def test_labels_render_under_bokeh_after_reproject(self):
+        """Labels built from reprojected points must render under bokeh.
+
+        Regression: handing GeoViews the geometry GeoDataFrame mis-projected the points at render
+        (a boolean-mask length mismatch). Building from explicit display-CRS x/y arrays fixes it. The
+        construct-only test above could not catch a render-time failure.
+        """
+        from pyramids.feature import FeatureCollection
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson")  # EPSG:32618
+        m = InteractiveMap(crs=3857)  # forces a reproject through pyramids
+        m.points(fc).labels(fc, "fid")
+        hv.renderer("bokeh").get_plot(m.render())  # raises if the element mis-projects
+
 
 class TestGraph:
     """``graph`` / ``flow`` — network / origin-destination flows (DI.15, recipe I9)."""
