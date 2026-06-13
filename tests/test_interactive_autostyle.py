@@ -30,6 +30,15 @@ def _source(variable: str) -> Source:
     return Source(z, x, y, crs=3857, metadata={"variable": variable})
 
 
+def _polygon_fc():
+    """A polygon FeatureCollection built by buffering the point fixture (numeric 'fid' column)."""
+    from pyramids.feature import FeatureCollection
+
+    fc = FeatureCollection.read_file("tests/data/points.geojson").copy()
+    fc["geometry"] = fc.geometry.buffer(500.0)
+    return fc
+
+
 class TestAutostyleDefaults:
     """``image`` resolves its colormap from ``auto_style`` when ``cmap`` is not given (DI.12)."""
 
@@ -129,3 +138,56 @@ class TestQuickplotBackend:
         out = quickplot(dataset, crs=dataset.epsg, backend="interactive")
         plot = hv.Store.lookup_options("bokeh", out.layers[0], "plot").kwargs
         assert plot.get("colorbar") is not False, "default must keep the colorbar"
+
+    def test_polygon_without_column_draws_polygons(self):
+        """A polygon FeatureCollection with no column dispatches to polygons()."""
+        from digitalearth.api import quickplot
+
+        fc = _polygon_fc()
+        out = quickplot(fc, backend="interactive")
+        assert isinstance(out.layers[0], gv.Polygons), f"got {type(out.layers[0])}"
+
+    def test_polygon_with_column_draws_choropleth(self):
+        """A polygon FeatureCollection with a column dispatches to choropleth()."""
+        from digitalearth.api import quickplot
+
+        fc = _polygon_fc()
+        out = quickplot(fc, backend="interactive", column="fid")
+        element = out.layers[0]
+        assert isinstance(element, gv.Polygons), f"got {type(element)}"
+        assert [d.name for d in element.vdims] == ["fid"], "choropleth must bind the column"
+
+    def test_empty_featurecollection_raises(self):
+        """An empty FeatureCollection has nothing to draw → ValueError."""
+        from pyramids.feature import FeatureCollection
+
+        from digitalearth.api import quickplot
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson")
+        empty = fc.iloc[0:0]
+        with pytest.raises(ValueError, match="empty FeatureCollection"):
+            quickplot(empty, backend="interactive")
+
+    def test_unsupported_type_raises_typeerror(self):
+        """A type that is neither Dataset nor FeatureCollection → TypeError."""
+        from digitalearth.api import quickplot
+
+        with pytest.raises(TypeError, match="cannot draw"):
+            quickplot([1, 2, 3], backend="interactive")
+
+    def test_basemap_adds_tile_layer_beneath(self, dataset):
+        """basemap=True prepends a Web-Mercator tile layer beneath the data."""
+        from digitalearth.api import quickplot
+
+        out = quickplot(dataset, crs=3857, backend="interactive", basemap=True)
+        assert type(out.layers[0]).__name__ in {
+            "WMTS",
+            "Tiles",
+        }, f"basemap must add a tile layer first, got {type(out.layers[0])}"
+
+    def test_coastlines_overlays_feature(self, dataset):
+        """coastlines=True overlays a Natural-Earth feature on top of the data."""
+        from digitalearth.api import quickplot
+
+        out = quickplot(dataset, crs=3857, backend="interactive", coastlines=True)
+        assert len(out.layers) >= 2, "coastlines must add a layer on top of the data"
