@@ -12,8 +12,6 @@ relax this test.
 import ast
 import pathlib
 
-import pytest
-
 #: Top-level packages the interactive/3D tiers must never import (use pyramids instead).
 FORBIDDEN = {
     "xarray",
@@ -33,7 +31,9 @@ FORBIDDEN = {
     "pvxarray",
 }
 
-#: Package roots the rule applies to (relative to the repo root).
+#: Package roots the rule applies to (relative to the repo root). Only ``src/`` is guarded — test
+#: files are deliberately exempt: fixtures legitimately ``import geopandas`` to construct the
+#: GeoDataFrames the tiers consume, which is not the same as a tier module reaching around pyramids.
 _GUARDED_ROOTS = ("src/digitalearth/three_d", "src/digitalearth/interactive")
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]

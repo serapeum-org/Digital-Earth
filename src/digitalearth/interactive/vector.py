@@ -109,7 +109,7 @@ class VectorMixin:
         gdf = self._display_gdf(features)
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize(self, "points", len(gdf), rasterize_threshold)
+            and _route_through_rasterize("points", len(gdf), rasterize_threshold)
         ):
             aggregator = "mean" if value_column else "count"
             return self.rasterize(
@@ -194,9 +194,7 @@ class VectorMixin:
         gdf = self._display_gdf(features)
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize(
-                self, "polygons", len(gdf), rasterize_threshold
-            )
+            and _route_through_rasterize("polygons", len(gdf), rasterize_threshold)
         ):
             from importlib.util import find_spec
 
@@ -207,8 +205,10 @@ class VectorMixin:
                     "polygon datashading needs the optional spatialpandas package "
                     "(pip install spatialpandas) — or pass rasterize=False to draw raw glyphs"
                 )
-            element = self._vector_element(  # pragma: no cover - needs optional spatialpandas
-                "Polygons", gdf, vdims=[column] if column else None
+            element = (
+                self._vector_element(  # pragma: no cover - needs optional spatialpandas
+                    "Polygons", gdf, vdims=[column] if column else None
+                )
             )
             return self.rasterize(  # pragma: no cover - needs optional spatialpandas
                 element,

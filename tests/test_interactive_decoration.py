@@ -50,6 +50,13 @@ class TestTiles:
         again = m.render()
         assert len(again) == 2, "re-rendering must not stack a second tile layer"
 
+    def test_explicit_tiles_supersede_constructor_tiles(self, dataset):
+        """A constructor provider + an explicit .tiles() must not stack two basemaps (L2)."""
+        m = InteractiveMap(tiles="CartoLight").image(dataset).tiles("OSM")
+        overlay = m.render()
+        wmts = [layer for layer in overlay if isinstance(layer, gv.element.WMTS)]
+        assert len(wmts) == 1, f"expected exactly one basemap, got {len(wmts)}"
+
 
 class TestCoastlinesAndFeatures:
     """``coastlines`` / ``features`` — Natural-Earth context layers."""

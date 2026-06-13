@@ -163,12 +163,10 @@ class DashboardMixin:
             opts["alpha"] = values["alpha"]
         if not opts:
             return obj
-        try:
-            return obj.opts(hv.opts.Image(**opts), hv.opts.QuadMesh(**opts))
-        except (
-            Exception
-        ):  # pragma: no cover - a layer that ignores these opts is harmless
-            return obj
+        # cmap/alpha apply to the colour-mapped element types; HoloViews applies each spec only to
+        # the matching elements and tolerates a map without them (a vector-only map is returned
+        # unchanged), so no error-swallowing wrapper is needed here.
+        return obj.opts(hv.opts.Image(**opts), hv.opts.QuadMesh(**opts))
 
     def serve(self, **kwargs: Any) -> Any:
         """Mark the dashboard servable for ``panel serve`` and return it.

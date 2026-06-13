@@ -57,6 +57,9 @@ class DecorationMixin:
         ].clone()  # clone: never mutate the shared module-level instance
         if opts:
             element = element.opts(**opts)
+        # An explicit tiles() call supersedes any provider passed to the constructor, so render()'s
+        # one-shot hook does not also prepend a second basemap (L2).
+        self._tiles_provider = None
         self.layers.insert(0, element)
         return self
 

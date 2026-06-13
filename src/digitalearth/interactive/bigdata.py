@@ -268,16 +268,13 @@ class BigDataMixin:
         return features
 
 
-def _route_through_rasterize(
-    map_obj: Any, kind: str, n_features: int, threshold: int
-) -> bool:
+def _route_through_rasterize(kind: str, n_features: int, threshold: int) -> bool:
     """Decide (and log) whether a vector builder auto-routes through Datashader.
 
     The no-silent-caps rule: when the row count crosses the threshold the switch is logged, so a
     user always knows their glyph layer became a density image.
 
     Args:
-        map_obj: The map (unused today; reserved for per-map configuration).
         kind: The calling builder name (for the log line).
         n_features: Row count of the layer.
         threshold: The auto-routing threshold.

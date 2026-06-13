@@ -21,6 +21,10 @@ class TemporalMixin:
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
         """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps.
 
+        Note: this pass is **eager** — it reprojects and extracts every member once at ``timecube``
+        construction time (the per-frame ``DynamicMap`` callback warps them again lazily). For a very
+        large datacube, pass an explicit ``clim`` to ``timecube`` to skip this whole-stack scan.
+
         Args:
             collection: A pyramids ``DatasetCollection``.
             band: 1-based band read from each member.
@@ -100,10 +104,16 @@ class TemporalMixin:
         gv, hv = _require_holoviz()
         members = collection.datasets
         n = len(members)
-        if labels is not None and len(labels) != n:
-            raise ValueError(
-                f"labels has {len(labels)} entries but the collection has {n} members"
-            )
+        if labels is not None:
+            if len(labels) != n:
+                raise ValueError(
+                    f"labels has {len(labels)} entries but the collection has {n} members"
+                )
+            if len(set(labels)) != n:
+                raise ValueError(
+                    "timecube labels must be unique — duplicate labels collapse the slider and "
+                    "make the matching frames unreachable"
+                )
         frozen_clim = clim if clim is not None else self._global_clim(collection, band)
         keys = list(labels) if labels is not None else list(range(n))
         key_to_index = {key: index for index, key in enumerate(keys)}
@@ -111,7 +121,7 @@ class TemporalMixin:
         def frame(value: Any) -> Any:
             src = self._to_display_source(members[key_to_index[value]], band=band)
             arr = _masked_to_nan(src.z.values)
-            name = src.metadata("variable", None) or src.z.name or "value"
+            name = self._vdim_name(src)
             image = hv.Image(
                 (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
             )

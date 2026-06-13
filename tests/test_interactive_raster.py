@@ -111,6 +111,42 @@ class TestRgb:
         m.rgb(mercator, bands=(1, 1, 1))
         assert isinstance(m.layers[0], hv.RGB)
 
+    def test_off_crs_input_warps_exactly_once(self, m, dataset, monkeypatch):
+        """An off-CRS rgb input must be reprojected exactly once (H1 — no double / no missed warp)."""
+        assert dataset.epsg != 3857, "fixture must start off the display CRS"
+        calls = {"n": 0}
+        real_to_crs = type(dataset).to_crs
+
+        def _counting_to_crs(self, *a, **k):
+            calls["n"] += 1
+            return real_to_crs(self, *a, **k)
+
+        monkeypatch.setattr(type(dataset), "to_crs", _counting_to_crs)
+        m.rgb(dataset, bands=(1, 1, 1))
+        assert (
+            calls["n"] == 1
+        ), f"rgb() must warp the dataset exactly once, warped {calls['n']}x"
+
+    def test_constant_channel_stretch_does_not_divide_by_zero(
+        self, m, dataset, monkeypatch
+    ):
+        """A constant (zero-span) channel must stretch without NaN/inf from a 0 or NaN scale (M1)."""
+        import numpy as np
+
+        import digitalearth.sources as sources_mod
+
+        src = m._to_display_source(dataset)
+        rows, cols = src.z.values.shape
+        constant = np.full((rows, cols), 7.0)  # zero-span channel: low == high
+        monkeypatch.setattr(
+            sources_mod, "get_stack", lambda data, bands: np.dstack([constant] * 3)
+        )
+        m.rgb(dataset, bands=(1, 1, 1))
+        red = m.layers[0].dimension_values("R", flat=False)
+        assert np.isfinite(
+            red
+        ).all(), "a constant channel must yield finite values, not NaN/inf"
+
 
 class TestQuadmeshAndContours:
     """``quadmesh`` / ``contours`` / ``filled_contours``."""
@@ -143,3 +179,30 @@ class TestSpaghetti:
         m.spaghetti(dc, levels=4)
         assert len(m.layers) == 3, f"expected 3 contour layers, got {len(m.layers)}"
         assert all(isinstance(layer, hv.element.Contours) for layer in m.layers)
+
+    def test_members_get_distinct_colours(self, m):
+        """Each ensemble member gets its own colour from the cycle (L1 — not monochrome)."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
+        m.spaghetti(dc, levels=4)
+        colours = [
+            hv.Store.lookup_options("bokeh", layer, "style").kwargs.get("color")
+            for layer in m.layers
+        ]
+        assert (
+            len(set(colours)) == 3
+        ), f"members must be distinct colours, got {colours}"
+
+    def test_explicit_color_disables_cycle(self, m):
+        from pyramids.dataset.collection import DatasetCollection
+
+        dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 2)
+        m.spaghetti(dc, levels=4, color="black")
+        colours = {
+            hv.Store.lookup_options("bokeh", layer, "style").kwargs.get("color")
+            for layer in m.layers
+        }
+        assert colours == {
+            "black"
+        }, f"explicit color must win over the cycle, got {colours}"

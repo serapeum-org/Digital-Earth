@@ -79,6 +79,11 @@ class TestTimecube:
         with pytest.raises(ValueError, match="labels has 2 entries"):
             m.timecube(cube, labels=["a", "b"])
 
+    def test_duplicate_labels_raise(self, m, cube):
+        """Duplicate labels would collapse the slider and hide frames — must raise (M3)."""
+        with pytest.raises(ValueError, match="labels must be unique"):
+            m.timecube(cube, labels=["jan", "jan", "feb"])
+
     def test_cmap_is_applied_to_frames(self, m, cube):
         m.timecube(cube, cmap="inferno")
         style = hv.Store.lookup_options("bokeh", m.layers[0][0], "style").kwargs

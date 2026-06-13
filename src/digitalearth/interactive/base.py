@@ -209,6 +209,21 @@ class InteractiveMapBase:
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
 
+    @staticmethod
+    def _vdim_name(source: Source) -> str:
+        """Return the value-dimension name for ``source`` (variable → z name → ``"value"``).
+
+        The single naming recipe the raster/temporal builders share, so the value dimension is
+        labelled consistently across ``image`` / ``quadmesh`` / ``timecube`` frames.
+
+        Args:
+            source: The display-CRS :class:`Source` whose value dimension is being named.
+
+        Returns:
+            The value-dimension name.
+        """
+        return source.metadata("variable", None) or source.z.name or "value"
+
     def _styled(
         self, element: Any, common: Optional[dict] = None, bokeh: Optional[dict] = None
     ) -> Any:

@@ -20,6 +20,14 @@ def m(dataset) -> InteractiveMap:
     return InteractiveMap().image(dataset)
 
 
+@pytest.fixture()
+def point_fc():
+    """The point fixture as a pyramids FeatureCollection (for the vector-only override test)."""
+    from pyramids.feature import FeatureCollection
+
+    return FeatureCollection.read_file("tests/data/points.geojson")
+
+
 class TestDashboard:
     """``dashboard`` — the Panel layout + reactive widgets."""
 
@@ -59,7 +67,16 @@ class TestDashboard:
 
     def test_override_with_no_values_returns_map_unchanged(self, m):
         out = m._render_with_overrides({})
-        assert out is not None
+        assert isinstance(
+            out, hv.core.Dimensioned
+        ), "no-override path must return the rendered map"
+
+    def test_override_on_vector_only_map_does_not_raise(self, point_fc):
+        """cmap/alpha on a vector-only map must not raise — HoloViews applies them where they match,
+        leaving a points-only map unchanged (M2: no broad except-swallow needed)."""
+        vmap = InteractiveMap().points(point_fc)
+        out = vmap._render_with_overrides({"cmap": "magma", "alpha": 0.3})
+        assert isinstance(out, hv.core.Dimensioned), "must return the map, not raise"
 
 
 class TestServeAndExport:

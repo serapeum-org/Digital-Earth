@@ -8,6 +8,12 @@ emits a **plain HoloViews** element (``hv.Image``/``hv.RGB``/``hv.QuadMesh``) wh
 already in the display CRS — deliberately *not* ``gv.Image``, whose default PlateCarree ``crs`` would
 re-project already-projected coordinates at render time. NoData arrives as a masked array from pyramids
 and renders transparent (``NaN``).
+
+**Naming note** — the interactive builders use HoloViews-idiomatic names that differ from the static
+``Map``: ``image`` (static ``imshow``), ``rgb`` (static ``rgb_composite``), ``contours``/
+``filled_contours`` (static ``contour``/``contourf``). ``spaghetti``/``quadmesh`` match. The divergence
+is intentional (this tier reads as HoloViews to its users); the static↔interactive mapping is documented
+in the tier plan's feature-parity matrix.
 """
 
 from typing import Any, Optional, Sequence, Tuple
@@ -34,7 +40,7 @@ class RasterMixin:
         gv, hv = _require_holoviz()
         src = self._to_display_source(data, band=band)
         arr = _masked_to_nan(src.z.values)
-        name = vname or src.metadata("variable", None) or src.z.name or "value"
+        name = vname or self._vdim_name(src)
         return hv.Image(
             (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
         )
@@ -126,20 +132,25 @@ class RasterMixin:
         gv, hv = _require_holoviz()
         if len(bands) != 3:
             raise ValueError(f"rgb() needs exactly three bands, got {tuple(bands)!r}")
-        if (
-            hasattr(data, "epsg")
-            and hasattr(data, "to_crs")
-            and self._needs_reproject(data)
-        ):
+        # Reproject once into a local handle, then feed both the coordinate extraction (get_source,
+        # via _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
+        # already-reprojected dataset, so a single warp here keeps them consistent (H1).
+        if hasattr(data, "to_crs") and self._needs_reproject(data):
             data = data.to_crs(self.crs)
         src = self._to_display_source(data, band=bands[0])
         stack = get_stack(data, bands)
         channels = []
         for index in range(3):
             channel = stack[:, :, index]
-            low, high = np.nanpercentile(channel, (2.0, 98.0))
-            scale = (high - low) or 1.0
-            channels.append(np.clip((channel - low) / scale, 0.0, 1.0))
+            with np.errstate(
+                invalid="ignore"
+            ):  # an all-nodata channel -> NaN bounds (renders transparent)
+                low, high = np.nanpercentile(channel, (2.0, 98.0))
+            span = high - low
+            # Guard a zero / NaN span (constant or all-nodata channel) so the stretch never divides
+            # by zero/NaN for the finite pixels; genuinely-nodata pixels stay NaN (transparent).
+            scale = span if np.isfinite(span) and span > 0 else 1.0
+            channels.append(np.clip((channel - np.nan_to_num(low)) / scale, 0.0, 1.0))
         element = hv.RGB(
             (src.x.values, src.y.values, *channels),
             kdims=["x", "y"],
@@ -178,7 +189,7 @@ class RasterMixin:
         gv, hv = _require_holoviz()
         src = self._to_display_source(data, band=band)
         arr = _masked_to_nan(src.z.values)
-        name = src.metadata("variable", None) or src.z.name or "value"
+        name = self._vdim_name(src)
         element = hv.QuadMesh(
             (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
         )
@@ -257,15 +268,33 @@ class RasterMixin:
         element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
+    #: Colour cycle used to distinguish ensemble members in :meth:`spaghetti` (Category10-ish).
+    _SPAGHETTI_COLORS = (
+        "#1f77b4",
+        "#ff7f0e",
+        "#2ca02c",
+        "#d62728",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+        "#7f7f7f",
+        "#bcbd22",
+        "#17becf",
+    )
+
     def spaghetti(
         self, collection: Any, *, band: int = 1, **opts: Any
     ) -> "RasterMixin":
         """Overlay each member of a ``DatasetCollection`` as line contours (ensemble spaghetti).
 
+        Each member gets a distinct colour from a cycling palette so the strands are
+        distinguishable, unless the caller passes an explicit ``color``/``cmap`` in ``opts``.
+
         Args:
             collection: A pyramids ``DatasetCollection`` whose members share a grid.
             band: 1-based band contoured in every member.
-            **opts: Extra HoloViews style options applied to each member's contour element.
+            **opts: Extra HoloViews style options applied to each member's contour element. An
+                explicit ``color`` or ``cmap`` here disables the per-member colour cycle.
 
         Examples:
             - Overlay a three-member ensemble as spaghetti contours:
@@ -282,6 +311,12 @@ class RasterMixin:
         Returns:
             This map (chainable) — one contour layer registered per member.
         """
-        for member in collection.datasets:
-            self.contours(member, band=band, **opts)
+        cycle_colour = "color" not in opts and "cmap" not in opts
+        for index, member in enumerate(collection.datasets):
+            member_opts = dict(opts)
+            if cycle_colour:
+                member_opts["color"] = self._SPAGHETTI_COLORS[
+                    index % len(self._SPAGHETTI_COLORS)
+                ]
+            self.contours(member, band=band, **member_opts)
         return self
