@@ -90,8 +90,13 @@ jobs:
           cache: true
 
       - name: Run interactive tier tests
+        # `test-interactive` = pytest tests/test_interactive_*.py --cov=src/digitalearth --cov-report=xml.
+        # The default py311/312/313 matrix skips these tests, so this is the only coverage for interactive/.
         run: |
           pixi run -e interactive test-interactive
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
   # The interactive notebook gallery, rendered in the interactive env. The WorldClim-only temporal notebook (07)
   # is excluded by the `notebooks-interactive` task (its data lives in the gitignored examples/data/global/);
