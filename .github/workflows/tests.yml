@@ -98,9 +98,8 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
-  # The interactive notebook gallery, rendered in the interactive env. The WorldClim-only temporal notebook (07)
-  # is excluded by the `notebooks-interactive` task (its data lives in the gitignored examples/data/global/);
-  # notebooks 01 and 06 guard their WorldClim cells to skip gracefully when that sample data is absent.
+  # The interactive notebook gallery, rendered in the interactive env. Notebooks 01/06/07 read the WorldClim stack
+  # in the gitignored examples/data/global/; each guards those cells to render locally when present and skip in CI.
   notebooks-interactive:
     runs-on: ubuntu-latest
     steps:
