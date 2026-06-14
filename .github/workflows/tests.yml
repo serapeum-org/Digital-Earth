@@ -71,3 +71,45 @@ jobs:
       - name: Check the 3-D notebook renders
         run: |
           xvfb-run -a pixi run -e viz3d notebooks-3d
+
+  # The interactive (HoloViz) tier needs the `interactive` extra (geoviews/holoviews/datashader/panel), which the
+  # default py311/312/313 matrix does not install (so it skips those tests). Validate it here in the interactive
+  # env. Bokeh/Panel render headless (to HTML; baselines use the matplotlib backend) — no display needed.
+  interactive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: interactive
+          activate-environment: interactive
+          cache: true
+
+      - name: Run interactive tier tests
+        run: |
+          pixi run -e interactive test-interactive
+
+  # The interactive notebook gallery, rendered in the interactive env. The WorldClim-only temporal notebook (07)
+  # is excluded by the `notebooks-interactive` task (its data lives in the gitignored examples/data/global/);
+  # notebooks 01 and 06 guard their WorldClim cells to skip gracefully when that sample data is absent.
+  notebooks-interactive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: interactive
+          activate-environment: interactive
+          cache: true
+
+      - name: Check the interactive notebooks render
+        run: |
+          pixi run -e interactive notebooks-interactive
