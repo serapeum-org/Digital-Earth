@@ -1,5 +1,11 @@
 # Change log
 
+## 0.6.0 (2026-06-14)
+
+### Feat
+
+- **interactive**: add the HoloViz interactive-2D web-map tier (#75)
+
 ## 0.5.0 (2026-06-11)
 
 ### Feat
