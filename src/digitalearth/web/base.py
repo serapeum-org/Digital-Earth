@@ -200,6 +200,8 @@ class WebMapBase:
         self._deck_layers: Optional[List[dict]] = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
         self.big_data_threshold = 50_000
+        #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
+        self._temporal: Optional[dict] = None
 
     def _uid(self, prefix: str) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
@@ -389,11 +391,14 @@ class WebMapBase:
         else:
             widget.add_layer(layer)
 
-    def render(self) -> Any:
-        """Build and return the configured MapLibre ``MapWidget`` (an empty map if no layers are registered).
+    def _build_map_widget(self) -> Any:
+        """Build the bare MapLibre ``MapWidget`` with every registered layer applied (no temporal wrap).
+
+        The single map-construction path shared by :meth:`render` (which may wrap it in a time-slider) and
+        :meth:`save` (which serialises just the map). An empty map is returned when no layers are registered.
 
         Returns:
-            The ``maplibre.ipywidget.MapWidget`` — an anywidget that renders inline in notebooks.
+            The configured ``maplibre.ipywidget.MapWidget``.
 
         Raises:
             ImportError: when the ``web`` extra is not installed.
@@ -405,6 +410,25 @@ class WebMapBase:
         widget = MapWidget(**kwargs)
         for layer in self.layers:
             self._apply_layer(widget, layer)
+        return widget
+
+    def render(self) -> Any:
+        """Build and return the configured map widget (an empty map if no layers are registered).
+
+        When a time-slider has been added (:meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`), the
+        map is wrapped in a slider composite so a notebook front-end renders both together; otherwise the bare
+        MapLibre ``MapWidget`` is returned.
+
+        Returns:
+            The ``maplibre.ipywidget.MapWidget``, or an ``ipywidgets`` container (slider + map) when temporal.
+
+        Raises:
+            ImportError: when the ``web`` extra is not installed.
+        """
+        widget = self._build_map_widget()
+        wrap = getattr(self, "_wrap_temporal", None)
+        if wrap is not None and self._temporal is not None:
+            return wrap(widget)
         return widget
 
     def save(self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any) -> str:
@@ -427,7 +451,7 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed.
         """
-        html = self.render().to_html(title=title, **kwargs)
+        html = self._build_map_widget().to_html(title=title, **kwargs)
         pathlib.Path(path).write_text(html, encoding="utf-8")
         return str(path)
 
