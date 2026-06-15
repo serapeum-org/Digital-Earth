@@ -120,6 +120,7 @@ class VectorMixin:
         radius: float = 5.0,
         color: str = "#3388ff",
         opacity: float = 0.9,
+        big: Optional[bool] = None,
     ) -> "VectorMixin":
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
@@ -133,12 +134,16 @@ class VectorMixin:
             radius: Circle radius in pixels.
             color: Fixed circle colour used when ``column`` is ``None``.
             opacity: Circle fill opacity in ``[0, 1]``.
+            big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
+                ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
 
         Returns:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
+        if big or (big is None and self._route_big(gdf, "points")):
+            return self.deck_scatter(gdf, radius=radius)
         paint: dict = {"circle-radius": float(radius), "circle-opacity": float(opacity)}
         if column is not None:
             paint["circle-color"] = self._color_expr(
@@ -197,6 +202,7 @@ class VectorMixin:
         color: str = "#3388ff",
         opacity: float = 0.6,
         outline_color: str = "#ffffff",
+        big: Optional[bool] = None,
     ) -> "VectorMixin":
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
 
@@ -210,12 +216,16 @@ class VectorMixin:
             color: Fixed fill colour used when ``column`` is ``None``.
             opacity: Fill opacity in ``[0, 1]``.
             outline_color: Polygon outline colour.
+            big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
+                ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
 
         Returns:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
+        if big or (big is None and self._route_big(gdf, "polygons")):
+            return self.deck_polygons(gdf)
         paint: dict = {"fill-opacity": float(opacity), "fill-outline-color": outline_color}
         if column is not None:
             paint["fill-color"] = self._color_expr(

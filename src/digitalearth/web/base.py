@@ -196,6 +196,10 @@ class WebMapBase:
         self._last_layer_id: Optional[str] = None
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
+        #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
+        self._deck_layers: Optional[List[dict]] = None
+        #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
+        self.big_data_threshold = 50_000
 
     def _uid(self, prefix: str) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
