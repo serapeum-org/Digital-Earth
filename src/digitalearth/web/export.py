@@ -101,7 +101,10 @@ class ExportMixin:
         Raises:
             ImportError: when neither Playwright nor Selenium is installed.
         """
-        html = self._build_map_widget().to_html(title=title, **kwargs)
+        # kwargs are reserved for future headless-browser options; they are NOT forwarded into to_html
+        # (which would surface unknown-keyword errors from deep inside maplibre).
+        _ = kwargs
+        html = self._build_map_widget().to_html(title=title)
         with tempfile.TemporaryDirectory() as tmp:
             html_path = pathlib.Path(tmp) / "map.html"
             html_path.write_text(html, encoding="utf-8")

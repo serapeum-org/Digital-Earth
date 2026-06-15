@@ -52,7 +52,12 @@ class VectorMixin:
         if scheme is not None:
             from cleopatra.styles import classify
 
-            edges, _ = classify(values, scheme, k)
+            try:
+                edges, _ = classify(values, scheme, k)
+            except ValueError as err:  # constant / single-feature column, unknown scheme, k<1, …
+                raise ValueError(
+                    f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
+                ) from err
             colors = self._cmap_hex(cmap, len(edges) - 1)
             expr: list = ["step", ["get", column], colors[0]]
             for edge, color in zip(edges[1:-1], colors[1:]):

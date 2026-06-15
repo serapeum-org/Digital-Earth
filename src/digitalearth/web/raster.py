@@ -12,7 +12,12 @@ the tier needs neither the ``web`` extra nor matplotlib at module load.
 
 from typing import Any, List, Optional
 
+from loguru import logger
+
 from digitalearth.web.base import _require_layer_api
+
+#: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
+_LARGE_RASTER_PIXELS = 4_000_000
 
 
 class RasterMixin:
@@ -53,6 +58,12 @@ class RasterMixin:
         cmap_name = self._auto_cmap(source, cmap)
 
         values = source.z.values
+        if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:
+            logger.warning(
+                "add_raster: inlining a {}-pixel band as a data-URI image source bloats the page; for large "
+                "rasters serve COG/XYZ tiles from pyramids instead",
+                getattr(values, "size", 0),
+            )
         y = np.asarray(source.y.values, dtype=float)
         if y.size > 1 and y[0] < y[-1]:  # ascending y → flip so PNG row 0 is the northern edge
             values = values[::-1]

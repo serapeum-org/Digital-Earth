@@ -111,6 +111,19 @@ class TestVectorBuildersNeedEngine:
         with pytest.raises(KeyError, match="nope"):
             WebMap().choropleth(polygons_gdf, column="nope")
 
+    def test_choropleth_constant_column_raises_clear_error(self):
+        """A no-spread column surfaces a web-tier-friendly message, not a bare cleopatra error (L2)."""
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Polygon
+
+        gdf = gpd.GeoDataFrame(
+            {"pop": [5.0, 5.0, 5.0]},
+            geometry=[Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)],
+            crs=4326,
+        )
+        with pytest.raises(ValueError, match="cannot classify column 'pop'"):
+            WebMap().choropleth(gdf, column="pop")
+
     def test_points_lines_polygons_chain(self, points_gdf, polygons_gdf):
         m = WebMap()
         out = m.points(points_gdf, column="value").polygons(polygons_gdf, column="pop")

@@ -60,6 +60,17 @@ def _patch_maplibre_html_encoding() -> None:
     if getattr(_utils.read_internal_file, "_digitalearth_utf8", False):
         return
 
+    # Self-gating: if the platform default encoding already reads the bundled JS (non-Windows, or once
+    # upstream specifies utf-8), the shim is unnecessary — don't monkeypatch the dependency at all.
+    try:
+        with open(get_internal_file_path("srcjs", "pywidget.js")) as handle:
+            handle.read()
+        return
+    except UnicodeDecodeError:
+        pass  # the cp1252-on-Windows bug — install the shim below
+    except OSError:
+        pass  # could not probe (file moved/renamed) — patch defensively
+
     def read_internal_file(*args: Any) -> str:
         with open(get_internal_file_path(*args), encoding="utf-8") as handle:
             return handle.read()

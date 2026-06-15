@@ -59,7 +59,7 @@ pip install git+https://github.com/serapeum-org/Digital-Earth
 ## pip
 to install the last release you can easly use pip
 ```
-pip install digitalearth==0.1.11
+pip install digitalearth
 ```
 
 ## Optional rendering tiers

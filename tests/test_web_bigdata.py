@@ -62,6 +62,15 @@ class TestBigDataBuildersNeedEngine:
         assert len(m.layers) == 1 and m._last_layer_id is not None
         assert isinstance(m.render(), MapWidget)
 
+    def test_heatmap_rejects_polygons(self, polygons_gdf):
+        """heatmap is point-only — polygons must raise, not render an empty layer (M4)."""
+        with pytest.raises(TypeError, match="point geometries"):
+            WebMap().heatmap(polygons_gdf)
+
+    def test_cluster_rejects_polygons(self, polygons_gdf):
+        with pytest.raises(TypeError, match="point geometries"):
+            WebMap().cluster(polygons_gdf)
+
     def test_cluster_registers_layer(self, points_gdf):
         from maplibre.ipywidget import MapWidget
 

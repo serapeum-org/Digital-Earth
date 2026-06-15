@@ -25,6 +25,24 @@ from digitalearth.web.base import _require_layer_api
 class BigDataMixin:
     """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`."""
 
+    @staticmethod
+    def _require_points(gdf: Any, method: str) -> None:
+        """Raise ``TypeError`` unless every geometry in ``gdf`` is a point (the only kind these layers map).
+
+        Args:
+            gdf: The display-CRS GeoDataFrame about to be drawn.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``gdf`` holds any non-point geometry (MapLibre heatmap/clustering are point-only,
+                so polygons/lines would render nothing).
+        """
+        kinds = set(gdf.geometry.geom_type.unique())
+        if not kinds <= {"Point", "MultiPoint"}:
+            raise TypeError(
+                f"{method}() needs point geometries; got {sorted(kinds)}. Use choropleth/polygons for areas."
+            )
+
     def heatmap(
         self,
         features: Any,
@@ -51,6 +69,7 @@ class BigDataMixin:
 
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
+        self._require_points(gdf, "heatmap")
         paint: dict = {
             "heatmap-radius": float(radius),
             "heatmap-intensity": float(intensity),
@@ -102,6 +121,7 @@ class BigDataMixin:
 
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
+        self._require_points(gdf, "cluster")
         src_id = self._uid("cluster-src")
         source = GeoJSONSource(
             data=geopandas_to_geojson(gdf),
@@ -176,6 +196,9 @@ class BigDataMixin:
     ) -> "BigDataMixin":
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
+        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
+        verified by the headless test suite (review H1).
+
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
             fill_color: RGBA fill colour (0-255 per channel).
@@ -209,6 +232,9 @@ class BigDataMixin:
         line_color: Sequence[int] = (255, 255, 255, 255),
     ) -> "BigDataMixin":
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
+
+        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
+        verified by the headless test suite (review H1).
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
