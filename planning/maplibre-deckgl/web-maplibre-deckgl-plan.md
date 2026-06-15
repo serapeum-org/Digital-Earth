@@ -431,11 +431,11 @@ Build on `feat/web-maplibre-deckgl-tier`; commit+push per task, run `/test` + `/
 | ID   | Status   | Title                                                   | Depends   | Effort |
 |------|----------|---------------------------------------------------------|-----------|-------:|
 | DW.0 | ✅ done   | packaging + `WebMap` skeleton + CRS + DX.3 guard        | —         |      M |
-| DW.1 | 🔜 ready | raster layers + basemaps/tiles                          | DW.0      |      M |
-| DW.2 | 🔜 ready | vector layers + symbology (choropleth/graduated/categ.) | DW.0      |      M |
-| DW.3 | ⛔        | big-data: heatmap / cluster / deck.gl (lonboard)        | DW.2      |      M |
-| DW.4 | ⛔        | 3-D: extrusion / point cloud / 3D tiles / glTF / globe  | DW.2      |      M |
-| DW.5 | ⛔        | temporal animation (time-slider)                        | DW.2      |      S |
+| DW.1 | ✅ done   | raster layers + basemaps/tiles                          | DW.0      |      M |
+| DW.2 | ✅ done   | vector layers + symbology (choropleth/graduated/categ.) | DW.0      |      M |
+| DW.3 | 🔜 ready | big-data: heatmap / cluster / deck.gl (lonboard)        | DW.2      |      M |
+| DW.4 | 🔜 ready | 3-D: extrusion / point cloud / 3D tiles / glTF / globe  | DW.2      |      M |
+| DW.5 | 🔜 ready | temporal animation (time-slider)                        | DW.2      |      S |
 | DW.6 | ⛔        | export & sharing (self-contained HTML + PNG)            | DW.1–DW.5 |      M |
 
 Status legend: ✅ done · 🔜 ready · ⛔ blocked · ⏸ deferred.
