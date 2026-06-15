@@ -49,7 +49,7 @@ class WebMap(
             >>> m.layers
             []
             >>> (m.zoom, m.style, m.crs)
-            (4, 'voyager', 3857)
+            (4, 'voyager', 4326)
 
             ```
         - Layers register in draw order and the builders chain:

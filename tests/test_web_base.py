@@ -217,9 +217,9 @@ class TestConstructionDefaults:
     """Constructor defaults and the reproject predicate (no engine needed)."""
 
     def test_default_configuration(self):
-        """A bare ``WebMap()`` defaults to EPSG:3857, zoom 2, the dark style, height 500, no centre."""
+        """A bare ``WebMap()`` defaults to EPSG:4326 (MapLibre lon/lat), zoom 2, dark style, height 500."""
         m = WebMap()
-        assert (m.center, m.zoom, m.style, m.crs, m.height) == (None, 2, "dark", 3857, 500)
+        assert (m.center, m.zoom, m.style, m.crs, m.height) == (None, 2, "dark", 4326, 500)
         assert m.layers == []
 
     @pytest.mark.parametrize(

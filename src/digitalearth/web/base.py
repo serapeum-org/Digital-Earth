@@ -95,6 +95,24 @@ def _require_maplibre() -> tuple:
     return MapOptions, MapWidget
 
 
+def _require_layer_api() -> tuple:
+    """Import and return ``(Layer, LayerType)``, raising the actionable error when the engine is absent.
+
+    The builder choke point: every raster/vector/decoration builder calls this first, so a builder invoked
+    without the ``web`` extra raises the same actionable ``ImportError`` as :func:`_require_maplibre`.
+
+    Returns:
+        tuple: ``(maplibre.Layer, maplibre.LayerType)``.
+
+    Raises:
+        ImportError: when the ``web`` extra is not installed.
+    """
+    _require_maplibre()  # friendly error + UTF-8 shim
+    from maplibre import Layer, LayerType
+
+    return Layer, LayerType
+
+
 def _resolve_style(style: Any) -> Any:
     """Resolve a basemap ``style`` to a MapLibre style URL/spec.
 
@@ -123,8 +141,9 @@ class WebMapBase:
         zoom: Initial zoom level.
         style: Basemap style — a short alias (``"dark"``/``"light"``/``"voyager"``), a style URL, or a
             MapLibre style ``dict`` (see :func:`_resolve_style`).
-        crs: Display CRS as an EPSG integer. Default ``3857`` (Web Mercator — what MapLibre and tile
-            basemaps render); ``4326`` for a lon/lat globe/Plate-Carrée.
+        crs: The EPSG the data is normalised to before it is handed to MapLibre. Default ``4326`` —
+            MapLibre ingests GeoJSON/image-source coordinates as lon/lat (WGS84) and renders Web
+            Mercator itself, so ``4326`` is the only value that places inline data correctly.
         height: Widget height in pixels (``None`` keeps the MapLibre default).
 
     Attributes:
@@ -143,12 +162,12 @@ class WebMapBase:
             []
 
             ```
-        - Defaults target the Web-Mercator tile contract:
+        - Data defaults to lon/lat (what MapLibre ingests):
             ```python
             >>> from digitalearth.web.base import WebMapBase
             >>> m = WebMapBase()
             >>> (m.crs, m.zoom)
-            (3857, 2)
+            (4326, 2)
 
             ```
 
@@ -162,7 +181,7 @@ class WebMapBase:
         center: Optional[Any] = None,
         zoom: int = 2,
         style: Any = "dark",
-        crs: int = 3857,
+        crs: int = 4326,
         height: Optional[int] = 500,
     ):
         self.center = center
@@ -171,6 +190,25 @@ class WebMapBase:
         self.crs = crs
         self.height = height
         self.layers: List[Any] = []
+        #: Monotonic counter handing out unique source/layer ids (see :meth:`_uid`).
+        self._id_counter = 0
+        #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
+        self._last_layer_id: Optional[str] = None
+        #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
+        self.last_breaks: Optional[List[float]] = None
+
+    def _uid(self, prefix: str) -> str:
+        """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
+
+        Args:
+            prefix: A short kind tag (``"fill"``, ``"circle"``, ``"raster"``, …).
+
+        Returns:
+            ``f"{prefix}-{n}"`` with a counter that increments on every call, so two builders never
+            collide on a MapLibre source/layer id.
+        """
+        self._id_counter += 1
+        return f"{prefix}-{self._id_counter}"
 
     def add_layer(self, layer: Any) -> "WebMapBase":
         """Register ``layer`` and return ``self`` (chainable).
@@ -239,6 +277,90 @@ class WebMapBase:
         ):
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
+
+    def _display_gdf(self, features: Any) -> Any:
+        """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
+
+        The single vector choke point the point/line/polygon builders call. A pyramids
+        ``FeatureCollection`` is reprojected through pyramids (``to_crs``) when needed and converted to a
+        ``geopandas`` GeoDataFrame (the only form ``maplibre.Map.add_source`` accepts for vector data); a
+        GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import — pyramids
+        owns the reprojection and hands us the GeoDataFrame.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
+
+        Returns:
+            A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
+        """
+        if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection
+            if self._needs_reproject(features):
+                features = features.to_crs(self.crs)
+            if hasattr(features, "to_geodataframe"):
+                return features.to_geodataframe()
+            return features
+        crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
+        if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
+            return features.to_crs(self.crs)
+        return features
+
+    def add_underlay(self, layer: Any) -> "WebMapBase":
+        """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
+
+        Basemaps/tiles call this so they sit beneath the data layers regardless of when they are added —
+        the mirror of :meth:`add_layer`, which appends on top.
+
+        Args:
+            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+
+        Returns:
+            This map (chainable).
+        """
+        self.layers.insert(0, layer)
+        return self
+
+    def _auto_cmap(self, source: Any, cmap: Optional[str]) -> str:
+        """Resolve a colormap name: the caller's ``cmap`` if given, else the autostyle default.
+
+        Mirrors the interactive tier's ``_auto_cmap`` so a variable looks the same across tiers (the same
+        ``digitalearth.autostyle`` variable→style lookup, incl. the ECMWF-Magics match); falls back to
+        ``"viridis"`` for an unrecognised field.
+
+        Args:
+            source: The display-CRS :class:`Source` whose variable drives the lookup.
+            cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
+
+        Returns:
+            The colormap name to use.
+        """
+        if cmap is not None:
+            return cmap
+        from digitalearth.autostyle import auto_style
+
+        return auto_style(source).get("cmap", "viridis")
+
+    @staticmethod
+    def _cmap_hex(cmap: str, n: int) -> List[str]:
+        """Sample ``cmap`` at ``n`` evenly spaced stops and return hex colour strings.
+
+        The colour side of symbology — turning a matplotlib colormap name into the concrete ``#rrggbb``
+        strings a MapLibre paint expression needs. matplotlib is imported lazily (only when a builder
+        actually colours something), so importing the tier stays engine-free.
+
+        Args:
+            cmap: A matplotlib colormap name.
+            n: Number of colours to sample (>= 1).
+
+        Returns:
+            A list of ``n`` ``#rrggbb`` hex strings spanning the colormap.
+        """
+        import numpy as np
+        from matplotlib import colormaps
+        from matplotlib.colors import to_hex
+
+        colormap = colormaps[cmap]
+        stops = [0.5] if n == 1 else list(np.linspace(0.0, 1.0, n))
+        return [to_hex(colormap(s)) for s in stops]
 
     def _map_options(self) -> dict:
         """Build the ``MapOptions`` kwargs from the display config (drops an unset ``center``)."""
