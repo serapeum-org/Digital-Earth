@@ -24,7 +24,7 @@ exact stack the GeoLibre app uses).
   MapLibre and deck.gl in one anywidget) ; optional **`lonboard`** (GeoArrow-fast deck.gl) for very large vector.
 - **Module:** `src/digitalearth/web/` — base + capability **mixins** composed into `WebMap`, mirroring the v0.4.0
   `Map(GeoLayerBase, …)`, the M1 `Scene3D(Scene3DBase, …)` and the M2 `InteractiveMap(InteractiveMapBase, …)`.
-- **Status:** in progress. **DW.0 is ✅ done (PR #96).** Sizes use the same XS/S/M/L scale as M1/M2.
+- **Status:** ✅ all tasks done (DW.0–DW.6, DX.1–DX.3) on PR #96. Sizes use the same XS/S/M/L scale as M1/M2.
 - **Tier goal (one line):** `WebMap().basemap().choropleth(gdf, column="pop").save("map.html")` writes one
   self-contained, pan/zoom/hover web map (and, with deck.gl layers, 3-D) — from pyramids data, opening in any
   browser with nothing installed.
@@ -433,10 +433,10 @@ Build on `feat/web-maplibre-deckgl-tier`; commit+push per task, run `/test` + `/
 | DW.0 | ✅ done   | packaging + `WebMap` skeleton + CRS + DX.3 guard        | —         |      M |
 | DW.1 | ✅ done   | raster layers + basemaps/tiles                          | DW.0      |      M |
 | DW.2 | ✅ done   | vector layers + symbology (choropleth/graduated/categ.) | DW.0      |      M |
-| DW.3 | 🔜 ready | big-data: heatmap / cluster / deck.gl (lonboard)        | DW.2      |      M |
-| DW.4 | 🔜 ready | 3-D: extrusion / point cloud / 3D tiles / glTF / globe  | DW.2      |      M |
-| DW.5 | 🔜 ready | temporal animation (time-slider)                        | DW.2      |      S |
-| DW.6 | ⛔        | export & sharing (self-contained HTML + PNG)            | DW.1–DW.5 |      M |
+| DW.3 | ✅ done   | big-data: heatmap / cluster / deck.gl (lonboard)        | DW.2      |      M |
+| DW.4 | ✅ done   | 3-D: extrusion / point cloud / 3D tiles / glTF / globe  | DW.2      |      M |
+| DW.5 | ✅ done   | temporal animation (time-slider)                        | DW.2      |      S |
+| DW.6 | ✅ done   | export & sharing (self-contained HTML + PNG)            | DW.1–DW.5 |      M |
 
 Status legend: ✅ done · 🔜 ready · ⛔ blocked · ⏸ deferred.
 
@@ -444,12 +444,12 @@ Status legend: ✅ done · 🔜 ready · ⛔ blocked · ⏸ deferred.
 
 ## Cross-tier follow-ups (DX.*)
 
-- **DX.1 — `quickplot(backend="web")`:** add `_quickmap_web` dispatch in `api.py` (raster→`add_raster`, points→
-  `points`/`heatmap`, polygons→`choropleth`), beside the existing `matplotlib`/`interactive`/`3d` branches. Now all
-  four backends share one entry point.
-- **DX.2 — docs + notebook:** `docs/examples/web/` gallery + a `notebooks-web` CI job in the `web` env (mirror
-  `notebooks-interactive`).
-- **DX.3 — import guard:** extend `_GUARDED_ROOTS` to include `src/digitalearth/web` in DW.0.
+- **DX.1 — `quickplot(backend="web")`:** ✅ done — `_quickmap_web` dispatch in `api.py` (raster→`add_raster`,
+  points→`points`, polygons→`choropleth`), beside the `matplotlib`/`interactive`/`3d` branches. All four backends
+  share one entry point.
+- **DX.2 — docs + notebook:** ✅ done — `docs/examples/web/web_maps.ipynb` gallery + the `notebooks-web` task in the
+  `web` env (the main `notebooks` task now ignores `docs/examples/web/`); README notes the `[web]` extra.
+- **DX.3 — import guard:** ✅ done — `_GUARDED_ROOTS` includes `src/digitalearth/web` (DW.0).
 
 ---
 
