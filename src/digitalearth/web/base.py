@@ -431,27 +431,43 @@ class WebMapBase:
             return wrap(widget)
         return widget
 
-    def save(self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any) -> str:
-        """Save the map as a standalone HTML page and return ``path``.
+    def save(
+        self,
+        path: str,
+        *,
+        fmt: Optional[str] = None,
+        title: str = "Digital-Earth map",
+        offline: bool = False,
+        **kwargs: Any,
+    ) -> str:
+        """Save the map — a standalone HTML page or a PNG snapshot — and return ``path`` (DW.6).
 
-        Renders the widget, serialises it to HTML via ``MapWidget.to_html``, and writes the bytes ourselves
-        as UTF-8 — sidestepping maplibre's cp1252-on-Windows writer bug (see
-        :func:`_patch_maplibre_html_encoding`). The page embeds the map state and widget JS; it still
-        references ``maplibre-gl`` from a CDN, so it is *self-contained for the data* but needs a network for
-        the engine JS (true offline bundling is a DW.6 concern).
+        The output kind is ``fmt`` if given, else inferred from the suffix (``.png`` → PNG, otherwise HTML).
+        HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
+        cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
+        the map state and widget JS but references ``maplibre-gl`` from a CDN; ``offline=True`` inlines the
+        engine JS/CSS for a fully self-contained page (best-effort, needs network at save time). PNG export is
+        delegated to the export mixin and needs a headless browser.
 
         Args:
-            path: Output ``*.html`` file.
+            path: Output file (``*.html`` or ``*.png``).
+            fmt: Force the format (``"html"`` / ``"png"``); ``None`` infers it from ``path``.
             title: HTML document title.
-            **kwargs: Forwarded to ``MapWidget.to_html``.
+            offline: When True (HTML only), inline the ``maplibre-gl`` JS/CSS so the page opens offline.
+            **kwargs: Forwarded to ``MapWidget.to_html`` (HTML) or the PNG renderer.
 
         Returns:
             The ``path`` written.
 
         Raises:
-            ImportError: when the ``web`` extra is not installed.
+            ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
         """
+        kind = (fmt or ("png" if str(path).lower().endswith(".png") else "html")).lower()
+        if kind == "png":
+            return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)
+        if offline:
+            html = self._inline_offline_assets(html)
         pathlib.Path(path).write_text(html, encoding="utf-8")
         return str(path)
 
