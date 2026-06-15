@@ -60,7 +60,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3893,7 +3893,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </style>
 <!-- End of mermaid configuration --><div class="jupyter-wrapper">
 <div class="jp-Notebook" data-jp-theme-light="true" data-jp-theme-name="JupyterLab Light">
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=da604625">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=4cfeda5e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3908,7 +3908,7 @@ is built; MapLibre renders Web Mercator itself.</p>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=a4888dea">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=45273fed">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3953,7 +3953,7 @@ DATA = Path('../../../examples/data')  # notebook CWD is this folder; data lives
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=6f9cf31d">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=1ee8986f">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3965,7 +3965,7 @@ a MapLibre image source; <code>basemap</code> adds a dark tile layer beneath it.
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=977cf350">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=19c7c92e">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -3985,18 +3985,20 @@ a MapLibre image source; <code>basemap</code> adds a dark tile layer beneath it.
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'acc4000.tif'</span><span class="p">))</span>
 <span class="n">raster_map</span> <span class="o">=</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">add_raster</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">,</span> <span class="n">opacity</span><span class="o">=</span><span class="mf">0.85</span><span class="p">)</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="s1">'CartoDark'</span><span class="p">)</span>
-<span class="n">raster_map</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'raster layers:'</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">raster_map</span><span class="o">.</span><span class="n">layers</span><span class="p">))</span>
+<span class="c1"># In a live notebook, evaluate `raster_map` on its own line to render the interactive map.</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">dem = Dataset.read_file(str(DATA / 'acc4000.tif'))
 raster_map = WebMap().add_raster(dem, cmap='viridis', opacity=0.85).basemap('CartoDark')
-raster_map</div>
+print('raster layers:', len(raster_map.layers))
+# In a live notebook, evaluate `raster_map` on its own line to render the interactive map.</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=14d287bb">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ca633185">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -4009,7 +4011,7 @@ no mapclassify) into a MapLibre data-driven <code>step</code> paint expression, 
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=38d40c2c">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=9f5978c7">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -4035,7 +4037,7 @@ no mapclassify) into a MapLibre data-driven <code>step</code> paint expression, 
 <span class="n">choro</span> <span class="o">=</span> <span class="n">WebMap</span><span class="p">(</span><span class="n">center</span><span class="o">=</span><span class="p">(</span><span class="mf">2.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="n">zoom</span><span class="o">=</span><span class="mi">6</span><span class="p">)</span><span class="o">.</span><span class="n">choropleth</span><span class="p">(</span><span class="n">polys</span><span class="p">,</span> <span class="n">column</span><span class="o">=</span><span class="s1">'pop'</span><span class="p">,</span> <span class="n">scheme</span><span class="o">=</span><span class="s1">'quantiles'</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
 <span class="n">choro</span> <span class="o">=</span> <span class="n">choro</span><span class="o">.</span><span class="n">basemap</span><span class="p">(</span><span class="s1">'CartoLight'</span><span class="p">)</span><span class="o">.</span><span class="n">tooltip</span><span class="p">([</span><span class="s1">'pop'</span><span class="p">])</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'class breaks:'</span><span class="p">,</span> <span class="n">choro</span><span class="o">.</span><span class="n">last_breaks</span><span class="p">)</span>
-<span class="n">choro</span>
+<span class="c1"># In a live notebook, evaluate `choro` on its own line to render the interactive choropleth.</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-3">polys = gpd.GeoDataFrame(
     {'pop': [1.0, 5.0, 9.0, 3.0, 7.0, 2.0]},
@@ -4045,14 +4047,14 @@ no mapclassify) into a MapLibre data-driven <code>step</code> paint expression, 
 choro = WebMap(center=(2.5, 0.5), zoom=6).choropleth(polys, column='pop', scheme='quantiles', k=4)
 choro = choro.basemap('CartoLight').tooltip(['pop'])
 print('class breaks:', choro.last_breaks)
-choro</div>
+# In a live notebook, evaluate `choro` on its own line to render the interactive choropleth.</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 </div>
-<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=ba81a5b3">
+<div class="jp-Cell jp-MarkdownCell jp-Notebook-cell" id="cell-id=b76a18cd">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
@@ -4064,7 +4066,7 @@ pass <code>offline=True</code> to inline it for a fully offline page).</p>
 </div>
 </div>
 </div><div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs">
-<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=f7e4d78c">
+<div class="jp-Cell jp-CodeCell jp-Notebook-cell jp-mod-noOutputs" id="cell-id=0eb48120">
 <div class="jp-Cell-inputWrapper" tabindex="0">
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
