@@ -93,6 +93,20 @@ class TestBigDataBuildersNeedEngine:
         assert m._deck_layers is None, "big=False must keep per-feature circles"
         assert len(m.layers) == 1
 
+    def test_points_with_column_over_threshold_keeps_styling(self, points_gdf):
+        """A column choropleth over the threshold must NOT silently auto-route to a flat deck layer (M1)."""
+        m = WebMap()
+        m.big_data_threshold = 2  # 5 points > 2, but a column is set
+        m.points(points_gdf, column="value")
+        assert m._deck_layers is None, "column styling must be preserved (no auto-route)"
+        assert len(m.layers) == 1  # a per-feature MapLibre circle layer, not a flat deck layer
+
+    def test_points_forced_big_with_column_warns_and_routes(self, points_gdf):
+        """Forcing big=True with a column routes to deck but is the explicit, logged opt-in (M1)."""
+        m = WebMap()
+        m.points(points_gdf, column="value", big=True)
+        assert m._deck_layers is not None, "big=True forces the deck path even with a column"
+
     def test_save_writes_a_file(self, tmp_path, points_gdf):
         out = tmp_path / "heat.html"
         WebMap().heatmap(points_gdf).basemap("CartoDark").save(str(out))

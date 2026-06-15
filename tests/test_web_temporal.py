@@ -50,6 +50,14 @@ class TestTimeSliderNeedsEngine:
         assert isinstance(slider, ipywidgets.SelectionSlider)
         assert len(slider.options) == 3, "one slider stop per distinct time step"
 
+    def test_large_polygon_series_stays_filterable(self, timed_polygons):
+        """A large temporal polygon set must keep a per-feature layer id for the filter (M3)."""
+        m = WebMap()
+        m.big_data_threshold = 2  # 6 polygons > 2; must NOT auto-route to deck (no layer id to filter)
+        m.timeslider(timed_polygons, kdim="time")
+        assert m._deck_layers is None, "temporal layers must not auto-route to deck.gl"
+        assert m._temporal["layer_id"] is not None, "the slider needs a filterable layer id"
+
     def test_render_without_slider_is_bare_map(self, timed_polygons):
         from maplibre.ipywidget import MapWidget
 

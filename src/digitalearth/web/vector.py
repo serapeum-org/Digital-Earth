@@ -14,6 +14,8 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 from typing import Any, List, Optional
 
+from loguru import logger
+
 from digitalearth.web.base import _require_layer_api
 
 
@@ -142,7 +144,15 @@ class VectorMixin:
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
-        if big or (big is None and self._route_big(gdf, "points")):
+        # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
+        # big=True with a column still routes but warns that the deck path drops the colouring (M1).
+        if big or (big is None and column is None and self._route_big(gdf, "points")):
+            if column is not None:
+                logger.warning(
+                    "points: big=True routes {} features to a flat deck.gl layer; column={!r} styling is dropped",
+                    len(gdf),
+                    column,
+                )
             return self.deck_scatter(gdf, radius=radius)
         paint: dict = {"circle-radius": float(radius), "circle-opacity": float(opacity)}
         if column is not None:
@@ -224,7 +234,15 @@ class VectorMixin:
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
-        if big or (big is None and self._route_big(gdf, "polygons")):
+        # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
+        # still routes but warns that the deck path drops the colouring (M1).
+        if big or (big is None and column is None and self._route_big(gdf, "polygons")):
+            if column is not None:
+                logger.warning(
+                    "polygons: big=True routes {} features to a flat deck.gl layer; column={!r} styling is dropped",
+                    len(gdf),
+                    column,
+                )
             return self.deck_polygons(gdf)
         paint: dict = {"fill-opacity": float(opacity), "fill-outline-color": outline_color}
         if column is not None:

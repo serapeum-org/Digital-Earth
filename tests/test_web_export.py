@@ -39,6 +39,13 @@ class TestOfflineInliningPure:
         with pytest.raises(RuntimeError, match="offline=True could not fetch"):
             WebMap()._inline_offline_assets(html)
 
+    def test_inline_unmatched_cdn_reference_raises(self):
+        """A CDN asset the regex cannot match must raise, not silently ship a still-online page (M2)."""
+        # A bare URL (not inside a matchable <script src>/<link href> tag) → zero substitutions but a CDN ref.
+        html = "<html><body>see https://cdn.example.com/maplibre-gl.js for the engine</body></html>"
+        with pytest.raises(RuntimeError, match="inlined none"):
+            WebMap()._inline_offline_assets(html)
+
 
 class TestExportNeedsEngine:
     """HTML and PNG export through ``save`` (engine required)."""

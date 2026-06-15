@@ -74,7 +74,14 @@ class ExportMixin:
                 return f"<style>{body}</style>"
             return f"<script>{body}</script>"
 
-        return _ASSET_RE.sub(_replace, html)
+        new_html, replaced = _ASSET_RE.subn(_replace, html)
+        if replaced == 0 and re.search(r'https?://[^"\']+\.(?:js|css)', html):
+            # The page still references a CDN asset our regex did not match — don't claim it is offline.
+            raise RuntimeError(
+                "offline=True found CDN asset references but inlined none of them; the to_html tag format "
+                "may have changed. Report this so the inliner regex can be updated."
+            )
+        return new_html
 
     def _render_png(self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any) -> str:
         """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
