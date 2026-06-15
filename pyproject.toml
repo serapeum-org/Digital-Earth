@@ -66,6 +66,16 @@ interactive = [
     "datashader >=0.19",
     "panel >=1.9",
 ]
+# Web tier (MapLibre GL JS + deck.gl via their anywidget Python bindings). `maplibre` (py-maplibregl) drives both
+# the MapLibre basemap/vector layers AND deck.gl overlays from one widget; lonboard is the GeoArrow-fast deck.gl
+# path for very large vector/point data. Neither is a GIS competitor — they are renderers; pyramids stays the only
+# GIS dep (enforced by tests/test_no_competitor_imports.py).
+# NOTE: pixi exposes this extra as a feature named `web`, which the `web` env uses directly — do NOT also declare a
+# `[tool.pixi.feature.web.pypi-dependencies]` table (it would double-declare these and break `pixi update`).
+web = [
+    "maplibre >=0.3",
+    "lonboard >=0.10",
+]
 
 [project.scripts]
 digitalearth = "digitalearth.cli:main"
@@ -230,6 +240,8 @@ test-3d = { cmd = "pytest -vvv tests/test_*3d.py --cov=src/digitalearth --cov-re
 notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
 test-interactive = { cmd = "pytest -vvv tests/test_interactive_*.py --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`)" }
 notebooks-interactive = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/interactive", description = "check the interactive (HoloViz) notebooks — run in the interactive env (`pixi run -e interactive notebooks-interactive`). Notebooks 01/06/07 guard their WorldClim cells (in the gitignored examples/data/global/) — they render locally when present and skip otherwise." }
+test-web = { cmd = "pytest -vvv tests/test_web_*.py --cov=src/digitalearth --cov-report=xml", description = "Run the web (MapLibre + deck.gl) tier tests — run in the web env (`pixi run -e web test-web`)" }
+notebooks-web = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/web", description = "check the web (MapLibre + deck.gl) notebooks — run in the web env (`pixi run -e web notebooks-web`)" }
 jupyter = { cmd = "jupyter lab --no-browser --IdentityProvider.token='' --ServerApp.password='' --port=8889", description = "launch jupyter lab" }
 build-dist = { cmd = "python -m build", description = "Build sdist and wheel for PyPI" }
 publish-pypi = { cmd = "twine upload --non-interactive --repository pypi dist/*", depends-on = ["build-dist"], description = "Build and upload package to PyPI" }
@@ -251,15 +263,18 @@ viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }
 # Interactive tier (HoloViz). Uses the `interactive` feature pixi derives from the `[interactive]` extra.
 # Separate solve-group so geoviews/datashader/panel stay out of default/dev. Run: pixi run -e interactive test-interactive
 interactive = { features = ["dev", "interactive"], solve-group = "interactive" }
+# Web tier (MapLibre + deck.gl). Uses the `web` feature pixi derives from the `[web]` extra. Separate solve-group
+# so maplibre/lonboard stay out of default/dev. Run: pixi run -e web test-web
+web = { features = ["dev", "web"], solve-group = "web" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }
 py313 = { features = ["py313", "dev"], solve-group = "py313" }
 
 
-# NOTE: the `interactive` (HoloViz) and `3d` (PyVista) features are NOT declared here — pixi derives them
-# automatically from the `[project.optional-dependencies]` `interactive` / `3d` extras above, and the `interactive`
-# / `viz3d` envs reference them directly. Re-declaring them as pixi features double-declares every package and
-# breaks `pixi update` ("<pkg> is already a dependency").
+# NOTE: the `interactive` (HoloViz), `3d` (PyVista) and `web` (MapLibre + deck.gl) features are NOT declared here —
+# pixi derives them automatically from the `[project.optional-dependencies]` `interactive` / `3d` / `web` extras
+# above, and the `interactive` / `viz3d` / `web` envs reference them directly. Re-declaring them as pixi features
+# double-declares every package and breaks `pixi update` ("<pkg> is already a dependency").
 
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"
