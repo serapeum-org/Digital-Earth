@@ -40,6 +40,8 @@ dependencies = [
 [project.optional-dependencies]
 # True-3D tier (PyVista). geovista (textured globe, D3.5) is folded in but imported lazily inside `globe()`,
 # so the rest of the tier works without it. None of these is a GIS competitor — pyramids stays the only GIS dep.
+# NOTE: pixi exposes this extra as a feature named `3d`, which the `viz3d` env uses directly — do NOT also
+# declare a `[tool.pixi.feature.viz3d.pypi-dependencies]` table duplicating these.
 "3d" = [
     "pyvista >=0.48",
     "trame >=3.13",
@@ -54,6 +56,9 @@ dependencies = [
 # Interactive-2D tier (HoloViz: GeoViews -> HoloViews -> Bokeh, + Datashader + Panel). cartopy/pyproj arrive
 # transitively under geoviews as *its* deps and are never imported by us — pyramids stays the only GIS engine
 # (enforced by tests/test_no_competitor_imports.py).
+# NOTE: pixi exposes this extra as a feature named `interactive`, which the `interactive` env uses directly —
+# do NOT also declare a `[tool.pixi.feature.interactive.pypi-dependencies]` table (it would double-declare these
+# and break `pixi update` with "geoviews is already a dependency").
 interactive = [
     "geoviews >=1.15",
     "holoviews >=1.22",
@@ -221,6 +226,7 @@ digitalearth = { path = ".", editable = true }
 main = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite" }
 test-all = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml --cov-report=term-missing", description = "Run all testsuite" }
 notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb' --ignore-glob='docs/examples/pyvista/**' --ignore-glob='docs/examples/interactive/**'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; the 3-D/PyVista notebooks need the viz3d env, run via `notebooks-3d`; the interactive/HoloViz notebooks need the interactive env, run via `notebooks-interactive`)" }
+test-3d = { cmd = "pytest -vvv tests/test_*3d.py --cov=src/digitalearth --cov-report=xml", description = "Run the 3-D (PyVista) tier tests — run in the viz3d env (`pixi run -e viz3d test-3d`)" }
 notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
 test-interactive = { cmd = "pytest -vvv tests/test_interactive_*.py --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`)" }
 notebooks-interactive = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/interactive", description = "check the interactive (HoloViz) notebooks — run in the interactive env (`pixi run -e interactive notebooks-interactive`). Notebooks 01/06/07 guard their WorldClim cells (in the gitignored examples/data/global/) — they render locally when present and skip otherwise." }
@@ -239,37 +245,21 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 notebook = { features = ["notebook"], solve-group = "default" }
 docs = { features = ["docs"], solve-group = "docs" }
-# 3D tier (PyVista). Separate solve-group so VTK stays out of the lean default/dev envs.
-# Run the 3D tests with: pixi run -e viz3d pytest tests/test_scene3d.py
-viz3d = { features = ["dev", "viz3d"], solve-group = "viz3d" }
-# Interactive tier (HoloViz). Separate solve-group so geoviews/datashader/panel stay out of default/dev.
-# Run the interactive tests with: pixi run -e interactive test-interactive
+# 3D tier (PyVista). Uses the `3d` feature that pixi derives from the `[3d]` optional-dependencies extra.
+# Separate solve-group so VTK stays out of the lean default/dev envs. Run: pixi run -e viz3d test-3d
+viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }
+# Interactive tier (HoloViz). Uses the `interactive` feature pixi derives from the `[interactive]` extra.
+# Separate solve-group so geoviews/datashader/panel stay out of default/dev. Run: pixi run -e interactive test-interactive
 interactive = { features = ["dev", "interactive"], solve-group = "interactive" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }
 py313 = { features = ["py313", "dev"], solve-group = "py313" }
 
 
-[tool.pixi.feature.interactive.pypi-dependencies]
-# PyPI wheels (cartopy ships binary wheels; GEOS/PROJ are already present via the conda gdal/pyogrio stack).
-# cartopy/pyproj are geoviews' own transitive deps — never imported by Digital-Earth (DX.3 guard).
-geoviews = ">=1.15"
-holoviews = ">=1.22"
-hvplot = ">=0.12"
-datashader = ">=0.19"
-panel = ">=1.9"
-
-[tool.pixi.feature.viz3d.pypi-dependencies]
-# PyPI wheels (pyvista bundles a VTK wheel) — keeps the 3D tier installable without a heavy conda solve.
-# geovista powers the optional textured globe (D3.5); it is imported lazily inside Scene3D.globe().
-pyvista = ">=0.48"
-trame = ">=3.13"
-# Widget backends export_html needs (the `trame` meta-package alone is insufficient — see the [3d] extra note).
-trame-vtk = ">=2.8"
-trame-vuetify = ">=2.7"
-geovista = ">=0.5.3"
-imageio = ">=2.34"
-imageio-ffmpeg = ">=0.5"
+# NOTE: the `interactive` (HoloViz) and `3d` (PyVista) features are NOT declared here — pixi derives them
+# automatically from the `[project.optional-dependencies]` `interactive` / `3d` extras above, and the `interactive`
+# / `viz3d` envs reference them directly. Re-declaring them as pixi features double-declares every package and
+# breaks `pixi update` ("<pkg> is already a dependency").
 
 [tool.pixi.feature.py311.dependencies]
 python = "3.11.*"

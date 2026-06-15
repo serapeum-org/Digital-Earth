@@ -97,11 +97,15 @@ def quickmap(
         colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable).
         backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
-            extra) fed from the same ``Source``/auto-style pipeline.
-        **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``).
+            extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
+            extra) — all fed from the same input-type dispatch. ``crs``/``kind``/``domain``/``basemap``/
+            ``coastlines`` apply to the 2-D backends only; the ``"3d"`` backend ignores them.
+        **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
+            ``z_exaggeration``/``height``/``point_size`` for ``backend="3d"``).
 
     Returns:
-        The decorated :class:`Map`, or an :class:`InteractiveMap` when ``backend="interactive"``.
+        The decorated :class:`Map`, an :class:`InteractiveMap` when ``backend="interactive"``, or a
+        :class:`Scene3D` when ``backend="3d"``.
 
     Raises:
         ValueError: for an unknown ``backend``.
@@ -134,6 +138,8 @@ def quickmap(
 
             ```
     """
+    if backend == "3d":
+        return _quickmap_3d(data, colorbar=colorbar, **kwargs)
     if backend == "interactive":
         return _quickmap_interactive(
             data,
@@ -146,7 +152,8 @@ def quickmap(
         )
     if backend != "matplotlib":
         raise ValueError(
-            f"unknown backend {backend!r}; choose 'matplotlib' (static) or 'interactive' (HoloViz)"
+            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
+            f"or '3d' (PyVista)"
         )
     scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
@@ -242,6 +249,68 @@ def _quickmap_interactive(
         scene.tiles()
     if coastlines:
         scene.coastlines()
+    return scene
+
+
+def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any:
+    """Build a finished ``Scene3D`` from ``data`` (the ``backend="3d"`` path, DX.1).
+
+    Dispatches by input type, mirroring :func:`_draw`: a raster ``Dataset`` becomes 3-D relief
+    (``terrain``); a point ``FeatureCollection`` becomes a ``point_cloud`` (coloured by ``column`` when
+    given); a polygon ``FeatureCollection`` becomes ``extruded_polygons`` (extruded by, and coloured by,
+    ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. The
+    map-only kwargs (``crs``/``kind``/``domain``/``basemap``/``coastlines``) have no 3-D analogue and are
+    not accepted here.
+
+    Args:
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
+        colorbar: When False, hide the scalar bar (``show_scalar_bar=False``); True leaves PyVista's
+            default (a bar iff the layer carries scalars).
+        **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
+            ``column``, ``height``, ``point_size``).
+
+    Returns:
+        The built :class:`~digitalearth.three_d.scene3d.Scene3D`.
+
+    Raises:
+        ValueError: if ``data`` is an empty ``FeatureCollection``.
+        TypeError: for a line ``FeatureCollection`` (no 3-D builder) or a non-raster/vector input.
+    """
+    from digitalearth.three_d import Scene3D
+
+    # Validate the input up front: a bad type / unsupported geometry must raise BEFORE a Scene3D (which opens a
+    # VTK plotter) is constructed — otherwise every error path leaks an open plotter.
+    geom_kind = None
+    if isinstance(data, FeatureCollection):
+        if len(data) == 0:
+            raise ValueError(
+                "quickplot got an empty FeatureCollection (nothing to draw)"
+            )
+        geom_type = data.geometry.geom_type
+        if geom_type.isin(["Polygon", "MultiPolygon"]).all():
+            geom_kind = "polygons"
+        elif geom_type.isin(["Point", "MultiPoint"]).all():
+            geom_kind = "points"
+        else:
+            raise TypeError(
+                "backend='3d' needs a uniformly point, polygon, or raster input "
+                "(point_cloud / extruded_polygons / terrain); got geometry types "
+                f"{sorted(geom_type.unique())}"
+            )
+    elif not isinstance(data, Dataset):
+        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+
+    if not colorbar:  # PyVista shows a scalar bar by default when scalars exist; force it off here
+        kwargs.setdefault("show_scalar_bar", False)
+    scene = Scene3D()  # constructed only after validation — the error paths above never leak a plotter
+    if isinstance(data, Dataset):
+        scene.terrain(data, **kwargs)
+    elif geom_kind == "polygons":
+        column = kwargs.pop("column", None)
+        height = kwargs.pop("height", column if column is not None else 1.0)
+        scene.extruded_polygons(data, height=height, column=column, **kwargs)
+    else:  # points
+        scene.point_cloud(data, value_column=kwargs.pop("column", None), **kwargs)
     return scene
 
 
