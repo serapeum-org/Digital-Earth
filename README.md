@@ -59,8 +59,22 @@ pip install git+https://github.com/serapeum-org/Digital-Earth
 ## pip
 to install the last release you can easly use pip
 ```
-pip install digitalearth==0.1.11
+pip install digitalearth
 ```
+
+## Optional rendering tiers
+The static matplotlib tier works out of the box. Richer renderers are optional extras (installed only when
+you ask for them):
+
+```
+pip install 'digitalearth[interactive]'   # interactive 2-D web maps (HoloViz: GeoViews/Bokeh)
+pip install 'digitalearth[3d]'            # true-3D scenes (PyVista)
+pip install 'digitalearth[web]'           # MapLibre + deck.gl web maps, shareable HTML
+```
+
+The `web` tier renders pyramids rasters/vectors as MapLibre GL JS / deck.gl layers and exports a
+self-contained HTML page — `WebMap().choropleth(gdf, column="pop").basemap().save("map.html")`, or
+`quickplot(data, backend="web")`. See `docs/examples/web/` for a runnable gallery.
 
 Quick start
 ===========

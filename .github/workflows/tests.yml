@@ -146,3 +146,48 @@ jobs:
       - name: Check the interactive notebooks render
         run: |
           pixi run -e interactive notebooks-interactive
+
+  # The web (MapLibre + deck.gl) tier needs the `web` extra (maplibre/lonboard), which the default
+  # py311/312/313 matrix does not install (so it skips those tests). Validate it here in the web env.
+  # anywidget renders to HTML headless — no display/xvfb needed.
+  tests-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: web
+          activate-environment: web
+          cache: true
+
+      - name: Run web tier tests
+        # `test-web` = pytest tests/test_web_*.py --cov=src/digitalearth --cov-report=xml.
+        # The default py311/312/313 matrix skips these tests, so this is the only coverage for web/.
+        run: |
+          pixi run -e web test-web
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+
+  # The web notebook gallery, rendered headless in the web env (anywidget -> HTML; no browser needed).
+  notebooks-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@0894988f30f270ee8e0d9369f1f62a0deb8d5233 # pixi/v1.1.1
+        with:
+          environments: web
+          activate-environment: web
+          cache: true
+
+      - name: Check the web notebooks render
+        run: |
+          pixi run -e web notebooks-web

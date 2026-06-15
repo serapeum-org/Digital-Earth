@@ -1,9 +1,10 @@
 """DX.3 — the pyramids-only enforcer.
 
-Fails the build if any module in the interactive/3D tiers (``digitalearth.three_d`` / ``digitalearth.interactive``)
-imports a forbidden GIS competitor. Per ``CLAUDE.md``, pyramids is the ONLY GIS dependency; these tiers must
-ingest data exclusively through pyramids (numpy + geotransform + GeoDataFrame) and never reach around it to
-``xarray``/``rasterio``/``rioxarray``/… — see ``planning/interactive-3d/00-architecture-and-ingestion.md``.
+Fails the build if any module in the interactive/3D/web tiers (``digitalearth.three_d`` /
+``digitalearth.interactive`` / ``digitalearth.web``) imports a forbidden GIS competitor. Per ``CLAUDE.md``,
+pyramids is the ONLY GIS dependency; these tiers must ingest data exclusively through pyramids
+(numpy + geotransform + GeoDataFrame) and never reach around it to ``xarray``/``rasterio``/``rioxarray``/… —
+see ``planning/interactive-3d/00-architecture-and-ingestion.md``.
 
 ``geopandas``/``shapely`` are forbidden as **imports** too: we *read* coordinates off the GeoDataFrame pyramids
 returns (no import needed). A genuine need to import them is a signal to push the capability into pyramids, not to
@@ -12,7 +13,7 @@ relax this test.
 import ast
 import pathlib
 
-#: Top-level packages the interactive/3D tiers must never import (use pyramids instead).
+#: Top-level packages the interactive/3D/web tiers must never import (use pyramids instead).
 FORBIDDEN = {
     "xarray",
     "rasterio",
@@ -34,7 +35,11 @@ FORBIDDEN = {
 #: Package roots the rule applies to (relative to the repo root). Only ``src/`` is guarded — test
 #: files are deliberately exempt: fixtures legitimately ``import geopandas`` to construct the
 #: GeoDataFrames the tiers consume, which is not the same as a tier module reaching around pyramids.
-_GUARDED_ROOTS = ("src/digitalearth/three_d", "src/digitalearth/interactive")
+_GUARDED_ROOTS = (
+    "src/digitalearth/three_d",
+    "src/digitalearth/interactive",
+    "src/digitalearth/web",
+)
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
