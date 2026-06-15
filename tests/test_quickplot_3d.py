@@ -63,7 +63,7 @@ class TestQuickplot3DBackend:
         from digitalearth.api import quickplot
 
         fc = FeatureCollection.read_file("examples/data/rhine_river_centerline.geojson")
-        with pytest.raises(TypeError, match="line geometries"):
+        with pytest.raises(TypeError, match="uniformly point, polygon, or raster"):
             quickplot(fc, backend="3d")
 
     def test_unknown_backend_message_lists_3d(self, raster):

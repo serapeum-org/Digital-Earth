@@ -293,8 +293,9 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
             geom_kind = "points"
         else:
             raise TypeError(
-                "backend='3d' draws rasters (terrain), points (point_cloud) and polygons "
-                "(extruded_polygons); line geometries have no 3-D builder"
+                "backend='3d' needs a uniformly point, polygon, or raster input "
+                "(point_cloud / extruded_polygons / terrain); got geometry types "
+                f"{sorted(geom_type.unique())}"
             )
     elif not isinstance(data, Dataset):
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
