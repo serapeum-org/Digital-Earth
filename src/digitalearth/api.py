@@ -98,14 +98,16 @@ def quickmap(
         backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
             extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
-            extra) — all fed from the same input-type dispatch. ``crs``/``kind``/``domain``/``basemap``/
-            ``coastlines`` apply to the 2-D backends only; the ``"3d"`` backend ignores them.
+            extra); ``"web"`` returns a :class:`~digitalearth.web.map.WebMap` (MapLibre + deck.gl; needs the
+            ``web`` extra) — all fed from the same input-type dispatch. ``crs``/``kind``/``domain``/
+            ``coastlines`` apply to the 2-D matplotlib/interactive backends only; the ``"3d"`` and ``"web"``
+            backends ignore them (the web backend normalises data to lon/lat itself).
         **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
             ``z_exaggeration``/``height``/``point_size`` for ``backend="3d"``).
 
     Returns:
-        The decorated :class:`Map`, an :class:`InteractiveMap` when ``backend="interactive"``, or a
-        :class:`Scene3D` when ``backend="3d"``.
+        The decorated :class:`Map`, an :class:`InteractiveMap` when ``backend="interactive"``, a
+        :class:`Scene3D` when ``backend="3d"``, or a :class:`WebMap` when ``backend="web"``.
 
     Raises:
         ValueError: for an unknown ``backend``.
@@ -150,10 +152,12 @@ def quickmap(
             colorbar=colorbar,
             **kwargs,
         )
+    if backend == "web":
+        return _quickmap_web(data, basemap=basemap, **kwargs)
     if backend != "matplotlib":
         raise ValueError(
             f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
-            f"or '3d' (PyVista)"
+            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
         )
     scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
@@ -249,6 +253,50 @@ def _quickmap_interactive(
         scene.tiles()
     if coastlines:
         scene.coastlines()
+    return scene
+
+
+def _quickmap_web(data: PlottableData, *, basemap: bool = False, **kwargs) -> Any:
+    """Build a finished ``WebMap`` from ``data`` (the ``backend="web"`` path, DX.1).
+
+    Dispatches by input type, mirroring :func:`_draw`: a polygon ``FeatureCollection`` with a ``column``
+    becomes a ``choropleth`` (else outline ``polygons``); other vectors become ``points``; a raster
+    ``Dataset`` becomes ``add_raster``. The ``WebMap`` import is lazy so the core ``api`` works without the
+    ``web`` extra. The web tier normalises data to lon/lat itself, so the matplotlib-oriented
+    ``crs``/``kind``/``domain``/``coastlines`` kwargs do not apply here.
+
+    Args:
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
+        basemap: When True, add a dark tile basemap beneath the data.
+        **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
+
+    Returns:
+        The built :class:`~digitalearth.web.map.WebMap`.
+
+    Raises:
+        ValueError: if ``data`` is an empty ``FeatureCollection``.
+        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
+    """
+    from digitalearth.web import WebMap
+
+    scene = WebMap()
+    if isinstance(data, FeatureCollection):
+        if len(data) == 0:
+            raise ValueError("quickplot got an empty FeatureCollection (nothing to draw)")
+        if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
+            column = kwargs.pop("column", None)
+            if column is not None:
+                scene.choropleth(data, column=column, **kwargs)
+            else:
+                scene.polygons(data, **kwargs)
+        else:
+            scene.points(data, **kwargs)
+    elif isinstance(data, Dataset):
+        scene.add_raster(data, **kwargs)
+    else:
+        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    if basemap:
+        scene.basemap()
     return scene
 
 
