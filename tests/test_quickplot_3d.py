@@ -59,6 +59,16 @@ class TestQuickplot3DBackend:
         assert isinstance(out, Scene3D) and len(out.layers) == 1
         out.close()
 
+    def test_polygons_default_flat_height_no_column(self):
+        """Polygons with neither ``column`` nor ``height`` extrude flat (height=1.0, column=None)."""
+        from digitalearth.api import quickplot
+        from digitalearth.three_d import Scene3D
+
+        fc = FeatureCollection.read_file("examples/data/rhine_basin.geojson")
+        out = quickplot(fc, backend="3d")
+        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        out.close()
+
     def test_lines_raise_typeerror(self):
         from digitalearth.api import quickplot
 
