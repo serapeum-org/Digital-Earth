@@ -1,5 +1,12 @@
 # Change log
 
+## 0.7.0 (2026-06-15)
+
+### Feat
+
+- **web**: add the MapLibre + deck.gl web rendering tier (#96)
+- **api**: add backend="3d" to quickplot/quickmap (dispatch to Scene3D) (#95)
+
 ## 0.6.0 (2026-06-14)
 
 ### Feat
