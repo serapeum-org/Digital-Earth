@@ -278,12 +278,9 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
     """
     from digitalearth.three_d import Scene3D
 
-    if not colorbar:  # PyVista shows a scalar bar by default when scalars exist; force it off here
-        kwargs.setdefault("show_scalar_bar", False)
-    scene = Scene3D()
-    if isinstance(data, Dataset):
-        scene.terrain(data, **kwargs)
-        return scene
+    # Validate the input up front: a bad type / unsupported geometry must raise BEFORE a Scene3D (which opens a
+    # VTK plotter) is constructed — otherwise every error path leaks an open plotter.
+    geom_kind = None
     if isinstance(data, FeatureCollection):
         if len(data) == 0:
             raise ValueError(
@@ -291,18 +288,29 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
             )
         geom_type = data.geometry.geom_type
         if geom_type.isin(["Polygon", "MultiPolygon"]).all():
-            column = kwargs.pop("column", None)
-            height = kwargs.pop("height", column if column is not None else 1.0)
-            scene.extruded_polygons(data, height=height, column=column, **kwargs)
+            geom_kind = "polygons"
         elif geom_type.isin(["Point", "MultiPoint"]).all():
-            scene.point_cloud(data, value_column=kwargs.pop("column", None), **kwargs)
+            geom_kind = "points"
         else:
             raise TypeError(
                 "backend='3d' draws rasters (terrain), points (point_cloud) and polygons "
                 "(extruded_polygons); line geometries have no 3-D builder"
             )
-        return scene
-    raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+    elif not isinstance(data, Dataset):
+        raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
+
+    if not colorbar:  # PyVista shows a scalar bar by default when scalars exist; force it off here
+        kwargs.setdefault("show_scalar_bar", False)
+    scene = Scene3D()  # constructed only after validation — the error paths above never leak a plotter
+    if isinstance(data, Dataset):
+        scene.terrain(data, **kwargs)
+    elif geom_kind == "polygons":
+        column = kwargs.pop("column", None)
+        height = kwargs.pop("height", column if column is not None else 1.0)
+        scene.extruded_polygons(data, height=height, column=column, **kwargs)
+    else:  # points
+        scene.point_cloud(data, value_column=kwargs.pop("column", None), **kwargs)
+    return scene
 
 
 def _finish(scene: Map, *, colorbar: bool) -> Map:
