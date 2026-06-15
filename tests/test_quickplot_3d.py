@@ -85,3 +85,37 @@ class TestQuickplot3DBackend:
         out = quickplot(raster, backend="3d", colorbar=False)
         assert isinstance(out, Scene3D) and len(out.layers) == 1
         out.close()
+
+    def test_colorbar_false_on_points_builds(self):
+        """colorbar=False forwards show_scalar_bar=False into the point-cloud (add_points) path too."""
+        from digitalearth.api import quickplot
+        from digitalearth.three_d import Scene3D
+
+        fc = FeatureCollection.read_file("examples/data/rhine_gauges.geojson")
+        out = quickplot(fc, backend="3d", colorbar=False)
+        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        out.close()
+
+    def test_empty_featurecollection_raises_valueerror(self):
+        from digitalearth.api import quickplot
+
+        empty = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[:0]
+        with pytest.raises(ValueError, match="empty FeatureCollection"):
+            quickplot(empty, backend="3d")
+
+    def test_non_vector_input_raises_typeerror(self):
+        from digitalearth.api import quickplot
+
+        with pytest.raises(TypeError, match="cannot draw"):
+            quickplot(123, backend="3d")
+
+    def test_mixed_geometry_raises_clear_message(self):
+        """Mixed point+polygon input raises the general message, not the misleading 'line geometries' one (N1)."""
+        import pandas as pd
+        from digitalearth.api import quickplot
+
+        pts = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[:2]
+        poly = FeatureCollection.read_file("examples/data/rhine_basin.geojson").iloc[:1]
+        mixed = pd.concat([pts, poly])
+        with pytest.raises(TypeError, match="uniformly point, polygon, or raster"):
+            quickplot(mixed, backend="3d")
