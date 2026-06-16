@@ -34,6 +34,22 @@ def resolve_categorical_cmap(cmap: str) -> str:
 
     Returns:
         ``cmap`` unchanged, unless it is the continuous default — then the qualitative categorical default.
+
+    Examples:
+        - The continuous default is swapped for a qualitative colormap:
+            ```python
+            >>> from digitalearth._symbology import resolve_categorical_cmap
+            >>> resolve_categorical_cmap("viridis")
+            'tab10'
+
+            ```
+        - An explicitly chosen colormap is left untouched:
+            ```python
+            >>> from digitalearth._symbology import resolve_categorical_cmap
+            >>> resolve_categorical_cmap("Set2")
+            'Set2'
+
+            ```
     """
     return _DEFAULT_CATEGORICAL_CMAP if cmap == _CONTINUOUS_DEFAULT_CMAP else cmap
 

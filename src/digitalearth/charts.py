@@ -437,7 +437,7 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
             ...     crs=4326,
             ... )
             >>> ax = bar_by(gdf, "cat", "v", agg="sum")
-            >>> [round(rect.get_height(), 1) for rect in ax.containers[0]]
+            >>> [float(round(rect.get_height(), 1)) for rect in ax.containers[0]]
             [3.0, 3.0]
 
             ```
