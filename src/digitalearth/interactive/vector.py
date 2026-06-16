@@ -233,25 +233,59 @@ class VectorMixin:
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
+    def _categorical_polygons(self, features: Any, column: str, *, cmap: str = "viridis",
+                              **opts: Any) -> "VectorMixin":
+        """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
+
+        The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
+        gets a colour from :func:`digitalearth._symbology.categorical_colors`, passed to GeoViews as a list
+        ``cmap`` over the categorical column (no continuous colorbar). The categories are recorded on
+        ``last_breaks`` for legend parity with the web tier.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
+            column: The attribute to colour by (any hashable value).
+            cmap: A qualitative colormap name (defaults to ``"tab10"`` when left at the continuous default).
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            This map (chainable).
+        """
+        from digitalearth._symbology import categorical_colors
+
+        gdf = self._display_gdf(features)
+        categories, colors = categorical_colors(gdf[column], "tab10" if cmap == "viridis" else cmap)
+        element = self._vector_element("Polygons", gdf, vdims=[column])
+        common = {"color": column, "cmap": colors, "colorbar": False, **opts}
+        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
+        self.last_breaks = list(categories)
+        return self.add_element(element)
+
     def choropleth(
         self,
         features: Any,
         column: str,
         *,
+        scheme: Optional[str] = None,
         cmap: str = "viridis",
         clim: Optional[Tuple[float, float]] = None,
         **opts: Any,
     ) -> "VectorMixin":
         """Add a choropleth — polygons filled and coloured by ``column`` (hover shows the value).
 
-        A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``.
+        A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``. Pass
+        ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
+        ramp (DC.8); the categories are recorded on ``last_breaks`` for legend parity with the web tier.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
                 pyramids when needed.
-            column: The numeric column driving the fill colour (required).
-            cmap: Colormap name.
-            clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales.
+            column: The column driving the fill colour (required); numeric for the continuous ramp, or any
+                hashable value for ``scheme="categorical"``.
+            scheme: ``"categorical"`` for distinct-value colouring; ``None`` (default) for a continuous ramp.
+            cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
+                left at the default).
+            clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -276,6 +310,8 @@ class VectorMixin:
             raise KeyError(
                 f"choropleth column {column!r} not found in the feature attributes"
             )
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_polygons(features, column, cmap=cmap, **opts)
         if clim is not None:
             opts = {"clim": clim, **opts}
         return self.polygons(features, column=column, cmap=cmap, **opts)

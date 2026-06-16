@@ -35,6 +35,12 @@ def test_choropleth_scheme_is_discrete(polygons):
     assert not isinstance(continuous.norm, BoundaryNorm)
 
 
+def test_choropleth_categorical_not_supported_in_static_tier(polygons):
+    """scheme='categorical' raises a clear, actionable error in the static tier (cleopatra gap, DC.8)."""
+    with pytest.raises(NotImplementedError, match="categorical"):
+        Map(crs=polygons.epsg).choropleth(polygons, column="fid", scheme="categorical")
+
+
 def test_voronoi_scheme_is_discrete(points_fc):
     """voronoi honours a categorical scheme on its filled cells."""
     pc = Map(crs=points_fc.epsg).voronoi(points_fc, column="fid", scheme="quantiles", k=3)

@@ -36,18 +36,40 @@ class VectorMixin:
             values: The 1-D value array driving the colour (used to compute breaks / limits).
             column: The GeoJSON property name the expression reads with ``["get", column]``.
             scheme: A cleopatra classification scheme (``"quantiles"``/``"fisher_jenks"``/… or an explicit
-                edge sequence) for a graduated ``step`` expression; ``None`` for a continuous ramp.
+                edge sequence) for a graduated ``step`` expression; ``"categorical"`` for a distinct-value
+                ``match`` expression (DC.8); ``None`` for a continuous ramp.
             k: Number of classes for the graduated schemes.
-            cmap: matplotlib colormap name sampled for the class / ramp colours.
+            cmap: matplotlib colormap name sampled for the class / ramp colours (a qualitative map such as
+                ``"tab10"`` is used for ``scheme="categorical"`` when ``cmap`` is left at the default).
 
         Returns:
-            A MapLibre expression list (``["step", …]`` or ``["interpolate", …]``). Also sets
-            ``self.last_breaks`` to the breaks (graduated edges) or ramp stops.
+            A MapLibre expression list (``["step", …]``, ``["match", …]`` or ``["interpolate", …]``). Also
+            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops.
 
         Raises:
-            ValueError: propagated from ``cleopatra.styles.classify`` (unknown scheme, no spread, …).
+            ValueError: propagated from ``cleopatra.styles.classify`` (unknown scheme, no spread, …) or from
+                the categorical helper (no non-null values).
         """
         import numpy as np
+
+        def _native(value: Any) -> Any:
+            """Coerce a numpy scalar to a JSON-native ``int``/``float``/``str`` for a MapLibre literal."""
+            if isinstance(value, np.integer):
+                return int(value)
+            if isinstance(value, np.floating):
+                return float(value)
+            return value
+
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            from digitalearth._symbology import categorical_colors
+
+            categories, colors = categorical_colors(values, "tab10" if cmap == "viridis" else cmap)
+            expr = ["match", ["get", column]]
+            for category, color in zip(categories, colors):
+                expr.extend([_native(category), color])
+            expr.append("#cccccc")  # fallback colour for values outside the known categories
+            self.last_breaks = [_native(c) for c in categories]
+            return expr
 
         if scheme is not None:
             from cleopatra.styles import classify
@@ -273,14 +295,17 @@ class VectorMixin:
 
         Graduated by default (``scheme="quantiles"``): the class breaks come from
         ``cleopatra.styles.classify`` and are compiled into a MapLibre ``step`` paint expression, so the
-        classes match the static tier's ``choropleth``. Pass ``scheme=None`` for a continuous ramp. The
-        breaks are exposed on ``WebMap.last_breaks`` for building a legend.
+        classes match the static tier's ``choropleth``. Pass ``scheme="categorical"`` to colour an unordered
+        attribute by distinct value (a MapLibre ``match`` expression, DC.8), or ``scheme=None`` for a
+        continuous ramp. The breaks / categories are exposed on ``WebMap.last_breaks`` for building a legend.
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
-            column: The numeric attribute that colours the polygons (required).
+            column: The attribute that colours the polygons (numeric for graduated/continuous; any hashable
+                value for ``scheme="categorical"``). Required.
             scheme: A cleopatra classification scheme (``"quantiles"``, ``"equal_interval"``,
-                ``"fisher_jenks"``, …) or an explicit edge sequence; ``None`` for a continuous ramp.
+                ``"fisher_jenks"``, …) or an explicit edge sequence for graduated colouring;
+                ``"categorical"`` for distinct-value colouring; ``None`` for a continuous ramp.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap name.
             opacity: Fill opacity in ``[0, 1]``.

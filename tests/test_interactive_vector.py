@@ -133,6 +133,18 @@ class TestPolygonsAndChoropleth:
         plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
         assert plot["clim"] == (0.0, 10.0), f"clim not honoured: {plot.get('clim')}"
 
+    def test_choropleth_categorical_scheme(self, m, polygon_fc):
+        """scheme='categorical' colours by distinct value with a list cmap, recording the categories (DC.8)."""
+        m.choropleth(polygon_fc, "fid", scheme="categorical")
+        element = m.layers[0]
+        assert isinstance(element, gv.Polygons)
+        style = hv.Store.lookup_options("bokeh", element, "style").kwargs
+        assert style["color"] == "fid"
+        assert isinstance(style["cmap"], list) and all(
+            isinstance(c, str) for c in style["cmap"]
+        ), f"categorical cmap should be a list of colours, got {style.get('cmap')!r}"
+        assert m.last_breaks is not None and len(m.last_breaks) >= 1, "categories should be recorded"
+
     def test_choropleth_missing_column_raises(self, m, polygon_fc):
         with pytest.raises(KeyError, match="nope"):
             m.choropleth(polygon_fc, "nope")

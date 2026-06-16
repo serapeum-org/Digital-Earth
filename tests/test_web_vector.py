@@ -85,6 +85,23 @@ class TestColorExpr:
         stops = [expr[i] for i in range(3, len(expr), 2)]
         assert stops[0] < stops[-1], "constant data must still yield an increasing ramp"
 
+    def test_categorical_match_expression(self):
+        """scheme='categorical' compiles a MapLibre `match` over the distinct values (DC.8)."""
+        m = WebMap()
+        expr = m._color_expr(np.array(["a", "b", "a", "c"], dtype=object), "kind", "categorical", 5, "tab10")
+        assert expr[0] == "match", f"categorical colouring must be a match expression, got {expr[0]!r}"
+        assert expr[1] == ["get", "kind"], "the match input must read the column with ['get', column]"
+        assert expr[2] == "a" and expr[4] == "b" and expr[6] == "c", f"category literals misordered: {expr}"
+        assert expr[-1] == "#cccccc", "the match expression must end with a default colour"
+        assert m.last_breaks == ["a", "b", "c"], f"categories should be recorded: {m.last_breaks}"
+
+    def test_categorical_numeric_literals_are_json_native(self):
+        """Numeric categories are coerced to native int for the MapLibre literal."""
+        m = WebMap()
+        expr = m._color_expr(np.array([1, 2, 1, 3]), "code", "categorical", 5, "tab10")
+        literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
+        assert literals == [1, 2, 3] and all(type(v) is int for v in literals)
+
     def test_cmap_hex_count_and_format(self):
         """``_cmap_hex`` returns the requested number of hex colours."""
         colors = WebMap()._cmap_hex("viridis", 4)

@@ -410,6 +410,13 @@ class VectorMixin:
 
                 ```
         """
+        if str(opts.get("scheme", "")).lower() == "categorical":
+            raise NotImplementedError(
+                "scheme='categorical' is not supported in the static tier: cleopatra's PolygonGlyph colours "
+                "by a continuous/graduated scale only (no per-distinct-value mapping) — tracked as an upstream "
+                "cleopatra gap. Use WebMap.choropleth(..., scheme='categorical') or the interactive tier; "
+                "graduated schemes (quantiles/fisher_jenks/…) work here."
+            )
         gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="choropleth",
                                  geom_label="polygon")
         polygons, repeats = self._polygon_vertices(gdf.geometry)
