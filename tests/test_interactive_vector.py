@@ -155,6 +155,18 @@ class TestPolygonsAndChoropleth:
         # the rendered colour column is discrete (string), not the original numeric dtype
         assert element.dimension_values("fid").dtype.kind in ("U", "O"), "colour column must be string-typed"
 
+    def test_choropleth_categorical_missing_values_get_fallback(self, m, polygon_fc):
+        """A NaN/None category gets the neutral '#cccccc' fallback in the dict cmap (web parity, L1)."""
+        fc = polygon_fc.copy()
+        n = len(fc)
+        kinds = [("a", "b")[i % 2] for i in range(n)]
+        kinds[0] = None
+        fc["kind"] = kinds
+        m.choropleth(fc, "kind", scheme="categorical")
+        cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
+        assert cmap.get("n/a") == "#cccccc", f"missing values must map to the neutral fallback: {cmap}"
+        assert {"a", "b"} <= set(cmap), f"real categories must still be coloured: {cmap}"
+
     def test_choropleth_missing_column_raises(self, m, polygon_fc):
         with pytest.raises(KeyError, match="nope"):
             m.choropleth(polygon_fc, "nope")

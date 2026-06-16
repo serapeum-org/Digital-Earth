@@ -99,7 +99,9 @@ def statistics(
 
     A thin numpy reduction (not a GIS op): the input is coerced to its finite values and summarised. Accepts a
     GeoDataFrame/DataFrame with ``column``, a pyramids ``Dataset`` (first band, nodata dropped), or a plain
-    array. Quantiles are returned under ``q<pct>`` keys (e.g. ``q50`` for the median).
+    array. Quantiles are returned under ``q<pct>`` keys (e.g. ``q50`` for the median); the percent is formatted
+    with ``:g``, so fractional quantiles stay distinct (``q50`` vs ``q50.5``) but two quantiles closer than
+    ~1e-6 would share a key.
 
     Args:
         data: A (Geo)DataFrame (with ``column``), a pyramids ``Dataset``, or an array-like of numbers.

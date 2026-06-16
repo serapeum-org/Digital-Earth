@@ -241,9 +241,10 @@ class VectorMixin:
         gets a colour from :func:`digitalearth._symbology.categorical_colors`. The colour column is cast to
         **string** and the colours are handed to GeoViews as a ``{label: colour}`` dict ``cmap`` — a numeric
         column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
-        what guarantees one discrete colour per distinct value (no continuous colorbar). The categories
-        (original values, in classifier order) are recorded on ``last_breaks`` for legend parity with the web
-        tier.
+        what guarantees one discrete colour per distinct value (no continuous colorbar). Missing values
+        (``NaN``/``None``) are drawn with a neutral ``"#cccccc"`` fallback, matching the web tier's default.
+        The categories (original values, in classifier order) are recorded on ``last_breaks`` for legend parity
+        with the web tier.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
@@ -261,8 +262,12 @@ class VectorMixin:
         # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
         # categorically (a numeric column would map continuously and interpolate the palette).
         gdf = gdf.copy()
-        gdf[column] = gdf[column].astype(str)
+        missing = gdf[column].isna()
+        gdf[column] = gdf[column].astype(str).mask(missing, "n/a")
         cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
+        if missing.any():
+            # Missing values get an explicit neutral fallback, matching the web tier's "#cccccc" default.
+            cmap_by_label["n/a"] = "#cccccc"
         element = self._vector_element("Polygons", gdf, vdims=[column])
         common = {"color": column, "cmap": cmap_by_label, "colorbar": False, **opts}
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
