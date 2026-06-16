@@ -1,13 +1,15 @@
-"""DecorationMixin — web-tier basemaps/tiles (DW.1a) and popups/tooltips (DW.2).
+"""DecorationMixin — web-tier basemaps/tiles, popups/tooltips, and map controls.
 
-Adds raster XYZ basemaps beneath the data (``basemap``/``tiles``) and hover/click attribute readouts
-(``tooltip``/``popup``) on top of a data layer. Each builder registers a callable on the map's layer
-registry (basemaps as an underlay; popups/tooltips as post-layer ``add_popup``/``add_tooltip`` calls).
+Adds raster XYZ basemaps beneath the data (``basemap``/``tiles``, DW.1a), hover/click attribute readouts
+(``tooltip``/``popup``, DW.2), MapLibre UI controls (``navigation``/``scale_bar``/``fullscreen``/``controls``,
+ED.13) and a draw-based ``measure`` tool (ED.10). Each builder registers a callable on the map's layer
+registry (basemaps as an underlay; popups/tooltips/controls as post-render ``add_*`` calls).
 
 Out of scope here (deferred): ``pmtiles`` (needs the optional ``pmtiles`` reader, intentionally not in the
-``[web]`` extra) and an on-map ``legend`` control (py-maplibregl has no built-in legend widget — it needs a
-custom HTML control, a DW.6 export concern). ``choropleth`` still exposes its class breaks via
-``WebMap.last_breaks`` so a caller can build a legend out-of-band.
+``[web]`` extra); an on-map ``legend`` control and a **minimap** (py-maplibregl has neither built in — both
+need a custom HTML/JS control). ``choropleth`` still exposes its class breaks via ``WebMap.last_breaks`` so a
+caller can build a legend out-of-band; the ``measure`` tool exposes the drawn geometry for pyramids to compute
+geodesic distance/area (the GIS part).
 """
 
 from typing import Any, List, Optional
@@ -200,6 +202,43 @@ class DecorationMixin:
         if fullscreen:
             self.fullscreen()
         return self
+
+    def measure(
+        self, *, distance: bool = True, area: bool = True, position: str = "top-left"
+    ) -> "DecorationMixin":
+        """Add a draw-based measure tool — draw a line (distance) or polygon (area) to measure (ED.10).
+
+        Enables MapLibre's draw control scoped to line and/or polygon geometries, so the user draws the shape
+        to measure. The drawn GeoJSON is available on the rendered widget
+        (``draw_feature_collection_all`` and the ``draw_features_created``/``…_updated`` events). Computing the
+        numeric distance/area from that geometry is a **GIS** operation — do it in pyramids (geodesic length /
+        area), keeping this tier to the (visualization) drawing control.
+
+        Args:
+            distance: Offer the line tool (measure distance along a path).
+            area: Offer the polygon tool (measure enclosed area).
+            position: Corner placement for the draw toolbar.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            ValueError: if neither ``distance`` nor ``area`` is enabled.
+        """
+        _require_maplibre()
+        from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
+
+        if not (distance or area):
+            raise ValueError("measure() needs distance and/or area enabled")
+        options = MapboxDrawOptions(
+            display_controls_default=False,
+            controls=MapboxDrawControls(line_string=distance, polygon=area, trash=True),
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_mapbox_draw(options, position)
+
+        return self.add_layer(layer=apply)
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:

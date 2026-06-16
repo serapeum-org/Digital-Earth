@@ -197,6 +197,18 @@ class TestDecorationNeedsEngine:
         m2 = WebMap().polygons(polygons_gdf).controls()
         assert len(m2.layers) == 3, "default controls() adds navigation + scale only"
 
+    def test_measure_registers_draw_tool(self, polygons_gdf):
+        """ED.10 — measure() adds a draw-based tool and the map still renders."""
+        from maplibre.ipywidget import MapWidget
+
+        m = WebMap().polygons(polygons_gdf).measure(distance=True, area=True)
+        assert len(m.layers) == 2, "data layer + the measure draw control"
+        assert isinstance(m.render(), MapWidget)
+
+    def test_measure_requires_a_mode(self, polygons_gdf):
+        with pytest.raises(ValueError, match="distance and/or area"):
+            WebMap().polygons(polygons_gdf).measure(distance=False, area=False)
+
 
 class TestAttributeTemplate:
     """``_attribute_template`` builds the right popup/tooltip kwargs (no engine needed)."""
