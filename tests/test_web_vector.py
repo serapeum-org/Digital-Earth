@@ -182,6 +182,21 @@ class TestDecorationNeedsEngine:
         assert len(m.layers) == 2
         assert isinstance(m.render(), MapWidget)
 
+    def test_navigation_scale_fullscreen_controls_render(self, polygons_gdf):
+        """ED.13 — nav/scale/fullscreen controls register and the map still renders."""
+        from maplibre.ipywidget import MapWidget
+
+        m = WebMap().polygons(polygons_gdf).navigation().scale_bar(unit="imperial").fullscreen()
+        assert len(m.layers) == 4, "data layer + 3 controls"
+        assert isinstance(m.render(), MapWidget)
+
+    def test_controls_convenience(self, polygons_gdf):
+        """ED.13 — controls() adds navigation + scale (+ fullscreen) in one call."""
+        m = WebMap().polygons(polygons_gdf).controls(fullscreen=True)
+        assert len(m.layers) == 4, "data layer + navigation + scale + fullscreen"
+        m2 = WebMap().polygons(polygons_gdf).controls()
+        assert len(m2.layers) == 3, "default controls() adds navigation + scale only"
+
 
 class TestAttributeTemplate:
     """``_attribute_template`` builds the right popup/tooltip kwargs (no engine needed)."""

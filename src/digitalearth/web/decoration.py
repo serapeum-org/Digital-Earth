@@ -12,7 +12,7 @@ custom HTML control, a DW.6 export concern). ``choropleth`` still exposes its cl
 
 from typing import Any, List, Optional
 
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
 _BASEMAP_PROVIDERS = {
@@ -102,6 +102,104 @@ class DecorationMixin:
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)
+
+    def navigation(
+        self,
+        *,
+        position: str = "top-right",
+        show_compass: bool = True,
+        show_zoom: bool = True,
+        visualize_pitch: bool = False,
+    ) -> "DecorationMixin":
+        """Add MapLibre navigation controls — zoom buttons and a compass (ED.13).
+
+        Args:
+            position: Corner placement (``"top-right"``/``"top-left"``/``"bottom-right"``/``"bottom-left"``).
+            show_compass: Show the compass / bearing-reset button.
+            show_zoom: Show the zoom in/out buttons.
+            visualize_pitch: Show the map pitch on the compass.
+
+        Returns:
+            This map (chainable).
+        """
+        _require_maplibre()
+        from maplibre.controls import NavigationControl
+
+        control = NavigationControl(
+            show_compass=show_compass, show_zoom=show_zoom, visualize_pitch=visualize_pitch
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
+    def scale_bar(
+        self, *, position: str = "bottom-left", unit: str = "metric", max_width: int = 100
+    ) -> "DecorationMixin":
+        """Add a MapLibre scale bar (ED.13).
+
+        Args:
+            position: Corner placement for the scale bar.
+            unit: ``"metric"``, ``"imperial"`` or ``"nautical"``.
+            max_width: Maximum scale-bar width in pixels.
+
+        Returns:
+            This map (chainable).
+        """
+        _require_maplibre()
+        from maplibre.controls import ScaleControl
+
+        control = ScaleControl(unit=unit, max_width=int(max_width))
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
+    def fullscreen(self, *, position: str = "top-right") -> "DecorationMixin":
+        """Add a MapLibre fullscreen toggle control (ED.13).
+
+        Args:
+            position: Corner placement for the fullscreen button.
+
+        Returns:
+            This map (chainable).
+        """
+        _require_maplibre()
+        from maplibre.controls import FullscreenControl
+
+        control = FullscreenControl()
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
+    def controls(
+        self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
+    ) -> "DecorationMixin":
+        """Add the common navigation / scale / fullscreen controls in one call (ED.13).
+
+        A convenience over :meth:`navigation`, :meth:`scale_bar` and :meth:`fullscreen`. Note: py-maplibregl
+        has no built-in **minimap** control, so a minimap is not offered here (it would need a custom JS
+        control — tracked as a follow-up).
+
+        Args:
+            navigation: Add zoom + compass controls.
+            scale: Add a scale bar.
+            fullscreen: Add a fullscreen toggle.
+
+        Returns:
+            This map (chainable).
+        """
+        if navigation:
+            self.navigation()
+        if scale:
+            self.scale_bar()
+        if fullscreen:
+            self.fullscreen()
+        return self
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:
