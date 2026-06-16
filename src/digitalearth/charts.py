@@ -9,13 +9,40 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 from cleopatra.line_glyph import LineGlyph
+from cleopatra.scatter_glyph import ScatterGlyph
 from cleopatra.statistical_glyph import StatisticalGlyph
 from matplotlib.axes import Axes
 
 from digitalearth._arrays import fig_of as _fig_of
 from digitalearth._arrays import finite, read_masked_band
 
-__all__ = ["line", "bar", "histogram", "statistics"]
+__all__ = ["line", "bar", "histogram", "scatter", "statistics"]
+
+
+def _column_or_array(data: Any, value: Any) -> Optional[np.ndarray]:
+    """Resolve ``value`` to an array — a column of ``data`` when it names one, else array-like as-is.
+
+    The field-vs-field plumbing: with a (Geo)DataFrame ``data`` and a string ``value`` naming a column, the
+    column is read as ``float64``; otherwise ``value`` is coerced with ``numpy.asarray`` (and ``None`` passes
+    through, so optional ``color_by``/``size_by`` stay absent).
+
+    Args:
+        data: A (Geo)DataFrame whose columns ``value`` may name, or ``None``.
+        value: A column name (resolved against ``data``) or an array-like, or ``None``.
+
+    Returns:
+        The resolved array, or ``None`` when ``value`` is ``None``.
+
+    Raises:
+        KeyError: if ``value`` names a column absent from ``data``.
+    """
+    if value is None:
+        return None
+    if data is not None and isinstance(value, str) and hasattr(data, "columns"):
+        if value not in data.columns:
+            raise KeyError(f"column {value!r} not found in the feature attributes")
+        return np.asarray(data[value], dtype=float)
+    return np.asarray(value)
 
 
 def _as_finite_array(values: Any) -> np.ndarray:
@@ -273,3 +300,65 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
     arr = _field_values(values, column) if column is not None else _as_finite_array(values)
     glyph = StatisticalGlyph(arr, ax=ax, fig=_fig_of(ax))
     return glyph.histogram(bins=bins, **kwargs)
+
+
+def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: Any = None,
+            ax: Optional[Axes] = None, **kwargs) -> Axes:
+    """Draw a field-vs-field scatter (cleopatra ``ScatterGlyph``); returns the Axes (DC.3).
+
+    Plots ``y`` against ``x`` as a point cloud, optionally colouring points by ``color_by`` and sizing them by
+    ``size_by``. With a (Geo)DataFrame ``data``, ``x``/``y``/``color_by``/``size_by`` may be column names;
+    otherwise they are array-likes.
+
+    Args:
+        x: x values, or a column name of ``data``.
+        y: y values (same length as ``x``), or a column name of ``data``.
+        data: Optional (Geo)DataFrame; when given, the other arguments may name its columns.
+        color_by: Optional values (or column name) mapped to point colour (adds a colorbar).
+        size_by: Optional magnitudes (or column name) mapped to point size.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to ``ScatterGlyph`` (e.g. ``cmap``, ``point_size``, ``vmin``, ``vmax``, ``alpha``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` the scatter was drawn on (one ``PathCollection``).
+
+    Raises:
+        KeyError: if a column name is given but absent from ``data``.
+        ValueError: if ``x`` and ``y`` differ in shape (from ``ScatterGlyph``).
+
+    Examples:
+        - Two arrays draw one scatter collection:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.charts import scatter
+            >>> ax = scatter([1, 2, 3], [4, 5, 6])
+            >>> len(ax.collections)
+            1
+
+            ```
+        - Field vs field from a GeoDataFrame by column name:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.charts import scatter
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"a": [1.0, 2.0, 3.0], "b": [3.0, 2.0, 1.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = scatter("a", "b", data=gdf)
+            >>> len(ax.collections)
+            1
+
+            ```
+    """
+    xs = _column_or_array(data, x)
+    ys = _column_or_array(data, y)
+    values = _column_or_array(data, color_by)
+    sizes = _column_or_array(data, size_by)
+    glyph = ScatterGlyph(xs, ys, values=values, sizes=sizes, ax=ax, fig=_fig_of(ax), **kwargs)
+    _, ax, _ = glyph.plot(ax=ax)
+    return ax

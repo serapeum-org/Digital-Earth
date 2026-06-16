@@ -141,6 +141,55 @@ class TestHistogram:
         assert sorted(out.tolist()) == [1.0, 2.0, 3.0, 4.0], f"all cells should be kept, got {out}"
 
 
+class TestScatter:
+    """Tests for charts.scatter (DC.3) and the _column_or_array helper."""
+
+    def test_arrays_draw_one_collection(self):
+        """Two arrays draw a single scatter PathCollection and return the Axes."""
+        ax = charts.scatter([1, 2, 3], [4, 5, 6])
+        assert isinstance(ax, Axes), f"expected an Axes, got {type(ax)}"
+        assert len(ax.collections) == 1, f"expected one scatter collection, got {len(ax.collections)}"
+
+    def test_field_vs_field_by_column(self):
+        """With a GeoDataFrame, x/y resolve to column names (DC.3)."""
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"a": [1.0, 2.0, 3.0], "b": [3.0, 2.0, 1.0]},
+            geometry=[Point(i, i) for i in range(3)],
+            crs=4326,
+        )
+        ax = charts.scatter("a", "b", data=gdf)
+        assert len(ax.collections) == 1
+
+    def test_color_by_column_adds_colorbar(self):
+        """Colouring by a value column maps point colour (and adds a colorbar)."""
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"a": [1.0, 2.0, 3.0], "b": [3.0, 2.0, 1.0], "v": [0.1, 0.5, 0.9]},
+            geometry=[Point(i, i) for i in range(3)],
+            crs=4326,
+        )
+        ax = charts.scatter("a", "b", data=gdf, color_by="v")
+        assert ax.collections, "coloured scatter should still draw a collection"
+
+    def test_missing_column_raises(self):
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame({"a": [1.0]}, geometry=[Point(0, 0)], crs=4326)
+        with pytest.raises(KeyError, match="nope"):
+            charts.scatter("a", "nope", data=gdf)
+
+    def test_exported_top_level(self):
+        import digitalearth
+
+        assert digitalearth.scatter is charts.scatter and "scatter" in digitalearth.__all__
+
+
 class TestStatistics:
     """Tests for charts.statistics (DC.5) and the _field_values helper."""
 
