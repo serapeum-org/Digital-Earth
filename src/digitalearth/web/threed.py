@@ -164,9 +164,6 @@ class ThreeDMixin:
     ) -> "ThreeDMixin":
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
 
-        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
-        verified by the headless test suite (review H1).
-
         Args:
             points: A point ``FeatureCollection`` / GeoDataFrame (reprojected to lon/lat) or an
                 ``(N, 2|3)`` coordinate array.
@@ -194,8 +191,9 @@ class ThreeDMixin:
     def tiles_3d(self, url: str, *, opacity: float = 1.0) -> "ThreeDMixin":
         """Render an OGC 3D Tiles / Cesium tileset as a deck.gl ``Tile3DLayer`` (recipe W5).
 
-        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
-        verified by the headless test suite (review H1).
+        **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not
+        covered by the headless smoke test because it streams a **remote** ``tileset.json`` (the hermetic CI
+        job does not fetch network assets).
 
         Args:
             url: URL of the tileset's ``tileset.json``.
@@ -223,8 +221,9 @@ class ThreeDMixin:
     ) -> "ThreeDMixin":
         """Place a glTF/GLB 3-D model at ``(lng, lat)`` as a deck.gl ``ScenegraphLayer`` (recipe W5).
 
-        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
-        verified by the headless test suite (review H1).
+        **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not
+        covered by the headless smoke test because it fetches a **remote** ``.gltf`` / ``.glb`` asset (the
+        hermetic CI job does not fetch network assets).
 
         Args:
             url: URL of the ``.gltf`` / ``.glb`` model.
