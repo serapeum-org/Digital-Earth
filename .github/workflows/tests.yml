@@ -211,8 +211,10 @@ jobs:
           cache: true
 
       - name: Install Playwright + Chromium
+        # Pin a bounded range so the smoke test is reproducible — an unpinned install pulls whatever ships that
+        # day into the locked `web` env, outside pixi's lock (review L1).
         run: |
-          pixi run -e web pip install playwright
+          pixi run -e web pip install "playwright>=1.44,<2"
           pixi run -e web playwright install --with-deps chromium
 
       - name: Run the deck.gl browser smoke test

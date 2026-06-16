@@ -191,6 +191,10 @@ class ThreeDMixin:
     def tiles_3d(self, url: str, *, opacity: float = 1.0) -> "ThreeDMixin":
         """Render an OGC 3D Tiles / Cesium tileset as a deck.gl ``Tile3DLayer`` (recipe W5).
 
+        **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not
+        covered by the headless smoke test because it streams a **remote** ``tileset.json`` (the hermetic CI
+        job does not fetch network assets).
+
         Args:
             url: URL of the tileset's ``tileset.json``.
             opacity: Layer opacity in ``[0, 1]``.
@@ -216,6 +220,10 @@ class ThreeDMixin:
         size: float = 1.0,
     ) -> "ThreeDMixin":
         """Place a glTF/GLB 3-D model at ``(lng, lat)`` as a deck.gl ``ScenegraphLayer`` (recipe W5).
+
+        **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not
+        covered by the headless smoke test because it fetches a **remote** ``.gltf`` / ``.glb`` asset (the
+        hermetic CI job does not fetch network assets).
 
         Args:
             url: URL of the ``.gltf`` / ``.glb`` model.
