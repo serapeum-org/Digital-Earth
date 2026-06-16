@@ -238,9 +238,12 @@ class VectorMixin:
         """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
 
         The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
-        gets a colour from :func:`digitalearth._symbology.categorical_colors`, passed to GeoViews as a list
-        ``cmap`` over the categorical column (no continuous colorbar). The categories are recorded on
-        ``last_breaks`` for legend parity with the web tier.
+        gets a colour from :func:`digitalearth._symbology.categorical_colors`. The colour column is cast to
+        **string** and the colours are handed to GeoViews as a ``{label: colour}`` dict ``cmap`` — a numeric
+        column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
+        what guarantees one discrete colour per distinct value (no continuous colorbar). The categories
+        (original values, in classifier order) are recorded on ``last_breaks`` for legend parity with the web
+        tier.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
@@ -251,12 +254,17 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
-        from digitalearth._symbology import categorical_colors
+        from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
 
         gdf = self._display_gdf(features)
-        categories, colors = categorical_colors(gdf[column], "tab10" if cmap == "viridis" else cmap)
+        categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))
+        # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
+        # categorically (a numeric column would map continuously and interpolate the palette).
+        gdf = gdf.copy()
+        gdf[column] = gdf[column].astype(str)
+        cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
         element = self._vector_element("Polygons", gdf, vdims=[column])
-        common = {"color": column, "cmap": colors, "colorbar": False, **opts}
+        common = {"color": column, "cmap": cmap_by_label, "colorbar": False, **opts}
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         self.last_breaks = list(categories)
         return self.add_element(element)
@@ -312,6 +320,8 @@ class VectorMixin:
             )
         if isinstance(scheme, str) and scheme.lower() == "categorical":
             return self._categorical_polygons(features, column, cmap=cmap, **opts)
+        # Continuous ramp: no discrete breaks — clear any recorded from a prior categorical call.
+        self.last_breaks = None
         if clim is not None:
             opts = {"clim": clim, **opts}
         return self.polygons(features, column=column, cmap=cmap, **opts)

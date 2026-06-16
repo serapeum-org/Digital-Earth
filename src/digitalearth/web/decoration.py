@@ -208,8 +208,10 @@ class DecorationMixin:
     ) -> "DecorationMixin":
         """Add a draw-based measure tool — draw a line (distance) or polygon (area) to measure (ED.10).
 
-        Enables MapLibre's draw control scoped to line and/or polygon geometries, so the user draws the shape
-        to measure. The drawn GeoJSON is available on the rendered widget
+        Note this adds a **drawing** control, not a live on-map readout: it does not display the distance/area
+        number on the map (that GIS computation is left to pyramids, below). It enables MapLibre's draw control
+        scoped to line and/or polygon geometries, so the user draws the shape to measure. The drawn GeoJSON is
+        available on the rendered widget
         (``draw_feature_collection_all`` and the ``draw_features_created``/``…_updated`` events). Computing the
         numeric distance/area from that geometry is a **GIS** operation — do it in pyramids (geodesic length /
         area), keeping this tier to the (visualization) drawing control.

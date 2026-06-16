@@ -26,6 +26,10 @@ def _column_or_array(data: Any, value: Any) -> Optional[np.ndarray]:
     column is read as ``float64``; otherwise ``value`` is coerced with ``numpy.asarray`` (and ``None`` passes
     through, so optional ``color_by``/``size_by`` stay absent).
 
+    Use this for *paired* inputs that must stay index-aligned and may legitimately contain non-finite values
+    (scatter ``x``/``y``/``color_by``/``size_by``). For a *single* field reduced to its finite values (histogram
+    / :func:`statistics`), use :func:`_field_values` instead.
+
     Args:
         data: A (Geo)DataFrame whose columns ``value`` may name, or ``None``.
         value: A column name (resolved against ``data``) or an array-like, or ``None``.
@@ -63,6 +67,10 @@ def _field_values(data: Any, column: Optional[str] = None) -> np.ndarray:
     The single field-extraction recipe the column-aware chart helpers share: a GeoDataFrame/DataFrame column
     (when ``column`` is given), a pyramids ``Dataset`` band, or a plain array — always reduced to its finite
     (non-``NaN``/non-``inf``) values as ``float64``.
+
+    Use this for a *single* field that is summarised or binned on its own (histogram, :func:`statistics`). For
+    *paired* inputs that must keep their (possibly non-finite) entries index-aligned, use
+    :func:`_column_or_array` instead.
 
     Args:
         data: A GeoDataFrame/DataFrame (with ``column``), a pyramids ``Dataset``, or an array-like.
@@ -148,7 +156,9 @@ def statistics(
         "std": float(arr.std()),
     }
     for q in quantiles:
-        summary[f"q{int(round(q * 100))}"] = float(np.quantile(arr, q))
+        # ``:g`` keeps integer percents clean (0.25 -> "q25") while still distinguishing fractional
+        # quantiles (0.5 -> "q50", 0.505 -> "q50.5"), so near-equal quantiles do not collide on one key.
+        summary[f"q{q * 100:g}"] = float(np.quantile(arr, q))
     return summary
 
 
@@ -384,7 +394,14 @@ def _grouped_series(data: Any, by: str, column: Optional[str], agg: str):
         raise TypeError("bar_by/line_by need a (Geo)DataFrame with a groupby method")
     grouped = data.groupby(by)
     series = grouped.size() if column is None else grouped[column].agg(agg)
-    return list(series.index), np.asarray(series.to_numpy(), dtype=float)
+    try:
+        values = np.asarray(series.to_numpy(), dtype=float)
+    except (TypeError, ValueError) as err:  # non-numeric aggregate (e.g. agg="sum" on strings)
+        raise TypeError(
+            f"cannot aggregate column {column!r} with agg={agg!r} into numbers — is the column numeric? "
+            f"({err})"
+        ) from err
+    return list(series.index), values
 
 
 def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",

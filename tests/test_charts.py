@@ -178,6 +178,13 @@ class TestAggregateByCategory:
         with pytest.raises(TypeError, match="groupby"):
             charts.bar_by([1, 2, 3], "cat")
 
+    def test_non_numeric_value_column_raises_clear_error(self, gdf):
+        """Aggregating a non-numeric value column surfaces a clear message naming column + agg (L2)."""
+        with pytest.raises(TypeError, match="cannot aggregate column 'cat'"):
+            charts.bar_by(gdf, "year", "cat", agg="sum")
+        with pytest.raises(TypeError, match="cannot aggregate column 'cat'"):
+            charts.line_by(gdf, "year", "cat", agg="sum")
+
     def test_exported_top_level(self):
         import digitalearth
 
@@ -249,6 +256,11 @@ class TestStatistics:
         s = charts.statistics(range(101), quantiles=(0.1, 0.9))
         assert s["q10"] == 10.0 and s["q90"] == 90.0
         assert "q50" not in s, "only the requested quantiles should be present"
+
+    def test_fractional_quantiles_get_distinct_keys(self):
+        """Near-equal quantiles map to distinct keys instead of colliding on one (N2)."""
+        s = charts.statistics(range(1001), quantiles=(0.5, 0.505))
+        assert "q50" in s and "q50.5" in s, f"fractional quantiles must not collide: {sorted(s)}"
 
     def test_drops_nonfinite(self):
         """NaN/inf are excluded from the summary."""

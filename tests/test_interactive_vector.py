@@ -134,16 +134,26 @@ class TestPolygonsAndChoropleth:
         assert plot["clim"] == (0.0, 10.0), f"clim not honoured: {plot.get('clim')}"
 
     def test_choropleth_categorical_scheme(self, m, polygon_fc):
-        """scheme='categorical' colours by distinct value with a list cmap, recording the categories (DC.8)."""
+        """scheme='categorical' gives one *discrete* colour per distinct value, recording the categories (DC.8).
+
+        The colour column (``fid``, numeric) is rendered as discrete string labels with a ``{label: colour}``
+        dict cmap, so Bokeh colours it categorically rather than interpolating a continuous palette (M1).
+        """
         m.choropleth(polygon_fc, "fid", scheme="categorical")
         element = m.layers[0]
         assert isinstance(element, gv.Polygons)
         style = hv.Store.lookup_options("bokeh", element, "style").kwargs
         assert style["color"] == "fid"
-        assert isinstance(style["cmap"], list) and all(
-            isinstance(c, str) for c in style["cmap"]
-        ), f"categorical cmap should be a list of colours, got {style.get('cmap')!r}"
-        assert m.last_breaks is not None and len(m.last_breaks) >= 1, "categories should be recorded"
+        cmap = style["cmap"]
+        assert isinstance(cmap, dict), f"categorical cmap should be a label->colour dict, got {cmap!r}"
+        assert all(isinstance(c, str) and c.startswith("#") for c in cmap.values()), f"hex colours: {cmap}"
+        # one discrete colour per distinct value, and the labels are the (stringified) categories
+        n = len(m.last_breaks)
+        assert n >= 1, "categories should be recorded"
+        assert len(cmap) == n, f"expected {n} discrete colours, got {len(cmap)}"
+        assert set(cmap) == {str(c) for c in m.last_breaks}, "cmap keys must be the category labels"
+        # the rendered colour column is discrete (string), not the original numeric dtype
+        assert element.dimension_values("fid").dtype.kind in ("U", "O"), "colour column must be string-typed"
 
     def test_choropleth_missing_column_raises(self, m, polygon_fc):
         with pytest.raises(KeyError, match="nope"):

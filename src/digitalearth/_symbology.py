@@ -17,6 +17,26 @@ import numpy as np
 #: Default qualitative colormap for categorical symbology (10 distinct hues; cycled if more categories).
 _DEFAULT_CATEGORICAL_CMAP = "tab10"
 
+#: The continuous-colour default ``choropleth`` carries in its signature (right for graduated/continuous,
+#: a poor fit for categorical). The categorical path swaps it for ``_DEFAULT_CATEGORICAL_CMAP``.
+_CONTINUOUS_DEFAULT_CMAP = "viridis"
+
+
+def resolve_categorical_cmap(cmap: str) -> str:
+    """Pick the colormap for categorical symbology, swapping the continuous default for a qualitative one.
+
+    ``choropleth``'s ``cmap`` defaults to the continuous ``"viridis"`` (right for graduated/continuous
+    colouring). That sequential map reads poorly as discrete categories, so when the caller leaves the default
+    in place it is swapped for :data:`_DEFAULT_CATEGORICAL_CMAP`; an explicit ``cmap`` is always honoured.
+
+    Args:
+        cmap: The colormap name passed to ``choropleth`` (a qualitative map is preferred for categorical).
+
+    Returns:
+        ``cmap`` unchanged, unless it is the continuous default — then the qualitative categorical default.
+    """
+    return _DEFAULT_CATEGORICAL_CMAP if cmap == _CONTINUOUS_DEFAULT_CMAP else cmap
+
 
 def _categories(values: Any) -> List[Any]:
     """Return the distinct, non-null values of ``values`` in a stable order (sorted when sortable).

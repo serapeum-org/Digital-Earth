@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from digitalearth._symbology import categorical_colors
+from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
 
 
 def test_distinct_categories_get_distinct_colors():
@@ -35,3 +35,9 @@ def test_unsortable_mixed_keeps_first_seen_order():
 def test_empty_raises():
     with pytest.raises(ValueError, match="no non-null"):
         categorical_colors([None, float("nan")])
+
+
+def test_resolve_categorical_cmap_swaps_continuous_default():
+    """The continuous default is swapped for a qualitative map; an explicit cmap is honoured (N1)."""
+    assert resolve_categorical_cmap("viridis") == "tab10", "continuous default → qualitative default"
+    assert resolve_categorical_cmap("Set2") == "Set2", "an explicit cmap must be honoured"
