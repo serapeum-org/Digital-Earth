@@ -209,12 +209,17 @@ def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, *
     return ax
 
 
-def histogram(values: Any, *, bins: int = 15, ax: Optional[Axes] = None, **kwargs):
-    """Draw a histogram of array or raster values (cleopatra ``StatisticalGlyph.histogram``).
+def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
+              ax: Optional[Axes] = None, **kwargs):
+    """Draw a histogram of array, raster, or field values (cleopatra ``StatisticalGlyph.histogram``).
 
     Args:
-        values: A 1-D/2-D sequence of numbers, or a pyramids ``Dataset`` (its first band is used, with nodata
-            and non-finite cells dropped). A 2-D array draws one overlaid histogram per column.
+        values: A 1-D/2-D sequence of numbers, a pyramids ``Dataset`` (its first band is used, with nodata
+            and non-finite cells dropped), or a GeoDataFrame/DataFrame when ``column`` is given (the one-call
+            ``histogram(gdf, column="pop")`` field path, DC.1). A 2-D array draws one overlaid histogram per
+            column.
+        column: Attribute/column name to histogram when ``values`` is a (Geo)DataFrame; its finite values are
+            used.
         bins: Number of histogram bins.
         ax: Existing axes to draw on; a new figure/axes is created when ``None``.
         **kwargs: Forwarded to ``StatisticalGlyph.histogram`` (e.g. ``color``, ``alpha``, ``rwidth``).
@@ -247,7 +252,24 @@ def histogram(values: Any, *, bins: int = 15, ax: Optional[Axes] = None, **kwarg
             4
 
             ```
+        - A GeoDataFrame column is histogrammed in one call (DC.1):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.charts import histogram
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"pop": [1.0, 1.0, 2.0, 3.0]},
+            ...     geometry=[Point(i, i) for i in range(4)],
+            ...     crs=4326,
+            ... )
+            >>> fig, ax, hist = histogram(gdf, column="pop", bins=3)
+            >>> len(ax.patches)
+            3
+
+            ```
     """
-    arr = _as_finite_array(values)
+    arr = _field_values(values, column) if column is not None else _as_finite_array(values)
     glyph = StatisticalGlyph(arr, ax=ax, fig=_fig_of(ax))
     return glyph.histogram(bins=bins, **kwargs)

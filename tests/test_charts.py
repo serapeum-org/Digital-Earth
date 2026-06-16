@@ -105,6 +105,19 @@ class TestHistogram:
         fig, ax, hist = charts.histogram(ds, bins=3)
         assert len(ax.patches) == 3
 
+    def test_geodataframe_column(self):
+        """A GeoDataFrame column is histogrammed in one call via `column=` (DC.1)."""
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"pop": [1.0, 1.0, 2.0, 3.0, 3.0, 3.0]},
+            geometry=[Point(i, i) for i in range(6)],
+            crs=4326,
+        )
+        fig, ax, hist = charts.histogram(gdf, column="pop", bins=3)
+        assert len(ax.patches) == 3, f"expected 3 bins, got {len(ax.patches)}"
+
     def test_2d_values_overlaid(self):
         """A 2-D array draws an overlaid histogram per column (one colour per series, as cleopatra needs)."""
         vals = np.column_stack([[1, 2, 3, 4], [2, 3, 4, 5]])
