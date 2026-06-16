@@ -196,9 +196,6 @@ class BigDataMixin:
     ) -> "BigDataMixin":
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
-        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
-        verified by the headless test suite (review H1).
-
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
             fill_color: RGBA fill colour (0-255 per channel).
@@ -232,9 +229,6 @@ class BigDataMixin:
         line_color: Sequence[int] = (255, 255, 255, 255),
     ) -> "BigDataMixin":
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
-
-        **Experimental:** the deck.gl layer spec is built and serialised, but its in-browser rendering is not
-        verified by the headless test suite (review H1).
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
