@@ -128,6 +128,67 @@ class TestHistogram:
         assert sorted(out.tolist()) == [1.0, 2.0, 3.0, 4.0], f"all cells should be kept, got {out}"
 
 
+class TestStatistics:
+    """Tests for charts.statistics (DC.5) and the _field_values helper."""
+
+    def test_basic_summary(self):
+        """count/min/max/mean and the default quartiles are computed over the finite values."""
+        s = charts.statistics([1, 2, 3, 4])
+        assert (s["count"], s["min"], s["max"], s["mean"]) == (4, 1.0, 4.0, 2.5)
+        assert s["q50"] == 2.5, f"median should be q50=2.5, got {s.get('q50')}"
+        assert set(s) == {"count", "min", "max", "mean", "std", "q25", "q50", "q75"}
+
+    def test_custom_quantiles(self):
+        """Requested quantiles appear under q<pct> keys."""
+        s = charts.statistics(range(101), quantiles=(0.1, 0.9))
+        assert s["q10"] == 10.0 and s["q90"] == 90.0
+        assert "q50" not in s, "only the requested quantiles should be present"
+
+    def test_drops_nonfinite(self):
+        """NaN/inf are excluded from the summary."""
+        s = charts.statistics([1.0, np.nan, 3.0, np.inf])
+        assert s["count"] == 2 and s["mean"] == 2.0
+
+    def test_geodataframe_column(self):
+        """A GeoDataFrame column is summarised when `column` is given."""
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"pop": [10.0, 20.0, 30.0]},
+            geometry=[Point(i, i) for i in range(3)],
+            crs=4326,
+        )
+        assert charts.statistics(gdf, column="pop")["mean"] == 20.0
+
+    def test_dataset_band(self):
+        """A pyramids Dataset is summarised over its first band, nodata dropped."""
+        from pyramids.dataset import Dataset
+
+        arr = np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+        s = charts.statistics(ds)
+        assert s["count"] == 3 and s["min"] == 1.0 and s["max"] == 3.0
+
+    def test_empty_raises(self):
+        with pytest.raises(ValueError, match="no finite values"):
+            charts.statistics([np.nan, np.inf])
+
+    def test_missing_column_raises(self):
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame({"pop": [1.0]}, geometry=[Point(0, 0)], crs=4326)
+        with pytest.raises(KeyError, match="nope"):
+            charts.statistics(gdf, column="nope")
+
+    def test_exported_top_level(self):
+        import digitalearth
+
+        assert digitalearth.statistics is charts.statistics
+        assert "statistics" in digitalearth.__all__
+
+
 class TestFigOf:
     """Tests for the _fig_of helper."""
 
