@@ -16,7 +16,7 @@ from matplotlib.axes import Axes
 from digitalearth._arrays import fig_of as _fig_of
 from digitalearth._arrays import finite, read_masked_band
 
-__all__ = ["line", "bar", "histogram", "scatter", "statistics"]
+__all__ = ["line", "bar", "bar_by", "line_by", "histogram", "scatter", "statistics"]
 
 
 def _column_or_array(data: Any, value: Any) -> Optional[np.ndarray]:
@@ -362,3 +362,129 @@ def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: 
     glyph = ScatterGlyph(xs, ys, values=values, sizes=sizes, ax=ax, fig=_fig_of(ax), **kwargs)
     _, ax, _ = glyph.plot(ax=ax)
     return ax
+
+
+def _grouped_series(data: Any, by: str, column: Optional[str], agg: str):
+    """Group ``data`` by ``by`` and aggregate ``column`` (or count rows) — the bar/line-by recipe.
+
+    Args:
+        data: A (Geo)DataFrame to group.
+        by: Column to group on (a category or time field).
+        column: Value column to aggregate; ``None`` counts rows per group.
+        agg: Aggregation name applied to ``column`` (``"sum"``/``"mean"``/``"count"``/``"min"``/…).
+
+    Returns:
+        tuple: ``(keys, values)`` — the group keys (sorted ascending by pandas) and the aggregated values as
+        a ``float64`` array.
+
+    Raises:
+        TypeError: if ``data`` has no ``groupby`` (not a DataFrame).
+    """
+    if not hasattr(data, "groupby"):
+        raise TypeError("bar_by/line_by need a (Geo)DataFrame with a groupby method")
+    grouped = data.groupby(by)
+    series = grouped.size() if column is None else grouped[column].agg(agg)
+    return list(series.index), np.asarray(series.to_numpy(), dtype=float)
+
+
+def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",
+           ax: Optional[Axes] = None, **kwargs) -> Axes:
+    """Bar chart of an aggregate per category (DC.4).
+
+    Groups ``data`` by the ``by`` column and draws one bar per group of ``column`` aggregated with ``agg``
+    (or the row count when ``column`` is ``None``). Bars sit at integer positions labelled with the category
+    names, so non-numeric categories render correctly.
+
+    Args:
+        data: A (Geo)DataFrame.
+        by: Category column to group on.
+        column: Value column to aggregate; ``None`` counts rows per category.
+        agg: Aggregation name (``"sum"``/``"mean"``/``"count"``/``"min"``/``"max"``/``"median"``).
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to :func:`bar` (e.g. ``color``, ``width``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` with one bar per category, x-tick-labelled by category.
+
+    Examples:
+        - Sum a value column per category:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.charts import bar_by
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"cat": ["a", "a", "b"], "v": [1.0, 2.0, 3.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = bar_by(gdf, "cat", "v", agg="sum")
+            >>> [round(rect.get_height(), 1) for rect in ax.containers[0]]
+            [3.0, 3.0]
+
+            ```
+        - Count rows per category (no value column):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.charts import bar_by
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"cat": ["a", "a", "b"]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = bar_by(gdf, "cat")
+            >>> [int(rect.get_height()) for rect in ax.containers[0]]
+            [2, 1]
+
+            ```
+    """
+    keys, values = _grouped_series(data, by, column, agg)
+    ax = bar(range(len(keys)), values, ax=ax, **kwargs)
+    ax.set_xticks(range(len(keys)))
+    ax.set_xticklabels([str(key) for key in keys])
+    return ax
+
+
+def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",
+            ax: Optional[Axes] = None, **kwargs) -> Axes:
+    """Line chart of an aggregate per ordered key — e.g. a value summed by year (DC.4).
+
+    Groups ``data`` by the ``by`` column (typically a time/ordered field), aggregates ``column`` with ``agg``
+    (or counts rows when ``column`` is ``None``), and draws a line over the sorted keys.
+
+    Args:
+        data: A (Geo)DataFrame.
+        by: Ordered/time column to group on (kept in ascending key order).
+        column: Value column to aggregate; ``None`` counts rows per key.
+        agg: Aggregation name (``"sum"``/``"mean"``/``"count"``/…).
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to :func:`line` (e.g. ``label``, ``color``, ``marker``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` with the aggregated series as one line.
+
+    Examples:
+        - Mean of a value by year:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.charts import line_by
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"year": [2000, 2000, 2010], "v": [1.0, 3.0, 5.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = line_by(gdf, "year", "v", agg="mean")
+            >>> len(ax.lines)
+            1
+
+            ```
+    """
+    keys, values = _grouped_series(data, by, column, agg)
+    return line(keys, values, ax=ax, **kwargs)

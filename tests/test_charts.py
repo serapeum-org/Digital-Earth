@@ -141,6 +141,50 @@ class TestHistogram:
         assert sorted(out.tolist()) == [1.0, 2.0, 3.0, 4.0], f"all cells should be kept, got {out}"
 
 
+class TestAggregateByCategory:
+    """Tests for charts.bar_by / line_by (DC.4) and the _grouped_series helper."""
+
+    @pytest.fixture()
+    def gdf(self):
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        return gpd.GeoDataFrame(
+            {"cat": ["a", "a", "b", "c"], "year": [2000, 2000, 2010, 2010], "v": [1.0, 2.0, 3.0, 4.0]},
+            geometry=[Point(i, i) for i in range(4)],
+            crs=4326,
+        )
+
+    def test_bar_by_sum(self, gdf):
+        """bar_by sums a value column per category, one bar per category in sorted-key order."""
+        ax = charts.bar_by(gdf, "cat", "v", agg="sum")
+        heights = [round(rect.get_height(), 1) for rect in ax.containers[0]]
+        assert heights == [3.0, 3.0, 4.0], f"a=1+2, b=3, c=4 expected, got {heights}"
+        assert [t.get_text() for t in ax.get_xticklabels()] == ["a", "b", "c"]
+
+    def test_bar_by_count_without_column(self, gdf):
+        """With no value column, bar_by counts rows per category."""
+        ax = charts.bar_by(gdf, "cat")
+        assert [int(r.get_height()) for r in ax.containers[0]] == [2, 1, 1]
+
+    def test_line_by_mean_by_time(self, gdf):
+        """line_by aggregates by an ordered/time key and draws one line."""
+        ax = charts.line_by(gdf, "year", "v", agg="mean")
+        assert len(ax.lines) == 1
+        ys = list(ax.lines[0].get_ydata())
+        assert ys == [1.5, 3.5], f"2000->mean(1,2)=1.5, 2010->mean(3,4)=3.5, got {ys}"
+
+    def test_non_dataframe_raises(self):
+        with pytest.raises(TypeError, match="groupby"):
+            charts.bar_by([1, 2, 3], "cat")
+
+    def test_exported_top_level(self):
+        import digitalearth
+
+        assert digitalearth.bar_by is charts.bar_by and "bar_by" in digitalearth.__all__
+        assert digitalearth.line_by is charts.line_by and "line_by" in digitalearth.__all__
+
+
 class TestScatter:
     """Tests for charts.scatter (DC.3) and the _column_or_array helper."""
 

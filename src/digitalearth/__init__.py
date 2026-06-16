@@ -38,7 +38,15 @@ digitalearth - visualization package
 from digitalearth.api import quickmap, quickplot  # noqa: E402
 from digitalearth.batch import Batch  # noqa: E402
 from digitalearth.browser import gallery  # noqa: E402
-from digitalearth.charts import bar, histogram, line, scatter, statistics  # noqa: E402
+from digitalearth.charts import (  # noqa: E402
+    bar,
+    bar_by,
+    histogram,
+    line,
+    line_by,
+    scatter,
+    statistics,
+)
 from digitalearth.plugins import load_plugins  # noqa: E402
 from digitalearth.scene import Map, Scene, grid, projections, shared_colorbar  # noqa: E402
 from digitalearth.series import (  # noqa: E402
@@ -57,7 +65,7 @@ __all__ = [
     # data view
     "get_source", "Source", "DimensionInfo",
     # charts and statistical series
-    "line", "bar", "histogram", "scatter", "statistics",
+    "line", "bar", "bar_by", "line_by", "histogram", "scatter", "statistics",
     "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",
     # temporal products
     "TimeSeries", "Climatology",
