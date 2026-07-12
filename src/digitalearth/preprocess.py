@@ -3,7 +3,7 @@
 Two small operations from earthkit-plots' pipeline that prepare global gridded data for plotting:
 
 - :func:`wrap_longitude` rolls a 0-360 dataset to -180..180 (delegated to **pyramids**
-  ``Dataset.convert_longitude`` — the CRS-aware operation belongs there, not here).
+  ``Dataset.wrap_longitude`` — the CRS-aware operation belongs there, not here).
 - :func:`add_cyclic_column` appends the first data column so a global contour/pcolormesh has no seam at the
   antimeridian. This is pure array bookkeeping (numpy), so it lives in the digitalearth wiring.
 """
@@ -13,7 +13,7 @@ import numpy as np
 
 
 def wrap_longitude(dataset: Any) -> Any:
-    """Roll a 0-360 longitude dataset to -180..180 via pyramids ``convert_longitude``.
+    """Roll a 0-360 longitude dataset to -180..180 via pyramids ``wrap_longitude``.
 
     Args:
         dataset: A pyramids ``Dataset`` whose x/longitude runs 0..360.
@@ -21,7 +21,7 @@ def wrap_longitude(dataset: Any) -> Any:
     Returns:
         A new ``Dataset`` with longitudes in -180..180.
     """
-    return dataset.convert_longitude()
+    return dataset.wrap_longitude()
 
 
 def add_cyclic_column(z: np.ndarray, x: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:

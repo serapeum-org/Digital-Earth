@@ -31,7 +31,7 @@ class TestWrapLongitude:
     """Tests for wrap_longitude."""
 
     def test_rolls_0_360_to_signed(self):
-        """A 0-360 dataset is rolled to -180..180 via pyramids convert_longitude."""
+        """A 0-360 dataset is rolled to -180..180 via pyramids wrap_longitude."""
         arr = np.arange(8 * 4, dtype="float32").reshape(4, 8)
         geo = (0.0, 45.0, 0.0, 90.0, 0.0, -45.0)
         ds = Dataset.create_from_array(arr=arr, geo=geo, epsg=4326)

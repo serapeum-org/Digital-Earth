@@ -7,7 +7,7 @@ Two vector visualizations:
 - :meth:`extruded_polygons` — turn polygon footprints into **3-D prisms** (``triangulate().extrude(...)``), the
   building-block of extruded-building / choropleth-relief views.
 
-Polygons come from the GeoDataFrame pyramids returns (``FeatureCollection.to_geodataframe()`` /
+Polygons come from the GeoDataFrame pyramids returns (a ``FeatureCollection``, which *is* a GeoDataFrame, or
 ``Dataset.get_cell_polygons()``); only their coordinates are read (``geom.exterior.coords``, ``geom.geoms``), so
 this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_competitor_imports`` guard). CRS work
 stays in pyramids.
@@ -125,8 +125,9 @@ class VectorMixin:
         """Extrude polygon footprints into 3-D prisms and register them as a single layer.
 
         Args:
-            gdf: A GeoDataFrame of ``Polygon``/``MultiPolygon`` geometries (e.g. ``to_geodataframe()`` /
-                ``get_cell_polygons()``); coordinates are read by duck-typing (no geopandas/shapely import).
+            gdf: A GeoDataFrame of ``Polygon``/``MultiPolygon`` geometries (e.g. a pyramids
+                ``FeatureCollection`` / ``get_cell_polygons()``); coordinates are read by duck-typing (no
+                geopandas/shapely import).
             height: Uniform extrusion height (``float``), or the name of a column (``str``) to read a
                 per-feature height from.
             column: Optional attribute column to colour the prisms by; ``None`` for a flat colour.

@@ -299,10 +299,10 @@ class WebMapBase:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
         The single vector choke point the point/line/polygon builders call. A pyramids
-        ``FeatureCollection`` is reprojected through pyramids (``to_crs``) when needed and converted to a
-        ``geopandas`` GeoDataFrame (the only form ``maplibre.Map.add_source`` accepts for vector data); a
-        GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import — pyramids
-        owns the reprojection and hands us the GeoDataFrame.
+        ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form ``maplibre.Map.add_source`` accepts
+        for vector data), so it is reprojected through pyramids (``to_crs``) when needed and returned as-is; a
+        bare GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import —
+        pyramids owns the reprojection and the GeoDataFrame type.
 
         Args:
             features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
@@ -310,11 +310,9 @@ class WebMapBase:
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
         """
-        if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection
+        if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
-            if hasattr(features, "to_geodataframe"):
-                return features.to_geodataframe()
             return features
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
