@@ -94,6 +94,11 @@ class TestHistogram:
         fig, ax, hist = charts.histogram([1, 1, 2, 3, 3, 3], bins=3)
         assert len(ax.patches) == 3, f"expected 3 bins, got {len(ax.patches)}"
 
+    def test_raw_array_drops_nonfinite(self):
+        """A raw 1-D array with NaN/inf histograms cleanly instead of an opaque numpy range error (M1)."""
+        fig, ax, hist = charts.histogram([1.0, np.nan, 3.0, np.inf, 2.0], bins=3)
+        assert len(ax.patches) == 3, f"expected 3 bins over the finite values, got {len(ax.patches)}"
+
     def test_dataset_input_drops_nodata(self):
         """A pyramids Dataset is histogrammed over its first band with nodata excluded."""
         from pyramids.dataset import Dataset

@@ -261,7 +261,8 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
         values: A 1-D/2-D sequence of numbers, a pyramids ``Dataset`` (its first band is used, with nodata
             and non-finite cells dropped), or a GeoDataFrame/DataFrame when ``column`` is given (the one-call
             ``histogram(gdf, column="pop")`` field path, DC.1). A 2-D array draws one overlaid histogram per
-            column.
+            column. Non-finite (``NaN``/``inf``) values are dropped on the 1-D and ``column``/``Dataset``
+            paths; a 2-D array keeps its shape (drop non-finite yourself before passing a 2-D array with gaps).
         column: Attribute/column name to histogram when ``values`` is a (Geo)DataFrame; its finite values are
             used.
         bins: Number of histogram bins.
@@ -314,7 +315,14 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
 
             ```
     """
-    arr = _field_values(values, column) if column is not None else _as_finite_array(values)
+    if column is not None:
+        arr = _field_values(values, column)
+    else:
+        arr = _as_finite_array(values)
+        if arr.ndim == 1:
+            # Drop NaN/inf on the 1-D raw path so a raw array with non-finite values histograms cleanly
+            # (a 2-D array keeps its shape for the overlaid-per-column case, so it is left untouched).
+            arr = finite(arr)
     glyph = StatisticalGlyph(arr, ax=ax, fig=_fig_of(ax))
     return glyph.histogram(bins=bins, **kwargs)
 
