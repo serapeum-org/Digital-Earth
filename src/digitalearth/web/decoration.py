@@ -36,6 +36,24 @@ _BASEMAP_PROVIDERS = {
     ),
 }
 
+#: The four legal MapLibre control corners.
+_CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+
+def _check_position(position: str) -> None:
+    """Validate a control corner, raising ``ValueError`` for anything but the four legal MapLibre corners.
+
+    Args:
+        position: The requested corner placement.
+
+    Raises:
+        ValueError: when ``position`` is not one of ``top-left``/``top-right``/``bottom-left``/``bottom-right``.
+    """
+    if position not in _CONTROL_POSITIONS:
+        raise ValueError(
+            f"unknown control position {position!r}; choose one of {list(_CONTROL_POSITIONS)}"
+        )
+
 
 class DecorationMixin:
     """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`."""
@@ -125,6 +143,7 @@ class DecorationMixin:
             This map (chainable).
         """
         _require_maplibre()
+        _check_position(position)
         from maplibre.controls import NavigationControl
 
         control = NavigationControl(
@@ -150,6 +169,7 @@ class DecorationMixin:
             This map (chainable).
         """
         _require_maplibre()
+        _check_position(position)
         from maplibre.controls import ScaleControl
 
         control = ScaleControl(unit=unit, max_width=int(max_width))
@@ -169,6 +189,7 @@ class DecorationMixin:
             This map (chainable).
         """
         _require_maplibre()
+        _check_position(position)
         from maplibre.controls import FullscreenControl
 
         control = FullscreenControl()
@@ -228,6 +249,7 @@ class DecorationMixin:
             ValueError: if neither ``distance`` nor ``area`` is enabled.
         """
         _require_maplibre()
+        _check_position(position)
         from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
 
         if not (distance or area):

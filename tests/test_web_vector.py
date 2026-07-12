@@ -222,6 +222,13 @@ class TestDecorationNeedsEngine:
         with pytest.raises(ValueError, match="distance and/or area"):
             WebMap().polygons(polygons_gdf).measure(distance=False, area=False)
 
+    def test_control_position_is_validated(self):
+        """An unknown control corner fails fast with a clear error rather than at render time (N3)."""
+        with pytest.raises(ValueError, match="unknown control position"):
+            WebMap().navigation(position="middle")
+        with pytest.raises(ValueError, match="unknown control position"):
+            WebMap().scale_bar(position="nowhere")
+
 
 class TestAttributeTemplate:
     """``_attribute_template`` builds the right popup/tooltip kwargs (no engine needed)."""
