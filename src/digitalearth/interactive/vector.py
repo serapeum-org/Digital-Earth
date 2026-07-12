@@ -296,6 +296,8 @@ class VectorMixin:
             column: The column driving the fill colour (required); numeric for the continuous ramp, or any
                 hashable value for ``scheme="categorical"``.
             scheme: ``"categorical"`` for distinct-value colouring; ``None`` (default) for a continuous ramp.
+                Graduated schemes (``"quantiles"``/``"fisher_jenks"``/…) are **not** supported in the
+                interactive tier and raise ``NotImplementedError`` rather than silently degrading.
             cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
                 left at the default).
             clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
@@ -318,6 +320,8 @@ class VectorMixin:
 
         Raises:
             KeyError: when ``column`` is not a column of ``features``.
+            NotImplementedError: when ``scheme`` is a graduated scheme (only ``"categorical"``/``None`` are
+                supported in the interactive tier).
         """
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
@@ -325,6 +329,12 @@ class VectorMixin:
             )
         if isinstance(scheme, str) and scheme.lower() == "categorical":
             return self._categorical_polygons(features, column, cmap=cmap, **opts)
+        if scheme is not None:
+            raise NotImplementedError(
+                f"interactive choropleth supports scheme='categorical' or None (continuous ramp); the "
+                f"graduated scheme {scheme!r} is not implemented in the interactive tier — use the web tier "
+                f"for graduated classification, or pass scheme=None for a continuous ramp"
+            )
         # Continuous ramp: no discrete breaks — clear any recorded from a prior categorical call.
         self.last_breaks = None
         if clim is not None:

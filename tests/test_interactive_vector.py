@@ -167,6 +167,11 @@ class TestPolygonsAndChoropleth:
         assert cmap.get("n/a") == "#cccccc", f"missing values must map to the neutral fallback: {cmap}"
         assert {"a", "b"} <= set(cmap), f"real categories must still be coloured: {cmap}"
 
+    def test_choropleth_graduated_scheme_not_implemented(self, m, polygon_fc):
+        """A graduated scheme is rejected, not silently degraded to a continuous ramp (L1)."""
+        with pytest.raises(NotImplementedError, match="graduated scheme"):
+            m.choropleth(polygon_fc, "fid", scheme="quantiles")
+
     def test_choropleth_missing_column_raises(self, m, polygon_fc):
         with pytest.raises(KeyError, match="nope"):
             m.choropleth(polygon_fc, "nope")
