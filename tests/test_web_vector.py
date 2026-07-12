@@ -102,6 +102,19 @@ class TestColorExpr:
         literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
         assert literals == [1, 2, 3] and all(type(v) is int for v in literals)
 
+    def test_categorical_whole_float_labels_narrow_to_int(self):
+        """Whole-valued float categories become int labels — MapLibre rejects non-integer match labels (M1)."""
+        m = WebMap()
+        expr = m._color_expr(np.array([1.0, 2.0, 1.0, 3.0]), "zone", "categorical", 5, "tab10")
+        literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
+        assert literals == [1, 2, 3] and all(type(v) is int for v in literals), f"float cats must narrow: {literals}"
+        assert all(type(b) is int for b in m.last_breaks), f"recorded breaks must narrow too: {m.last_breaks}"
+
+    def test_categorical_non_integer_float_rejected(self):
+        """A non-integer float category cannot key a MapLibre match and is rejected clearly (M1)."""
+        with pytest.raises(ValueError, match="non-integer category"):
+            WebMap()._color_expr(np.array([1.5, 2.5]), "x", "categorical", 5, "tab10")
+
     def test_cmap_hex_count_and_format(self):
         """``_cmap_hex`` returns the requested number of hex colours."""
         colors = WebMap()._cmap_hex("viridis", 4)

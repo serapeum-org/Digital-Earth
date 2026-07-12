@@ -53,11 +53,23 @@ class VectorMixin:
         import numpy as np
 
         def _native(value: Any) -> Any:
-            """Coerce a numpy scalar to a JSON-native ``int``/``float``/``str`` for a MapLibre literal."""
+            """Coerce a category to a JSON-native, MapLibre-legal ``match`` label.
+
+            MapLibre rejects non-integer numeric ``match`` labels ("Numeric branch labels must be integer
+            values"), so a whole-valued float (integer class codes stored as ``float64`` — the common shape
+            for codes read from GeoJSON) is narrowed to ``int``; a genuinely non-integral float cannot key a
+            ``match`` and is rejected with a clear error. Integers and strings pass through unchanged.
+            """
             if isinstance(value, np.integer):
                 return int(value)
-            if isinstance(value, np.floating):
-                return float(value)
+            if isinstance(value, (np.floating, float)):
+                as_float = float(value)
+                if not as_float.is_integer():
+                    raise ValueError(
+                        f"categorical column {column!r} has a non-integer category {as_float!r}; a "
+                        f"categorical scheme needs discrete integer codes or string labels"
+                    )
+                return int(as_float)
             return value
 
         if isinstance(scheme, str) and scheme.lower() == "categorical":
