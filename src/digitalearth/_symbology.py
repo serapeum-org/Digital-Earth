@@ -69,12 +69,14 @@ def _categories(values: Any) -> List[Any]:
         The unique categories, sorted ascending when they are mutually comparable, else in first-seen order.
     """
     seen: List[Any] = []
+    seen_set: set = set()  # O(1) membership so dedup stays O(n), not O(n·k), for large columns
     for value in np.asarray(values, dtype=object).ravel():
         if value is None:
             continue
         if isinstance(value, float) and np.isnan(value):
             continue
-        if value not in seen:
+        if value not in seen_set:
+            seen_set.add(value)
             seen.append(value)
     try:
         return sorted(seen)
