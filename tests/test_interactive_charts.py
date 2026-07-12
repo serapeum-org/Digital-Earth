@@ -5,6 +5,7 @@ The lazy-import contract runs without the engine; the chart builders ``importors
 """
 import sys
 
+import numpy as np
 import pytest
 
 from digitalearth.interactive import charts as icharts
@@ -50,6 +51,12 @@ class TestInteractiveCharts:
         import holoviews as hv
 
         assert isinstance(icharts.histogram(gdf, column="a_val", bins=3), hv.Histogram)
+
+    def test_histogram_raw_array_drops_nonfinite(self):
+        """A raw array with NaN/inf histograms cleanly instead of raising an opaque numpy range error (L2)."""
+        import holoviews as hv
+
+        assert isinstance(icharts.histogram([1.0, np.nan, 3.0, np.inf, 2.0], bins=3), hv.Histogram)
 
     def test_scatter_arrays(self):
         import holoviews as hv

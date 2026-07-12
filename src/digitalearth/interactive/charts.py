@@ -14,7 +14,7 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from digitalearth.charts import _as_finite_array, _column_or_array, _field_values, _grouped_series
+from digitalearth.charts import _column_or_array, _field_values, _grouped_series
 
 __all__ = ["histogram", "scatter", "bar", "line", "bar_by", "line_by"]
 
@@ -52,7 +52,9 @@ def histogram(data: Any, *, column: Optional[str] = None, bins: int = 15, **opts
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    values = _field_values(data, column) if column is not None else _as_finite_array(data).ravel()
+    # _field_values drops non-finite (NaN/inf) values on every path (column, Dataset band or plain array),
+    # so a raw array with NaN yields a clean histogram instead of an opaque numpy range error.
+    values = _field_values(data, column)
     element = hv.Histogram(np.histogram(values, bins=bins))
     return element.opts(**opts) if opts else element
 
