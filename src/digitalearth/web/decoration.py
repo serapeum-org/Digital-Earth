@@ -141,6 +141,9 @@ class DecorationMixin:
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
         """
         _require_maplibre()
         _check_position(position)
@@ -167,6 +170,9 @@ class DecorationMixin:
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
         """
         _require_maplibre()
         _check_position(position)
@@ -187,6 +193,9 @@ class DecorationMixin:
 
         Returns:
             This map (chainable).
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
         """
         _require_maplibre()
         _check_position(position)
@@ -246,7 +255,8 @@ class DecorationMixin:
             This map (chainable).
 
         Raises:
-            ValueError: if neither ``distance`` nor ``area`` is enabled.
+            ValueError: if neither ``distance`` nor ``area`` is enabled, or if ``position`` is not one of the
+                four legal MapLibre corners.
         """
         _require_maplibre()
         _check_position(position)
