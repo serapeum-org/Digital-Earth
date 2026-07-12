@@ -3,7 +3,7 @@
 Turns a point table into a PyVista ``PolyData`` and renders it with optional per-point colour, sphere markers,
 and **eye-dome lighting** (the depth-cueing shading that makes dense point clouds legible). Inputs come from
 pyramids — a numpy ``(N, 3)``/``(N, 2)`` table (e.g. ``Dataset.to_xyz()`` / LiDAR), or a GeoDataFrame of points
-(e.g. ``Dataset.get_cell_points()`` / ``FeatureCollection.to_geodataframe()``).
+(e.g. ``Dataset.get_cell_points()`` or a pyramids ``FeatureCollection``, which *is* a GeoDataFrame).
 
 The GeoDataFrame is **duck-typed** (``hasattr(data, "geometry")``) and only its coordinates are read — so this
 module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competitor_imports`` guard); pyramids does
