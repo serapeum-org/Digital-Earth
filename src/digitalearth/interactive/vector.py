@@ -246,9 +246,14 @@ class VectorMixin:
         The categories (original values, in classifier order) are recorded on ``last_breaks`` for legend parity
         with the web tier.
 
+        Because the fill is keyed on the **string** form of each value, this assumes a single-dtype attribute
+        column: two categories that stringify identically (e.g. the integer ``1`` and the string ``"1"``, or
+        ``1`` and ``1.0``) collapse to one colour. Realistic categorical columns are single-dtype; the web tier
+        keeps such mixed values distinct via its native ``match``.
+
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
-            column: The attribute to colour by (any hashable value).
+            column: The attribute to colour by (any hashable value; assumed single-dtype — see above).
             cmap: A qualitative colormap name (defaults to ``"tab10"`` when left at the continuous default).
             **opts: Extra HoloViews style options.
 
