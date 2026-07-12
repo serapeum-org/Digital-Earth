@@ -27,7 +27,12 @@ def resolve_categorical_cmap(cmap: str) -> str:
 
     ``choropleth``'s ``cmap`` defaults to the continuous ``"viridis"`` (right for graduated/continuous
     colouring). That sequential map reads poorly as discrete categories, so when the caller leaves the default
-    in place it is swapped for :data:`_DEFAULT_CATEGORICAL_CMAP`; an explicit ``cmap`` is always honoured.
+    in place it is swapped for :data:`_DEFAULT_CATEGORICAL_CMAP`; any other explicit ``cmap`` is honoured.
+
+    Note this cannot distinguish "caller left the default" from "caller explicitly passed ``"viridis"``" — both
+    are swapped to the qualitative default. To force a viridis categorical map, pass a distinct spelling such as
+    ``"viridis_r"`` (or sample viridis yourself); this is deliberate, since viridis rarely reads well as
+    discrete categories.
 
     Args:
         cmap: The colormap name passed to ``choropleth`` (a qualitative map is preferred for categorical).
