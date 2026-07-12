@@ -295,6 +295,10 @@ class VectorMixin:
         ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
         ramp (DC.8); the categories are recorded on ``last_breaks`` for legend parity with the web tier.
 
+        Note the default ``scheme`` differs by tier: this interactive tier (like the static ``Map.choropleth``)
+        defaults to a **continuous** ramp, whereas the **web** ``choropleth`` is graduated-by-default
+        (``"quantiles"``). Pass ``scheme`` explicitly for identical classification across tiers.
+
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
                 pyramids when needed.

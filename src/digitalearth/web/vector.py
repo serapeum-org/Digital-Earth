@@ -306,10 +306,14 @@ class VectorMixin:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
         Graduated by default (``scheme="quantiles"``): the class breaks come from
-        ``cleopatra.styles.classify`` and are compiled into a MapLibre ``step`` paint expression, so the
-        classes match the static tier's ``choropleth``. Pass ``scheme="categorical"`` to colour an unordered
-        attribute by distinct value (a MapLibre ``match`` expression, DC.8), or ``scheme=None`` for a
-        continuous ramp. The breaks / categories are exposed on ``WebMap.last_breaks`` for building a legend.
+        ``cleopatra.styles.classify`` and are compiled into a MapLibre ``step`` paint expression. Pass
+        ``scheme="categorical"`` to colour an unordered attribute by distinct value (a MapLibre ``match``
+        expression, DC.8), or ``scheme=None`` for a continuous ramp. The breaks / categories are exposed on
+        ``WebMap.last_breaks`` for building a legend.
+
+        Note the default ``scheme`` differs by tier: this **web** tier is graduated-by-default
+        (``"quantiles"``), whereas the interactive and static ``choropleth`` default to a **continuous** ramp.
+        Pass ``scheme`` explicitly for identical classification across tiers.
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
