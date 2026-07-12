@@ -36,6 +36,14 @@ _BASEMAP_PROVIDERS = {
     ),
 }
 
+#: Canonical (correctly-cased) display names for the basemap keys, used in the not-found error message.
+_BASEMAP_DISPLAY_NAMES = {
+    "cartodark": "CartoDark",
+    "cartolight": "CartoLight",
+    "cartovoyager": "CartoVoyager",
+    "osm": "OSM",
+}
+
 #: The four legal MapLibre control corners.
 _CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
 
@@ -118,7 +126,7 @@ class DecorationMixin:
         if key not in _BASEMAP_PROVIDERS:
             raise ValueError(
                 f"unknown basemap provider {provider!r}; choose one of "
-                f"{sorted(p.capitalize() for p in _BASEMAP_PROVIDERS)} or pass a tile URL to tiles()"
+                f"{sorted(_BASEMAP_DISPLAY_NAMES.values())} or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)
@@ -259,11 +267,10 @@ class DecorationMixin:
                 four legal MapLibre corners.
         """
         _require_maplibre()
-        _check_position(position)
-        from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
-
         if not (distance or area):
             raise ValueError("measure() needs distance and/or area enabled")
+        _check_position(position)
+        from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
         options = MapboxDrawOptions(
             display_controls_default=False,
             controls=MapboxDrawControls(line_string=distance, polygon=area, trash=True),

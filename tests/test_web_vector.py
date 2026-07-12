@@ -174,8 +174,10 @@ class TestDecorationNeedsEngine:
         pytest.importorskip("maplibre")
 
     def test_basemap_unknown_provider_raises(self):
-        with pytest.raises(ValueError, match="unknown basemap provider"):
+        with pytest.raises(ValueError, match="unknown basemap provider") as exc:
             WebMap().basemap("NoSuchProvider")
+        # the suggestion list uses the canonical, correctly-cased names, not "Cartodark"/"Osm" (N1)
+        assert "CartoDark" in str(exc.value) and "OSM" in str(exc.value), f"mis-cased names: {exc.value}"
 
     def test_basemap_registers_an_underlay(self, polygons_gdf):
         """A basemap added after data is still drawn first (underlay at index 0)."""
@@ -221,6 +223,9 @@ class TestDecorationNeedsEngine:
     def test_measure_requires_a_mode(self, polygons_gdf):
         with pytest.raises(ValueError, match="distance and/or area"):
             WebMap().polygons(polygons_gdf).measure(distance=False, area=False)
+        # the mode guard is checked before position, so it wins when both are invalid (N4)
+        with pytest.raises(ValueError, match="distance and/or area"):
+            WebMap().polygons(polygons_gdf).measure(distance=False, area=False, position="bad")
 
     def test_control_position_is_validated(self):
         """An unknown control corner fails fast with a clear error rather than at render time (N3)."""
