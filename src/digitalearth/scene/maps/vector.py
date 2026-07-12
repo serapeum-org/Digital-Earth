@@ -390,6 +390,10 @@ class VectorMixin:
             column: Name of the numeric column whose values colour the polygons.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
                 ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
+                Note the default ``scheme`` differs by tier: this static tier (like the interactive
+                ``choropleth``) defaults to a **continuous** scale, whereas the **web** ``choropleth`` is
+                graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification
+                across tiers.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -410,6 +414,13 @@ class VectorMixin:
 
                 ```
         """
+        if str(opts.get("scheme", "")).lower() == "categorical":
+            raise NotImplementedError(
+                "scheme='categorical' is not supported in the static tier: cleopatra's PolygonGlyph colours "
+                "by a continuous/graduated scale only (no per-distinct-value mapping) — tracked as an upstream "
+                "cleopatra gap. Use WebMap.choropleth(..., scheme='categorical') or the interactive tier; "
+                "graduated schemes (quantiles/fisher_jenks/…) work here."
+            )
         gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="choropleth",
                                  geom_label="polygon")
         polygons, repeats = self._polygon_vertices(gdf.geometry)

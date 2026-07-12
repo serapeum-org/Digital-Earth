@@ -85,6 +85,36 @@ class TestColorExpr:
         stops = [expr[i] for i in range(3, len(expr), 2)]
         assert stops[0] < stops[-1], "constant data must still yield an increasing ramp"
 
+    def test_categorical_match_expression(self):
+        """scheme='categorical' compiles a MapLibre `match` over the distinct values (DC.8)."""
+        m = WebMap()
+        expr = m._color_expr(np.array(["a", "b", "a", "c"], dtype=object), "kind", "categorical", 5, "tab10")
+        assert expr[0] == "match", f"categorical colouring must be a match expression, got {expr[0]!r}"
+        assert expr[1] == ["get", "kind"], "the match input must read the column with ['get', column]"
+        assert expr[2] == "a" and expr[4] == "b" and expr[6] == "c", f"category literals misordered: {expr}"
+        assert expr[-1] == "#cccccc", "the match expression must end with a default colour"
+        assert m.last_breaks == ["a", "b", "c"], f"categories should be recorded: {m.last_breaks}"
+
+    def test_categorical_numeric_literals_are_json_native(self):
+        """Numeric categories are coerced to native int for the MapLibre literal."""
+        m = WebMap()
+        expr = m._color_expr(np.array([1, 2, 1, 3]), "code", "categorical", 5, "tab10")
+        literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
+        assert literals == [1, 2, 3] and all(type(v) is int for v in literals)
+
+    def test_categorical_whole_float_labels_narrow_to_int(self):
+        """Whole-valued float categories become int labels — MapLibre rejects non-integer match labels (M1)."""
+        m = WebMap()
+        expr = m._color_expr(np.array([1.0, 2.0, 1.0, 3.0]), "zone", "categorical", 5, "tab10")
+        literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
+        assert literals == [1, 2, 3] and all(type(v) is int for v in literals), f"float cats must narrow: {literals}"
+        assert all(type(b) is int for b in m.last_breaks), f"recorded breaks must narrow too: {m.last_breaks}"
+
+    def test_categorical_non_integer_float_rejected(self):
+        """A non-integer float category cannot key a MapLibre match and is rejected clearly (M1)."""
+        with pytest.raises(ValueError, match="non-integer category"):
+            WebMap()._color_expr(np.array([1.5, 2.5]), "x", "categorical", 5, "tab10")
+
     def test_cmap_hex_count_and_format(self):
         """``_cmap_hex`` returns the requested number of hex colours."""
         colors = WebMap()._cmap_hex("viridis", 4)
@@ -144,8 +174,10 @@ class TestDecorationNeedsEngine:
         pytest.importorskip("maplibre")
 
     def test_basemap_unknown_provider_raises(self):
-        with pytest.raises(ValueError, match="unknown basemap provider"):
+        with pytest.raises(ValueError, match="unknown basemap provider") as exc:
             WebMap().basemap("NoSuchProvider")
+        # the suggestion list uses the canonical, correctly-cased names, not "Cartodark"/"Osm" (N1)
+        assert "CartoDark" in str(exc.value) and "OSM" in str(exc.value), f"mis-cased names: {exc.value}"
 
     def test_basemap_registers_an_underlay(self, polygons_gdf):
         """A basemap added after data is still drawn first (underlay at index 0)."""
@@ -164,6 +196,43 @@ class TestDecorationNeedsEngine:
         m = WebMap().choropleth(polygons_gdf, column="pop").tooltip(["pop"])
         assert len(m.layers) == 2
         assert isinstance(m.render(), MapWidget)
+
+    def test_navigation_scale_fullscreen_controls_render(self, polygons_gdf):
+        """ED.13 — nav/scale/fullscreen controls register and the map still renders."""
+        from maplibre.ipywidget import MapWidget
+
+        m = WebMap().polygons(polygons_gdf).navigation().scale_bar(unit="imperial").fullscreen()
+        assert len(m.layers) == 4, "data layer + 3 controls"
+        assert isinstance(m.render(), MapWidget)
+
+    def test_controls_convenience(self, polygons_gdf):
+        """ED.13 — controls() adds navigation + scale (+ fullscreen) in one call."""
+        m = WebMap().polygons(polygons_gdf).controls(fullscreen=True)
+        assert len(m.layers) == 4, "data layer + navigation + scale + fullscreen"
+        m2 = WebMap().polygons(polygons_gdf).controls()
+        assert len(m2.layers) == 3, "default controls() adds navigation + scale only"
+
+    def test_measure_registers_draw_tool(self, polygons_gdf):
+        """ED.10 — measure() adds a draw-based tool and the map still renders."""
+        from maplibre.ipywidget import MapWidget
+
+        m = WebMap().polygons(polygons_gdf).measure(distance=True, area=True)
+        assert len(m.layers) == 2, "data layer + the measure draw control"
+        assert isinstance(m.render(), MapWidget)
+
+    def test_measure_requires_a_mode(self, polygons_gdf):
+        with pytest.raises(ValueError, match="distance and/or area"):
+            WebMap().polygons(polygons_gdf).measure(distance=False, area=False)
+        # the mode guard is checked before position, so it wins when both are invalid (N4)
+        with pytest.raises(ValueError, match="distance and/or area"):
+            WebMap().polygons(polygons_gdf).measure(distance=False, area=False, position="bad")
+
+    def test_control_position_is_validated(self):
+        """An unknown control corner fails fast with a clear error rather than at render time (N3)."""
+        with pytest.raises(ValueError, match="unknown control position"):
+            WebMap().navigation(position="middle")
+        with pytest.raises(ValueError, match="unknown control position"):
+            WebMap().scale_bar(position="nowhere")
 
 
 class TestAttributeTemplate:

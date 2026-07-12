@@ -233,25 +233,88 @@ class VectorMixin:
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
+    def _categorical_polygons(self, features: Any, column: str, *, cmap: str = "viridis",
+                              **opts: Any) -> "VectorMixin":
+        """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
+
+        The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
+        gets a colour from :func:`digitalearth._symbology.categorical_colors`. The colour column is cast to
+        **string** and the colours are handed to GeoViews as a ``{label: colour}`` dict ``cmap`` — a numeric
+        column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
+        what guarantees one discrete colour per distinct value (no continuous colorbar). Missing values
+        (``NaN``/``None``) are drawn with a neutral ``"#cccccc"`` fallback, matching the web tier's default.
+        The categories (original values, in classifier order) are recorded on ``last_breaks`` for legend parity
+        with the web tier.
+
+        Because the fill is keyed on the **string** form of each value, this assumes a single-dtype attribute
+        column: two categories that stringify identically (e.g. the integer ``1`` and the string ``"1"``, or
+        ``1`` and ``1.0``) collapse to one colour. Realistic categorical columns are single-dtype; the web tier
+        keeps such mixed values distinct via its native ``match``.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
+            column: The attribute to colour by (any hashable value; assumed single-dtype — see above).
+            cmap: A qualitative colormap name (defaults to ``"tab10"`` when left at the continuous default).
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            This map (chainable).
+        """
+        from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
+
+        gdf = self._display_gdf(features)
+        categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))
+        cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
+        # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
+        # categorically (a numeric column would map continuously and interpolate the palette).
+        gdf = gdf.copy()
+        missing = gdf[column].isna()
+        # A sentinel label for missing rows that is guaranteed not to collide with a real category (which
+        # could itself stringify to "n/a"/"nan"), so a genuine category is never overwritten by the fallback.
+        sentinel = "n/a"
+        while sentinel in cmap_by_label:
+            sentinel += "_"
+        gdf[column] = gdf[column].astype(str).mask(missing, sentinel)
+        if missing.any():
+            # Missing values get an explicit neutral fallback, matching the web tier's "#cccccc" default.
+            cmap_by_label[sentinel] = "#cccccc"
+        element = self._vector_element("Polygons", gdf, vdims=[column])
+        common = {"color": column, "cmap": cmap_by_label, "colorbar": False, **opts}
+        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
+        self.last_breaks = list(categories)
+        return self.add_element(element)
+
     def choropleth(
         self,
         features: Any,
         column: str,
         *,
+        scheme: Optional[str] = None,
         cmap: str = "viridis",
         clim: Optional[Tuple[float, float]] = None,
         **opts: Any,
     ) -> "VectorMixin":
         """Add a choropleth — polygons filled and coloured by ``column`` (hover shows the value).
 
-        A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``.
+        A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``. Pass
+        ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
+        ramp (DC.8); the categories are recorded on ``last_breaks`` for legend parity with the web tier.
+
+        Note the default ``scheme`` differs by tier: this interactive tier (like the static ``Map.choropleth``)
+        defaults to a **continuous** ramp, whereas the **web** ``choropleth`` is graduated-by-default
+        (``"quantiles"``). Pass ``scheme`` explicitly for identical classification across tiers.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
                 pyramids when needed.
-            column: The numeric column driving the fill colour (required).
-            cmap: Colormap name.
-            clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales.
+            column: The column driving the fill colour (required); numeric for the continuous ramp, or any
+                hashable value for ``scheme="categorical"``.
+            scheme: ``"categorical"`` for distinct-value colouring; ``None`` (default) for a continuous ramp.
+                Graduated schemes (``"quantiles"``/``"fisher_jenks"``/…) are **not** supported in the
+                interactive tier and raise ``NotImplementedError`` rather than silently degrading.
+            cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
+                left at the default).
+            clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -271,11 +334,23 @@ class VectorMixin:
 
         Raises:
             KeyError: when ``column`` is not a column of ``features``.
+            NotImplementedError: when ``scheme`` is a graduated scheme (only ``"categorical"``/``None`` are
+                supported in the interactive tier).
         """
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
                 f"choropleth column {column!r} not found in the feature attributes"
             )
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_polygons(features, column, cmap=cmap, **opts)
+        if scheme is not None:
+            raise NotImplementedError(
+                f"interactive choropleth supports scheme='categorical' or None (continuous ramp); the "
+                f"graduated scheme {scheme!r} is not implemented in the interactive tier — use the web tier "
+                f"for graduated classification, or pass scheme=None for a continuous ramp"
+            )
+        # Continuous ramp: no discrete breaks — clear any recorded from a prior categorical call.
+        self.last_breaks = None
         if clim is not None:
             opts = {"clim": clim, **opts}
         return self.polygons(features, column=column, cmap=cmap, **opts)

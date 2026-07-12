@@ -137,6 +137,9 @@ class InteractiveMapBase:
         self._projection: Any = None
         # Draw-tool stream (DI.8), set by the interaction mixin's draw(); None until a draw tool is added.
         self._draw_stream: Any = None
+        # Class breaks / categories from the most recent choropleth, for building a legend out-of-band
+        # (web-tier parity). None until a categorical choropleth runs; the continuous ramp resets it to None.
+        self.last_breaks: Optional[List[Any]] = None
         self.layers: List[Any] = []
 
     def _raster_element(self, x: Any, y: Any, arr: Any, name: str) -> Any:

@@ -1,18 +1,20 @@
-"""DecorationMixin — web-tier basemaps/tiles (DW.1a) and popups/tooltips (DW.2).
+"""DecorationMixin — web-tier basemaps/tiles, popups/tooltips, and map controls.
 
-Adds raster XYZ basemaps beneath the data (``basemap``/``tiles``) and hover/click attribute readouts
-(``tooltip``/``popup``) on top of a data layer. Each builder registers a callable on the map's layer
-registry (basemaps as an underlay; popups/tooltips as post-layer ``add_popup``/``add_tooltip`` calls).
+Adds raster XYZ basemaps beneath the data (``basemap``/``tiles``, DW.1a), hover/click attribute readouts
+(``tooltip``/``popup``, DW.2), MapLibre UI controls (``navigation``/``scale_bar``/``fullscreen``/``controls``,
+ED.13) and a draw-based ``measure`` tool (ED.10). Each builder registers a callable on the map's layer
+registry (basemaps as an underlay; popups/tooltips/controls as post-render ``add_*`` calls).
 
 Out of scope here (deferred): ``pmtiles`` (needs the optional ``pmtiles`` reader, intentionally not in the
-``[web]`` extra) and an on-map ``legend`` control (py-maplibregl has no built-in legend widget — it needs a
-custom HTML control, a DW.6 export concern). ``choropleth`` still exposes its class breaks via
-``WebMap.last_breaks`` so a caller can build a legend out-of-band.
+``[web]`` extra); an on-map ``legend`` control and a **minimap** (py-maplibregl has neither built in — both
+need a custom HTML/JS control). ``choropleth`` still exposes its class breaks via ``WebMap.last_breaks`` so a
+caller can build a legend out-of-band; the ``measure`` tool exposes the drawn geometry for pyramids to compute
+geodesic distance/area (the GIS part).
 """
 
 from typing import Any, List, Optional
 
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
 _BASEMAP_PROVIDERS = {
@@ -33,6 +35,32 @@ _BASEMAP_PROVIDERS = {
         "© OpenStreetMap contributors",
     ),
 }
+
+#: Canonical (correctly-cased) display names for the basemap keys, used in the not-found error message.
+_BASEMAP_DISPLAY_NAMES = {
+    "cartodark": "CartoDark",
+    "cartolight": "CartoLight",
+    "cartovoyager": "CartoVoyager",
+    "osm": "OSM",
+}
+
+#: The four legal MapLibre control corners.
+_CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+
+def _check_position(position: str) -> None:
+    """Validate a control corner, raising ``ValueError`` for anything but the four legal MapLibre corners.
+
+    Args:
+        position: The requested corner placement.
+
+    Raises:
+        ValueError: when ``position`` is not one of ``top-left``/``top-right``/``bottom-left``/``bottom-right``.
+    """
+    if position not in _CONTROL_POSITIONS:
+        raise ValueError(
+            f"unknown control position {position!r}; choose one of {list(_CONTROL_POSITIONS)}"
+        )
 
 
 class DecorationMixin:
@@ -98,10 +126,160 @@ class DecorationMixin:
         if key not in _BASEMAP_PROVIDERS:
             raise ValueError(
                 f"unknown basemap provider {provider!r}; choose one of "
-                f"{sorted(p.capitalize() for p in _BASEMAP_PROVIDERS)} or pass a tile URL to tiles()"
+                f"{sorted(_BASEMAP_DISPLAY_NAMES.values())} or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)
+
+    def navigation(
+        self,
+        *,
+        position: str = "top-right",
+        show_compass: bool = True,
+        show_zoom: bool = True,
+        visualize_pitch: bool = False,
+    ) -> "DecorationMixin":
+        """Add MapLibre navigation controls — zoom buttons and a compass (ED.13).
+
+        Args:
+            position: Corner placement (``"top-right"``/``"top-left"``/``"bottom-right"``/``"bottom-left"``).
+            show_compass: Show the compass / bearing-reset button.
+            show_zoom: Show the zoom in/out buttons.
+            visualize_pitch: Show the map pitch on the compass.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import NavigationControl
+
+        control = NavigationControl(
+            show_compass=show_compass, show_zoom=show_zoom, visualize_pitch=visualize_pitch
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
+    def scale_bar(
+        self, *, position: str = "bottom-left", unit: str = "metric", max_width: int = 100
+    ) -> "DecorationMixin":
+        """Add a MapLibre scale bar (ED.13).
+
+        Args:
+            position: Corner placement for the scale bar.
+            unit: ``"metric"``, ``"imperial"`` or ``"nautical"``.
+            max_width: Maximum scale-bar width in pixels.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import ScaleControl
+
+        control = ScaleControl(unit=unit, max_width=int(max_width))
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
+    def fullscreen(self, *, position: str = "top-right") -> "DecorationMixin":
+        """Add a MapLibre fullscreen toggle control (ED.13).
+
+        Args:
+            position: Corner placement for the fullscreen button.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import FullscreenControl
+
+        control = FullscreenControl()
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
+    def controls(
+        self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
+    ) -> "DecorationMixin":
+        """Add the common navigation / scale / fullscreen controls in one call (ED.13).
+
+        A convenience over :meth:`navigation`, :meth:`scale_bar` and :meth:`fullscreen`. Note: py-maplibregl
+        has no built-in **minimap** control, so a minimap is not offered here (it would need a custom JS
+        control — tracked as a follow-up).
+
+        Args:
+            navigation: Add zoom + compass controls.
+            scale: Add a scale bar.
+            fullscreen: Add a fullscreen toggle.
+
+        Returns:
+            This map (chainable).
+        """
+        if navigation:
+            self.navigation()
+        if scale:
+            self.scale_bar()
+        if fullscreen:
+            self.fullscreen()
+        return self
+
+    def measure(
+        self, *, distance: bool = True, area: bool = True, position: str = "top-left"
+    ) -> "DecorationMixin":
+        """Add a draw-based measure tool — draw a line (distance) or polygon (area) to measure (ED.10).
+
+        Note this adds a **drawing** control, not a live on-map readout: it does not display the distance/area
+        number on the map (that GIS computation is left to pyramids, below). It enables MapLibre's draw control
+        scoped to line and/or polygon geometries, so the user draws the shape to measure. The drawn GeoJSON is
+        available on the rendered widget
+        (``draw_feature_collection_all`` and the ``draw_features_created``/``…_updated`` events). Computing the
+        numeric distance/area from that geometry is a **GIS** operation — do it in pyramids (geodesic length /
+        area), keeping this tier to the (visualization) drawing control.
+
+        Args:
+            distance: Offer the line tool (measure distance along a path).
+            area: Offer the polygon tool (measure enclosed area).
+            position: Corner placement for the draw toolbar.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            ValueError: if neither ``distance`` nor ``area`` is enabled, or if ``position`` is not one of the
+                four legal MapLibre corners.
+        """
+        _require_maplibre()
+        if not (distance or area):
+            raise ValueError("measure() needs distance and/or area enabled")
+        _check_position(position)
+        from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
+        options = MapboxDrawOptions(
+            display_controls_default=False,
+            controls=MapboxDrawControls(line_string=distance, polygon=area, trash=True),
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_mapbox_draw(options, position)
+
+        return self.add_layer(layer=apply)
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:

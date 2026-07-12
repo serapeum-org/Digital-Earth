@@ -133,6 +133,57 @@ class TestPolygonsAndChoropleth:
         plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
         assert plot["clim"] == (0.0, 10.0), f"clim not honoured: {plot.get('clim')}"
 
+    def test_choropleth_categorical_scheme(self, m, polygon_fc):
+        """scheme='categorical' gives one *discrete* colour per distinct value, recording the categories (DC.8).
+
+        The colour column (``fid``, numeric) is rendered as discrete string labels with a ``{label: colour}``
+        dict cmap, so Bokeh colours it categorically rather than interpolating a continuous palette (M1).
+        """
+        m.choropleth(polygon_fc, "fid", scheme="categorical")
+        element = m.layers[0]
+        assert isinstance(element, gv.Polygons)
+        style = hv.Store.lookup_options("bokeh", element, "style").kwargs
+        assert style["color"] == "fid"
+        cmap = style["cmap"]
+        assert isinstance(cmap, dict), f"categorical cmap should be a label->colour dict, got {cmap!r}"
+        assert all(isinstance(c, str) and c.startswith("#") for c in cmap.values()), f"hex colours: {cmap}"
+        # one discrete colour per distinct value, and the labels are the (stringified) categories
+        n = len(m.last_breaks)
+        assert n >= 1, "categories should be recorded"
+        assert len(cmap) == n, f"expected {n} discrete colours, got {len(cmap)}"
+        assert set(cmap) == {str(c) for c in m.last_breaks}, "cmap keys must be the category labels"
+        # the rendered colour column is discrete (string), not the original numeric dtype
+        assert element.dimension_values("fid").dtype.kind in ("U", "O"), "colour column must be string-typed"
+
+    def test_choropleth_categorical_missing_values_get_fallback(self, m, polygon_fc):
+        """A NaN/None category gets the neutral '#cccccc' fallback in the dict cmap (web parity, L1)."""
+        fc = polygon_fc.copy()
+        n = len(fc)
+        kinds = [("a", "b")[i % 2] for i in range(n)]
+        kinds[0] = None
+        fc["kind"] = kinds
+        m.choropleth(fc, "kind", scheme="categorical")
+        cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
+        assert cmap.get("n/a") == "#cccccc", f"missing values must map to the neutral fallback: {cmap}"
+        assert {"a", "b"} <= set(cmap), f"real categories must still be coloured: {cmap}"
+
+    def test_choropleth_categorical_real_na_not_clobbered(self, m, polygon_fc):
+        """A genuine 'n/a' category keeps its colour; missing rows use a collision-free sentinel (L3)."""
+        fc = polygon_fc.copy()
+        n = len(fc)
+        kinds = [("n/a", "b")[i % 2] for i in range(n)]
+        kinds[0] = None
+        fc["kind"] = kinds
+        m.choropleth(fc, "kind", scheme="categorical")
+        cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
+        assert cmap.get("n/a") not in (None, "#cccccc"), f"the real 'n/a' category must keep its colour: {cmap}"
+        assert cmap.get("n/a_") == "#cccccc", f"missing rows must use a distinct sentinel: {cmap}"
+
+    def test_choropleth_graduated_scheme_not_implemented(self, m, polygon_fc):
+        """A graduated scheme is rejected, not silently degraded to a continuous ramp (L1)."""
+        with pytest.raises(NotImplementedError, match="graduated scheme"):
+            m.choropleth(polygon_fc, "fid", scheme="quantiles")
+
     def test_choropleth_missing_column_raises(self, m, polygon_fc):
         with pytest.raises(KeyError, match="nope"):
             m.choropleth(polygon_fc, "nope")

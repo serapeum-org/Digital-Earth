@@ -36,18 +36,52 @@ class VectorMixin:
             values: The 1-D value array driving the colour (used to compute breaks / limits).
             column: The GeoJSON property name the expression reads with ``["get", column]``.
             scheme: A cleopatra classification scheme (``"quantiles"``/``"fisher_jenks"``/… or an explicit
-                edge sequence) for a graduated ``step`` expression; ``None`` for a continuous ramp.
+                edge sequence) for a graduated ``step`` expression; ``"categorical"`` for a distinct-value
+                ``match`` expression (DC.8); ``None`` for a continuous ramp.
             k: Number of classes for the graduated schemes.
-            cmap: matplotlib colormap name sampled for the class / ramp colours.
+            cmap: matplotlib colormap name sampled for the class / ramp colours (a qualitative map such as
+                ``"tab10"`` is used for ``scheme="categorical"`` when ``cmap`` is left at the default).
 
         Returns:
-            A MapLibre expression list (``["step", …]`` or ``["interpolate", …]``). Also sets
-            ``self.last_breaks`` to the breaks (graduated edges) or ramp stops.
+            A MapLibre expression list (``["step", …]``, ``["match", …]`` or ``["interpolate", …]``). Also
+            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops.
 
         Raises:
-            ValueError: propagated from ``cleopatra.styles.classify`` (unknown scheme, no spread, …).
+            ValueError: propagated from ``cleopatra.styles.classify`` (unknown scheme, no spread, …) or from
+                the categorical helper (no non-null values).
         """
         import numpy as np
+
+        def _native(value: Any) -> Any:
+            """Coerce a category to a JSON-native, MapLibre-legal ``match`` label.
+
+            MapLibre rejects non-integer numeric ``match`` labels ("Numeric branch labels must be integer
+            values"), so a whole-valued float (integer class codes stored as ``float64`` — the common shape
+            for codes read from GeoJSON) is narrowed to ``int``; a genuinely non-integral float cannot key a
+            ``match`` and is rejected with a clear error. Integers and strings pass through unchanged.
+            """
+            if isinstance(value, np.integer):
+                return int(value)
+            if isinstance(value, (np.floating, float)):
+                as_float = float(value)
+                if not as_float.is_integer():
+                    raise ValueError(
+                        f"categorical column {column!r} has a non-integer category {as_float!r}; a "
+                        f"categorical scheme needs discrete integer codes or string labels"
+                    )
+                return int(as_float)
+            return value
+
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
+
+            categories, colors = categorical_colors(values, resolve_categorical_cmap(cmap))
+            expr = ["match", ["get", column]]
+            for category, color in zip(categories, colors):
+                expr.extend([_native(category), color])
+            expr.append("#cccccc")  # fallback colour for values outside the known categories
+            self.last_breaks = [_native(c) for c in categories]
+            return expr
 
         if scheme is not None:
             from cleopatra.styles import classify
@@ -272,15 +306,22 @@ class VectorMixin:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
         Graduated by default (``scheme="quantiles"``): the class breaks come from
-        ``cleopatra.styles.classify`` and are compiled into a MapLibre ``step`` paint expression, so the
-        classes match the static tier's ``choropleth``. Pass ``scheme=None`` for a continuous ramp. The
-        breaks are exposed on ``WebMap.last_breaks`` for building a legend.
+        ``cleopatra.styles.classify`` and are compiled into a MapLibre ``step`` paint expression. Pass
+        ``scheme="categorical"`` to colour an unordered attribute by distinct value (a MapLibre ``match``
+        expression, DC.8), or ``scheme=None`` for a continuous ramp. The breaks / categories are exposed on
+        ``WebMap.last_breaks`` for building a legend.
+
+        Note the default ``scheme`` differs by tier: this **web** tier is graduated-by-default
+        (``"quantiles"``), whereas the interactive and static ``choropleth`` default to a **continuous** ramp.
+        Pass ``scheme`` explicitly for identical classification across tiers.
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
-            column: The numeric attribute that colours the polygons (required).
+            column: The attribute that colours the polygons (numeric for graduated/continuous; any hashable
+                value for ``scheme="categorical"``). Required.
             scheme: A cleopatra classification scheme (``"quantiles"``, ``"equal_interval"``,
-                ``"fisher_jenks"``, …) or an explicit edge sequence; ``None`` for a continuous ramp.
+                ``"fisher_jenks"``, …) or an explicit edge sequence for graduated colouring;
+                ``"categorical"`` for distinct-value colouring; ``None`` for a continuous ramp.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap name.
             opacity: Fill opacity in ``[0, 1]``.
