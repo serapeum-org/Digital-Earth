@@ -46,18 +46,23 @@ def _patch_maplibre_html_encoding() -> None:
 
     Upstream bug (py-maplibregl 0.3.6): ``maplibre._utils.read_internal_file`` opens its bundled JS with a
     bare ``open()``, so on Windows (cp1252 default) ``to_html``/``save`` crash with a ``UnicodeDecodeError``
-    reading the widget JS. We rebind the reader — in both ``maplibre._utils`` and the ``maplibre.map`` copy
-    that imported it by name — to read UTF-8. This lives entirely in *our* code (maplibre is never edited);
-    the matching *write* bug is sidestepped by :meth:`WebMapBase.save` writing the HTML itself. Idempotent.
+    reading the widget JS. We rebind the reader to read UTF-8 across **every** already-imported ``maplibre``
+    submodule that still references the original (not just ``_utils``/``map``) — some import it by name — so no
+    stale bare-``open`` reader survives; modules imported *after* the patch pick up the shim from the patched
+    ``_utils`` automatically. This lives entirely in *our* code (maplibre is never edited); the matching *write*
+    bug is sidestepped by :meth:`WebMapBase.save` writing the HTML itself.
 
-    See ``planning/maplibre-deckgl/web-maplibre-deckgl-plan.md`` (DW.0 notes) — report upstream, remove the
-    shim once a fixed ``maplibre`` ships.
+    This is a **permanent, self-gating** shim (kept in-house by design, not pending an upstream fix): it only
+    patches on a platform whose default encoding actually fails to read the bundled JS, is applied once
+    (idempotent), and is a no-op everywhere else.
     """
+    import sys
+
     import maplibre._utils as _utils
-    import maplibre.map as _map
     from maplibre._utils import get_internal_file_path
 
-    if getattr(_utils.read_internal_file, "_digitalearth_utf8", False):
+    original = _utils.read_internal_file
+    if getattr(original, "_digitalearth_utf8", False):
         return
 
     # Self-gating: if the platform default encoding already reads the bundled JS (non-Windows, or once
@@ -71,13 +76,17 @@ def _patch_maplibre_html_encoding() -> None:
     except OSError:
         pass  # could not probe (file moved/renamed) — patch defensively
 
-    def read_internal_file(*args: Any) -> str:
-        with open(get_internal_file_path(*args), encoding="utf-8") as handle:
+    def read_internal_file(*args: Any, **kwargs: Any) -> str:
+        with open(get_internal_file_path(*args, **kwargs), encoding="utf-8") as handle:
             return handle.read()
 
     read_internal_file._digitalearth_utf8 = True  # type: ignore[attr-defined]
+    # Patch the canonical module first, then rebind every maplibre submodule that imported the reader by
+    # name and still holds the original (e.g. `maplibre.map`) so no un-shimmed reference is left behind.
     _utils.read_internal_file = read_internal_file
-    _map.read_internal_file = read_internal_file
+    for name, module in list(sys.modules.items()):
+        if name.startswith("maplibre") and getattr(module, "read_internal_file", None) is original:
+            module.read_internal_file = read_internal_file
 
 
 def _require_maplibre() -> tuple:
