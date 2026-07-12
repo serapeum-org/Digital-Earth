@@ -100,8 +100,8 @@ def statistics(
     A thin numpy reduction (not a GIS op): the input is coerced to its finite values and summarised. Accepts a
     GeoDataFrame/DataFrame with ``column``, a pyramids ``Dataset`` (first band, nodata dropped), or a plain
     array. Quantiles are returned under ``q<pct>`` keys (e.g. ``q50`` for the median); the percent is formatted
-    with ``:g``, so fractional quantiles stay distinct (``q50`` vs ``q50.5``) but two quantiles closer than
-    ~1e-6 would share a key.
+    with ``:g``, so fractional quantiles stay distinct (``q50`` vs ``q50.5``). Two quantiles that differ only
+    below ~1e-6 would format to the same key and raise ``ValueError`` rather than silently overwrite.
 
     Args:
         data: A (Geo)DataFrame (with ``column``), a pyramids ``Dataset``, or an array-like of numbers.
@@ -113,7 +113,7 @@ def statistics(
         all floats.
 
     Raises:
-        ValueError: if there are no finite values to summarise.
+        ValueError: if there are no finite values to summarise, or if two quantiles collide on one key.
         KeyError: if ``column`` is given but absent from ``data``.
 
     Examples:
@@ -160,7 +160,12 @@ def statistics(
     for q in quantiles:
         # ``:g`` keeps integer percents clean (0.25 -> "q25") while still distinguishing fractional
         # quantiles (0.5 -> "q50", 0.505 -> "q50.5"), so near-equal quantiles do not collide on one key.
-        summary[f"q{q * 100:g}"] = float(np.quantile(arr, q))
+        key = f"q{q * 100:g}"
+        if key in summary:
+            # Two quantiles that format to the same key (differing only below ~1e-6) would silently
+            # overwrite each other — surface it instead.
+            raise ValueError(f"quantiles collide on key {key!r}; use quantiles that differ by more than ~1e-6")
+        summary[key] = float(np.quantile(arr, q))
     return summary
 
 

@@ -262,6 +262,11 @@ class TestStatistics:
         s = charts.statistics(range(1001), quantiles=(0.5, 0.505))
         assert "q50" in s and "q50.5" in s, f"fractional quantiles must not collide: {sorted(s)}"
 
+    def test_colliding_quantile_keys_raise(self):
+        """Two quantiles that format to the same key raise instead of silently overwriting (N2)."""
+        with pytest.raises(ValueError, match="collide on key"):
+            charts.statistics(range(101), quantiles=(0.5, 0.5000001))
+
     def test_drops_nonfinite(self):
         """NaN/inf are excluded from the summary."""
         s = charts.statistics([1.0, np.nan, 3.0, np.inf])
