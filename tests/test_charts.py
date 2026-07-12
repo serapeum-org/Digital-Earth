@@ -190,6 +190,12 @@ class TestAggregateByCategory:
         with pytest.raises(TypeError, match="cannot aggregate column 'cat'"):
             charts.line_by(gdf, "year", "cat", agg="sum")
 
+    def test_non_numeric_reducing_agg_raises_clear_error(self, gdf):
+        """mean/median/std on a non-numeric column also surface the clear message, not a raw pandas error (L1)."""
+        for agg in ("mean", "median", "std"):
+            with pytest.raises(TypeError, match="cannot aggregate column 'cat'"):
+                charts.bar_by(gdf, "year", "cat", agg=agg)
+
     def test_exported_top_level(self):
         import digitalearth
 

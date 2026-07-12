@@ -408,10 +408,13 @@ def _grouped_series(data: Any, by: str, column: Optional[str], agg: str):
     if not hasattr(data, "groupby"):
         raise TypeError("bar_by/line_by need a (Geo)DataFrame with a groupby method")
     grouped = data.groupby(by)
-    series = grouped.size() if column is None else grouped[column].agg(agg)
     try:
+        # The agg itself can raise for a non-numeric column (mean/median/std reject strings), and a
+        # numeric-looking agg that succeeds (sum/min/max concatenate/compare strings) fails the float cast —
+        # wrap both so every non-numeric aggregation surfaces the same actionable message.
+        series = grouped.size() if column is None else grouped[column].agg(agg)
         values = np.asarray(series.to_numpy(), dtype=float)
-    except (TypeError, ValueError) as err:  # non-numeric aggregate (e.g. agg="sum" on strings)
+    except (TypeError, ValueError) as err:
         raise TypeError(
             f"cannot aggregate column {column!r} with agg={agg!r} into numbers — is the column numeric? "
             f"({err})"
