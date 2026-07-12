@@ -259,15 +259,20 @@ class VectorMixin:
 
         gdf = self._display_gdf(features)
         categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))
+        cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
         # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
         # categorically (a numeric column would map continuously and interpolate the palette).
         gdf = gdf.copy()
         missing = gdf[column].isna()
-        gdf[column] = gdf[column].astype(str).mask(missing, "n/a")
-        cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
+        # A sentinel label for missing rows that is guaranteed not to collide with a real category (which
+        # could itself stringify to "n/a"/"nan"), so a genuine category is never overwritten by the fallback.
+        sentinel = "n/a"
+        while sentinel in cmap_by_label:
+            sentinel += "_"
+        gdf[column] = gdf[column].astype(str).mask(missing, sentinel)
         if missing.any():
             # Missing values get an explicit neutral fallback, matching the web tier's "#cccccc" default.
-            cmap_by_label["n/a"] = "#cccccc"
+            cmap_by_label[sentinel] = "#cccccc"
         element = self._vector_element("Polygons", gdf, vdims=[column])
         common = {"color": column, "cmap": cmap_by_label, "colorbar": False, **opts}
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})

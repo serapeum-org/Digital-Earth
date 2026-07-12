@@ -167,6 +167,18 @@ class TestPolygonsAndChoropleth:
         assert cmap.get("n/a") == "#cccccc", f"missing values must map to the neutral fallback: {cmap}"
         assert {"a", "b"} <= set(cmap), f"real categories must still be coloured: {cmap}"
 
+    def test_choropleth_categorical_real_na_not_clobbered(self, m, polygon_fc):
+        """A genuine 'n/a' category keeps its colour; missing rows use a collision-free sentinel (L3)."""
+        fc = polygon_fc.copy()
+        n = len(fc)
+        kinds = [("n/a", "b")[i % 2] for i in range(n)]
+        kinds[0] = None
+        fc["kind"] = kinds
+        m.choropleth(fc, "kind", scheme="categorical")
+        cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
+        assert cmap.get("n/a") not in (None, "#cccccc"), f"the real 'n/a' category must keep its colour: {cmap}"
+        assert cmap.get("n/a_") == "#cccccc", f"missing rows must use a distinct sentinel: {cmap}"
+
     def test_choropleth_graduated_scheme_not_implemented(self, m, polygon_fc):
         """A graduated scheme is rejected, not silently degraded to a continuous ramp (L1)."""
         with pytest.raises(NotImplementedError, match="graduated scheme"):
