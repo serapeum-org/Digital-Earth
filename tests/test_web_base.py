@@ -195,6 +195,58 @@ class TestRegistryAndRender:
         assert "application/vnd.jupyter.widget-view+json" in data
 
 
+class TestUtf8Shim:
+    """The Windows-cp1252 UTF-8 workaround (`_patch_maplibre_html_encoding` + UTF-8 `save`)."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("maplibre")
+
+    def test_shim_rebinds_every_maplibre_submodule(self, monkeypatch):
+        """On a platform that needs it, the shim rebinds the reader on *every* maplibre submodule.
+
+        Simulates the cp1252 read failure so the patch installs regardless of the host OS, and injects a
+        fake maplibre submodule that imported ``read_internal_file`` by name — it must be rebound too, so no
+        stale bare-``open`` reader survives.
+        """
+        import builtins
+        import types
+
+        import maplibre._utils as _utils
+
+        from digitalearth.web import base
+
+        real_open = builtins.open
+
+        def _sentinel(*args, **kwargs):  # a fresh, un-shimmed reader (no _digitalearth_utf8 flag)
+            raise AssertionError("this reader should have been rebound by the shim")
+
+        fake = types.ModuleType("maplibre._fake_reader_holder")
+        fake.read_internal_file = _sentinel
+        monkeypatch.setitem(sys.modules, "maplibre._fake_reader_holder", fake)
+        # start from an un-patched reader (monkeypatch auto-restores after the test)
+        monkeypatch.setattr(_utils, "read_internal_file", _sentinel)
+
+        def _fake_open(file, *args, **kwargs):  # fail the probe like Windows cp1252 does
+            if "pywidget.js" in str(file) and not kwargs.get("encoding"):
+                raise UnicodeDecodeError("charmap", b"\x9d", 0, 1, "simulated cp1252")
+            return real_open(file, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", _fake_open)
+
+        base._patch_maplibre_html_encoding()
+
+        shim = _utils.read_internal_file
+        assert getattr(shim, "_digitalearth_utf8", False), "the canonical _utils reader must be shimmed"
+        assert fake.read_internal_file is shim, "a submodule holding the reader by name must be rebound too"
+
+    def test_save_writes_utf8_non_ascii_title(self, tmp_path):
+        """`save` writes the HTML as UTF-8 so a non-ASCII title round-trips (the write-side cp1252 fix)."""
+        out = tmp_path / "u.html"
+        WebMap(center=(0.0, 0.0), zoom=2).save(str(out), title="façade ′ café —")
+        assert "façade ′ café —" in out.read_text(encoding="utf-8"), "unicode title must survive the write"
+
+
 class TestStyleResolution:
     """``_resolve_style`` maps aliases to CartoCDN URLs and passes URLs/dicts through (no engine)."""
 
