@@ -2,278 +2,278 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/CODE_OF_CONDUCT/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/LICENSE/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/change-log/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/contributing/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/installation/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/plotarray/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/01_sources/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/02_maps_and_fields/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/03_points_cells_vectors/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/04_composites_and_mesh/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/05_choropleth_and_decoration/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/06_temporal_and_series/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/07_quickplot/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/08_projected_globe_maps/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/09_globe_basemaps/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/10_globe_under_the_hood/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/11_global_data_on_globe/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/12_animated_globe/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/13_charts_and_decorations/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/14_batch_cli_and_plugins/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/00_overview/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/01_raster_fields/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/02_vector_layers/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/03_basemaps_and_decoration/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/04_flow_and_networks/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/05_mesh_and_density/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/06_big_data/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/07_temporal_and_projections/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/interactive/08_interaction_and_dashboards/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/01_imshow/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/02_contourf/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/03_contour/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/04_pcolormesh/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/05_block/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/06_grid_points/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/07_scatter/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/08_grid_cells/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/09_quiver/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/10_streamplot/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/11_barbs/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/12_tricontourf/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/13_tricontour/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/14_tripcolor/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/15_rgb_composite/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/16_hsv_composite/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/17_choropleth/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/18_shapes/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/19_spaghetti/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/20_envelope/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/21_quantile_band/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/22_boxplot/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/23_multiboxplot/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/24_stripes/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/25_timeseries/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/plots/26_climatology/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/01_scene3d_basics/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/02_terrain/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/03_point_cloud/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/04_volume_isosurface/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/05_vectors_extruded/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/06_globe/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/07_animation/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/08_raster_3d/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/09_vector_3d/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/10_gis_scene_3d/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/pyvista/15_3d_visualization/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/examples/web/web_maps/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
     <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/main/reference/static/</loc>
-         <lastmod>2026-07-12</lastmod>
+         <lastmod>2026-07-16</lastmod>
     </url>
 </urlset>
