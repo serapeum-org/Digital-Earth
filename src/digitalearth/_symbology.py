@@ -2,12 +2,15 @@
 
 Graduated / continuous classification lives upstream in ``cleopatra.styles.classify`` (numeric breaks); this
 module is the **categorical** counterpart: map each distinct value of a field to a colour from a qualitative
-colormap. It is pure numpy + matplotlib colour work (styling, not GIS), consumed by the tiers' ``choropleth``
-``scheme="categorical"`` path to colour by an unordered attribute (land-use class, region name, …).
+colormap, to colour by an unordered attribute (land-use class, region name, …).
 
-The mapping itself is generic colour work and is a candidate to move into cleopatra alongside ``classify``
-(tracked in ``planning/geolibre-parity/ISSUE-TRACKER.md`` / upstream note); it lives here for now because no
-cleopatra equivalent exists yet.
+Scope: the **web** and **interactive** tiers only. The static tier takes its categorical mapping from cleopatra
+(``scheme="categorical"`` → ``Glyph._prepare_categorical_mapping``, cleopatra >=0.26.0), the canonical home for
+this colour work. What remains here is not a duplicate of it but a different *output shape*: cleopatra builds a
+matplotlib ``ListedColormap`` + ``BoundaryNorm`` bound to a glyph, whereas MapLibre needs a literal
+``["match", …]`` colour expression and GeoViews a plain ``{value: colour}`` dict — neither can consume a
+matplotlib mappable, so both tiers need the category→colour pairs as plain data. The ordering rule (sorted when
+sortable, else first-seen) is shared with cleopatra's ``styles.categorize``, so the classes agree across tiers.
 """
 
 from typing import Any, List, Tuple

@@ -62,7 +62,12 @@ class VectorMixin:
 
         Consolidates the fill-vs-outline branch shared by :meth:`grid_cells`, :meth:`choropleth`,
         :meth:`shapes`, :meth:`voronoi`, :meth:`cartogram` and :meth:`quadtree`. The Scene owns the
-        aggregated colorbar, so the glyph's own colorbar is suppressed by default.
+        aggregated colorbar, so the glyph's own colorbar is suppressed by default — except under
+        ``scheme="categorical"``, where the value key is a per-class swatch legend the glyph builds from its
+        own mapping (``PolygonGlyph.category_legend``). The Scene's colorbar cannot stand in for it: a
+        categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
+        ``0, 1, 2 …`` instead of the category labels. Pass ``add_colorbar=False`` explicitly to suppress the
+        legend and key the classes yourself via :meth:`~digitalearth.scene.scene.Scene.legend`.
 
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
@@ -72,7 +77,8 @@ class VectorMixin:
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
         """
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        categorical = str(opts.get("scheme", "")).lower() == "categorical"
+        opts.setdefault("add_colorbar", categorical)  # the Scene owns the colorbar; the glyph owns the legend
         if values is not None:
             glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
             return self._render_glyph(glyph, artist="plot")
@@ -387,9 +393,15 @@ class VectorMixin:
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
-            column: Name of the numeric column whose values colour the polygons.
+            column: Name of the column whose values colour the polygons — numeric for a continuous or
+                graduated scale, or any nominal labels (strings, region codes, …) under
+                ``scheme="categorical"``.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale, or
+                ``scheme="categorical"`` to give every distinct value its own colour (an unordered attribute
+                such as a land-use class or region name — ``k`` does not apply, and ``vmin``/``vmax``/
+                ``levels``/``color_scale`` are ignored). A categorical fill is keyed by a swatch legend rather
+                than a colorbar, and defaults to the qualitative ``"tab10"`` unless ``cmap`` is given.
                 Note the default ``scheme`` differs by tier: this static tier (like the interactive
                 ``choropleth``) defaults to a **continuous** scale, whereas the **web** ``choropleth`` is
                 graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification
@@ -413,14 +425,16 @@ class VectorMixin:
                 True
 
                 ```
+            - Colour by an unordered attribute — one colour per distinct class, keyed by a swatch legend:
+                ```python
+                >>> fc["zone"] = ["urban", "rural"] * (len(fc) // 2) + ["urban"] * (len(fc) % 2)
+                >>> m = Map(crs=fc.epsg)
+                >>> pc = m.choropleth(fc, column="zone", scheme="categorical")
+                >>> [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
+                ['rural', 'urban']
+
+                ```
         """
-        if str(opts.get("scheme", "")).lower() == "categorical":
-            raise NotImplementedError(
-                "scheme='categorical' is not supported in the static tier: cleopatra's PolygonGlyph colours "
-                "by a continuous/graduated scale only (no per-distinct-value mapping) — tracked as an upstream "
-                "cleopatra gap. Use WebMap.choropleth(..., scheme='categorical') or the interactive tier; "
-                "graduated schemes (quantiles/fisher_jenks/…) work here."
-            )
         gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="choropleth",
                                  geom_label="polygon")
         polygons, repeats = self._polygon_vertices(gdf.geometry)

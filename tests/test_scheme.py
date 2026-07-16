@@ -35,10 +35,43 @@ def test_choropleth_scheme_is_discrete(polygons):
     assert not isinstance(continuous.norm, BoundaryNorm)
 
 
-def test_choropleth_categorical_not_supported_in_static_tier(polygons):
-    """scheme='categorical' raises a clear, actionable error in the static tier (cleopatra gap, DC.8)."""
-    with pytest.raises(NotImplementedError, match="categorical"):
-        Map(crs=polygons.epsg).choropleth(polygons, column="fid", scheme="categorical")
+def test_choropleth_categorical_colors_each_distinct_value(polygons):
+    """scheme='categorical' gives every distinct value its own class code (cleopatra >=0.26, CAT-5)."""
+    fc = polygons.copy()
+    fc["zone"] = ["urban", "rural", "park"] * (len(fc) // 3) + ["urban"] * (len(fc) % 3)
+    pc = Map(crs=fc.epsg).choropleth(fc, column="zone", scheme="categorical")
+    assert isinstance(pc.norm, BoundaryNorm)
+    # the mappable carries integer class codes (one per distinct label), not the labels themselves
+    assert sorted(set(pc.get_array().tolist())) == [0.0, 1.0, 2.0]
+
+
+def test_choropleth_categorical_draws_a_swatch_legend(polygons):
+    """A categorical fill is keyed by a labelled swatch legend, not a colorbar (the codes would be opaque)."""
+    fc = polygons.copy()
+    fc["zone"] = ["urban", "rural"] * (len(fc) // 2) + ["urban"] * (len(fc) % 2)
+    m = Map(crs=fc.epsg)
+    m.choropleth(fc, column="zone", scheme="categorical")
+    glyph = m.layers[-1][0]
+    assert glyph.cbar is None
+    assert [t.get_text() for t in glyph.category_legend.get_texts()] == ["rural", "urban"]
+
+
+def test_choropleth_categorical_legend_can_be_suppressed(polygons):
+    """An explicit add_colorbar=False keeps the glyph from drawing its own key (the Scene takes over)."""
+    fc = polygons.copy()
+    fc["zone"] = ["urban", "rural"] * (len(fc) // 2) + ["urban"] * (len(fc) % 2)
+    m = Map(crs=fc.epsg)
+    m.choropleth(fc, column="zone", scheme="categorical", add_colorbar=False)
+    assert m.layers[-1][0].category_legend is None
+
+
+def test_graduated_choropleth_still_defers_its_key_to_the_scene(polygons):
+    """The categorical legend default must not leak into the graduated/continuous path (Scene owns that)."""
+    m = Map(crs=polygons.epsg)
+    m.choropleth(polygons, column="fid", scheme="quantiles", k=3)
+    glyph = m.layers[-1][0]
+    assert glyph.cbar is None
+    assert getattr(glyph, "category_legend", None) is None
 
 
 def test_voronoi_scheme_is_discrete(points_fc):

@@ -41,3 +41,26 @@ def test_resolve_categorical_cmap_swaps_continuous_default():
     """The continuous default is swapped for a qualitative map; an explicit cmap is honoured (N1)."""
     assert resolve_categorical_cmap("viridis") == "tab10", "continuous default → qualitative default"
     assert resolve_categorical_cmap("Set2") == "Set2", "an explicit cmap must be honoured"
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        ["urban", "rural", "park", "urban"],  # strings, sortable
+        [3, 1, 2, 1],  # numbers, sortable
+        ["b", None, "a", float("nan")],  # nulls dropped
+    ],
+    ids=["strings", "numbers", "with-nulls"],
+)
+def test_matches_cleopatra_categorize(values):
+    """This helper must agree with cleopatra's ``categorize`` — same classes, same colours (CAT-5).
+
+    The static tier maps categories via cleopatra while the web/interactive tiers use this helper, so the two
+    must derive an identical category→colour table or the same data would render different colours per tier.
+    """
+    from cleopatra.styles import categorize
+
+    ours_cats, ours_colors = categorical_colors(values)
+    upstream_cats, upstream_colors = categorize(np.asarray(values, dtype=object))
+    assert list(ours_cats) == list(upstream_cats), "categories must match cleopatra's (order and content)"
+    assert [c.lower() for c in ours_colors] == [c.lower() for c in upstream_colors], "colours must match"
