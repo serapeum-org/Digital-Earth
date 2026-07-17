@@ -203,6 +203,18 @@ def test_scheme_fisher_jenks(polygons):
     assert isinstance(pc.norm, BoundaryNorm)
 
 
+def test_categorical_scheme_on_outline_only_is_inert(polygons):
+    """An outline-only draw with scheme='categorical' (no values) skips the categorical mapping harmlessly.
+
+    ``shapes`` reaches ``_polygon_layer`` with ``values=None``, so the categorical value-mapping branch must be
+    a no-op — the outlines still draw and nothing crashes on the absent values.
+    """
+    m = Map(crs=polygons.epsg)
+    pc = m.shapes(polygons, scheme="categorical")
+    assert len(pc.get_paths()) == len(polygons), "outlines must still be drawn"
+    assert m.layers[-1][0].category_legend is None, "no values means no category legend"
+
+
 @pytest.mark.parametrize(
     "fixture,call",
     [

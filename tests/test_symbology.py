@@ -1,8 +1,47 @@
 """Tests for digitalearth._symbology — categorical (distinct-value → colour) mapping (DC.8)."""
 import numpy as np
+import pandas as pd
 import pytest
 
-from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
+from digitalearth._symbology import (
+    categorical_colors,
+    is_null,
+    nulls_to_none,
+    resolve_categorical_cmap,
+)
+
+
+class TestIsNull:
+    """Tests for is_null — the scalar-null predicate shared by every tier's categorical path."""
+
+    @pytest.mark.parametrize("value", [None, np.nan, pd.NA, pd.NaT, float("nan")])
+    def test_missing_values_are_null(self, value):
+        """Every spelling of a missing scalar reads as null."""
+        assert is_null(value) is True, f"{value!r} should be null"
+
+    @pytest.mark.parametrize("value", ["urban", 0, False, 1.5, "", np.int64(3)])
+    def test_real_values_are_not_null(self, value):
+        """A genuine category — including falsy 0/False/'' — is never null."""
+        assert is_null(value) is False, f"{value!r} should not be null"
+
+    @pytest.mark.parametrize("value", [[1, 2], np.array([1, 2])])
+    def test_non_scalar_is_not_null(self, value):
+        """A list-like value whose `pd.isna` is elementwise flows on as a (non-null) value, not a null."""
+        assert is_null(value) is False, f"non-scalar {value!r} should flow on as a value"
+
+
+class TestNullsToNone:
+    """Tests for nulls_to_none — normalizing a column's nulls to the one spelling cleopatra recognises."""
+
+    def test_pd_na_becomes_none(self):
+        """A pandas nullable-dtype null is rewritten to None so cleopatra drops it."""
+        out = nulls_to_none(pd.array(["urban", pd.NA, "rural"], dtype="string"))
+        assert out.tolist() == ["urban", None, "rural"], f"pd.NA must normalize to None, got {out.tolist()}"
+
+    def test_no_nulls_is_unchanged(self):
+        """A column with no nulls comes back with its values intact."""
+        out = nulls_to_none(np.array(["a", "b"], dtype=object))
+        assert out.tolist() == ["a", "b"], f"non-null values must survive untouched, got {out.tolist()}"
 
 
 def test_distinct_categories_get_distinct_colors():
