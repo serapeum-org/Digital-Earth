@@ -8,7 +8,7 @@ default (no ``scheme``) stays a continuous norm.
 import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
 
-from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
+from digitalearth._symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
 from digitalearth.scene import Map
 
 
@@ -58,6 +58,25 @@ def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     pc = Map(crs=zoned.epsg).choropleth(zoned, column="zone", scheme="categorical", **opts)
     _, expected = categorical_colors(zoned["zone"], resolve_categorical_cmap(cmap))
     assert rendered_colors(pc, len(expected)) == [c.lower() for c in expected]
+
+
+def test_categorical_missing_values_are_drawn_neutral(polygons):
+    """A missing category is drawn neutral, not invisible — matching the web/interactive tiers (M4).
+
+    cleopatra codes a missing category as ``NaN``, whose default "bad" colour is fully transparent, so the
+    feature would render as nothing and be indistinguishable from one that was never in the collection.
+    """
+    fc = polygons.copy()
+    zones = [["urban", "rural"][i % 2] for i in range(len(fc))]
+    zones[0] = None
+    fc["zone"] = zones
+    m = Map(crs=fc.epsg)
+    pc = m.choropleth(fc, column="zone", scheme="categorical")
+    pc.update_scalarmappable()  # resolve the value array into facecolors
+    facecolors = pc.get_facecolors()
+    assert to_hex(facecolors[0]) == MISSING_COLOR, "the null-attribute polygon must be drawn neutral"
+    assert facecolors[0][3] > 0, "and must be visible at all (the default bad colour is fully transparent)"
+    assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == ["rural", "urban"]
 
 
 @pytest.mark.parametrize("spelling", ["categorical", "Categorical", "CATEGORICAL"])

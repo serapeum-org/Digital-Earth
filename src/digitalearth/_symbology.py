@@ -27,6 +27,13 @@ import numpy as np
 #: Default qualitative colormap for categorical symbology (10 distinct hues; cycled if more categories).
 _DEFAULT_CATEGORICAL_CMAP = "tab10"
 
+#: Neutral colour for a feature whose category is missing (``NaN``/``None``/``pd.NA``). Shared by all three
+#: tiers — the web tier's ``["match", …]`` fallback, the interactive tier's dict-cmap fallback, and the static
+#: tier's colormap "bad" colour — so missing data reads as *missing* rather than as absent, identically
+#: everywhere. Keep this a single constant: two tiers spelling the same idea differently is exactly how the
+#: ``cmap`` sentinels drifted apart.
+MISSING_COLOR = "#cccccc"
+
 #: The continuous-colour default ``choropleth`` carries in its signature (right for graduated/continuous,
 #: a poor fit for categorical). The categorical path swaps it for ``_DEFAULT_CATEGORICAL_CMAP``.
 _CONTINUOUS_DEFAULT_CMAP = "viridis"

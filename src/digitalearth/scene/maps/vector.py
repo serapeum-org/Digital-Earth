@@ -19,12 +19,31 @@ from cleopatra.vector_glyph import VectorGlyph
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import NAN_REDUCERS, read_masked_band
-from digitalearth._symbology import resolve_categorical_cmap
+from digitalearth._symbology import MISSING_COLOR, resolve_categorical_cmap
 from digitalearth.sources import get_source
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
+
+
+def _draw_missing_neutral(artist: Any) -> None:
+    """Colour a categorical layer's missing values neutral instead of invisible.
+
+    cleopatra maps a missing category to ``NaN`` in the class codes, and a ``ListedColormap``'s default "bad"
+    colour is fully transparent — so a feature whose attribute is missing is drawn as *nothing*, making it
+    indistinguishable from a feature that was never in the collection. The web and interactive tiers both draw
+    :data:`~digitalearth._symbology.MISSING_COLOR` there; this matches them, so missing data reads as missing on
+    all three tiers.
+
+    ``with_extremes`` returns a *new* colormap rather than mutating in place, which matters: the glyph's may be
+    a colormap registered globally under a name, and setting the bad colour on that instance would leak this
+    policy into every other plot in the process.
+
+    Args:
+        artist: The rendered mappable (a ``PolyCollection``) whose colormap gets the neutral "bad" colour.
+    """
+    artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
 
 
 class VectorMixin:
@@ -96,7 +115,10 @@ class VectorMixin:
             opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
         if values is not None:
             glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
-            return self._render_glyph(glyph, artist="plot")
+            artist = self._render_glyph(glyph, artist="plot")
+            if categorical:
+                _draw_missing_neutral(artist)
+            return artist
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", outline_only=True)
 

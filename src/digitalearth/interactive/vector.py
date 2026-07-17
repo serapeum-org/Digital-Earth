@@ -260,7 +260,7 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
-        from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
+        from digitalearth._symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
 
         gdf = self._display_gdf(features)
         categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))
@@ -276,8 +276,8 @@ class VectorMixin:
             sentinel += "_"
         gdf[column] = gdf[column].astype(str).mask(missing, sentinel)
         if missing.any():
-            # Missing values get an explicit neutral fallback, matching the web tier's "#cccccc" default.
-            cmap_by_label[sentinel] = "#cccccc"
+            # Missing values get an explicit neutral fallback, shared with the web and static tiers.
+            cmap_by_label[sentinel] = MISSING_COLOR
         element = self._vector_element("Polygons", gdf, vdims=[column])
         common = {"color": column, "cmap": cmap_by_label, "colorbar": False, **opts}
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
