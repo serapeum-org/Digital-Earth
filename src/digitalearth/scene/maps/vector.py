@@ -199,7 +199,9 @@ class VectorMixin:
         Args:
             dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
             band: 1-based band whose values colour the cells.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options. A ``scheme`` (including
+                ``scheme="categorical"``, keyed by a swatch legend) is honoured the same way :meth:`choropleth`
+                describes — see ``_polygon_layer``.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -568,7 +570,9 @@ class VectorMixin:
                 to the display CRS) or a shapely geometry already in the display CRS. ``None`` leaves shapely's
                 default bounded cells.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale,
+                or ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
+                way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -654,7 +658,9 @@ class VectorMixin:
             column: Optional column whose value colours each scaled polygon, or ``None`` for outlines only.
             limits: ``(min, max)`` scale factors mapped to the smallest/largest ``scale`` value.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale, or
+                ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
+                way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -769,7 +775,9 @@ class VectorMixin:
             clip: Optional boundary the cells are clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` keeps the full rectangular cells.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale,
+                or ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
+                way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).

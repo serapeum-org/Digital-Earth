@@ -165,12 +165,18 @@ def test_choropleth_categorical_legend_can_be_suppressed(polygons):
 
 
 def test_graduated_choropleth_still_defers_its_key_to_the_scene(polygons):
-    """The categorical legend default must not leak into the graduated/continuous path (Scene owns that)."""
+    """The categorical legend default must not leak into the graduated/continuous path (Scene owns that).
+
+    The load-bearing assertion is on ``add_colorbar``: cleopatra resets ``category_legend`` to None on every
+    ``plot()`` and only sets it on the categorical branch, so asserting it is None on a graduated fill can never
+    fail — it would pass even if ``_polygon_layer`` wrongly defaulted ``add_colorbar=True`` for every scheme,
+    which is exactly the leak this test guards. Assert the default the glyph actually received instead.
+    """
     m = Map(crs=polygons.epsg)
     m.choropleth(polygons, column="fid", scheme="quantiles", k=3)
     glyph = m.layers[-1][0]
+    assert glyph.default_options["add_colorbar"] is False, "the Scene, not the glyph, owns the graduated key"
     assert glyph.cbar is None
-    assert getattr(glyph, "category_legend", None) is None
 
 
 def test_voronoi_scheme_is_discrete(points_fc):
@@ -195,3 +201,27 @@ def test_scheme_fisher_jenks(polygons):
     """The native Fisher-Jenks scheme is accepted (no mapclassify dependency)."""
     pc = Map(crs=polygons.epsg).choropleth(polygons, column="fid", scheme="fisher_jenks", k=3)
     assert isinstance(pc.norm, BoundaryNorm)
+
+
+@pytest.mark.parametrize(
+    "fixture,call",
+    [
+        ("points_fc", lambda m, fc: m.voronoi(fc, column="fid", scheme="categorical")),
+        ("polygons", lambda m, fc: m.cartogram(fc, scale="fid", column="fid", scheme="categorical")),
+        ("points_fc", lambda m, fc: m.quadtree(fc, column="fid", nmax=1, scheme="categorical")),
+    ],
+    ids=["voronoi", "cartogram", "quadtree"],
+)
+def test_sibling_polygon_methods_honour_categorical(request, fixture, call):
+    """voronoi/cartogram/quadtree inherit the categorical path through the shared helper (L4).
+
+    They accept ``scheme`` and pass values, so the ``add_colorbar`` categorical default reaches them too — the
+    swatch legend must be drawn (and no colorbar), exactly as for :meth:`choropleth`.
+    """
+    fc = request.getfixturevalue(fixture)
+    m = Map(crs=fc.epsg)
+    pc = call(m, fc)
+    glyph = m.layers[-1][0]
+    assert isinstance(pc.norm, BoundaryNorm)
+    assert glyph.cbar is None
+    assert glyph.category_legend is not None, "a categorical sibling fill must draw its own swatch legend"
