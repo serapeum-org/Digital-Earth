@@ -6,8 +6,9 @@ default (no ``scheme``) stays a continuous norm.
 """
 
 import pytest
-from matplotlib.colors import BoundaryNorm
+from matplotlib.colors import BoundaryNorm, to_hex
 
+from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
 from digitalearth.scene import Map
 
 
@@ -25,6 +26,51 @@ def polygons(points_fc):
     fc = points_fc.copy()
     fc["geometry"] = fc.geometry.buffer(500.0)
     return fc
+
+
+@pytest.fixture
+def zoned(polygons):
+    """Polygon fixture carrying a nominal 'zone' column of three unordered classes."""
+    fc = polygons.copy()
+    labels = ["urban", "rural", "park"]
+    fc["zone"] = [labels[i % len(labels)] for i in range(len(fc))]
+    return fc
+
+
+def rendered_colors(mappable, count):
+    """Return the first ``count`` colours of a categorical mappable's colormap, as lower-case hex."""
+    cmap = mappable.get_cmap()
+    return [to_hex(cmap(i)) for i in range(count)]
+
+
+@pytest.mark.parametrize(
+    "cmap",
+    [None, "viridis", "Set2"],
+    ids=["default", "continuous-default", "qualitative"],
+)
+def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
+    """Static must resolve ``cmap`` through the same sentinel as web/interactive, else one cmap means two maps.
+
+    cleopatra swaps its *own* continuous default (``coolwarm_r``) for a qualitative map, while the sibling tiers
+    swap ``viridis`` — so without a shared sentinel ``cmap="viridis"`` renders viridis here and tab10 there (M1).
+    """
+    opts = {} if cmap is None else {"cmap": cmap}
+    pc = Map(crs=zoned.epsg).choropleth(zoned, column="zone", scheme="categorical", **opts)
+    _, expected = categorical_colors(zoned["zone"], resolve_categorical_cmap(cmap))
+    assert rendered_colors(pc, len(expected)) == [c.lower() for c in expected]
+
+
+def test_categorical_cmap_coolwarm_r_is_a_known_upstream_divergence(zoned):
+    """``cmap="coolwarm_r"`` is cleopatra's own sentinel, so the static tier swaps it where web honours it.
+
+    Pins the one divergence that cannot be resolved from this side (it needs an upstream change), so a future
+    cleopatra release that changes the rule fails here loudly instead of drifting silently.
+    """
+    pc = Map(crs=zoned.epsg).choropleth(zoned, column="zone", scheme="categorical", cmap="coolwarm_r")
+    _, web_colors = categorical_colors(zoned["zone"], resolve_categorical_cmap("coolwarm_r"))
+    _, tab10 = categorical_colors(zoned["zone"], "tab10")
+    assert rendered_colors(pc, 3) == [c.lower() for c in tab10], "static swaps cleopatra's own default sentinel"
+    assert [c.lower() for c in web_colors] != [c.lower() for c in tab10], "web honours it — the divergence"
 
 
 def test_choropleth_scheme_is_discrete(polygons):
