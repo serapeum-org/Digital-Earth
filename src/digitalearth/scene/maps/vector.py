@@ -86,8 +86,10 @@ class VectorMixin:
         ``scheme="categorical"``, where the value key is a per-class swatch legend the glyph builds from its
         own mapping (``PolygonGlyph.category_legend``). The Scene's colorbar cannot stand in for it: a
         categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
-        ``0, 1, 2 …`` instead of the category labels. Pass ``add_colorbar=False`` explicitly to suppress the
-        legend and key the classes yourself via :meth:`~digitalearth.scene.scene.Scene.legend`.
+        ``0, 1, 2 …`` instead of the category labels. Passing ``add_colorbar=False`` suppresses that swatch
+        legend — for a caller keying the map some other way, e.g. drawing one shared legend across several
+        layers via :meth:`~digitalearth.scene.scene.Scene.legend` (which takes explicit ``colors``/``labels``;
+        read the drawn legend's swatches/texts off ``layer.category_legend`` to feed it).
 
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
@@ -481,6 +483,9 @@ class VectorMixin:
                 >>> fc["zone"] = ["urban", "rural"] * (len(fc) // 2) + ["urban"] * (len(fc) % 2)
                 >>> m = Map(crs=fc.epsg)
                 >>> pc = m.choropleth(fc, column="zone", scheme="categorical")
+                >>> from matplotlib.colors import BoundaryNorm
+                >>> isinstance(pc.norm, BoundaryNorm)  # discrete class codes, not a continuous scale
+                True
                 >>> [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
                 ['rural', 'urban']
 
