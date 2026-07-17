@@ -60,6 +60,20 @@ def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     assert rendered_colors(pc, len(expected)) == [c.lower() for c in expected]
 
 
+@pytest.mark.parametrize("spelling", ["categorical", "Categorical", "CATEGORICAL"])
+def test_categorical_scheme_spelling_is_case_insensitive(zoned, spelling):
+    """A case-variant ``scheme`` renders the same map, as it already does on the web tier (M3).
+
+    cleopatra dispatches on an exact ``== "categorical"``, so an unnormalized case variant used to set up a
+    categorical render here and then fall through to the continuous path there, dying in ``np.isfinite`` on a
+    string column.
+    """
+    m = Map(crs=zoned.epsg)
+    pc = m.choropleth(zoned, column="zone", scheme=spelling)
+    assert isinstance(pc.norm, BoundaryNorm)
+    assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == ["park", "rural", "urban"]
+
+
 def test_categorical_cmap_coolwarm_r_is_a_known_upstream_divergence(zoned):
     """``cmap="coolwarm_r"`` is cleopatra's own sentinel, so the static tier swaps it where web honours it.
 

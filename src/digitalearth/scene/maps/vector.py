@@ -78,9 +78,17 @@ class VectorMixin:
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
         """
-        categorical = str(opts.get("scheme", "")).lower() == "categorical"
+        scheme = opts.get("scheme")
+        # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
+        # edges as `scheme`, which must never be stringified into this comparison.
+        categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
         opts.setdefault("add_colorbar", categorical)  # the Scene owns the colorbar; the glyph owns the legend
         if categorical:
+            # Normalize the spelling: cleopatra dispatches on an exact, case-sensitive `== "categorical"`, so a
+            # case variant would set up a categorical render here and then fall through to the continuous path
+            # there — dying inside `np.isfinite` on a string column. The web tier accepts any case, so
+            # normalizing (rather than matching cleopatra's exactness) keeps a `scheme` portable across tiers.
+            opts["scheme"] = "categorical"
             # Resolve the colormap here so all three tiers key off ONE sentinel. cleopatra applies the same
             # "swap the continuous default for a qualitative one" rule against a *different* sentinel (its own
             # default, "coolwarm_r"), so left to itself it would honour an explicit cmap="viridis" that the
