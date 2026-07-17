@@ -5,6 +5,7 @@
 default (no ``scheme``) stays a continuous norm.
 """
 
+import pandas as pd
 import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
 
@@ -77,6 +78,25 @@ def test_categorical_missing_values_are_drawn_neutral(polygons):
     assert to_hex(facecolors[0]) == MISSING_COLOR, "the null-attribute polygon must be drawn neutral"
     assert facecolors[0][3] > 0, "and must be visible at all (the default bad colour is fully transparent)"
     assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == ["rural", "urban"]
+
+
+@pytest.mark.parametrize("dtype", ["object", "string"], ids=["object-None", "nullable-pdNA"])
+def test_categorical_nulls_never_become_a_category(polygons, dtype):
+    """The same logical data must render the same whether its nulls are ``None`` or ``pd.NA`` (M5).
+
+    A pandas nullable dtype spells its nulls ``pd.NA``, which survives cleopatra's ``is None``/float-NaN test
+    and becomes a real ``<NA>`` class — taking a palette colour and shifting every other category's.
+    """
+    fc = polygons.copy()
+    zones = [["urban", "rural"][i % 2] for i in range(len(fc))]
+    zones[0] = None
+    fc["zone"] = pd.array(zones, dtype=dtype)
+    m = Map(crs=fc.epsg)
+    pc = m.choropleth(fc, column="zone", scheme="categorical")
+    labels = [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
+    assert labels == ["rural", "urban"], "a null must not become a category, whatever its dtype spelling"
+    pc.update_scalarmappable()
+    assert to_hex(pc.get_facecolors()[0]) == MISSING_COLOR, "the null row is missing data, not a class"
 
 
 @pytest.mark.parametrize("spelling", ["categorical", "Categorical", "CATEGORICAL"])

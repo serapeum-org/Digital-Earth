@@ -23,6 +23,7 @@ This module has two distinct jobs, with **different scopes** — do not conflate
 from typing import Any, List, Tuple
 
 import numpy as np
+import pandas as pd
 
 #: Default qualitative colormap for categorical symbology (10 distinct hues; cycled if more categories).
 _DEFAULT_CATEGORICAL_CMAP = "tab10"
@@ -105,11 +106,82 @@ def resolve_categorical_cmap(cmap: Any = None) -> Any:
     return _DEFAULT_CATEGORICAL_CMAP if left_at_default else cmap
 
 
+def is_null(value: Any) -> bool:
+    """Return whether ``value`` is missing, in any of the spellings a dataframe column can produce.
+
+    A category column can carry its nulls as ``None`` (object dtype), ``float("nan")`` (numeric dtype), or
+    ``pd.NA``/``pd.NaT`` (pandas' nullable ``string``/``Int64``/``boolean``/datetime dtypes — increasingly the
+    default for anything round-tripped through modern pandas or pyarrow). All three mean "no data" and must
+    never become a category: a bogus ``<NA>`` class would take a palette colour and shift every subsequent
+    category's colour by one, so the same logical data would render differently purely by dtype.
+
+    Args:
+        value: A single scalar from a category column.
+
+    Returns:
+        ``True`` when the value is any flavour of null, else ``False``.
+
+    Examples:
+        - Every spelling of missing is caught, and real categories are kept:
+            ```python
+            >>> import numpy as np
+            >>> import pandas as pd
+            >>> from digitalearth._symbology import is_null
+            >>> [is_null(v) for v in (None, np.nan, pd.NA, pd.NaT)]
+            [True, True, True, True]
+            >>> [is_null(v) for v in ("urban", 0, False)]
+            [False, False, False]
+
+            ```
+    """
+    try:
+        result = bool(pd.isna(value))
+    except (TypeError, ValueError):
+        # A list-like or otherwise non-scalar value: `pd.isna` returns an elementwise array whose truth value
+        # is ambiguous. Such a value is not a null, it is (an unhashable) category — let it flow on.
+        result = False
+    return result
+
+
+def nulls_to_none(values: Any) -> np.ndarray:
+    """Return ``values`` as an object array with every flavour of null spelled ``None``.
+
+    The static tier's mapping is built by cleopatra, whose null test is ``value is None`` plus a float-``NaN``
+    check — so a ``pd.NA`` from a pandas nullable dtype survives it and becomes a real, coloured ``<NA>``
+    category. Normalizing the nulls to the one spelling cleopatra recognises keeps the static tier's classes
+    identical to the web/interactive tiers' (which drop them via :func:`is_null`), without reaching into
+    cleopatra. The underlying gap is upstream and is reported there, not patched here.
+
+    Args:
+        values: An array-like of category labels.
+
+    Returns:
+        An object-dtype copy with all nulls replaced by ``None``. Non-null values are untouched.
+
+    Examples:
+        - `pd.NA` is normalized to `None`, so it cannot become a category:
+            ```python
+            >>> import pandas as pd
+            >>> from digitalearth._symbology import nulls_to_none
+            >>> nulls_to_none(pd.array(["urban", pd.NA], dtype="string")).tolist()
+            ['urban', None]
+
+            ```
+    """
+    array = np.asarray(values, dtype=object)
+    missing = np.array([is_null(value) for value in array.ravel()]).reshape(array.shape)
+    if missing.any():
+        array = array.copy()
+        array[missing] = None
+    return array
+
+
 def _categories(values: Any) -> List[Any]:
     """Return the distinct, non-null values of ``values`` in a stable order (sorted when sortable).
 
     Args:
-        values: An array-like of category labels (strings or numbers); ``None``/``NaN`` are dropped.
+        values: An array-like of category labels (strings or numbers); nulls (``None``/``NaN``/``pd.NA``) are
+            dropped — see :func:`is_null`.
 
     Returns:
         The unique categories, sorted ascending when they are mutually comparable, else in first-seen order.
@@ -117,9 +189,7 @@ def _categories(values: Any) -> List[Any]:
     seen: List[Any] = []
     seen_set: set = set()  # O(1) membership so dedup stays O(n), not O(n·k), for large columns
     for value in np.asarray(values, dtype=object).ravel():
-        if value is None:
-            continue
-        if isinstance(value, float) and np.isnan(value):
+        if is_null(value):
             continue
         if value not in seen_set:
             seen_set.add(value)

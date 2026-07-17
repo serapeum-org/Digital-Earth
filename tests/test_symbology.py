@@ -43,6 +43,17 @@ def test_resolve_categorical_cmap_swaps_continuous_default():
     assert resolve_categorical_cmap("Set2") == "Set2", "an explicit cmap must be honoured"
 
 
+def test_drops_pandas_nullable_na():
+    """`pd.NA`/`pd.NaT` are nulls, not categories — a nullable dtype must classify like an object one (M5)."""
+    import pandas as pd
+
+    cats, colors = categorical_colors(pd.array(["urban", pd.NA, "rural"], dtype="string"))
+    assert cats == ["rural", "urban"], f"pd.NA must not become a category, got {cats}"
+    assert len(colors) == 2
+    object_cats, _ = categorical_colors(["urban", None, "rural"])
+    assert cats == object_cats, "the same logical data must classify identically across dtypes"
+
+
 @pytest.mark.parametrize(
     "values",
     [

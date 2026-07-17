@@ -19,7 +19,7 @@ from cleopatra.vector_glyph import VectorGlyph
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import NAN_REDUCERS, read_masked_band
-from digitalearth._symbology import MISSING_COLOR, resolve_categorical_cmap
+from digitalearth._symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
 from digitalearth.sources import get_source
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
@@ -113,6 +113,12 @@ class VectorMixin:
             # default, "coolwarm_r"), so left to itself it would honour an explicit cmap="viridis" that the
             # web/interactive tiers swap for tab10 — one cmap, two maps.
             opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
+            if values is not None:
+                # cleopatra's null test is `is None` plus a float-NaN check, so a `pd.NA` from a pandas
+                # nullable dtype (`string`, `Int64`, …) would survive it and become a coloured `<NA>` class,
+                # shifting every other category's colour — i.e. the same data would render differently
+                # depending only on the column's dtype.
+                values = nulls_to_none(values)
         if values is not None:
             glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
             artist = self._render_glyph(glyph, artist="plot")
