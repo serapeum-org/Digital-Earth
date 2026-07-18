@@ -63,15 +63,16 @@ def resolve_categorical_cmap(cmap: Any = None) -> Any:
     .. warning::
         One divergence remains and is **not** fixable from this side: ``cmap="coolwarm_r"`` is cleopatra's own
         sentinel, so the static tier swaps it for ``tab10`` while the web/interactive tiers honour it. Passing
-        cleopatra's continuous default explicitly to a categorical map is a pathological case (it renders
-        near-identically either way — see the qualitative-colormap note below); it needs an upstream change to
-        settle. Tracked in `planning/geolibre-parity/upstream-cleopatra-categorical.md`.
+        cleopatra's continuous default explicitly to a categorical map is a pathological edge; it needs an
+        upstream change to settle. Tracked in `planning/geolibre-parity/upstream-cleopatra-categorical.md`.
 
     A **qualitative** (``ListedColormap``) colormap is what belongs here — ``tab10``, ``tab20``, ``Set1``,
-    ``Set2``, ``Paired``. A continuous map (``viridis``, ``plasma``, ``coolwarm``) is honoured as given but
-    reads poorly: category colours are drawn at the colormap's first ``n`` LUT entries, which for a 256-entry
-    continuous map are near-identical shades. To build categories from a continuous map, sample it yourself and
-    pass the resulting ``ListedColormap``.
+    ``Set2``, ``Paired``. A continuous map is honoured as given, and how well it reads depends on its matplotlib
+    type: a ``LinearSegmentedColormap`` (``coolwarm``, ``RdBu``, ``jet``) is sampled at ``n`` evenly-spaced
+    points, so the categories stay distinct; a perceptual ``ListedColormap`` (``viridis``, ``plasma`` — 256
+    discrete entries) contributes its first ``n``, which are near-identical shades and read poorly. Either way
+    :func:`categorical_colors` and cleopatra sample it identically, so the tiers agree. To spread a perceptual
+    map across the categories, sample it into a shorter ``ListedColormap`` yourself.
 
     Args:
         cmap: The colormap passed to ``choropleth`` (a qualitative map is preferred for categorical), or
@@ -208,12 +209,19 @@ def categorical_colors(
     """Map the distinct values of a field to colours from a qualitative colormap (DC.8).
 
     The categorical analog of ``cleopatra.styles.classify``: instead of binning a continuous range, it assigns
-    one colour per distinct value. Colours cycle through ``cmap`` when there are more categories than the
-    colormap has entries.
+    one colour per distinct value. The colour sampling mirrors ``cleopatra.styles.categorize`` **exactly**, so
+    the web/interactive tiers (which consume this) and the static tier (which consumes cleopatra) render one
+    ``cmap`` as the same colours — a qualitative ``ListedColormap`` (``tab10``/``Set2``/…) contributes its
+    palette entries in order, cycling when there are more categories than colours, while a continuous
+    ``LinearSegmentedColormap`` (``coolwarm``/``RdBu``/…) is sampled at ``n`` **evenly-spaced** points so the
+    categories stay visually distinct rather than collapsing to the first few near-identical LUT entries. This
+    parity is pinned by ``tests/test_symbology.py::test_matches_cleopatra_categorize``.
 
     Args:
-        values: An array-like of category labels (strings or numbers); ``None``/``NaN`` are ignored.
-        cmap: A matplotlib (preferably qualitative) colormap name, e.g. ``"tab10"``/``"tab20"``/``"Set2"``.
+        values: An array-like of category labels (strings or numbers); nulls (``None``/``NaN``/``pd.NA``) are
+            ignored (see :func:`is_null`).
+        cmap: A matplotlib colormap name; a qualitative one (``"tab10"``/``"tab20"``/``"Set2"``) is preferred,
+            but a continuous map is sampled evenly and honoured too.
 
     Returns:
         tuple[list, list[str]]: ``(categories, colors)`` — the distinct categories (sorted when sortable) and a
@@ -249,6 +257,13 @@ def categorical_colors(
     if not categories:
         raise ValueError("no non-null values to colour categorically")
     colormap = colormaps[cmap]
-    n_colors = getattr(colormap, "N", len(categories)) or len(categories)
-    colors = [to_hex(colormap(i % n_colors)) for i in range(len(categories))]
+    n = len(categories)
+    # Match cleopatra.styles.categorize exactly: a ListedColormap exposes its palette as `.colors` and cycles;
+    # a LinearSegmentedColormap has none, so sample it at n evenly-spaced points (not the first n LUT entries,
+    # which on a 256-entry map are near-identical). Keeping this identical to cleopatra is what makes one cmap
+    # render the same colours on the static tier (via cleopatra) and the web/interactive tiers (via here).
+    base_colors = getattr(colormap, "colors", None)
+    if base_colors is None:
+        base_colors = [colormap(x) for x in np.linspace(0.0, 1.0, n)]
+    colors = [to_hex(base_colors[i % len(base_colors)]) for i in range(n)]
     return categories, colors

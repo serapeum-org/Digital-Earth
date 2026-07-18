@@ -46,14 +46,17 @@ def rendered_colors(mappable, count):
 
 @pytest.mark.parametrize(
     "cmap",
-    [None, "viridis", "Set2"],
-    ids=["default", "continuous-default", "qualitative"],
+    [None, "viridis", "Set2", "coolwarm", "RdBu"],
+    ids=["default", "continuous-default", "qualitative", "linseg-coolwarm", "linseg-rdbu"],
 )
 def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     """Static must resolve ``cmap`` through the same sentinel as web/interactive, else one cmap means two maps.
 
     cleopatra swaps its *own* continuous default (``coolwarm_r``) for a qualitative map, while the sibling tiers
     swap ``viridis`` — so without a shared sentinel ``cmap="viridis"`` renders viridis here and tab10 there (M1).
+    The honoured ``LinearSegmentedColormap`` cases (``coolwarm``/``RdBu``, not the ``_r`` sentinel) guard the
+    other half: both tiers must sample it at the same n evenly-spaced points, not the first-n near-identical
+    LUT entries.
     """
     opts = {} if cmap is None else {"cmap": cmap}
     pc = Map(crs=zoned.epsg).choropleth(zoned, column="zone", scheme="categorical", **opts)

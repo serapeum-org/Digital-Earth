@@ -450,11 +450,11 @@ class VectorMixin:
                 ``levels``/``color_scale`` are ignored). A categorical fill is keyed by a swatch legend rather
                 than a colorbar. For a categorical scheme, ``cmap`` should be a **qualitative**
                 (``ListedColormap``) map — ``"tab10"`` (the default), ``"Set2"``, ``"Paired"``, … A continuous
-                map (``"viridis"``, ``"plasma"``) is accepted but reads poorly: category colours are drawn from
-                its first *n* LUT entries, which on a 256-entry continuous map are near-identical shades (a known
-                cleopatra limitation — see `planning/geolibre-parity/upstream-cleopatra-categorical.md`); to
-                build categories from a continuous map, sample it into a ``ListedColormap`` yourself. Missing
-                values (``NaN``/``None``/``pd.NA``) are drawn a neutral grey, not dropped.
+                ``LinearSegmentedColormap`` (``"coolwarm"``, ``"RdBu"``) is sampled at evenly-spaced points so
+                the categories stay distinct; a perceptual ``ListedColormap`` (``"viridis"``, ``"plasma"``) is
+                accepted but reads poorly (its first *n* of 256 entries are near-identical shades). The colours
+                are identical to the web/interactive tiers either way. Missing values
+                (``NaN``/``None``/``pd.NA``) are drawn a neutral grey, not dropped.
                 Note the default ``scheme`` differs by tier: this static tier (like the interactive
                 ``choropleth``) defaults to a **continuous** scale, whereas the **web** ``choropleth`` is
                 graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification

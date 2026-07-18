@@ -94,6 +94,22 @@ def test_drops_pandas_nullable_na():
 
 
 @pytest.mark.parametrize(
+    "cmap",
+    ["tab10", "Set2", "coolwarm", "RdBu", "jet", "viridis"],
+    ids=["listed-tab10", "listed-set2", "linseg-coolwarm", "linseg-rdbu", "linseg-jet", "listed-viridis"],
+)
+def test_matches_cleopatra_categorize_across_colormap_kinds(cmap):
+    """Colours match cleopatra for both colormap kinds — a LinearSegmentedColormap must sample evenly, not
+    collapse to the first-n near-identical LUT entries (the cross-tier crack this closes)."""
+    from cleopatra.styles import categorize
+
+    values = ["a", "b", "c"]
+    _, ours = categorical_colors(values, cmap)
+    _, upstream = categorize(np.asarray(values, dtype=object), cmap)
+    assert [c.lower() for c in ours] == [c.lower() for c in upstream], f"colours must match cleopatra for {cmap}"
+
+
+@pytest.mark.parametrize(
     "values",
     [
         ["urban", "rural", "park", "urban"],  # strings, sortable
