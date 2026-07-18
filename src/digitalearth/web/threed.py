@@ -5,8 +5,9 @@ The GeoLibre 3-D surface without VTK, all on the GPU:
 * ``extrusion`` — a MapLibre ``fill-extrusion`` layer (3-D choropleth: height and colour from a column);
 * ``point_cloud`` / ``tiles_3d`` / ``gltf`` — deck.gl ``PointCloudLayer`` / ``Tile3DLayer`` / ``ScenegraphLayer``
   driven through the maplibre widget's ``add_deck_layers`` (deck.gl JSON);
-* ``terrain`` — draped 3-D terrain from a raster-DEM source (defaults to the public AWS *terrarium* terrain-RGB
-  tiles, since a pyramids ``to_terrain_rgb`` writer is a confirmed upstream gap);
+* ``terrain`` — draped 3-D terrain from a served ``raster-dem`` tile source (defaults to the public AWS
+  *terrarium* terrain-RGB tiles; MapLibre terrain reads tiles over the network, so a self-contained map points
+  at hosted tiles rather than embedding a DEM — encode your own with pyramids ``Dataset.to_terrain_rgb``);
 * ``globe`` — switch the map to the spherical (globe) projection.
 
 extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; deck builders reuse the
@@ -17,8 +18,9 @@ from typing import Any, Optional, Sequence
 
 from digitalearth.web.base import _require_layer_api
 
-#: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. Used until a
-#: pyramids ``to_terrain_rgb`` writer ships (see planning/maplibre-deckgl/upstream-maplibre-issues.md / PY-IO.9).
+#: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
+#: needs a served ``raster-dem`` tile source, so the default is hosted tiles; to use your own DEM, encode it to
+#: terrain-RGB tiles with pyramids ``Dataset.to_terrain_rgb``, serve them, and pass the tile-URL template as ``dem``.
 _DEFAULT_TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 
 
@@ -87,7 +89,8 @@ class ThreeDMixin:
 
         Args:
             dem: An XYZ terrain-RGB tile URL template (``{z}/{x}/{y}``). ``None`` uses the public AWS
-                terrarium terrain tiles (the default until pyramids gains a ``to_terrain_rgb`` writer).
+                terrarium terrain tiles. To use your own DEM, encode it to terrain-RGB tiles with pyramids
+                ``Dataset.to_terrain_rgb`` and serve them, then pass the tile-URL template here.
             exaggeration: Vertical exaggeration factor.
             encoding: Terrain-RGB encoding of the DEM tiles (``"terrarium"`` or ``"mapbox"``).
 

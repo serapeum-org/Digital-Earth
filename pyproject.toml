@@ -231,6 +231,12 @@ libc = "2.39"
 
 [tool.pixi.pypi-dependencies]
 digitalearth = { path = ".", editable = true }
+# geostatista — the geostatistics engine (kriging / variography / spatial statistics on top of pyramids).
+# Sourced from git `main`, not a pinned version. It lives here (a pixi git source), NOT in
+# [project].dependencies: PyPI rejects a `git+` direct URL in published metadata, so putting it there would
+# break the release workflow. Add a versioned [project].dependencies entry only once Digital-Earth's code
+# depends on a stable geostatista release. See the "geostatista is the geostatistics engine" note in CLAUDE.md.
+geostatista = { git = "https://github.com/serapeum-org/geostatista.git", branch = "main" }
 
 [tool.pixi.tasks]
 main = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite" }
