@@ -19,11 +19,31 @@ from cleopatra.vector_glyph import VectorGlyph
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import NAN_REDUCERS, read_masked_band
+from digitalearth._symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
 from digitalearth.sources import get_source
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
+
+
+def _draw_missing_neutral(artist: Any) -> None:
+    """Colour a categorical layer's missing values neutral instead of invisible.
+
+    cleopatra maps a missing category to ``NaN`` in the class codes, and a ``ListedColormap``'s default "bad"
+    colour is fully transparent — so a feature whose attribute is missing is drawn as *nothing*, making it
+    indistinguishable from a feature that was never in the collection. The web and interactive tiers both draw
+    :data:`~digitalearth._symbology.MISSING_COLOR` there; this matches them, so missing data reads as missing on
+    all three tiers.
+
+    ``with_extremes`` returns a *new* colormap rather than mutating in place, which matters: the glyph's may be
+    a colormap registered globally under a name, and setting the bad colour on that instance would leak this
+    policy into every other plot in the process.
+
+    Args:
+        artist: The rendered mappable (a ``PolyCollection``) whose colormap gets the neutral "bad" colour.
+    """
+    artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
 
 
 class VectorMixin:
@@ -62,7 +82,14 @@ class VectorMixin:
 
         Consolidates the fill-vs-outline branch shared by :meth:`grid_cells`, :meth:`choropleth`,
         :meth:`shapes`, :meth:`voronoi`, :meth:`cartogram` and :meth:`quadtree`. The Scene owns the
-        aggregated colorbar, so the glyph's own colorbar is suppressed by default.
+        aggregated colorbar, so the glyph's own colorbar is suppressed by default — except under
+        ``scheme="categorical"``, where the value key is a per-class swatch legend the glyph builds from its
+        own mapping (``PolygonGlyph.category_legend``). The Scene's colorbar cannot stand in for it: a
+        categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
+        ``0, 1, 2 …`` instead of the category labels. Passing ``add_colorbar=False`` suppresses that swatch
+        legend — for a caller keying the map some other way, e.g. drawing one shared legend across several
+        layers via :meth:`~digitalearth.scene.scene.Scene.legend` (which takes explicit ``colors``/``labels``;
+        read the drawn legend's swatches/texts off ``layer.category_legend`` to feed it).
 
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
@@ -72,10 +99,34 @@ class VectorMixin:
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
         """
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        scheme = opts.get("scheme")
+        # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
+        # edges as `scheme`, which must never be stringified into this comparison.
+        categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
+        opts.setdefault("add_colorbar", categorical)  # the Scene owns the colorbar; the glyph owns the legend
+        if categorical:
+            # Normalize the spelling: cleopatra dispatches on an exact, case-sensitive `== "categorical"`, so a
+            # case variant would set up a categorical render here and then fall through to the continuous path
+            # there — dying inside `np.isfinite` on a string column. The web tier accepts any case, so
+            # normalizing (rather than matching cleopatra's exactness) keeps a `scheme` portable across tiers.
+            opts["scheme"] = "categorical"
+            # Resolve the colormap here so all three tiers key off ONE sentinel. cleopatra applies the same
+            # "swap the continuous default for a qualitative one" rule against a *different* sentinel (its own
+            # default, "coolwarm_r"), so left to itself it would honour an explicit cmap="viridis" that the
+            # web/interactive tiers swap for tab10 — one cmap, two maps.
+            opts["cmap"] = resolve_categorical_cmap(opts.get("cmap"))
+            if values is not None:
+                # cleopatra's null test is `is None` plus a float-NaN check, so a `pd.NA` from a pandas
+                # nullable dtype (`string`, `Int64`, …) would survive it and become a coloured `<NA>` class,
+                # shifting every other category's colour — i.e. the same data would render differently
+                # depending only on the column's dtype.
+                values = nulls_to_none(values)
         if values is not None:
             glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
-            return self._render_glyph(glyph, artist="plot")
+            artist = self._render_glyph(glyph, artist="plot")
+            if categorical:
+                _draw_missing_neutral(artist)
+            return artist
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", outline_only=True)
 
@@ -150,7 +201,9 @@ class VectorMixin:
         Args:
             dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
             band: 1-based band whose values colour the cells.
-            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options.
+            **opts: Styling kwargs, filtered to ``PolygonGlyph``'s accepted options. A ``scheme`` (including
+                ``scheme="categorical"``, keyed by a swatch legend) is honoured the same way :meth:`choropleth`
+                describes — see ``_polygon_layer``.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -387,9 +440,21 @@ class VectorMixin:
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected to the display CRS).
-            column: Name of the numeric column whose values colour the polygons.
+            column: Name of the column whose values colour the polygons — numeric for a continuous or
+                graduated scale, or any nominal labels (strings, region codes, …) under
+                ``scheme="categorical"``.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale, or
+                ``scheme="categorical"`` to give every distinct value its own colour (an unordered attribute
+                such as a land-use class or region name — ``k`` does not apply, and ``vmin``/``vmax``/
+                ``levels``/``color_scale`` are ignored). A categorical fill is keyed by a swatch legend rather
+                than a colorbar. For a categorical scheme, ``cmap`` should be a **qualitative**
+                (``ListedColormap``) map — ``"tab10"`` (the default), ``"Set2"``, ``"Paired"``, … A continuous
+                ``LinearSegmentedColormap`` (``"coolwarm"``, ``"RdBu"``) is sampled at evenly-spaced points so
+                the categories stay distinct; a perceptual ``ListedColormap`` (``"viridis"``, ``"plasma"``) is
+                accepted but reads poorly (its first *n* of 256 entries are near-identical shades). The colours
+                are identical to the web/interactive tiers either way. Missing values
+                (``NaN``/``None``/``pd.NA``) are drawn a neutral grey, not dropped.
                 Note the default ``scheme`` differs by tier: this static tier (like the interactive
                 ``choropleth``) defaults to a **continuous** scale, whereas the **web** ``choropleth`` is
                 graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification
@@ -413,14 +478,19 @@ class VectorMixin:
                 True
 
                 ```
+            - Colour by an unordered attribute — one colour per distinct class, keyed by a swatch legend:
+                ```python
+                >>> fc["zone"] = ["urban", "rural"] * (len(fc) // 2) + ["urban"] * (len(fc) % 2)
+                >>> m = Map(crs=fc.epsg)
+                >>> pc = m.choropleth(fc, column="zone", scheme="categorical")
+                >>> from matplotlib.colors import BoundaryNorm
+                >>> isinstance(pc.norm, BoundaryNorm)  # discrete class codes, not a continuous scale
+                True
+                >>> [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
+                ['rural', 'urban']
+
+                ```
         """
-        if str(opts.get("scheme", "")).lower() == "categorical":
-            raise NotImplementedError(
-                "scheme='categorical' is not supported in the static tier: cleopatra's PolygonGlyph colours "
-                "by a continuous/graduated scale only (no per-distinct-value mapping) — tracked as an upstream "
-                "cleopatra gap. Use WebMap.choropleth(..., scheme='categorical') or the interactive tier; "
-                "graduated schemes (quantiles/fisher_jenks/…) work here."
-            )
         gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="choropleth",
                                  geom_label="polygon")
         polygons, repeats = self._polygon_vertices(gdf.geometry)
@@ -505,7 +575,9 @@ class VectorMixin:
                 to the display CRS) or a shapely geometry already in the display CRS. ``None`` leaves shapely's
                 default bounded cells.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale,
+                or ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
+                way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -591,7 +663,9 @@ class VectorMixin:
             column: Optional column whose value colours each scaled polygon, or ``None`` for outlines only.
             limits: ``(min, max)`` scale factors mapped to the smallest/largest ``scale`` value.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale, or
+                ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
+                way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -706,7 +780,9 @@ class VectorMixin:
             clip: Optional boundary the cells are clipped to (``FeatureCollection``/``GeoDataFrame`` reprojected,
                 or a shapely geometry in the display CRS). ``None`` keeps the full rectangular cells.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale.
+                ``"fisher_jenks"``) + ``k`` to colour cells by discrete classes instead of a continuous scale,
+                or ``scheme="categorical"`` for one colour per distinct value (keyed by a swatch legend the same
+                way :meth:`choropleth` describes — see ``_polygon_layer``).
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).

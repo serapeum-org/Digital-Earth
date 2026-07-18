@@ -73,13 +73,13 @@ class VectorMixin:
             return value
 
         if isinstance(scheme, str) and scheme.lower() == "categorical":
-            from digitalearth._symbology import categorical_colors, resolve_categorical_cmap
+            from digitalearth._symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
 
             categories, colors = categorical_colors(values, resolve_categorical_cmap(cmap))
             expr = ["match", ["get", column]]
             for category, color in zip(categories, colors):
                 expr.extend([_native(category), color])
-            expr.append("#cccccc")  # fallback colour for values outside the known categories
+            expr.append(MISSING_COLOR)  # fallback for values outside the known categories (shared by all tiers)
             self.last_breaks = [_native(c) for c in categories]
             return expr
 
