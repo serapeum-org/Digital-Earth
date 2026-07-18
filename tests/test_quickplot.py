@@ -84,6 +84,11 @@ def test_quickmap_graduated_still_gets_its_colorbar():
     assert len(m.fig.axes) == 2, "a graduated numeric fill still carries a colorbar"
 
 
+def test_last_layer_is_categorical_on_empty_scene():
+    """The categorical predicate is False on a scene with no layers (self-safe when called directly)."""
+    assert qp._last_layer_is_categorical(Map(crs=4326)) is False, "an empty scene has no categorical layer"
+
+
 def test_quickmap_rejects_unsupported_type():
     """quickmap raises on an input type it cannot draw."""
     with pytest.raises(TypeError, match="cannot draw"):

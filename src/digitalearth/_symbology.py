@@ -173,12 +173,9 @@ def nulls_to_none(values: Any) -> np.ndarray:
             ```
     """
     array = np.asarray(values, dtype=object)
-    try:
-        missing = np.asarray(pd.isna(array), dtype=bool)
-        if missing.shape != array.shape:  # a non-elementwise result (e.g. a list-like cell) — fall back
-            raise ValueError
-    except (TypeError, ValueError):
-        missing = np.array([is_null(value) for value in array.ravel()], dtype=bool).reshape(array.shape)
+    # `pd.isna` on an object array is reliably elementwise (a list/tuple/dict/set/ndarray cell reads as a
+    # non-null value, matching :func:`is_null`), so one vectorized call suffices — no per-element loop.
+    missing = np.asarray(pd.isna(array), dtype=bool)
     if missing.any():
         array = array.copy()
         array[missing] = None

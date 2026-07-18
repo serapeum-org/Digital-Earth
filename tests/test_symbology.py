@@ -48,8 +48,8 @@ class TestNullsToNone:
         out = nulls_to_none(np.array([["a", None], ["b", "c"]], dtype=object))
         assert out.tolist() == [["a", None], ["b", "c"]], f"2-D nulls must normalize in place, got {out.tolist()}"
 
-    def test_list_cell_falls_back_and_is_kept(self):
-        """A list-like cell (where vectorized `pd.isna` is non-elementwise) flows on as a value, not a null."""
+    def test_list_cell_is_kept_as_a_value(self):
+        """A list-like cell reads as a non-null value (vectorized `pd.isna` stays elementwise), only None drops."""
         out = nulls_to_none(np.array(["a", [1, 2], None], dtype=object))
         assert out[0] == "a" and out[1] == [1, 2] and out[2] is None, f"list cell must survive, got {out.tolist()}"
 
