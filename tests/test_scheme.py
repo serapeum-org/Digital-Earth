@@ -64,6 +64,21 @@ def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     assert rendered_colors(pc, len(expected)) == [c.lower() for c in expected]
 
 
+def test_categorical_cmap_cycles_in_step_with_the_sibling_tiers(polygons):
+    """Past the palette length the static render must cycle the cmap the same way the sibling helper does.
+
+    `Accent` has 8 entries; giving every polygon a distinct class (10 of them) wraps classes 8 and 9 back to the
+    palette start, and static (via cleopatra) and web/interactive (via `categorical_colors`) must land on the
+    same colour for the wrapped classes too, not just the first eight.
+    """
+    fc = polygons.copy()
+    fc["zone"] = [f"c{i:02d}" for i in range(len(fc))]
+    pc = Map(crs=fc.epsg).choropleth(fc, column="zone", scheme="categorical", cmap="Accent")
+    categories, expected = categorical_colors(fc["zone"], "Accent")
+    assert len(categories) > 8, "the fixture must span more classes than the 8-colour palette to force a cycle"
+    assert rendered_colors(pc, len(categories)) == [c.lower() for c in expected], "static cycles in step"
+
+
 def test_categorical_missing_values_are_drawn_neutral(polygons):
     """A missing category is drawn neutral, not invisible — matching the web/interactive tiers (M4).
 
