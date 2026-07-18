@@ -159,7 +159,8 @@ def nulls_to_none(values: Any) -> np.ndarray:
         values: An array-like of category labels.
 
     Returns:
-        An object-dtype copy with all nulls replaced by ``None``. Non-null values are untouched.
+        An object-dtype array with all nulls replaced by ``None`` and non-null values untouched. Copied only
+        when a null is actually rewritten; a null-free input may be returned as-is.
 
     Examples:
         - `pd.NA` is normalized to `None`, so it cannot become a category:
@@ -172,7 +173,12 @@ def nulls_to_none(values: Any) -> np.ndarray:
             ```
     """
     array = np.asarray(values, dtype=object)
-    missing = np.array([is_null(value) for value in array.ravel()]).reshape(array.shape)
+    try:
+        missing = np.asarray(pd.isna(array), dtype=bool)
+        if missing.shape != array.shape:  # a non-elementwise result (e.g. a list-like cell) — fall back
+            raise ValueError
+    except (TypeError, ValueError):
+        missing = np.array([is_null(value) for value in array.ravel()], dtype=bool).reshape(array.shape)
     if missing.any():
         array = array.copy()
         array[missing] = None

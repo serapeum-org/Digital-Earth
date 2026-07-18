@@ -43,6 +43,16 @@ class TestNullsToNone:
         out = nulls_to_none(np.array(["a", "b"], dtype=object))
         assert out.tolist() == ["a", "b"], f"non-null values must survive untouched, got {out.tolist()}"
 
+    def test_two_dimensional_input(self):
+        """A 2-D array normalizes nulls elementwise and keeps its shape."""
+        out = nulls_to_none(np.array([["a", None], ["b", "c"]], dtype=object))
+        assert out.tolist() == [["a", None], ["b", "c"]], f"2-D nulls must normalize in place, got {out.tolist()}"
+
+    def test_list_cell_falls_back_and_is_kept(self):
+        """A list-like cell (where vectorized `pd.isna` is non-elementwise) flows on as a value, not a null."""
+        out = nulls_to_none(np.array(["a", [1, 2], None], dtype=object))
+        assert out[0] == "a" and out[1] == [1, 2] and out[2] is None, f"list cell must survive, got {out.tolist()}"
+
 
 def test_distinct_categories_get_distinct_colors():
     cats, colors = categorical_colors(["a", "b", "a", "c"])
