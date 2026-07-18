@@ -173,7 +173,7 @@ def quickmap(
             pass
     if domain is not None:
         scene.set_domain()
-    if colorbar and scene.layers and scene.layers[-1][1] is not None:
+    if colorbar and scene.layers and scene.layers[-1][1] is not None and not _last_layer_is_categorical(scene):
         try:
             scene.colorbar()
         except Exception:  # outline-only / unmappable layer
@@ -362,12 +362,32 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
     return scene
 
 
+def _last_layer_is_categorical(scene: Map) -> bool:
+    """Return whether ``scene``'s most recent layer is a categorical fill (keyed by a swatch legend).
+
+    A categorical fill's mappable carries opaque integer class codes, so an aggregated colorbar over it would
+    read ``0, 1, 2 …`` instead of the category labels — the glyph draws its own swatch legend instead
+    (``PolygonGlyph.category_legend`` is set, non-categorical glyphs leave it ``None`` or absent). The one-call
+    wrappers must not add a colorbar on top of that legend.
+
+    Args:
+        scene: The :class:`Map` whose last layer is inspected.
+
+    Returns:
+        ``True`` when the last layer's glyph exposes a drawn ``category_legend``, else ``False``.
+    """
+    if not scene.layers:
+        return False
+    return getattr(scene.layers[-1][0], "category_legend", None) is not None
+
+
 def _finish(scene: Map, *, colorbar: bool) -> Map:
     """Add an aggregated colorbar to ``scene`` when requested and a mappable layer exists; return ``scene``.
 
     The shared tail of the one-call wrappers: a colorbar is added only when ``colorbar`` is true and a layer
     was drawn, and an outline-only / unmappable layer (which cannot carry a colorbar) is swallowed rather
-    than raised.
+    than raised. A categorical fill is skipped too — it keys itself with a swatch legend, and a colorbar over
+    its integer class codes would be a meaningless second key (see :func:`_last_layer_is_categorical`).
 
     Args:
         scene: The :class:`Map` a wrapper has already drawn on.
@@ -376,7 +396,7 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
     Returns:
         The same ``scene`` (so wrappers can ``return _finish(...)``).
     """
-    if colorbar and scene.layers:
+    if colorbar and scene.layers and not _last_layer_is_categorical(scene):
         try:
             scene.colorbar()
         except Exception:  # outline-only / unmappable layer

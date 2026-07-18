@@ -48,6 +48,42 @@ def test_quickmap_choropleth_polygons():
     assert m.ax.collections
 
 
+def _zoned_polygons():
+    """Buffered-point polygons carrying a nominal 'zone' column (three unordered classes)."""
+    from pyramids.feature import FeatureCollection
+
+    fc = FeatureCollection.read_file("tests/data/points.geojson")
+    fc["geometry"] = fc.geometry.buffer(500.0)
+    fc["zone"] = [["urban", "rural", "park"][i % 3] for i in range(len(fc))]
+    return fc
+
+
+def test_quickmap_categorical_has_no_spurious_colorbar():
+    """A categorical quickmap keys itself with a swatch legend, so no meaningless numeric colorbar is added.
+
+    The mappable carries integer class codes; a colorbar over them would read -0.5, 0.5, 1.5 next to the swatch
+    legend — the one-call api must skip it (M2), leaving a single axes.
+    """
+    fc = _zoned_polygons()
+    m = qp.quickmap(fc, crs=fc.epsg, column="zone", scheme="categorical")
+    assert len(m.fig.axes) == 1, "categorical map must not gain a colorbar axes on top of its swatch legend"
+    assert m.layers[-1][0].category_legend is not None, "the swatch legend is still the key"
+
+
+def test_module_choropleth_categorical_has_no_spurious_colorbar():
+    """The module-level choropleth() helper (the _finish path) also skips the colorbar for a categorical fill."""
+    fc = _zoned_polygons()
+    m = qp.choropleth(fc, crs=fc.epsg, column="zone", scheme="categorical")
+    assert len(m.fig.axes) == 1, "the _finish path must skip the colorbar for a categorical fill too"
+
+
+def test_quickmap_graduated_still_gets_its_colorbar():
+    """A non-categorical fill must still receive its aggregated colorbar (the M2 guard must not over-fire)."""
+    fc = _zoned_polygons()
+    m = qp.quickmap(fc, crs=fc.epsg, column="fid", scheme="quantiles", k=3)
+    assert len(m.fig.axes) == 2, "a graduated numeric fill still carries a colorbar"
+
+
 def test_quickmap_rejects_unsupported_type():
     """quickmap raises on an input type it cannot draw."""
     with pytest.raises(TypeError, match="cannot draw"):
