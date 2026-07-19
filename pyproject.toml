@@ -31,7 +31,7 @@ requires-python = ">= 3.11, <4"
 dependencies = [
     "numpy >=2.0.0",
     "geopandas >=1.1.3",
-    "cleopatra >=0.26.0",
+    "cleopatra >=0.26.1",
     "pyramids-gis >=0.46.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
@@ -219,7 +219,11 @@ testpaths = ["tests"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["win-64", "linux-64", "osx-64"]
+# osx-arm64 (Apple Silicon), not osx-64: the numba/llvmlite stack the `interactive` tier pulls
+# (datashader -> numba -> llvmlite) ships macOS wheels for arm64 only — there are no Intel-mac (x86_64)
+# wheels for Python 3.13, so osx-64 forces a source build that backtracks into a legacy llvmlite that
+# refuses Python >=3.10. arm64 also matches CI (GitHub macos-latest is Apple Silicon).
+platforms = ["win-64", "linux-64", "osx-arm64"]
 
 # pyramids-gis ships its Linux wheels tagged manylinux_2_39 (its bundled
 # GDAL is conda-forge GCC-13 -> GLIBCXX_3.4.32). pixi's default linux-64
@@ -228,6 +232,7 @@ platforms = ["win-64", "linux-64", "osx-64"]
 # matches. Targets Ubuntu 24.04+ / RHEL 10+. See pyramids issue #338.
 [tool.pixi.system-requirements]
 libc = "2.39"
+
 
 [tool.pixi.pypi-dependencies]
 digitalearth = { path = ".", editable = true }
@@ -258,6 +263,13 @@ cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }
 
 
+# numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves
+# numpy 2.5.x for the interactive solve-group, which leaves no installable numba, so uv backtracks numba into
+# a legacy llvmlite that has no cp313 wheel and whose setup.py refuses Python >=3.10. Cap numpy here and scope
+# this feature to the interactive env only, so the lean envs stay on the latest numpy.
+[tool.pixi.feature.numba-numpy.dependencies]
+numpy = "<2.5"
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
@@ -268,7 +280,7 @@ docs = { features = ["docs"], solve-group = "docs" }
 viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }
 # Interactive tier (HoloViz). Uses the `interactive` feature pixi derives from the `[interactive]` extra.
 # Separate solve-group so geoviews/datashader/panel stay out of default/dev. Run: pixi run -e interactive test-interactive
-interactive = { features = ["dev", "interactive"], solve-group = "interactive" }
+interactive = { features = ["dev", "interactive", "numba-numpy"], solve-group = "interactive" }
 # Web tier (MapLibre + deck.gl). Uses the `web` feature pixi derives from the `[web]` extra. Separate solve-group
 # so maplibre/lonboard stay out of default/dev. Run: pixi run -e web test-web
 web = { features = ["dev", "web"], solve-group = "web" }
