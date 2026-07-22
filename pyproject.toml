@@ -98,10 +98,7 @@ dev = [
     "commitizen>=4.16.2",
     "mypy>=2.1.0",
     "pytest-mock>=3.15.1",
-    "pytest-mpl>=0.17.0",
-    # `safety` backs the Safety Check pre-commit hook (language: system); declare it here so the dev env
-    # provides it (pyramids' hook relies on an ambient install — this makes it reproducible).
-    "safety>=3.0"
+    "pytest-mpl>=0.17.0"
 ]
 docs = [
     "mkdocs >=1.6.1",
@@ -145,35 +142,21 @@ include = ["digitalearth", "digitalearth.*"]
 [tool.setuptools.package-data]
 "digitalearth.autostyle" = ["library/*.yml"]
 
-[tool.flake8]
-extend-ignore = ["E203", "E226", "E266", "E501", "E701", "E704", "E722", "C901", "E741", "E731", "W503"]
-max-line-length = 88
-max-complexity = 18
-# extend-select (not bare select) so flake8's default-ignore list — which turns off the
-# black-conflict codes E226/W503/W504/E121/E123/E126 — is preserved instead of replaced.
-extend-select = "B,C,E,F,W,T4"
-
-[tool.black]
+# Ruff replaces black + isort + flake8 + pyupgrade (and their nbqa notebook wrappers): one engine and one
+# line-length ruler, so the formatter and the import sorter can't disagree. Mirrors pyramids' current config.
+[tool.ruff]
 line-length = 88
-skip-string-normalization = true
+target-version = "py311"  # requires-python floors at 3.11
 
-[tool.isort]
-profile = "black"
-line_length = 88
-multi_line_output = 3
+[tool.ruff.format]
 
-# nbqa runs flake8 on notebook code cells. Tutorial notebooks intentionally place
-# imports next to where they are first used (teaching in context), and setup such as
-# `%matplotlib inline` must run before imports — both legitimately trip E402. E402
-# stays enforced for real .py modules; it is ignored only for notebooks here.
-[tool.nbqa.addopts]
-# nbqa runs flake8 on a temp file, so flake8 does NOT discover this pyproject's
-# [tool.flake8] config — pass the same ignores explicitly here (E402 is the extra,
-# notebook-only rule for imports-near-usage). Keep in sync with [tool.flake8].extend-ignore.
-flake8 = [
-    "--extend-ignore=E203,E226,E266,E402,E501,E701,E704,E722,C901,E741,E731,W503",
-    "--max-line-length=88",
-]
+[tool.ruff.lint]
+# E/F/W is the effective flake8 set (the old B/T4 selectors were inert — flake8-bugbear / flake8-print
+# were never installed); add I (isort) and UP (pyupgrade) to fold in those standalone hooks.
+select = ["E", "F", "W", "I", "UP"]
+# Mirror the old flake8 ignores; E704/W503 are dropped (ruff doesn't implement them — both are
+# formatter-owned pycodestyle codes).
+ignore = ["E203", "E226", "E266", "E501", "E701", "E722", "C901", "E741", "E731"]
 
 [tool.bandit]
 exclude_dirs = ["tests", "examples", "scripts", "planning", "docs"]
