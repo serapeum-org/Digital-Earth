@@ -1,6 +1,6 @@
 """Shared symbology helpers — categorical (distinct-value → colour) mapping for thematic maps (DC.8).
 
-Graduated / continuous classification lives upstream in ``cleopatra.styles.classify`` (numeric breaks); this
+Graduated / continuous classification lives upstream in ``cleopatra.styling.styles.classify`` (numeric breaks); this
 module is the **categorical** counterpart: map each distinct value of a field to a colour from a qualitative
 colormap, to colour by an unordered attribute (land-use class, region name, …).
 
@@ -211,8 +211,8 @@ def categorical_colors(
 ) -> Tuple[List[Any], List[str]]:
     """Map the distinct values of a field to colours from a qualitative colormap (DC.8).
 
-    The categorical analog of ``cleopatra.styles.classify``: instead of binning a continuous range, it assigns
-    one colour per distinct value. The colour sampling mirrors ``cleopatra.styles.categorize`` **exactly**, so
+    The categorical analog of ``cleopatra.styling.styles.classify``: instead of binning a continuous range, it assigns
+    one colour per distinct value. The colour sampling mirrors ``cleopatra.styling.styles.categorize`` **exactly**, so
     the web/interactive tiers (which consume this) and the static tier (which consumes cleopatra) render one
     ``cmap`` as the same colours — a qualitative ``ListedColormap`` (``tab10``/``Set2``/…) contributes its
     palette entries in order, cycling when there are more categories than colours, while a continuous
@@ -261,7 +261,7 @@ def categorical_colors(
         raise ValueError("no non-null values to colour categorically")
     colormap = colormaps[cmap]
     n = len(categories)
-    # Match cleopatra.styles.categorize exactly: a ListedColormap exposes its palette as `.colors` and cycles;
+    # Match cleopatra.styling.styles.categorize exactly: a ListedColormap exposes its palette as `.colors` and cycles;
     # a LinearSegmentedColormap has none, so sample it at n evenly-spaced points (not the first n LUT entries,
     # which on a 256-entry map are near-identical). Keeping this identical to cleopatra is what makes one cmap
     # render the same colours on the static tier (via cleopatra) and the web/interactive tiers (via here).

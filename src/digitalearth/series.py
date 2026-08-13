@@ -1,4 +1,4 @@
-"""series — ensemble / statistical series plots wired onto cleopatra LineGlyph and StatisticalGlyph.
+"""series — ensemble / statistical series plots wired onto cleopatra LineGlyph and HistogramGlyph.
 
 These are the non-map specialty plots from earthkit-plots (T7.3): envelope/quantile bands, box and
 multi-box plots, and warming stripes. The rendering primitives live in cleopatra; this module only turns
@@ -7,8 +7,8 @@ numpy ensembles/series into the arrays those glyphs expect and draws them onto a
 from typing import Any, Optional, Sequence
 
 import numpy as np
-from cleopatra.line_glyph import LineGlyph
-from cleopatra.statistical_glyph import StatisticalGlyph
+from cleopatra.glyphs.primitives.line_glyph import LineGlyph
+from cleopatra.glyphs.stats.histogram_glyph import HistogramGlyph
 from matplotlib.axes import Axes
 
 from digitalearth._arrays import fig_of as _fig_of
@@ -71,15 +71,15 @@ def quantile_band(
 
 
 def boxplot(values: Any, *, ax: Optional[Axes] = None, **kwargs) -> Any:
-    """Draw a box-and-whisker plot of ``values`` (``StatisticalGlyph.boxplot``)."""
-    return StatisticalGlyph(values, ax=ax, fig=_fig_of(ax)).boxplot(ax=ax, **kwargs)
+    """Draw a box-and-whisker plot of ``values`` (``HistogramGlyph.boxplot``)."""
+    return HistogramGlyph(values, ax=ax, fig=_fig_of(ax)).boxplot(ax=ax, **kwargs)
 
 
 def multiboxplot(groups: Sequence[Sequence[float]], *, ax: Optional[Axes] = None, **kwargs) -> Any:
-    """Draw grouped box plots, one box per group (``StatisticalGlyph.multiboxplot``)."""
-    return StatisticalGlyph(groups, ax=ax, fig=_fig_of(ax)).multiboxplot(ax=ax, **kwargs)
+    """Draw grouped box plots, one box per group (``HistogramGlyph.multiboxplot``)."""
+    return HistogramGlyph(groups, ax=ax, fig=_fig_of(ax)).multiboxplot(ax=ax, **kwargs)
 
 
 def stripes(values: Sequence[float], *, ax: Optional[Axes] = None, **kwargs) -> Any:
-    """Draw a warming-stripes bar strip of a 1-D series (``StatisticalGlyph.stripes``)."""
-    return StatisticalGlyph(np.asarray(values), ax=ax, fig=_fig_of(ax)).stripes(ax=ax, **kwargs)
+    """Draw a warming-stripes bar strip of a 1-D series (``HistogramGlyph.stripes``)."""
+    return HistogramGlyph(np.asarray(values), ax=ax, fig=_fig_of(ax)).stripes(ax=ax, **kwargs)

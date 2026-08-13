@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from cleopatra.array_glyph import ArrayGlyph
+from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
 
 from digitalearth.scene import Scene
 

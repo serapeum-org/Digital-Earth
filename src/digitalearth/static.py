@@ -5,10 +5,13 @@ from typing import Any, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import LineCollection, PolyCollection
-from cleopatra.array_glyph import ArrayGlyph
-from cleopatra.scatter_glyph import ScatterGlyph
+from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
+from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+from cleopatra.styling.params import Classify
 from geopandas import GeoDataFrame
 from pyramids.dataset import Dataset
+
+from digitalearth._render_compat import group_render_kwargs
 
 #: Message emitted by every StaticGlyph entry point (PD-1 / L-2).
 _DEPRECATION_MSG = (
@@ -145,7 +148,7 @@ class StaticGlyph:
         # (raises on None). np.nan is ArrayGlyph's "no exclusion" sentinel (an empty list would IndexError).
         exclude = [no_data_value] if no_data_value is not None else np.nan
         array = ArrayGlyph(arr, exclude_value=exclude)
-        fig, ax = array.plot(**kwargs)
+        fig, ax = array.plot(**group_render_kwargs(kwargs))
 
         points_ids = list()
         if points is not None:
@@ -194,7 +197,7 @@ class StaticGlyph:
         """Plot a catchment: gauge points over a grey sub-catchment fill and a river network.
 
         Built on **cleopatra + matplotlib**. The gauge ``points`` are drawn as
-        a value-coloured, value-scaled scatter (``cleopatra.scatter_glyph.ScatterGlyph``), the ``poly`` features
+        a value-coloured, value-scaled scatter (``cleopatra.glyphs.primitives.scatter_glyph.ScatterGlyph``), the ``poly`` features
         as a uniform grey fill, and the ``line`` features as a river network. All three inputs are reprojected to
         the points' CRS; the projection is applied to the data, not to the axes.
 
@@ -271,11 +274,11 @@ class StaticGlyph:
             ax=ax,
             fig=fig,
             cmap=cmap,
-            scheme=scheme,
             size_limits=size_limits,
             size_legend=True,
         )
-        glyph.plot()
+        # `scheme` moved off the constructor onto plot()'s `classify` group (cleopatra >=0.30).
+        glyph.plot(**({"classify": Classify(scheme=scheme)} if scheme is not None else {}))
 
         ax.set_title(title, fontsize=title_size)
         ax.set_aspect("equal")

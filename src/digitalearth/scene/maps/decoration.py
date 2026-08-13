@@ -3,7 +3,7 @@
 Lon/lat text/annotate, a tile basemap, a backdrop ``stock_img``, and the Natural-Earth coastline/border/
 land/ocean/lake/river layers (with the globe limb-splitting/closing helpers behind them).
 
-The reference data comes from ``cleopatra.reference`` (``natural_earth`` raw lon/lat coordinate arrays for
+The reference data comes from ``cleopatra.basemap.reference`` (``natural_earth`` raw lon/lat coordinate arrays for
 the globe limb-splitting; ``add_features`` for the flat, hole-aware reprojected render) — these helpers
 moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 """
@@ -12,15 +12,15 @@ from typing import Any, List, Optional, Tuple
 
 import numpy as np
 from matplotlib.collections import PolyCollection
-from cleopatra.tiles import add_tiles
-from cleopatra.reference import add_features, natural_earth
+from cleopatra.basemap.tiles import add_tiles
+from cleopatra.basemap.reference import add_features, natural_earth
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.scene import projections
 
 logger = logging.getLogger(__name__)
 
-#: Natural-Earth layers that ``cleopatra.reference`` renders as filled polygons (vs. line layers); used to
+#: Natural-Earth layers that ``cleopatra.basemap.reference`` renders as filled polygons (vs. line layers); used to
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
 _POLYGON_LAYERS = frozenset({"land", "ocean", "lakes"})
 
@@ -134,7 +134,7 @@ class DecorationMixin:
         best-effort XYZ-tile basemap is used instead (network; skipped offline).
 
         Note: the no-argument form uses a tile basemap. cleopatra now ships a hypsometric relief backdrop
-        (``cleopatra.reference.add_relief``); wiring it in as the offline no-argument default is tracked
+        (``cleopatra.basemap.reference.add_relief``); wiring it in as the offline no-argument default is tracked
         separately. For a raster backdrop today, supply your own ``Dataset``.
 
         Args:
@@ -168,7 +168,7 @@ class DecorationMixin:
 
         Args:
             parts: ``(N, 2)`` lon/lat arrays (EPSG:4326) as returned by
-                ``cleopatra.reference.natural_earth`` for a line layer.
+                ``cleopatra.basemap.reference.natural_earth`` for a line layer.
 
         Returns:
             A list of finite ``(M, 2)`` projected polyline segments.
@@ -194,7 +194,7 @@ class DecorationMixin:
 
         Args:
             parts: ``(N, 2)`` lon/lat exterior-ring arrays (EPSG:4326) as returned by
-                ``cleopatra.reference.natural_earth`` for a polygon layer.
+                ``cleopatra.basemap.reference.natural_earth`` for a polygon layer.
 
         Returns:
             A list of closed ``(M, 2)`` projected fill rings (empty when nothing is on the near side).
@@ -243,7 +243,7 @@ class DecorationMixin:
         layers (``polygon=True``: land/lakes) are projected and re-closed at the limb into finite rings and
         filled via :meth:`_fill_globe_polygons`. Both are clipped to the boundary when the frame is applied.
         On a **flat** map, the layer is drawn (and reprojected to the display CRS) by
-        ``cleopatra.reference.add_features`` — hole-aware for polygon layers. ``add_features`` holds the
+        ``cleopatra.basemap.reference.add_features`` — hole-aware for polygon layers. ``add_features`` holds the
         current axis limits, so a global layer never autoscales an already-drawn data view out; on an
         otherwise-empty axes the view is autoscaled to the new layer instead.
 
@@ -275,7 +275,7 @@ class DecorationMixin:
         return self.ax
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
-        """Overlay Natural-Earth coastlines (``cleopatra.reference`` ``"coastline"`` layer).
+        """Overlay Natural-Earth coastlines (``cleopatra.basemap.reference`` ``"coastline"`` layer).
 
         Returns:
             The drawn coastline artist (a list of polyline artists on a globe; the reprojected plot artist
@@ -354,7 +354,7 @@ class DecorationMixin:
         )
 
     def basemap(self, source: Any = None, **kwargs) -> Any:
-        """Add an XYZ-tile basemap to the axes via ``cleopatra.tiles.add_tiles`` in the display CRS.
+        """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
 
         Returns:
             The tile artist ``add_tiles`` added to the axes.

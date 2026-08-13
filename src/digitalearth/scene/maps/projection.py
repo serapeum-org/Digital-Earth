@@ -5,7 +5,7 @@ globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
 from typing import Any, Optional, Sequence
 
-from cleopatra.projection import apply_projection_frame
+from cleopatra.basemap.projection import apply_projection_frame
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.scene import projections

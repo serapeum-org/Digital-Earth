@@ -1,16 +1,16 @@
 """charts — non-map x–y charts (line, bar, histogram) wired onto cleopatra glyphs.
 
 These are the earthkit-plots chart primitives that are **not** maps: a line/marker series, a bar chart, and a
-histogram. The rendering lives in cleopatra (``LineGlyph``, ``StatisticalGlyph``); this module only adapts
+histogram. The rendering lives in cleopatra (``LineGlyph``, ``HistogramGlyph``); this module only adapts
 numpy arrays (or a pyramids ``Dataset`` band, with nodata dropped) into the inputs those glyphs expect.
 Parallel to :mod:`digitalearth.series` (the ensemble/statistical series plots).
 """
 from typing import Any, Optional, Sequence
 
 import numpy as np
-from cleopatra.line_glyph import LineGlyph
-from cleopatra.scatter_glyph import ScatterGlyph
-from cleopatra.statistical_glyph import StatisticalGlyph
+from cleopatra.glyphs.primitives.line_glyph import LineGlyph
+from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+from cleopatra.glyphs.stats.histogram_glyph import HistogramGlyph
 from matplotlib.axes import Axes
 
 from digitalearth._arrays import fig_of as _fig_of
@@ -255,7 +255,7 @@ def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, *
 
 def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
               ax: Optional[Axes] = None, **kwargs):
-    """Draw a histogram of array, raster, or field values (cleopatra ``StatisticalGlyph.histogram``).
+    """Draw a histogram of array, raster, or field values (cleopatra ``HistogramGlyph.histogram``).
 
     Args:
         values: A 1-D/2-D sequence of numbers, a pyramids ``Dataset`` (its first band is used, with nodata
@@ -267,7 +267,7 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             used.
         bins: Number of histogram bins.
         ax: Existing axes to draw on; a new figure/axes is created when ``None``.
-        **kwargs: Forwarded to ``StatisticalGlyph.histogram`` (e.g. ``color``, ``alpha``, ``rwidth``).
+        **kwargs: Forwarded to ``HistogramGlyph.histogram`` (e.g. ``color``, ``alpha``, ``rwidth``).
 
     Returns:
         ``(fig, ax, hist)`` — the figure, the axes, and the histogram info dict from cleopatra.
@@ -323,7 +323,7 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             # Drop NaN/inf on the 1-D raw path so a raw array with non-finite values histograms cleanly
             # (a 2-D array keeps its shape for the overlaid-per-column case, so it is left untouched).
             arr = finite(arr)
-    glyph = StatisticalGlyph(arr, ax=ax, fig=_fig_of(ax))
+    glyph = HistogramGlyph(arr, ax=ax, fig=_fig_of(ax))
     return glyph.histogram(bins=bins, **kwargs)
 
 

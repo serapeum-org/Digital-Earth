@@ -5,7 +5,7 @@ pyramids) into MapLibre circle / line / fill layers over a GeoJSON source; ``cho
 polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expression**:
 
 * graduated (``scheme`` set) → a ``["step", ["get", col], …]`` expression whose breaks come from
-  **cleopatra.styles.classify** (pure-numpy quantiles / equal-interval / Fisher-Jenks — no mapclassify), the
+  **cleopatra.styling.styles.classify** (pure-numpy quantiles / equal-interval / Fisher-Jenks — no mapclassify), the
   same classifier the static tier uses, so the classes match across tiers;
 * continuous (``scheme=None``) → an ``["interpolate", ["linear"], ["get", col], …]`` colour ramp.
 
@@ -47,7 +47,7 @@ class VectorMixin:
             sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops.
 
         Raises:
-            ValueError: propagated from ``cleopatra.styles.classify`` (unknown scheme, no spread, …) or from
+            ValueError: propagated from ``cleopatra.styling.styles.classify`` (unknown scheme, no spread, …) or from
                 the categorical helper (no non-null values).
         """
         import numpy as np
@@ -84,7 +84,7 @@ class VectorMixin:
             return expr
 
         if scheme is not None:
-            from cleopatra.styles import classify
+            from cleopatra.styling.styles import classify
 
             try:
                 edges, _ = classify(values, scheme, k)
@@ -306,7 +306,7 @@ class VectorMixin:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
         Graduated by default (``scheme="quantiles"``): the class breaks come from
-        ``cleopatra.styles.classify`` and are compiled into a MapLibre ``step`` paint expression. Pass
+        ``cleopatra.styling.styles.classify`` and are compiled into a MapLibre ``step`` paint expression. Pass
         ``scheme="categorical"`` to colour an unordered attribute by distinct value (a MapLibre ``match``
         expression, DC.8), or ``scheme=None`` for a continuous ramp. The breaks / categories are exposed on
         ``WebMap.last_breaks`` for building a legend.

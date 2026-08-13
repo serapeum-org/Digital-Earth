@@ -1,7 +1,7 @@
 """DW.2 — web-tier vector builders (points/lines/polygons/choropleth) + symbology.
 
 The colour logic lives in pure helpers (``_color_expr`` → MapLibre paint, breaks via
-``cleopatra.styles.classify``); those are tested **without** the engine (cleopatra/numpy/matplotlib are core
+``cleopatra.styling.styles.classify``); those are tested **without** the engine (cleopatra/numpy/matplotlib are core
 deps). The builders that construct ``maplibre`` layers ``importorskip`` maplibre and assert the full
 build → render → save path, so the lean dev env stays green while the ``web`` env runs everything.
 """
@@ -44,10 +44,10 @@ class TestColorExpr:
         """A graduated scheme compiles a ``step`` expression whose breaks equal cleopatra's classifier.
 
         This is the parity contract: the web tier owns no classification logic — it reuses
-        ``cleopatra.styles.classify`` (the same classifier the static tier uses) and only compiles the
+        ``cleopatra.styling.styles.classify`` (the same classifier the static tier uses) and only compiles the
         result into a MapLibre paint expression.
         """
-        from cleopatra.styles import classify
+        from cleopatra.styling.styles import classify
 
         values = np.arange(100.0)
         expr = WebMap()._color_expr(values, "pop", "quantiles", 4, "viridis")
@@ -61,7 +61,7 @@ class TestColorExpr:
 
     def test_graduated_records_breaks_on_the_map(self):
         """The full class edges are exposed on ``last_breaks`` for an out-of-band legend."""
-        from cleopatra.styles import classify
+        from cleopatra.styling.styles import classify
 
         m = WebMap()
         m._color_expr(np.arange(50.0), "pop", "equal_interval", 5, "viridis")

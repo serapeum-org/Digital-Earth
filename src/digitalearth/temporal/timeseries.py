@@ -2,7 +2,7 @@
 from typing import Any, Optional, Sequence
 
 import numpy as np
-from cleopatra.line_glyph import LineGlyph
+from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
 from digitalearth._arrays import NAN_REDUCERS, read_masked_band
