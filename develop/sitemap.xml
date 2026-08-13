@@ -225,6 +225,26 @@
          <lastmod>2026-08-13</lastmod>
     </url>
     <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/presets/01_preset_gallery/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/presets/02_domain_presets/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/presets/03_palettes_and_colormaps/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/presets/04_color_scaling_and_terrain/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/presets/05_globe_and_projections/</loc>
+         <lastmod>2026-08-13</lastmod>
+    </url>
+    <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/pyvista/01_scene3d_basics/</loc>
          <lastmod>2026-08-13</lastmod>
     </url>
