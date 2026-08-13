@@ -32,15 +32,18 @@ _COLOR_SCALE_ALIASES = {
     "sym_log": ColorScale.SYM_LOGNORM,
     "symlog": ColorScale.SYM_LOGNORM,
     "sym_lognorm": ColorScale.SYM_LOGNORM,
-    "lognorm": ColorScale.SYM_LOGNORM,
     "boundary": ColorScale.BOUNDARY_NORM,
     "boundary_norm": ColorScale.BOUNDARY_NORM,
     "midpoint": ColorScale.MIDPOINT,
 }
 
 
-def _coerce_color_scale(value: Any) -> Any:
-    """Coerce a friendly ``color_scale=`` string to a ``ColorScale`` member; pass through anything unrecognised."""
+def _coerce_color_scale(value: Any) -> ColorScale:
+    """Coerce a friendly ``color_scale=`` string (or ``ColorScale``) to a ``ColorScale`` member.
+
+    Raises a clear error for an unrecognised value — otherwise the bare string reaches cleopatra and crashes
+    opaquely at render time (``'str' object has no attribute 'value'``).
+    """
     if isinstance(value, ColorScale):
         return value
     key = str(value).strip().lower().replace("-", "_")
@@ -49,7 +52,10 @@ def _coerce_color_scale(value: Any) -> Any:
     try:
         return ColorScale(str(value))  # exact enum value (e.g. "sym-lognorm")
     except ValueError:
-        return value  # leave it; cleopatra raises a clear error listing the valid scales
+        raise ValueError(
+            f"color_scale={value!r} is not a recognised colour scale; use one of "
+            f"{sorted(_COLOR_SCALE_ALIASES)} (or a cleopatra ColorScale member)"
+        ) from None
 
 #: Marker/label styling that folds into a ``PointOverlay`` wrapping the ``points`` array.
 _POINT_FIELDS = {
