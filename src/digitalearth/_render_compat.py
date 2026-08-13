@@ -109,11 +109,33 @@ def relocate_flat_style(opts: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         The removed style keys as a new dict.
     """
-    return {key: opts.pop(key) for key in list(opts) if key in FLAT_STYLE_KEYS}
+    moved = {key: opts[key] for key in opts if key in FLAT_STYLE_KEYS}
+    for key in moved:
+        del opts[key]
+    return moved
 
 
 #: Flat member kwargs per group parameter (used to spot styling a target glyph cannot accept).
 _GROUP_MEMBERS = {param: frozenset(field_map) for param, _, field_map in _GROUP_SPECS}
+
+
+def _fold_points(out: Dict[str, Any]) -> None:
+    """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place)."""
+    points = out.pop("points", None)
+    point_kw = {field: out.pop(key) for key, field in _POINT_FIELDS.items() if key in out}
+    if points is None:
+        return  # only marker styling was passed with no array to attach it to; drop it
+    out["points"] = points if isinstance(points, PointOverlay) else PointOverlay(points, **point_kw)
+
+
+def _fold_group(out: Dict[str, Any], param: str, cls: type, field_map: Dict[str, str]) -> None:
+    """Fold one group's flat members in ``out`` into a ``param`` group object (in place)."""
+    members = {field: out.pop(key) for key, field in field_map.items() if key in out}
+    if not members or out.get(param) is not None:
+        return  # nothing to fold, or the caller already passed a built group object under this name
+    if "kind" in members:  # color_scale=: coerce the friendly string to the ColorScale enum
+        members["kind"] = _coerce_color_scale(members["kind"])
+    out[param] = cls(**members)
 
 
 def group_render_kwargs(kwargs: Dict[str, Any], accepted: Optional[Set[str]] = None) -> Dict[str, Any]:
@@ -137,20 +159,10 @@ def group_render_kwargs(kwargs: Dict[str, Any], accepted: Optional[Set[str]] = N
     if (accepted is None or "points" in accepted) and (
         "points" in out or any(key in out for key in _POINT_FIELDS)
     ):
-        points = out.pop("points", None)
-        point_kw = {field: out.pop(key) for key, field in _POINT_FIELDS.items() if key in out}
-        if points is not None and not isinstance(points, PointOverlay):
-            out["points"] = PointOverlay(points, **point_kw)
-        elif points is not None:
-            out["points"] = points  # already a PointOverlay; stray flat point_* (if any) dropped above
+        _fold_points(out)
     for param, cls, field_map in _GROUP_SPECS:
-        if accepted is not None and param not in accepted:
-            continue  # this glyph's plot() has no such parameter; leave the flat members for the caller
-        members = {field: out.pop(key) for key, field in field_map.items() if key in out}
-        if members and out.get(param) is None:
-            if "kind" in members:  # color_scale=: coerce the friendly string to the ColorScale enum
-                members["kind"] = _coerce_color_scale(members["kind"])
-            out[param] = cls(**members)
+        if accepted is None or param in accepted:  # skip a group this glyph's plot() cannot take
+            _fold_group(out, param, cls, field_map)
     return out
 
 
