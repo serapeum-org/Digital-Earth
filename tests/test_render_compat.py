@@ -48,11 +48,16 @@ def test_group_render_kwargs_folds_each_group():
         {"levels": 5, "scheme": "quantiles", "k": 4, "style": "terrain", "display_cell_value": True,
          "color_scale": "power", "gamma": 0.3, "cmap": "viridis"}
     )
-    assert isinstance(out["contour"], Contour) and out["contour"].levels == 5
-    assert isinstance(out["classify"], Classify) and out["classify"].scheme == "quantiles" and out["classify"].k == 4
-    assert isinstance(out["data_style"], DataStyle) and out["data_style"].style == "terrain"
+    assert isinstance(out["contour"], Contour)
+    assert out["contour"].levels == 5
+    assert isinstance(out["classify"], Classify)
+    assert out["classify"].scheme == "quantiles"
+    assert out["classify"].k == 4
+    assert isinstance(out["data_style"], DataStyle)
+    assert out["data_style"].style == "terrain"
     assert isinstance(out["cells"], CellValues)
-    assert isinstance(out["color"], ColorScaling) and out["color"].kind is ColorScale.POWER
+    assert isinstance(out["color"], ColorScaling)
+    assert out["color"].kind is ColorScale.POWER
     assert out["cmap"] == "viridis"  # non-styling kwargs pass through untouched
 
 
@@ -60,7 +65,8 @@ def test_group_render_kwargs_is_idempotent():
     """Folding an already-folded dict is a no-op (safe to apply centrally)."""
     once = group_render_kwargs({"levels": 3, "scheme": "quantiles"})
     twice = group_render_kwargs(once)
-    assert twice["contour"] is once["contour"] and twice["classify"] is once["classify"]
+    assert twice["contour"] is once["contour"]
+    assert twice["classify"] is once["classify"]
 
 
 def test_group_render_kwargs_wraps_points_overlay():
@@ -68,14 +74,16 @@ def test_group_render_kwargs_wraps_points_overlay():
     arr = np.zeros((2, 3))
     out = group_render_kwargs({"points": arr, "point_color": "red", "point_size": 40})
     assert isinstance(out["points"], PointOverlay)
-    assert out["points"].color == "red" and out["points"].size == 40
+    assert out["points"].color == "red"
+    assert out["points"].size == 40
 
 
 def test_group_render_kwargs_respects_accepted_groups():
     """With an ``accepted`` set, groups the glyph lacks are not folded — their flat members are left alone."""
     out = group_render_kwargs({"scheme": "quantiles", "alpha": 0.5}, accepted={"color", "contour", "classify"})
     assert isinstance(out["classify"], Classify)  # accepted -> folded
-    assert out["alpha"] == 0.5 and "data_style" not in out  # data_style not accepted -> left flat
+    assert out["alpha"] == 0.5
+    assert "data_style" not in out  # data_style not accepted -> left flat
 
 
 def test_prepare_plot_kwargs_defers_alpha_for_vector_glyph():
@@ -83,7 +91,9 @@ def test_prepare_plot_kwargs_defers_alpha_for_vector_glyph():
     glyph = ScatterGlyph(np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2]))
     kwargs, alpha = prepare_plot_kwargs(glyph, {"scheme": "quantiles", "alpha": 0.5})
     assert alpha == 0.5
-    assert isinstance(kwargs["classify"], Classify) and "alpha" not in kwargs and "data_style" not in kwargs
+    assert isinstance(kwargs["classify"], Classify)
+    assert "alpha" not in kwargs
+    assert "data_style" not in kwargs
 
 
 def test_prepare_plot_kwargs_folds_alpha_for_array_glyph():
@@ -91,7 +101,8 @@ def test_prepare_plot_kwargs_folds_alpha_for_array_glyph():
     glyph = ArrayGlyph(np.arange(12, dtype=float).reshape(3, 4))
     kwargs, alpha = prepare_plot_kwargs(glyph, {"alpha": 0.5})
     assert alpha is None
-    assert isinstance(kwargs["data_style"], DataStyle) and kwargs["data_style"].alpha == 0.5
+    assert isinstance(kwargs["data_style"], DataStyle)
+    assert kwargs["data_style"].alpha == 0.5
 
 
 def test_prepare_plot_kwargs_rejects_unsupported_styling():
