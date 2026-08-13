@@ -17,7 +17,35 @@ from typing import Any, Dict
 
 from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
-from cleopatra.styling.scaling import ColorScaling
+from cleopatra.styling.scaling import ColorScale, ColorScaling
+
+#: Flat ``color_scale=`` spellings -> the ``ColorScale`` enum the renderer needs (its ``.value``s carry dashes,
+#: so a bare string like ``"power"`` constructs a ColorScaling but blows up at render time). Digital-Earth keeps
+#: accepting the friendly names.
+_COLOR_SCALE_ALIASES = {
+    "linear": ColorScale.LINEAR,
+    "power": ColorScale.POWER,
+    "sym_log": ColorScale.SYM_LOGNORM,
+    "symlog": ColorScale.SYM_LOGNORM,
+    "sym_lognorm": ColorScale.SYM_LOGNORM,
+    "lognorm": ColorScale.SYM_LOGNORM,
+    "boundary": ColorScale.BOUNDARY_NORM,
+    "boundary_norm": ColorScale.BOUNDARY_NORM,
+    "midpoint": ColorScale.MIDPOINT,
+}
+
+
+def _coerce_color_scale(value: Any) -> Any:
+    """Coerce a friendly ``color_scale=`` string to a ``ColorScale`` member; pass through anything unrecognised."""
+    if isinstance(value, ColorScale):
+        return value
+    key = str(value).strip().lower().replace("-", "_")
+    if key in _COLOR_SCALE_ALIASES:
+        return _COLOR_SCALE_ALIASES[key]
+    try:
+        return ColorScale(str(value))  # exact enum value (e.g. "sym-lognorm")
+    except ValueError:
+        return value  # leave it; cleopatra raises a clear error listing the valid scales
 
 #: Marker/label styling that folds into a ``PointOverlay`` wrapping the ``points`` array.
 _POINT_FIELDS = {
@@ -46,24 +74,30 @@ _GROUP_SPECS = (
     }),
 )
 
-#: Every flat styling key cleopatra's glyph constructors now reject (they belong on ``plot`` as group objects).
+#: The typed group parameters themselves (``color``/``contour``/``data_style``/``classify``/``cells``/``points``)
+#: — the constructors reject these too, so a caller passing a group object directly must also route to ``plot``.
+_GROUP_PARAMS = frozenset({param for param, _, _ in _GROUP_SPECS} | {"points"})
+
+#: Every styling key cleopatra's glyph constructors now reject — the flat members, plus the typed group params.
 FLAT_STYLE_KEYS = frozenset(
-    {"points", *_POINT_FIELDS} | {flat for _, _, field_map in _GROUP_SPECS for flat in field_map}
+    {"points", *_POINT_FIELDS} | {flat for _, _, field_map in _GROUP_SPECS for flat in field_map} | _GROUP_PARAMS
 )
 
 
 def relocate_flat_style(opts: Dict[str, Any]) -> Dict[str, Any]:
-    """Pop cleopatra-regrouped flat style keys out of a constructor kwargs dict, returning them (still flat).
+    """Pop cleopatra-regrouped style keys out of a constructor kwargs dict, returning them.
 
-    The glyph constructors reject these keys now (they moved onto ``plot`` group objects); pop them here so the
+    The glyph constructors reject these keys now — both the flat members (``levels``/``scheme``/``style``/…) and
+    the typed group parameters (``color``/``contour``/``data_style``/…) they fold into. Pop them here so the
     constructor keeps only the options it still accepts (``cmap``, ``add_colorbar``, ``size_*``, …), and forward
-    the returned dict to ``plot`` (where :func:`group_render_kwargs` folds it into the group objects).
+    the returned dict to ``plot`` (where :func:`group_render_kwargs` folds any flat members into group objects and
+    leaves an already-built group object untouched).
 
     Args:
         opts: The constructor keyword dict; mutated in place (matched keys are removed).
 
     Returns:
-        The removed flat style keys as a new dict.
+        The removed style keys as a new dict.
     """
     return {key: opts.pop(key) for key in list(opts) if key in FLAT_STYLE_KEYS}
 
@@ -93,5 +127,7 @@ def group_render_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     for param, cls, field_map in _GROUP_SPECS:
         members = {field: out.pop(key) for key, field in field_map.items() if key in out}
         if members and out.get(param) is None:
+            if "kind" in members:  # color_scale=: coerce the friendly string to the ColorScale enum
+                members["kind"] = _coerce_color_scale(members["kind"])
             out[param] = cls(**members)
     return out
