@@ -66,13 +66,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release with Commitizen
-        uses: serapeum-org/github-actions/actions/release/github@6823246a90df2963d1576ef6de875e10467c64aa #github-release/v1.3.5
+        uses: serapeum-org/github-actions/actions/release/github@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # github-release/v1.5.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           increment: ${{ github.event.inputs.increment }}
           prerelease-type: ${{ github.event.inputs.prerelease_type }}
           draft: ${{ github.event.inputs.draft }}
           package-manager: pixi
+          package-manager-version: v0.73.0
           install-groups: "dev"
 
       - name: Update lockfile after version bump
