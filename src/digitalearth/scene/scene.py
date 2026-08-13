@@ -17,7 +17,7 @@ from cleopatra.styling.styles import colorbar_legend, disjoint_legend
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from digitalearth._render_compat import group_render_kwargs
+from digitalearth._render_compat import prepare_plot_kwargs
 
 
 class Scene:
@@ -105,8 +105,11 @@ class Scene:
         Returns:
             The registered mappable/artist (so callers can chain a colorbar or keep a reference).
         """
-        result = glyph.plot(*plot_args, **group_render_kwargs(plot_kwargs))
+        plot_kwargs, deferred_alpha = prepare_plot_kwargs(glyph, plot_kwargs)
+        result = glyph.plot(*plot_args, **plot_kwargs)
         mappable = glyph.im if artist == "im" else result[2]
+        if deferred_alpha is not None and mappable is not None:
+            mappable.set_alpha(deferred_alpha)
         return self._add_layer(glyph, mappable)
 
     @contextmanager

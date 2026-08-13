@@ -5,15 +5,19 @@ cleopatra >=0.30 removed the loose ``plot``/``animate`` styling keywords (``leve
 ``DataStyle``, ``ColorScaling``, ``CellValues``, ``PointOverlay``). Digital-Earth keeps accepting the flat
 kwargs as its public surface and folds them here, so callers stay insulated from the upstream regrouping.
 
-Two entry points:
+Entry points:
 
-- :func:`group_render_kwargs` — fold any flat members in a ``plot`` kwargs dict into their group objects
-  (idempotent: an already-built group object, or an unrelated kwarg, is passed through untouched). Applied
-  once, centrally, in :meth:`~digitalearth.scene.scene.Scene._render_glyph`.
+- :func:`prepare_plot_kwargs` — fold the flat members a *given glyph* supports into their group objects, and
+  hand back any ``alpha`` the glyph cannot take for the caller to apply to the artist. Applied centrally in
+  :meth:`~digitalearth.scene.scene.Scene._render_glyph`.
+- :func:`group_render_kwargs` — the glyph-agnostic fold underneath it (idempotent; an already-built group
+  object, or an unrelated kwarg, passes through untouched).
 - :func:`relocate_flat_style` — pop the flat members out of a *constructor* kwargs dict (the cleopatra glyph
   constructors now reject them) so they can be forwarded to ``plot`` instead.
 """
-from typing import Any, Dict
+import inspect
+from functools import lru_cache
+from typing import Any, Dict, Optional, Set, Tuple
 
 from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
@@ -102,7 +106,11 @@ def relocate_flat_style(opts: Dict[str, Any]) -> Dict[str, Any]:
     return {key: opts.pop(key) for key in list(opts) if key in FLAT_STYLE_KEYS}
 
 
-def group_render_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+#: Flat member kwargs per group parameter (used to spot styling a target glyph cannot accept).
+_GROUP_MEMBERS = {param: frozenset(field_map) for param, _, field_map in _GROUP_SPECS}
+
+
+def group_render_kwargs(kwargs: Dict[str, Any], accepted: Optional[Set[str]] = None) -> Dict[str, Any]:
     """Fold cleopatra's flat render keywords in ``kwargs`` into typed group objects.
 
     A bare ``points`` array (with any ``point_*`` styling) becomes a ``PointOverlay``; ``levels``/``labels``
@@ -112,12 +120,17 @@ def group_render_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         kwargs: The ``plot`` keyword dict to fold (not mutated).
+        accepted: When given, only fold the groups whose parameter name is in this set (a target glyph's
+            ``plot`` parameters); flat members of an unsupported group are left in place for the caller to
+            handle. ``None`` (default) folds every group.
 
     Returns:
-        A new dict with flat members replaced by their group objects.
+        A new dict with the folded flat members replaced by their group objects.
     """
     out = dict(kwargs)
-    if "points" in out or any(key in out for key in _POINT_FIELDS):
+    if (accepted is None or "points" in accepted) and (
+        "points" in out or any(key in out for key in _POINT_FIELDS)
+    ):
         points = out.pop("points", None)
         point_kw = {field: out.pop(key) for key, field in _POINT_FIELDS.items() if key in out}
         if points is not None and not isinstance(points, PointOverlay):
@@ -125,9 +138,54 @@ def group_render_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
         elif points is not None:
             out["points"] = points  # already a PointOverlay; stray flat point_* (if any) dropped above
     for param, cls, field_map in _GROUP_SPECS:
+        if accepted is not None and param not in accepted:
+            continue  # this glyph's plot() has no such parameter; leave the flat members for the caller
         members = {field: out.pop(key) for key, field in field_map.items() if key in out}
         if members and out.get(param) is None:
             if "kind" in members:  # color_scale=: coerce the friendly string to the ColorScale enum
                 members["kind"] = _coerce_color_scale(members["kind"])
             out[param] = cls(**members)
     return out
+
+
+@lru_cache(maxsize=None)
+def _plot_params(glyph_cls: type) -> frozenset:
+    """The parameter names of a glyph class's ``plot`` method (cached per class)."""
+    return frozenset(inspect.signature(glyph_cls.plot).parameters)
+
+
+def prepare_plot_kwargs(glyph: Any, kwargs: Dict[str, Any]) -> Tuple[Dict[str, Any], Optional[Any]]:
+    """Fold flat styling into the groups ``glyph`` supports, returning ``(plot_kwargs, deferred_alpha)``.
+
+    Only the groups the glyph's ``plot`` accepts are built (the vector glyphs take ``color``/``contour``/
+    ``classify`` but not ``data_style``/``cells``, so folding those blindly would raise an opaque ``TypeError``).
+    A leftover flat member the glyph cannot take raises a clear ``ValueError`` naming it — except ``alpha``,
+    which every layer should honour: it is returned as ``deferred_alpha`` for the caller to apply to the
+    rendered artist, since the vector glyphs expose no ``alpha`` parameter upstream.
+
+    Args:
+        glyph: The cleopatra glyph about to be drawn.
+        kwargs: The flat ``plot`` keyword dict.
+
+    Returns:
+        A ``(plot_kwargs, deferred_alpha)`` pair — the grouped ``plot`` kwargs, and the ``alpha`` to apply to
+        the artist after drawing (``None`` when the glyph folded it into a ``DataStyle`` itself or none was given).
+
+    Raises:
+        ValueError: if a styling kwarg has no home on this glyph type (e.g. ``style=`` on a scatter layer).
+    """
+    accepted = _plot_params(type(glyph))
+    grouped = group_render_kwargs(kwargs, accepted)
+    leftover = {}
+    for param, members in _GROUP_MEMBERS.items():
+        if param in accepted:
+            continue
+        for key in [k for k in grouped if k in members]:
+            leftover[key] = grouped.pop(key)
+    deferred_alpha = leftover.pop("alpha", None)
+    if leftover:
+        raise ValueError(
+            f"{type(glyph).__name__} does not support the styling option(s) {sorted(leftover)}; "
+            "they apply to raster/mesh layers, not this layer type"
+        )
+    return grouped, deferred_alpha
