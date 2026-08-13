@@ -35,7 +35,7 @@ jobs:
           environments: ${{ matrix.environment }}
           activate-environment: ${{ matrix.environment }}
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Run main tests
         run: |
@@ -59,7 +59,7 @@ jobs:
           environments: viz3d
           activate-environment: viz3d
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       # PyVista renders off-screen through VTK's OpenGL, which still needs a display + a GL driver even when
       # off_screen=True (without one VTK segfaults). Install a virtual framebuffer and Mesa's software GL, then
@@ -90,7 +90,7 @@ jobs:
           environments: viz3d
           activate-environment: viz3d
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Install a virtual framebuffer + software OpenGL
         run: |
@@ -120,7 +120,7 @@ jobs:
           environments: interactive
           activate-environment: interactive
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Run interactive tier tests
         # `test-interactive` = pytest tests/test_interactive_*.py --cov=src/digitalearth --cov-report=xml.
@@ -146,7 +146,7 @@ jobs:
           environments: interactive
           activate-environment: interactive
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Check the interactive notebooks render
         run: |
@@ -168,7 +168,7 @@ jobs:
           environments: web
           activate-environment: web
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Run web tier tests
         # `test-web` = pytest tests/test_web_*.py --cov=src/digitalearth --cov-report=xml.
@@ -193,7 +193,7 @@ jobs:
           environments: web
           activate-environment: web
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Check the web notebooks render
         run: |
@@ -216,7 +216,7 @@ jobs:
           environments: web
           activate-environment: web
           cache: true
-          version: v0.65.0
+          version: v0.73.0
 
       - name: Install Playwright + Chromium
         # Pin a bounded range so the smoke test is reproducible — an unpinned install pulls whatever ships that
