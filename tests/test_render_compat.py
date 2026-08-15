@@ -112,6 +112,21 @@ def test_prepare_plot_kwargs_rejects_unsupported_styling():
         prepare_plot_kwargs(glyph, {"style": "terrain"})
 
 
+def test_prepare_plot_kwargs_rejects_points_overlay_on_unsupported_glyph():
+    """A points overlay on a glyph with no ``points`` parameter raises a clear ValueError, not a TypeError."""
+    glyph = ScatterGlyph(np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2]))
+    with pytest.raises(ValueError, match=r"does not support the styling option\(s\).*points"):
+        prepare_plot_kwargs(glyph, {"points": np.zeros((2, 3))})
+
+
+def test_group_render_kwargs_keeps_flat_member_when_group_object_present():
+    """A flat member passed alongside a built group object of the same group is left in place, not dropped."""
+    scaling = ColorScaling()
+    out = group_render_kwargs({"color": scaling, "gamma": 0.3})
+    assert out["color"] is scaling
+    assert out["gamma"] == 0.3
+
+
 def test_relocate_flat_style_pops_styling_leaves_constructor_options():
     """relocate_flat_style removes the flat members and group params, leaving constructor-safe options."""
     opts = {"scheme": "quantiles", "levels": 5, "color": ColorScaling(), "cmap": "viridis", "add_colorbar": False}

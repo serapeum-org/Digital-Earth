@@ -118,21 +118,29 @@ def relocate_flat_style(opts: Dict[str, Any]) -> Dict[str, Any]:
 #: Flat member kwargs per group parameter (used to spot styling a target glyph cannot accept).
 _GROUP_MEMBERS = {param: frozenset(field_map) for param, _, field_map in _GROUP_SPECS}
 
+#: The point-overlay keys (the ``points`` array plus its ``point_*`` styling), rejected on a glyph with no
+#: ``points`` parameter the same way an unsupported group is.
+_POINT_OVERLAY_KEYS = frozenset({"points", *_POINT_FIELDS})
+
 
 def _fold_points(out: Dict[str, Any]) -> None:
     """Wrap a bare ``points`` array plus any ``point_*`` styling into a ``PointOverlay`` (in place)."""
+    if isinstance(out.get("points"), PointOverlay):
+        return  # already a built overlay; leave any stray point_* keys in place, don't silently drop them
     points = out.pop("points", None)
     point_kw = {field: out.pop(key) for key, field in _POINT_FIELDS.items() if key in out}
     if points is None:
         return  # only marker styling was passed with no array to attach it to; drop it
-    out["points"] = points if isinstance(points, PointOverlay) else PointOverlay(points, **point_kw)
+    out["points"] = PointOverlay(points, **point_kw)
 
 
 def _fold_group(out: Dict[str, Any], param: str, cls: type, field_map: Dict[str, str]) -> None:
     """Fold one group's flat members in ``out`` into a ``param`` group object (in place)."""
+    if out.get(param) is not None:
+        return  # caller already passed a built group object under this name; leave any flat members in place
     members = {field: out.pop(key) for key, field in field_map.items() if key in out}
-    if not members or out.get(param) is not None:
-        return  # nothing to fold, or the caller already passed a built group object under this name
+    if not members:
+        return
     if "kind" in members:  # color_scale=: coerce the friendly string to the ColorScale enum
         members["kind"] = _coerce_color_scale(members["kind"])
     out[param] = cls(**members)
@@ -177,9 +185,15 @@ def prepare_plot_kwargs(glyph: Any, kwargs: Dict[str, Any]) -> Tuple[Dict[str, A
 
     Only the groups the glyph's ``plot`` accepts are built (the vector glyphs take ``color``/``contour``/
     ``classify`` but not ``data_style``/``cells``, so folding those blindly would raise an opaque ``TypeError``).
-    A leftover flat member the glyph cannot take raises a clear ``ValueError`` naming it — except ``alpha``,
-    which every layer should honour: it is returned as ``deferred_alpha`` for the caller to apply to the
-    rendered artist, since the vector glyphs expose no ``alpha`` parameter upstream.
+    A leftover flat member the glyph cannot take (including an unsupported ``points`` overlay) raises a clear
+    ``ValueError`` naming it — except ``alpha``, which every layer should honour: it is returned as
+    ``deferred_alpha`` for the caller to apply to the rendered artist, since the vector glyphs expose no
+    ``alpha`` parameter upstream.
+
+    This assumes each glyph advertises its supported groups as *explicit named* ``plot`` parameters — true for
+    every cleopatra glyph today (``ArrayGlyph`` names ``color``/``contour``/``cells``/``data_style``/``points``;
+    the vector glyphs name ``color``/``contour``/``classify``). A glyph that exposed its groups only through
+    ``**kwargs`` would need this rejection revisited.
 
     Args:
         glyph: The cleopatra glyph about to be drawn.
@@ -199,6 +213,9 @@ def prepare_plot_kwargs(glyph: Any, kwargs: Dict[str, Any]) -> Tuple[Dict[str, A
         if param in accepted:
             continue
         for key in [k for k in grouped if k in members]:
+            leftover[key] = grouped.pop(key)
+    if "points" not in accepted:  # a point overlay on a glyph with no `points` parameter is unsupported too
+        for key in [k for k in grouped if k in _POINT_OVERLAY_KEYS]:
             leftover[key] = grouped.pop(key)
     deferred_alpha = leftover.pop("alpha", None)
     if leftover:
