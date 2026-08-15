@@ -188,7 +188,7 @@ def test_project_line_features_skips_empty(mocker):
 def _add_features_drawing(*verts):
     """Build an ``add_features`` stand-in that draws ``verts`` as a LineCollection, preserving the view.
 
-    Mirrors the real ``cleopatra.reference.add_features`` contract used by the flat ``_natural_earth`` path:
+    Mirrors the real ``cleopatra.basemap.reference.add_features`` contract used by the flat ``_natural_earth`` path:
     it adds an artist to the axes and holds the current limits, so the decoration's own autoscale-when-empty
     logic is what gets exercised — all without touching the network.
     """
@@ -224,7 +224,7 @@ def land_fc():
 
     Returns:
         list[numpy.ndarray]: closed `(N, 2)` lon/lat rings spanning both hemispheres of an ortho globe —
-            the coordinate-array shape ``cleopatra.reference.natural_earth`` yields for a polygon layer.
+            the coordinate-array shape ``cleopatra.basemap.reference.natural_earth`` yields for a polygon layer.
     """
     near = np.array([(-20, -20), (20, -20), (20, 20), (-20, 20), (-20, -20)], float)      # near side
     straddle = np.array([(60, -30), (120, -30), (120, 30), (60, 30), (60, -30)], float)   # crosses the limb

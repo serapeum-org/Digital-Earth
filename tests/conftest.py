@@ -13,9 +13,9 @@ _NATURAL_EARTH_FIXTURES = Path(__file__).parent / "data" / "naturalearth"
 
 @pytest.fixture(scope="session", autouse=True)
 def _seed_natural_earth_cache(tmp_path_factory):
-    """Point ``cleopatra.reference`` at the committed Natural-Earth assets so overlay tests run offline.
+    """Point ``cleopatra.basemap.reference`` at the committed Natural-Earth assets so overlay tests run offline.
 
-    ``cleopatra.reference.natural_earth`` / ``add_features`` download each layer from a GitHub release on
+    ``cleopatra.basemap.reference.natural_earth`` / ``add_features`` download each layer from a GitHub release on
     first use and cache it under ``CLEOPATRA_CACHE_DIR``; if the file is already there they read it without
     touching the network. We copy the committed ``ne_110m_*`` fixtures into a throwaway cache dir (a copy, so
     cleopatra's corrupt-cache cleanup can never unlink the originals) and aim ``CLEOPATRA_CACHE_DIR`` at it.

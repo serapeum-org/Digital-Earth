@@ -13,9 +13,11 @@ from contextlib import contextmanager
 from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
-from cleopatra.styles import colorbar_legend, disjoint_legend
+from cleopatra.styling.styles import colorbar_legend, disjoint_legend
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+
+from digitalearth._render_compat import prepare_plot_kwargs
 
 
 class Scene:
@@ -103,8 +105,11 @@ class Scene:
         Returns:
             The registered mappable/artist (so callers can chain a colorbar or keep a reference).
         """
+        plot_kwargs, deferred_alpha = prepare_plot_kwargs(glyph, plot_kwargs)
         result = glyph.plot(*plot_args, **plot_kwargs)
         mappable = glyph.im if artist == "im" else result[2]
+        if deferred_alpha is not None and mappable is not None:
+            mappable.set_alpha(deferred_alpha)
         return self._add_layer(glyph, mappable)
 
     @contextmanager
@@ -127,7 +132,7 @@ class Scene:
             self.ax.set_ylim(ylim)
 
     def colorbar(self, layer: int = -1, label: Optional[str] = None, **kwargs) -> Any:
-        """Draw one colorbar for a registered layer (delegates to ``cleopatra.styles.colorbar_legend``).
+        """Draw one colorbar for a registered layer (delegates to ``cleopatra.styling.styles.colorbar_legend``).
 
         Args:
             layer: Index into :attr:`layers` (default ``-1``, the most recent layer).
@@ -159,7 +164,7 @@ class Scene:
         return [self.colorbar(layer=i, **kwargs) for i in range(len(self.layers))]
 
     def legend(self, colors: Sequence, labels: Sequence[str], **kwargs) -> Any:
-        """Attach a categorical (disjoint) swatch legend (delegates to ``cleopatra.styles.disjoint_legend``).
+        """Attach a categorical (disjoint) swatch legend (delegates to ``cleopatra.styling.styles.disjoint_legend``).
 
         Args:
             colors: One color per category.

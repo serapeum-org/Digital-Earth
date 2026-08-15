@@ -10,15 +10,16 @@ import numpy as np
 from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
 from matplotlib.path import Path as MplPath
-from cleopatra.flow_glyph import FlowGlyph
-from cleopatra.kde_glyph import KDEGlyph
-from cleopatra.mesh_glyph import MeshGlyph
-from cleopatra.polygon_glyph import PolygonGlyph
-from cleopatra.scatter_glyph import ScatterGlyph
-from cleopatra.vector_glyph import VectorGlyph
+from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
+from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
+from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
+from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
+from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import NAN_REDUCERS, read_masked_band
+from digitalearth._render_compat import relocate_flat_style
 from digitalearth._symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
 from digitalearth.sources import get_source
 
@@ -121,14 +122,16 @@ class VectorMixin:
                 # shifting every other category's colour — i.e. the same data would render differently
                 # depending only on the column's dtype.
                 values = nulls_to_none(values)
+        # scheme/k moved onto the plot() `classify` group; pull them off the constructor kwargs.
+        plot_style = relocate_flat_style(opts)
         if values is not None:
             glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
-            artist = self._render_glyph(glyph, artist="plot")
+            artist = self._render_glyph(glyph, artist="plot", **plot_style)
             if categorical:
                 _draw_missing_neutral(artist)
             return artist
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot", outline_only=True)
+        return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
 
     def scatter(self, features: Any, *, scale: Optional[str] = None, **opts) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
@@ -149,10 +152,11 @@ class VectorMixin:
         values = src.z.values if src.z is not None else None
         sizes = np.asarray(fc[scale], dtype=float) if scale is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         glyph = ScatterGlyph(
             src.x.values, src.y.values, values=values, sizes=sizes, ax=self.ax, fig=self.fig, **opts,
         )
-        return self._render_glyph(glyph, artist="plot")
+        return self._render_glyph(glyph, artist="plot", **plot_style)
 
     def grid_points(self, dataset: Any, **opts) -> Any:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
@@ -184,8 +188,9 @@ class VectorMixin:
         y = xyz.iloc[:, 1].to_numpy()
         z = xyz.iloc[:, 2].to_numpy()
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot")
+        return self._render_glyph(glyph, artist="plot", **plot_style)
 
     def point_cloud(self, dataset: Any, **opts) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
@@ -224,6 +229,13 @@ class VectorMixin:
                 ```
         """
         ds = self._reproject(dataset)
+        if ds.epsg is None:
+            # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
+            # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
+            # orthographic globe). We read only the cell geometry, in display-CRS coordinates computed from
+            # the geotransform, so the authority code is cosmetic; give the transient reprojected copy a
+            # placeholder EPSG (coordinates are untouched) so the call runs. Drop this once pyramids#979 ships.
+            ds.epsg = 4326
         polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
         values = read_masked_band(ds, band).ravel()  # 1-based band, nodata -> NaN (shared helper)
         polygons, values = self._finite_polygons(polygons, values)  # drop far-side cells on a globe
@@ -255,10 +267,11 @@ class VectorMixin:
             ys, u, v = ys[::-1], u[::-1, :], v[::-1, :]
         x_grid, y_grid = np.meshgrid(xs, ys)
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        plot_style = relocate_flat_style(opts)
         glyph = VectorGlyph(
             x_grid, y_grid, u, v, ax=self.ax, fig=self.fig, **opts,
         )
-        im = self._render_glyph(glyph, artist="plot", kind=kind)
+        im = self._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
         self._last_vector = (glyph, im, kind)  # remembered for quiverkey()
         return im
 
@@ -941,10 +954,11 @@ class VectorMixin:
         if xs.size == 0:
             raise ValueError("kde: no finite points in the display CRS")
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        plot_style = relocate_flat_style(opts)  # levels/… -> plot() contour/data_style groups
         glyph = KDEGlyph(
             xs, ys, clip_path=self._clip_path(clip), ax=self.ax, fig=self.fig, **opts,
         )
-        return self._render_glyph(glyph, artist="plot")
+        return self._render_glyph(glyph, artist="plot", **plot_style)
 
     def sankey(
         self, features: Any, column: Optional[str] = None, scale: Optional[str] = None, **opts,
@@ -1002,8 +1016,9 @@ class VectorMixin:
         values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
         widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+        plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         glyph = FlowGlyph(
             paths, values=values, widths=widths, ax=self.ax, fig=self.fig, **opts,
         )
-        return self._render_glyph(glyph, artist="plot")
+        return self._render_glyph(glyph, artist="plot", **plot_style)
 

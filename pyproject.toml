@@ -31,8 +31,8 @@ requires-python = ">= 3.11, <4"
 dependencies = [
     "numpy >=2.0.0",
     "geopandas >=1.1.3",
-    "cleopatra >=0.26.0",
-    "pyramids-gis >=0.46.0",
+    "cleopatra >=0.31.0",
+    "pyramids-gis >=0.52.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -142,24 +142,24 @@ include = ["digitalearth", "digitalearth.*"]
 [tool.setuptools.package-data]
 "digitalearth.autostyle" = ["library/*.yml"]
 
-[tool.flake8]
-ignore = ["E203", "E266", "E501", "W503", "E722", "C901", "E741", "E731"]
-max-line-length = 88
-max-complexity = 18
-select = "B,C,E,F,W,T4"
-
-[tool.black]
-profile = "flake8"
+# Ruff replaces black + isort + flake8 + pyupgrade (and their nbqa notebook wrappers): one engine and one
+# line-length ruler, so the formatter and the import sorter can't disagree. Mirrors pyramids' current config.
+[tool.ruff]
 line-length = 88
-skip-string-normalization = true
+target-version = "py311"  # requires-python floors at 3.11
 
-[tool.isort]
-profile = "black"
-line_length = 88
-multi_line_output = 3
+[tool.ruff.format]
+
+[tool.ruff.lint]
+# E/F/W is the effective flake8 set (the old B/T4 selectors were inert — flake8-bugbear / flake8-print
+# were never installed); add I (isort) and UP (pyupgrade) to fold in those standalone hooks.
+select = ["E", "F", "W", "I", "UP"]
+# Mirror the old flake8 ignores; E704/W503 are dropped (ruff doesn't implement them — both are
+# formatter-owned pycodestyle codes).
+ignore = ["E203", "E226", "E266", "E501", "E701", "E722", "C901", "E741", "E731"]
 
 [tool.bandit]
-exclude_dirs = ["tests", "examples", "scripts", "docs"]
+exclude_dirs = ["tests", "examples", "scripts", "planning", "docs"]
 skips = ["B101"]
 
 [tool.coverage.run]
@@ -174,7 +174,12 @@ show_missing = true
 fail_under = 0
 
 [tool.mypy]
-python_version = "3.11"
+# Checker target is 3.12 even though `requires-python` floors at 3.11: numpy 2.5
+# ships PEP 695 `type` statements in its stubs, which mypy only parses when the
+# target is >= 3.12 (at 3.11 it aborts with a syntax error before checking any
+# source). This only widens the *typing* target; actual 3.11 runtime
+# compatibility is covered by the py311 leg of the test matrix, not by mypy.
+python_version = "3.12"
 mypy_path = "src"
 packages = ["digitalearth"]
 explicit_package_bases = true
@@ -187,6 +192,8 @@ exclude = [
     "tests/",
     "examples/",
     "docs/",
+    "scripts/",
+    "planning/",
 ]
 
 [tool.commitizen]
@@ -219,15 +226,12 @@ testpaths = ["tests"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["win-64", "linux-64", "osx-64"]
+# osx-arm64 (Apple Silicon), not osx-64: the numba/llvmlite stack the `interactive` tier pulls
+# (datashader -> numba -> llvmlite) ships macOS wheels for arm64 only — there are no Intel-mac (x86_64)
+# wheels for Python 3.13, so osx-64 forces a source build that backtracks into a legacy llvmlite that
+# refuses Python >=3.10. arm64 also matches CI (GitHub macos-latest is Apple Silicon).
+platforms = ["win-64", "linux-64", "osx-arm64"]
 
-# pyramids-gis ships its Linux wheels tagged manylinux_2_39 (its bundled
-# GDAL is conda-forge GCC-13 -> GLIBCXX_3.4.32). pixi's default linux-64
-# baseline is glibc 2.17, so the wheel is rejected and 0.27.0 (wheel-only,
-# no sdist) becomes unsatisfiable. Advertise glibc 2.39 so the wheel
-# matches. Targets Ubuntu 24.04+ / RHEL 10+. See pyramids issue #338.
-[tool.pixi.system-requirements]
-libc = "2.39"
 
 [tool.pixi.pypi-dependencies]
 digitalearth = { path = ".", editable = true }
@@ -258,6 +262,13 @@ cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }
 
 
+# numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves
+# numpy 2.5.x for the interactive solve-group, which leaves no installable numba, so uv backtracks numba into
+# a legacy llvmlite that has no cp313 wheel and whose setup.py refuses Python >=3.10. Cap numpy here and scope
+# this feature to the interactive env only, so the lean envs stay on the latest numpy.
+[tool.pixi.feature.numba-numpy.dependencies]
+numpy = "<2.5"
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
@@ -268,7 +279,7 @@ docs = { features = ["docs"], solve-group = "docs" }
 viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }
 # Interactive tier (HoloViz). Uses the `interactive` feature pixi derives from the `[interactive]` extra.
 # Separate solve-group so geoviews/datashader/panel stay out of default/dev. Run: pixi run -e interactive test-interactive
-interactive = { features = ["dev", "interactive"], solve-group = "interactive" }
+interactive = { features = ["dev", "interactive", "numba-numpy"], solve-group = "interactive" }
 # Web tier (MapLibre + deck.gl). Uses the `web` feature pixi derives from the `[web]` extra. Separate solve-group
 # so maplibre/lonboard stay out of default/dev. Run: pixi run -e web test-web
 web = { features = ["dev", "web"], solve-group = "web" }

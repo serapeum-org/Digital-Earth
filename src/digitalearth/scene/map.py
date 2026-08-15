@@ -1,8 +1,8 @@
 """Map — a Scene with a display CRS, pyramids reprojection, and basemap/coastline decoration (no Cartopy).
 
 ``Map`` reprojects each input to a chosen display CRS via **pyramids** (``Dataset.to_crs``), renders on a plain
-matplotlib axes in that projected space, and decorates it with an XYZ-tile basemap (``cleopatra.tiles``) and
-Natural-Earth vector features (``cleopatra.reference``). There is deliberately **no Cartopy**: the
+matplotlib axes in that projected space, and decorates it with an XYZ-tile basemap (``cleopatra.basemap.tiles``) and
+Natural-Earth vector features (``cleopatra.basemap.reference``). There is deliberately **no Cartopy**: the
 projection is applied to the *data* upstream, not to the axes (see plan §2.4).
 
 The field methods here (``imshow`` and the private ``_field`` recipe) are the foundation T1.1 extends with

@@ -121,6 +121,12 @@ nav:
     - Global data on the globe: examples/11_global_data_on_globe.ipynb
     - Animating data on the globe: examples/12_animated_globe.ipynb
     - Charts & map decorations: examples/13_charts_and_decorations.ipynb
+    - Presets & styling:
+      - Preset library gallery: examples/presets/01_preset_gallery.ipynb
+      - Domain presets on matching data: examples/presets/02_domain_presets.ipynb
+      - Palettes & colormaps: examples/presets/03_palettes_and_colormaps.ipynb
+      - Colour scaling & terrain: examples/presets/04_color_scaling_and_terrain.ipynb
+      - Globe & projections (real climate data): examples/presets/05_globe_and_projections.ipynb
     - Interactive web maps (HoloViz):
       - Overview — InteractiveMap: examples/interactive/00_overview.ipynb
       - Raster fields: examples/interactive/01_raster_fields.ipynb

@@ -111,7 +111,7 @@ def test_drops_pandas_nullable_na():
 def test_matches_cleopatra_categorize_across_colormap_kinds(cmap):
     """Colours match cleopatra for both colormap kinds — a LinearSegmentedColormap must sample evenly, not
     collapse to the first-n near-identical LUT entries (the cross-tier crack this closes)."""
-    from cleopatra.styles import categorize
+    from cleopatra.styling.styles import categorize
 
     values = ["a", "b", "c"]
     _, ours = categorical_colors(values, cmap)
@@ -134,7 +134,7 @@ def test_matches_cleopatra_categorize(values):
     The static tier maps categories via cleopatra while the web/interactive tiers use this helper, so the two
     must derive an identical category→colour table or the same data would render different colours per tier.
     """
-    from cleopatra.styles import categorize
+    from cleopatra.styling.styles import categorize
 
     ours_cats, ours_colors = categorical_colors(values)
     upstream_cats, upstream_colors = categorize(np.asarray(values, dtype=object))
