@@ -4248,8 +4248,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s1">'LisbonElevation.tif'</span><span class="p">))</span>
 
 <span class="c1"># Real climate data, fetched from the internet: NOAA ERSST v5 monthly sea-surface temperature</span>
-<span class="c1"># (2-degree global grid), via the pydata/xarray-data mirror on GitHub. Cached under the gitignored</span>
-<span class="c1"># examples/data/global/ so a second run is offline.</span>
+<span class="c1"># (2-degree global grid), via the pydata/xarray-data mirror on GitHub. It is committed under</span>
+<span class="c1"># examples/data/global/ so this runs offline; the download below is only a fallback.</span>
 <span class="n">CACHE</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'../../../examples/data/global'</span><span class="p">);</span> <span class="n">CACHE</span><span class="o">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">parents</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">SST_NC</span> <span class="o">=</span> <span class="n">CACHE</span> <span class="o">/</span> <span class="s1">'ersstv5.nc'</span>
 <span class="k">if</span> <span class="ow">not</span> <span class="n">SST_NC</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
@@ -4282,8 +4282,8 @@ DATA = Path('../../../examples/data')   # notebook-relative path (docs/examples/
 dem = Dataset.read_file(str(DATA / 'LisbonElevation.tif'))
 
 # Real climate data, fetched from the internet: NOAA ERSST v5 monthly sea-surface temperature
-# (2-degree global grid), via the pydata/xarray-data mirror on GitHub. Cached under the gitignored
-# examples/data/global/ so a second run is offline.
+# (2-degree global grid), via the pydata/xarray-data mirror on GitHub. It is committed under
+# examples/data/global/ so this runs offline; the download below is only a fallback.
 CACHE = Path('../../../examples/data/global'); CACHE.mkdir(parents=True, exist_ok=True)
 SST_NC = CACHE / 'ersstv5.nc'
 if not SST_NC.exists():
