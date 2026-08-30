@@ -84,6 +84,17 @@ class TestNearestIndex:
         coords = np.array([7.0])
         assert list(_nearest_index(np.array([7.4, 7.9]), coords, cell=1.0)) == [0, -1]
 
+    def test_duplicate_coordinates_do_not_divide_by_a_zero_step(self):
+        """Two identical cell centres give a zero step; it must degrade to an exact-hit test, not divide."""
+        coords = np.array([5.0, 5.0])
+        assert list(_nearest_index(np.array([5.0, 9.0]), coords)) == [0, -1]
+
+    def test_a_degenerate_step_is_rejected_rather_than_dividing_into_nonsense(self):
+        """A spacing far below any real grid's resolution must not be trusted as a divisor."""
+        coords = np.array([0.0, 1e-12])
+        result = _nearest_index(np.array([0.0, 40.0]), coords)
+        assert list(result) == [0, -1], f"a 1e-12 step should degrade to an exact-hit test, got {result}"
+
 
 class TestFromDataset:
     """A raster is draped where it actually is, not stretched over the sphere."""

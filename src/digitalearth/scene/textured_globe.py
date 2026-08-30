@@ -84,9 +84,15 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
     """
     if coords.size == 0:
         return np.full(np.shape(targets), -1, dtype=int)
-    step = float(coords[1] - coords[0]) if coords.size > 1 else float(cell or 0.0)
-    if step == 0.0:
-        # A lone cell with no known size spans no area; only an exact hit maps onto it.
+    step: Optional[float] = None
+    if coords.size > 1:
+        step = float(coords[1] - coords[0])
+    elif cell:
+        step = float(cell)
+    # A grid with no usable step spans no area, so only an exact hit maps onto its single cell. Testing the
+    # magnitude rather than `step == 0` also rejects a degenerate spacing (duplicate coordinates, or a cell
+    # size far below the ~1e-8-degree floor of any real grid), which would otherwise divide into nonsense.
+    if step is None or not np.isfinite(step) or np.isclose(step, 0.0):
         return np.where(np.isclose(targets, float(coords[0])), 0, -1)
     half = abs(step) / 2.0
     lo, hi = min(coords[0], coords[-1]) - half, max(coords[0], coords[-1]) + half
