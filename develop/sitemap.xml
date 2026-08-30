@@ -85,6 +85,10 @@
          <lastmod>2026-08-30</lastmod>
     </url>
     <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/14_textured_globe_3d/</loc>
+         <lastmod>2026-08-30</lastmod>
+    </url>
+    <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/develop/examples/interactive/00_overview/</loc>
          <lastmod>2026-08-30</lastmod>
     </url>
@@ -293,7 +297,15 @@
          <lastmod>2026-08-30</lastmod>
     </url>
     <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/reference/animation/</loc>
+         <lastmod>2026-08-30</lastmod>
+    </url>
+    <url>
          <loc>https://serapeum-org.github.io/Digital-Earth/develop/reference/static/</loc>
+         <lastmod>2026-08-30</lastmod>
+    </url>
+    <url>
+         <loc>https://serapeum-org.github.io/Digital-Earth/develop/reference/textured_globe/</loc>
          <lastmod>2026-08-30</lastmod>
     </url>
 </urlset>
