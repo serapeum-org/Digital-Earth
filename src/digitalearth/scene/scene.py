@@ -14,6 +14,7 @@ from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
+from cleopatra.styling.watermark import stamp_mark
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
@@ -179,6 +180,54 @@ class Scene:
     def set_title(self, title: str, **kwargs) -> None:
         """Set the axes title."""
         self.ax.set_title(title, **kwargs)
+
+    def stamp(self, mark: Any, **kwargs) -> Any:
+        """Stamp a logo / watermark onto the figure (delegates to ``cleopatra.styling.watermark.stamp_mark``).
+
+        The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction
+        coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved
+        at. Because it is figure-level rather than axes-level it sits above every layer, and works on any
+        scene — a :class:`~digitalearth.scene.map.Map`, a chart, or a bare :class:`Scene`.
+
+        Args:
+            mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /
+                ``(H, W, 4)`` array, either ``uint8`` ``0-255`` or float ``0-1``.
+            **kwargs: Forwarded to ``stamp_mark`` — ``frac`` (the mark's longer side as a fraction of the
+                figure, default ``0.11``), ``corner`` (``"lower right"`` / ``"lower left"`` /
+                ``"upper right"`` / ``"upper left"``), ``margin``, ``shadow`` and ``blur``.
+
+        Returns:
+            The frameless inset ``Axes`` the mark was drawn on.
+
+        Raises:
+            ValueError: if ``corner``, ``frac``, ``margin`` or ``blur`` is out of contract, if the mark plus
+                its margin would not fit the figure, or if an array mark has a bad shape/dtype/range.
+            FileNotFoundError: if ``mark`` is a path that does not exist.
+
+        Warning:
+            Stamp **last** — the mark is baked from the figure's current size, so call this after any
+            ``tight_layout()`` and after the final ``set_size_inches``. Note also that :meth:`save` defaults
+            to ``bbox_inches="tight"``, which crops surrounding whitespace and so shifts the mark's relative
+            margin; pass ``bbox_inches=None`` to :meth:`save` to preserve the placement exactly.
+
+        Examples:
+            - Stamp a small opaque mark into the lower-right corner:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import Scene
+                >>> scene = Scene(figsize=(8, 6))
+                >>> logo = np.zeros((40, 80, 4), dtype=np.uint8)
+                >>> logo[..., :3] = 255
+                >>> logo[..., 3] = 255
+                >>> mark_ax = scene.stamp(logo, frac=0.2, shadow=False)
+                >>> [round(float(v), 3) for v in mark_ax.get_position().bounds]
+                [0.775, 0.025, 0.2, 0.133]
+
+                ```
+        """
+        return stamp_mark(self.fig, mark, **kwargs)
 
     def save(self, path: str, **kwargs) -> None:
         """Save the figure to ``path`` (``bbox_inches="tight"`` by default)."""

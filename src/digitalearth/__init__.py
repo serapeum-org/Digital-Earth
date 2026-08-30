@@ -48,7 +48,14 @@ from digitalearth.charts import (  # noqa: E402
     statistics,
 )
 from digitalearth.plugins import load_plugins  # noqa: E402
-from digitalearth.scene import Map, Scene, grid, projections, shared_colorbar  # noqa: E402
+from digitalearth.scene import (  # noqa: E402
+    Map,
+    Scene,
+    TexturedGlobe,
+    grid,
+    projections,
+    shared_colorbar,
+)
 from digitalearth.series import (  # noqa: E402
     boxplot,
     envelope,
@@ -61,7 +68,7 @@ from digitalearth.temporal import Climatology, TimeSeries  # noqa: E402
 
 __all__ = [
     # one-call API + composition
-    "quickplot", "quickmap", "Map", "Scene", "grid", "shared_colorbar", "projections",
+    "quickplot", "quickmap", "Map", "Scene", "TexturedGlobe", "grid", "shared_colorbar", "projections",
     # data view
     "get_source", "Source", "DimensionInfo",
     # charts and statistical series

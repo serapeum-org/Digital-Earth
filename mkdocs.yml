@@ -121,6 +121,7 @@ nav:
     - Global data on the globe: examples/11_global_data_on_globe.ipynb
     - Animating data on the globe: examples/12_animated_globe.ipynb
     - Charts & map decorations: examples/13_charts_and_decorations.ipynb
+    - Textured 3-D globe: examples/14_textured_globe_3d.ipynb
     - Presets & styling:
       - Preset library gallery: examples/presets/01_preset_gallery.ipynb
       - Domain presets on matching data: examples/presets/02_domain_presets.ipynb
@@ -185,6 +186,8 @@ nav:
         - timeseries: examples/plots/25_timeseries.ipynb
         - climatology: examples/plots/26_climatology.ipynb
   - Reference:
+    - TexturedGlobe (3-D globe): reference/textured_globe.md
+    - Saving animations: reference/animation.md
     - StaticGlyph: reference/static.md
   - About:
     - Change-log: change-log.md

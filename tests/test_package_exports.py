@@ -7,7 +7,7 @@ import digitalearth
 
 
 EXPECTED = [
-    "quickplot", "quickmap", "Map", "Scene", "grid", "shared_colorbar", "projections",
+    "quickplot", "quickmap", "Map", "Scene", "TexturedGlobe", "grid", "shared_colorbar", "projections",
     "get_source", "Source", "DimensionInfo",
     "line", "bar", "histogram", "scatter", "bar_by", "line_by", "statistics",
     "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",

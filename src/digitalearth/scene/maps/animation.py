@@ -10,6 +10,7 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from digitalearth._arrays import finite, read_masked_band
+from digitalearth.animation import save_animation
 from digitalearth.scene import projections
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
@@ -40,7 +41,36 @@ class AnimationMixin:
 
         anim = FuncAnimation(self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False)
         self._animation = anim  # keep a strong reference so it isn't garbage-collected before save (L3)
+        self._animation_fps = float(fps)  # so save_animation writes at the rate the scene was built for
         return anim
+
+    def save_animation(self, path: str, *, fps: Optional[float] = None, gif: Optional[str] = None,
+                       **kwargs: Any) -> Any:
+        """Save the animation built by :meth:`animate` / :meth:`rotate`, optionally also deriving a GIF.
+
+        Passing ``gif`` draws the frames **once**: the clip is encoded to ``path``, then the GIF is derived
+        by reading those frames back off that file rather than redrawing every one. On a long animation that
+        roughly halves the wall-clock cost of shipping both formats.
+
+        Args:
+            path: Output path; the extension picks the format (``mp4`` / ``mov`` / ``avi`` / ``webp`` /
+                ``gif``).
+            fps: Frames per second. Defaults to the rate the animation was built with.
+            gif: Optional second path to derive a GIF at. Requires ``path`` to be a video.
+            **kwargs: Forwarded to :func:`digitalearth.animation.save_animation` (and on to cleopatra) —
+                ``crf``, ``bitrate``, ``codec``, ``dpi``, ``gif_options``, and the rest.
+
+        Returns:
+            The written path, or a ``(video, gif)`` pair when ``gif`` was requested.
+
+        Raises:
+            RuntimeError: if no animation has been built yet — call :meth:`animate` or :meth:`rotate` first.
+        """
+        anim = getattr(self, "_animation", None)
+        if anim is None:
+            raise RuntimeError("no animation to save; call animate() or rotate() first")
+        rate = getattr(self, "_animation_fps", None) if fps is None else fps
+        return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
     @staticmethod
     def _stack_clim(datasets: Sequence[Any]) -> Tuple[float, float]:
