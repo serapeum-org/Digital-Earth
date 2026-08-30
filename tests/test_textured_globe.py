@@ -3,10 +3,12 @@
 The cleopatra glyph is already tested upstream, so these cover the half Digital-Earth owns: turning geodata
 into an equirectangular texture at the right lon/lat, and mapping lon/lat back onto the drawn sphere.
 """
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
+from shapely.geometry import Point, Polygon
 
 from digitalearth.scene import TexturedGlobe
 from digitalearth.scene.textured_globe import _nearest_index, _texture_axes
@@ -259,6 +261,35 @@ class TestPoints:
         globe.draw()
         assert globe.points(points_fc) is not None
 
+    def test_a_projected_feature_collection_is_reprojected(self, globe, points_fc):
+        """The fixture is UTM 18N; its coordinates must become lon/lat before they reach the sphere."""
+        assert points_fc.epsg == 32618, "fixture precondition: the points are in a projected CRS"
+        lon, lat = TexturedGlobe._as_lonlat(points_fc, None)
+        assert np.all(np.abs(lon) <= 180) and np.all(np.abs(lat) <= 90), (
+            f"coordinates are still projected: lon {lon.min()}..{lon.max()}, lat {lat.min()}..{lat.max()}"
+        )
+
+    def test_a_lonlat_feature_collection_passes_through(self, points_fc):
+        """Already in 4326, so the reprojection branch must be skipped rather than re-warping."""
+        lonlat = points_fc.to_crs(4326)
+        lon, lat = TexturedGlobe._as_lonlat(lonlat, None)
+        assert np.allclose(lon, lonlat.geometry.x.to_numpy()), "lon should be untouched for a 4326 collection"
+        assert np.allclose(lat, lonlat.geometry.y.to_numpy()), "lat should be untouched for a 4326 collection"
+
+    def test_non_point_geometry_falls_back_to_centroids(self):
+        """Polygons have no .x/.y, so they must be reduced to centroids rather than raising."""
+        square = Polygon([(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)])
+        frame = FeatureCollection(geometry=[square], crs="EPSG:4326")
+        lon, lat = TexturedGlobe._as_lonlat(frame, None)
+        assert lon[0] == pytest.approx(1.0), f"centroid lon should be 1.0, got {lon[0]}"
+        assert lat[0] == pytest.approx(1.0), f"centroid lat should be 1.0, got {lat[0]}"
+
+    def test_a_feature_collection_without_a_crs_is_refused(self):
+        """With no CRS the coordinates cannot be placed on the sphere, so fail rather than assume 4326."""
+        frame = FeatureCollection(geometry=[Point(1.0, 2.0)], crs=None)
+        with pytest.raises(ValueError, match="no CRS"):
+            TexturedGlobe._as_lonlat(frame, None)
+
     def test_input_without_geometry_is_refused(self, globe):
         globe.draw()
         with pytest.raises(ValueError, match="FeatureCollection"):
@@ -291,6 +322,41 @@ class TestRenderLifecycle:
     def test_saving_an_animation_before_animating_is_refused(self, globe, tmp_path):
         with pytest.raises(RuntimeError, match="no animation"):
             globe.save_animation(str(tmp_path / "globe.mp4"))
+
+    def test_save_animation_forwards_to_the_shared_saver(self, globe, monkeypatch):
+        """The globe delegates to digitalearth.animation rather than reimplementing the encode."""
+        seen = {}
+        monkeypatch.setattr("digitalearth.scene.textured_globe.save_animation",
+                            lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path)
+        globe.animate(n_frames=2, interval=125)
+        globe.save_animation("globe.mp4", gif="globe.gif")
+        assert seen["path"] == "globe.mp4" and seen["gif"] == "globe.gif"
+        assert seen["anim"] is globe._animation, "the saver must receive this globe's animation"
+
+    def test_save_animation_defaults_to_the_animations_own_rate(self, globe, monkeypatch):
+        """interval=125 ms is 8 fps; the saved clip should match what animate() was built for."""
+        seen = {}
+        monkeypatch.setattr("digitalearth.scene.textured_globe.save_animation",
+                            lambda anim, path, **kw: seen.update(kw) or path)
+        globe.animate(n_frames=2, interval=125)
+        globe.save_animation("globe.mp4")
+        assert seen["fps"] == pytest.approx(8.0), f"expected 8 fps from a 125 ms interval, got {seen['fps']}"
+
+    def test_an_explicit_rate_overrides_the_animations(self, globe, monkeypatch):
+        seen = {}
+        monkeypatch.setattr("digitalearth.scene.textured_globe.save_animation",
+                            lambda anim, path, **kw: seen.update(kw) or path)
+        globe.animate(n_frames=2, interval=125)
+        globe.save_animation("globe.mp4", fps=24)
+        assert seen["fps"] == 24, f"an explicit fps must win, got {seen['fps']}"
+
+    def test_animate_accepts_an_existing_axes(self, globe):
+        """Passing an axes must reuse it rather than opening a second figure."""
+        fig = plt.figure(figsize=(3, 3))
+        ax = fig.add_subplot(projection="3d")
+        globe.animate(ax, n_frames=2, interval=100)
+        assert globe.ax is ax, "the supplied axes should be adopted"
+        assert globe.fig is fig, "fig should follow the supplied axes"
 
     def test_stamping_before_drawing_is_refused(self, globe):
         with pytest.raises(RuntimeError, match="draw"):

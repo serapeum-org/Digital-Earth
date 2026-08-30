@@ -65,6 +65,44 @@ class AnimationMixin:
 
         Raises:
             RuntimeError: if no animation has been built yet — call :meth:`animate` or :meth:`rotate` first.
+
+        Examples:
+            - Animate a stack, then write it straight to a GIF at the rate it was built with:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import tempfile
+                >>> from pathlib import Path
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.scene import Map
+                >>> geo = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
+                >>> frames = [Dataset.create_from_array(arr=np.full((4, 4), v, dtype="float32"), geo=geo,
+                ...                                     epsg=4326) for v in (1.0, 2.0)]
+                >>> m = Map(crs=4326)
+                >>> anim = m.animate(frames, fps=2.0)
+                >>> out = Path(tempfile.mkdtemp()) / "clip.gif"
+                >>> written = m.save_animation(str(out))
+                >>> Path(written).exists()
+                True
+
+                ```
+            - Render once and deliver both a video and a GIF derived from that file:
+                ```python
+                >>> video, gif = m.save_animation("clip.mp4", gif="clip.gif")   # doctest: +SKIP
+
+                ```
+            - Saving before animating is refused, rather than writing an empty clip:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.scene import Map
+                >>> Map(crs=4326).save_animation("clip.gif")
+                Traceback (most recent call last):
+                    ...
+                RuntimeError: no animation to save; call animate() or rotate() first
+
+                ```
         """
         anim = getattr(self, "_animation", None)
         if anim is None:

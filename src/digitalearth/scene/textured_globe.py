@@ -53,6 +53,13 @@ def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
 
     Endpoint-inclusive, matching the glyph's documented layout: row 0 is +90 and the last row -90; column 0
     is -180 and the last column +180.
+
+    Args:
+        n_lat: Number of texture rows.
+        n_lon: Number of texture columns.
+
+    Returns:
+        A ``(lat, lon)`` pair of 1-D degree vectors, of length ``n_lat`` and ``n_lon`` respectively.
     """
     return np.linspace(90.0, -90.0, n_lat), np.linspace(-180.0, 180.0, n_lon)
 
@@ -70,6 +77,10 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
         targets: The coordinates to look up.
         coords: The source grid's cell centres, uniformly spaced (ascending or descending).
         cell: Cell size to assume when ``coords`` holds a single value and the step is therefore unknown.
+
+    Returns:
+        An integer array the shape of ``targets``, holding the index of the covering cell, or ``-1`` where
+        the target lies outside the grid's footprint.
     """
     if coords.size == 0:
         return np.full(np.shape(targets), -1, dtype=int)
@@ -89,6 +100,13 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
 
     Mirrors the mesh the glyph builds — ``x = cos(lat)cos(lon)``, ``y = cos(lat)sin(lon)``, ``z = sin(lat)``
     — so a point at ``(lon, lat)`` lands on the texture cell showing that longitude and latitude.
+
+    Args:
+        lon: Longitudes in degrees.
+        lat: Latitudes in degrees, the same shape as ``lon``.
+
+    Returns:
+        An ``(N, 3)`` array of unit-sphere coordinates in the glyph's body frame (``+z`` at the north pole).
     """
     lon_rad, lat_rad = np.deg2rad(np.asarray(lon, dtype=float)), np.deg2rad(np.asarray(lat, dtype=float))
     return np.stack(
@@ -98,7 +116,15 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
 
 
 def _view_vector(elev: float, azim: float) -> np.ndarray:
-    """Unit vector pointing from the sphere's centre toward the camera at ``elev``/``azim`` degrees."""
+    """Unit vector pointing from the sphere's centre toward the camera at ``elev``/``azim`` degrees.
+
+    Args:
+        elev: The axes' elevation angle, in degrees above the equatorial plane.
+        azim: The axes' azimuth angle, in degrees about the polar axis.
+
+    Returns:
+        A unit ``(3,)`` array pointing from the origin toward the camera.
+    """
     e, a = np.deg2rad(float(elev)), np.deg2rad(float(azim))
     return np.array([np.cos(e) * np.cos(a), np.cos(e) * np.sin(a), np.sin(e)])
 
@@ -150,6 +176,18 @@ class TexturedGlobe:
     """
 
     def __init__(self, texture: np.ndarray, **kwargs: Any):
+        """Wrap an equirectangular texture in a cleopatra globe glyph.
+
+        Args:
+            texture: An equirectangular ``(H, W, 3)`` or ``(H, W, 4)`` array — row 0 at +90 degrees, column
+                0 at -180 degrees.
+            **kwargs: Forwarded to ``TexturedGlobeGlyph`` (``tilt_deg``, ``n_lon``, ``n_lat``,
+                ``brightness``, ``sun``, ``ambient``, ``fig``, ``ax``).
+
+        Raises:
+            ValueError: If ``texture`` is not a 3-channel or 4-channel 2-D image, or if a lighting argument
+                is out of contract (a zero-length ``sun``, an ``ambient`` outside ``[0, 1]``).
+        """
         self.glyph = TexturedGlobeGlyph(texture, **kwargs)
         self.fig: Any = None
         self.ax: Any = None
@@ -190,6 +228,41 @@ class TexturedGlobe:
         Raises:
             ValueError: if ``dataset`` has no resolvable CRS (there is then no way to place it on the
                 sphere), or if ``shape`` is not two positive integers.
+
+        Examples:
+            - Drape a whole-globe raster and inspect the texture it produced:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> from pyramids.dataset import Dataset
+                >>> arr = np.arange(8, dtype="float32").reshape(2, 4)
+                >>> ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 90.0, 0.0, 90.0, 0.0, -90.0),
+                ...                                epsg=4326)
+                >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
+                >>> globe.glyph.texture.shape
+                (90, 180, 4)
+                >>> float(globe.glyph.texture[..., 3].min())
+                1.0
+
+                ```
+            - A raster covering only part of the world leaves the rest transparent:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> from pyramids.dataset import Dataset
+                >>> arr = np.ones((2, 2), dtype="float32")
+                >>> ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0),
+                ...                                epsg=4326)
+                >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
+                >>> opaque = globe.glyph.texture[..., 3] > 0
+                >>> bool(opaque.any()), bool(opaque.all())
+                (True, False)
+
+                ```
         """
         rows, cols = (int(v) for v in shape)
         if rows < 2 or cols < 2:
@@ -233,6 +306,29 @@ class TexturedGlobe:
 
         Raises:
             ImportError: if cleopatra's ``[tiles]`` extra is unavailable.
+
+        Examples:
+            - Build a photographic Earth and spin it (needs the network on first use; the texture is then
+              cached on disk):
+                ```python
+                >>> from digitalearth.scene import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe.from_provider("Esri.WorldImagery", zoom=3)   # doctest: +SKIP
+                >>> globe.glyph.texture.shape                             # doctest: +SKIP
+                (1440, 2880, 4)
+                >>> fig, ax = globe.draw(spin=30.0, sun=(1.0, 0.3, 0.2))  # doctest: +SKIP
+
+                ```
+            - Size the fetched texture and the sphere mesh independently:
+                ```python
+                >>> from digitalearth.scene import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe.from_provider(                  # doctest: +SKIP
+                ...     "Esri.WorldImagery", zoom=2, n_lon=720, n_lat=360,
+                ...     mesh_n_lon=60, mesh_n_lat=30,
+                ... )
+                >>> globe.glyph.n_lon, globe.glyph.n_lat                  # doctest: +SKIP
+                (60, 30)
+
+                ```
         """
         texture_keys = ("zoom", "n_lon", "n_lat", "cache", "max_workers", "timeout", "retries", "user_agent")
         texture_kwargs = {k: kwargs.pop(k) for k in texture_keys if k in kwargs}
@@ -246,7 +342,18 @@ class TexturedGlobe:
     @staticmethod
     def _colorize(values: np.ndarray, *, cmap: Any, vmin: Optional[float],
                   vmax: Optional[float]) -> np.ndarray:
-        """Colour-map a NaN-masked 2-D band to an ``(H, W, 4)`` float RGBA array, NaN cells transparent."""
+        """Colour-map a NaN-masked 2-D band to an ``(H, W, 4)`` float RGBA array, NaN cells transparent.
+
+        Args:
+            values: The band, with nodata already masked to ``NaN``.
+            cmap: Colormap name or ``Colormap``, resolved by cleopatra; falls back to ``"viridis"``.
+            vmin: Lower bound of the colour scale, or ``None`` to take the band's finite minimum.
+            vmax: Upper bound of the colour scale, or ``None`` to take the band's finite maximum.
+
+        Returns:
+            An ``(H, W, 4)`` float RGBA array in ``[0, 1]``, with alpha ``0`` wherever ``values`` is not
+            finite. A constant band is widened to a unit range so the normalisation cannot divide by zero.
+        """
         good = finite(values)
         lo = float(good.min()) if vmin is None and good.size else (0.0 if vmin is None else float(vmin))
         hi = float(good.max()) if vmax is None and good.size else (1.0 if vmax is None else float(vmax))
@@ -265,6 +372,20 @@ class TexturedGlobe:
 
         Samples inversely — every canvas cell asks which source cell covers it — so the result has no holes
         when the source is coarser than the canvas.
+
+        Args:
+            rgba: The source patch as an ``(H, W, 4)`` float RGBA array.
+            src_lon: The source's 1-D longitude cell centres, in degrees.
+            src_lat: The source's 1-D latitude cell centres, in degrees.
+            rows: Number of rows in the output canvas.
+            cols: Number of columns in the output canvas.
+
+        Returns:
+            A ``(rows, cols, 4)`` float RGBA canvas, transparent everywhere the source does not reach.
+
+        Warns:
+            RuntimeWarning: If the source's footprint is smaller than one canvas cell, so nothing is pasted
+                and the globe would render blank.
         """
         canvas = np.zeros((rows, cols, 4), dtype=float)
         lat_targets, lon_targets = _texture_axes(rows, cols)
@@ -305,6 +426,40 @@ class TexturedGlobe:
 
         Raises:
             ValueError: if ``lon`` and ``lat`` do not have the same shape.
+
+        Examples:
+            - With no tilt the body frame is the world frame, so the cardinal points are exact:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
+                ...                       n_lon=8, n_lat=4)
+                >>> np.round(globe.project(0.0, 0.0), 6)
+                array([[1., 0., 0.]])
+                >>> np.round(globe.project(90.0, 0.0), 6)
+                array([[0., 1., 0.]])
+                >>> np.round(globe.project(0.0, 90.0), 6)
+                array([[0., 0., 1.]])
+
+                ```
+            - Points land on the unit sphere; ``altitude`` lifts an overlay clear of the surface:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> world = globe.project([0.0, 45.0], [10.0, -20.0], spin=30.0)
+                >>> world.shape
+                (2, 3)
+                >>> [round(float(r), 6) for r in np.linalg.norm(world, axis=1)]
+                [1.0, 1.0]
+                >>> round(float(np.linalg.norm(globe.project(0.0, 0.0, altitude=0.05))), 6)
+                1.05
+
+                ```
         """
         lon_arr, lat_arr = np.atleast_1d(np.asarray(lon, dtype=float)), np.atleast_1d(
             np.asarray(lat, dtype=float))
@@ -319,6 +474,10 @@ class TexturedGlobe:
         A point on a unit sphere is its own outward normal, so it is visible exactly when it points toward
         the camera. Uses the axes' current ``elev``/``azim``, so call it after :meth:`draw`.
 
+        A point sitting exactly on the limb is a tie, and floating point decides it: at ``lon=90`` with the
+        camera at ``azim=0``, ``cos(90°)`` evaluates to ``6.1e-17`` rather than ``0``, so the point reads as
+        (barely) visible. Do not rely on the classification of points within rounding distance of the limb.
+
         Args:
             world_xyz: An ``(N, 3)`` array of world-space points, as returned by :meth:`project`.
 
@@ -327,6 +486,37 @@ class TexturedGlobe:
 
         Raises:
             RuntimeError: if the globe has not been drawn yet (there is no camera to test against).
+
+        Examples:
+            - The hemisphere facing the camera is visible; the one behind it is not:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
+                ...                       n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
+                >>> globe.visible(globe.project(0.0, 0.0)).tolist()
+                [True]
+                >>> globe.visible(globe.project(180.0, 0.0)).tolist()
+                [False]
+
+                ```
+            - Use it to label only the points a reader can actually see:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
+                ...                       n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
+                >>> lon, lat = [0.0, 45.0, 180.0, 225.0], [0.0, 0.0, 0.0, 0.0]
+                >>> int(globe.visible(globe.project(lon, lat)).sum())
+                2
+
+                ```
         """
         if self.ax is None:
             raise RuntimeError("draw() the globe before asking which points are visible")
@@ -345,6 +535,37 @@ class TexturedGlobe:
 
         Returns:
             The ``(Figure, Axes3D)`` the globe was drawn on.
+
+        Examples:
+            - Draw the globe and keep the axes for further decoration:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw(spin=45.0)
+                >>> ax.name
+                '3d'
+                >>> globe.ax is ax
+                True
+
+                ```
+            - Draw several spins onto axes you own, to build a contact sheet:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> import matplotlib.pyplot as plt
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> fig, axes = plt.subplots(1, 3, subplot_kw={"projection": "3d"})
+                >>> for spin, sub in zip([0.0, 120.0, 240.0], axes):
+                ...     _ = globe.draw(ax=sub, spin=spin)
+                >>> len(fig.axes)
+                3
+
+                ```
         """
         self.fig, self.ax = self.glyph.draw(spin=spin, **kwargs)
         return self.fig, self.ax
@@ -372,6 +593,36 @@ class TexturedGlobe:
             RuntimeError: if the globe has not been drawn yet.
             ValueError: if ``data`` is a feature collection with no resolvable CRS, or holds no point
                 geometry.
+
+        Examples:
+            - Scatter lon/lat points; the ones behind the globe are dropped:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
+                ...                       n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
+                >>> scatter = globe.points([0.0, 180.0], lat=[0.0, 0.0])
+                >>> len(scatter.get_offsets())
+                1
+
+                ```
+            - Keep the far side when you want the full set drawn:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
+                ...                       n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
+                >>> scatter = globe.points([0.0, 180.0], lat=[0.0, 0.0], hide_far_side=False)
+                >>> len(scatter.get_offsets())
+                2
+
+                ```
         """
         if self.ax is None:
             raise RuntimeError("draw() the globe before adding points to it")
@@ -388,7 +639,19 @@ class TexturedGlobe:
 
     @staticmethod
     def _as_lonlat(data: Any, lat: Any) -> Tuple[np.ndarray, np.ndarray]:
-        """Resolve ``points``' input into lon/lat degree arrays, reprojecting a feature collection if needed."""
+        """Resolve ``points``' input into lon/lat degree arrays, reprojecting a feature collection if needed.
+
+        Args:
+            data: A point ``FeatureCollection`` / ``GeoDataFrame``, or the longitudes when ``lat`` is given.
+            lat: Latitudes, when ``data`` holds longitudes; ``None`` to read the geometry from ``data``.
+
+        Returns:
+            A ``(lon, lat)`` pair of 1-D degree arrays.
+
+        Raises:
+            ValueError: If ``data`` has no geometry and no ``lat`` was given, or if a feature collection
+                carries no CRS (its coordinates then cannot be placed on the sphere).
+        """
         if lat is not None:
             return np.atleast_1d(np.asarray(data, dtype=float)), np.atleast_1d(np.asarray(lat, dtype=float))
         geometry = getattr(data, "geometry", None)
@@ -419,6 +682,36 @@ class TexturedGlobe:
         Returns:
             The ``FuncAnimation`` over the rotation. It is also kept on ``self._animation`` so it is not
             garbage-collected before you save or display it.
+
+        Examples:
+            - Animate a rotation; the figure and axes are recorded for saving or stamping afterwards:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> anim = globe.animate(n_frames=4, interval=100)
+                >>> globe.ax.name
+                '3d'
+                >>> globe.fig is globe.ax.get_figure()
+                True
+
+                ```
+            - Animate onto an axes you already own:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> import matplotlib.pyplot as plt
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> ax = plt.figure().add_subplot(projection="3d")
+                >>> anim = globe.animate(ax, n_frames=2, interval=200)
+                >>> globe.ax is ax
+                True
+
+                ```
         """
         if ax is None:
             figsize = kwargs.pop("figsize", self.glyph.default_options.get("figsize", (6, 6)))
@@ -438,6 +731,37 @@ class TexturedGlobe:
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
+
+        Examples:
+            - Draw, then write the figure to disk:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> import tempfile
+                >>> from pathlib import Path
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw()
+                >>> out = Path(tempfile.mkdtemp()) / "globe.png"
+                >>> globe.save(str(out))
+                >>> out.exists() and out.stat().st_size > 0
+                True
+
+                ```
+            - Saving before drawing is refused, rather than writing an empty figure:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> globe.save("globe.png")
+                Traceback (most recent call last):
+                    ...
+                RuntimeError: draw() the globe before saving it
+
+                ```
         """
         if self.fig is None:
             raise RuntimeError("draw() the globe before saving it")
@@ -461,6 +785,29 @@ class TexturedGlobe:
 
         Raises:
             RuntimeError: if no animation has been built yet — call :meth:`animate` first.
+
+        Examples:
+            - Animate, then write the rotation straight to a GIF:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> import tempfile
+                >>> from pathlib import Path
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> anim = globe.animate(n_frames=2, interval=200)
+                >>> out = Path(tempfile.mkdtemp()) / "globe.gif"
+                >>> written = globe.save_animation(str(out))
+                >>> Path(written).exists()
+                True
+
+                ```
+            - Render once and deliver both a video and a GIF derived from it:
+                ```python
+                >>> video, gif = globe.save_animation("globe.mp4", gif="globe.gif")  # doctest: +SKIP
+
+                ```
         """
         anim = getattr(self, "_animation", None)
         if anim is None:
@@ -480,6 +827,37 @@ class TexturedGlobe:
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
+
+        Examples:
+            - Stamp a mark onto the drawn globe; it arrives as an extra axes on the figure:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw()
+                >>> mark = np.full((8, 16, 4), 255, dtype=np.uint8)
+                >>> mark_ax = globe.stamp(mark, frac=0.2, shadow=False)
+                >>> len(fig.axes)
+                2
+                >>> round(float(mark_ax.get_position().bounds[2]), 3)
+                0.2
+
+                ```
+            - Stamping before drawing is refused:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> globe.stamp(np.full((8, 16, 4), 255, dtype=np.uint8))
+                Traceback (most recent call last):
+                    ...
+                RuntimeError: draw() the globe before stamping it
+
+                ```
         """
         if self.fig is None:
             raise RuntimeError("draw() the globe before stamping it")
