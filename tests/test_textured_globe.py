@@ -162,8 +162,15 @@ class TestFromDataset:
     def test_a_dataset_without_a_crs_is_refused(self, dataset, monkeypatch):
         """Without a CRS there is no way to place the raster, so fail loudly instead of guessing 4326."""
         monkeypatch.setattr(type(dataset), "epsg", property(lambda self: None))
+        monkeypatch.setattr(type(dataset), "crs", property(lambda self: None))
         with pytest.raises(ValueError, match="has none"):
             TexturedGlobe.from_dataset(dataset)
+
+    def test_a_dataset_whose_crs_has_no_epsg_code_is_accepted(self, dataset, monkeypatch):
+        """`.epsg` is None for geostationary/Mollweide too; those reproject fine and must not be rejected."""
+        monkeypatch.setattr(type(dataset), "epsg", property(lambda self: None))
+        globe = TexturedGlobe.from_dataset(dataset, n_lon=2880, n_lat=1440)
+        assert (globe.glyph.texture[..., 3] > 0).any(), "a CRS without an EPSG code should still drape"
 
     def test_a_degenerate_shape_is_refused(self, dataset):
         with pytest.raises(ValueError, match="at least"):
@@ -383,6 +390,27 @@ class TestPoints:
         lon, lat = TexturedGlobe._as_lonlat(frame, None)
         assert lon[0] == pytest.approx(1.0), f"centroid lon should be 1.0, got {lon[0]}"
         assert lat[0] == pytest.approx(1.0), f"centroid lat should be 1.0, got {lat[0]}"
+
+    def test_projected_polygons_are_centroided_before_reprojection(self):
+        """A centroid taken on lon/lat degrees is not the centroid on the ground, and geopandas warns."""
+        import warnings as _warnings
+
+        square = Polygon([(500000.0, 0.0), (501000.0, 0.0), (501000.0, 1000.0), (500000.0, 1000.0)])
+        frame = FeatureCollection(geometry=[square], crs="EPSG:32618")
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            lon, lat = TexturedGlobe._as_lonlat(frame, None)
+        geographic = [w for w in caught if "geographic CRS" in str(w.message)]
+        assert not geographic, f"centroids should be taken in the projected CRS: {geographic}"
+        assert -180.0 <= lon[0] <= 180.0 and -90.0 <= lat[0] <= 90.0
+
+    def test_a_crs_without_an_epsg_code_is_accepted(self):
+        """`.epsg` is None for a valid CRS with no authority code; only a missing CRS is unplaceable."""
+        square = Polygon([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)])
+        mollweide = "+proj=moll +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+        frame = FeatureCollection(geometry=[square], crs=mollweide)
+        lon, lat = TexturedGlobe._as_lonlat(frame, None)
+        assert np.isfinite(lon).all() and np.isfinite(lat).all()
 
     def test_a_feature_collection_without_a_crs_is_refused(self):
         """With no CRS the coordinates cannot be placed on the sphere, so fail rather than assume 4326."""

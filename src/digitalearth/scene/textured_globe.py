@@ -353,13 +353,16 @@ class TexturedGlobe:
         if rows < 2 or cols < 2:
             raise ValueError(f"shape must be at least (2, 2), got {shape!r}")
 
+        # `epsg` is None both for a raster with no CRS and for one whose CRS carries no EPSG authority code
+        # (geostationary, Mollweide, a bare ESRI code). Only the first is unplaceable; the second reprojects
+        # fine, so the presence of a CRS — not of a code — is what decides.
         epsg = getattr(dataset, "epsg", None)
-        if epsg is None:
+        if epsg is None and not getattr(dataset, "crs", None):
             raise ValueError(
                 "from_dataset needs a dataset with a CRS to place it on the globe; this one has none. "
                 "Set dataset.crs / dataset.epsg first."
             )
-        src = dataset if int(epsg) == _TEXTURE_EPSG else dataset.to_crs(_TEXTURE_EPSG)
+        src = dataset if epsg == _TEXTURE_EPSG else dataset.to_crs(_TEXTURE_EPSG)
 
         values = read_masked_band(src, band=band)
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
@@ -710,8 +713,12 @@ class TexturedGlobe:
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
-            ValueError: if ``data`` is a feature collection with no resolvable CRS, or holds no point
-                geometry.
+            ValueError: if ``data`` is neither a feature collection nor a pair of lon/lat arrays, or is a
+                feature collection carrying no CRS.
+
+        Note:
+            Non-point geometry (polygons, lines) is reduced to its centroids rather than rejected, so a
+            polygon layer can be marked on the globe without converting it first.
 
         Examples:
             - Scatter lon/lat points; the ones behind the globe are dropped:
@@ -773,13 +780,17 @@ class TexturedGlobe:
         geometry = getattr(data, "geometry", None)
         if geometry is None:
             raise ValueError("points needs a FeatureCollection/GeoDataFrame, or both lon and lat")
+        # As on the raster path, a missing EPSG code is not the same as a missing CRS: a projection with no
+        # authority code still reprojects, so test the CRS itself.
         epsg = source_epsg(data)
-        if epsg is None:
+        if epsg is None and getattr(data, "crs", None) is None:
             raise ValueError("the feature collection has no CRS, so its points cannot be placed on the globe")
-        if int(epsg) != _TEXTURE_EPSG:
-            geometry = geometry.to_crs(_TEXTURE_EPSG)
+        # Reduce to centroids *before* reprojecting: a centroid taken on lon/lat degrees is not the centroid
+        # of the shape on the ground, and geopandas warns about exactly that.
         if not (geometry.geom_type == "Point").all():
             geometry = geometry.centroid
+        if epsg != _TEXTURE_EPSG:
+            geometry = geometry.to_crs(_TEXTURE_EPSG)
         return geometry.x.to_numpy(), geometry.y.to_numpy()
 
     def animate(self, ax: Any = None, **kwargs: Any) -> FuncAnimation:
