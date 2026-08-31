@@ -221,12 +221,30 @@ class TestFromDataset:
     def test_a_none_colormap_falls_back_to_viridis(self, dataset):
         """resolve_colormap returns None only for cmap=None, which must still produce a texture."""
         globe = TexturedGlobe.from_dataset(dataset, cmap=None, n_lon=2880, n_lat=1440)
-        assert np.isfinite(globe.glyph.texture).all()
+        fallback = TexturedGlobe.from_dataset(dataset, cmap="viridis", n_lon=2880, n_lat=1440)
+        assert np.array_equal(globe.glyph.texture, fallback.glyph.texture), (
+            "cmap=None should fall back to viridis, not to some other colormap"
+        )
 
     def test_reversed_colour_bounds_are_refused(self, dataset):
         """vmax <= vmin was silently discarded and replaced, hiding the caller's mistake."""
         with pytest.raises(ValueError, match="vmax must be greater than vmin"):
             TexturedGlobe.from_dataset(dataset, vmin=10.0, vmax=1.0)
+
+    @pytest.mark.parametrize("band, value", [(1, 1.0), (2, 2.0), (3, 3.0)])
+    def test_the_requested_band_is_the_one_drawn(self, band, value):
+        """Selecting a band before the warp must not change which band ends up on the globe."""
+        arr = np.stack([np.full((40, 40), v, dtype="float32") for v in (1.0, 2.0, 3.0)])
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 0.25, 0.0, 10.0, 0.0, -0.25), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, band=band, cmap="viridis", vmin=1.0, vmax=3.0,
+                                           n_lon=2880, n_lat=1440)
+        texture = globe.glyph.texture
+        opaque = texture[..., 3] > 0
+        assert opaque.any(), f"band {band} should drape"
+        expected = resolve_colormap("viridis")(Normalize(vmin=1.0, vmax=3.0)(value))
+        assert np.allclose(texture[opaque][0][:3], expected[:3], atol=2.0 / 255), (
+            f"band {band} should carry value {value}"
+        )
 
     @pytest.mark.parametrize("kwargs", [{"vmin": 99.0}, {"vmax": -99.0}])
     def test_a_lone_bound_that_inverts_the_range_is_refused(self, kwargs):
@@ -315,7 +333,10 @@ class TestFromDataset:
         arr = np.full((4, 4), 5.0, dtype="float32")
         ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
-        assert np.isfinite(globe.glyph.texture).all()
+        opaque = globe.glyph.texture[..., 3] > 0
+        assert opaque.any(), "a constant band should still drape"
+        rgb = globe.glyph.texture[opaque][:, :3]
+        assert np.allclose(rgb, rgb[0]), "a constant band should map to one colour, not a gradient"
 
 
 class TestFromProvider:
