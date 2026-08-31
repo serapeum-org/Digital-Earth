@@ -82,6 +82,10 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
     Returns:
         An integer array the shape of ``targets``, holding the index of the covering cell, or ``-1`` where
         the target lies outside the grid's footprint.
+
+    Warns:
+        RuntimeWarning: If ``coords`` is not evenly spaced. The index is arithmetic from a single step, so a
+            non-uniform axis is misplaced rather than merely approximated.
     """
     if coords.size == 0:
         return np.full(np.shape(targets), -1, dtype=int)
@@ -532,6 +536,12 @@ class TexturedGlobe:
         Returns:
             An ``(H, W, 4)`` float RGBA array in ``[0, 1]``, with alpha ``0`` wherever ``values`` is not
             finite. A constant band is widened to a unit range so the normalisation cannot divide by zero.
+
+        Raises:
+            ValueError: If both bounds are given and ``vmax`` is not greater than ``vmin``.
+
+        Warns:
+            RuntimeWarning: If no cell of the band is finite, so the result is entirely transparent.
         """
         if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
             raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
@@ -881,6 +891,9 @@ class TexturedGlobe:
         Returns:
             The ``FuncAnimation`` over the rotation. It is also kept on ``self._animation`` so it is not
             garbage-collected before you save or display it.
+
+        Raises:
+            ValueError: If ``interval`` is not a positive number of milliseconds.
 
         Examples:
             - Animate a rotation; the figure and axes are recorded for saving or stamping afterwards:
