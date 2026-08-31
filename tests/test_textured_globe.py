@@ -262,6 +262,12 @@ class TestFromDataset:
             f"band {band} should carry value {value}"
         )
 
+    @pytest.mark.parametrize("kwargs", [{"vmin": float("nan")}, {"vmax": float("inf")}])
+    def test_a_non_finite_bound_is_refused(self, dataset, kwargs):
+        """vmin=nan slipped through Normalize and painted the whole globe the colormap's bad colour."""
+        with pytest.raises(ValueError, match="must be a finite number"):
+            TexturedGlobe.from_dataset(dataset, **kwargs)
+
     @pytest.mark.parametrize("kwargs", [{"vmin": 99.0}, {"vmax": -99.0}])
     def test_a_lone_bound_that_inverts_the_range_is_refused(self, kwargs):
         """One bound on the wrong side of the data leaves no range, just as passing both reversed does."""
@@ -289,7 +295,7 @@ class TestFromDataset:
             TexturedGlobe.from_dataset(dataset, shape=(1, 1))
 
     def test_too_coarse_a_canvas_warns_instead_of_rendering_blank(self, dataset):
-        with pytest.warns(RuntimeWarning, match="did not survive the resample"):
+        with pytest.warns(RuntimeWarning, match="nothing was draped"):
             TexturedGlobe.from_dataset(dataset, shape=(90, 180))
 
     def test_data_finer_than_the_mesh_warns(self, dataset):
@@ -731,6 +737,11 @@ class TestRenderLifecycle:
         globe.animate(n_frames=2, interval=100)
         globe.animate(n_frames=2, interval=100)
         assert len(plt.get_fignums()) == 1, f"expected 1 open figure, got {len(plt.get_fignums())}"
+
+    def test_animate_records_its_starting_spin(self, globe):
+        """Otherwise an overlay added after animate() is placed at whatever spin draw() last used."""
+        globe.animate(n_frames=2, interval=100, start_spin=42.0)
+        assert globe._spin == pytest.approx(42.0)
 
     def test_a_zero_animation_interval_is_refused(self, globe):
         """interval=0 used to raise ZeroDivisionError from the frame-rate bookkeeping."""

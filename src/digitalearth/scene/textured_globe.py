@@ -418,9 +418,10 @@ class TexturedGlobe:
         texture = _clamp_edges(_as_byte_texture(rgba))
         if not (texture[..., 3] > 0).any():
             warnings.warn(
-                f"the dataset did not survive the resample onto the {rows}x{cols} globe texture, so nothing "
-                "was draped and the globe will render blank. Pass a finer shape= (e.g. shape=(2880, 5760)) "
-                "to resolve it.",
+                f"nothing was draped onto the {rows}x{cols} globe texture, so it will render blank. Either "
+                "the raster is finer than one texture cell — pass a finer shape=, e.g. shape=(2880, 5760) — "
+                "or it does not overlap the globe at all, which usually means its CRS or geotransform is "
+                "wrong.",
                 RuntimeWarning,
                 stacklevel=2,
             )
@@ -533,6 +534,9 @@ class TexturedGlobe:
             ValueError: If both bounds are given and ``vmax <= vmin``, or if a single given bound sits
                 outside the data on the wrong side.
         """
+        for name, bound in (("vmin", vmin), ("vmax", vmax)):
+            if bound is not None and not np.isfinite(float(bound)):
+                raise ValueError(f"{name} must be a finite number, got {bound!r}")
         if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
             raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
         if not good.size:
@@ -600,7 +604,7 @@ class TexturedGlobe:
             warnings.warn(
                 "every cell of this band is nodata or non-finite, so the globe will be fully transparent.",
                 RuntimeWarning,
-                stacklevel=4,
+                stacklevel=3,
             )
         lo, hi = cls._resolve_colour_bounds(good, vmin, vmax)
         colormap = resolve_colormap(cmap)
@@ -973,6 +977,8 @@ class TexturedGlobe:
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
         self._owns_fig = not supplied
+        # Record where the animation starts, so an overlay added afterwards is not placed at a stale spin.
+        self._spin = float(kwargs.get("start_spin", 0.0))
         self._animation = anim  # keep a strong reference so it survives until save/display
         self._animation_fps = 1000.0 / interval
         self.ax, self.fig = ax, ax.get_figure()
