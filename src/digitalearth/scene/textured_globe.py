@@ -234,28 +234,47 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
 
 #: ``Axes3D.scatter`` arguments that may carry one value per point, and so have to be culled alongside the
 #: points themselves when the far side is hidden. Anything left whole would silently shift onto the wrong
-#: points (``linewidths``) or make matplotlib reject the call outright (``color``, ``c``).
+#: points (``linewidths``) or make matplotlib reject the call outright (``color``, ``c``). ``marker`` and
+#: ``hatch`` are deliberately absent: ``scatter`` takes a single value for each.
 _PER_POINT_SCATTER_KEYS = (
     "c", "s", "color", "facecolor", "facecolors", "edgecolor", "edgecolors",
-    "linewidth", "linewidths", "alpha", "marker", "hatch",
+    "linewidth", "linewidths", "linestyle", "linestyles", "alpha",
 )
 
-#: The subset of those that take colours, where a bare 3- or 4-tuple of numbers is one RGB(A) value rather
-#: than one value per point. Only these are exempt from culling on a length match; ``linewidths=[1, 2, 3, 4]``
-#: is four widths, not a colour, and must be culled like any other per-point sequence.
-_COLOUR_SCATTER_KEYS = frozenset(
-    {"c", "color", "facecolor", "facecolors", "edgecolor", "edgecolors"}
-)
+#: Colour arguments where a bare 3- or 4-element sequence of numbers is one RGB(A) value rather than one
+#: value per point. ``c`` is deliberately excluded: matplotlib gives value-mapping precedence for a sequence
+#: whose length matches the point count, so a length-matching ``c`` is per-point data and must be culled.
+_RGBA_EXEMPT_KEYS = frozenset({"color", "facecolor", "facecolors", "edgecolor", "edgecolors"})
+
+
+def _is_rgba_literal(key: str, value: Any) -> bool:
+    """Whether ``value`` is a single RGB(A) colour rather than one value per point.
+
+    Applies only to the colour arguments in :data:`_RGBA_EXEMPT_KEYS`, and only to a 3- or 4-element sequence
+    of plain numbers. Container type is not the test — ``color=[1, 0, 0, 1]`` is as much a single red as
+    ``color=(1, 0, 0, 1)``, and culling it would leave ``[1, 0, 1]``, which renders as magenta with no error.
+
+    Args:
+        key: The scatter keyword the value was passed under.
+        value: The value the caller supplied.
+
+    Returns:
+        ``True`` when the value should be passed through whole rather than culled.
+    """
+    if key not in _RGBA_EXEMPT_KEYS or len(value) not in (3, 4):
+        return False
+    return all(isinstance(v, (int, float, np.floating, np.integer)) and not isinstance(v, bool) for v in value)
 
 
 def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
     """Drop the hidden points' entries from every per-point scatter argument.
 
     Only a sequence whose length matches the point count is treated as per-point; a scalar (``color="red"``,
-    ``s=30``) applies to every point and is passed through untouched. A bare RGB(A) **tuple** on a colour
-    argument is passed through as well — ``color=(1.0, 0.0, 0.0, 1.0)`` is one colour, not one per point, and
-    slicing it would silently change it. That exemption is limited to colour arguments and to tuples, so
-    ``linewidths=[1, 2, 3, 4]`` is still four widths and is culled like anything else.
+    ``s=30``) applies to every point and is passed through untouched. A bare RGB(A) colour is passed through
+    as well — see :func:`_is_rgba_literal` for which arguments that covers and why ``c`` is not one of them.
+
+    Any sized sequence is accepted, including a pandas ``Series``, which is what a caller naturally passes
+    when the colours come from a dataframe column.
 
     Args:
         kwargs: The scatter keyword arguments as the caller supplied them.
@@ -267,18 +286,15 @@ def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
     culled = dict(kwargs)
     for key in _PER_POINT_SCATTER_KEYS:
         value = culled.get(key)
-        if not isinstance(value, (list, tuple, np.ndarray)):
+        if value is None or isinstance(value, str) or np.ndim(value) == 0:
             continue
-        if len(value) != keep.size:
+        try:
+            matches = len(value) == keep.size
+        except TypeError:
             continue
-        if (
-            key in _COLOUR_SCATTER_KEYS
-            and isinstance(value, tuple)
-            and len(value) in (3, 4)
-            and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
-        ):
-            continue  # a bare RGB/RGBA tuple that happens to match the point count
-        culled[key] = np.asarray(value, dtype=object if key in ("marker", "hatch") else None)[keep]
+        if not matches or _is_rgba_literal(key, value):
+            continue
+        culled[key] = np.asarray(value)[keep]
     return culled
 
 

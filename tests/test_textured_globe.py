@@ -505,36 +505,57 @@ class TestPoints:
         assert len(collection.get_offsets()) == 1
 
     @pytest.mark.parametrize(
-        "kwargs",
+        "key, values, expected",
         [
-            pytest.param({"color": ["r", "g", "b", "y"]}, id="color"),
-            pytest.param({"c": [1.0, 2.0, 3.0, 4.0]}, id="c"),
-            pytest.param({"edgecolors": ["r", "g", "b", "y"]}, id="edgecolors"),
-            pytest.param({"facecolors": ["r", "g", "b", "y"]}, id="facecolors"),
-            pytest.param({"linewidths": [1.0, 2.0, 3.0, 4.0]}, id="linewidths"),
-            pytest.param({"s": [10, 20, 30, 40]}, id="s"),
-            pytest.param({"alpha": [0.1, 0.2, 0.3, 0.4]}, id="alpha"),
+            pytest.param("s", [10, 20, 30, 40], [10, 30, 40], id="s"),
+            pytest.param("linewidths", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="linewidths"),
+            pytest.param("alpha", [0.1, 0.2, 0.3, 0.4], [0.1, 0.3, 0.4], id="alpha"),
+            pytest.param("c", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="c"),
+            pytest.param("linestyles", ["-", "--", ":", "-."], ["-", ":", "-."], id="linestyles"),
         ],
     )
-    def test_every_per_point_argument_is_culled(self, globe, kwargs):
-        """Any per-point sequence left whole either crashes the call or shifts onto the wrong points."""
+    def test_per_point_values_are_culled_to_the_kept_points(self, globe, key, values, expected):
+        """Assert the surviving values, not the point count: a count passes even with the cull removed."""
         globe.draw(elev=0.0, azim=0.0)
-        collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0, 0.0, 0.0, 0.0], **kwargs)
-        assert len(collection.get_offsets()) == 3, f"{kwargs} should leave 3 near-side points"
+        culled = _cull_per_point({key: values}, np.array([True, False, True, True]))
+        assert list(np.asarray(culled[key])) == list(np.asarray(expected)), (
+            f"{key} should keep {expected}, got {list(np.asarray(culled[key]))}"
+        )
 
-    def test_per_point_linewidths_are_reduced_not_just_accepted(self, globe):
-        """A surviving 4th width would silently shift every width onto the wrong point."""
+    def test_a_far_side_point_does_not_shift_the_linewidths(self, globe):
+        """End to end: the second point is hidden, so its width must not land on the third."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4,
                                   linewidths=[1.0, 2.0, 3.0, 4.0])
-        widths = np.atleast_1d(collection.get_linewidths())
-        assert len(widths) == 3, f"expected 3 widths for 3 drawn points, got {len(widths)}"
+        assert list(np.atleast_1d(collection.get_linewidths())) == [1.0, 3.0, 4.0]
+
+    @pytest.mark.parametrize(
+        "colour", [[1.0, 0.0, 0.0, 1.0], (1.0, 0.0, 0.0, 1.0), np.array([1.0, 0.0, 0.0, 1.0])],
+        ids=["list", "tuple", "ndarray"],
+    )
+    def test_a_single_rgba_colour_survives_the_cull_whatever_its_container(self, globe, colour):
+        """Culling a 4-element red to 3 elements renders magenta, silently and in any container type."""
+        globe.draw(elev=0.0, azim=0.0)
+        collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, color=colour)
+        assert np.allclose(collection.get_facecolors()[0], [1.0, 0.0, 0.0, 1.0]), (
+            f"expected red, got {collection.get_facecolors()[0]} (magenta means the RGBA was culled)"
+        )
+
+    def test_c_is_culled_even_as_a_four_element_sequence(self, globe):
+        """matplotlib value-maps a length-matching `c`, so it is per-point data, not one RGBA colour."""
+        culled = _cull_per_point({"c": (0.1, 0.2, 0.3, 0.4)}, np.array([True, False, True, True]))
+        assert list(np.asarray(culled["c"])) == [0.1, 0.3, 0.4]
+
+    def test_a_pandas_series_is_culled(self, globe):
+        """Colours often come straight from a dataframe column."""
+        pd = pytest.importorskip("pandas")
+        culled = _cull_per_point({"c": pd.Series([1.0, 2.0, 3.0, 4.0])}, np.array([True, False, True, True]))
+        assert list(np.asarray(culled["c"])) == [1.0, 3.0, 4.0]
 
     @pytest.mark.parametrize(
         "kwargs",
         [
             pytest.param({"color": "red"}, id="scalar-name"),
-            pytest.param({"color": (1.0, 0.0, 0.0, 1.0)}, id="rgba-tuple"),
             pytest.param({"s": 30}, id="scalar-size"),
         ],
     )
