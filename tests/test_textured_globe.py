@@ -486,6 +486,17 @@ class TestPoints:
         culled = _cull_per_point({"c": (0.1, 0.2, 0.3, 0.4)}, np.array([True, False, True, True]))
         assert list(np.asarray(culled["c"])) == [0.1, 0.3, 0.4]
 
+    def test_a_sized_but_unindexable_value_is_left_alone(self, globe):
+        """A set has a length but cannot be sliced; it must be passed through, not crash the cull."""
+        culled = _cull_per_point({"s": {1, 2, 3, 4}}, np.array([True, False, True, True]))
+        assert culled["s"] == {1, 2, 3, 4}
+
+    def test_a_value_with_no_length_is_left_alone(self, globe):
+        """An arbitrary object with no len() is a scalar as far as the cull is concerned."""
+        sentinel = object()
+        culled = _cull_per_point({"s": sentinel}, np.array([True, False]))
+        assert culled["s"] is sentinel
+
     def test_a_pandas_series_is_culled(self, globe):
         """Colours often come straight from a dataframe column."""
         pd = pytest.importorskip("pandas")
@@ -632,6 +643,13 @@ class TestRenderLifecycle:
             with TexturedGlobe(flat_texture, n_lon=8, n_lat=4) as globe:
                 globe.draw()
                 raise RuntimeError("boom")
+
+    def test_animating_twice_does_not_leak_the_first_figure(self, globe):
+        """animate() creates its own figure when given no axes, so the previous one must be released."""
+        plt.close("all")
+        globe.animate(n_frames=2, interval=100)
+        globe.animate(n_frames=2, interval=100)
+        assert len(plt.get_fignums()) == 1, f"expected 1 open figure, got {len(plt.get_fignums())}"
 
     def test_a_zero_animation_interval_is_refused(self, globe):
         """interval=0 used to raise ZeroDivisionError from the frame-rate bookkeeping."""

@@ -185,13 +185,11 @@ def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
     culled = dict(kwargs)
     for key in _PER_POINT_SCATTER_KEYS:
         value = culled.get(key)
+        # `np.ndim` is 0 for a scalar and for anything numpy cannot see a shape in (a set, a generator, an
+        # arbitrary object), so everything past this point is a real sequence with a length.
         if value is None or isinstance(value, str) or np.ndim(value) == 0:
             continue
-        try:
-            matches = len(value) == keep.size
-        except TypeError:
-            continue
-        if not matches or _is_rgba_literal(key, value):
+        if len(value) != keep.size or _is_rgba_literal(key, value):
             continue
         culled[key] = np.asarray(value)[keep]
     return culled
