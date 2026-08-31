@@ -315,6 +315,10 @@ class TexturedGlobe:
         self.glyph = TexturedGlobeGlyph(texture, **kwargs)
         self.fig: Any = None
         self.ax: Any = None
+        # Declared up front rather than sprung into existence by animate(), so every reader can see the
+        # instance's full state and the accessors need no getattr() guards.
+        self._animation: Optional[FuncAnimation] = None
+        self._animation_fps: Optional[float] = None
 
     # ------------------------------------------------------------------ constructors
 
@@ -883,12 +887,15 @@ class TexturedGlobe:
 
                 ```
         """
+        interval = float(kwargs.get("interval", _DEFAULT_INTERVAL_MS))
+        if interval <= 0:
+            raise ValueError(f"interval must be a positive number of milliseconds, got {interval!r}")
         if ax is None:
             figsize = kwargs.pop("figsize", self.glyph.default_options.get("figsize", (6, 6)))
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
         self._animation = anim  # keep a strong reference so it survives until save/display
-        self._animation_fps = 1000.0 / float(kwargs.get("interval", _DEFAULT_INTERVAL_MS))
+        self._animation_fps = 1000.0 / interval
         self.ax, self.fig = ax, ax.get_figure()
         return anim
 
@@ -979,11 +986,73 @@ class TexturedGlobe:
 
                 ```
         """
-        anim = getattr(self, "_animation", None)
-        if anim is None:
+        if self._animation is None:
             raise RuntimeError("no animation to save; call animate() first")
-        rate = fps if fps is not None else getattr(self, "_animation_fps", None)
+        anim = self._animation
+        rate = fps if fps is not None else self._animation_fps
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
+
+    def close(self) -> None:
+        """Close the globe's figure and drop the animation reference.
+
+        Every :meth:`draw` or :meth:`animate` that is not handed an existing axes creates a pyplot figure,
+        and pyplot keeps a reference to it forever. A loop that builds many globes therefore grows without
+        bound and eventually trips matplotlib's open-figure warning. Closing releases both the figure and the
+        retained animation.
+
+        Safe to call more than once, and on a globe that was never drawn.
+
+        Examples:
+            - Close a drawn globe and see the figure released:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import matplotlib.pyplot as plt
+                >>> import numpy as np
+                >>> from digitalearth.scene import TexturedGlobe
+                >>> plt.close("all")
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                >>> fig, ax = globe.draw()
+                >>> len(plt.get_fignums())
+                1
+                >>> globe.close()
+                >>> len(plt.get_fignums())
+                0
+
+                ```
+        """
+        if self.fig is not None:
+            plt.close(self.fig)
+        self.fig = None
+        self.ax = None
+        self._animation = None
+        self._animation_fps = None
+
+    def __enter__(self) -> "TexturedGlobe":
+        """Enter the runtime context, returning the globe so ``with TexturedGlobe(...) as g:`` binds it.
+
+        Returns:
+            This globe.
+        """
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        """Close the figure on exit so a long run of globes stays memory-bounded.
+
+        Mirrors :class:`~digitalearth.scene.scene.Scene`: the figure is closed whether or not the body
+        raised, and any exception propagates (``__exit__`` returns ``False``), so ``with`` never swallows an
+        error.
+
+        Args:
+            exc_type: Exception class raised in the body, if any.
+            exc: The exception instance, if any.
+            tb: The traceback, if any.
+
+        Returns:
+            ``False``, so an exception raised inside the block is re-raised.
+        """
+        self.close()
+        return False
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the globe's figure (see :meth:`Scene.stamp`).

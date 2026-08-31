@@ -506,6 +506,41 @@ class TestRenderLifecycle:
         assert globe.ax is not None and globe.fig is not None
         assert globe._animation_fps == pytest.approx(10.0)
 
+    def test_close_releases_the_figure(self, globe):
+        """pyplot holds every figure it creates, so a loop of globes leaks without an explicit close."""
+        plt.close("all")
+        globe.draw()
+        assert len(plt.get_fignums()) == 1
+        globe.close()
+        assert plt.get_fignums() == [], "close() should release the figure"
+        assert globe.fig is None and globe.ax is None
+
+    def test_close_is_safe_before_drawing_and_twice(self, globe):
+        globe.close()
+        globe.draw()
+        globe.close()
+        globe.close()
+        assert globe.fig is None
+
+    def test_the_context_manager_closes_the_figure(self, flat_texture):
+        plt.close("all")
+        with TexturedGlobe(flat_texture, n_lon=8, n_lat=4) as globe:
+            globe.draw()
+            assert len(plt.get_fignums()) == 1
+        assert plt.get_fignums() == [], "leaving the block should close the figure"
+
+    def test_the_context_manager_propagates_errors(self, flat_texture):
+        """It must not swallow an exception raised inside the block."""
+        with pytest.raises(RuntimeError, match="boom"):
+            with TexturedGlobe(flat_texture, n_lon=8, n_lat=4) as globe:
+                globe.draw()
+                raise RuntimeError("boom")
+
+    def test_a_zero_animation_interval_is_refused(self, globe):
+        """interval=0 used to raise ZeroDivisionError from the frame-rate bookkeeping."""
+        with pytest.raises(ValueError, match="positive number of milliseconds"):
+            globe.animate(n_frames=2, interval=0)
+
     def test_saving_before_drawing_is_refused(self, globe, tmp_path):
         with pytest.raises(RuntimeError, match="draw"):
             globe.save(str(tmp_path / "globe.png"))
