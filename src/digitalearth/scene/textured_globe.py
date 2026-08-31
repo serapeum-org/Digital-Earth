@@ -5,10 +5,10 @@ spinnable sphere on a matplotlib ``Axes3D``. It is deliberately geometry-only: i
 CRSes or nodata. This module is the Digital-Earth half of that seam — it turns geospatial inputs into the
 texture the glyph wants, and maps lon/lat back onto the rendered sphere:
 
-- :meth:`TexturedGlobe.from_dataset` reprojects a pyramids ``Dataset`` to EPSG:4326 (pyramids does the warp),
-  colour-maps the band through cleopatra's colormap resolver, and pastes it into a **global** transparent
-  canvas at its true lon/lat position — so a regional raster floats on the globe where it belongs instead of
-  being stretched over the whole sphere.
+- :meth:`TexturedGlobe.from_dataset` aligns a pyramids ``Dataset`` onto a global EPSG:4326 grid (pyramids does
+  the reprojection and the resample) and colour-maps the band through cleopatra's colormap resolver — so a
+  regional raster sits on the globe where it belongs instead of being stretched over the whole sphere, and the
+  rest of the sphere stays transparent.
 - :meth:`TexturedGlobe.from_provider` pulls a whole-world XYZ basemap via ``cleopatra.basemap.tiles``.
 - :meth:`TexturedGlobe.project` and :meth:`TexturedGlobe.points` push lon/lat (or a pyramids
   ``FeatureCollection``) through the glyph's own ``transform``, so overlays land exactly on the drawn surface
@@ -327,10 +327,11 @@ class TexturedGlobe:
     ) -> "TexturedGlobe":
         """Build a globe from a pyramids ``Dataset``, draped at the raster's true lon/lat position.
 
-        The raster is reprojected to EPSG:4326 by **pyramids** when it is not already there, its band read
-        with nodata masked to ``NaN``, colour-mapped through cleopatra's colormap resolver, and pasted into a
-        global transparent canvas. Cells the raster does not cover — and its nodata cells — stay fully
-        transparent, so a regional dataset shows as a patch on the globe rather than being smeared over it.
+        **pyramids** does the geospatial work: the raster is aligned onto a global EPSG:4326 grid, which
+        reprojects it and resamples it in one step, and settles the longitude frame along the way. Its band is
+        then read with nodata masked to ``NaN`` and colour-mapped through cleopatra's colormap resolver. Cells
+        the raster does not cover — and its nodata cells — stay fully transparent, so a regional dataset shows
+        as a patch on the globe rather than being smeared over it.
 
         Args:
             dataset: A pyramids ``Dataset``. Must carry a CRS.
@@ -1197,6 +1198,6 @@ class TexturedGlobe:
         return stamp_mark(self.fig, mark, **kwargs)
 
 
-#: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported here so a caller setting ``tilt_deg``
-#: does not have to import from the glyph module directly.
+#: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported from this module (not from
+#: ``digitalearth.scene``) so a caller adjusting ``tilt_deg`` can reach it without importing from the glyph.
 __all__: List[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]
