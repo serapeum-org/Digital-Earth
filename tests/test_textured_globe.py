@@ -3,6 +3,8 @@
 The cleopatra glyph is already tested upstream, so these cover the half Digital-Earth owns: turning geodata
 into an equirectangular texture at the right lon/lat, and mapping lon/lat back onto the drawn sphere.
 """
+import warnings
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
@@ -346,6 +348,35 @@ class TestFromDataset:
         globe.draw()
         painted = np.asarray(globe.glyph._facecolors)
         assert int((painted[..., 3] > 0).sum()) == 0, "the warning fired but the data did paint"
+
+    def test_the_mesh_warning_matches_the_render_for_many_placements(self):
+        """One fixture can agree by luck. Sweep placements and sizes and require exact agreement.
+
+        The first version of this guard sampled the mesh's vertex grid while the glyph samples its face
+        centres; that disagreed with the real render for about one small raster in eight, in both directions
+        — silent blank globes and false alarms. A single-case test did not notice.
+        """
+        rng = np.random.default_rng(1337)
+        disagreements = []
+        for _ in range(60):
+            lon0 = float(rng.uniform(-170.0, 160.0))
+            lat0 = float(rng.uniform(-70.0, 70.0))
+            size = float(rng.uniform(0.2, 4.0))
+            ds = Dataset.create_from_array(
+                arr=np.ones((4, 4), dtype="float32"),
+                geo=(lon0, size / 4, 0.0, lat0, 0.0, -size / 4),
+                epsg=4326,
+            )
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                globe = TexturedGlobe.from_dataset(ds, n_lon=180, n_lat=90)
+            warned = any("sphere mesh" in str(w.message) for w in caught)
+            globe.draw()
+            paints = bool((np.asarray(globe.glyph._facecolors)[..., 3] > 0).any())
+            if warned == paints:  # warned yet painted, or silent yet blank
+                disagreements.append((round(lon0, 2), round(lat0, 2), round(size, 2), warned, paints))
+            globe.close()
+        assert not disagreements, f"the warning disagreed with the render at {disagreements[:5]}"
 
     def test_a_constant_band_does_not_divide_by_zero(self):
         """vmin == vmax has no range to normalise against; it must still produce a texture."""
