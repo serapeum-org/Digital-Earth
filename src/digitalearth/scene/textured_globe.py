@@ -95,6 +95,33 @@ def _mesh_sample_indices(texture_shape: Tuple[int, int], n_lon: int,
     return rows, cols
 
 
+def _clamp_edges(texture: np.ndarray) -> np.ndarray:
+    """Fill a fully transparent outermost row or column from its neighbour.
+
+    The texture's outer cell centres sit exactly on +/-90 latitude and +/-180 longitude, which is the
+    boundary of a whole-world source rather than a point inside it, so the warp finds nothing there and
+    leaves them empty. On the sphere that shows as a hole at the pole and a hairline seam down the
+    antimeridian — on data that does in fact cover the globe.
+
+    Only an edge that is *entirely* transparent beside a neighbour that is not is filled, so a raster that
+    genuinely stops short of the pole keeps its transparent margin.
+
+    Args:
+        texture: The RGBA texture, modified in place and returned.
+
+    Returns:
+        The same array, with any empty outer edge clamped to its neighbour.
+    """
+    if texture.shape[0] < 2 or texture.shape[1] < 2:
+        return texture
+    for outer, inner in ((0, 1), (-1, -2)):
+        if not texture[outer, :, 3].any() and texture[inner, :, 3].any():
+            texture[outer] = texture[inner]
+        if not texture[:, outer, 3].any() and texture[:, inner, 3].any():
+            texture[:, outer] = texture[:, inner]
+    return texture
+
+
 def _as_byte_texture(rgba: np.ndarray) -> np.ndarray:
     """Convert a float RGBA canvas in ``[0, 1]`` to ``uint8``, which is what a texture actually needs.
 
@@ -388,7 +415,7 @@ class TexturedGlobe:
 
         values = read_masked_band(aligned, band=1)
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
-        texture = _as_byte_texture(rgba)
+        texture = _clamp_edges(_as_byte_texture(rgba))
         if not (texture[..., 3] > 0).any():
             warnings.warn(
                 f"the dataset did not survive the resample onto the {rows}x{cols} globe texture, so nothing "

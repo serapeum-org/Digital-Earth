@@ -103,7 +103,7 @@ class TestFromDataset:
         ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
         globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=0.0, vmax=359.0, shape=(180, 360))
         texture = globe.glyph.texture
-        assert (texture[..., 3] > 0).mean() > 0.99, "should cover essentially the whole globe"
+        assert (texture[..., 3] > 0).mean() == pytest.approx(1.0), "should cover the whole globe"
 
         # Each canvas longitude must carry the source value for that same place on Earth. The source is
         # stored on 0-360, so the equivalent source longitude is the canvas longitude modulo a full turn,
@@ -122,7 +122,7 @@ class TestFromDataset:
         arr = np.ones((180, 360), dtype="float32")
         ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
-        assert (globe.glyph.texture[..., 3] > 0).mean() > 0.99
+        assert (globe.glyph.texture[..., 3] > 0).mean() == pytest.approx(1.0)
 
     def test_a_raster_beyond_the_antimeridian_lands_west(self):
         """Longitudes 200-210 in the 0-360 frame are -160..-150 on the canvas, not off the edge."""
@@ -149,6 +149,22 @@ class TestFromDataset:
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         assert (globe.glyph.texture[..., 3] > 0).any(), "a single-column raster should still drape"
 
+
+    def test_the_poles_and_the_antimeridian_are_not_left_empty(self):
+        """The outer cell centres sit on the source's boundary, so the warp drops them without a clamp."""
+        arr = np.ones((180, 360), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
+        opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
+        assert opaque[0].all(), "the north-pole row should be filled"
+        assert opaque[-1].all(), "the south-pole row should be filled, not left as a hole"
+        assert opaque[:, 0].all(), "the -180 column should be filled"
+        assert opaque[:, -1].all(), "the +180 column should be filled, not left as a seam"
+
+    def test_a_regional_raster_keeps_its_transparent_margin(self, dataset):
+        """The edge clamp must not spread a regional raster to the poles."""
+        opaque = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3] > 0
+        assert opaque.mean() < 0.01, f"a small raster should stay small, covered {opaque.mean():.4f}"
+        assert not opaque[-1].any(), "the south-pole row should stay empty for a regional raster"
 
     def test_uncovered_cells_stay_transparent(self, dataset):
         """A regional raster leaves the rest of the globe see-through rather than filling it."""
