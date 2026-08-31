@@ -20,7 +20,7 @@ layer/colorbar lifecycle, none of which applies to a textured sphere.
 """
 import inspect
 import warnings
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -973,8 +973,8 @@ class TexturedGlobe:
         Args:
             ax: An existing ``Axes3D`` to animate on. A new figure/axes is created when omitted.
             **kwargs: Forwarded to the glyph's ``animate`` (``n_frames``, ``revolutions``, ``start_spin``,
-                ``sun``, ``ambient``, ``interval``, plus the render options); ``figsize`` sizes the figure
-                created here.
+                ``sun``, ``ambient``, ``interval``, plus the render options). ``figsize`` sizes the figure
+                created here, and is ignored when ``ax`` is given — that figure already exists.
 
         Returns:
             The ``FuncAnimation`` over the rotation. It is also kept on ``self._animation`` so it is not
@@ -1190,7 +1190,11 @@ class TexturedGlobe:
         return False
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
-        """Stamp a logo / watermark onto the globe's figure (see :meth:`Scene.stamp`).
+        """Stamp a logo / watermark onto the globe's figure.
+
+        The same figure-level mark as :meth:`digitalearth.scene.scene.Scene.stamp`, and it carries the same
+        two caveats: stamp **last**, because the mark is baked from the figure's current size, and note that
+        a ``bbox_inches="tight"`` save crops surrounding whitespace and so shifts the mark's margin.
 
         Args:
             mark: The mark image — a file path or an ``(H, W, 3)`` / ``(H, W, 4)`` array.
@@ -1240,4 +1244,4 @@ class TexturedGlobe:
 
 #: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported here so a caller setting ``tilt_deg``
 #: does not have to import from the glyph module directly.
-__all__: Sequence[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]
+__all__: List[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]

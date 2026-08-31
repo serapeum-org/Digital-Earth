@@ -190,12 +190,29 @@ class TestFromDataset:
         assert src_lat.min() - tol <= lat.min() and lat.max() <= src_lat.max() + tol
 
     def test_a_0_360_longitude_axis_drapes_the_whole_world(self):
-        """0-360 is the usual climate/NWP convention; treating it as -180..180 loses half the globe."""
-        arr = np.ones((180, 360), dtype="float32")
+        """0-360 is the usual climate/NWP convention; treating it as -180..180 loses half the globe.
+
+        The band ramps with longitude rather than being constant, so a drape that covers the globe but is
+        rotated by 180 degrees -- which a constant array cannot tell apart -- fails too.
+        """
+        lon = np.linspace(0.0, 359.0, 360, dtype="float32")
+        arr = np.repeat(lon[None, :], 180, axis=0)
         ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
-        globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
-        opaque = (globe.glyph.texture[..., 3] > 0).mean()
-        assert opaque == pytest.approx(1.0), f"a whole-world raster should cover the globe, got {opaque:.3f}"
+        globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=0.0, vmax=359.0, shape=(180, 360))
+        texture = globe.glyph.texture
+        assert (texture[..., 3] > 0).mean() == pytest.approx(1.0), "should cover the whole globe"
+
+        # Each canvas longitude must carry the source value for that same place on Earth. The source is
+        # stored on 0-360, so the equivalent source longitude is the canvas longitude modulo a full turn,
+        # and the band's value at that longitude is the longitude itself.
+        _, lon_axis = _texture_axes(*texture.shape[:2])
+        cmap, norm = resolve_colormap("viridis"), Normalize(vmin=0.0, vmax=359.0)
+        for col in (0, 90, 180, 270, 359):
+            source_lon = lon_axis[col] % 360.0
+            expected = cmap(norm(np.floor(source_lon)))
+            assert np.allclose(texture[90, col, :3], expected[:3], atol=2.0 / 255), (
+                f"canvas lon {lon_axis[col]:.2f} should carry source lon {source_lon:.2f}, not a rotated one"
+            )
 
     def test_a_minus180_longitude_axis_still_drapes_the_whole_world(self):
         """The conventional frame must be unaffected by the 0-360 handling."""

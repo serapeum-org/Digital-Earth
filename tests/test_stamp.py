@@ -48,11 +48,14 @@ def test_stamp_is_inherited_by_map(dataset, mark):
 
 
 def test_stamp_draws_above_the_data(dataset, mark):
-    """A watermark that renders under the map is useless — the mark axes must come last."""
+    """A watermark that renders under the map is useless, so check the drawing order, not list order."""
     m = Map(crs=dataset.epsg)
     m.imshow(dataset)
     mark_ax = m.stamp(mark, frac=0.1, shadow=False)
-    assert m.fig.axes[-1] is mark_ax
+    assert mark_ax.get_zorder() >= m.ax.get_zorder(), (
+        f"the mark axes (zorder {mark_ax.get_zorder()}) must not sit under the data "
+        f"(zorder {m.ax.get_zorder()})"
+    )
 
 
 def test_a_bad_corner_is_refused(mark):
