@@ -301,18 +301,23 @@ class TestFromProvider:
         assert fetched["provider"] == "Esri.WorldImagery"
 
     def test_texture_options_go_to_the_fetcher(self, fetched):
-        TexturedGlobe.from_provider("Esri.WorldImagery", zoom=3, n_lon=720, n_lat=360, cache=False)
+        TexturedGlobe.from_provider("Esri.WorldImagery", zoom=3, texture_n_lon=720, texture_n_lat=360,
+                                    cache=False)
         assert fetched["kwargs"] == {"zoom": 3, "n_lon": 720, "n_lat": 360, "cache": False}
 
     def test_glyph_options_do_not_leak_into_the_fetcher(self, fetched):
         TexturedGlobe.from_provider(zoom=2, tilt_deg=0.0)
         assert "tilt_deg" not in fetched["kwargs"]
 
-    def test_mesh_resolution_is_set_separately_from_the_texture_grid(self, fetched):
-        """n_lon/n_lat name the texture here, so the sphere mesh needs its own spelling."""
-        globe = TexturedGlobe.from_provider(n_lon=720, mesh_n_lon=48, mesh_n_lat=24)
-        assert fetched["kwargs"]["n_lon"] == 720
-        assert globe.glyph.n_lon == 48 and globe.glyph.n_lat == 24
+    def test_n_lon_means_the_mesh_here_as_everywhere_else(self, fetched):
+        """The same keyword must not mean the mesh in one constructor and the texture in another."""
+        globe = TexturedGlobe.from_provider(texture_n_lon=720, n_lon=48, n_lat=24)
+        assert fetched["kwargs"]["n_lon"] == 720, "texture_n_lon should size the fetched grid"
+        assert globe.glyph.n_lon == 48 and globe.glyph.n_lat == 24, "n_lon should size the sphere mesh"
+
+    def test_mesh_size_is_not_leaked_to_the_fetcher(self, fetched):
+        TexturedGlobe.from_provider(n_lon=48, n_lat=24)
+        assert "n_lon" not in fetched["kwargs"] and "n_lat" not in fetched["kwargs"]
 
 
 class TestProject:

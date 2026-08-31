@@ -456,18 +456,18 @@ class TexturedGlobe:
                 ``"Esri.WorldImagery"`` — a bulk-permitting imagery provider. Do **not** point this at
                 OpenStreetMap's tiles: a whole-world fetch pulls thousands of tiles, which its usage policy
                 prohibits.
-            **kwargs: Split between ``world_texture`` (``zoom``, ``n_lon``, ``n_lat``, ``cache``,
-                ``max_workers``, ``timeout``, ``retries``, ``user_agent``) and :class:`TexturedGlobe`
-                (``tilt_deg``, mesh ``n_lon``/``n_lat`` are **not** shared — see below); anything not a
-                ``world_texture`` parameter is forwarded to the glyph.
+            **kwargs: The fetch options ``zoom``, ``cache``, ``max_workers``, ``timeout``, ``retries`` and
+                ``user_agent`` go to ``world_texture``; ``texture_n_lon`` / ``texture_n_lat`` size the
+                fetched texture grid. Everything else — ``n_lon``, ``n_lat``, ``tilt_deg``, ``sun``,
+                ``ambient`` — is forwarded to the glyph, exactly as in the other constructors.
 
         Returns:
             TexturedGlobe: a globe textured with the provider's imagery.
 
         Note:
-            ``n_lon`` / ``n_lat`` are ambiguous here — they name both the texture grid and the sphere mesh.
-            They are read as the **texture** grid (``world_texture``'s meaning); set the mesh resolution with
-            ``mesh_n_lon`` / ``mesh_n_lat``.
+            ``n_lon`` / ``n_lat`` always mean the **sphere mesh**, here as everywhere else in this class.
+            The texture grid — which ``world_texture`` also calls ``n_lon`` / ``n_lat`` — is set with
+            ``texture_n_lon`` / ``texture_n_lat``, so the same keyword never means two different things.
 
         Raises:
             ImportError: if cleopatra's ``[tiles]`` extra is unavailable.
@@ -487,19 +487,19 @@ class TexturedGlobe:
                 ```python
                 >>> from digitalearth.scene import TexturedGlobe          # doctest: +SKIP
                 >>> globe = TexturedGlobe.from_provider(                  # doctest: +SKIP
-                ...     "Esri.WorldImagery", zoom=2, n_lon=720, n_lat=360,
-                ...     mesh_n_lon=60, mesh_n_lat=30,
+                ...     "Esri.WorldImagery", zoom=2, texture_n_lon=720, texture_n_lat=360,
+                ...     n_lon=60, n_lat=30,
                 ... )
                 >>> globe.glyph.n_lon, globe.glyph.n_lat                  # doctest: +SKIP
                 (60, 30)
 
                 ```
         """
-        texture_keys = ("zoom", "n_lon", "n_lat", "cache", "max_workers", "timeout", "retries", "user_agent")
+        texture_keys = ("zoom", "cache", "max_workers", "timeout", "retries", "user_agent")
         texture_kwargs = {k: kwargs.pop(k) for k in texture_keys if k in kwargs}
-        for mesh_key, glyph_key in (("mesh_n_lon", "n_lon"), ("mesh_n_lat", "n_lat")):
-            if mesh_key in kwargs:
-                kwargs[glyph_key] = kwargs.pop(mesh_key)
+        for shape_key, fetch_key in (("texture_n_lon", "n_lon"), ("texture_n_lat", "n_lat")):
+            if shape_key in kwargs:
+                texture_kwargs[fetch_key] = kwargs.pop(shape_key)
         return cls(world_texture(provider, **texture_kwargs), **kwargs)
 
     # ------------------------------------------------------------------ texture building
