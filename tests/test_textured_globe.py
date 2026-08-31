@@ -620,6 +620,30 @@ class TestRenderLifecycle:
         globe.close()
         assert plt.fignum_exists(fig.number), "a caller-supplied figure must survive close()"
 
+    @pytest.mark.parametrize("via", ["ax", "fig"])
+    def test_close_leaves_a_constructor_supplied_figure_alone(self, flat_texture, via):
+        """The glyph stores a ctor fig/ax and draws on it even when no later call passes one."""
+        plt.close("all")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        kwargs = {"ax": ax, "fig": fig} if via == "ax" else {"fig": fig}
+        owned = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, **kwargs)
+        owned.draw()
+        owned.close()
+        assert plt.fignum_exists(fig.number), "a constructor-supplied figure must survive close()"
+
+    def test_switching_to_a_caller_axes_does_not_orphan_our_figure(self, globe):
+        """Our own figure must be released when draw() rebinds, or close() can never reach it."""
+        plt.close("all")
+        globe.draw()
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        globe.draw(ax=ax)
+        globe.close()
+        assert plt.get_fignums() == [fig.number], (
+            f"only the caller's figure should remain, got {plt.get_fignums()}"
+        )
+
     def test_close_leaves_a_caller_supplied_animation_axes_alone(self, globe):
         plt.close("all")
         fig = plt.figure()

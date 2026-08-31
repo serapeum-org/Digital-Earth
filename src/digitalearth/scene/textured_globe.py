@@ -275,6 +275,9 @@ class TexturedGlobe:
         # instance's full state and the accessors need no getattr() guards.
         self._animation: Optional[FuncAnimation] = None
         self._animation_fps: Optional[float] = None
+        #: A fig/ax handed to the constructor is the caller's too — the glyph stores it and draws on it even
+        #: when no later call passes one, so ownership has to be settled here, not only at draw time.
+        self._caller_supplied_axes: bool = kwargs.get("ax") is not None or kwargs.get("fig") is not None
         #: The spin the globe was last drawn at, so an overlay defaults to the surface it can see.
         self._spin: float = 0.0
         #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
@@ -767,9 +770,11 @@ class TexturedGlobe:
 
                 ```
         """
-        supplied = kwargs.get("ax") is not None
-        if self._owns_fig and self.fig is not None and not supplied:
-            plt.close(self.fig)  # do not leak the figure this call is about to replace
+        supplied = kwargs.get("ax") is not None or self._caller_supplied_axes
+        if self._owns_fig and self.fig is not None:
+            # Release the figure we own before rebinding, whether the replacement is ours or the caller's;
+            # otherwise an explicit ax= orphans it and close() can never reach it again.
+            plt.close(self.fig)
         self.fig, self.ax = self.glyph.draw(spin=spin, **kwargs)
         self._owns_fig = not supplied
         self._spin = float(spin)
@@ -931,8 +936,8 @@ class TexturedGlobe:
         interval = float(kwargs.get("interval", _DEFAULT_INTERVAL_MS))
         if interval <= 0:
             raise ValueError(f"interval must be a positive number of milliseconds, got {interval!r}")
-        supplied = ax is not None
-        if ax is None:
+        supplied = ax is not None or self._caller_supplied_axes
+        if ax is None and not self._caller_supplied_axes:
             figsize = kwargs.pop("figsize", self.glyph.default_options.get("figsize", (6, 6)))
             if self._owns_fig and self.fig is not None:
                 plt.close(self.fig)
