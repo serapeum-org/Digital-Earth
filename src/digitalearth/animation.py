@@ -28,6 +28,10 @@ FULL_CHROMA_PIX_FMT = "yuv444p"
 #: Frames per second used when neither the caller nor the scene supplies one.
 DEFAULT_FPS = 12.0
 
+#: Container suffixes a GIF can be derived from. Anything else would reach ffmpeg as an
+#: intermediate it cannot decode, and fail there rather than here.
+VIDEO_SUFFIXES = (".mp4", ".mov", ".avi", ".webp", ".mkv", ".m4v")
+
 
 def _encoder_fps(fps: Any) -> int:
     """Round a frame rate to the whole number both encoders will actually use.
@@ -111,6 +115,11 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
             "gif= derives a GIF from a video; path is already a GIF. Save to a video (e.g. .mp4) and let "
             "gif= produce the GIF, or drop gif= to write the GIF directly."
         )
+    if not video_path.lower().endswith(VIDEO_SUFFIXES):
+        raise ValueError(
+            f"gif= reads the frames back off a video, so path must be one of {', '.join(VIDEO_SUFFIXES)}; "
+            f"got {video_path!r}."
+        )
     if not gif_path.lower().endswith(".gif"):
         raise ValueError(f"gif must end in '.gif', got {gif_path!r}")
 
@@ -121,4 +130,4 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
     return video_path, gif_path
 
 
-__all__ = ["save_animation", "FULL_CHROMA_PIX_FMT", "DEFAULT_FPS"]
+__all__ = ["save_animation", "FULL_CHROMA_PIX_FMT", "DEFAULT_FPS", "VIDEO_SUFFIXES"]

@@ -107,6 +107,12 @@ class TestDerivedGif:
         with pytest.raises(ValueError, match="already a GIF"):
             save_animation(anim, "clip.gif", gif="other.gif")
 
+    @pytest.mark.parametrize("path", ["clip.png", "clip", "clip.txt"])
+    def test_a_non_video_source_path_is_refused(self, anim, calls, path):
+        """Only a .gif path was rejected, so any other non-video reached ffmpeg and failed there."""
+        with pytest.raises(ValueError, match="must be one of"):
+            save_animation(anim, path, gif="clip.gif")
+
     def test_a_non_gif_derived_path_is_refused(self, anim, calls):
         with pytest.raises(ValueError, match="must end in"):
             save_animation(anim, "clip.mp4", gif="clip.webm")
