@@ -31,6 +31,7 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
 )
 from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
+from pyramids.dataset import Dataset
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 
@@ -44,10 +45,6 @@ DEFAULT_TEXTURE_SHAPE = (1440, 2880)
 
 #: EPSG code of the lon/lat grid the glyph's texture is defined on.
 _TEXTURE_EPSG = 4326
-
-#: Above this borrowed cell size, in degrees, a single-row/column raster is being spread far enough that the
-#: assumption deserves saying out loud rather than being applied silently.
-_MAX_BORROWED_CELL_DEG = 5.0
 
 #: The glyph's own default inter-frame interval, in milliseconds, read from its signature rather than
 #: mirrored as a literal: a hand-copied default drifts silently, and the saved frame rate is derived from it.
@@ -68,140 +65,6 @@ def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
         A ``(lat, lon)`` pair of 1-D degree vectors, of length ``n_lat`` and ``n_lon`` respectively.
     """
     return np.linspace(90.0, -90.0, n_lat), np.linspace(-180.0, 180.0, n_lon)
-
-
-def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = None,
-                   warn_non_uniform: bool = True) -> np.ndarray:
-    """Nearest-cell index of each ``targets`` value in the uniform 1-D cell-centre vector ``coords``.
-
-    Returns ``-1`` where a target falls outside the grid's **footprint** — the cell centres widened by half a
-    cell at each end — which the caller turns into a transparent texture cell. Membership is decided by the
-    footprint rather than by whether the target rounds onto a cell, so every canvas sample inside the raster
-    is coloured even when the canvas is far coarser than the source; otherwise a small raster on a coarse
-    canvas would drop out entirely. Rasters are uniform grids, so the index is arithmetic, not a search.
-
-    Args:
-        targets: The coordinates to look up.
-        coords: The source grid's cell centres, uniformly spaced (ascending or descending).
-        cell: Cell size to assume when ``coords`` holds a single value and the step is therefore unknown.
-        warn_non_uniform: Whether to warn about an irregular axis. The longitude path retries the same
-            axis in up to three frames, and one axis deserves one warning, so the retries pass False.
-
-    Returns:
-        An integer array the shape of ``targets``, holding the index of the covering cell, or ``-1`` where
-        the target lies outside the grid's footprint.
-
-    Warns:
-        RuntimeWarning: If ``coords`` is not evenly spaced. The index is arithmetic from a single step, so a
-            non-uniform axis is misplaced rather than merely approximated.
-    """
-    if coords.size == 0:
-        return np.full(np.shape(targets), -1, dtype=int)
-    step: Optional[float] = None
-    if coords.size > 1:
-        step = float(coords[1] - coords[0])
-    elif cell:
-        step = float(cell)
-    # A grid with no usable step spans no area, so only an exact hit maps onto its single cell. Testing the
-    # magnitude rather than `step == 0` also rejects a degenerate spacing (duplicate coordinates, or a cell
-    # size far below the ~1e-8-degree floor of any real grid), which would otherwise divide into nonsense.
-    if step is None or not np.isfinite(step) or np.isclose(step, 0.0):
-        return np.where(np.isclose(targets, float(coords[0])), 0, -1)
-    if warn_non_uniform and coords.size > 2 and not np.allclose(np.diff(coords), step, rtol=1e-6):
-        warnings.warn(
-            "the raster's coordinates are not evenly spaced; the drape assumes a uniform grid and will "
-            "misplace cells. Resample it to a regular grid first (pyramids' Dataset.resample).",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-    half = abs(step) / 2.0
-    lo, hi = min(coords[0], coords[-1]) - half, max(coords[0], coords[-1]) + half
-    # NaN compares False against both bounds, so it lands outside; computing the index first would cast NaN
-    # to an integer and emit numpy's "invalid value encountered in cast" warning on the way.
-    inside = (targets >= lo) & (targets <= hi)
-    offsets = np.where(inside, (targets - float(coords[0])) / step, 0.0)
-    idx = np.clip(np.rint(offsets).astype(int), 0, coords.size - 1)
-    return np.where(inside, idx, -1)
-
-
-def _axis_cell(axis: np.ndarray, fallback_axis: np.ndarray) -> Optional[float]:
-    """Cell size of ``axis``, falling back to the other axis' spacing when it has only one cell.
-
-    A raster one row or one column wide carries no spacing on that axis, so its footprint would collapse to a
-    point and match nothing. Raster cells are very often square, and the other axis' spacing is a far better
-    estimate than treating the single cell as zero-width.
-
-    Args:
-        axis: The axis whose cell size is wanted.
-        fallback_axis: The perpendicular axis, used when ``axis`` holds fewer than two cells.
-
-    Returns:
-        The cell size as a positive float, or ``None`` when neither axis has a spacing to offer.
-    """
-    if axis.size > 1:
-        step = abs(float(axis[1] - axis[0]))
-        if step > 0.0:
-            return step
-    if fallback_axis.size > 1:
-        borrowed = abs(float(fallback_axis[1] - fallback_axis[0]))
-        if borrowed > 0.0:
-            if borrowed > _MAX_BORROWED_CELL_DEG:
-                warnings.warn(
-                    f"this raster has a single cell on one axis, so its extent there is assumed to be the "
-                    f"other axis' spacing ({borrowed:g} degrees), which is wide enough to be a guess rather "
-                    "than a measurement. Give the raster a real extent on both axes if that is wrong.",
-                    RuntimeWarning,
-                    stacklevel=3,
-                )
-            return borrowed
-    return None
-
-
-def _lon_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = None) -> np.ndarray:
-    """Nearest-cell index of each canvas longitude in ``coords``, tolerant of the source's longitude frame.
-
-    Longitude is periodic, but a raster's x axis is not: a global field is just as often stored on ``0..360``
-    (the usual climate / NWP convention) as on ``-180..180``, and a regional raster can sit wholly beyond the
-    antimeridian or straddle it. A plain footprint test against the canvas' ``-180..180`` axis would then miss
-    part or all of the source — silently, since every missed cell simply stays transparent.
-
-    So a canvas longitude that finds no cell is retried shifted by a full turn in each direction, which brings
-    it into whatever frame the source actually uses. This is index selection on our own canvas, not a
-    reprojection: no pixel is resampled and the source is never modified.
-
-    Args:
-        targets: The canvas' longitude cell centres, in degrees on ``-180..180``.
-        coords: The source's 1-D longitude cell centres, in degrees, in whatever frame it was stored in.
-        cell: Cell size to assume when ``coords`` holds a single column.
-
-    Returns:
-        An integer array the shape of ``targets``, holding the covering source column, or ``-1`` where the
-        source does not reach that longitude in any frame.
-    """
-    idx = _nearest_index(targets, coords, cell=cell)
-    for shift in (360.0, -360.0):
-        missing = idx < 0
-        if not missing.any():
-            break
-        idx[missing] = _nearest_index(targets[missing] + shift, coords, cell=cell,
-                                      warn_non_uniform=False)
-    return idx
-
-
-def _as_byte_texture(rgba: np.ndarray) -> np.ndarray:
-    """Convert a float RGBA canvas in ``[0, 1]`` to ``uint8``, which is what a texture actually needs.
-
-    A whole-globe canvas at the default 0.125-degree resolution is 1440 x 2880 x 4. Held as ``float64`` that
-    is 133 MB, and the glyph then keeps its own normalised copy, so a single globe cost around 265 MB at peak.
-    Colour is 8-bit on the way to the screen regardless, so the extra 56 bits per channel buy nothing.
-
-    Args:
-        rgba: A float RGBA array with values in ``[0, 1]``.
-
-    Returns:
-        The same image as ``uint8`` in ``[0, 255]``, one quarter the size.
-    """
-    return np.clip(np.rint(rgba * 255.0), 0, 255).astype(np.uint8)
 
 
 def _mesh_sample_indices(texture_shape: Tuple[int, int], n_lon: int,
@@ -230,6 +93,22 @@ def _mesh_sample_indices(texture_shape: Tuple[int, int], n_lon: int,
     rows = np.clip(np.round((90.0 - lat_centres) / 180.0 * (height - 1)).astype(int), 0, height - 1)
     cols = np.clip(np.round((lon_centres + 180.0) / 360.0 * (width - 1)).astype(int), 0, width - 1)
     return rows, cols
+
+
+def _as_byte_texture(rgba: np.ndarray) -> np.ndarray:
+    """Convert a float RGBA canvas in ``[0, 1]`` to ``uint8``, which is what a texture actually needs.
+
+    A whole-globe canvas at the default 0.125-degree resolution is 1440 x 2880 x 4. Held as ``float64`` that
+    is 133 MB, and the glyph then keeps its own normalised copy, so a single globe cost around 265 MB at peak.
+    Colour is 8-bit on the way to the screen regardless, so the extra 56 bits per channel buy nothing.
+
+    Args:
+        rgba: A float RGBA array with values in ``[0, 1]``.
+
+    Returns:
+        The same image as ``uint8`` in ``[0, 255]``, one quarter the size.
+    """
+    return np.clip(np.rint(rgba * 255.0), 0, 255).astype(np.uint8)
 
 
 def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
@@ -415,6 +294,7 @@ class TexturedGlobe:
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         shape: Tuple[int, int] = DEFAULT_TEXTURE_SHAPE,
+        resampling: str = "nearest",
         **kwargs: Any,
     ) -> "TexturedGlobe":
         """Build a globe from a pyramids ``Dataset``, draped at the raster's true lon/lat position.
@@ -431,6 +311,9 @@ class TexturedGlobe:
             vmin: Lower bound of the colour scale; defaults to the band's finite minimum.
             vmax: Upper bound of the colour scale; defaults to the band's finite maximum.
             shape: ``(rows, columns)`` of the global canvas. Larger is sharper and slower to build.
+            resampling: How pyramids resamples the raster onto that grid — ``"nearest"`` (the default, which
+                preserves categorical values), ``"bilinear"``, ``"cubic"``, ``"average"``, ``"mode"``, and
+                the rest of ``Dataset.align``'s methods.
             **kwargs: Forwarded to :class:`TexturedGlobe` (and on to the glyph).
 
         Returns:
@@ -454,8 +337,8 @@ class TexturedGlobe:
                 >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
                 >>> globe.glyph.texture.shape
                 (90, 180, 4)
-                >>> float(globe.glyph.texture[..., 3].min())
-                1.0
+                >>> bool((globe.glyph.texture[..., 3] > 0).mean() > 0.98)
+                True
 
                 ```
             - A raster covering only part of the world leaves the rest transparent:
@@ -491,12 +374,22 @@ class TexturedGlobe:
                 "from_dataset needs a dataset with a CRS to place it on the globe; this one has none. "
                 "Set dataset.crs / dataset.epsg first."
             )
-        src = dataset if epsg == _TEXTURE_EPSG else dataset.to_crs(_TEXTURE_EPSG)
+        # pyramids owns the regrid: align() reprojects to the template's CRS and resamples onto its grid,
+        # which also settles the longitude frame (0-360 or antimeridian-crossing) and any non-uniform or
+        # single-row source. Doing it here would be re-implementing GIS.
+        aligned = dataset.align(cls._global_template(rows, cols), method=resampling)
 
-        values = read_masked_band(src, band=band)
+        values = read_masked_band(aligned, band=band)
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
-        texture = cls._paste_global(rgba, np.asarray(src.x, dtype=float), np.asarray(src.y, dtype=float),
-                                    rows, cols)
+        texture = _as_byte_texture(rgba)
+        if not (texture[..., 3] > 0).any():
+            warnings.warn(
+                f"the dataset did not survive the resample onto the {rows}x{cols} globe texture, so nothing "
+                "was draped and the globe will render blank. Pass a finer shape= (e.g. shape=(2880, 5760)) "
+                "to resolve it.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         globe = cls(texture, **kwargs)
         globe._warn_if_finer_than_the_mesh(texture)
         return globe
@@ -521,7 +414,7 @@ class TexturedGlobe:
         """
         opaque = texture[..., 3] > 0
         if not opaque.any():
-            return  # _paste_global has already warned that nothing was draped at all
+            return  # from_dataset has already warned that nothing was draped at all
         rows, cols = _mesh_sample_indices(texture.shape[:2], self.glyph.n_lon, self.glyph.n_lat)
         if not opaque[np.ix_(rows, cols)].any():
             warnings.warn(
@@ -644,48 +537,27 @@ class TexturedGlobe:
         return rgba
 
     @staticmethod
-    def _paste_global(rgba: np.ndarray, src_lon: np.ndarray, src_lat: np.ndarray, rows: int,
-                      cols: int) -> np.ndarray:
-        """Paste an RGBA lon/lat patch into a transparent global canvas of shape ``(rows, cols, 4)``.
+    def _global_template(rows: int, cols: int) -> Dataset:
+        """Build the empty global EPSG:4326 raster that a dataset is aligned onto.
 
-        Samples inversely — every canvas cell asks which source cell covers it — so the result has no holes
-        when the source is coarser than the canvas.
+        The grid is chosen so its **cell centres** land exactly on the latitudes and longitudes the glyph
+        samples — ``linspace(90, -90, rows)`` and ``linspace(-180, 180, cols)`` — rather than on the
+        half-cell-offset grid a naive ``(-180, 90)`` corner would give. Without that the whole texture sits
+        half a cell off what is drawn.
 
         Args:
-            rgba: The source patch as an ``(H, W, 4)`` float RGBA array.
-            src_lon: The source's 1-D longitude cell centres, in degrees.
-            src_lat: The source's 1-D latitude cell centres, in degrees.
-            rows: Number of rows in the output canvas.
-            cols: Number of columns in the output canvas.
+            rows: Number of texture rows.
+            cols: Number of texture columns.
 
         Returns:
-            A ``(rows, cols, 4)`` float RGBA canvas, transparent everywhere the source does not reach.
-
-        Warns:
-            RuntimeWarning: If the source's footprint is smaller than one canvas cell, so nothing is pasted
-                and the globe would render blank.
+            Dataset: an empty raster carrying only the target grid; ``align`` reads its spatial properties.
         """
-        canvas = np.zeros((rows, cols, 4), dtype=float)
-        lat_targets, lon_targets = _texture_axes(rows, cols)
-        # A single-row or single-column raster has no spacing of its own to infer, so borrow the other
-        # axis' cell size. Without it such a raster matches only an exact hit and drapes nothing.
-        lat_cell = _axis_cell(src_lat, src_lon)
-        lon_cell = _axis_cell(src_lon, src_lat)
-        row_idx = _nearest_index(lat_targets, src_lat, cell=lat_cell)
-        col_idx = _lon_index(lon_targets, src_lon, cell=lon_cell)
-        valid_rows = np.flatnonzero(row_idx >= 0)
-        valid_cols = np.flatnonzero(col_idx >= 0)
-        if not (valid_rows.size and valid_cols.size):
-            warnings.warn(
-                f"the dataset's footprint is smaller than one cell of the {rows}x{cols} globe texture, so "
-                "nothing was draped and the globe will render blank. Pass a finer shape= (e.g. "
-                "shape=(2880, 5760)) to resolve it.",
-                RuntimeWarning,
-                stacklevel=3,
-            )
-            return _as_byte_texture(canvas)
-        canvas[np.ix_(valid_rows, valid_cols)] = rgba[np.ix_(row_idx[valid_rows], col_idx[valid_cols])]
-        return _as_byte_texture(canvas)
+        d_lat, d_lon = 180.0 / (rows - 1), 360.0 / (cols - 1)
+        return Dataset.create_from_array(
+            arr=np.zeros((rows, cols), dtype="float32"),
+            geo=(-180.0 - d_lon / 2, d_lon, 0.0, 90.0 + d_lat / 2, 0.0, -d_lat),
+            epsg=_TEXTURE_EPSG,
+        )
 
     # ------------------------------------------------------------------ geometry
 
