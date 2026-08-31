@@ -378,6 +378,10 @@ class TexturedGlobe:
         # instance's full state and the accessors need no getattr() guards.
         self._animation: Optional[FuncAnimation] = None
         self._animation_fps: Optional[float] = None
+        #: The spin the globe was last drawn at, so an overlay defaults to the surface it can see.
+        self._spin: float = 0.0
+        #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
+        self._owns_fig: bool = False
 
     # ------------------------------------------------------------------ constructors
 
@@ -653,7 +657,8 @@ class TexturedGlobe:
 
     # ------------------------------------------------------------------ geometry
 
-    def project(self, lon: Any, lat: Any, *, spin: float = 0.0, altitude: float = 0.0) -> np.ndarray:
+    def project(self, lon: Any, lat: Any, *, spin: Optional[float] = None,
+                altitude: float = 0.0) -> np.ndarray:
         """Map lon/lat degrees onto the drawn sphere, returning world-space ``(N, 3)`` coordinates.
 
         Pushes the points through the glyph's own ``transform``, so they carry the same spin **and axial
@@ -662,8 +667,8 @@ class TexturedGlobe:
         Args:
             lon: Longitude(s) in degrees (scalar or array-like).
             lat: Latitude(s) in degrees, same shape as ``lon``.
-            spin: The spin, in degrees, of the frame being drawn — pass the same value given to
-                :meth:`draw`.
+            spin: The spin, in degrees, to place the points at. Defaults to the spin the globe was last
+                drawn at, so an overlay lands on the surface the reader can actually see.
             altitude: Radial offset from the unit surface. A small positive value (e.g. ``0.01``) lifts an
                 overlay clear of the surface so matplotlib does not z-fight it.
 
@@ -707,6 +712,7 @@ class TexturedGlobe:
 
                 ```
         """
+        spin = self._spin if spin is None else spin
         lon_arr, lat_arr = np.atleast_1d(np.asarray(lon, dtype=float)), np.atleast_1d(
             np.asarray(lat, dtype=float))
         if lon_arr.shape != lat_arr.shape:
@@ -814,10 +820,16 @@ class TexturedGlobe:
 
                 ```
         """
+        supplied = kwargs.get("ax") is not None
+        if self._owns_fig and self.fig is not None and not supplied:
+            plt.close(self.fig)  # do not leak the figure this call is about to replace
         self.fig, self.ax = self.glyph.draw(spin=spin, **kwargs)
+        self._owns_fig = not supplied
+        self._spin = float(spin)
         return self.fig, self.ax
 
-    def points(self, data: Any, *, lat: Any = None, spin: float = 0.0, altitude: float = 0.01,
+    def points(self, data: Any, *, lat: Any = None, spin: Optional[float] = None,
+               altitude: float = 0.01,
                hide_far_side: bool = True, **kwargs: Any) -> Any:
         """Scatter lon/lat points onto the globe's surface.
 
@@ -827,7 +839,8 @@ class TexturedGlobe:
         Args:
             data: A point ``FeatureCollection``/``GeoDataFrame``, or the longitudes when ``lat`` is given.
             lat: Latitudes, when ``data`` holds longitudes.
-            spin: The spin of the frame being drawn — pass the same value given to :meth:`draw`.
+            spin: The spin, in degrees, to place the points at. Defaults to the spin the globe was last
+                drawn at.
             altitude: Radial lift above the surface, to avoid z-fighting with it.
             hide_far_side: When True (default), drop the points on the hemisphere facing away from the
                 camera, which matplotlib would otherwise draw straight through the sphere.
@@ -971,10 +984,14 @@ class TexturedGlobe:
         interval = float(kwargs.get("interval", _DEFAULT_INTERVAL_MS))
         if interval <= 0:
             raise ValueError(f"interval must be a positive number of milliseconds, got {interval!r}")
+        supplied = ax is not None
         if ax is None:
             figsize = kwargs.pop("figsize", self.glyph.default_options.get("figsize", (6, 6)))
+            if self._owns_fig and self.fig is not None:
+                plt.close(self.fig)
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
+        self._owns_fig = not supplied
         self._animation = anim  # keep a strong reference so it survives until save/display
         self._animation_fps = 1000.0 / interval
         self.ax, self.fig = ax, ax.get_figure()
@@ -1081,6 +1098,10 @@ class TexturedGlobe:
         bound and eventually trips matplotlib's open-figure warning. Closing releases both the figure and the
         retained animation.
 
+        Only a figure this globe created is closed. An axes handed in by the caller — to ``__init__``,
+        ``draw(ax=...)`` or ``animate(ax=...)`` — belongs to the caller, who may well have other subplots on
+        it, so its figure is left alone.
+
         Safe to call more than once, and on a globe that was never drawn.
 
         Examples:
@@ -1102,8 +1123,9 @@ class TexturedGlobe:
 
                 ```
         """
-        if self.fig is not None:
+        if self.fig is not None and self._owns_fig:
             plt.close(self.fig)
+        self._owns_fig = False
         self.fig = None
         self.ax = None
         self._animation = None

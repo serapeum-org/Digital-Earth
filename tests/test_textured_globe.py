@@ -458,6 +458,19 @@ class TestProject:
     def test_spin_moves_the_point(self, globe):
         assert not np.allclose(globe.project(0.0, 0.0, spin=0.0), globe.project(0.0, 0.0, spin=90.0))
 
+    def test_projection_defaults_to_the_drawn_spin(self, globe):
+        """spin=0 by default silently placed overlays on a face the reader could not see."""
+        globe.draw(spin=90.0)
+        assert np.allclose(globe.project(10.0, 20.0), globe.project(10.0, 20.0, spin=90.0)), (
+            "project() should default to the spin the globe was drawn at"
+        )
+
+    def test_an_explicit_spin_still_wins(self, globe):
+        globe.draw(spin=90.0)
+        assert np.allclose(globe.project(10.0, 20.0, spin=0.0),
+                           TexturedGlobe(globe.glyph.texture, tilt_deg=globe.glyph.tilt_deg,
+                                         n_lon=8, n_lat=4).project(10.0, 20.0, spin=0.0))
+
     def test_mismatched_lon_lat_shapes_are_refused(self, globe):
         with pytest.raises(ValueError, match="same shape"):
             globe.project([0.0, 1.0], [0.0])
@@ -646,6 +659,31 @@ class TestRenderLifecycle:
         globe.close()
         assert plt.get_fignums() == [], "close() should release the figure"
         assert globe.fig is None and globe.ax is None
+
+    def test_close_leaves_a_caller_supplied_figure_alone(self, globe):
+        """The caller may have other subplots on that figure; it is not ours to close."""
+        plt.close("all")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        globe.draw(ax=ax)
+        globe.close()
+        assert plt.fignum_exists(fig.number), "a caller-supplied figure must survive close()"
+
+    def test_close_leaves_a_caller_supplied_animation_axes_alone(self, globe):
+        plt.close("all")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        globe.animate(ax, n_frames=2, interval=100)
+        globe.close()
+        assert plt.fignum_exists(fig.number), "a caller-supplied figure must survive close()"
+
+    def test_redrawing_does_not_leak_the_previous_figure(self, globe):
+        """draw() rebinds fig/ax, so the one it replaces would otherwise be held by pyplot forever."""
+        plt.close("all")
+        globe.draw()
+        globe.draw()
+        globe.draw()
+        assert len(plt.get_fignums()) == 1, f"expected 1 open figure, got {len(plt.get_fignums())}"
 
     def test_close_is_safe_before_drawing_and_twice(self, globe):
         globe.close()
