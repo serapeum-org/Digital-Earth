@@ -101,7 +101,29 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
     return np.where(inside, idx, -1)
 
 
-def _lon_index(targets: np.ndarray, coords: np.ndarray) -> np.ndarray:
+def _axis_cell(axis: np.ndarray, fallback_axis: np.ndarray) -> Optional[float]:
+    """Cell size of ``axis``, falling back to the other axis' spacing when it has only one cell.
+
+    A raster one row or one column wide carries no spacing on that axis, so its footprint would collapse to a
+    point and match nothing. Raster cells are very often square, and the other axis' spacing is a far better
+    estimate than treating the single cell as zero-width.
+
+    Args:
+        axis: The axis whose cell size is wanted.
+        fallback_axis: The perpendicular axis, used when ``axis`` holds fewer than two cells.
+
+    Returns:
+        The cell size as a positive float, or ``None`` when neither axis has a spacing to offer.
+    """
+    for candidate in (axis, fallback_axis):
+        if candidate.size > 1:
+            step = abs(float(candidate[1] - candidate[0]))
+            if step > 0.0:
+                return step
+    return None
+
+
+def _lon_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = None) -> np.ndarray:
     """Nearest-cell index of each canvas longitude in ``coords``, tolerant of the source's longitude frame.
 
     Longitude is periodic, but a raster's x axis is not: a global field is just as often stored on ``0..360``
@@ -116,17 +138,18 @@ def _lon_index(targets: np.ndarray, coords: np.ndarray) -> np.ndarray:
     Args:
         targets: The canvas' longitude cell centres, in degrees on ``-180..180``.
         coords: The source's 1-D longitude cell centres, in degrees, in whatever frame it was stored in.
+        cell: Cell size to assume when ``coords`` holds a single column.
 
     Returns:
         An integer array the shape of ``targets``, holding the covering source column, or ``-1`` where the
         source does not reach that longitude in any frame.
     """
-    idx = _nearest_index(targets, coords)
+    idx = _nearest_index(targets, coords, cell=cell)
     for shift in (360.0, -360.0):
         missing = idx < 0
         if not missing.any():
             break
-        idx[missing] = _nearest_index(targets[missing] + shift, coords)
+        idx[missing] = _nearest_index(targets[missing] + shift, coords, cell=cell)
     return idx
 
 
@@ -511,8 +534,12 @@ class TexturedGlobe:
         """
         canvas = np.zeros((rows, cols, 4), dtype=float)
         lat_targets, lon_targets = _texture_axes(rows, cols)
-        row_idx = _nearest_index(lat_targets, src_lat)
-        col_idx = _lon_index(lon_targets, src_lon)
+        # A single-row or single-column raster has no spacing of its own to infer, so borrow the other
+        # axis' cell size. Without it such a raster matches only an exact hit and drapes nothing.
+        lat_cell = _axis_cell(src_lat, src_lon)
+        lon_cell = _axis_cell(src_lon, src_lat)
+        row_idx = _nearest_index(lat_targets, src_lat, cell=lat_cell)
+        col_idx = _lon_index(lon_targets, src_lon, cell=lon_cell)
         valid_rows = np.flatnonzero(row_idx >= 0)
         valid_cols = np.flatnonzero(col_idx >= 0)
         if not (valid_rows.size and valid_cols.size):

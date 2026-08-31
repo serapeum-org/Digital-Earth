@@ -145,6 +145,31 @@ class TestFromDataset:
         lon = lon_axis[np.nonzero(opaque.any(axis=0))[0]]
         assert -161.0 <= lon.min() and lon.max() <= -149.0, f"landed at lon {lon.min()}..{lon.max()}"
 
+    def test_a_single_row_raster_drapes(self):
+        """One row has no latitude spacing of its own; borrowing the column spacing keeps it visible."""
+        arr = np.ones((1, 8), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 5.0, 0.0, 10.0, 0.0, -5.0), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
+        assert (globe.glyph.texture[..., 3] > 0).any(), "a single-row raster should still drape"
+
+    def test_a_single_column_raster_drapes(self):
+        arr = np.ones((8, 1), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 5.0, 0.0, 40.0, 0.0, -5.0), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
+        assert (globe.glyph.texture[..., 3] > 0).any(), "a single-column raster should still drape"
+
+    def test_a_single_row_raster_does_not_warn_falsely(self):
+        """It used to drape nothing and blame the canvas resolution, which was not the reason."""
+        import warnings as _warnings
+
+        arr = np.ones((1, 8), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 5.0, 0.0, 10.0, 0.0, -5.0), epsg=4326)
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            TexturedGlobe.from_dataset(ds, shape=(180, 360))
+        blank = [w for w in caught if "smaller than one cell" in str(w.message)]
+        assert not blank, f"nothing should claim the footprint is too small: {blank}"
+
     def test_uncovered_cells_stay_transparent(self, dataset):
         """A regional raster leaves the rest of the globe see-through rather than filling it."""
         alpha = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3]
