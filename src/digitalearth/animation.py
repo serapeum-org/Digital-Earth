@@ -18,7 +18,7 @@ import math
 import os
 from typing import Any, Optional, Tuple, Union
 
-from cleopatra.glyphs.base.animation import gif_from_video
+from cleopatra.glyphs.base.animation import SUPPORTED_VIDEO_FORMAT, gif_from_video
 from cleopatra.glyphs.base.animation import save_animation as _cleopatra_save_animation
 
 #: Pixel format used for the intermediate video when a GIF is derived from it — full chroma, so the GIF
@@ -28,9 +28,10 @@ FULL_CHROMA_PIX_FMT = "yuv444p"
 #: Frames per second used when neither the caller nor the scene supplies one.
 DEFAULT_FPS = 12.0
 
-#: Container suffixes a GIF can be derived from. Anything else would reach ffmpeg as an
-#: intermediate it cannot decode, and fail there rather than here.
-VIDEO_SUFFIXES = (".mp4", ".mov", ".avi", ".webp", ".mkv", ".m4v")
+#: Container suffixes a GIF can be derived from: cleopatra's own supported formats, minus GIF itself.
+#: Derived from ``SUPPORTED_VIDEO_FORMAT`` rather than hand-listed, so it cannot drift from what the writer
+#: actually accepts — a hand-kept list previously admitted .mkv and .m4v, which cleopatra rejects.
+VIDEO_SUFFIXES = tuple(f".{fmt}" for fmt in SUPPORTED_VIDEO_FORMAT if fmt != "gif")
 
 
 def _encoder_fps(fps: Any) -> int:
@@ -60,8 +61,9 @@ def _encoder_fps(fps: Any) -> int:
     rounded = int(round(rate))
     if rounded < 1:
         raise ValueError(
-            f"fps={fps!r} rounds to {rounded} frames per second, which no encoder accepts. Pass fps >= 0.5, "
-            "or slow the animation down with more frames instead of a fractional rate."
+            f"fps={fps!r} rounds to {rounded} frames per second, which no encoder accepts. Pass a rate that "
+            "rounds to at least 1 (fps > 0.5), or slow the animation down with more frames instead of a "
+            "fractional rate."
         )
     return rounded
 

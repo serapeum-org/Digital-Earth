@@ -18,6 +18,7 @@ Like the cleopatra glyph it wraps (and unlike :class:`~digitalearth.scene.map.Ma
 class rather than a :class:`~digitalearth.scene.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
 layer/colorbar lifecycle, none of which applies to a textured sphere.
 """
+import inspect
 import warnings
 from typing import Any, Optional, Sequence, Tuple
 
@@ -44,9 +45,13 @@ DEFAULT_TEXTURE_SHAPE = (1440, 2880)
 #: EPSG code of the lon/lat grid the glyph's texture is defined on.
 _TEXTURE_EPSG = 4326
 
-#: The glyph's own default inter-frame interval, in milliseconds — mirrored here so :meth:`animate` can
-#: record the frame rate without reading the animation's private state.
-_DEFAULT_INTERVAL_MS = 50
+#: Above this borrowed cell size, in degrees, a single-row/column raster is being spread far enough that the
+#: assumption deserves saying out loud rather than being applied silently.
+_MAX_BORROWED_CELL_DEG = 5.0
+
+#: The glyph's own default inter-frame interval, in milliseconds, read from its signature rather than
+#: mirrored as a literal: a hand-copied default drifts silently, and the saved frame rate is derived from it.
+_DEFAULT_INTERVAL_MS = inspect.signature(TexturedGlobeGlyph.animate).parameters["interval"].default
 
 
 def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -65,7 +70,8 @@ def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
     return np.linspace(90.0, -90.0, n_lat), np.linspace(-180.0, 180.0, n_lon)
 
 
-def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = None) -> np.ndarray:
+def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = None,
+                   warn_non_uniform: bool = True) -> np.ndarray:
     """Nearest-cell index of each ``targets`` value in the uniform 1-D cell-centre vector ``coords``.
 
     Returns ``-1`` where a target falls outside the grid's **footprint** — the cell centres widened by half a
@@ -78,6 +84,8 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
         targets: The coordinates to look up.
         coords: The source grid's cell centres, uniformly spaced (ascending or descending).
         cell: Cell size to assume when ``coords`` holds a single value and the step is therefore unknown.
+        warn_non_uniform: Whether to warn about an irregular axis. The longitude path retries the same
+            axis in up to three frames, and one axis deserves one warning, so the retries pass False.
 
     Returns:
         An integer array the shape of ``targets``, holding the index of the covering cell, or ``-1`` where
@@ -99,12 +107,12 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
     # size far below the ~1e-8-degree floor of any real grid), which would otherwise divide into nonsense.
     if step is None or not np.isfinite(step) or np.isclose(step, 0.0):
         return np.where(np.isclose(targets, float(coords[0])), 0, -1)
-    if coords.size > 2 and not np.allclose(np.diff(coords), step, rtol=1e-6):
+    if warn_non_uniform and coords.size > 2 and not np.allclose(np.diff(coords), step, rtol=1e-6):
         warnings.warn(
             "the raster's coordinates are not evenly spaced; the drape assumes a uniform grid and will "
             "misplace cells. Resample it to a regular grid first (pyramids' Dataset.resample).",
             RuntimeWarning,
-            stacklevel=4,
+            stacklevel=2,
         )
     half = abs(step) / 2.0
     lo, hi = min(coords[0], coords[-1]) - half, max(coords[0], coords[-1]) + half
@@ -130,11 +138,22 @@ def _axis_cell(axis: np.ndarray, fallback_axis: np.ndarray) -> Optional[float]:
     Returns:
         The cell size as a positive float, or ``None`` when neither axis has a spacing to offer.
     """
-    for candidate in (axis, fallback_axis):
-        if candidate.size > 1:
-            step = abs(float(candidate[1] - candidate[0]))
-            if step > 0.0:
-                return step
+    if axis.size > 1:
+        step = abs(float(axis[1] - axis[0]))
+        if step > 0.0:
+            return step
+    if fallback_axis.size > 1:
+        borrowed = abs(float(fallback_axis[1] - fallback_axis[0]))
+        if borrowed > 0.0:
+            if borrowed > _MAX_BORROWED_CELL_DEG:
+                warnings.warn(
+                    f"this raster has a single cell on one axis, so its extent there is assumed to be the "
+                    f"other axis' spacing ({borrowed:g} degrees), which is wide enough to be a guess rather "
+                    "than a measurement. Give the raster a real extent on both axes if that is wrong.",
+                    RuntimeWarning,
+                    stacklevel=3,
+                )
+            return borrowed
     return None
 
 
@@ -164,7 +183,8 @@ def _lon_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = 
         missing = idx < 0
         if not missing.any():
             break
-        idx[missing] = _nearest_index(targets[missing] + shift, coords, cell=cell)
+        idx[missing] = _nearest_index(targets[missing] + shift, coords, cell=cell,
+                                      warn_non_uniform=False)
     return idx
 
 
@@ -593,6 +613,18 @@ class TexturedGlobe:
         if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
             raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
         good = finite(values)
+        if good.size:
+            # A single bound on the wrong side of the data inverts the range just as surely as passing both.
+            if vmax is None and vmin is not None and float(vmin) >= float(good.max()):
+                raise ValueError(
+                    f"vmin={vmin!r} is at or above the band's maximum ({float(good.max())!r}), so there is "
+                    "no range to colour. Lower vmin, or pass vmax as well."
+                )
+            if vmin is None and vmax is not None and float(vmax) <= float(good.min()):
+                raise ValueError(
+                    f"vmax={vmax!r} is at or below the band's minimum ({float(good.min())!r}), so there is "
+                    "no range to colour. Raise vmax, or pass vmin as well."
+                )
         if not good.size:
             warnings.warn(
                 "every cell of this band is nodata or non-finite, so the globe will be fully transparent.",

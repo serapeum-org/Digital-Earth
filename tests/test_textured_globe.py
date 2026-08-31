@@ -123,6 +123,20 @@ class TestAxisCell:
         assert _axis_cell(np.array([5.0, 5.0]), np.array([0.0, 4.0])) == pytest.approx(4.0)
 
 
+class TestBorrowedCellWarning:
+    """Borrowing the other axis' spacing is a guess; a wide one is worth saying out loud."""
+
+    def test_a_wide_borrowed_cell_warns(self):
+        with pytest.warns(RuntimeWarning, match="single cell on one axis"):
+            _axis_cell(np.array([5.0]), np.array([0.0, 30.0]))
+
+    def test_a_narrow_borrowed_cell_is_silent(self):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _axis_cell(np.array([5.0]), np.array([0.0, 1.0]))
+        assert not [w for w in caught if "single cell" in str(w.message)]
+
+
 class TestNonUniformAxis:
     """A grid whose spacing changes cannot be indexed by a single step."""
 
@@ -303,6 +317,14 @@ class TestFromDataset:
         """vmax <= vmin was silently discarded and replaced, hiding the caller's mistake."""
         with pytest.raises(ValueError, match="vmax must be greater than vmin"):
             TexturedGlobe.from_dataset(dataset, vmin=10.0, vmax=1.0)
+
+    @pytest.mark.parametrize("kwargs", [{"vmin": 99.0}, {"vmax": -99.0}])
+    def test_a_lone_bound_that_inverts_the_range_is_refused(self, kwargs):
+        """One bound on the wrong side of the data leaves no range, just as passing both reversed does."""
+        arr = np.arange(16, dtype="float32").reshape(4, 4)
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
+        with pytest.raises(ValueError, match="no range to colour"):
+            TexturedGlobe.from_dataset(ds, **kwargs)
 
     def test_an_all_nodata_band_warns(self):
         """A fully transparent globe is indistinguishable from a broken one, so say which it is."""
