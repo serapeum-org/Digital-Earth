@@ -8,14 +8,13 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
+from cleopatra.styling.colors import resolve_colormap
+from matplotlib.colors import Normalize
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.scene import TexturedGlobe
-from cleopatra.styling.colors import resolve_colormap
-from matplotlib.colors import Normalize
-
 from digitalearth.scene.textured_globe import _cull_per_point, _texture_axes
 
 

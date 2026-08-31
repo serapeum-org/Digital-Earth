@@ -31,9 +31,9 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
 )
 from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
-from pyramids.dataset import Dataset
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
+from pyramids.dataset import Dataset
 
 from digitalearth._arrays import finite, read_masked_band
 from digitalearth._crs import source_epsg
@@ -485,6 +485,8 @@ class TexturedGlobe:
 
         Raises:
             ValueError: if ``provider`` is not a known ``xyzservices`` provider.
+            OSError: if the tiles cannot be fetched — the whole-world grid is pulled over the network on
+                first use, so a connection failure or an unreachable provider surfaces here.
 
         Examples:
             - Build a photographic Earth and spin it (needs the network on first use; the texture is then
@@ -762,13 +764,15 @@ class TexturedGlobe:
 
     # ------------------------------------------------------------------ rendering
 
-    def draw(self, *, spin: float = 0.0, **kwargs: Any) -> Tuple[Any, Any]:
+    def draw(self, ax: Any = None, *, spin: float = 0.0, **kwargs: Any) -> Tuple[Any, Any]:
         """Draw the globe, returning the matplotlib ``(fig, ax)`` and recording them on the instance.
 
         Args:
+            ax: An existing ``Axes3D`` to draw on, accepted positionally to match :meth:`animate`. A figure
+                the caller supplies is never closed by :meth:`close`.
             spin: Rotation about the polar axis, in degrees.
-            **kwargs: Forwarded to the glyph's ``draw`` (``ax``, ``sun``, ``ambient``, ``figsize``,
-                ``elev``, ``azim``, ``background``).
+            **kwargs: Forwarded to the glyph's ``draw`` (``sun``, ``ambient``, ``figsize``, ``elev``,
+                ``azim``, ``background``).
 
         Returns:
             The ``(Figure, Axes3D)`` the globe was drawn on.
@@ -804,6 +808,8 @@ class TexturedGlobe:
 
                 ```
         """
+        if ax is not None:
+            kwargs["ax"] = ax
         supplied = kwargs.get("ax") is not None or self._caller_supplied_axes
         if self._owns_fig and self.fig is not None:
             # Release the figure we own before rebinding, whether the replacement is ours or the caller's;
