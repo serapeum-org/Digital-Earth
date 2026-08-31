@@ -241,6 +241,25 @@ class TestFromDataset:
         globe = TexturedGlobe.from_dataset(dataset, n_lon=2880, n_lat=1440)
         assert (globe.glyph.texture[..., 3] > 0).any(), "a CRS without an EPSG code should still drape"
 
+    def test_reversed_colour_bounds_are_refused(self, dataset):
+        """vmax <= vmin was silently discarded and replaced, hiding the caller's mistake."""
+        with pytest.raises(ValueError, match="vmax must be greater than vmin"):
+            TexturedGlobe.from_dataset(dataset, vmin=10.0, vmax=1.0)
+
+    def test_an_all_nodata_band_warns(self):
+        """A fully transparent globe is indistinguishable from a broken one, so say which it is."""
+        arr = np.full((4, 4), -9999.0, dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326,
+                                       no_data_value=-9999.0)
+        with pytest.warns(RuntimeWarning, match="fully transparent"):
+            TexturedGlobe.from_dataset(ds)
+
+    @pytest.mark.parametrize("shape", [(1, 2, 3), ("a", "b"), 5, None])
+    def test_a_malformed_shape_is_refused_clearly(self, dataset, shape):
+        """A 3-tuple used to fail with 'too many values to unpack', which names nothing useful."""
+        with pytest.raises(ValueError, match="rows, columns"):
+            TexturedGlobe.from_dataset(dataset, shape=shape)
+
     def test_a_degenerate_shape_is_refused(self, dataset):
         with pytest.raises(ValueError, match="at least"):
             TexturedGlobe.from_dataset(dataset, shape=(1, 1))

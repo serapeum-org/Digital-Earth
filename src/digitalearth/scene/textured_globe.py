@@ -392,7 +392,10 @@ class TexturedGlobe:
 
                 ```
         """
-        rows, cols = (int(v) for v in shape)
+        try:
+            rows, cols = (int(v) for v in shape)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"shape must be a (rows, columns) pair of integers, got {shape!r}") from exc
         if rows < 2 or cols < 2:
             raise ValueError(f"shape must be at least (2, 2), got {shape!r}")
 
@@ -519,10 +522,18 @@ class TexturedGlobe:
             An ``(H, W, 4)`` float RGBA array in ``[0, 1]``, with alpha ``0`` wherever ``values`` is not
             finite. A constant band is widened to a unit range so the normalisation cannot divide by zero.
         """
+        if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
+            raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
         good = finite(values)
+        if not good.size:
+            warnings.warn(
+                "every cell of this band is nodata or non-finite, so the globe will be fully transparent.",
+                RuntimeWarning,
+                stacklevel=4,
+            )
         lo = float(good.min()) if vmin is None and good.size else (0.0 if vmin is None else float(vmin))
         hi = float(good.max()) if vmax is None and good.size else (1.0 if vmax is None else float(vmax))
-        if hi <= lo:  # a constant (or empty) band has no range to normalise against
+        if hi <= lo:  # a constant band has no range to normalise against
             hi = lo + 1.0
         colormap = resolve_colormap(cmap) or resolve_colormap("viridis")
         rgba = colormap(Normalize(vmin=lo, vmax=hi)(np.asarray(values, dtype=float)))
