@@ -181,7 +181,7 @@ class Scene:
         """Set the axes title."""
         self.ax.set_title(title, **kwargs)
 
-    def stamp(self, mark: Any, **kwargs) -> Any:
+    def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the figure (delegates to ``cleopatra.styling.watermark.stamp_mark``).
 
         The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction

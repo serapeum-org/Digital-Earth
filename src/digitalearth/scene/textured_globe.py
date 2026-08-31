@@ -29,6 +29,7 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
     TexturedGlobeGlyph,
 )
 from cleopatra.styling.colors import resolve_colormap
+from cleopatra.styling.watermark import stamp_mark
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 
@@ -483,7 +484,7 @@ class TexturedGlobe:
             ``texture_n_lon`` / ``texture_n_lat``, so the same keyword never means two different things.
 
         Raises:
-            ImportError: if cleopatra's ``[tiles]`` extra is unavailable.
+            ValueError: if ``provider`` is not a known ``xyzservices`` provider.
 
         Examples:
             - Build a photographic Earth and spin it (needs the network on first use; the texture is then
@@ -545,7 +546,9 @@ class TexturedGlobe:
         hi = float(good.max()) if vmax is None and good.size else (1.0 if vmax is None else float(vmax))
         if hi <= lo:  # a constant band has no range to normalise against
             hi = lo + 1.0
-        colormap = resolve_colormap(cmap) or resolve_colormap("viridis")
+        colormap = resolve_colormap(cmap)
+        if colormap is None:  # resolve_colormap returns None only for cmap=None
+            colormap = resolve_colormap("viridis")
         rgba = colormap(Normalize(vmin=lo, vmax=hi)(np.asarray(values, dtype=float)))
         rgba = np.asarray(rgba, dtype=float).copy()
         rgba[..., 3] = np.where(np.isfinite(values), rgba[..., 3], 0.0)
@@ -1122,9 +1125,9 @@ class TexturedGlobe:
         """
         if self.fig is None:
             raise RuntimeError("draw() the globe before stamping it")
-        from cleopatra.styling.watermark import stamp_mark
-
         return stamp_mark(self.fig, mark, **kwargs)
 
 
+#: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported here so a caller setting ``tilt_deg``
+#: does not have to import from the glyph module directly.
 __all__: Sequence[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]
