@@ -382,9 +382,11 @@ class TexturedGlobe:
         # pyramids owns the regrid: align() reprojects to the template's CRS and resamples onto its grid,
         # which also settles the longitude frame (0-360 or antimeridian-crossing) and any non-uniform or
         # single-row source. Doing it here would be re-implementing GIS.
-        aligned = dataset.align(cls._global_template(rows, cols), method=resampling)
+        # Select the wanted band first: align warps every band it is given, and only one is drawn.
+        source = dataset.select_bands([band]) if dataset.band_count > 1 else dataset
+        aligned = source.align(cls._global_template(rows, cols), method=resampling)
 
-        values = read_masked_band(aligned, band=band)
+        values = read_masked_band(aligned, band=1)
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
         texture = _as_byte_texture(rgba)
         if not (texture[..., 3] > 0).any():
