@@ -173,6 +173,29 @@ class TestFromDataset:
         with pytest.warns(RuntimeWarning, match="smaller than one cell"):
             TexturedGlobe.from_dataset(dataset, shape=(90, 180))
 
+    def test_data_finer_than_the_mesh_warns(self, dataset):
+        """A fine texture is not enough: the glyph samples down to the mesh, so sub-mesh data vanishes."""
+        with pytest.warns(RuntimeWarning, match="finer than the .* sphere mesh"):
+            TexturedGlobe.from_dataset(dataset, n_lon=180, n_lat=90)
+
+    def test_a_mesh_that_resolves_the_data_does_not_warn(self, dataset):
+        """The warning must be about visibility, not merely about the data being small."""
+        import warnings as _warnings
+
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            TexturedGlobe.from_dataset(dataset, n_lon=2880, n_lat=1440)
+        mesh_warnings = [w for w in caught if "sphere mesh" in str(w.message)]
+        assert not mesh_warnings, f"a mesh that resolves the data should not warn: {mesh_warnings}"
+
+    def test_the_mesh_warning_predicts_what_actually_paints(self, dataset):
+        """Tie the warning to reality: when it fires, the drawn sphere really does carry no opaque face."""
+        with pytest.warns(RuntimeWarning, match="sphere mesh"):
+            globe = TexturedGlobe.from_dataset(dataset, n_lon=180, n_lat=90)
+        globe.draw()
+        painted = np.asarray(globe.glyph._facecolors)
+        assert int((painted[..., 3] > 0).sum()) == 0, "the warning fired but the data did paint"
+
     def test_a_constant_band_does_not_divide_by_zero(self):
         """vmin == vmax has no range to normalise against; it must still produce a texture."""
         arr = np.full((4, 4), 5.0, dtype="float32")

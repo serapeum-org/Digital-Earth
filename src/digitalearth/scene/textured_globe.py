@@ -315,7 +315,41 @@ class TexturedGlobe:
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
         texture = cls._paste_global(rgba, np.asarray(src.x, dtype=float), np.asarray(src.y, dtype=float),
                                     rows, cols)
-        return cls(texture, **kwargs)
+        globe = cls(texture, **kwargs)
+        globe._warn_if_finer_than_the_mesh(texture)
+        return globe
+
+    def _warn_if_finer_than_the_mesh(self, texture: np.ndarray) -> None:
+        """Warn when the draped data is too small to survive the sphere mesh.
+
+        A fine texture is not enough to make small data visible. The glyph point-samples the texture down to
+        its ``n_lon`` x ``n_lat`` mesh, so detail narrower than one mesh face falls between the samples and
+        disappears — however many texture cells it covers. The default mesh is 180x90, roughly 2-degree faces,
+        while the default texture is 0.125 degrees, so a raster can occupy hundreds of texture cells and still
+        paint nothing.
+
+        Checking the mesh is the only check that predicts what a reader will actually see; the texture-grid
+        check alone reports success on a globe that renders blank.
+
+        Args:
+            texture: The global RGBA canvas about to be handed to the glyph.
+
+        Warns:
+            RuntimeWarning: If the opaque part of ``texture`` covers no mesh sample.
+        """
+        opaque = texture[..., 3] > 0
+        if not opaque.any():
+            return  # _paste_global has already warned that nothing was draped at all
+        rows = np.rint(np.linspace(0, texture.shape[0] - 1, self.glyph.n_lat)).astype(int)
+        cols = np.rint(np.linspace(0, texture.shape[1] - 1, self.glyph.n_lon)).astype(int)
+        if not opaque[np.ix_(rows, cols)].any():
+            warnings.warn(
+                f"the draped data is finer than the {self.glyph.n_lon}x{self.glyph.n_lat} sphere mesh, so it "
+                "falls between the mesh samples and the globe will render without it. Raise the mesh "
+                "(n_lon=/n_lat=) until a mesh face fits inside the data's footprint.",
+                RuntimeWarning,
+                stacklevel=3,
+            )
 
     @classmethod
     def from_provider(cls, provider: Any = "Esri.WorldImagery", **kwargs: Any) -> "TexturedGlobe":
