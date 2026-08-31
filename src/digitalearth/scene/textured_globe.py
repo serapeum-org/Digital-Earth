@@ -319,7 +319,11 @@ class TexturedGlobe:
 
         Raises:
             ValueError: if ``dataset`` has no resolvable CRS (there is then no way to place it on the
-                sphere), or if ``shape`` is not two positive integers.
+                sphere), if ``shape`` is not two positive integers, or if the colour bounds leave no range.
+
+        Warns:
+            RuntimeWarning: If nothing survives the resample onto the texture, or if what does is finer than
+                the sphere mesh and so would not be drawn — see :meth:`_warn_if_finer_than_the_mesh`.
 
         Examples:
             - Drape a whole-globe raster and inspect the texture it produced:
