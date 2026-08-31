@@ -14,6 +14,7 @@ palette ever sees the frames — and ``gif_from_video`` warns when handed such a
 derived, this wrapper raises the intermediate to ``yuv444p`` unless the caller asks for something else: the
 video stays perfectly playable and the GIF gets full-chroma frames to quantise.
 """
+import math
 import os
 from typing import Any, Optional, Tuple, Union
 
@@ -26,6 +27,39 @@ FULL_CHROMA_PIX_FMT = "yuv444p"
 
 #: Frames per second used when neither the caller nor the scene supplies one.
 DEFAULT_FPS = 12.0
+
+
+def _encoder_fps(fps: Any) -> int:
+    """Round a frame rate to the whole number both encoders will actually use.
+
+    cleopatra's ``save_animation`` types ``fps`` as an ``int``, so a fractional rate has to be rounded
+    somewhere. Rounding it only for the video and handing the raw float to ``gif_from_video`` is the trap:
+    ``fps=2.5`` then wrote a 2 fps video beside a 2.5 fps GIF, two files of the same animation playing at
+    different speeds. Rounding once, here, keeps them identical.
+
+    Args:
+        fps: The requested frame rate.
+
+    Returns:
+        The frame rate as a positive whole number of frames per second.
+
+    Raises:
+        ValueError: If ``fps`` is not a finite number, or rounds to less than one frame per second — a rate
+            below 0.5 would otherwise silently become ``fps=0``, which no encoder can use.
+    """
+    try:
+        rate = float(fps)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"fps must be a number, got {fps!r}") from exc
+    if not math.isfinite(rate):
+        raise ValueError(f"fps must be finite, got {fps!r}")
+    rounded = int(round(rate))
+    if rounded < 1:
+        raise ValueError(
+            f"fps={fps!r} rounds to {rounded} frames per second, which no encoder accepts. Pass fps >= 0.5, "
+            "or slow the animation down with more frames instead of a fractional rate."
+        )
+    return rounded
 
 
 def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Optional[float] = None,
@@ -50,7 +84,12 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
         The written path as a ``str``, or a ``(video, gif)`` pair when ``gif`` was requested.
 
     Raises:
-        ValueError: if ``gif`` is given but ``path`` is itself a GIF, or if ``gif`` does not end in ``.gif``.
+        ValueError: if ``gif`` is given but ``path`` is itself a GIF, if ``gif`` does not end in ``.gif``, or
+            if ``fps`` is not a finite number or rounds to less than one frame per second.
+
+    Note:
+        The rate is rounded to a whole number **once**, and the same value is used for the video and for the
+        derived GIF, so the two files always play at the same speed.
 
     Examples:
         - Rendering once and delivering two formats, without drawing the frames twice:
@@ -60,10 +99,10 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
 
             ```
     """
-    rate = DEFAULT_FPS if fps is None else float(fps)
+    rate = _encoder_fps(DEFAULT_FPS if fps is None else fps)
     video_path = os.fspath(path)
     if gif is None:
-        _cleopatra_save_animation(anim, video_path, fps=int(round(rate)), **kwargs)
+        _cleopatra_save_animation(anim, video_path, fps=rate, **kwargs)
         return video_path
 
     gif_path = os.fspath(gif)
@@ -77,7 +116,7 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
 
     # Full chroma in the intermediate so the GIF palette is not built from subsampled colour.
     kwargs.setdefault("pix_fmt", FULL_CHROMA_PIX_FMT)
-    _cleopatra_save_animation(anim, video_path, fps=int(round(rate)), **kwargs)
+    _cleopatra_save_animation(anim, video_path, fps=rate, **kwargs)
     gif_from_video(video_path, gif_path, **{"fps": rate, **(gif_options or {})})
     return video_path, gif_path
 

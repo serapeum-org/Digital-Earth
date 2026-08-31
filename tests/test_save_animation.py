@@ -96,6 +96,13 @@ class TestDerivedGif:
         save_animation(anim, "clip.mp4", fps=9, gif="clip.gif", gif_options={"fps": 4, "max_colors": 64})
         assert calls["gif"][0][2]["fps"] == 4 and calls["gif"][0][2]["max_colors"] == 64
 
+    @pytest.mark.parametrize("fps", [2.5, 7.4, 0.6, 12])
+    def test_the_video_and_the_gif_share_one_frame_rate(self, anim, calls, fps):
+        """Rounding only the video left the two files of one animation playing at different speeds."""
+        save_animation(anim, "clip.mp4", fps=fps, gif="clip.gif")
+        video_fps, gif_fps = calls["save"][0][1]["fps"], calls["gif"][0][2]["fps"]
+        assert video_fps == gif_fps, f"video is {video_fps} fps but the GIF is {gif_fps} fps"
+
     def test_deriving_a_gif_from_a_gif_is_refused(self, anim, calls):
         with pytest.raises(ValueError, match="already a GIF"):
             save_animation(anim, "clip.gif", gif="other.gif")
@@ -103,6 +110,33 @@ class TestDerivedGif:
     def test_a_non_gif_derived_path_is_refused(self, anim, calls):
         with pytest.raises(ValueError, match="must end in"):
             save_animation(anim, "clip.mp4", gif="clip.webm")
+
+
+class TestFrameRate:
+    """The rate is rounded once, and a rate no encoder can use is refused rather than silently zeroed."""
+
+    @pytest.mark.parametrize(
+        "fps, expected",
+        [(2.5, 2), (2.4, 2), (7.6, 8), (0.6, 1), (12, 12)],
+    )
+    def test_fractional_rates_round_to_a_whole_number(self, anim, calls, fps, expected):
+        save_animation(anim, "clip.mp4", fps=fps)
+        assert calls["save"][0][1]["fps"] == expected
+
+    @pytest.mark.parametrize("fps", [0.5, 0.4, 0.0, -3])
+    def test_a_rate_below_one_is_refused(self, anim, calls, fps):
+        """fps=0.5 used to round to 0, which no encoder accepts — it must fail loudly, not silently."""
+        with pytest.raises(ValueError, match="frames per second"):
+            save_animation(anim, "clip.mp4", fps=fps)
+
+    @pytest.mark.parametrize("fps", [float("nan"), float("inf")])
+    def test_a_non_finite_rate_is_refused(self, anim, calls, fps):
+        with pytest.raises(ValueError, match="finite"):
+            save_animation(anim, "clip.mp4", fps=fps)
+
+    def test_a_non_numeric_rate_is_refused(self, anim, calls):
+        with pytest.raises(ValueError, match="must be a number"):
+            save_animation(anim, "clip.mp4", fps="fast")
 
 
 class TestMapIntegration:
