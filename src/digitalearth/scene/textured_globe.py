@@ -101,6 +101,35 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
     return np.where(inside, idx, -1)
 
 
+def _lon_index(targets: np.ndarray, coords: np.ndarray) -> np.ndarray:
+    """Nearest-cell index of each canvas longitude in ``coords``, tolerant of the source's longitude frame.
+
+    Longitude is periodic, but a raster's x axis is not: a global field is just as often stored on ``0..360``
+    (the usual climate / NWP convention) as on ``-180..180``, and a regional raster can sit wholly beyond the
+    antimeridian or straddle it. A plain footprint test against the canvas' ``-180..180`` axis would then miss
+    part or all of the source — silently, since every missed cell simply stays transparent.
+
+    So a canvas longitude that finds no cell is retried shifted by a full turn in each direction, which brings
+    it into whatever frame the source actually uses. This is index selection on our own canvas, not a
+    reprojection: no pixel is resampled and the source is never modified.
+
+    Args:
+        targets: The canvas' longitude cell centres, in degrees on ``-180..180``.
+        coords: The source's 1-D longitude cell centres, in degrees, in whatever frame it was stored in.
+
+    Returns:
+        An integer array the shape of ``targets``, holding the covering source column, or ``-1`` where the
+        source does not reach that longitude in any frame.
+    """
+    idx = _nearest_index(targets, coords)
+    for shift in (360.0, -360.0):
+        missing = idx < 0
+        if not missing.any():
+            break
+        idx[missing] = _nearest_index(targets[missing] + shift, coords)
+    return idx
+
+
 def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
     """Convert lon/lat degrees to the glyph's body-frame unit-sphere ``(N, 3)`` coordinates.
 
@@ -396,7 +425,7 @@ class TexturedGlobe:
         canvas = np.zeros((rows, cols, 4), dtype=float)
         lat_targets, lon_targets = _texture_axes(rows, cols)
         row_idx = _nearest_index(lat_targets, src_lat)
-        col_idx = _nearest_index(lon_targets, src_lon)
+        col_idx = _lon_index(lon_targets, src_lon)
         valid_rows = np.flatnonzero(row_idx >= 0)
         valid_cols = np.flatnonzero(col_idx >= 0)
         if not (valid_rows.size and valid_cols.size):

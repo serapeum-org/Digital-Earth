@@ -119,6 +119,32 @@ class TestFromDataset:
         assert src_lon.min() - tol <= lon.min() and lon.max() <= src_lon.max() + tol
         assert src_lat.min() - tol <= lat.min() and lat.max() <= src_lat.max() + tol
 
+    def test_a_0_360_longitude_axis_drapes_the_whole_world(self):
+        """0-360 is the usual climate/NWP convention; treating it as -180..180 loses half the globe."""
+        arr = np.ones((180, 360), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
+        opaque = (globe.glyph.texture[..., 3] > 0).mean()
+        assert opaque == pytest.approx(1.0), f"a whole-world raster should cover the globe, got {opaque:.3f}"
+
+    def test_a_minus180_longitude_axis_still_drapes_the_whole_world(self):
+        """The conventional frame must be unaffected by the 0-360 handling."""
+        arr = np.ones((180, 360), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
+        assert (globe.glyph.texture[..., 3] > 0).mean() == pytest.approx(1.0)
+
+    def test_a_raster_beyond_the_antimeridian_lands_west(self):
+        """Longitudes 200-210 in the 0-360 frame are -160..-150 on the canvas, not off the edge."""
+        arr = np.ones((10, 10), dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(200.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, shape=(720, 1440))
+        opaque = globe.glyph.texture[..., 3] > 0
+        assert opaque.any(), "a raster stored beyond the antimeridian must still drape"
+        _, lon_axis = _texture_axes(*opaque.shape)
+        lon = lon_axis[np.nonzero(opaque.any(axis=0))[0]]
+        assert -161.0 <= lon.min() and lon.max() <= -149.0, f"landed at lon {lon.min()}..{lon.max()}"
+
     def test_uncovered_cells_stay_transparent(self, dataset):
         """A regional raster leaves the rest of the globe see-through rather than filling it."""
         alpha = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3]
