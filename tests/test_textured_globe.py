@@ -14,7 +14,12 @@ from digitalearth.scene import TexturedGlobe
 from cleopatra.styling.colors import resolve_colormap
 from matplotlib.colors import Normalize
 
-from digitalearth.scene.textured_globe import _nearest_index, _texture_axes
+from digitalearth.scene.textured_globe import (
+    _axis_cell,
+    _cull_per_point,
+    _nearest_index,
+    _texture_axes,
+)
 
 
 @pytest.fixture(scope="module")
@@ -97,6 +102,52 @@ class TestNearestIndex:
         coords = np.array([0.0, 1e-12])
         result = _nearest_index(np.array([0.0, 40.0]), coords)
         assert list(result) == [0, -1], f"a 1e-12 step should degrade to an exact-hit test, got {result}"
+
+
+class TestAxisCell:
+    """The cell size a single-row/column raster borrows from its other axis."""
+
+    def test_uses_its_own_spacing_when_it_has_one(self):
+        assert _axis_cell(np.array([0.0, 2.0, 4.0]), np.array([0.0, 9.0])) == pytest.approx(2.0)
+
+    def test_borrows_the_other_axis_when_it_has_one_cell(self):
+        assert _axis_cell(np.array([5.0]), np.array([0.0, 3.0, 6.0])) == pytest.approx(3.0)
+
+    def test_returns_none_when_neither_axis_has_a_spacing(self):
+        assert _axis_cell(np.array([5.0]), np.array([7.0])) is None
+
+    def test_ignores_a_zero_spacing(self):
+        """Duplicate coordinates give a zero step, which is no more usable than none at all."""
+        assert _axis_cell(np.array([5.0, 5.0]), np.array([0.0, 4.0])) == pytest.approx(4.0)
+
+
+class TestNonUniformAxis:
+    """A grid whose spacing changes cannot be indexed by a single step."""
+
+    def test_a_non_uniform_axis_warns(self):
+        with pytest.warns(RuntimeWarning, match="not evenly spaced"):
+            _nearest_index(np.array([1.0]), np.array([0.0, 1.0, 5.0, 6.0]))
+
+    def test_a_uniform_axis_does_not_warn(self):
+        import warnings as _warnings
+
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            _nearest_index(np.array([1.0]), np.array([0.0, 1.0, 2.0, 3.0]))
+        assert not [w for w in caught if "evenly spaced" in str(w.message)]
+
+
+class TestCullPerPoint:
+    """Which scatter arguments are treated as one-value-per-point."""
+
+    def test_a_shorter_sequence_is_left_alone(self):
+        """Only a sequence matching the point count is per-point; anything else is the caller's business."""
+        keep = np.array([True, False, True])
+        assert _cull_per_point({"s": [1, 2]}, keep)["s"] == [1, 2]
+
+    def test_an_unknown_keyword_is_left_alone(self):
+        keep = np.array([True, False])
+        assert _cull_per_point({"zorder": [1, 2]}, keep)["zorder"] == [1, 2]
 
 
 class TestFromDataset:
@@ -240,6 +291,11 @@ class TestFromDataset:
         monkeypatch.setattr(type(dataset), "epsg", property(lambda self: None))
         globe = TexturedGlobe.from_dataset(dataset, n_lon=2880, n_lat=1440)
         assert (globe.glyph.texture[..., 3] > 0).any(), "a CRS without an EPSG code should still drape"
+
+    def test_a_none_colormap_falls_back_to_viridis(self, dataset):
+        """resolve_colormap returns None only for cmap=None, which must still produce a texture."""
+        globe = TexturedGlobe.from_dataset(dataset, cmap=None, n_lon=2880, n_lat=1440)
+        assert np.isfinite(globe.glyph.texture).all()
 
     def test_reversed_colour_bounds_are_refused(self, dataset):
         """vmax <= vmin was silently discarded and replaced, hiding the caller's mistake."""
