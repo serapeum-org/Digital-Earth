@@ -94,10 +94,20 @@ def _nearest_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float
     # size far below the ~1e-8-degree floor of any real grid), which would otherwise divide into nonsense.
     if step is None or not np.isfinite(step) or np.isclose(step, 0.0):
         return np.where(np.isclose(targets, float(coords[0])), 0, -1)
+    if coords.size > 2 and not np.allclose(np.diff(coords), step, rtol=1e-6):
+        warnings.warn(
+            "the raster's coordinates are not evenly spaced; the drape assumes a uniform grid and will "
+            "misplace cells. Resample it to a regular grid first (pyramids' Dataset.resample).",
+            RuntimeWarning,
+            stacklevel=4,
+        )
     half = abs(step) / 2.0
     lo, hi = min(coords[0], coords[-1]) - half, max(coords[0], coords[-1]) + half
+    # NaN compares False against both bounds, so it lands outside; computing the index first would cast NaN
+    # to an integer and emit numpy's "invalid value encountered in cast" warning on the way.
     inside = (targets >= lo) & (targets <= hi)
-    idx = np.clip(np.rint((targets - float(coords[0])) / step).astype(int), 0, coords.size - 1)
+    offsets = np.where(inside, (targets - float(coords[0])) / step, 0.0)
+    idx = np.clip(np.rint(offsets).astype(int), 0, coords.size - 1)
     return np.where(inside, idx, -1)
 
 
@@ -701,7 +711,8 @@ class TexturedGlobe:
         if self.ax is None:
             raise RuntimeError("draw() the globe before asking which points are visible")
         view = _view_vector(self.ax.elev, self.ax.azim)
-        return np.asarray(np.asarray(world_xyz, dtype=float) @ view > 0.0, dtype=bool)
+        points = np.atleast_2d(np.asarray(world_xyz, dtype=float))
+        return np.asarray(points @ view > 0.0, dtype=bool).ravel()
 
     # ------------------------------------------------------------------ rendering
 
