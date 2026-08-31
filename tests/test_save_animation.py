@@ -116,6 +116,17 @@ class TestDerivedGif:
         with pytest.raises(ValueError, match="must be one of"):
             save_animation(anim, path, gif="clip.gif")
 
+    @pytest.mark.parametrize("path", ["clip.webp", "clip.gif"])
+    def test_a_pillow_written_source_is_refused(self, anim, calls, path):
+        """Pillow ignores pix_fmt, so the full-chroma intermediate cannot be delivered for these."""
+        with pytest.raises(ValueError, match="already a GIF|must be one of"):
+            save_animation(anim, path, gif="clip.gif")
+
+    def test_a_gif_options_rate_is_rounded_like_the_video_rate(self, anim, calls):
+        """Spelling the rate via gif_options bypassed the single-rounding invariant."""
+        save_animation(anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 4.6})
+        assert calls["gif"][0][2]["fps"] == 5, f"expected the rate rounded to 5, got {calls['gif'][0][2]['fps']}"
+
     def test_a_non_gif_derived_path_is_refused(self, anim, calls):
         with pytest.raises(ValueError, match="must end in"):
             save_animation(anim, "clip.mp4", gif="clip.webm")

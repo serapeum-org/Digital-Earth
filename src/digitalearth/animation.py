@@ -28,10 +28,15 @@ FULL_CHROMA_PIX_FMT = "yuv444p"
 #: Frames per second used when neither the caller nor the scene supplies one.
 DEFAULT_FPS = 12.0
 
-#: Container suffixes a GIF can be derived from: cleopatra's own supported formats, minus GIF itself.
+#: Formats cleopatra writes with Pillow rather than ffmpeg. They ignore ``pix_fmt``, so the full-chroma
+#: intermediate this module promises cannot be delivered for them — which makes them unfit to derive a GIF
+#: from, GIF itself included.
+_PILLOW_WRITTEN = frozenset({"gif", "webp"})
+
+#: Container suffixes a GIF can be derived from: cleopatra's own supported formats, minus the Pillow ones.
 #: Derived from ``SUPPORTED_VIDEO_FORMAT`` rather than hand-listed, so it cannot drift from what the writer
 #: actually accepts — a hand-kept list previously admitted .mkv and .m4v, which cleopatra rejects.
-VIDEO_SUFFIXES = tuple(f".{fmt}" for fmt in SUPPORTED_VIDEO_FORMAT if fmt != "gif")
+VIDEO_SUFFIXES = tuple(f".{fmt}" for fmt in SUPPORTED_VIDEO_FORMAT if fmt not in _PILLOW_WRITTEN)
 
 
 def _encoder_fps(fps: Any) -> int:
@@ -128,7 +133,12 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
     # Full chroma in the intermediate so the GIF palette is not built from subsampled colour.
     kwargs.setdefault("pix_fmt", FULL_CHROMA_PIX_FMT)
     _cleopatra_save_animation(anim, video_path, fps=rate, **kwargs)
-    gif_from_video(video_path, gif_path, **{"fps": rate, **(gif_options or {})})
+    gif_kwargs = dict(gif_options or {})
+    if "fps" in gif_kwargs:
+        # Round it the same way the video's rate was, so the documented "one rate, rounded once" invariant
+        # holds however the caller spells it.
+        gif_kwargs["fps"] = _encoder_fps(gif_kwargs["fps"])
+    gif_from_video(video_path, gif_path, **{"fps": rate, **gif_kwargs})
     return video_path, gif_path
 
 
