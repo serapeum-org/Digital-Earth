@@ -83,4 +83,5 @@ def test_stamped_figure_saves(tmp_path, mark):
     scene.stamp(mark, frac=0.2, shadow=False)
     out = tmp_path / "stamped.png"
     scene.save(str(out), bbox_inches=None)
-    assert out.exists() and out.stat().st_size > 0
+    assert out.exists(), f"{out} was not written"
+    assert out.stat().st_size > 0, f"{out} is empty"

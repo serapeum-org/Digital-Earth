@@ -45,11 +45,13 @@ class TestTextureAxes:
 
     def test_rows_run_north_to_south(self):
         lat, _ = _texture_axes(5, 9)
-        assert lat[0] == 90.0 and lat[-1] == -90.0
+        assert lat[0] == 90.0, f"row 0 should be +90, got {lat[0]}"
+        assert lat[-1] == -90.0, f"the last row should be -90, got {lat[-1]}"
 
     def test_columns_run_west_to_east(self):
         _, lon = _texture_axes(5, 9)
-        assert lon[0] == -180.0 and lon[-1] == 180.0
+        assert lon[0] == -180.0, f"column 0 should be -180, got {lon[0]}"
+        assert lon[-1] == 180.0, f"the last column should be +180, got {lon[-1]}"
 
 
 class TestCullPerPoint:
@@ -85,8 +87,10 @@ class TestFromDataset:
         lonlat = dataset.to_crs(4326)
         src_lon, src_lat = np.asarray(lonlat.x, dtype=float), np.asarray(lonlat.y, dtype=float)
         tol = 0.25  # a canvas cell (0.125 deg) plus the source's own half-cell
-        assert src_lon.min() - tol <= lon.min() and lon.max() <= src_lon.max() + tol
-        assert src_lat.min() - tol <= lat.min() and lat.max() <= src_lat.max() + tol
+        assert src_lon.min() - tol <= lon.min(), f"drape starts west of the source: {lon.min()}"
+        assert lon.max() <= src_lon.max() + tol, f"drape ends east of the source: {lon.max()}"
+        assert src_lat.min() - tol <= lat.min(), f"drape starts south of the source: {lat.min()}"
+        assert lat.max() <= src_lat.max() + tol, f"drape ends north of the source: {lat.max()}"
 
     def test_a_0_360_longitude_axis_drapes_the_whole_world(self):
         """0-360 is the usual climate/NWP convention; treating it as -180..180 loses half the globe.
@@ -129,7 +133,8 @@ class TestFromDataset:
         assert opaque.any(), "a raster stored beyond the antimeridian must still drape"
         _, lon_axis = _texture_axes(*opaque.shape)
         lon = lon_axis[np.nonzero(opaque.any(axis=0))[0]]
-        assert -161.0 <= lon.min() and lon.max() <= -149.0, f"landed at lon {lon.min()}..{lon.max()}"
+        assert -161.0 <= lon.min(), f"drape starts too far west: {lon.min()}"
+        assert lon.max() <= -149.0, f"drape ends too far east: {lon.max()}"
 
     def test_a_single_row_raster_drapes(self):
         """One row has no latitude spacing of its own; borrowing the column spacing keeps it visible."""
@@ -346,11 +351,13 @@ class TestFromProvider:
         """The same keyword must not mean the mesh in one constructor and the texture in another."""
         globe = TexturedGlobe.from_provider(texture_n_lon=720, n_lon=48, n_lat=24)
         assert fetched["kwargs"]["n_lon"] == 720, "texture_n_lon should size the fetched grid"
-        assert globe.glyph.n_lon == 48 and globe.glyph.n_lat == 24, "n_lon should size the sphere mesh"
+        assert globe.glyph.n_lon == 48, "n_lon should size the sphere mesh"
+        assert globe.glyph.n_lat == 24, "n_lat should size the sphere mesh"
 
     def test_mesh_size_is_not_leaked_to_the_fetcher(self, fetched):
         TexturedGlobe.from_provider(n_lon=48, n_lat=24)
-        assert "n_lon" not in fetched["kwargs"] and "n_lat" not in fetched["kwargs"]
+        assert "n_lon" not in fetched["kwargs"], "the mesh size must not reach the fetcher"
+        assert "n_lat" not in fetched["kwargs"], "the mesh size must not reach the fetcher"
 
 
 class TestProject:
@@ -413,7 +420,8 @@ class TestVisibility:
     def test_the_camera_facing_hemisphere_is_visible(self, globe):
         globe.draw(elev=0.0, azim=0.0)
         near, far = np.array([[1.0, 0.0, 0.0]]), np.array([[-1.0, 0.0, 0.0]])
-        assert globe.visible(near)[0] and not globe.visible(far)[0]
+        assert globe.visible(near)[0], "the camera-facing point should be visible"
+        assert not globe.visible(far)[0], "the point behind the globe should not be"
 
 
 class TestPoints:
@@ -524,9 +532,8 @@ class TestPoints:
         """The fixture is UTM 18N; its coordinates must become lon/lat before they reach the sphere."""
         assert points_fc.epsg == 32618, "fixture precondition: the points are in a projected CRS"
         lon, lat = TexturedGlobe._as_lonlat(points_fc, None)
-        assert np.all(np.abs(lon) <= 180) and np.all(np.abs(lat) <= 90), (
-            f"coordinates are still projected: lon {lon.min()}..{lon.max()}, lat {lat.min()}..{lat.max()}"
-        )
+        assert np.all(np.abs(lon) <= 180), f"longitudes are still projected: {lon.min()}..{lon.max()}"
+        assert np.all(np.abs(lat) <= 90), f"latitudes are still projected: {lat.min()}..{lat.max()}"
 
     def test_a_lonlat_feature_collection_passes_through(self, points_fc):
         """Already in 4326, so the reprojection branch must be skipped rather than re-warping."""
@@ -554,7 +561,8 @@ class TestPoints:
             lon, lat = TexturedGlobe._as_lonlat(frame, None)
         geographic = [w for w in caught if "geographic CRS" in str(w.message)]
         assert not geographic, f"centroids should be taken in the projected CRS: {geographic}"
-        assert -180.0 <= lon[0] <= 180.0 and -90.0 <= lat[0] <= 90.0
+        assert -180.0 <= lon[0] <= 180.0, f"longitude out of range: {lon[0]}"
+        assert -90.0 <= lat[0] <= 90.0, f"latitude out of range: {lat[0]}"
 
     def test_a_crs_without_an_epsg_code_is_accepted(self):
         """`.epsg` is None for a valid CRS with no authority code; only a missing CRS is unplaceable."""
@@ -562,7 +570,8 @@ class TestPoints:
         mollweide = "+proj=moll +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
         frame = FeatureCollection(geometry=[square], crs=mollweide)
         lon, lat = TexturedGlobe._as_lonlat(frame, None)
-        assert np.isfinite(lon).all() and np.isfinite(lat).all()
+        assert np.isfinite(lon).all(), "longitudes should all be finite"
+        assert np.isfinite(lat).all(), "latitudes should all be finite"
 
     def test_a_feature_collection_without_a_crs_is_refused(self):
         """With no CRS the coordinates cannot be placed on the sphere, so fail rather than assume 4326."""
@@ -581,12 +590,15 @@ class TestRenderLifecycle:
 
     def test_draw_records_the_figure_and_axes(self, globe):
         fig, ax = globe.draw(spin=15.0)
-        assert globe.fig is fig and globe.ax is ax and ax.name == "3d"
+        assert globe.fig is fig, "draw() should record the figure"
+        assert globe.ax is ax, "draw() should record the axes"
+        assert ax.name == "3d", f"expected a 3-D axes, got {ax.name}"
 
     def test_animate_records_the_figure_axes_and_rate(self, globe):
         anim = globe.animate(n_frames=2, interval=100)
         assert anim is not None
-        assert globe.ax is not None and globe.fig is not None
+        assert globe.ax is not None, "animate() should record the axes"
+        assert globe.fig is not None, "animate() should record the figure"
         assert globe._animation_fps == pytest.approx(10.0)
 
     def test_close_releases_the_figure(self, globe):
@@ -596,7 +608,8 @@ class TestRenderLifecycle:
         assert len(plt.get_fignums()) == 1
         globe.close()
         assert plt.get_fignums() == [], "close() should release the figure"
-        assert globe.fig is None and globe.ax is None
+        assert globe.fig is None, "close() should clear the figure"
+        assert globe.ax is None, "close() should clear the axes"
 
     def test_close_leaves_a_caller_supplied_figure_alone(self, globe):
         """The caller may have other subplots on that figure; it is not ours to close."""
@@ -638,11 +651,18 @@ class TestRenderLifecycle:
         assert plt.get_fignums() == [], "leaving the block should close the figure"
 
     def test_the_context_manager_propagates_errors(self, flat_texture):
-        """It must not swallow an exception raised inside the block."""
-        with pytest.raises(RuntimeError, match="boom"):
-            with TexturedGlobe(flat_texture, n_lon=8, n_lat=4) as globe:
-                globe.draw()
+        """It must not swallow an exception raised inside the block, and must still close the figure."""
+        plt.close("all")
+        globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4)
+        globe.draw()
+
+        def raise_inside() -> None:
+            with globe:
                 raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            raise_inside()
+        assert plt.get_fignums() == [], "the figure should be closed even when the block raised"
 
     def test_animating_twice_does_not_leak_the_first_figure(self, globe):
         """animate() creates its own figure when given no axes, so the previous one must be released."""
@@ -664,7 +684,8 @@ class TestRenderLifecycle:
         globe.draw()
         out = tmp_path / "globe.png"
         globe.save(str(out))
-        assert out.exists() and out.stat().st_size > 0
+        assert out.exists(), f"{out} was not written"
+        assert out.stat().st_size > 0, f"{out} is empty"
 
     def test_saving_an_animation_before_animating_is_refused(self, globe, tmp_path):
         with pytest.raises(RuntimeError, match="no animation"):
@@ -677,7 +698,8 @@ class TestRenderLifecycle:
                             lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path)
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", gif="globe.gif")
-        assert seen["path"] == "globe.mp4" and seen["gif"] == "globe.gif"
+        assert seen["path"] == "globe.mp4", "the video path should be forwarded"
+        assert seen["gif"] == "globe.gif", "the gif path should be forwarded"
         assert seen["anim"] is globe._animation, "the saver must receive this globe's animation"
 
     def test_save_animation_defaults_to_the_animations_own_rate(self, globe, monkeypatch):

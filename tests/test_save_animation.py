@@ -61,7 +61,8 @@ class TestDirectSave:
 
     def test_forwards_encoder_options(self, anim, calls):
         save_animation(anim, "clip.mp4", crf=20, codec="libx264")
-        assert calls["save"][0][1]["crf"] == 20 and calls["save"][0][1]["codec"] == "libx264"
+        assert calls["save"][0][1]["crf"] == 20, "crf should be forwarded"
+        assert calls["save"][0][1]["codec"] == "libx264", "codec should be forwarded"
 
 
 class TestDerivedGif:
@@ -73,7 +74,8 @@ class TestDerivedGif:
     def test_derives_the_gif_from_the_written_video(self, anim, calls):
         save_animation(anim, "clip.mp4", gif="clip.gif")
         src, out, _ = calls["gif"][0]
-        assert src == "clip.mp4" and out == "clip.gif"
+        assert src == "clip.mp4", f"the GIF should be derived from the video, got {src}"
+        assert out == "clip.gif", f"the GIF should be written to clip.gif, got {out}"
 
     def test_the_animation_is_rendered_only_once(self, anim, calls):
         save_animation(anim, "clip.mp4", gif="clip.gif")
@@ -94,7 +96,8 @@ class TestDerivedGif:
 
     def test_gif_options_override_the_inherited_rate(self, anim, calls):
         save_animation(anim, "clip.mp4", fps=9, gif="clip.gif", gif_options={"fps": 4, "max_colors": 64})
-        assert calls["gif"][0][2]["fps"] == 4 and calls["gif"][0][2]["max_colors"] == 64
+        assert calls["gif"][0][2]["fps"] == 4, "gif_options should override the inherited rate"
+        assert calls["gif"][0][2]["max_colors"] == 64, "gif_options should be forwarded"
 
     @pytest.mark.parametrize("fps", [2.5, 7.4, 0.6, 12])
     def test_the_video_and_the_gif_share_one_frame_rate(self, anim, calls, fps):
@@ -187,4 +190,5 @@ def test_a_real_gif_is_written_end_to_end(tmp_path):
     anim = FuncAnimation(fig, lambda i: ax.imshow(frames[i]), frames=2, interval=200, blit=False)
     out = tmp_path / "clip.gif"
     assert save_animation(anim, str(out), fps=2) == str(out)
-    assert out.exists() and out.stat().st_size > 0
+    assert out.exists(), f"{out} was not written"
+    assert out.stat().st_size > 0, f"{out} is empty"
