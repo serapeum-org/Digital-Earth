@@ -485,31 +485,29 @@ class TexturedGlobe:
     # ------------------------------------------------------------------ texture building
 
     @staticmethod
-    def _colorize(values: np.ndarray, *, cmap: Any, vmin: Optional[float],
-                  vmax: Optional[float]) -> np.ndarray:
-        """Colour-map a NaN-masked 2-D band to an ``(H, W, 4)`` float RGBA array, NaN cells transparent.
+    def _resolve_colour_bounds(good: np.ndarray, vmin: Optional[float],
+                               vmax: Optional[float]) -> Tuple[float, float]:
+        """Settle the colour scale's ``(lo, hi)`` from the caller's bounds and the band's finite values.
+
+        A bound the caller gives always wins; a bound they leave out comes from the data. What this owns
+        beyond that is rejecting the combinations that leave nothing to colour, rather than quietly
+        substituting a range the caller never asked for and returning a plausible-looking image from it.
 
         Args:
-            values: The band, with nodata already masked to ``NaN``.
-            cmap: Colormap name or ``Colormap``, resolved by cleopatra; falls back to ``"viridis"``.
-            vmin: Lower bound of the colour scale, or ``None`` to take the band's finite minimum.
-            vmax: Upper bound of the colour scale, or ``None`` to take the band's finite maximum.
+            good: The band's finite values, already stripped of nodata. May be empty.
+            vmin: Lower bound, or ``None`` to take the band's minimum.
+            vmax: Upper bound, or ``None`` to take the band's maximum.
 
         Returns:
-            An ``(H, W, 4)`` float RGBA array in ``[0, 1]``, with alpha ``0`` wherever ``values`` is not
-            finite. A constant band is widened to a unit range so the normalisation cannot divide by zero.
+            The ``(lo, hi)`` pair to normalise against, with ``hi > lo`` guaranteed.
 
         Raises:
-            ValueError: If both bounds are given and ``vmax`` is not greater than ``vmin``.
-
-        Warns:
-            RuntimeWarning: If no cell of the band is finite, so the result is entirely transparent.
+            ValueError: If both bounds are given and ``vmax <= vmin``, or if a single given bound sits
+                outside the data on the wrong side, leaving no range.
         """
         if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
             raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
-        good = finite(values)
         if good.size:
-            # A single bound on the wrong side of the data inverts the range just as surely as passing both.
             if vmax is None and vmin is not None and float(vmin) >= float(good.max()):
                 raise ValueError(
                     f"vmin={vmin!r} is at or above the band's maximum ({float(good.max())!r}), so there is "
@@ -520,21 +518,59 @@ class TexturedGlobe:
                     f"vmax={vmax!r} is at or below the band's minimum ({float(good.min())!r}), so there is "
                     "no range to colour. Raise vmax, or pass vmin as well."
                 )
+
+        if vmin is not None:
+            lo = float(vmin)
+        elif good.size:
+            lo = float(good.min())
+        else:
+            lo = 0.0
+
+        if vmax is not None:
+            hi = float(vmax)
+        elif good.size:
+            hi = float(good.max())
+        else:
+            hi = 1.0
+
+        if hi <= lo:  # a constant band has no range to normalise against
+            hi = lo + 1.0
+        return lo, hi
+
+    @classmethod
+    def _colorize(cls, values: np.ndarray, *, cmap: Any, vmin: Optional[float],
+                  vmax: Optional[float]) -> np.ndarray:
+        """Colour-map a NaN-masked 2-D band to an ``(H, W, 4)`` float RGBA array, NaN cells transparent.
+
+        Args:
+            values: The band, with nodata already masked to ``NaN``.
+            cmap: Colormap name or ``Colormap``, resolved by cleopatra; ``None`` falls back to viridis.
+            vmin: Lower bound of the colour scale, or ``None`` to take the band's finite minimum.
+            vmax: Upper bound of the colour scale, or ``None`` to take the band's finite maximum.
+
+        Returns:
+            An ``(H, W, 4)`` float RGBA array in ``[0, 1]``, with alpha ``0`` wherever ``values`` is not
+            finite.
+
+        Raises:
+            ValueError: If the colour bounds leave no range — see :meth:`_resolve_colour_bounds`.
+
+        Warns:
+            RuntimeWarning: If no cell of the band is finite, so the result is entirely transparent.
+        """
+        good = finite(values)
         if not good.size:
             warnings.warn(
                 "every cell of this band is nodata or non-finite, so the globe will be fully transparent.",
                 RuntimeWarning,
                 stacklevel=4,
             )
-        lo = float(good.min()) if vmin is None and good.size else (0.0 if vmin is None else float(vmin))
-        hi = float(good.max()) if vmax is None and good.size else (1.0 if vmax is None else float(vmax))
-        if hi <= lo:  # a constant band has no range to normalise against
-            hi = lo + 1.0
+        lo, hi = cls._resolve_colour_bounds(good, vmin, vmax)
         colormap = resolve_colormap(cmap)
         if colormap is None:  # resolve_colormap returns None only for cmap=None
             colormap = resolve_colormap("viridis")
-        rgba = colormap(Normalize(vmin=lo, vmax=hi)(np.asarray(values, dtype=float)))
-        rgba = np.asarray(rgba, dtype=float).copy()
+        rgba = np.asarray(colormap(Normalize(vmin=lo, vmax=hi)(np.asarray(values, dtype=float))),
+                          dtype=float).copy()
         rgba[..., 3] = np.where(np.isfinite(values), rgba[..., 3], 0.0)
         return rgba
 
