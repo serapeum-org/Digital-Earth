@@ -150,6 +150,56 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
     )
 
 
+#: ``Axes3D.scatter`` arguments that may carry one value per point, and so have to be culled alongside the
+#: points themselves when the far side is hidden. Anything left whole would silently shift onto the wrong
+#: points (``linewidths``) or make matplotlib reject the call outright (``color``, ``c``).
+_PER_POINT_SCATTER_KEYS = (
+    "c", "s", "color", "facecolor", "facecolors", "edgecolor", "edgecolors",
+    "linewidth", "linewidths", "alpha", "marker", "hatch",
+)
+
+#: The subset of those that take colours, where a bare 3- or 4-tuple of numbers is one RGB(A) value rather
+#: than one value per point. Only these are exempt from culling on a length match; ``linewidths=[1, 2, 3, 4]``
+#: is four widths, not a colour, and must be culled like any other per-point sequence.
+_COLOUR_SCATTER_KEYS = frozenset(
+    {"c", "color", "facecolor", "facecolors", "edgecolor", "edgecolors"}
+)
+
+
+def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
+    """Drop the hidden points' entries from every per-point scatter argument.
+
+    Only a sequence whose length matches the point count is treated as per-point; a scalar (``color="red"``,
+    ``s=30``) applies to every point and is passed through untouched. A bare RGB(A) **tuple** on a colour
+    argument is passed through as well — ``color=(1.0, 0.0, 0.0, 1.0)`` is one colour, not one per point, and
+    slicing it would silently change it. That exemption is limited to colour arguments and to tuples, so
+    ``linewidths=[1, 2, 3, 4]`` is still four widths and is culled like anything else.
+
+    Args:
+        kwargs: The scatter keyword arguments as the caller supplied them.
+        keep: Boolean mask of the points that survive the far-side cull.
+
+    Returns:
+        A new mapping with every per-point sequence reduced to the kept points.
+    """
+    culled = dict(kwargs)
+    for key in _PER_POINT_SCATTER_KEYS:
+        value = culled.get(key)
+        if not isinstance(value, (list, tuple, np.ndarray)):
+            continue
+        if len(value) != keep.size:
+            continue
+        if (
+            key in _COLOUR_SCATTER_KEYS
+            and isinstance(value, tuple)
+            and len(value) in (3, 4)
+            and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in value)
+        ):
+            continue  # a bare RGB/RGBA tuple that happens to match the point count
+        culled[key] = np.asarray(value, dtype=object if key in ("marker", "hatch") else None)[keep]
+    return culled
+
+
 def _view_vector(elev: float, azim: float) -> np.ndarray:
     """Unit vector pointing from the sphere's centre toward the camera at ``elev``/``azim`` degrees.
 
@@ -700,10 +750,7 @@ class TexturedGlobe:
         if hide_far_side:
             keep = self.visible(world)
             world = world[keep]
-            for key in ("c", "s"):
-                value = kwargs.get(key)
-                if isinstance(value, (list, tuple, np.ndarray)) and len(value) == keep.size:
-                    kwargs[key] = np.asarray(value)[keep]
+            kwargs = _cull_per_point(kwargs, keep)
         return self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **kwargs)
 
     @staticmethod

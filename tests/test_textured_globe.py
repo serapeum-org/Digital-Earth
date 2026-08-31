@@ -317,6 +317,46 @@ class TestPoints:
         collection = globe.points([0.0, 180.0], lat=[0.0, 0.0], c=[1.0, 2.0], hide_far_side=True)
         assert len(collection.get_offsets()) == 1
 
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            pytest.param({"color": ["r", "g", "b", "y"]}, id="color"),
+            pytest.param({"c": [1.0, 2.0, 3.0, 4.0]}, id="c"),
+            pytest.param({"edgecolors": ["r", "g", "b", "y"]}, id="edgecolors"),
+            pytest.param({"facecolors": ["r", "g", "b", "y"]}, id="facecolors"),
+            pytest.param({"linewidths": [1.0, 2.0, 3.0, 4.0]}, id="linewidths"),
+            pytest.param({"s": [10, 20, 30, 40]}, id="s"),
+            pytest.param({"alpha": [0.1, 0.2, 0.3, 0.4]}, id="alpha"),
+        ],
+    )
+    def test_every_per_point_argument_is_culled(self, globe, kwargs):
+        """Any per-point sequence left whole either crashes the call or shifts onto the wrong points."""
+        globe.draw(elev=0.0, azim=0.0)
+        collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0, 0.0, 0.0, 0.0], **kwargs)
+        assert len(collection.get_offsets()) == 3, f"{kwargs} should leave 3 near-side points"
+
+    def test_per_point_linewidths_are_reduced_not_just_accepted(self, globe):
+        """A surviving 4th width would silently shift every width onto the wrong point."""
+        globe.draw(elev=0.0, azim=0.0)
+        collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4,
+                                  linewidths=[1.0, 2.0, 3.0, 4.0])
+        widths = np.atleast_1d(collection.get_linewidths())
+        assert len(widths) == 3, f"expected 3 widths for 3 drawn points, got {len(widths)}"
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            pytest.param({"color": "red"}, id="scalar-name"),
+            pytest.param({"color": (1.0, 0.0, 0.0, 1.0)}, id="rgba-tuple"),
+            pytest.param({"s": 30}, id="scalar-size"),
+        ],
+    )
+    def test_scalar_arguments_pass_through_unculled(self, globe, kwargs):
+        """A single colour or size applies to every point; slicing it would change what was asked for."""
+        globe.draw(elev=0.0, azim=0.0)
+        collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, **kwargs)
+        assert len(collection.get_offsets()) == 3, f"{kwargs} should still draw the 3 near-side points"
+
     def test_a_feature_collection_is_accepted(self, globe, points_fc):
         globe.draw()
         assert globe.points(points_fc) is not None
