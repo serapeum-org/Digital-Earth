@@ -11,6 +11,9 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.scene import TexturedGlobe
+from cleopatra.styling.colors import resolve_colormap
+from matplotlib.colors import Normalize
+
 from digitalearth.scene.textured_globe import _nearest_index, _texture_axes
 
 
@@ -176,13 +179,53 @@ class TestFromDataset:
         assert (alpha == 0).sum() > alpha.size * 0.9
 
     def test_nodata_cells_are_transparent(self):
-        """A nodata cell must not be coloured as if it held data."""
+        """The nodata cell must be transparent while its neighbours are opaque, at its own lon/lat."""
         arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326,
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326,
                                        no_data_value=-9999.0)
-        globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
+        globe = TexturedGlobe.from_dataset(ds, shape=(720, 1440))
         alpha = globe.glyph.texture[..., 3]
-        assert (alpha > 0).any(), "the valid cells should still drape"
+        lat_axis, lon_axis = _texture_axes(*alpha.shape)
+
+        def alpha_at(lon: float, lat: float) -> float:
+            return float(alpha[int(np.abs(lat_axis - lat).argmin()), int(np.abs(lon_axis - lon).argmin())])
+
+        assert alpha_at(5.0, 15.0) > 0, "the top-left valid cell should be opaque"
+        assert alpha_at(15.0, 15.0) == 0, "the top-right cell is nodata and must be transparent"
+        assert alpha_at(5.0, 5.0) > 0, "the bottom-left valid cell should be opaque"
+        assert alpha_at(15.0, 5.0) > 0, "the bottom-right valid cell should be opaque"
+
+    def test_nodata_is_transparent_even_under_an_opaque_bad_colour(self):
+        """matplotlib's default 'bad' colour is already transparent, so only an opaque one tests our own
+        masking. A colormap with set_bad opaque must still leave nodata see-through."""
+        cmap = resolve_colormap("viridis").copy()
+        cmap.set_bad("red", alpha=1.0)
+        arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326,
+                                       no_data_value=-9999.0)
+        globe = TexturedGlobe.from_dataset(ds, cmap=cmap, shape=(720, 1440))
+        alpha = globe.glyph.texture[..., 3]
+        lat_axis, lon_axis = _texture_axes(*alpha.shape)
+        r = int(np.abs(lat_axis - 15.0).argmin())
+        c = int(np.abs(lon_axis - 15.0).argmin())
+        assert alpha[r, c] == 0, "the nodata cell must be transparent whatever the colormap's bad colour is"
+
+    def test_the_drape_is_not_transposed_or_shifted(self):
+        """Pin the orientation: a distinctive value must land at its own lon/lat, not a mirrored one."""
+        arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
+        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326)
+        globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=1.0, vmax=4.0, shape=(720, 1440))
+        texture = globe.glyph.texture
+        lat_axis, lon_axis = _texture_axes(*texture.shape[:2])
+        expected = resolve_colormap("viridis")(Normalize(vmin=1.0, vmax=4.0)(arr))
+
+        for row, lat in enumerate((15.0, 5.0)):
+            for col, lon in enumerate((5.0, 15.0)):
+                r = int(np.abs(lat_axis - lat).argmin())
+                c = int(np.abs(lon_axis - lon).argmin())
+                assert np.allclose(texture[r, c, :3], expected[row, col, :3], atol=1e-6), (
+                    f"cell ({row}, {col}) should appear at lon {lon}, lat {lat}"
+                )
 
     def test_a_dataset_without_a_crs_is_refused(self, dataset, monkeypatch):
         """Without a CRS there is no way to place the raster, so fail loudly instead of guessing 4326."""
