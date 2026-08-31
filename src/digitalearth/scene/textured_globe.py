@@ -485,13 +485,44 @@ class TexturedGlobe:
     # ------------------------------------------------------------------ texture building
 
     @staticmethod
-    def _resolve_colour_bounds(good: np.ndarray, vmin: Optional[float],
+    def _validate_colour_bounds(good: np.ndarray, vmin: Optional[float], vmax: Optional[float]) -> None:
+        """Reject bound combinations that leave nothing to colour.
+
+        Separated from resolving the bounds because it answers a different question: not "what scale do we
+        use" but "is what the caller asked for coherent at all". Quietly substituting a workable range
+        instead would return a plausible image drawn from a scale nobody chose.
+
+        Args:
+            good: The band's finite values, already stripped of nodata. May be empty.
+            vmin: Lower bound, or ``None``.
+            vmax: Upper bound, or ``None``.
+
+        Raises:
+            ValueError: If both bounds are given and ``vmax <= vmin``, or if a single given bound sits
+                outside the data on the wrong side.
+        """
+        if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
+            raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
+        if not good.size:
+            return
+        if vmax is None and vmin is not None and float(vmin) >= float(good.max()):
+            raise ValueError(
+                f"vmin={vmin!r} is at or above the band's maximum ({float(good.max())!r}), so there is no "
+                "range to colour. Lower vmin, or pass vmax as well."
+            )
+        if vmin is None and vmax is not None and float(vmax) <= float(good.min()):
+            raise ValueError(
+                f"vmax={vmax!r} is at or below the band's minimum ({float(good.min())!r}), so there is no "
+                "range to colour. Raise vmax, or pass vmin as well."
+            )
+
+    @classmethod
+    def _resolve_colour_bounds(cls, good: np.ndarray, vmin: Optional[float],
                                vmax: Optional[float]) -> Tuple[float, float]:
         """Settle the colour scale's ``(lo, hi)`` from the caller's bounds and the band's finite values.
 
-        A bound the caller gives always wins; a bound they leave out comes from the data. What this owns
-        beyond that is rejecting the combinations that leave nothing to colour, rather than quietly
-        substituting a range the caller never asked for and returning a plausible-looking image from it.
+        A bound the caller gives always wins; a bound they leave out comes from the data, or from a unit
+        fallback when there is no finite data to take it from.
 
         Args:
             good: The band's finite values, already stripped of nodata. May be empty.
@@ -502,37 +533,11 @@ class TexturedGlobe:
             The ``(lo, hi)`` pair to normalise against, with ``hi > lo`` guaranteed.
 
         Raises:
-            ValueError: If both bounds are given and ``vmax <= vmin``, or if a single given bound sits
-                outside the data on the wrong side, leaving no range.
+            ValueError: If the bounds leave no range — see :meth:`_validate_colour_bounds`.
         """
-        if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
-            raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
-        if good.size:
-            if vmax is None and vmin is not None and float(vmin) >= float(good.max()):
-                raise ValueError(
-                    f"vmin={vmin!r} is at or above the band's maximum ({float(good.max())!r}), so there is "
-                    "no range to colour. Lower vmin, or pass vmax as well."
-                )
-            if vmin is None and vmax is not None and float(vmax) <= float(good.min()):
-                raise ValueError(
-                    f"vmax={vmax!r} is at or below the band's minimum ({float(good.min())!r}), so there is "
-                    "no range to colour. Raise vmax, or pass vmin as well."
-                )
-
-        if vmin is not None:
-            lo = float(vmin)
-        elif good.size:
-            lo = float(good.min())
-        else:
-            lo = 0.0
-
-        if vmax is not None:
-            hi = float(vmax)
-        elif good.size:
-            hi = float(good.max())
-        else:
-            hi = 1.0
-
+        cls._validate_colour_bounds(good, vmin, vmax)
+        lo = float(vmin) if vmin is not None else (float(good.min()) if good.size else 0.0)
+        hi = float(vmax) if vmax is not None else (float(good.max()) if good.size else 1.0)
         if hi <= lo:  # a constant band has no range to normalise against
             hi = lo + 1.0
         return lo, hi
