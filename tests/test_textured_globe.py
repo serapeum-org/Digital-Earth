@@ -223,7 +223,8 @@ class TestFromDataset:
             for col, lon in enumerate((5.0, 15.0)):
                 r = int(np.abs(lat_axis - lat).argmin())
                 c = int(np.abs(lon_axis - lon).argmin())
-                assert np.allclose(texture[r, c, :3], expected[row, col, :3], atol=1e-6), (
+                # The texture is 8-bit, so one colour step (1/255) is the tightest meaningful tolerance.
+                assert np.allclose(texture[r, c, :3], expected[row, col, :3], atol=1.0 / 255), (
                     f"cell ({row}, {col}) should appear at lon {lon}, lat {lat}"
                 )
 

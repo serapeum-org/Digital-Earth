@@ -153,6 +153,22 @@ def _lon_index(targets: np.ndarray, coords: np.ndarray, cell: Optional[float] = 
     return idx
 
 
+def _as_byte_texture(rgba: np.ndarray) -> np.ndarray:
+    """Convert a float RGBA canvas in ``[0, 1]`` to ``uint8``, which is what a texture actually needs.
+
+    A whole-globe canvas at the default 0.125-degree resolution is 1440 x 2880 x 4. Held as ``float64`` that
+    is 133 MB, and the glyph then keeps its own normalised copy, so a single globe cost around 265 MB at peak.
+    Colour is 8-bit on the way to the screen regardless, so the extra 56 bits per channel buy nothing.
+
+    Args:
+        rgba: A float RGBA array with values in ``[0, 1]``.
+
+    Returns:
+        The same image as ``uint8`` in ``[0, 255]``, one quarter the size.
+    """
+    return np.clip(np.rint(rgba * 255.0), 0, 255).astype(np.uint8)
+
+
 def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
     """Convert lon/lat degrees to the glyph's body-frame unit-sphere ``(N, 3)`` coordinates.
 
@@ -550,9 +566,9 @@ class TexturedGlobe:
                 RuntimeWarning,
                 stacklevel=3,
             )
-            return canvas
+            return _as_byte_texture(canvas)
         canvas[np.ix_(valid_rows, valid_cols)] = rgba[np.ix_(row_idx[valid_rows], col_idx[valid_cols])]
-        return canvas
+        return _as_byte_texture(canvas)
 
     # ------------------------------------------------------------------ geometry
 
