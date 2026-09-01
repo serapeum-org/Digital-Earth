@@ -40,7 +40,7 @@ _PILLOW_WRITTEN = frozenset({"gif", "webp"})
 VIDEO_SUFFIXES = tuple(f".{fmt}" for fmt in SUPPORTED_VIDEO_FORMAT if fmt not in _PILLOW_WRITTEN)
 
 
-def _encoder_fps(fps: Any) -> int:
+def _encoder_fps(fps: Any, *, name: str = "fps") -> int:
     """Round a frame rate to the whole number both encoders will actually use.
 
     cleopatra's ``save_animation`` types ``fps`` as an ``int``, so a fractional rate has to be rounded
@@ -50,6 +50,8 @@ def _encoder_fps(fps: Any) -> int:
 
     Args:
         fps: The requested frame rate.
+        name: The parameter name to quote in an error, so a value that arrived via ``gif_options`` is not
+            reported as though it were the top-level ``fps``.
 
     Returns:
         The frame rate as a positive whole number of frames per second.
@@ -61,14 +63,14 @@ def _encoder_fps(fps: Any) -> int:
     try:
         rate = float(fps)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"fps must be a number, got {fps!r}") from exc
+        raise ValueError(f"{name} must be a number, got {fps!r}") from exc
     if not math.isfinite(rate):
-        raise ValueError(f"fps must be finite, got {fps!r}")
+        raise ValueError(f"{name} must be finite, got {fps!r}")
     rounded = int(round(rate))
     if rounded < 1:
         raise ValueError(
-            f"fps={fps!r} rounds to {rounded} frames per second, which no encoder accepts. Pass a rate that "
-            "rounds to at least 1 (fps > 0.5), or slow the animation down with more frames instead of a "
+            f"{name}={fps!r} rounds to {rounded} frames per second, which no encoder accepts. Pass a rate "
+            "that rounds to at least 1 (> 0.5), or slow the animation down with more frames instead of a "
             "fractional rate."
         )
     return rounded
@@ -85,8 +87,9 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
         fps: Frames per second. Defaults to :data:`DEFAULT_FPS`; callers that know the scene's own rate
             (``Map.animate(fps=...)``) pass it through so the file matches what was previewed.
         gif: When given, a second output path to derive a GIF at, by reading the frames back off ``path``
-            instead of re-rendering them. ``path`` must be a video for this — deriving a GIF from a GIF is
-            pointless and raises.
+            instead of re-rendering them. ``path`` must be one of :data:`VIDEO_SUFFIXES` — the ffmpeg-written
+            containers. GIF and WebP are excluded because cleopatra writes them with Pillow, which ignores
+            ``pix_fmt``, so the full-chroma intermediate below cannot be delivered for them.
         gif_options: Extra keyword arguments for ``gif_from_video`` (``width``, ``max_colors``, ``loop``,
             ``optimize``, ``quantize_method``). ``fps`` defaults to the same rate as the video.
         **kwargs: Forwarded to cleopatra's ``save_animation`` (``crf``, ``bitrate``, ``codec``, ``preset``,

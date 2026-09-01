@@ -330,7 +330,8 @@ class TexturedGlobe:
 
         Raises:
             ValueError: if ``dataset`` has no resolvable CRS (there is then no way to place it on the
-                sphere), if ``shape`` is not two positive integers, or if the colour bounds leave no range.
+                sphere), if ``shape`` is not two positive integers, if ``band`` is out of range, or if the
+                colour bounds are non-finite or leave no range.
 
         Warns:
             RuntimeWarning: If nothing survives the resample onto the texture, or if what does is finer than
@@ -520,8 +521,8 @@ class TexturedGlobe:
             vmax: Upper bound, or ``None``.
 
         Raises:
-            ValueError: If both bounds are given and ``vmax <= vmin``, or if a single given bound sits
-                outside the data on the wrong side.
+            ValueError: If either bound is not finite, if both are given and ``vmax <= vmin``, or if a
+                single given bound sits outside the data on the wrong side.
         """
         for name, bound in (("vmin", vmin), ("vmax", vmax)):
             if bound is not None and not np.isfinite(float(bound)):
@@ -943,7 +944,8 @@ class TexturedGlobe:
         :meth:`save_gif` and :meth:`stamp` work on an animated globe.
 
         Args:
-            ax: An existing ``Axes3D`` to animate on. A new figure/axes is created when omitted.
+            ax: An existing ``Axes3D`` to animate on. When omitted, the constructor's axes is used if one
+                was given, and only otherwise is a new figure created.
             **kwargs: Forwarded to the glyph's ``animate`` (``n_frames``, ``revolutions``, ``start_spin``,
                 ``sun``, ``ambient``, ``interval``, plus the render options). ``figsize`` sizes the figure
                 created here, and is ignored when ``ax`` is given — that figure already exists.
@@ -996,7 +998,8 @@ class TexturedGlobe:
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
         self._bind(ax, owns=not supplied)
-        # Record where the animation starts, so an overlay added afterwards is not placed at a stale spin.
+        # Record the spin the animation *starts* at. An overlay added afterwards then sits on the first
+        # frame rather than on whatever draw() last used; it does not track the animation as it turns.
         self._spin = float(kwargs.get("start_spin", 0.0))
         self._animation = anim  # keep a strong reference so it survives until save/display
         self._animation_fps = 1000.0 / interval

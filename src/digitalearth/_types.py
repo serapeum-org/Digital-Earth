@@ -49,6 +49,19 @@ class RasterLike(Protocol):
         """Read a (0-based) band as a numpy array."""
         ...
 
+    @property
+    def band_count(self) -> int:
+        """How many bands the raster holds."""
+        ...
+
+    def select_bands(self, bands: Any) -> "RasterLike":
+        """Return a raster holding only the given (1-based) bands."""
+        ...
+
+    def align(self, alignment_src: "RasterLike", **kwargs: Any) -> "RasterLike":
+        """Reproject and resample onto ``alignment_src``'s grid, returning the aligned raster."""
+        ...
+
 
 @runtime_checkable
 class VectorLike(Protocol):
