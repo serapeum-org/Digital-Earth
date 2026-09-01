@@ -716,6 +716,8 @@ class TestRenderLifecycle:
         kwargs = {"ax": ax, "fig": fig} if via == "ax" else {"fig": fig}
         owned = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, **kwargs)
         owned.draw()
+        assert owned.fig is fig, "the globe should have drawn on the constructor's figure"
+        assert not owned._owns_fig, "a constructor-supplied figure is the caller's"
         owned.close()
         assert plt.fignum_exists(fig.number), "a constructor-supplied figure must survive close()"
 

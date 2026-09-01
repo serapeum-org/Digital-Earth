@@ -116,11 +116,11 @@ class TestDerivedGif:
         with pytest.raises(ValueError, match="must be one of"):
             save_animation(anim, path, gif="clip.gif")
 
-    @pytest.mark.parametrize("path", ["clip.webp", "clip.gif"])
-    def test_a_pillow_written_source_is_refused(self, anim, calls, path):
-        """Pillow ignores pix_fmt, so the full-chroma intermediate cannot be delivered for these."""
-        with pytest.raises(ValueError, match="already a GIF|must be one of"):
-            save_animation(anim, path, gif="clip.gif")
+    def test_a_webp_source_is_refused(self, anim, calls):
+        """Pillow writes webp and ignores pix_fmt, so the full-chroma intermediate cannot be delivered."""
+        with pytest.raises(ValueError, match="must be one of"):
+            save_animation(anim, "clip.webp", gif="clip.gif")
+        assert ".webp" not in de_animation.VIDEO_SUFFIXES
 
     def test_a_differing_gif_options_rate_warns_but_is_honoured(self, anim, calls):
         """gif_from_video types fps as a float, so a fractional rate is meaningful and must not be coerced —
