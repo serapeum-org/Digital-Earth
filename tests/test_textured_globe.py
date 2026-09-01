@@ -653,6 +653,35 @@ class TestRenderLifecycle:
         assert globe.fig is None, "close() should clear the figure"
         assert globe.ax is None, "close() should clear the axes"
 
+    def test_animate_works_when_the_constructor_supplied_the_axes(self, flat_texture):
+        """The guard that skipped creating an axes left ax=None and animate crashed on ax.get_figure()."""
+        plt.close("all")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        owned = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, fig=fig, ax=ax)
+        assert owned.animate(n_frames=2, interval=100) is not None
+        assert owned.ax is ax, "animate should reuse the constructor's axes"
+
+    def test_redrawing_onto_the_same_figure_does_not_close_it(self, globe):
+        """draw(ax=) closed self.fig before drawing — including when the new axes lives on that figure."""
+        plt.close("all")
+        fig, _ = globe.draw()
+        second = fig.add_subplot(222, projection="3d")
+        globe.draw(ax=second)
+        assert plt.fignum_exists(fig.number), "the figure being drawn on must not be closed"
+
+    def test_animating_onto_a_caller_axes_releases_our_figure(self, globe):
+        """The release was only wired into draw(), so animate() leaked the figure draw() had created."""
+        plt.close("all")
+        globe.draw()
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        globe.animate(ax, n_frames=2, interval=100)
+        globe.close()
+        assert plt.get_fignums() == [fig.number], (
+            f"only the caller's figure should remain, got {plt.get_fignums()}"
+        )
+
     def test_close_leaves_a_caller_supplied_figure_alone(self, globe):
         """The caller may have other subplots on that figure; it is not ours to close."""
         plt.close("all")
@@ -681,6 +710,35 @@ class TestRenderLifecycle:
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
         globe.draw(ax=ax)
+        globe.close()
+        assert plt.get_fignums() == [fig.number], (
+            f"only the caller's figure should remain, got {plt.get_fignums()}"
+        )
+
+    def test_animate_works_when_the_constructor_supplied_the_axes(self, flat_texture):
+        """A bare animate() must reuse the ctor's axes, not crash on a None it never created."""
+        plt.close("all")
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, fig=fig, ax=ax)
+        globe.animate(n_frames=2, interval=100)
+        assert globe.ax is ax, "animate() should have used the constructor's axes"
+
+    def test_redrawing_onto_the_same_figure_does_not_close_it(self, globe):
+        """Rebinding to another axes on the figure we are already drawing on must keep it open."""
+        plt.close("all")
+        fig, _ = globe.draw()
+        second = fig.add_subplot(222, projection="3d")
+        globe.draw(ax=second)
+        assert plt.fignum_exists(fig.number), "the figure being drawn on was closed"
+
+    def test_animating_onto_a_caller_axes_releases_our_figure(self, globe):
+        """The release-on-rebind rule has to apply to animate(), not only to draw()."""
+        plt.close("all")
+        globe.draw()
+        fig = plt.figure()
+        ax = fig.add_subplot(projection="3d")
+        globe.animate(ax, n_frames=2, interval=100)
         globe.close()
         assert plt.get_fignums() == [fig.number], (
             f"only the caller's figure should remain, got {plt.get_fignums()}"

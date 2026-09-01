@@ -309,6 +309,9 @@ class TexturedGlobe:
         self._spin: float = 0.0
         #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
         self._owns_fig: bool = False
+        #: The axes the constructor was given, if any. animate() falls back to it so a globe built around a
+        #: caller's axes keeps drawing there instead of opening a figure of its own.
+        self._ctor_ax: Any = kwargs.get("ax")
 
     # ------------------------------------------------------------------ constructors
 
@@ -764,6 +767,24 @@ class TexturedGlobe:
 
     # ------------------------------------------------------------------ rendering
 
+    def _bind(self, ax: Any, *, owns: bool) -> None:
+        """Adopt ``ax`` as the render target, releasing a figure we own and are leaving behind.
+
+        The single rule for figure ownership: we close a figure only if we created it *and* we are no longer
+        drawing on it. Rebinding to a different axes releases the old one so nothing is orphaned beyond
+        ``close()``'s reach; rebinding to another axes on the *same* figure closes nothing, because that
+        figure is still in use.
+
+        Args:
+            ax: The axes now being drawn on.
+            owns: Whether the figure behind ``ax`` was created by this globe.
+        """
+        figure = ax.get_figure()
+        if self._owns_fig and self.fig is not None and self.fig is not figure:
+            plt.close(self.fig)
+        self.ax, self.fig = ax, figure
+        self._owns_fig = owns
+
     def draw(self, ax: Any = None, *, spin: float = 0.0, **kwargs: Any) -> Tuple[Any, Any]:
         """Draw the globe, returning the matplotlib ``(fig, ax)`` and recording them on the instance.
 
@@ -811,12 +832,8 @@ class TexturedGlobe:
         if ax is not None:
             kwargs["ax"] = ax
         supplied = kwargs.get("ax") is not None or self._caller_supplied_axes
-        if self._owns_fig and self.fig is not None:
-            # Release the figure we own before rebinding, whether the replacement is ours or the caller's;
-            # otherwise an explicit ax= orphans it and close() can never reach it again.
-            plt.close(self.fig)
-        self.fig, self.ax = self.glyph.draw(spin=spin, **kwargs)
-        self._owns_fig = not supplied
+        _, drawn_ax = self.glyph.draw(spin=spin, **kwargs)
+        self._bind(drawn_ax, owns=not supplied)
         self._spin = float(spin)
         return self.fig, self.ax
 
@@ -977,18 +994,17 @@ class TexturedGlobe:
         if interval <= 0:
             raise ValueError(f"interval must be a positive number of milliseconds, got {interval!r}")
         supplied = ax is not None or self._caller_supplied_axes
-        if ax is None and not self._caller_supplied_axes:
+        if ax is None:
+            ax = self._ctor_ax  # a globe built around the caller's axes keeps animating there
+        if ax is None:
             figsize = kwargs.pop("figsize", self.glyph.default_options.get("figsize", (6, 6)))
-            if self._owns_fig and self.fig is not None:
-                plt.close(self.fig)
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
-        self._owns_fig = not supplied
+        self._bind(ax, owns=not supplied)
         # Record where the animation starts, so an overlay added afterwards is not placed at a stale spin.
         self._spin = float(kwargs.get("start_spin", 0.0))
         self._animation = anim  # keep a strong reference so it survives until save/display
         self._animation_fps = 1000.0 / interval
-        self.ax, self.fig = ax, ax.get_figure()
         return anim
 
     def save(self, path: str, **kwargs: Any) -> None:
