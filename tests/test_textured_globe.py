@@ -256,6 +256,12 @@ class TestFromDataset:
         with pytest.raises(ValueError, match="vmax must be greater than vmin"):
             TexturedGlobe.from_dataset(dataset, vmin=10.0, vmax=1.0)
 
+    @pytest.mark.parametrize("band", [0, 2, -1])
+    def test_an_out_of_range_band_is_refused(self, dataset, band):
+        """The single-band shortcut skips select_bands, which used to be what validated the index."""
+        with pytest.raises(ValueError, match="out of range"):
+            TexturedGlobe.from_dataset(dataset, band=band, shape=(180, 360))
+
     @pytest.mark.parametrize("band, value", [(1, 1.0), (2, 2.0), (3, 3.0)])
     def test_the_requested_band_is_the_one_drawn(self, band, value):
         """Selecting a band before the warp must not change which band ends up on the globe."""
