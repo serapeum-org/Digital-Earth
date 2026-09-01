@@ -562,8 +562,10 @@ class TexturedGlobe:
             ValueError: If the bounds leave no range — see :meth:`_validate_colour_bounds`.
         """
         cls._validate_colour_bounds(good, vmin, vmax)
-        lo = float(vmin) if vmin is not None else (float(good.min()) if good.size else 0.0)
-        hi = float(vmax) if vmax is not None else (float(good.max()) if good.size else 1.0)
+        # A unit range is the fallback when the band has no finite value to take a bound from.
+        data_lo, data_hi = (float(good.min()), float(good.max())) if good.size else (0.0, 1.0)
+        lo = data_lo if vmin is None else float(vmin)
+        hi = data_hi if vmax is None else float(vmax)
         if hi <= lo:  # a constant band has no range to normalise against
             hi = lo + 1.0
         return lo, hi
