@@ -102,9 +102,13 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
         ValueError: if ``gif`` is given but ``path`` is itself a GIF, if ``gif`` does not end in ``.gif``, or
             if ``fps`` is not a finite number or rounds to less than one frame per second.
 
+    Warns:
+        RuntimeWarning: If ``gif_options["fps"]`` differs from the video's rate, so the two files of the one
+            animation would play at different speeds.
+
     Note:
         The rate is rounded to a whole number **once**, and the same value is used for the video and for the
-        derived GIF, so the two files always play at the same speed.
+        derived GIF, so the two files play at the same speed unless ``gif_options`` deliberately overrides it.
 
     Examples:
         - Rendering once and delivering two formats, without drawing the frames twice:
