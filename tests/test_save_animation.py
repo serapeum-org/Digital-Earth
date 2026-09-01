@@ -122,10 +122,20 @@ class TestDerivedGif:
         with pytest.raises(ValueError, match="already a GIF|must be one of"):
             save_animation(anim, path, gif="clip.gif")
 
-    def test_a_gif_options_rate_is_rounded_like_the_video_rate(self, anim, calls):
-        """Spelling the rate via gif_options bypassed the single-rounding invariant."""
-        save_animation(anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 4.6})
-        assert calls["gif"][0][2]["fps"] == 5, f"expected the rate rounded to 5, got {calls['gif'][0][2]['fps']}"
+    def test_a_differing_gif_options_rate_warns_but_is_honoured(self, anim, calls):
+        """gif_from_video types fps as a float, so a fractional rate is meaningful and must not be coerced —
+        but two files of one animation playing at different speeds is worth saying out loud."""
+        with pytest.warns(RuntimeWarning, match="different speeds"):
+            save_animation(anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 4.5})
+        assert calls["gif"][0][2]["fps"] == 4.5, "the caller's rate should reach gif_from_video unchanged"
+
+    def test_a_matching_gif_options_rate_is_silent(self, anim, calls):
+        import warnings as _warnings
+
+        with _warnings.catch_warnings(record=True) as caught:
+            _warnings.simplefilter("always")
+            save_animation(anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 12})
+        assert not [w for w in caught if "different speeds" in str(w.message)]
 
     def test_a_non_gif_derived_path_is_refused(self, anim, calls):
         with pytest.raises(ValueError, match="must end in"):

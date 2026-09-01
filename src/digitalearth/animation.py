@@ -16,6 +16,7 @@ video stays perfectly playable and the GIF gets full-chroma frames to quantise.
 """
 import math
 import os
+import warnings
 from typing import Any, Optional, Tuple, Union
 
 from cleopatra.glyphs.base.animation import SUPPORTED_VIDEO_FORMAT, gif_from_video
@@ -134,10 +135,16 @@ def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Opti
     kwargs.setdefault("pix_fmt", FULL_CHROMA_PIX_FMT)
     _cleopatra_save_animation(anim, video_path, fps=rate, **kwargs)
     gif_kwargs = dict(gif_options or {})
-    if "fps" in gif_kwargs:
-        # Round it the same way the video's rate was, so the documented "one rate, rounded once" invariant
-        # holds however the caller spells it.
-        gif_kwargs["fps"] = _encoder_fps(gif_kwargs["fps"])
+    if "fps" in gif_kwargs and float(gif_kwargs["fps"]) != rate:
+        # gif_from_video types fps as a float and samples the source at that rate, so a fractional value is
+        # meaningful here even though the video's own rate had to be a whole number. Only warn when the two
+        # genuinely differ, which is the case that produces two files playing at different speeds.
+        warnings.warn(
+            f"gif_options['fps']={gif_kwargs['fps']!r} differs from the video's {rate} fps, so the GIF and "
+            "the video will play at different speeds. Drop it to inherit the video's rate.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     gif_from_video(video_path, gif_path, **{"fps": rate, **gif_kwargs})
     return video_path, gif_path
 
