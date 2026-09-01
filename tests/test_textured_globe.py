@@ -150,7 +150,7 @@ class TestFromDataset:
 
 
     def test_the_poles_and_the_antimeridian_are_not_left_empty(self):
-        """The outer cell centres sit on the source's boundary, so the warp drops them without a clamp."""
+        """Outer centres on the source's boundary returned nothing: a pole hole and an antimeridian seam."""
         arr = np.ones((180, 360), dtype="float32")
         ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
         opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
@@ -159,8 +159,18 @@ class TestFromDataset:
         assert opaque[:, 0].all(), "the -180 column should be filled"
         assert opaque[:, -1].all(), "the +180 column should be filled, not left as a seam"
 
+    def test_a_genuine_nodata_edge_stays_transparent(self):
+        """The earlier edge-clamp filled this in, fabricating data that is not in the raster."""
+        arr = np.ones((180, 360), dtype="float32")
+        arr[-1, :] = -9999.0
+        ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326,
+                                       no_data_value=-9999.0)
+        opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
+        assert not opaque[-1].any(), "a nodata southern row must stay transparent, not be filled from above"
+        assert opaque[-2].any(), "the row above it is real data and should still drape"
+
     def test_a_regional_raster_keeps_its_transparent_margin(self, dataset):
-        """The edge clamp must not spread a regional raster to the poles."""
+        """Nothing may spread a regional raster to the poles."""
         opaque = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3] > 0
         assert opaque.mean() < 0.01, f"a small raster should stay small, covered {opaque.mean():.4f}"
         assert not opaque[-1].any(), "the south-pole row should stay empty for a regional raster"

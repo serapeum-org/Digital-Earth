@@ -46,6 +46,10 @@ DEFAULT_TEXTURE_SHAPE = (1440, 2880)
 #: EPSG code of the lon/lat grid the glyph's texture is defined on.
 _TEXTURE_EPSG = 4326
 
+#: How far inside the globe the texture's outermost cell centres sit, as a fraction of one cell. Enough to
+#: put them inside a whole-world source rather than on its boundary; far too small to move anything visibly.
+_EDGE_INSET = 1e-6
+
 #: The glyph's own default inter-frame interval, in milliseconds, read from its signature rather than
 #: mirrored as a literal: a hand-copied default drifts silently, and the saved frame rate is derived from it.
 _DEFAULT_INTERVAL_MS = inspect.signature(TexturedGlobeGlyph.animate).parameters["interval"].default
@@ -93,33 +97,6 @@ def _mesh_sample_indices(texture_shape: Tuple[int, int], n_lon: int,
     rows = np.clip(np.round((90.0 - lat_centres) / 180.0 * (height - 1)).astype(int), 0, height - 1)
     cols = np.clip(np.round((lon_centres + 180.0) / 360.0 * (width - 1)).astype(int), 0, width - 1)
     return rows, cols
-
-
-def _clamp_edges(texture: np.ndarray) -> np.ndarray:
-    """Fill a fully transparent outermost row or column from its neighbour.
-
-    The texture's outer cell centres sit exactly on +/-90 latitude and +/-180 longitude, which is the
-    boundary of a whole-world source rather than a point inside it, so the warp finds nothing there and
-    leaves them empty. On the sphere that shows as a hole at the pole and a hairline seam down the
-    antimeridian — on data that does in fact cover the globe.
-
-    Only an edge that is *entirely* transparent beside a neighbour that is not is filled, so a raster that
-    genuinely stops short of the pole keeps its transparent margin.
-
-    Args:
-        texture: The RGBA texture, modified in place and returned.
-
-    Returns:
-        The same array, with any empty outer edge clamped to its neighbour.
-    """
-    if texture.shape[0] < 2 or texture.shape[1] < 2:
-        return texture
-    for outer, inner in ((0, 1), (-1, -2)):
-        if not texture[outer, :, 3].any() and texture[inner, :, 3].any():
-            texture[outer] = texture[inner]
-        if not texture[:, outer, 3].any() and texture[:, inner, 3].any():
-            texture[:, outer] = texture[:, inner]
-    return texture
 
 
 def _as_byte_texture(rgba: np.ndarray) -> np.ndarray:
@@ -419,7 +396,7 @@ class TexturedGlobe:
 
         values = read_masked_band(aligned, band=1)
         rgba = cls._colorize(values, cmap=cmap, vmin=vmin, vmax=vmax)
-        texture = _clamp_edges(_as_byte_texture(rgba))
+        texture = _as_byte_texture(rgba)
         if not (texture[..., 3] > 0).any():
             warnings.warn(
                 f"nothing was draped onto the {rows}x{cols} globe texture, so it will render blank. Either "
@@ -638,9 +615,21 @@ class TexturedGlobe:
             Dataset: an empty raster carrying only the target grid; ``align`` reads its spatial properties.
         """
         d_lat, d_lon = 180.0 / (rows - 1), 360.0 / (cols - 1)
+        # Pull the outermost centres a hair inside the globe. Sitting exactly on +/-90 / +/-180 puts them on
+        # the *boundary* of a whole-world source rather than inside it, and the warp returns nothing there —
+        # which showed as a hole at the pole and a seam down the antimeridian. The offset is a millionth of a
+        # cell, far below anything the texture can express, so nothing moves visibly.
+        inset_lat, inset_lon = d_lat * _EDGE_INSET, d_lon * _EDGE_INSET
         return Dataset.create_from_array(
             arr=np.zeros((rows, cols), dtype="float32"),
-            geo=(-180.0 - d_lon / 2, d_lon, 0.0, 90.0 + d_lat / 2, 0.0, -d_lat),
+            geo=(
+                -180.0 + inset_lon - d_lon / 2,
+                d_lon * (1.0 - 2.0 * _EDGE_INSET / (cols - 1)),
+                0.0,
+                90.0 - inset_lat + d_lat / 2,
+                0.0,
+                -d_lat * (1.0 - 2.0 * _EDGE_INSET / (rows - 1)),
+            ),
             epsg=_TEXTURE_EPSG,
         )
 
