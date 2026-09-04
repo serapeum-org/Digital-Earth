@@ -1,5 +1,18 @@
 # Change log
 
+## 0.8.0 (2026-09-04)
+
+### Feat
+
+- **scene**: add a 3-D textured globe, figure watermarks and clip saving (#136)
+- **scene**: add categorical symbology to the static choropleth (#122)
+- add field charts, categorized symbology, and web map controls (#110)
+
+### Fix
+
+- **deps,web**: upgrade pyramids 0.46.0 / cleopatra 0.25.0 and harden the maplibre UTF-8 shim (#119)
+- **deps**: upgrade to pyramids 0.44.0 / cleopatra 0.24.0 and adapt to their API changes (#117)
+
 ## 0.7.0 (2026-06-15)
 
 ### Feat
