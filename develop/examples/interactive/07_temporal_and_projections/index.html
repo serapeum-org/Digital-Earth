@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4366,7 +4366,7 @@ and <code>save_animation</code> writes a GIF. <code>projection</code> re-renders
         <span class="k">return</span> <span class="n">Image</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">buf</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>                        <span class="c1"># interactive Bokeh object</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive</span><span class="w"> </span><span class="kn">import</span> <span class="n">InteractiveMap</span>
 
@@ -4412,7 +4412,7 @@ def show(m, static=False, dpi=96):
         return Image(data=buf.getvalue())
     return m.render()                        # interactive Bokeh object
 
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from pyramids.dataset.collection import DatasetCollection
 from digitalearth.interactive import InteractiveMap
 
@@ -4454,9 +4454,9 @@ cube = DatasetCollection.from_files(months) if _tavg.exists() else None</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="60dd8dec-66d4-4316-ac29-d6a8790764c9" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="142bb935-6746-49d6-af93-761e15fce8e6" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('60dd8dec-66d4-4316-ac29-d6a8790764c9');
+var element = document.getElementById('142bb935-6746-49d6-af93-761e15fce8e6');
 (function(root) {
   function now() {
     return new Date();
@@ -4713,9 +4713,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="0166c7a0-811b-465c-afb9-3682914f357f" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="bf0d5133-c478-4c78-8b6d-2c97467f14a4" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('0166c7a0-811b-465c-afb9-3682914f357f');
+var element = document.getElementById('bf0d5133-c478-4c78-8b6d-2c97467f14a4');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}

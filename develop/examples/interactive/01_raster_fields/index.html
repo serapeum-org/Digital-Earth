@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4389,7 +4389,7 @@ transparent automatically.</p>
         <span class="k">return</span> <span class="n">Image</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">buf</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>                        <span class="c1"># interactive Bokeh object</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive</span><span class="w"> </span><span class="kn">import</span> <span class="n">InteractiveMap</span>
 
 <span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s2">"LisbonElevation.tif"</span><span class="p">))</span>
@@ -4428,7 +4428,7 @@ def show(m, static=False, dpi=96):
         return Image(data=buf.getvalue())
     return m.render()                        # interactive Bokeh object
 
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from digitalearth.interactive import InteractiveMap
 
 dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
@@ -4463,9 +4463,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="ed01e696-4fed-4016-b512-15945a872aa1" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="aea352c7-bccf-44f5-8957-a0244e273f53" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('ed01e696-4fed-4016-b512-15945a872aa1');
+var element = document.getElementById('aea352c7-bccf-44f5-8957-a0244e273f53');
 (function(root) {
   function now() {
     return new Date();
@@ -4722,9 +4722,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="e0ca3fc4-a5c0-4eb8-ab1e-d17a8d6f36e0" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="2869fe83-194c-47e4-8112-43236521cca7" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('e0ca3fc4-a5c0-4eb8-ab1e-d17a8d6f36e0');
+var element = document.getElementById('2869fe83-194c-47e4-8112-43236521cca7');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
