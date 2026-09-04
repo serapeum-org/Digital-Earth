@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4389,7 +4389,7 @@ transparent automatically.</p>
         <span class="k">return</span> <span class="n">Image</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">buf</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>                        <span class="c1"># interactive Bokeh object</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive</span><span class="w"> </span><span class="kn">import</span> <span class="n">InteractiveMap</span>
 
 <span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DATA</span> <span class="o">/</span> <span class="s2">"LisbonElevation.tif"</span><span class="p">))</span>
@@ -4428,7 +4428,7 @@ def show(m, static=False, dpi=96):
         return Image(data=buf.getvalue())
     return m.render()                        # interactive Bokeh object
 
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from digitalearth.interactive import InteractiveMap
 
 dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
@@ -4463,9 +4463,9 @@ dem = Dataset.read_file(str(DATA / "LisbonElevation.tif"))</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="be87140d-8ae5-4c15-bfdb-0ecee67a11cf" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="76e55744-07a1-4974-9013-3f700f8389e3" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('be87140d-8ae5-4c15-bfdb-0ecee67a11cf');
+var element = document.getElementById('76e55744-07a1-4974-9013-3f700f8389e3');
 (function(root) {
   function now() {
     return new Date();
@@ -4722,9 +4722,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="9abd1271-474c-4ac2-82f3-767bf7f6e5d8" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="ba1c0ead-c14b-4f83-a55f-bc282bd919f8" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('9abd1271-474c-4ac2-82f3-767bf7f6e5d8');
+var element = document.getElementById('ba1c0ead-c14b-4f83-a55f-bc282bd919f8');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5615,7 +5615,11 @@ show(m)</div>
 
     <span class="n">stack</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">_temp</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">_temp</span><span class="p">(</span><span class="mi">7</span><span class="p">),</span> <span class="n">_temp</span><span class="p">(</span><span class="mi">12</span><span class="p">)])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">)</span>
     <span class="n">_src</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">_tavg</span><span class="p">))</span>
-    <span class="n">composite</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">stack</span><span class="p">,</span> <span class="n">geo</span><span class="o">=</span><span class="n">_src</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">_src</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+    <span class="n">composite</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+        <span class="n">arr</span><span class="o">=</span><span class="n">stack</span><span class="p">,</span>
+        <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">_src</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">_src</span><span class="o">.</span><span class="n">epsg</span><span class="p">),</span>
+        <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"seasonal RGB (Jan/Jul/Dec)"</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">rgb</span><span class="p">(</span><span class="n">composite</span><span class="p">)</span>
@@ -5635,7 +5639,11 @@ if _tavg.exists():
 
     stack = np.stack([_temp(1), _temp(7), _temp(12)]).astype("float32")
     _src = Dataset.read_file(str(_tavg))
-    composite = Dataset.create_from_array(arr=stack, geo=_src.geotransform, epsg=_src.epsg, no_data_value=np.nan)
+    composite = Dataset.from_array(
+        arr=stack,
+        geo_ref=GeoReference(geo=_src.geotransform, epsg=_src.epsg),
+        no_data_value=np.nan,
+    )
 
     m = InteractiveMap(crs=4326, title="seasonal RGB (Jan/Jul/Dec)")
     m.rgb(composite)

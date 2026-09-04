@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4567,7 +4567,7 @@ temperature months: 12
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">projections</span>
 
 <span class="n">elevation</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">ELEV</span><span class="p">))</span>
@@ -4587,7 +4587,7 @@ temperature months: 12
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">%matplotlib inline
 import matplotlib.pyplot as plt
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from digitalearth.scene import Map, projections
 
 elevation = Dataset.read_file(str(ELEV))
@@ -4630,7 +4630,7 @@ temperature grid: 1080 x 2160 EPSG 4326
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="etopo-relief-bathymetry-noaa-erddap">ETOPO relief &amp; bathymetry (NOAA ERDDAP)<a class="anchor-link" href="#etopo-relief-bathymetry-noaa-erddap">¶</a></h2><p>ERDDAP serves ETOPO downsampled <strong>server-side</strong> (a stride on the 1-arc-minute grid) as an <strong>ESRI-ASCII</strong> grid — a plain-text raster — so we never download the full 466 MB file. We parse the numeric grid with <strong>numpy</strong> and build the raster with <strong>pyramids</strong> <code>Dataset.create_from_array</code>: pyramids is the GIS engine (CRS, reprojection, plotting), numpy just reads numbers from a text file. The result is a global relief field whose <strong>negative</strong> values are ocean depth.</p>
+<h2 id="etopo-relief-bathymetry-noaa-erddap">ETOPO relief &amp; bathymetry (NOAA ERDDAP)<a class="anchor-link" href="#etopo-relief-bathymetry-noaa-erddap">¶</a></h2><p>ERDDAP serves ETOPO downsampled <strong>server-side</strong> (a stride on the 1-arc-minute grid) as an <strong>ESRI-ASCII</strong> grid — a plain-text raster — so we never download the full 466 MB file. We parse the numeric grid with <strong>numpy</strong> and build the raster with <strong>pyramids</strong> <code>Dataset.from_array</code>: pyramids is the GIS engine (CRS, reprojection, plotting), numpy just reads numbers from a text file. The result is a global relief field whose <strong>negative</strong> values are ocean depth.</p>
 </div>
 </div>
 </div>
@@ -4675,7 +4675,7 @@ temperature grid: 1080 x 2160 EPSG 4326
     <span class="n">yll</span> <span class="o">=</span> <span class="n">hdr</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'yllcorner'</span><span class="p">,</span> <span class="n">hdr</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">'yllcenter'</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span> <span class="o">-</span> <span class="n">cell</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
     <span class="n">arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">loadtxt</span><span class="p">(</span><span class="n">ETOPO_ASC</span><span class="p">,</span> <span class="n">skiprows</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s1">'float32'</span><span class="p">)</span>   <span class="c1"># AAIGrid order: row 0 = north</span>
     <span class="n">geo</span> <span class="o">=</span> <span class="p">(</span><span class="n">xll</span><span class="p">,</span> <span class="n">cell</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="n">yll</span> <span class="o">+</span> <span class="n">nrows</span> <span class="o">*</span> <span class="n">cell</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="n">cell</span><span class="p">)</span>      <span class="c1"># north-up geotransform</span>
-    <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">arr</span><span class="p">,</span> <span class="n">geo</span><span class="o">=</span><span class="n">geo</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
+    <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">arr</span><span class="p">,</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">geo</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="mi">4326</span><span class="p">))</span>
     <span class="n">ds</span><span class="o">.</span><span class="n">change_no_data_value</span><span class="p">(</span><span class="n">nodata</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">ds</span>
 
@@ -4707,7 +4707,7 @@ def load_relief():
     yll = hdr.get('yllcorner', hdr.get('yllcenter', 0.0) - cell / 2)
     arr = np.loadtxt(ETOPO_ASC, skiprows=6, dtype='float32')   # AAIGrid order: row 0 = north
     geo = (xll, cell, 0.0, yll + nrows * cell, 0.0, -cell)      # north-up geotransform
-    ds = Dataset.create_from_array(arr=arr, geo=geo, epsg=4326)
+    ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=geo, epsg=4326))
     ds.change_no_data_value(nodata)
     return ds
 

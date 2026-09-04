@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4381,7 +4381,7 @@ print("DEM:", DEM)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
@@ -4393,12 +4393,14 @@ print("DEM:", DEM)</div>
 <span class="kn">from</span><span class="w"> </span><span class="nn">numpy.lib.stride_tricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">sliding_window_view</span> <span class="k">as</span> <span class="n">swv</span>
 <span class="n">smooth</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">k</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">'edge'</span><span class="p">)</span>
 <span class="n">smooth</span> <span class="o">=</span> <span class="n">swv</span><span class="p">(</span><span class="n">smooth</span><span class="p">,</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">k</span><span class="p">))</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">)</span>
-<span class="n">rgb</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span>
-    <span class="n">arr</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">z</span><span class="p">,</span> <span class="n">grad</span><span class="p">,</span> <span class="n">smooth</span><span class="p">]),</span> <span class="n">geo</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<span class="n">rgb</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+    <span class="n">arr</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">z</span><span class="p">,</span> <span class="n">grad</span><span class="p">,</span> <span class="n">smooth</span><span class="p">]),</span>
+    <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">),</span>
+<span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'composite bands:'</span><span class="p">,</span> <span class="n">rgb</span><span class="o">.</span><span class="n">band_count</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">import numpy as np
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from digitalearth.scene import Map
 
 ds = Dataset.read_file(DEM)
@@ -4410,8 +4412,10 @@ kern = np.ones((k, k), 'float32') / (k * k)
 from numpy.lib.stride_tricks import sliding_window_view as swv
 smooth = np.pad(z, k // 2, mode='edge')
 smooth = swv(smooth, (k, k)).mean(axis=(-1, -2)).astype('float32')
-rgb = Dataset.create_from_array(
-    arr=np.stack([z, grad, smooth]), geo=ds.geotransform, epsg=ds.epsg)
+rgb = Dataset.from_array(
+    arr=np.stack([z, grad, smooth]),
+    geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg),
+)
 print('composite bands:', rgb.band_count)</div>
 </div>
 </div>

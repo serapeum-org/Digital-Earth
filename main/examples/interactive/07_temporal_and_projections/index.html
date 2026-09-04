@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4366,7 +4366,7 @@ and <code>save_animation</code> writes a GIF. <code>projection</code> re-renders
         <span class="k">return</span> <span class="n">Image</span><span class="p">(</span><span class="n">data</span><span class="o">=</span><span class="n">buf</span><span class="o">.</span><span class="n">getvalue</span><span class="p">())</span>
     <span class="k">return</span> <span class="n">m</span><span class="o">.</span><span class="n">render</span><span class="p">()</span>                        <span class="c1"># interactive Bokeh object</span>
 
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.interactive</span><span class="w"> </span><span class="kn">import</span> <span class="n">InteractiveMap</span>
 
@@ -4412,7 +4412,7 @@ def show(m, static=False, dpi=96):
         return Image(data=buf.getvalue())
     return m.render()                        # interactive Bokeh object
 
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from pyramids.dataset.collection import DatasetCollection
 from digitalearth.interactive import InteractiveMap
 
@@ -4454,9 +4454,9 @@ cube = DatasetCollection.from_files(months) if _tavg.exists() else None</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="c7166fe0-c03d-468a-9a0c-00259b6c53f6" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="968c88c9-4fb5-47e0-badb-0fc6548567e5" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('c7166fe0-c03d-468a-9a0c-00259b6c53f6');
+var element = document.getElementById('968c88c9-4fb5-47e0-badb-0fc6548567e5');
 (function(root) {
   function now() {
     return new Date();
@@ -4713,9 +4713,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="4fe4bbc8-53f3-4afb-aa00-62ac61119f95" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="f3a0dca8-f004-44f7-8cbc-34ce10bf7ff2" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('4fe4bbc8-53f3-4afb-aa00-62ac61119f95');
+var element = document.getElementById('f3a0dca8-f004-44f7-8cbc-34ce10bf7ff2');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5555,7 +5555,11 @@ else:
 <span class="k">if</span> <span class="n">_tavg7</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
     <span class="n">raw</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">_tavg7</span><span class="p">))</span>
     <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mf">1e30</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span> <span class="n">raw</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-    <span class="n">temp</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">a</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span> <span class="n">geo</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+        <span class="n">arr</span><span class="o">=</span><span class="n">a</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span>
+        <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">epsg</span><span class="p">),</span>
+        <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"July mean temperature + graticule"</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">temp</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"inferno"</span><span class="p">)</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="s2">"Robinson"</span><span class="p">)</span><span class="o">.</span><span class="n">graticule</span><span class="p">()</span>
@@ -5569,7 +5573,11 @@ _tavg7 = DATA / "global" / "wc2.1_10m_tavg_07.tif"
 if _tavg7.exists():
     raw = Dataset.read_file(str(_tavg7))
     a = np.where(raw.read_array(band=0).astype("float32") &lt; -1e30, np.nan, raw.read_array(band=0))
-    temp = Dataset.create_from_array(arr=a.astype("float32"), geo=raw.geotransform, epsg=raw.epsg, no_data_value=np.nan)
+    temp = Dataset.from_array(
+        arr=a.astype("float32"),
+        geo_ref=GeoReference(geo=raw.geotransform, epsg=raw.epsg),
+        no_data_value=np.nan,
+    )
 
     m = InteractiveMap(crs=4326, title="July mean temperature + graticule")
     m.image(temp, cmap="inferno").projection("Robinson").graticule()
