@@ -104,12 +104,13 @@ jobs:
           version: v0.73.0
 
       - name: Check the notebooks render
-        # The skip-list lives in exactly one place — the `notebooks` pixi task (which the pre-commit
-        # notebook-check hook's exclude regex mirrors). The two globs below are the CI-only delta, appended
-        # to the task rather than forked into a second copy of it, and they belong here because the reason
-        # is CI-specific: 11 and 12 each download ~50 MB of WorldClim/ETOPO from real endpoints on every
-        # run, since examples/data/global/ holds only the tracked ersstv5.nc and is gitignored otherwise.
-        # The lint-and-doctests job above name-checks those two notebooks instead.
+        # The gallery skip-list is declared once, as the `notebooks` task's ignore-globs. The pre-commit
+        # notebook-check hook restates it as a regex because a hook filters paths, not pytest arguments;
+        # tests/test_pixi_task_references.py asserts the two select exactly the same notebooks, so the
+        # restatement cannot drift. The two globs below are neither of those: they are a CI-only delta,
+        # appended to the task rather than forking it, because the reason is CI-specific — 11 and 12 each
+        # download ~50 MB of WorldClim/ETOPO from real endpoints on every run (examples/data/global/ holds
+        # only the tracked ersstv5.nc). The lint-and-doctests job name-checks those two instead.
         run: >
           pixi run -e dev notebooks
           --ignore-glob='docs/examples/11_global_data_on_globe.ipynb'

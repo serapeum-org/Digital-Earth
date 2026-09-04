@@ -1,4 +1,7 @@
-"""Guard: every pixi task the CI workflows and the pre-commit hooks invoke is actually defined.
+"""Guards against drift between the CI workflows, the pre-commit hooks and the pixi task table.
+
+Two kinds of drift are covered: a task reference that no longer resolves, and the notebook skip-list
+falling out of step with the hook regex that is documented as mirroring it.
 
 `pixi run -e <env> <name>` accepts either a task from `[tool.pixi.tasks]` or a bare executable in the
 environment, so a task that is renamed or deleted fails only at run time — in CI, or in a hook the author
@@ -13,10 +16,12 @@ scan actually found something, so none of them can pass vacuously.
 import functools
 import pathlib
 import re
+import shlex
 import tomllib
 
 import pytest
 import yaml
+from _pytest.pathlib import fnmatch_ex
 
 #: Repository root — this file lives in `<root>/tests/`.
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -149,3 +154,58 @@ class TestPixiTaskReferences:
         assert task in _tasks(), f"the {task!r} task is not defined in [tool.pixi.tasks]"
         invoked = {name for _, name in _workflow_invocations()}
         assert task in invoked, f"the {task!r} task is defined but no workflow step runs it"
+
+
+def _notebooks() -> list:
+    """Return every example notebook, excluding checkpoint copies."""
+    return sorted(p for p in (ROOT / "docs" / "examples").glob("**/*.ipynb")
+                  if ".ipynb_checkpoints" not in p.as_posix())
+
+
+def _task_skipped() -> set:
+    """Return the notebooks the `notebooks` task's --ignore-glob arguments exclude.
+
+    Matching goes through pytest's own `fnmatch_ex`, the function that implements `--ignore-glob`, so this
+    reflects what pytest actually does rather than a second guess at its glob semantics.
+    """
+    globs = [arg.split("=", 1)[1] for arg in shlex.split(_tasks()["notebooks"]["cmd"])
+             if arg.startswith("--ignore-glob=")]
+    return {p for p in _notebooks() if any(fnmatch_ex(glob, p) for glob in globs)}
+
+
+def _hook_excluded() -> set:
+    """Return the notebooks the pre-commit `notebook-check` hook's exclude regex filters out."""
+    document = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hook = next(h for repo in document["repos"] for h in repo.get("hooks") or []
+                if h.get("id") == "notebook-check")
+    pattern = re.compile(hook["exclude"])
+    return {p for p in _notebooks() if pattern.match(p.relative_to(ROOT).as_posix())}
+
+
+class TestNotebookSkipListsMirror:
+    """Tests that the notebook skip-list and the hook regex that documents itself as mirroring it agree."""
+
+    def test_the_notebook_scan_finds_notebooks(self):
+        """The gallery scan finds notebooks and the task declares ignore-globs.
+
+        Test scenario:
+            The mirror assertion compares two sets; both would be empty, and equal, if the scan or the
+            task's argument list stopped being found. Pin a floor under each.
+        """
+        notebooks = _notebooks()
+        globs = [a for a in shlex.split(_tasks()["notebooks"]["cmd"]) if a.startswith("--ignore-glob=")]
+        assert len(notebooks) >= 40, f"expected >=40 example notebooks, found {len(notebooks)}"
+        assert len(globs) >= 5, f"expected the notebooks task to declare >=5 ignore-globs, found {globs}"
+
+    def test_hook_regex_excludes_exactly_what_the_task_skips(self):
+        """The hook's exclude regex filters exactly the notebooks the task's ignore-globs skip.
+
+        Test scenario:
+            The hook's comment states it mirrors the `notebooks` task's ignore-globs, but the two are
+            written in different languages — shell globs against a regex — so nothing but this test keeps
+            them in step. A notebook in one set and not the other is checked by only one of the two gates.
+        """
+        task_only = sorted(p.relative_to(ROOT).as_posix() for p in _task_skipped() - _hook_excluded())
+        hook_only = sorted(p.relative_to(ROOT).as_posix() for p in _hook_excluded() - _task_skipped())
+        assert not task_only, f"the task skips these but the pre-commit hook still checks them: {task_only}"
+        assert not hook_only, f"the hook skips these but the notebooks task still runs them: {hook_only}"
