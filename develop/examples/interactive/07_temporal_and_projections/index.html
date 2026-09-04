@@ -4454,9 +4454,9 @@ cube = DatasetCollection.from_files(months) if _tavg.exists() else None</div>
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="ac1d6144-2183-4b72-9c3b-4b07f8131525" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="60dd8dec-66d4-4316-ac29-d6a8790764c9" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('ac1d6144-2183-4b72-9c3b-4b07f8131525');
+var element = document.getElementById('60dd8dec-66d4-4316-ac29-d6a8790764c9');
 (function(root) {
   function now() {
     return new Date();
@@ -4713,9 +4713,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="194dba16-2d8e-42c4-bd97-eddfdb9723c4" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="0166c7a0-811b-465c-afb9-3682914f357f" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('194dba16-2d8e-42c4-bd97-eddfdb9723c4');
+var element = document.getElementById('0166c7a0-811b-465c-afb9-3682914f357f');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
@@ -5555,7 +5555,11 @@ else:
 <span class="k">if</span> <span class="n">_tavg7</span><span class="o">.</span><span class="n">exists</span><span class="p">():</span>
     <span class="n">raw</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">_tavg7</span><span class="p">))</span>
     <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">raw</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">)</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mf">1e30</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span> <span class="n">raw</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">))</span>
-    <span class="n">temp</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">a</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span> <span class="n">geo</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">epsg</span><span class="p">,</span> <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">)</span>
+    <span class="n">temp</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+        <span class="n">arr</span><span class="o">=</span><span class="n">a</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span>
+        <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">raw</span><span class="o">.</span><span class="n">epsg</span><span class="p">),</span>
+        <span class="n">no_data_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span>
+    <span class="p">)</span>
 
     <span class="n">m</span> <span class="o">=</span> <span class="n">InteractiveMap</span><span class="p">(</span><span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">,</span> <span class="n">title</span><span class="o">=</span><span class="s2">"July mean temperature + graticule"</span><span class="p">)</span>
     <span class="n">m</span><span class="o">.</span><span class="n">image</span><span class="p">(</span><span class="n">temp</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s2">"inferno"</span><span class="p">)</span><span class="o">.</span><span class="n">projection</span><span class="p">(</span><span class="s2">"Robinson"</span><span class="p">)</span><span class="o">.</span><span class="n">graticule</span><span class="p">()</span>
@@ -5569,7 +5573,11 @@ _tavg7 = DATA / "global" / "wc2.1_10m_tavg_07.tif"
 if _tavg7.exists():
     raw = Dataset.read_file(str(_tavg7))
     a = np.where(raw.read_array(band=0).astype("float32") &lt; -1e30, np.nan, raw.read_array(band=0))
-    temp = Dataset.create_from_array(arr=a.astype("float32"), geo=raw.geotransform, epsg=raw.epsg, no_data_value=np.nan)
+    temp = Dataset.from_array(
+        arr=a.astype("float32"),
+        geo_ref=GeoReference(geo=raw.geotransform, epsg=raw.epsg),
+        no_data_value=np.nan,
+    )
 
     m = InteractiveMap(crs=4326, title="July mean temperature + graticule")
     m.image(temp, cmap="inferno").projection("Robinson").graticule()

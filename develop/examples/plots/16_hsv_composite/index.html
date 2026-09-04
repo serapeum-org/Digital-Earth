@@ -4207,7 +4207,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="k">while</span> <span class="ow">not</span> <span class="p">(</span><span class="n">ROOT</span> <span class="o">/</span> <span class="s2">"examples"</span> <span class="o">/</span> <span class="s2">"data"</span> <span class="o">/</span> <span class="s2">"LisbonElevation.tif"</span><span class="p">)</span><span class="o">.</span><span class="n">exists</span><span class="p">()</span> <span class="ow">and</span> <span class="n">ROOT</span> <span class="o">!=</span> <span class="n">ROOT</span><span class="o">.</span><span class="n">parent</span><span class="p">:</span>
     <span class="n">ROOT</span> <span class="o">=</span> <span class="n">ROOT</span><span class="o">.</span><span class="n">parent</span>
 <span class="n">DEM</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ROOT</span> <span class="o">/</span> <span class="s2">"examples"</span> <span class="o">/</span> <span class="s2">"data"</span> <span class="o">/</span> <span class="s2">"LisbonElevation.tif"</span><span class="p">)</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
@@ -4217,7 +4217,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">from</span><span class="w"> </span><span class="nn">numpy.lib.stride_tricks</span><span class="w"> </span><span class="kn">import</span> <span class="n">sliding_window_view</span> <span class="k">as</span> <span class="n">swv</span>
 <span class="n">k</span> <span class="o">=</span> <span class="mi">5</span>
 <span class="n">sm</span> <span class="o">=</span> <span class="n">swv</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">pad</span><span class="p">(</span><span class="n">z</span><span class="p">,</span> <span class="n">k</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="s1">'edge'</span><span class="p">),</span> <span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">k</span><span class="p">))</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">)</span>
-<span class="n">rgb</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">z</span><span class="p">,</span> <span class="n">grad</span><span class="p">,</span> <span class="n">sm</span><span class="p">]),</span> <span class="n">geo</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">)</span>
+<span class="n">rgb</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">z</span><span class="p">,</span> <span class="n">grad</span><span class="p">,</span> <span class="n">sm</span><span class="p">]),</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">ds</span><span class="o">.</span><span class="n">epsg</span><span class="p">))</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">%matplotlib inline
 from pathlib import Path
@@ -4227,7 +4227,7 @@ ROOT = Path.cwd()
 while not (ROOT / "examples" / "data" / "LisbonElevation.tif").exists() and ROOT != ROOT.parent:
     ROOT = ROOT.parent
 DEM = str(ROOT / "examples" / "data" / "LisbonElevation.tif")
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from digitalearth.scene import Map
 ds = Dataset.read_file(DEM)
 import numpy as np
@@ -4237,7 +4237,7 @@ grad = np.hypot(dx, dy).astype('float32')
 from numpy.lib.stride_tricks import sliding_window_view as swv
 k = 5
 sm = swv(np.pad(z, k // 2, mode='edge'), (k, k)).mean(axis=(-1, -2)).astype('float32')
-rgb = Dataset.create_from_array(arr=np.stack([z, grad, sm]), geo=ds.geotransform, epsg=ds.epsg)</div>
+rgb = Dataset.from_array(arr=np.stack([z, grad, sm]), geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))</div>
 </div>
 </div>
 </div>

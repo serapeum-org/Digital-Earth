@@ -4348,7 +4348,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.netcdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">NetCDF</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span> <span class="k">as</span> <span class="n">proj</span>
 
@@ -4367,8 +4367,10 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="k">def</span><span class="w"> </span><span class="nf">to_dataset</span><span class="p">(</span><span class="n">arr2d</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""A 2-D SST array -&gt; a display-ready Dataset, shifting the 0-360 grid to -180..180."""</span>
     <span class="n">rolled</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">roll</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">arr2d</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mf">1e30</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">nan</span><span class="p">,</span> <span class="n">arr2d</span><span class="p">),</span> <span class="n">arr2d</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">create_from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="n">rolled</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">),</span>
-                                     <span class="n">geo</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">181.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">89.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">epsg</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span>
+        <span class="n">arr</span><span class="o">=</span><span class="n">rolled</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">'float32'</span><span class="p">),</span>
+        <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="mf">181.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mf">89.0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.0</span><span class="p">),</span> <span class="n">epsg</span><span class="o">=</span><span class="mi">4326</span><span class="p">),</span>
+    <span class="p">)</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">sst_month</span><span class="p">(</span><span class="n">band</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">"""One month of SST as a -180..180 pyramids Dataset (land fill -&gt; NaN)."""</span>
@@ -4400,7 +4402,7 @@ import urllib.request, warnings
 import numpy as np
 import matplotlib.pyplot as plt
 from pyramids.netcdf import NetCDF
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from digitalearth.scene import Map
 from digitalearth.scene import projections as proj
 
@@ -4419,8 +4421,10 @@ nc = NetCDF.read_file(str(SST_NC)).get_variable('sst')
 def to_dataset(arr2d):
     """A 2-D SST array -&gt; a display-ready Dataset, shifting the 0-360 grid to -180..180."""
     rolled = np.roll(np.where(arr2d &lt; -1e30, np.nan, arr2d), arr2d.shape[1] // 2, axis=1)
-    return Dataset.create_from_array(arr=rolled.astype('float32'),
-                                     geo=(-181.0, 2.0, 0, 89.0, 0, -2.0), epsg=4326)
+    return Dataset.from_array(
+        arr=rolled.astype('float32'),
+        geo_ref=GeoReference(geo=(-181.0, 2.0, 0, 89.0, 0, -2.0), epsg=4326),
+    )
 
 def sst_month(band):
     """One month of SST as a -180..180 pyramids Dataset (land fill -&gt; NaN)."""
