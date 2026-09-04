@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.scene import Map
 from digitalearth.scene.maps.raster import _stretch_to_unit
@@ -17,7 +17,7 @@ def rgb_dataset(dataset):
     """
     base = np.nan_to_num(dataset.read_array(band=0).astype("float32"))
     arr3 = np.stack([base, base * 0.5, base * 0.25])  # (3, rows, cols)
-    return Dataset.create_from_array(arr=arr3, geo=dataset.geotransform, epsg=dataset.epsg)
+    return Dataset.from_array(arr=arr3, geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg))
 
 
 def test_stretch_to_unit_range():

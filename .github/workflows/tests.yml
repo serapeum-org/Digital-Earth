@@ -44,6 +44,77 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
+  # The two cheap whole-tree checks: a static name-check, and the doctests. ruff's F821 analyses a
+  # notebook as a whole, across cells, so it catches an undefined name inside a cell CI cannot execute
+  # — a body guarded by
+  # `if <gitignored data>.exists():`, or one of the network-heavy notebooks the `notebooks` job skips. Those cells are
+  # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
+  # Scoped to F821 on src/tests/docs deliberately: the full ruleset has ~1000 pre-existing findings (mostly import
+  # ordering) and examples/ is the exploratory scratch tree, both out of scope here. Keep the version in step with
+  # the ruff-pre-commit rev in .pre-commit-config.yaml.
+  lint-and-doctests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # No fetch-depth: 0 — this job reads the working tree only, never history.
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+          version: v0.73.0
+
+      - name: Name-check modules and notebooks
+        # Through pixi, not a bare `pip install` into the runner's system Python: the version then comes from
+        # pixi.lock rather than a second copy of it here, and a contributor can run the identical check with
+        # `pixi run -e dev lint` before pushing. ruff lints .ipynb natively, no extra flag.
+        run: |
+          pixi run -e dev lint
+
+      - name: Run the doctests
+        # The five doctests this branch migrated by hand are the only migrated code no other job covers:
+        # `main` sets testpaths = ["tests"] with no --doctest-modules, and ruff's F821 does not analyse
+        # doctest bodies, so a missing import inside a `>>>` block would sail through the step above.
+        run: |
+          pixi run -e dev doctests
+
+  # The notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env, minus the two
+  # network-heavy notebooks the step below names. Without this job nothing in CI executes those notebooks at
+  # all: the tier jobs below each run only their own tier's task, and the docs build renders with
+  # mkdocs-jupyter `execute: false`.
+  notebooks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      # No fetch-depth: 0 — this job reads the working tree only, never history.
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+          version: v0.73.0
+
+      - name: Check the notebooks render
+        # The gallery skip-list is declared once, as the `notebooks` task's ignore-globs. The pre-commit
+        # notebook-check hook restates it as a regex because a hook filters paths, not pytest arguments;
+        # tests/test_pixi_task_references.py asserts the two select exactly the same notebooks, so the
+        # restatement cannot drift. The two globs below are neither of those: they are a CI-only delta,
+        # appended to the task rather than forking it, because the reason is CI-specific — 11 and 12 each
+        # download ~50 MB of WorldClim/ETOPO from real endpoints on every run (examples/data/global/ holds
+        # only the tracked ersstv5.nc). The lint-and-doctests job name-checks those two instead.
+        run: >
+          pixi run -e dev notebooks
+          --ignore-glob='docs/examples/11_global_data_on_globe.ipynb'
+          --ignore-glob='docs/examples/12_animated_globe.ipynb'
+
   # The 3-D (PyVista) notebook needs VTK + the viz3d extra, so it is excluded from the default `notebooks`
   # task and validated here in the viz3d env. One Linux runner is enough — PyVista renders headless via OSMesa.
   notebooks-3d:
@@ -100,6 +171,12 @@ jobs:
       - name: Run 3-D tier tests
         run: |
           xvfb-run -a pixi run -e viz3d test-3d
+
+      - name: Run the 3-D doctests
+        # The `doctests` task ignores three_d because those modules import pyvista, which the dev env does
+        # not have. Without this step their doctests would run in no job at all.
+        run: |
+          xvfb-run -a pixi run -e viz3d doctests-3d
 
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5

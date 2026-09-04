@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 from matplotlib.animation import FuncAnimation, PillowWriter
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.scene import Map, projections
 
@@ -19,8 +19,10 @@ def _field(offset: float) -> Dataset:
     ny, nx = 60, 120
     lat = np.linspace(90, -90, ny)[:, None]
     z = (np.cos(np.deg2rad(lat)) * 30 + offset) * np.ones((ny, nx), "float32")
-    return Dataset.create_from_array(arr=z.astype("float32"), geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0),
-                                     epsg=4326)
+    return Dataset.from_array(
+        arr=z.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326),
+    )
 
 
 @pytest.fixture
@@ -122,7 +124,7 @@ class TestAnimate:
         def fld(lo, hi):
             ny, nx = 30, 60
             z = np.linspace(lo, hi, ny * nx).reshape(ny, nx).astype("float32")
-            return Dataset.create_from_array(arr=z, geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326)
+            return Dataset.from_array(arr=z, geo_ref=GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326))
 
         frames = [fld(0, 10), fld(0, 100), fld(0, 1000)]   # wildly different per-frame ranges
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
@@ -159,9 +161,9 @@ class TestAnimate:
         assert len(m.fig.axes) == 2, "a colorbar axes should be present"
 
     def test_stack_clim_ignores_nodata(self):
-        """_stack_clim excludes nodata cells when computing the range (create_from_array defaults to -9999)."""
+        """_stack_clim excludes nodata cells when computing the range (from_array defaults to -9999)."""
         arr = np.array([[0.0, 5.0], [10.0, -9999.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
         assert ds.no_data_value[0] == -9999.0
         lo, hi = Map._stack_clim([ds])
         assert (lo, hi) == (0.0, 10.0), f"nodata -9999 should be ignored, got ({lo}, {hi})"

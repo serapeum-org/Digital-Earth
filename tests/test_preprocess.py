@@ -1,7 +1,7 @@
 """Tests for T5.2 — longitude wrap, cyclic column, and the cyclic field option."""
 
 import numpy as np
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.preprocess import add_cyclic_column, wrap_longitude
 from digitalearth.scene import Map
@@ -34,7 +34,7 @@ class TestWrapLongitude:
         """A 0-360 dataset is rolled to -180..180 via pyramids wrap_longitude."""
         arr = np.arange(8 * 4, dtype="float32").reshape(4, 8)
         geo = (0.0, 45.0, 0.0, 90.0, 0.0, -45.0)
-        ds = Dataset.create_from_array(arr=arr, geo=geo, epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=geo, epsg=4326))
         wrapped = wrap_longitude(ds)
         assert wrapped.x.min() < 0.0
         assert wrapped.x.max() <= 180.0
@@ -44,7 +44,7 @@ def test_field_cyclic_option_widens_extent():
     """contourf(cyclic=True) closes the seam, widening the x-extent by one grid step."""
     arr = np.arange(8 * 4, dtype="float32").reshape(4, 8)
     geo = (-180.0, 45.0, 0.0, 90.0, 0.0, -45.0)
-    ds = Dataset.create_from_array(arr=arr, geo=geo, epsg=4326)
+    ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=geo, epsg=4326))
     plain = Map(crs=4326)
     plain.contourf(ds)
     wide = Map(crs=4326)

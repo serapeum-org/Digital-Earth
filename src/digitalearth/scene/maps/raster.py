@@ -162,12 +162,12 @@ class RasterMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from pyramids.dataset import Dataset
+                >>> from pyramids.dataset import Dataset, GeoReference
                 >>> from digitalearth.scene import Map
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
-                >>> rgb = Dataset.create_from_array(arr=np.stack([base, base, base]),
-                ...                                 geo=ds.geotransform, epsg=ds.epsg)
+                >>> rgb = Dataset.from_array(arr=np.stack([base, base, base]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
                 >>> m = Map(crs=rgb.epsg)
                 >>> _ = m.rgb_composite(rgb)
                 >>> len(m.ax.images)

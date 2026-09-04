@@ -32,7 +32,7 @@ dependencies = [
     "numpy >=2.0.0",
     "geopandas >=1.1.3",
     "cleopatra[tiles] >=0.35.0",
-    "pyramids-gis >=0.58.1",
+    "pyramids-gis >=0.59.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -98,7 +98,10 @@ dev = [
     "commitizen>=4.16.2",
     "mypy>=2.1.0",
     "pytest-mock>=3.15.1",
-    "pytest-mpl>=0.17.0"
+    "pytest-mpl>=0.17.0",
+    # Pinned, not floored: the `lint` task and the ruff-pre-commit hook must agree, so this tracks
+    # `rev: v0.15.22` in .pre-commit-config.yaml. Bump both together.
+    "ruff ==0.15.22"
 ]
 docs = [
     "mkdocs >=1.6.1",
@@ -260,6 +263,9 @@ docs-build = { cmd = "mkdocs build", description = "Build the documentation site
 cz-changelog = { cmd = "cz changelog", description = "Generate changelog using Commitizen" }
 cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }
+lint = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821) — catches an undefined name in a cell CI cannot execute. Scoped to F821, and to src/tests/docs, because the full ruleset and examples/ carry pre-existing findings" }
+doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/three_d -p no:cacheprovider", description = "run the doctests in src. three_d is ignored (it imports pyvista, which only viz3d has); run those via `doctests-3d`" }
+doctests-3d = { cmd = "pytest --doctest-modules src/digitalearth/three_d -p no:cacheprovider", description = "run the three_d doctests, which the `doctests` task ignores because they import pyvista. Needs the viz3d env" }
 
 
 # numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves

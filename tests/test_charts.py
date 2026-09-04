@@ -101,10 +101,10 @@ class TestHistogram:
 
     def test_dataset_input_drops_nodata(self):
         """A pyramids Dataset is histogrammed over its first band with nodata excluded."""
-        from pyramids.dataset import Dataset
+        from pyramids.dataset import Dataset, GeoReference
 
         arr = np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
         finite = charts._as_finite_array(ds)
         assert sorted(finite.tolist()) == [1.0, 2.0, 3.0], f"nodata not dropped: {finite}"
         fig, ax, hist = charts.histogram(ds, bins=3)
@@ -297,10 +297,10 @@ class TestStatistics:
 
     def test_dataset_band(self):
         """A pyramids Dataset is summarised over its first band, nodata dropped."""
-        from pyramids.dataset import Dataset
+        from pyramids.dataset import Dataset, GeoReference
 
         arr = np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
         s = charts.statistics(ds)
         assert s["count"] == 3 and s["min"] == 1.0 and s["max"] == 3.0
 

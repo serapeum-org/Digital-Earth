@@ -74,11 +74,12 @@ class AnimationMixin:
                 >>> import tempfile
                 >>> from pathlib import Path
                 >>> import numpy as np
-                >>> from pyramids.dataset import Dataset
+                >>> from pyramids.dataset import Dataset, GeoReference
                 >>> from digitalearth.scene import Map
                 >>> geo = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
-                >>> frames = [Dataset.create_from_array(arr=np.full((4, 4), v, dtype="float32"), geo=geo,
-                ...                                     epsg=4326) for v in (1.0, 2.0)]
+                >>> ref = GeoReference(geo=geo, epsg=4326)
+                >>> frames = [Dataset.from_array(arr=np.full((4, 4), v, dtype="float32"), geo_ref=ref)
+                ...           for v in (1.0, 2.0)]
                 >>> m = Map(crs=4326)
                 >>> anim = m.animate(frames, fps=2.0)
                 >>> out = Path(tempfile.mkdtemp()) / "clip.gif"

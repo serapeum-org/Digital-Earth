@@ -33,7 +33,7 @@ from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth._arrays import finite, read_masked_band
 from digitalearth._crs import source_epsg
@@ -344,10 +344,10 @@ class TexturedGlobe:
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
                 >>> from digitalearth.scene import TexturedGlobe
-                >>> from pyramids.dataset import Dataset
+                >>> from pyramids.dataset import Dataset, GeoReference
                 >>> arr = np.arange(8, dtype="float32").reshape(2, 4)
-                >>> ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 90.0, 0.0, 90.0, 0.0, -90.0),
-                ...                                epsg=4326)
+                >>> ds = Dataset.from_array(
+                ...     arr=arr, geo_ref=GeoReference(geo=(-180.0, 90.0, 0.0, 90.0, 0.0, -90.0), epsg=4326))
                 >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
                 >>> globe.glyph.texture.shape
                 (90, 180, 4)
@@ -361,10 +361,10 @@ class TexturedGlobe:
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
                 >>> from digitalearth.scene import TexturedGlobe
-                >>> from pyramids.dataset import Dataset
+                >>> from pyramids.dataset import Dataset, GeoReference
                 >>> arr = np.ones((2, 2), dtype="float32")
-                >>> ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0),
-                ...                                epsg=4326)
+                >>> ds = Dataset.from_array(
+                ...     arr=arr, geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326))
                 >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
                 >>> opaque = globe.glyph.texture[..., 3] > 0
                 >>> bool(opaque.any()), bool(opaque.all())
@@ -629,17 +629,19 @@ class TexturedGlobe:
         # which showed as a hole at the pole and a seam down the antimeridian. The offset is a millionth of a
         # cell, far below anything the texture can express, so nothing moves visibly.
         inset_lat, inset_lon = d_lat * _EDGE_INSET, d_lon * _EDGE_INSET
-        return Dataset.create_from_array(
+        return Dataset.from_array(
             arr=np.zeros((rows, cols), dtype="float32"),
-            geo=(
-                -180.0 + inset_lon - d_lon / 2,
-                d_lon * (1.0 - 2.0 * _EDGE_INSET / (cols - 1)),
-                0.0,
-                90.0 - inset_lat + d_lat / 2,
-                0.0,
-                -d_lat * (1.0 - 2.0 * _EDGE_INSET / (rows - 1)),
+            geo_ref=GeoReference(
+                geo=(
+                    -180.0 + inset_lon - d_lon / 2,
+                    d_lon * (1.0 - 2.0 * _EDGE_INSET / (cols - 1)),
+                    0.0,
+                    90.0 - inset_lat + d_lat / 2,
+                    0.0,
+                    -d_lat * (1.0 - 2.0 * _EDGE_INSET / (rows - 1)),
+                ),
+                epsg=_TEXTURE_EPSG,
             ),
-            epsg=_TEXTURE_EPSG,
         )
 
     # ------------------------------------------------------------------ geometry
