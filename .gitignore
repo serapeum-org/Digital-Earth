@@ -145,7 +145,7 @@ examples/data/DEM100_Rhine.tif
 # ersstv5.nc is the exception: it is tracked (19 MB, committed in 5863993) so presets/02 and presets/05
 # read it from the checkout instead of fetching it, in CI and on a fresh clone alike. The negation only
 # documents that — git already keeps tracking it, which is why it survived this rule in the first place.
-examples/data/global/
+examples/data/global/*
 !examples/data/global/ersstv5.nc
 docs/examples/examples/
 
