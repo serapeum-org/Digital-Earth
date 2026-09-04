@@ -45,8 +45,8 @@ jobs:
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
   # The two cheap whole-tree checks: a static name-check, and the doctests. ruff's F821 analyses a
-  # notebook as a whole, across
-  # cells, so it catches an undefined name inside a cell CI cannot execute — a body guarded by
+  # notebook as a whole, across cells, so it catches an undefined name inside a cell CI cannot execute
+  # — a body guarded by
   # `if <gitignored data>.exists():`, or one of the network-heavy notebooks the `notebooks` job skips. Those cells are
   # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
   # Scoped to F821 on src/tests/docs deliberately: the full ruleset has ~1000 pre-existing findings (mostly import
@@ -91,9 +91,8 @@ jobs:
     permissions:
       contents: read
     steps:
+      # No fetch-depth: 0 — this job reads the working tree only, never history.
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
@@ -172,6 +171,12 @@ jobs:
       - name: Run 3-D tier tests
         run: |
           xvfb-run -a pixi run -e viz3d test-3d
+
+      - name: Run the 3-D doctests
+        # The `doctests` task ignores three_d because those modules import pyvista, which the dev env does
+        # not have. Without this step their doctests would run in no job at all.
+        run: |
+          xvfb-run -a pixi run -e viz3d doctests-3d
 
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5

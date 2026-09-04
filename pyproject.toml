@@ -263,8 +263,9 @@ docs-build = { cmd = "mkdocs build", description = "Build the documentation site
 cz-changelog = { cmd = "cz changelog", description = "Generate changelog using Commitizen" }
 cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }
-lint = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821). Scoped to F821 because the full ruleset has ~1000 pre-existing findings, and to src/tests/docs because examples/ is the exploratory scratch tree. Catches an undefined name inside a cell CI cannot execute — a body guarded by a gitignored-data check, or a notebook the CI notebooks job skips" }
-doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/three_d -p no:cacheprovider", description = "run the doctests in src. three_d is ignored because it imports pyvista, which only the viz3d env has — without the ignore, collection errors in dev. MPLBACKEND=Agg comes from pytest-env, so no display is needed" }
+lint = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821) — catches an undefined name in a cell CI cannot execute. Scoped to F821, and to src/tests/docs, because the full ruleset and examples/ carry pre-existing findings" }
+doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/three_d -p no:cacheprovider", description = "run the doctests in src. three_d is ignored (it imports pyvista, which only viz3d has); run those via `doctests-3d`" }
+doctests-3d = { cmd = "pytest --doctest-modules src/digitalearth/three_d -p no:cacheprovider", description = "run the three_d doctests, which the `doctests` task ignores because they import pyvista. Needs the viz3d env" }
 
 
 # numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves
