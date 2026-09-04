@@ -347,7 +347,7 @@ class TexturedGlobe:
                 >>> from pyramids.dataset import Dataset, GeoReference
                 >>> arr = np.arange(8, dtype="float32").reshape(2, 4)
                 >>> ds = Dataset.from_array(
-                ...     arr, geo_ref=GeoReference(geo=(-180.0, 90.0, 0.0, 90.0, 0.0, -90.0), epsg=4326))
+                ...     arr=arr, geo_ref=GeoReference(geo=(-180.0, 90.0, 0.0, 90.0, 0.0, -90.0), epsg=4326))
                 >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
                 >>> globe.glyph.texture.shape
                 (90, 180, 4)
@@ -364,7 +364,7 @@ class TexturedGlobe:
                 >>> from pyramids.dataset import Dataset, GeoReference
                 >>> arr = np.ones((2, 2), dtype="float32")
                 >>> ds = Dataset.from_array(
-                ...     arr, geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326))
+                ...     arr=arr, geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326))
                 >>> globe = TexturedGlobe.from_dataset(ds, shape=(90, 180))
                 >>> opaque = globe.glyph.texture[..., 3] > 0
                 >>> bool(opaque.any()), bool(opaque.all())

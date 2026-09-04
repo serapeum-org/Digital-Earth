@@ -166,7 +166,7 @@ class RasterMixin:
                 >>> from digitalearth.scene import Map
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
-                >>> rgb = Dataset.from_array(np.stack([base, base, base]),
+                >>> rgb = Dataset.from_array(arr=np.stack([base, base, base]),
                 ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
                 >>> m = Map(crs=rgb.epsg)
                 >>> _ = m.rgb_composite(rgb)

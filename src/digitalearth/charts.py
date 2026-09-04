@@ -292,7 +292,7 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             >>> from digitalearth.charts import histogram
             >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
             >>> ds = Dataset.from_array(
-            ...     arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
+            ...     arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
             >>> fig, ax, hist = histogram(ds, bins=4)
             >>> len(ax.patches)
             4
