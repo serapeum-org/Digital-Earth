@@ -58,12 +58,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+          version: v0.73.0
+
       - name: Name-check modules and notebooks
-        # Installed with pip rather than via astral-sh/ruff-action: every action here is SHA-pinned, and this
-        # needs no new third-party action to pin and track. ruff lints .ipynb natively, no extra flag.
+        # Through pixi, not a bare `pip install` into the runner's system Python: the version then comes from
+        # pixi.lock rather than a second copy of it here, and a contributor can run the identical check with
+        # `pixi run -e dev lint` before pushing. ruff lints .ipynb natively, no extra flag.
         run: |
-          python -m pip install --disable-pip-version-check ruff==0.15.22
-          ruff check --select F821 src tests docs
+          pixi run -e dev lint
 
   # The notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env, minus the two
   # network-heavy notebooks the step below names. Without this job nothing in CI executes those notebooks at
