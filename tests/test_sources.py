@@ -91,8 +91,8 @@ def test_collection_source():
 
 def test_netcdf_source():
     """A NetCDF variable becomes a raster Source (synthesised from the test raster)."""
-    from pyramids.dataset import Dataset
-    from pyramids.netcdf import GeoReference, NetCDF
+    from pyramids.dataset import Dataset, GeoReference
+    from pyramids.netcdf import NetCDF
 
     ds = Dataset.read_file("examples/data/acc4000.tif")
     arr = ds.read_array(band=0).astype("float32")[np.newaxis, ...]

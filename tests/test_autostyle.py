@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+from pyramids.dataset import GeoReference
 
 from digitalearth.autostyle import auto_style, load_library
 from digitalearth.scene import Map
@@ -74,8 +75,6 @@ class TestAutoStyle:
 
 def test_field_uses_auto_style_cmap(dataset):
     """A field method with no explicit cmap picks up the auto-style default for the variable."""
-    from pyramids.dataset import GeoReference
-
     t2m = dataset.__class__.from_array(
         arr=np.nan_to_num(dataset.read_array(band=0)),
         geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg),
