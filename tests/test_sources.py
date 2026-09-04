@@ -96,7 +96,7 @@ def test_netcdf_source():
 
     ds = Dataset.read_file("examples/data/acc4000.tif")
     arr = ds.read_array(band=0).astype("float32")[np.newaxis, ...]
-    nc = NetCDF.create_from_array(
+    nc = NetCDF.from_array(
         arr,
         geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg),
         no_data_value=ds.no_data_value[0],
@@ -200,13 +200,15 @@ def test_raster_source_nodata_is_exact_not_tolerant():
     Regression for the tolerant->exact change: a cell equal to the nodata sentinel becomes NaN, but a cell
     0.01% away from it is preserved (the old isclose(rtol=1e-3) rule would have nulled it).
     """
-    from pyramids.dataset import Dataset
+    from pyramids.dataset import Dataset, GeoReference
 
     nodata = -9999.0
     near = nodata * (1 + 1e-4)  # within 0.1% of the sentinel, but not equal
     arr = np.array([[1.0, nodata], [near, 4.0]], dtype="float64")
-    ds = Dataset.create_from_array(
-        arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326, no_data_value=nodata
+    ds = Dataset.from_array(
+        arr=arr,
+        geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+        no_data_value=nodata,
     )
     z = get_source(ds).z.values
     assert np.isnan(z[0, 1]), "exact nodata cell should be masked"

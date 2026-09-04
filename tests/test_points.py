@@ -56,11 +56,13 @@ def test_grid_cells_nulls_nodata_cells():
         that one cell carries a non-finite (masked/NaN) face value.
     """
     import numpy as np
-    from pyramids.dataset import Dataset
+    from pyramids.dataset import Dataset, GeoReference
 
     arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
-    ds = Dataset.create_from_array(
-        arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326, no_data_value=-9999.0
+    ds = Dataset.from_array(
+        arr=arr,
+        geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+        no_data_value=-9999.0,
     )
     m = Map(crs=4326)
     pc = m.grid_cells(ds)

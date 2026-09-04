@@ -288,10 +288,11 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import numpy as np
-            >>> from pyramids.dataset import Dataset
+            >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.charts import histogram
             >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
-            >>> ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326)
+            >>> ds = Dataset.from_array(
+            ...     arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
             >>> fig, ax, hist = histogram(ds, bins=4)
             >>> len(ax.patches)
             4

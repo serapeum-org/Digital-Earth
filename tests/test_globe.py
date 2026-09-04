@@ -1,7 +1,7 @@
 """Tests for DC.5/DC.6 — Map(globe=) projection frame, graticule, set_global."""
 import numpy as np
 import pytest
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.scene import Map, projections
 
@@ -90,7 +90,10 @@ def global_field():
     ny, nx = 90, 180
     lat = np.linspace(90, -90, ny)[:, None]
     z = (np.cos(np.deg2rad(lat)) * 30) * np.ones((ny, nx), "float32")
-    return Dataset.create_from_array(arr=z.astype("float32"), geo=(-180.0, 2.0, 0.0, 90.0, 0.0, -2.0), epsg=4326)
+    return Dataset.from_array(
+        arr=z.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 2.0, 0.0, 90.0, 0.0, -2.0), epsg=4326),
+    )
 
 
 def test_finite_polygons_drops_nonfinite():

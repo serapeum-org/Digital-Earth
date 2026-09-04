@@ -1,7 +1,7 @@
 """Tests for digitalearth.sources.get_stack — the multiband band-stack reader (PC-5)."""
 import numpy as np
 import pytest
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.sources import get_stack
 
@@ -14,8 +14,10 @@ def three_band():
         np.array([[10.0, 20.0], [30.0, 40.0]], dtype="float32"),
         np.array([[100.0, 200.0], [300.0, 400.0]], dtype="float32"),
     ])  # (3, 2, 2)
-    return Dataset.create_from_array(
-        arr=arr, geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326, no_data_value=-9999.0
+    return Dataset.from_array(
+        arr=arr,
+        geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+        no_data_value=-9999.0,
     )
 
 
@@ -52,8 +54,10 @@ class TestGetStack:
             A band whose cell equals the sentinel comes back as NaN at that cell.
         """
         arr = np.stack([np.array([[5.0, -9999.0]], dtype="float32")])  # (1, 1, 2)
-        ds = Dataset.create_from_array(
-            arr=arr, geo=(0.0, 1.0, 0.0, 1.0, 0.0, -1.0), epsg=4326, no_data_value=-9999.0
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 1.0, 0.0, -1.0), epsg=4326),
+            no_data_value=-9999.0,
         )
         stack = get_stack(ds, (1,))  # shape (rows=1, cols=2, n=1)
         assert stack[0, 0, 0] == 5.0, "real value should be preserved"
@@ -66,8 +70,10 @@ class TestGetStack:
             With masking off the nodata sentinel stays as its numeric value.
         """
         arr = np.stack([np.array([[5.0, -9999.0]], dtype="float32")])
-        ds = Dataset.create_from_array(
-            arr=arr, geo=(0.0, 1.0, 0.0, 1.0, 0.0, -1.0), epsg=4326, no_data_value=-9999.0
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 1.0, 0.0, -1.0), epsg=4326),
+            no_data_value=-9999.0,
         )
         stack = get_stack(ds, (1,), mask=False)  # shape (rows=1, cols=2, n=1)
         assert stack[0, 1, 0] == -9999.0, f"raw sentinel should be kept, got {stack[0, 1, 0]}"

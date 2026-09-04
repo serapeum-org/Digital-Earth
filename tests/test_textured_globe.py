@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 from cleopatra.styling.colors import resolve_colormap
 from matplotlib.colors import Normalize
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
@@ -99,7 +99,7 @@ class TestFromDataset:
         """
         lon = np.linspace(0.0, 359.0, 360, dtype="float32")
         arr = np.repeat(lon[None, :], 180, axis=0)
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=0.0, vmax=359.0, shape=(180, 360))
         texture = globe.glyph.texture
         assert (texture[..., 3] > 0).mean() == pytest.approx(1.0), "should cover the whole globe"
@@ -119,14 +119,14 @@ class TestFromDataset:
     def test_a_minus180_longitude_axis_still_drapes_the_whole_world(self):
         """The conventional frame must be unaffected by the 0-360 handling."""
         arr = np.ones((180, 360), dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         assert (globe.glyph.texture[..., 3] > 0).mean() == pytest.approx(1.0)
 
     def test_a_raster_beyond_the_antimeridian_lands_west(self):
         """Longitudes 200-210 in the 0-360 frame are -160..-150 on the canvas, not off the edge."""
         arr = np.ones((10, 10), dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(200.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(200.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, shape=(720, 1440))
         opaque = globe.glyph.texture[..., 3] > 0
         assert opaque.any(), "a raster stored beyond the antimeridian must still drape"
@@ -138,13 +138,13 @@ class TestFromDataset:
     def test_a_single_row_raster_drapes(self):
         """One row has no latitude spacing of its own; borrowing the column spacing keeps it visible."""
         arr = np.ones((1, 8), dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 5.0, 0.0, 10.0, 0.0, -5.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 5.0, 0.0, 10.0, 0.0, -5.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         assert (globe.glyph.texture[..., 3] > 0).any(), "a single-row raster should still drape"
 
     def test_a_single_column_raster_drapes(self):
         arr = np.ones((8, 1), dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 5.0, 0.0, 40.0, 0.0, -5.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 5.0, 0.0, 40.0, 0.0, -5.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         assert (globe.glyph.texture[..., 3] > 0).any(), "a single-column raster should still drape"
 
@@ -152,7 +152,7 @@ class TestFromDataset:
     def test_the_poles_and_the_antimeridian_are_not_left_empty(self):
         """Outer centres on the source's boundary returned nothing: a pole hole and an antimeridian seam."""
         arr = np.ones((180, 360), dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326))
         opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
         assert opaque[0].all(), "the north-pole row should be filled"
         assert opaque[-1].all(), "the south-pole row should be filled, not left as a hole"
@@ -163,8 +163,11 @@ class TestFromDataset:
         """The earlier edge-clamp filled this in, fabricating data that is not in the raster."""
         arr = np.ones((180, 360), dtype="float32")
         arr[-1, :] = -9999.0
-        ds = Dataset.create_from_array(arr=arr, geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326,
-                                       no_data_value=-9999.0)
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326),
+            no_data_value=-9999.0,
+        )
         opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
         assert not opaque[-1].any(), "a nodata southern row must stay transparent, not be filled from above"
         assert opaque[-2].any(), "the row above it is real data and should still drape"
@@ -183,8 +186,11 @@ class TestFromDataset:
     def test_nodata_cells_are_transparent(self):
         """The nodata cell must be transparent while its neighbours are opaque, at its own lon/lat."""
         arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326,
-                                       no_data_value=-9999.0)
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326),
+            no_data_value=-9999.0,
+        )
         globe = TexturedGlobe.from_dataset(ds, shape=(720, 1440))
         alpha = globe.glyph.texture[..., 3]
         lat_axis, lon_axis = _texture_axes(*alpha.shape)
@@ -203,8 +209,11 @@ class TestFromDataset:
         cmap = resolve_colormap("viridis").copy()
         cmap.set_bad("red", alpha=1.0)
         arr = np.array([[1.0, -9999.0], [3.0, 4.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326,
-                                       no_data_value=-9999.0)
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326),
+            no_data_value=-9999.0,
+        )
         globe = TexturedGlobe.from_dataset(ds, cmap=cmap, shape=(720, 1440))
         alpha = globe.glyph.texture[..., 3]
         lat_axis, lon_axis = _texture_axes(*alpha.shape)
@@ -215,7 +224,7 @@ class TestFromDataset:
     def test_the_drape_is_not_transposed_or_shifted(self):
         """Pin the orientation: a distinctive value must land at its own lon/lat, not a mirrored one."""
         arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=1.0, vmax=4.0, shape=(720, 1440))
         texture = globe.glyph.texture
         lat_axis, lon_axis = _texture_axes(*texture.shape[:2])
@@ -266,7 +275,7 @@ class TestFromDataset:
     def test_the_requested_band_is_the_one_drawn(self, band, value):
         """Selecting a band before the warp must not change which band ends up on the globe."""
         arr = np.stack([np.full((40, 40), v, dtype="float32") for v in (1.0, 2.0, 3.0)])
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 0.25, 0.0, 10.0, 0.0, -0.25), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 0.25, 0.0, 10.0, 0.0, -0.25), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, band=band, cmap="viridis", vmin=1.0, vmax=3.0,
                                            n_lon=2880, n_lat=1440)
         texture = globe.glyph.texture
@@ -287,15 +296,18 @@ class TestFromDataset:
     def test_a_lone_bound_that_inverts_the_range_is_refused(self, kwargs):
         """One bound on the wrong side of the data leaves no range, just as passing both reversed does."""
         arr = np.arange(16, dtype="float32").reshape(4, 4)
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326))
         with pytest.raises(ValueError, match="no range to colour"):
             TexturedGlobe.from_dataset(ds, **kwargs)
 
     def test_an_all_nodata_band_warns(self):
         """A fully transparent globe is indistinguishable from a broken one, so say which it is."""
         arr = np.full((4, 4), -9999.0, dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326,
-                                       no_data_value=-9999.0)
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+            no_data_value=-9999.0,
+        )
         with pytest.warns(RuntimeWarning, match="fully transparent"):
             TexturedGlobe.from_dataset(ds)
 
@@ -349,10 +361,9 @@ class TestFromDataset:
             lon0 = float(rng.uniform(-170.0, 160.0))
             lat0 = float(rng.uniform(-70.0, 70.0))
             size = float(rng.uniform(0.2, 4.0))
-            ds = Dataset.create_from_array(
+            ds = Dataset.from_array(
                 arr=np.ones((4, 4), dtype="float32"),
-                geo=(lon0, size / 4, 0.0, lat0, 0.0, -size / 4),
-                epsg=4326,
+                geo_ref=GeoReference(geo=(lon0, size / 4, 0.0, lat0, 0.0, -size / 4), epsg=4326),
             )
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
@@ -368,7 +379,7 @@ class TestFromDataset:
     def test_a_constant_band_does_not_divide_by_zero(self):
         """vmin == vmax has no range to normalise against; it must still produce a texture."""
         arr = np.full((4, 4), 5.0, dtype="float32")
-        ds = Dataset.create_from_array(arr=arr, geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326)
+        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326))
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         opaque = globe.glyph.texture[..., 3] > 0
         assert opaque.any(), "a constant band should still drape"

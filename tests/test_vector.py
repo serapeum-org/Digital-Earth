@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from pyramids.dataset import Dataset
+from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.scene import Map
 
@@ -18,8 +18,8 @@ def uv():
     u = np.ones((ny, nx), dtype="float32")
     v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones((1, nx), "float32")
     geo = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)  # increasing y (good for streamplot)
-    u_ds = Dataset.create_from_array(arr=u, geo=geo, epsg=4326)
-    v_ds = Dataset.create_from_array(arr=v, geo=geo, epsg=4326)
+    u_ds = Dataset.from_array(arr=u, geo_ref=GeoReference(geo=geo, epsg=4326))
+    v_ds = Dataset.from_array(arr=v, geo_ref=GeoReference(geo=geo, epsg=4326))
     return u_ds, v_ds
 
 
@@ -89,8 +89,8 @@ def uv_descending_y():
     u = np.ones((ny, nx), dtype="float32")
     v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones((1, nx), "float32")
     geo = (0.0, 1.0, 0.0, 6.0, 0.0, -1.0)  # ymax=6, negative dy -> y runs north->south
-    u_ds = Dataset.create_from_array(arr=u, geo=geo, epsg=4326)
-    v_ds = Dataset.create_from_array(arr=v, geo=geo, epsg=4326)
+    u_ds = Dataset.from_array(arr=u, geo_ref=GeoReference(geo=geo, epsg=4326))
+    v_ds = Dataset.from_array(arr=v, geo_ref=GeoReference(geo=geo, epsg=4326))
     return u_ds, v_ds
 
 

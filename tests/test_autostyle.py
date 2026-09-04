@@ -74,10 +74,11 @@ class TestAutoStyle:
 
 def test_field_uses_auto_style_cmap(dataset):
     """A field method with no explicit cmap picks up the auto-style default for the variable."""
-    t2m = dataset.__class__.create_from_array(
+    from pyramids.dataset import GeoReference
+
+    t2m = dataset.__class__.from_array(
         arr=np.nan_to_num(dataset.read_array(band=0)),
-        geo=dataset.geotransform,
-        epsg=dataset.epsg,
+        geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg),
     )
     t2m.band_names = ["t2m"]
     m = Map(crs=t2m.epsg)
