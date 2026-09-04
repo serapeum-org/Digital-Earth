@@ -133,7 +133,10 @@ repos:
     hooks:
       - id: doctest
         name: doctest
-        entry: pixi run --frozen -e dev python -c 'import matplotlib; matplotlib.use("Agg"); import pytest; import sys; sys.exit(pytest.main(["--doctest-modules", "src", "-p", "no:cacheprovider"]))'
+        # The `doctests` pixi task, so this hook and the CI step cannot drift. The old inline command
+        # ran --doctest-modules over all of src, which errors in dev: three_d imports pyvista, which
+        # only the viz3d env has. The task carries the ignore.
+        entry: pixi run --frozen -e dev doctests
         language: system
         always_run: true
         pass_filenames: false

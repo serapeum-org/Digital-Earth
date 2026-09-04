@@ -264,6 +264,7 @@ cz-changelog = { cmd = "cz changelog", description = "Generate changelog using C
 cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }
 lint = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821). Scoped to F821 because the full ruleset has ~1000 pre-existing findings, and to src/tests/docs because examples/ is the exploratory scratch tree. Catches an undefined name inside a cell CI cannot execute — a body guarded by a gitignored-data check, or a notebook the CI notebooks job skips" }
+doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/three_d -p no:cacheprovider", description = "run the doctests in src. three_d is ignored because it imports pyvista, which only the viz3d env has — without the ignore, collection errors in dev. MPLBACKEND=Agg comes from pytest-env, so no display is needed" }
 
 
 # numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves
