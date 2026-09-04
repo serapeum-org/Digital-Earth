@@ -46,7 +46,7 @@ jobs:
 
   # Static name-check across every module and notebook. ruff's F821 analyses a notebook as a whole, across
   # cells, so it catches an undefined name inside a cell CI cannot execute — a body guarded by
-  # `if <gitignored data>.exists():`, or one of the network-heavy notebooks `notebooks-ci` skips. Those cells are
+  # `if <gitignored data>.exists():`, or one of the network-heavy notebooks the `notebooks` job skips. Those cells are
   # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
   # Scoped to F821 on src/tests/docs deliberately: the full ruleset has ~1000 pre-existing findings (mostly import
   # ordering) and examples/ is the exploratory scratch tree, both out of scope here. Keep the version in step with
@@ -84,12 +84,16 @@ jobs:
           version: v0.73.0
 
       - name: Check the notebooks render
-        # `notebooks-ci`, not `notebooks`: the CI variant additionally skips the two notebooks that download
-        # ~50 MB of WorldClim/ETOPO from real endpoints on every run. `lint` above name-checks those two.
-        # This job still reaches the network: presets/02 and presets/05 fetch a 19 MB ERSST file from GitHub
-        # raw, because the examples/data/global/ cache they read is gitignored and so never present here.
-        run: |
-          pixi run -e dev notebooks-ci
+        # The skip-list lives in exactly one place — the `notebooks` pixi task (which the pre-commit
+        # notebook-check hook's exclude regex mirrors). The two globs below are the CI-only delta, appended
+        # to the task rather than forked into a second copy of it, and they belong here because the reason
+        # is CI-specific: 11 and 12 each download ~50 MB of WorldClim/ETOPO from real endpoints on every
+        # run, since examples/data/global/ holds only the tracked ersstv5.nc and is gitignored otherwise.
+        # `lint` above name-checks those two notebooks instead.
+        run: >
+          pixi run -e dev notebooks
+          --ignore-glob='docs/examples/11_global_data_on_globe.ipynb'
+          --ignore-glob='docs/examples/12_animated_globe.ipynb'
 
   # The 3-D (PyVista) notebook needs VTK + the viz3d extra, so it is excluded from the default `notebooks`
   # task and validated here in the viz3d env. One Linux runner is enough — PyVista renders headless via OSMesa.
