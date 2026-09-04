@@ -44,6 +44,53 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
+  # Static name-check across every module and notebook. ruff's F821 analyses a notebook as a whole, across
+  # cells, so it catches an undefined name inside a cell CI cannot execute — a body guarded by
+  # `if <gitignored data>.exists():`, or one of the network-heavy notebooks `notebooks-ci` skips. Those cells are
+  # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
+  # Scoped to F821 on src/tests/docs deliberately: the full ruleset has ~1000 pre-existing findings (mostly import
+  # ordering) and examples/ is the exploratory scratch tree, both out of scope here. Keep the version in step with
+  # the ruff-pre-commit rev in .pre-commit-config.yaml.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Name-check modules and notebooks
+        # Installed with pip rather than via astral-sh/ruff-action: every action here is SHA-pinned, and this
+        # needs no new third-party action to pin and track. ruff lints .ipynb natively, no extra flag.
+        run: |
+          python -m pip install --disable-pip-version-check ruff==0.15.22
+          ruff check --select F821 src tests docs
+
+  # The default notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env. Without this job
+  # nothing in CI executes those notebooks at all: the tier jobs below each run only their own tier's task, and
+  # the docs build renders with mkdocs-jupyter `execute: false`.
+  notebooks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+          version: v0.73.0
+
+      - name: Check the notebooks render
+        # `notebooks-ci`, not `notebooks`: the CI variant additionally skips the two notebooks that download
+        # ~50 MB of WorldClim/ETOPO from real endpoints on every run. `lint` above name-checks those two.
+        # This job still reaches the network: presets/02 and presets/05 fetch a 19 MB ERSST file from GitHub
+        # raw, because the examples/data/global/ cache they read is gitignored and so never present here.
+        run: |
+          pixi run -e dev notebooks-ci
+
   # The 3-D (PyVista) notebook needs VTK + the viz3d extra, so it is excluded from the default `notebooks`
   # task and validated here in the viz3d env. One Linux runner is enough — PyVista renders headless via OSMesa.
   notebooks-3d:
