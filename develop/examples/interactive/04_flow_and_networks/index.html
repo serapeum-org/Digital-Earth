@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4353,7 +4353,7 @@ networks</strong> (<code>graph</code>, <code>flow</code>). For the field we use 
 <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">nan_to_num</span><span class="p">(</span><span class="n">coarse</span><span class="o">.</span><span class="n">read_array</span><span class="p">(</span><span class="n">band</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">))</span>
 <span class="n">dy</span><span class="p">,</span> <span class="n">dx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">gradient</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
 <span class="n">u</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="p">(</span><span class="o">-</span><span class="n">dx</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">epsg</span><span class="p">))</span>
-<span class="n">v</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="p">(</span> <span class="n">dy</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">epsg</span><span class="p">))</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">from_array</span><span class="p">(</span><span class="n">arr</span><span class="o">=</span><span class="p">(</span><span class="n">dy</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"float32"</span><span class="p">),</span> <span class="n">geo_ref</span><span class="o">=</span><span class="n">GeoReference</span><span class="p">(</span><span class="n">geo</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">geotransform</span><span class="p">,</span> <span class="n">epsg</span><span class="o">=</span><span class="n">coarse</span><span class="o">.</span><span class="n">epsg</span><span class="p">))</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">import warnings
 warnings.filterwarnings("ignore")            # hide backend-mismatch style warnings in the docs
@@ -4398,7 +4398,7 @@ coarse = dem.resample(dem.cell_size * 12)                # fewer, legible arrows
 z = np.nan_to_num(coarse.read_array(band=0).astype("float32"))
 dy, dx = np.gradient(z)
 u = Dataset.from_array(arr=(-dx).astype("float32"), geo_ref=GeoReference(geo=coarse.geotransform, epsg=coarse.epsg))
-v = Dataset.from_array(arr=( dy).astype("float32"), geo_ref=GeoReference(geo=coarse.geotransform, epsg=coarse.epsg))</div>
+v = Dataset.from_array(arr=(dy).astype("float32"), geo_ref=GeoReference(geo=coarse.geotransform, epsg=coarse.epsg))</div>
 </div>
 </div>
 </div>
@@ -4430,9 +4430,9 @@ v = Dataset.from_array(arr=( dy).astype("float32"), geo_ref=GeoReference(geo=coa
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="5fdb88e4-8e3d-4bb4-a84e-ae141068c91b" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="bd891dd3-b75c-4c8b-9a3a-3696badd7207" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('5fdb88e4-8e3d-4bb4-a84e-ae141068c91b');
+var element = document.getElementById('bd891dd3-b75c-4c8b-9a3a-3696badd7207');
 (function(root) {
   function now() {
     return new Date();
@@ -4689,9 +4689,9 @@ function(Bokeh) {} // ensure no trailing comma for IE
 </div>
 <div class="jp-OutputArea-child">
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
-<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="307581f3-a993-41be-98c7-3ec562b973a5" tabindex="0">
+<div class="jp-RenderedJavaScript jp-OutputArea-output" data-mime-type="application/javascript" id="8f8a7120-cf32-42c3-9c6e-53b3ba3fd2a8" tabindex="0">
 <script type="text/javascript">
-var element = document.getElementById('307581f3-a993-41be-98c7-3ec562b973a5');
+var element = document.getElementById('8f8a7120-cf32-42c3-9c6e-53b3ba3fd2a8');
 
 if ((window.PyViz === undefined) || (window.PyViz instanceof HTMLElement)) {
   window.PyViz = {comms: {}, comm_status:{}, kernels:{}, receivers: {}, plot_index: []}
