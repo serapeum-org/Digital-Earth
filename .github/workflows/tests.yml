@@ -65,9 +65,10 @@ jobs:
           python -m pip install --disable-pip-version-check ruff==0.15.22
           ruff check --select F821 src tests docs
 
-  # The default notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env. Without this job
-  # nothing in CI executes those notebooks at all: the tier jobs below each run only their own tier's task, and
-  # the docs build renders with mkdocs-jupyter `execute: false`.
+  # The notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env, minus the two
+  # network-heavy notebooks the step below names. Without this job nothing in CI executes those notebooks at
+  # all: the tier jobs below each run only their own tier's task, and the docs build renders with
+  # mkdocs-jupyter `execute: false`.
   notebooks:
     runs-on: ubuntu-latest
     steps:
