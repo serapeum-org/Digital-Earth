@@ -209,3 +209,30 @@ class TestNotebookSkipListsMirror:
         hook_only = sorted(p.relative_to(ROOT).as_posix() for p in _hook_excluded() - _task_skipped())
         assert not task_only, f"the task skips these but the pre-commit hook still checks them: {task_only}"
         assert not hook_only, f"the hook skips these but the notebooks task still runs them: {hook_only}"
+
+
+class TestRuffPinsAgree:
+    """Tests that the ruff the lint task resolves is the ruff the pre-commit hook runs."""
+
+    def test_dev_extra_pin_matches_the_pre_commit_rev(self):
+        """The `ruff ==X` pin in the dev extra equals the ruff-pre-commit `rev: vX`.
+
+        Test scenario:
+            The `lint` task resolves ruff from the `dev` dependency group; the hooks resolve it from their
+            own rev. They must agree, or a contributor's hook and CI can disagree about the same file. The
+            two pins live in different files and were kept in step only by a comment saying to bump them.
+        """
+        dev = _pyproject()["dependency-groups"]["dev"]
+        pinned = [d for d in dev if d.replace(" ", "").startswith("ruff==")]
+        assert len(pinned) == 1, f"expected exactly one pinned ruff in the dev extra, found {pinned}"
+        pyproject_version = pinned[0].split("==")[1].strip()
+
+        document = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+        revs = [repo["rev"] for repo in document["repos"] if "ruff-pre-commit" in repo.get("repo", "")]
+        assert len(revs) == 1, f"expected exactly one ruff-pre-commit repo, found {revs}"
+        hook_version = revs[0].lstrip("v")
+
+        assert pyproject_version == hook_version, (
+            f"ruff pins disagree: pyproject dev extra has {pyproject_version!r}, "
+            f".pre-commit-config.yaml has {revs[0]!r}"
+        )
