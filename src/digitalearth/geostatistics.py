@@ -19,12 +19,9 @@ Each helper composes the **static** :class:`~digitalearth.scene.Map`; the annota
 draws can equally be handed to the interactive/web tiers' own ``choropleth(scheme="categorical")``, which share
 Digital-Earth's categorical colouring.
 
-.. note::
-   ``kriging_map`` is wired but **not yet exercisable** end-to-end against pyramids 0.59: geostatista 0.2.0's
-   ``KrigedSurface.from_arrays`` calls ``Dataset.create_from_array``, which pyramids 0.59 renamed to
-   ``from_array`` / ``create`` — so ``Samples.krige`` / ``OrdinaryKriging.predict_grid`` raise
-   ``AttributeError`` before a surface is ever produced. ``kriging_map`` itself is correct (given a surface); it
-   will work once geostatista is fixed and released. Tracked as a geostatista upstream bug.
+The full kriging path (``Samples.krige`` / ``OrdinaryKriging.predict_grid`` → :func:`kriging_map`) works with
+**geostatista >= 0.3.0** on pyramids 0.59; earlier geostatista releases could not produce a ``KrigedSurface``
+on pyramids 0.59 (their ``KrigedSurface.from_arrays`` called the removed ``Dataset.create_from_array``).
 """
 
 from __future__ import annotations
@@ -203,11 +200,6 @@ def kriging_map(
     Raises:
         ValueError: ``field`` is not one of :data:`_RASTER_FIELDS`.
         AttributeError: ``variance=True`` but ``surface`` has no ``.variance``.
-
-    .. note::
-        Blocked upstream on pyramids 0.59: geostatista 0.2.0 cannot *produce* a ``KrigedSurface`` (its
-        ``from_arrays`` calls the removed ``Dataset.create_from_array``), so this cannot yet be exercised
-        end-to-end. The composition itself is correct.
     """
     if field not in _RASTER_FIELDS:
         raise ValueError(f"field must be one of {_RASTER_FIELDS}, got {field!r}")

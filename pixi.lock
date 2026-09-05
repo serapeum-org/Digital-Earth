@@ -110,6 +110,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/0d/ab/8cfdc4e83716c0bbf91f5bfcf0f05bcbf5e3846b13caa38371aaeec82175/pyramids_gis-0.59.0-cp313-cp313-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/ea/65cec46fe241390ccea1b1754207ee28eb71c5ab866bd5f22fe47e538fa4/matplotlib-3.11.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/2b/0a/7b98e1e119878a27ba8618ca1e18b14f992ff1eda40f47bccccf4de44121/kiwisolver-1.5.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/4b/32/e0f13a1c5b0f8572d0ec6ae2f6c677b7991fafd95da523159c19eff0696a/contourpy-1.3.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -120,7 +121,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a8/a9/d23012099dc88ec69a29c6407b41d89681cb674c2043cd5b467c7e299c08/xyzservices-2026.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ba/08/52f06ff2f04d376f9cd2c211aefcf2b37f1978e43289341f362fc99f6a0e/cftime-1.6.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/36/0b805d8c485f872f65a509cbe3b58a5d0d17bee855333b54a150c79d3061/fonttools-4.63.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/e3/70/4363150359f95b4cb4bcbb34ca23572bb5495749a621a8f3d5a1ddfd293c/pandas-3.0.5-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl
@@ -216,6 +216,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/40/5c/f3d8a657d362cc93b81aab8feda487317da5b5d31c0e1fdfd5e986e55d17/imageio_ffmpeg-0.6.0-py3-none-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/59/98/6acadbe7f98df19d274bc107ac58bb439fa75df82c33dc110d71a4a8501f/matplotlib-3.11.1-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/59/a8/bd530cc264e62ddbc1d1bb7225823992e6f2432c664693e9281bb6b9c359/geopandas-1.1.4-py3-none-any.whl
@@ -228,7 +229,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a8/a9/d23012099dc88ec69a29c6407b41d89681cb674c2043cd5b467c7e299c08/xyzservices-2026.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b1/16/95309993f1d3748cd644e02e38b75d50cbc0d9561d21f390a76242ce073f/pyyaml-6.0.3-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ec/57/56b9bcc3c9c6a792fcbaf139543cee77261f3651ca9da0c93f5c1221264b/python_dateutil-2.9.0.post0-py2.py3-none-any.whl
@@ -309,6 +309,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/18/0b/0098c214843213759692cc638fce7de5c289200a830e5035d1791d7a2338/contourpy-1.3.3-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2c/c6/fa760e12a2483469e2bf5058c5faff664acf66cadb4df2ad6205b016a73d/imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/34/bd/0d731685290f60a15cf98b903fc6c594c97bbed02ff80eaf24eb94d0369a/pyramids_gis-0.59.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/41/47/3647fe7ad990af60ad98b889657a976042c9988c2807cf322a9d6685f462/shapely-2.1.2-cp313-cp313-win_amd64.whl
@@ -324,7 +325,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/d2/ae881ee28d014f38e0ccbfd974a06a919ba9af34f1f74bf42b5301891d63/scipy-1.18.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/be/0f/747974129cf0d800906f81cd25efd098c96509026e454d4b66868779ab04/pyproj-3.7.2-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl
@@ -439,6 +439,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -541,7 +542,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -691,6 +691,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -793,7 +794,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -930,6 +930,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -1030,7 +1031,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bf/af/64aff4885a40b93132382f2c314647d722574605416504379184ef3045ea/librt-0.15.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/c0/88/aaa65a93c73d0cdae7e42f8adb302bf6885bb281302084f99d0290a35347/mypy-2.3.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -1187,6 +1187,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/7f/13cd798d180af4bf4c0ceddeefba2b864a63c71645abc0308b768d67bb81/hjson-3.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/5b/dbc6a8cddc9cfa9c4971d59fb12bb8d42e161b7e7f8cc89e49137c5b279c/mkdocs-1.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/ea/65cec46fe241390ccea1b1754207ee28eb71c5ab866bd5f22fe47e538fa4/matplotlib-3.11.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -1276,7 +1277,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ba/08/52f06ff2f04d376f9cd2c211aefcf2b37f1978e43289341f362fc99f6a0e/cftime-1.6.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ce/36/0b805d8c485f872f65a509cbe3b58a5d0d17bee855333b54a150c79d3061/fonttools-4.63.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -1414,6 +1414,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/7f/13cd798d180af4bf4c0ceddeefba2b864a63c71645abc0308b768d67bb81/hjson-3.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/5b/dbc6a8cddc9cfa9c4971d59fb12bb8d42e161b7e7f8cc89e49137c5b279c/mkdocs-1.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -1505,7 +1506,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/cf/58/8acf1b3e91c58313ce5cb67df61001fc9dcd21be4fadb76c1a2d540e09ed/fqdn-1.5.1-py3-none-any.whl
@@ -1631,6 +1631,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/7f/13cd798d180af4bf4c0ceddeefba2b864a63c71645abc0308b768d67bb81/hjson-3.1.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/5b/dbc6a8cddc9cfa9c4971d59fb12bb8d42e161b7e7f8cc89e49137c5b279c/mkdocs-1.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/28/de/a3e710469772c6a89595fc52816da05c1e164b4c866a89e3cb82fb1b67c5/mkdocs_autorefs-1.4.4-py3-none-any.whl
@@ -1718,7 +1719,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/0f/747974129cf0d800906f81cd25efd098c96509026e454d4b66868779ab04/pyproj-3.7.2-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/cb/e1/468ad54333e92ccb62627e62cb88e5fc14a2171daa67ed47b1b8542d5b86/tornado-6.5.8-cp39-abi3-win_amd64.whl
@@ -1872,6 +1872,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -1988,7 +1989,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -2147,6 +2147,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -2264,7 +2265,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -2412,6 +2412,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -2525,7 +2526,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bf/af/64aff4885a40b93132382f2c314647d722574605416504379184ef3045ea/librt-0.15.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/c0/88/aaa65a93c73d0cdae7e42f8adb302bf6885bb281302084f99d0290a35347/mypy-2.3.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -2682,6 +2682,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/ea/65cec46fe241390ccea1b1754207ee28eb71c5ab866bd5f22fe47e538fa4/matplotlib-3.11.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
@@ -2747,7 +2748,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/ba/08/52f06ff2f04d376f9cd2c211aefcf2b37f1978e43289341f362fc99f6a0e/cftime-1.6.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -2879,6 +2879,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -2947,7 +2948,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -3066,6 +3066,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl
@@ -3131,7 +3132,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/0f/747974129cf0d800906f81cd25efd098c96509026e454d4b66868779ab04/pyproj-3.7.2-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -3282,6 +3282,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -3389,7 +3390,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -3534,6 +3534,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/d5/d86ad95fc1fd89947c34b495ff6487b6d361cf77500217423b4ebcb1f0c2/cftime-1.6.5-cp311-cp311-macosx_11_0_arm64.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -3635,7 +3636,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -3773,6 +3773,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/6d/d8d92a0eb270a925c9b4dd039c0b4dc10abc2fcbc48331788824ef113935/pyzmq-27.1.0-cp311-cp311-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -3878,7 +3879,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/6c/28f17390b62b8f2f520e2915095b3c94d88681ecf0041e75389d9667f202/kiwisolver-1.5.0-cp311-cp311-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -4038,6 +4038,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/35/5b85772eb82528ef22ba29487ad544a7049dfd27f35b1a5a55dbc0843048/charset_normalizer-3.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
@@ -4141,7 +4142,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/13/680c54afe3e65767bed7ec1a15571e1a2f1257128733851ade24abcefbcc/kiwisolver-1.5.0-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
@@ -4286,6 +4286,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/20/dd/88d6f83f1fffc974a3691a34a97951c5b12df7512a6782c5963883cbc058/coverage-7.15.4-cp312-cp312-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
@@ -4388,7 +4389,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -4525,6 +4525,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -4626,7 +4627,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -4784,6 +4784,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -4886,7 +4887,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -5036,6 +5036,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -5138,7 +5139,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -5275,6 +5275,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -5375,7 +5376,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bf/af/64aff4885a40b93132382f2c314647d722574605416504379184ef3045ea/librt-0.15.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/c0/88/aaa65a93c73d0cdae7e42f8adb302bf6885bb281302084f99d0290a35347/mypy-2.3.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -5538,6 +5538,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -5661,7 +5662,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/75/4a1fe360256b99779d534b2387d0efa70952167d53d716f60ff39d62994d/vtk-9.6.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -5824,6 +5824,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -5947,7 +5948,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bc/8e/1239df488393d61076653bfb29f759d0f60cab8e030abdf7c17c31539b51/ipython-9.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -6094,6 +6094,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/fd/3f0f10dba4dabad3bf53102be007abf55481067952bde0fdddff439e7c61/propcache-0.5.2-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -6213,7 +6214,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bf/af/64aff4885a40b93132382f2c314647d722574605416504379184ef3045ea/librt-0.15.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/c0/88/aaa65a93c73d0cdae7e42f8adb302bf6885bb281302084f99d0290a35347/mypy-2.3.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -6379,6 +6379,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -6490,7 +6491,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/bf/32/7f77ea87fa0836daab706ed5cb7f903bb25fa26a77439011aee626af11d8/ast_serialize-0.8.0-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -6645,6 +6645,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1e/14/adb293ac6127079b49ff11c05cf3d5ce5c1f17d097f326dc02d74ddfcb6e/cftime-1.6.5-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/22/a6/858897256d0deac81a172289110f31629fc4cee19b6f01283303e18c8db3/ptyprocess-0.7.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
@@ -6755,7 +6756,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/bd/24/12818598c362d7f300f18e74db45963dbcb85150324092410c8b49405e42/pyproject_hooks-1.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/be/4a/0eece9dad5e73230ca972f7bc29456ce7d74772f123d401fcf67379008f7/nbformat-5.11.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c0/b5/bff1842ed8dbb2134b004f78c52d977b52a6df1d9389b1284aad02bf4d93/arro3_core-0.8.1-cp311-abi3-macosx_11_0_arm64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/81/4fa520eaffa8bd7d1525e644cd6d39e7d60b1592bc5b516693c7340b50f1/pydantic_core-2.46.4-cp313-cp313-macosx_11_0_arm64.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
@@ -6897,6 +6897,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/1c/78/504fdd027da3b84ff1aecd9f6957e65f35134534ccc6da8628eb71e76d3f/send2trash-2.1.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/5e/d4e9f1a599fb8e573b7b87160658329fbf28d19eac2718f51fc3def3aa5a/idna-3.18-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1f/1f/0ca8e48ae53d13e5a3f54744730b90326eab25d650d2377e85250d2fa194/cleopatra-0.35.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/23/e8/9d61dcbd1dce8ef418f06befd4ac084b4720429c26b0b1222bc218685eff/jupyter_lsp-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/27/be/0631a861af4d1c875f096c07d34e9a63639560a717130e7a87cbc82b7e3f/python_json_logger-4.1.0-py3-none-any.whl
@@ -7007,7 +7008,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/be/8a/be60e3bbcf513cc5a50f4a3e88e1dcecebb79c1ad607a7222877becaa101/kiwisolver-1.5.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/bf/af/64aff4885a40b93132382f2c314647d722574605416504379184ef3045ea/librt-0.15.0-cp313-cp313-win_amd64.whl
       - pypi: https://files.pythonhosted.org/packages/c0/88/aaa65a93c73d0cdae7e42f8adb302bf6885bb281302084f99d0290a35347/mypy-2.3.0-cp313-cp313-win_amd64.whl
-      - pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c1/ea/53f2148663b321f21b5a606bd5f191517cf40b7072c0497d3c92c4a13b1e/executing-2.2.1-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/3b/920bc7f3c2ad25abc0071ae7ae55789f4b85ecf3e4467f0602a88dc668cb/jupyter_builder-1.2.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/c4/77/4c0456ead6871b060d024204f891546499eb1e57b8ce523671f690f24281/hpc_utils-0.1.5-py3-none-any.whl
@@ -11566,7 +11566,7 @@ packages:
   - cleopatra[tiles]>=0.35.0
   - pyramids-gis>=0.59.0
   - pyramids-eo>=0.8.0
-  - geostatista>=0.2.0
+  - geostatista>=0.3.0
   - loguru>=0.7.3
   - pyyaml>=6.0
   - pyvista>=0.48 ; extra == '3d'
@@ -12840,6 +12840,21 @@ packages:
   requires_dist:
   - numpy>=1.21.2
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/20/3e/53305f3b4c83fd7001dc0b2aa758c3780727f4aac2a08cb1508b628d24c0/geostatista-0.3.0-py3-none-any.whl
+  name: geostatista
+  version: 0.3.0
+  sha256: 0b22a133a3c0aff0cbd255410beb795f9601a3af04de597faac0d8031085a20e
+  requires_dist:
+  - numpy>=2.0.0
+  - scipy>=1.10.0
+  - geopandas>=1.0.0
+  - pyramids-gis>=0.59.0
+  - loguru>=0.7.3
+  - pyramids-gis[viz]>=0.59.0 ; extra == 'viz'
+  - cleopatra>=0.31.0 ; extra == 'viz'
+  - pyramids-gis[lazy]>=0.59.0 ; extra == 'distributed'
+  - geostatista[distributed,viz] ; extra == 'all'
+  requires_python: '>=3.11,<4'
 - pypi: https://files.pythonhosted.org/packages/20/dd/88d6f83f1fffc974a3691a34a97951c5b12df7512a6782c5963883cbc058/coverage-7.15.4-cp312-cp312-macosx_11_0_arm64.whl
   name: coverage
   version: 7.15.4
@@ -17574,21 +17589,6 @@ packages:
   requires_dist:
   - typing-extensions ; python_full_version < '3.12'
   requires_python: '>=3.9'
-- pypi: https://files.pythonhosted.org/packages/c1/37/d4ce4d251525ac029b41e7398a362542766d1762a13edc12169e6aedd94f/geostatista-0.2.0-py3-none-any.whl
-  name: geostatista
-  version: 0.2.0
-  sha256: 0b96f66e34d0fd9c5ceaa578f7b5424f607f85bc3619ab56c736af4a46764658
-  requires_dist:
-  - numpy>=2.0.0
-  - scipy>=1.10.0
-  - geopandas>=1.0.0
-  - pyramids-gis>=0.46.0
-  - loguru>=0.7.3
-  - pyramids-gis[viz]>=0.46.0 ; extra == 'viz'
-  - cleopatra>=0.26.0 ; extra == 'viz'
-  - pyramids-gis[lazy]>=0.46.0 ; extra == 'distributed'
-  - geostatista[distributed,viz] ; extra == 'all'
-  requires_python: '>=3.11,<4'
 - pypi: https://files.pythonhosted.org/packages/c1/81/4fa520eaffa8bd7d1525e644cd6d39e7d60b1592bc5b516693c7340b50f1/pydantic_core-2.46.4-cp313-cp313-macosx_11_0_arm64.whl
   name: pydantic-core
   version: 2.46.4

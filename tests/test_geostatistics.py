@@ -159,20 +159,13 @@ class TestKrigingMap:
         with pytest.raises(AttributeError, match="variance"):
             kriging_map(dataset, variance=True)
 
-    @pytest.mark.xfail(
-        raises=AttributeError,
-        strict=True,
-        reason="geostatista 0.2.0 KrigedSurface.from_arrays calls Dataset.create_from_array, removed in "
-        "pyramids 0.59 (now from_array/create). krige/predict_grid raise before a surface exists. When "
-        "geostatista is fixed this XPASSES (strict) and fails the suite — the signal to remove this marker.",
-    )
-    def test_end_to_end_via_krige_blocked_upstream(self):
-        """Full path (samples → krige → kriging_map) — xfail until geostatista is fixed for pyramids 0.59."""
+    def test_end_to_end_via_krige(self):
+        """Full path — geostatista Samples.krige → KrigedSurface → kriging_map (geostatista >=0.3.0)."""
         from geostatista import Samples
 
         coords = [(i * 1.7 % 10, i * 2.3 % 10) for i in range(30)]
         pts = [Point(x, y) for x, y in coords]
         fc = Samples(gpd.GeoDataFrame({"v": [x + y for x, y in coords]}, geometry=pts, crs="EPSG:32631"))
-        surface = fc.krige("v", "spherical", cell_size=0.5)  # raises AttributeError on pyramids 0.59
+        surface = fc.krige("v", "spherical", cell_size=0.5)
         scene = kriging_map(surface, samples=fc)
         assert len(scene.layers) == 2
