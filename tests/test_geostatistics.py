@@ -7,7 +7,8 @@ conventional palette, and the kriged-surface composition).
 import geopandas as gpd
 import matplotlib
 import pytest
-from matplotlib.colors import to_hex
+from matplotlib import colormaps
+from matplotlib.colors import BoundaryNorm, to_hex
 from shapely.geometry import Point, box
 
 matplotlib.use("Agg")
@@ -28,6 +29,7 @@ from digitalearth.geostatistics import (  # noqa: E402
 def _rendered_colors(scene, categories):
     """Read the hex colour the drawn choropleth actually renders for each sorted category."""
     collection = scene.ax.collections[-1]
+    assert isinstance(collection.norm, BoundaryNorm)  # discrete class codes, not a continuous scale
     cmap, norm = collection.get_cmap(), collection.norm
     return {cat: to_hex(cmap(norm(i))) for i, cat in enumerate(categories)}
 
@@ -59,11 +61,27 @@ class TestLisaMap:
         for label, hexcolor in rendered.items():
             assert hexcolor.lower() == LISA_COLORS[str(label)].lower()
 
-    def test_explicit_cmap_is_honoured(self, clustered_polygons):
-        """Passing an explicit cmap overrides the conventional palette (no semantic palette relied on)."""
+    def test_explicit_cmap_reaches_the_render(self, clustered_polygons):
+        """An explicit cmap actually drives the rendered colours (not silently dropped for the semantic palette)."""
         lm = local_morans(clustered_polygons, "v", Weights.queen(clustered_polygons))
         scene = lisa_map(lm, cmap="Set2")
-        assert len(scene.layers) == 1
+        cats = _categories(lm["cluster"])
+        rendered = _rendered_colors(scene, cats)
+        set2 = [to_hex(c) for c in colormaps["Set2"].colors]
+        assert rendered["HH"].lower() != LISA_COLORS["HH"].lower()  # the override replaced the semantic palette
+        for i, cat in enumerate(cats):
+            assert rendered[cat].lower() == set2[i % len(set2)].lower()
+
+    def test_unknown_class_uses_tab10_fallback(self):
+        """A class absent from the semantic map renders in the qualitative tab10 fallback, not a semantic colour."""
+        polys = [box(0, 0, 1, 1), box(1, 0, 2, 1)]
+        fc = FeatureCollection(gpd.GeoDataFrame({"cluster": ["HH", "ZZ"]}, geometry=polys, crs="EPSG:32631"))
+        scene = lisa_map(fc)
+        cats = _categories(fc["cluster"])
+        rendered = _rendered_colors(scene, cats)
+        assert rendered["HH"].lower() == LISA_COLORS["HH"].lower()  # known class keeps its semantic colour
+        fallback = [to_hex(c) for c in colormaps["tab10"].colors]
+        assert rendered["ZZ"].lower() == fallback[cats.index("ZZ") % len(fallback)].lower()
 
     def test_scheme_override_rejected(self, clustered_polygons):
         """A non-categorical scheme is a clear error, not a confusing keyword collision."""
