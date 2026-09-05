@@ -76,6 +76,12 @@ class TestLisaMap:
         with pytest.raises(KeyError):
             lisa_map(clustered_polygons, column="cluster")
 
+    def test_all_null_classes_raises(self, clustered_polygons):
+        """A present-but-all-null class column is a clear error rather than an empty palette."""
+        clustered_polygons["cluster"] = None
+        with pytest.raises(ValueError, match="no non-null classes"):
+            lisa_map(clustered_polygons)
+
 
 class TestHotspotMap:
     """hotspot_map — Getis-Ord Gi* hot/cold spots drawn as a categorical choropleth."""
