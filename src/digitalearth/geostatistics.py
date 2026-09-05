@@ -81,7 +81,10 @@ def _palette(categories: list[Any], color_map: dict[str, str]) -> ListedColormap
     from matplotlib import colormaps
 
     fallback = list(colormaps[_FALLBACK_CMAP].colors)
-    colors = [color_map.get(str(cat), fallback[i % len(fallback)]) for i, cat in enumerate(categories)]
+    colors: list[Any] = []
+    for i, cat in enumerate(categories):
+        semantic = color_map.get(str(cat))
+        colors.append(semantic if semantic is not None else fallback[i % len(fallback)])
     return ListedColormap(colors)
 
 
@@ -108,15 +111,15 @@ def _categorical_map(features: Any, column: str, color_map: dict[str, str], **kw
             f"column {column!r} not found — run the matching geostatista op first "
             f"(local_morans → 'cluster', getis_ord_gi/hotspots → 'hotspot'). Columns: {list(features.columns)}"
         )
-    categories = _categories(features[column])
-    if not categories:
-        raise ValueError(f"column {column!r} has no non-null classes to draw")
     scheme = kwargs.pop("scheme", "categorical")
     if scheme != "categorical":
         raise ValueError(
             f"lisa_map/hotspot_map draw an inherently categorical class column; scheme={scheme!r} is not "
             "supported — omit it (or pass scheme='categorical')"
         )
+    categories = _categories(features[column])
+    if not categories:
+        raise ValueError(f"column {column!r} has no non-null classes to draw")
     cmap = kwargs.pop("cmap", None)
     if cmap is None:
         cmap = _palette(categories, color_map)
