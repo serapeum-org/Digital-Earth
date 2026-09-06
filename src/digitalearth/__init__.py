@@ -47,6 +47,11 @@ from digitalearth.charts import (  # noqa: E402
     scatter,
     statistics,
 )
+from digitalearth.geostatistics import (  # noqa: E402
+    hotspot_map,
+    kriging_map,
+    lisa_map,
+)
 from digitalearth.plugins import load_plugins  # noqa: E402
 from digitalearth.scene import (  # noqa: E402
     Map,
@@ -76,6 +81,8 @@ __all__ = [
     "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",
     # temporal products
     "TimeSeries", "Climatology",
+    # geostatistics visualization (composes geostatista outputs)
+    "lisa_map", "hotspot_map", "kriging_map",
     # operational tier
     "Batch", "gallery", "load_plugins",
 ]

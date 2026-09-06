@@ -12,6 +12,7 @@ EXPECTED = [
     "line", "bar", "histogram", "scatter", "bar_by", "line_by", "statistics",
     "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",
     "TimeSeries", "Climatology",
+    "lisa_map", "hotspot_map", "kriging_map",
     "Batch", "gallery", "load_plugins",
 ]
 
