@@ -1,5 +1,15 @@
 # Change log
 
+## 0.9.0 (2026-09-06)
+
+### Feat
+
+- **geostatistics**: visualize geostatista results in the map tiers (#146)
+
+### Fix
+
+- **render**: recognise the lognorm colour scale (cleopatra 0.36.0)
+
 ## 0.8.0 (2026-09-04)
 
 ### Feat

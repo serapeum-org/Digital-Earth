@@ -29,6 +29,7 @@ from cleopatra.styling.scaling import ColorScale, ColorScaling
 _COLOR_SCALE_ALIASES = {
     "linear": ColorScale.LINEAR,
     "power": ColorScale.POWER,
+    "lognorm": ColorScale.LOGNORM,
     "sym_log": ColorScale.SYM_LOGNORM,
     "symlog": ColorScale.SYM_LOGNORM,
     "sym_lognorm": ColorScale.SYM_LOGNORM,
