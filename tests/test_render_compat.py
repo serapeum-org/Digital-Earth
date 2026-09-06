@@ -20,6 +20,7 @@ from digitalearth._render_compat import (
     [
         ("linear", ColorScale.LINEAR),
         ("power", ColorScale.POWER),
+        ("lognorm", ColorScale.LOGNORM),
         ("sym_log", ColorScale.SYM_LOGNORM),
         ("symlog", ColorScale.SYM_LOGNORM),
         ("sym_lognorm", ColorScale.SYM_LOGNORM),
@@ -35,7 +36,7 @@ def test_coerce_color_scale_maps_friendly_spellings(value, expected):
     assert _coerce_color_scale(value) is expected
 
 
-@pytest.mark.parametrize("value", ["lognorm", "bogus", "log"])
+@pytest.mark.parametrize("value", ["bogus", "log"])
 def test_coerce_color_scale_rejects_unknown(value):
     """An unrecognised color_scale raises a clear error rather than crashing opaquely at render time."""
     with pytest.raises(ValueError, match="not a recognised colour scale"):
