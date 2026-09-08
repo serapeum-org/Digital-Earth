@@ -187,13 +187,27 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
         cent = geom.centroid
         xs, ys = cent.x.to_numpy(), cent.y.to_numpy()
 
+    # `pandas.api.types.is_numeric_dtype`, not `np.issubdtype`: the latter only understands numpy dtypes
+    # and *raises* on a pandas extension dtype (`string`, `Int64`, `boolean`) rather than answering False,
+    # so one nullable column anywhere in the frame took the whole render down (#157).
+    from pandas.api.types import is_bool_dtype, is_numeric_dtype
+
+    # `is_numeric_dtype` counts booleans, where the previous `np.issubdtype(..., np.number)` did not
+    # (numpy's bool is not a subtype of `number`). Keep the old meaning: a flag column is not a value
+    # to colour by, and promoting one to the value column would change what existing frames render.
     value_cols = [
         c
         for c in fc.columns
-        if c != geom_name and np.issubdtype(fc[c].dtype, np.number)
+        if c != geom_name and is_numeric_dtype(fc[c]) and not is_bool_dtype(fc[c])
     ]
     column = value_cols[0] if value_cols else None
-    z = _axis(fc[column].to_numpy(), "z") if column is not None else None
+    # A nullable numeric column (`Int64`) is numeric but `.to_numpy()` yields an object array holding
+    # `pd.NA`, which no colour mapper can read — ask for float64 with NaN in its place.
+    z = (
+        _axis(fc[column].to_numpy(dtype="float64", na_value=np.nan), "z")
+        if column is not None
+        else None
+    )
 
     return Source(
         z=z,

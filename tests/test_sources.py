@@ -214,3 +214,47 @@ def test_raster_source_nodata_is_exact_not_tolerant():
     assert np.isnan(z[0, 1]), "exact nodata cell should be masked"
     assert not np.isnan(z[1, 0]), "a value near (but != ) nodata must be kept under exact-compare"
     assert z[0, 0] == 1.0 and z[1, 1] == 4.0, f"real values changed: {z}"
+
+
+class TestExtensionDtypes:
+    """A pandas extension dtype must not break the value-column scan (issue #157)."""
+
+    @staticmethod
+    def _frame(**columns):
+        """A two-point GeoDataFrame carrying the given columns."""
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        return gpd.GeoDataFrame(columns, geometry=[Point(0, 0), Point(1, 1)], crs=4326)
+
+    def test_nullable_string_is_skipped_not_raised(self):
+        """A `string` column is ignored, and the numeric column is still found."""
+        import pandas as pd
+        from pyramids.feature import FeatureCollection
+
+        frame = self._frame(name=pd.array(["a", "b"], dtype="string"), score=[1.0, 2.0])
+        src = get_source(FeatureCollection(frame))
+        assert src.metadata("variable") == "score"
+        assert src.z.values.tolist() == [1.0, 2.0]
+
+    def test_nullable_integer_is_read_as_float_with_nan(self):
+        """An `Int64` column is numeric, and its pd.NA arrives as NaN rather than an object."""
+        import numpy as np
+        import pandas as pd
+        from pyramids.feature import FeatureCollection
+
+        frame = self._frame(count=pd.array([3, None], dtype="Int64"))
+        src = get_source(FeatureCollection(frame))
+        assert src.z.values.dtype == np.dtype("float64")
+        assert src.z.values[0] == 3.0
+        assert np.isnan(src.z.values[1])
+
+    def test_a_frame_of_only_extension_columns_has_no_value(self):
+        """No numeric column at all still resolves, with z unset rather than an error."""
+        import pandas as pd
+        from pyramids.feature import FeatureCollection
+
+        frame = self._frame(name=pd.array(["a", "b"], dtype="string"),
+                            flag=pd.array([True, False], dtype="boolean"))
+        src = get_source(FeatureCollection(frame))
+        assert src.z is None
