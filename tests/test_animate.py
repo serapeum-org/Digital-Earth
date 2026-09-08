@@ -449,3 +449,33 @@ class TestAnimateDatasetCollection:
             anim.save(str(out), writer=PillowWriter(fps=2))
             outputs.append(out.read_bytes())
         assert outputs[0] == outputs[1], "a collection must animate identically to its member list"
+
+
+class TestClimFollowsTheBand:
+    """Tests that the shared colour scale is read off the band being animated (issue #155)."""
+
+    @staticmethod
+    def _two_band(k):
+        """A 2-band frame whose bands sit in very different ranges."""
+        b1 = np.full((40, 50), 1.0 + k, dtype="float32")
+        b2 = np.full((40, 50), 500.0 + 100 * k, dtype="float32")
+        return Dataset.from_array(
+            arr=np.stack([b1, b2]),
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 40.0, 0.0, -1.0), epsg=4326),
+        )
+
+    def test_clim_matches_the_animated_band(self):
+        """band=2 scales from band 2's range, not band 1's."""
+        frames = [self._two_band(k) for k in range(3)]
+        opts = {"band": 2}
+        Map(crs=4326)._resolve_animation_clim(frames, opts)
+        assert (opts["vmin"], opts["vmax"]) == pytest.approx((500.0, 700.0)), (
+            f"band 2 spans 500-700 but the scale resolved to {opts['vmin']}-{opts['vmax']}"
+        )
+
+    def test_band_one_is_still_the_default(self):
+        """With no band given, the scan still reads band 1."""
+        frames = [self._two_band(k) for k in range(3)]
+        opts = {}
+        Map(crs=4326)._resolve_animation_clim(frames, opts)
+        assert (opts["vmin"], opts["vmax"]) == pytest.approx((1.0, 3.0))

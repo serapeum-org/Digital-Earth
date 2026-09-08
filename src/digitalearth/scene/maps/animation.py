@@ -120,12 +120,20 @@ class AnimationMixin:
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
     @staticmethod
-    def _stack_clim(datasets: Sequence[Any]) -> Tuple[float, float]:
-        """Return the ``(min, max)`` of the first band across ``datasets``, ignoring nodata/non-finite."""
+    def _stack_clim(datasets: Sequence[Any], band: int = 1) -> Tuple[float, float]:
+        """Return the ``(min, max)`` of ``band`` across ``datasets``, ignoring nodata/non-finite.
+
+        Args:
+            datasets: The frames to scan.
+            band: 1-based band index — the one being animated, so the scale matches what is drawn.
+
+        Returns:
+            The ``(low, high)`` bounds, or ``(0.0, 1.0)`` when every frame is empty.
+        """
         lows: List[float] = []
         highs: List[float] = []
         for ds in datasets:
-            arr = finite(read_masked_band(ds, band=1))
+            arr = finite(read_masked_band(ds, band=band))
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))
@@ -144,7 +152,9 @@ class AnimationMixin:
         if vmin is None or vmax is None:
             seq = list(datasets)
             stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
-            lo, hi = self._stack_clim(seq[::stride])
+            # Scan the band that will actually be drawn: `band` is forwarded to the renderer, so scanning
+            # band 1 regardless would scale every other band against the wrong range (#155).
+            lo, hi = self._stack_clim(seq[::stride], band=opts.get("band", 1))
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
