@@ -119,3 +119,49 @@ def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
     # finally-block ran: the writer was flushed/closed (no lingering open mwriter)
     assert getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
     scene.close()
+
+
+class TestOrbitPathShape:
+    """orbit() can shape its own path, not just its length (issue #159)."""
+
+    @staticmethod
+    def _scene():
+        """A tiny off-screen terrain scene."""
+        import numpy as np
+
+        from digitalearth.sources import get_source
+        from digitalearth.three_d import Scene3D
+
+        dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+        scene = Scene3D(off_screen=True)
+        scene.terrain(get_source(dem), z_exaggeration=3.0)
+        return scene
+
+    def test_shift_and_factor_reach_the_path_generator(self, mocker, tmp_path):
+        """shift/factor/viewup go to generate_orbital_path, which is what shapes the orbit."""
+        scene = self._scene()
+        spy = mocker.spy(scene.plotter, "generate_orbital_path")
+        scene.orbit(str(tmp_path / "o.gif"), n_frames=4, factor=0.7, shift=2.4)
+        scene.close()
+        assert spy.call_args.kwargs["factor"] == 0.7
+        assert spy.call_args.kwargs["shift"] == 2.4
+        assert spy.call_args.kwargs["n_points"] == 4
+
+    def test_viewup_reaches_both_the_path_and_the_camera(self, mocker, tmp_path):
+        """The travelling camera shares the path's up vector by default."""
+        scene = self._scene()
+        path_spy = mocker.spy(scene.plotter, "generate_orbital_path")
+        travel_spy = mocker.spy(scene.plotter, "orbit_on_path")
+        scene.orbit(str(tmp_path / "o.gif"), n_frames=4, viewup=[0, 0, 1])
+        scene.close()
+        assert path_spy.call_args.kwargs["viewup"] == [0, 0, 1]
+        assert travel_spy.call_args.kwargs["viewup"] == [0, 0, 1]
+
+    def test_defaults_match_pyvista(self, mocker, tmp_path):
+        """Unset, the arguments keep pyvista's own defaults, so existing clips are unchanged."""
+        scene = self._scene()
+        spy = mocker.spy(scene.plotter, "generate_orbital_path")
+        scene.orbit(str(tmp_path / "o.gif"), n_frames=4)
+        scene.close()
+        assert spy.call_args.kwargs["factor"] == 3.0
+        assert spy.call_args.kwargs["shift"] == 0.0

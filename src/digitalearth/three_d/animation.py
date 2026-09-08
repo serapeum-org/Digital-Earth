@@ -11,7 +11,7 @@ GIF/MP4 writing uses PyVista's ``open_gif``/``open_movie`` (which need ``imageio
 the ``3d`` extra). No GIS is touched here: animation is pure rendering of already-built meshes; data still comes
 from pyramids upstream.
 """
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Optional, Sequence
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
@@ -51,6 +51,9 @@ class AnimationMixin:
         *,
         n_frames: int = 36,
         framerate: int = 12,
+        factor: float = 3.0,
+        shift: float = 0.0,
+        viewup: Optional[Sequence[float]] = None,
         **orbit_kwargs: Any,
     ) -> str:
         """Sweep the camera around the scene and write the fly-through to a GIF/MP4.
@@ -59,7 +62,16 @@ class AnimationMixin:
             path: Output file. A video suffix (``.mp4``/``.mov``/``.avi``) writes a movie; anything else a GIF.
             n_frames: Number of frames (camera positions) along the orbit.
             framerate: Frames per second of the output.
-            **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path` (``factor``, ``viewup`` …).
+            factor: Radius of the orbit as a multiple of the scene's bounding size. Larger pulls the camera
+                back; smaller flies closer in.
+            shift: How far to raise the orbit **above** the mesh's mid-plane, in the scene's own z units.
+                The default ``0.0`` circles level with the middle of the data, which views a terrain almost
+                edge-on and makes the turn hard to read — raising it tilts the camera down onto the surface.
+                It is an absolute offset, so scale it against the data: a useful starting point is a small
+                fraction of the horizontal extent.
+            viewup: The camera's up vector, used for both the orbit path and the camera as it travels. ``None``
+                takes the plotter theme's.
+            **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path` (``step``, ``focus`` …).
 
         Returns:
             The ``path`` written.
@@ -82,7 +94,13 @@ class AnimationMixin:
         """
         _open_writer(self.plotter, path, framerate)
         try:
-            orbital_path = self.plotter.generate_orbital_path(n_points=n_frames)
+            # `factor`/`shift`/`viewup` shape the *path*, so they belong to generate_orbital_path — they are
+            # not orbit_on_path arguments, which is why they were unreachable before (#159).
+            orbital_path = self.plotter.generate_orbital_path(
+                factor=factor, n_points=n_frames, viewup=viewup, shift=shift
+            )
+            # Keep the travelling camera's up vector the same as the path's, unless the caller overrode it.
+            orbit_kwargs.setdefault("viewup", viewup)
             self.plotter.orbit_on_path(orbital_path, write_frames=True, **orbit_kwargs)
         finally:
             _finalize_frames(self.plotter)  # always flush/close the writer, even if rendering raised
