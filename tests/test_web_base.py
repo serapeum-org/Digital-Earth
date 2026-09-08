@@ -323,3 +323,56 @@ def test_reimport_is_stable():
     """The package re-imports cleanly (no import-time engine side effects)."""
     mod = importlib.reload(importlib.import_module("digitalearth.web"))
     assert hasattr(mod, "WebMap")
+
+
+class TestJsonSafeDatetimes:
+    """Datetime columns are ISO-encoded before the frame reaches GeoJSON (issue #156)."""
+
+    @staticmethod
+    def _frame():
+        """A point frame with a tz-naive datetime column and a NaT."""
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        return gpd.GeoDataFrame(
+            {
+                "name": ["a", "b", "c"],
+                "score": [1.0, 2.0, 3.0],
+                "from_date": pd.to_datetime(["2026-01-01 06:00", "2026-02-01 18:30", None]),
+            },
+            geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
+            crs=4326,
+        )
+
+    def test_timestamps_become_iso_strings(self):
+        """A Timestamp column is replaced by ISO-8601 text, which json can serialise."""
+        import json
+
+        out = WebMap()._json_safe(self._frame())
+        assert out["from_date"].iloc[0].startswith("2026-01-01T06:00:00")
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_nat_becomes_null_not_the_string(self):
+        """A missing timestamp serialises as null rather than the text 'NaT'."""
+        out = WebMap()._json_safe(self._frame())
+        assert out["from_date"].iloc[2] is None
+
+    def test_iso_text_still_sorts_chronologically(self):
+        """The encoding keeps timeslider's ordering valid — lexicographic == chronological."""
+        out = WebMap()._json_safe(self._frame())
+        stamps = [s for s in out["from_date"] if s is not None]
+        assert stamps == sorted(stamps)
+
+    def test_frames_without_datetimes_are_passed_through(self):
+        """No datetime column means no copy — the caller's frame is returned as-is."""
+        frame = self._frame().drop(columns="from_date")
+        assert WebMap()._json_safe(frame) is frame
+
+    def test_the_callers_frame_is_not_mutated(self):
+        """Coercion happens on a copy; the frame the caller still holds keeps its dtype."""
+        import pandas as pd
+
+        frame = self._frame()
+        WebMap()._json_safe(frame)
+        assert pd.api.types.is_datetime64_any_dtype(frame["from_date"])

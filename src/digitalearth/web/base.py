@@ -304,6 +304,39 @@ class WebMapBase:
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
 
+    @staticmethod
+    def _json_safe(gdf: Any) -> Any:
+        """Return ``gdf`` with datetime-like columns encoded as ISO-8601 strings.
+
+        MapLibre ingests a GeoDataFrame by serialising it to GeoJSON with ``json.dumps``, and GeoJSON has
+        no date type — so a ``Timestamp`` column raises ``TypeError`` and takes the whole map with it. A
+        timestamp is the norm for the data this tier renders (alerts, detections, observations), so the
+        coercion happens here rather than being left to the caller (#156).
+
+        ISO-8601 is the encoding chosen because it is what GeoJSON consumers expect, it still sorts
+        lexicographically — which is what keeps :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`
+        ordering its steps correctly — and MapLibre expressions can compare the strings directly. ``NaT``
+        becomes ``None`` (GeoJSON ``null``) rather than the string ``"NaT"``, which would otherwise surface
+        in a popup as though it were a real value.
+
+        Args:
+            gdf: The display-CRS GeoDataFrame about to be handed to ``add_source``.
+
+        Returns:
+            The same object when it holds no datetime column, else a shallow copy with those columns
+            converted. The input is never mutated — it is the caller's frame.
+        """
+        from pandas.api.types import is_datetime64_any_dtype
+
+        stamped = [name for name in gdf.columns if is_datetime64_any_dtype(gdf[name])]
+        if not stamped:
+            return gdf
+        out = gdf.copy()
+        for name in stamped:
+            iso = out[name].dt.strftime("%Y-%m-%dT%H:%M:%S%z")
+            out[name] = iso.where(out[name].notna(), None)
+        return out
+
     def _display_gdf(self, features: Any) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
@@ -322,11 +355,11 @@ class WebMapBase:
         if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
-            return features
+            return self._json_safe(features)
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
-            return features.to_crs(self.crs)
-        return features
+            return self._json_safe(features.to_crs(self.crs))
+        return self._json_safe(features)
 
     def add_underlay(self, layer: Any) -> "WebMapBase":
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
