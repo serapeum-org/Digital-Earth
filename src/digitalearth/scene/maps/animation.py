@@ -251,8 +251,9 @@ class AnimationMixin:
         scale, so ``colorbar=True`` is rejected rather than silently drawing a misleading one.
 
         Args:
-            stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
-                ``DatasetCollection`` datacube) — one raster per animation frame.
+            stack: An ordered collection of pyramids ``Dataset`` frames — one raster per animation frame.
+                A plain list, or a ``DatasetCollection`` datacube (its ``.datasets`` are used, since the
+                collection itself iterates to arrays rather than to its members).
             kind: The method used to draw each frame — a scalar field renderer (``"imshow"`` /
                 ``"contourf"`` / ``"contour"`` / ``"pcolormesh"`` / ``"block"``) or a colour composite
                 (``"rgb_composite"`` / ``"hsv_composite"``), which takes ``bands=`` in ``**kwargs``.
@@ -276,7 +277,10 @@ class AnimationMixin:
         """
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
-        frames = list(stack)
+        # A DatasetCollection iterates to numpy arrays, not to its members, so unwrap `.datasets` before
+        # listing — otherwise the documented datacube input reaches the renderers as bare arrays and dies
+        # on the first `.read_array` (#154).
+        frames = list(getattr(stack, "datasets", stack))
         if not frames:
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):

@@ -407,3 +407,45 @@ class TestChannelLimits:
         stack = np.dstack([np.zeros((4, 4))] * 3)
         with pytest.raises(ValueError, match="channel bounds"):
             _stretch_to_unit(stack, [(0.0, 1.0)])
+
+
+class TestAnimateDatasetCollection:
+    """Tests for accepting a DatasetCollection as the stack (issue #154)."""
+
+    @pytest.fixture
+    def cube(self, tmp_path, rgb_stack):
+        """The rgb_stack written to disk and reloaded as a DatasetCollection.
+
+        Returns:
+            DatasetCollection: a 3-member datacube.
+        """
+        from pyramids.dataset.collection import DatasetCollection
+
+        paths = []
+        for i, ds in enumerate(rgb_stack):
+            out = tmp_path / f"frame_{i}.tif"
+            ds.to_file(str(out))
+            paths.append(str(out))
+        return DatasetCollection.from_files(paths)
+
+    def test_collection_iterates_to_arrays_not_datasets(self, cube):
+        """The premise: iterating a DatasetCollection yields arrays, which is why animate must unwrap it."""
+        assert not hasattr(list(cube)[0], "read_array"), (
+            "if a collection now iterates to Datasets, the unwrap in animate is redundant"
+        )
+
+    def test_animate_accepts_a_collection(self, cube):
+        """A DatasetCollection animates directly, as the docstring promises."""
+        anim = Map(crs=4326, figsize=(4, 4)).animate(cube, kind="rgb_composite", fps=2)
+        assert len(list(anim.new_frame_seq())) == len(cube.datasets), "one frame per member"
+
+    def test_collection_matches_an_explicit_list(self, cube, tmp_path):
+        """Passing the collection and passing its .datasets produce the same clip."""
+        outputs = []
+        for stack in (cube, cube.datasets):
+            m = Map(crs=4326, figsize=(4, 4))
+            anim = m.animate(stack, kind="rgb_composite", fps=2)
+            out = tmp_path / f"{'collection' if stack is cube else 'list'}.gif"
+            anim.save(str(out), writer=PillowWriter(fps=2))
+            outputs.append(out.read_bytes())
+        assert outputs[0] == outputs[1], "a collection must animate identically to its member list"
