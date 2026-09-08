@@ -5,6 +5,8 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.scene import Map, projections
+from digitalearth.scene.maps.raster import _stretch_to_unit, channel_limits
+from digitalearth.sources import get_stack
 
 
 def _field(offset: float) -> Dataset:
@@ -23,6 +25,36 @@ def _field(offset: float) -> Dataset:
         arr=z.astype("float32"),
         geo_ref=GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326),
     )
+
+
+def _rgb_field(offset: float, exposure: float = 1.0) -> Dataset:
+    """A small 3-band global field, shifted by ``offset`` and scaled by ``exposure``.
+
+    Args:
+        offset: Constant added to every band (distinguishes stack frames).
+        exposure: Multiplier applied to every band, standing in for a brighter or darker scene.
+
+    Returns:
+        Dataset: a 3-band 60x120 global EPSG:4326 raster.
+    """
+    ny, nx = 60, 120
+    lat = np.linspace(90, -90, ny)[:, None]
+    base = (np.cos(np.deg2rad(lat)) * 30 + offset) * np.ones((ny, nx), "float32")
+    bands = np.stack([base * exposure, base * 0.6 * exposure, base * 0.3 * exposure])
+    return Dataset.from_array(
+        arr=bands.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326),
+    )
+
+
+@pytest.fixture
+def rgb_stack():
+    """A 3-frame stack of small 3-band global fields.
+
+    Returns:
+        list[Dataset]: three distinct 3-band rasters.
+    """
+    return [_rgb_field(o) for o in (0.0, 15.0, 30.0)]
 
 
 @pytest.fixture
@@ -285,3 +317,93 @@ class TestDrawAnimationFrame:
         m = Map(crs=4326)
         m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=False, coastlines=False)
         assert m.ax.get_title() == "", f"title should be empty, got {m.ax.get_title()!r}"
+
+
+class TestAnimateComposites:
+    """Tests for animating RGB/HSV composites (issue #150)."""
+
+    @pytest.mark.parametrize("kind", ["rgb_composite", "hsv_composite"])
+    def test_composite_is_an_accepted_kind(self, rgb_stack, kind):
+        """A composite kind animates instead of being rejected as unknown."""
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(rgb_stack, kind=kind, fps=2)
+        assert isinstance(anim, FuncAnimation), f"expected FuncAnimation, got {type(anim)}"
+        assert len(list(anim.new_frame_seq())) == len(rgb_stack), "frame count must match the stack length"
+
+    def test_composite_renders_a_gif(self, rgb_stack, tmp_path):
+        """A composite animation renders every frame to a non-empty GIF."""
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(rgb_stack, kind="rgb_composite", fps=2, titles=["a", "b", "c"])
+        out = tmp_path / "rgb.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.exists() and out.stat().st_size > 0, "composite GIF should be non-empty"
+        assert m.ax.get_title() == "c", "the last frame's title should remain on the axes"
+
+    def test_colorbar_on_a_composite_is_refused(self, rgb_stack):
+        """A composite has no single value scale, so colorbar=True is rejected rather than drawn."""
+        m = Map(crs=4326, figsize=(4, 4))
+        with pytest.raises(ValueError, match="colorbar=True is not meaningful"):
+            m.animate(rgb_stack, kind="rgb_composite", colorbar=True)
+
+    def test_stretch_is_frozen_across_the_stack(self):
+        """One stretch spans the whole stack, so a real exposure change survives instead of being erased."""
+        dark, bright = _rgb_field(0.0, exposure=0.5), _rgb_field(0.0, exposure=1.0)
+        opts: dict = {}
+        Map(crs=4326)._resolve_composite_stretch([dark, bright], opts)
+        limits = opts["stretch_limits"]
+        rendered = [_stretch_to_unit(get_stack(ds, (1, 2, 3)), limits).mean() for ds in (dark, bright)]
+        assert rendered[1] - rendered[0] > 0.05, (
+            f"the frozen stretch flattened a 2x exposure difference to {rendered}; frames would not differ"
+        )
+        per_frame = [_stretch_to_unit(get_stack(ds, (1, 2, 3))).mean() for ds in (dark, bright)]
+        assert abs(per_frame[1] - per_frame[0]) < 0.01, (
+            "per-frame stretch is expected to erase the difference — that is the flicker this guards against"
+        )
+
+    def test_explicit_stretch_limits_are_kept(self, rgb_stack):
+        """Caller-supplied stretch_limits are honoured, not overwritten by the stack scan."""
+        given = [(0.0, 10.0), (0.0, 20.0), (0.0, 30.0)]
+        opts = {"stretch_limits": given}
+        Map(crs=4326)._resolve_composite_stretch(rgb_stack, opts)
+        assert opts["stretch_limits"] is given, "an explicit stretch must not be recomputed"
+
+    def test_composite_scan_is_capped(self, mocker):
+        """The stack scan samples at most _CLIM_SCAN_CAP frames, however long the stack."""
+        from digitalearth.scene.maps import animation as anim_mod
+
+        spy = mocker.spy(anim_mod, "get_stack")
+        big = [_rgb_field(float(o)) for o in range(anim_mod._CLIM_SCAN_CAP * 3)]
+        opts: dict = {}
+        Map(crs=4326)._resolve_composite_stretch(big, opts)
+        assert spy.call_count <= anim_mod._CLIM_SCAN_CAP, (
+            f"scanned {spy.call_count} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
+        )
+        assert len(opts["stretch_limits"]) == 3, "one bound pair per band"
+
+
+class TestChannelLimits:
+    """Tests for the stretch-bounds helpers the composite animation path depends on."""
+
+    def test_limits_are_reused_verbatim(self):
+        """Passing limits bypasses the per-array percentile derivation."""
+        stack = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
+        out = _stretch_to_unit(stack, [(0.0, 99.0)] * 3)
+        assert out.min() == pytest.approx(0.0) and out.max() == pytest.approx(1.0)
+
+    def test_channel_limits_one_pair_per_band(self):
+        """channel_limits returns a (low, high) pair for each channel, low < high."""
+        stack = np.dstack([np.arange(100.0).reshape(10, 10) * s for s in (1.0, 2.0, 3.0)])
+        limits = channel_limits(stack)
+        assert len(limits) == 3
+        assert all(high > low for low, high in limits)
+
+    def test_flat_channel_does_not_divide_by_zero(self):
+        """A constant channel gets a nudged upper bound so the stretch stays finite."""
+        stack = np.dstack([np.full((4, 4), 7.0), np.zeros((4, 4)), np.ones((4, 4))])
+        assert np.isfinite(_stretch_to_unit(stack, channel_limits(stack))).all()
+
+    def test_wrong_number_of_limits_is_rejected(self):
+        """Limits that do not match the channel count raise rather than silently mis-stretching."""
+        stack = np.dstack([np.zeros((4, 4))] * 3)
+        with pytest.raises(ValueError, match="channel bounds"):
+            _stretch_to_unit(stack, [(0.0, 1.0)])

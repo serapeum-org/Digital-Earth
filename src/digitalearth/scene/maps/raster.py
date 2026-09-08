@@ -3,7 +3,7 @@
 Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into cleopatra ``ArrayGlyph`` field
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -13,16 +13,55 @@ from digitalearth.autostyle import auto_style
 from digitalearth.preprocess import add_cyclic_column
 from digitalearth.sources import get_stack
 
+#: Percentile pair the composite contrast stretch clips to, per channel.
+STRETCH_PERCENTILES = (2, 98)
 
-def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
-    """Per-channel 2-98 percentile contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``."""
-    out = np.empty(stack.shape, dtype="float64")
+
+def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
+    """Per-channel ``(low, high)`` stretch bounds of an ``(rows, cols, n)`` stack.
+
+    Split out of :func:`_stretch_to_unit` so a caller can compute the bounds over a whole *series* of
+    rasters and then hold them fixed — see :meth:`~digitalearth.scene.maps.animation.AnimationMixin.animate`,
+    where per-frame bounds would make a composite time-lapse pulse in brightness.
+
+    Args:
+        stack: A band-last ``(rows, cols, n)`` array; nodata cells are expected to be ``NaN``.
+
+    Returns:
+        One ``(low, high)`` pair per channel, with ``high`` nudged above ``low`` for a flat channel so the
+        stretch cannot divide by zero.
+    """
+    limits: List[Tuple[float, float]] = []
     for i in range(stack.shape[2]):
-        band = stack[..., i].astype("float64")
-        lo, hi = np.nanpercentile(band, [2, 98])
-        if hi <= lo:
-            hi = lo + 1.0
-        out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
+        low, high = np.nanpercentile(stack[..., i].astype("float64"), STRETCH_PERCENTILES)
+        limits.append((float(low), float(high) if high > low else float(low) + 1.0))
+    return limits
+
+
+def _stretch_to_unit(stack: np.ndarray, limits: Optional[Sequence[Tuple[float, float]]] = None) -> np.ndarray:
+    """Per-channel contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``.
+
+    Args:
+        stack: A band-last ``(rows, cols, n)`` array.
+        limits: Optional precomputed per-channel ``(low, high)`` bounds. ``None`` (default) derives them
+            from this array alone via :func:`channel_limits`; passing bounds computed over a whole series
+            keeps every frame on one scale.
+
+    Returns:
+        The stretched stack, clipped into ``[0, 1]``.
+
+    Raises:
+        ValueError: if ``limits`` is given with a different number of pairs than the stack has channels.
+    """
+    if limits is None:
+        limits = channel_limits(stack)
+    elif len(limits) != stack.shape[2]:
+        raise ValueError(
+            f"limits has {len(limits)} channel bounds but the stack has {stack.shape[2]} channels"
+        )
+    out = np.empty(stack.shape, dtype="float64")
+    for i, (low, high) in enumerate(limits):
+        out[..., i] = np.clip((stack[..., i].astype("float64") - low) / (high - low), 0.0, 1.0)
     return out
 
 
@@ -142,7 +181,7 @@ class RasterMixin:
         return self._extent_of(ds.x, ds.y)
 
     def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
-                      **opts) -> Any:
+                      stretch_limits: Optional[Sequence[Tuple[float, float]]] = None, **opts) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
         Args:
@@ -151,6 +190,11 @@ class RasterMixin:
             mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
                 percentile stretch (and render transparent). Pass ``False`` for the raw values (the
                 pre-mask behaviour, where the nodata sentinel participates in the stretch).
+            stretch_limits: Optional per-channel ``(low, high)`` bounds for the contrast stretch, one pair
+                per band. ``None`` (default) derives them from this raster alone. Pass bounds computed over
+                a whole series (:func:`channel_limits`) to hold the stretch fixed across frames — which is
+                what :meth:`~digitalearth.scene.maps.animation.AnimationMixin.animate` does, so a composite
+                time-lapse does not pulse in brightness.
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -179,7 +223,7 @@ class RasterMixin:
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
-        band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
+        band_first = np.moveaxis(_stretch_to_unit(stack, stretch_limits), -1, 0)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
             band_first, rgb_bands=RgbBands(list(range(len(bands)))), extent=self._extent(ds),
@@ -188,7 +232,7 @@ class RasterMixin:
         return self._render_glyph(glyph, **plot_style)
 
     def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
-                      **opts) -> Any:
+                      stretch_limits: Optional[Sequence[Tuple[float, float]]] = None, **opts) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
         Args:
@@ -196,6 +240,9 @@ class RasterMixin:
             bands: Three 1-based band indices mapped to H, S, V. Defaults to ``(1, 2, 3)``.
             mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
                 percentile stretch (and render transparent). Pass ``False`` for the raw pre-mask behaviour.
+            stretch_limits: Optional per-channel ``(low, high)`` bounds for the contrast stretch, one pair
+                per band; ``None`` (default) derives them from this raster alone. See
+                :meth:`rgb_composite` for why an animation freezes them across the stack.
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -205,7 +252,7 @@ class RasterMixin:
 
         ds = self._reproject(dataset)
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
-        rgb = hsv_to_rgb(_stretch_to_unit(stack))                      # (rows, cols, 3) RGB
+        rgb = hsv_to_rgb(_stretch_to_unit(stack, stretch_limits))      # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's RgbBands path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)
         plot_style = relocate_flat_style(opts)
