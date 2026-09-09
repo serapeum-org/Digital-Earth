@@ -523,9 +523,10 @@ class TestAnimateComposites:
         lo, hi = frozen[1]
         assert np.isfinite(lo), f"a dead frame poisoned channel 2's low bound: {frozen[1]}"
         assert np.isfinite(hi), f"a dead frame poisoned channel 2's high bound: {frozen[1]}"
+        frozen_bounds = frozen[1]
         surviving = channel_limits(get_stack(live, (1, 2, 3)))[1]
-        assert (lo, hi) == pytest.approx(surviving), (
-            f"the surviving frame's own bounds {surviving} should be the frozen ones {(lo, hi)}"
+        assert frozen_bounds == pytest.approx(surviving), (
+            f"the surviving frame's own bounds {surviving} should be the frozen ones {frozen_bounds}"
         )
 
     def test_channel_dead_in_every_frame_reports_no_bound(self):
