@@ -304,10 +304,81 @@ class WebMapBase:
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
 
-    def _display_gdf(self, features: Any) -> Any:
+    @staticmethod
+    def _require_vector(features: Any, method: str) -> None:
+        """Raise ``TypeError`` unless ``features`` is a vector layer.
+
+        The tier's single input guard, called from :meth:`_display_gdf` so every vector builder rejects a
+        raster the same way. Without it a pyramids raster reaches whichever expression the builder happens
+        to run first and fails obscurely there — a ``Dataset`` reports ``columns`` as an ``int`` (the grid
+        width in cells), so an attribute-membership test raises ``TypeError: argument of type 'int' is not
+        iterable``, while other builders raise ``has no len()``, an ``AttributeError``, or nothing at all.
+
+        Args:
+            features: The caller's input, expected to be a pyramids ``FeatureCollection`` / GeoDataFrame.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``features`` exposes no ``geometry``. A table that has columns but no *active*
+                geometry (``set_geometry`` never called) gets its own message naming ``set_geometry``,
+                rather than being misreported as a raster.
+
+        Examples:
+            - A vector-like input passes the guard silently (the check returns nothing):
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> layer = type("Layer", (), {"geometry": ()})()
+                >>> print(WebMap._require_vector(layer, "points"))
+                None
+
+                ```
+            - A raster is turned away, and the message names the type that arrived:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap._require_vector(42, "points")
+                ... except TypeError as err:
+                ...     print(str(err).split("(")[0])
+                points
+
+                ```
+            - The message routes the caller to the raster builders in this same tier:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap._require_vector(42, "points")
+                ... except TypeError as err:
+                ...     print("add_raster" in str(err), "DatasetCollection" in str(err))
+                True True
+
+                ```
+
+        See Also:
+            digitalearth.web.bigdata.BigDataMixin._require_points: the narrower geometry-kind guard that
+                runs after this one for the heatmap/cluster builders.
+        """
+        if hasattr(features, "geometry"):
+            return
+        # A raster reports `columns` as an int (the grid width); a table reports an Index of names. Telling
+        # the two apart keeps a GeoDataFrame whose geometry was never activated from being called a raster.
+        columns = getattr(features, "columns", None)
+        if columns is not None and not isinstance(columns, int):
+            raise TypeError(
+                f"{method}() needs a layer with an active geometry column; got a "
+                f"{type(features).__name__} whose columns are {list(columns)}. Call set_geometry(...) on "
+                f"it first."
+            )
+        raise TypeError(
+            f"{method}() needs a vector layer (a pyramids FeatureCollection / GeoDataFrame); got "
+            f"{type(features).__name__}. For a single raster use add_raster(); for a raster time stack "
+            f"use timeslider() with a DatasetCollection."
+        )
+
+    def _display_gdf(self, features: Any, *, method: str = "this builder") -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
-        The single vector choke point the point/line/polygon builders call. A pyramids
+        The single vector choke point the point/line/polygon builders call, and so the place the tier
+        rejects non-vector input (:meth:`_require_vector`) before any reprojection is paid for. A pyramids
         ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form ``maplibre.Map.add_source`` accepts
         for vector data), so it is reprojected through pyramids (``to_crs``) when needed and returned as-is; a
         bare GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import —
@@ -315,10 +386,15 @@ class WebMapBase:
 
         Args:
             features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
+            method: The calling builder's name, quoted in the guard's error message.
 
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
+
+        Raises:
+            TypeError: when ``features`` is not a vector layer.
         """
+        self._require_vector(features, method)
         if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)

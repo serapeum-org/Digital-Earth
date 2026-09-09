@@ -56,7 +56,7 @@ class ThreeDMixin:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="extrusions")
         paint: dict = {
             "fill-extrusion-opacity": float(opacity),
             "fill-extrusion-height": ["get", height] if isinstance(height, str) else float(height),

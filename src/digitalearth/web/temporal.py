@@ -22,77 +22,6 @@ from digitalearth.web.base import _require_layer_api
 class TemporalMixin:
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
-    @staticmethod
-    def _require_vector(features: Any, method: str) -> None:
-        """Raise ``TypeError`` unless ``features`` is a vector layer.
-
-        Reached only after the ``DatasetCollection`` branch, so by here the input is neither a vector layer
-        nor a raster stack. Without this check a pyramids raster would die in the attribute-membership test
-        below on an unrelated error: a ``Dataset`` exposes ``columns`` as an ``int`` (the grid width in
-        cells), so ``kdim not in ...`` raises ``TypeError: argument of type 'int' is not iterable``. Called
-        *before* :meth:`_display_gdf` so a raster in another CRS is not warped on its way to being rejected.
-
-        Args:
-            features: The caller's input, expected to be a pyramids ``FeatureCollection`` / GeoDataFrame.
-            method: The calling builder name (quoted in the error).
-
-        Raises:
-            TypeError: when ``features`` exposes no ``geometry`` — a single raster, a bare array, anything
-                non-vector — naming the accepted forms and the single-raster alternative. A table that has
-                columns but no *active* geometry (``set_geometry`` never called) gets its own message
-                naming ``set_geometry``, rather than being misreported as a raster.
-
-        Examples:
-            - A vector-like input passes the guard silently (the check returns nothing):
-                ```python
-                >>> from digitalearth.web import WebMap
-                >>> layer = type("Layer", (), {"geometry": ()})()
-                >>> print(WebMap._require_vector(layer, "timeslider"))
-                None
-
-                ```
-            - Anything else is turned away, and the message names the type that arrived:
-                ```python
-                >>> from digitalearth.web import WebMap
-                >>> try:
-                ...     WebMap._require_vector(42, "timeslider")
-                ... except TypeError as err:
-                ...     print(str(err).split(",")[0])
-                timeslider() needs a vector layer with a time attribute
-
-                ```
-            - The message points at the single-raster builder in this same tier:
-                ```python
-                >>> from digitalearth.web import WebMap
-                >>> try:
-                ...     WebMap._require_vector(42, "timeslider")
-                ... except TypeError as err:
-                ...     print("add_raster" in str(err))
-                True
-
-                ```
-
-        See Also:
-            digitalearth.web.bigdata.BigDataMixin._require_points: the sibling geometry-kind guard this
-                mirrors, which rejects non-point input for the heatmap/cluster builders.
-        """
-        if hasattr(features, "geometry"):
-            return
-        # A raster reports `columns` as an int (the grid width); a table reports an Index of names. Telling
-        # the two apart keeps a GeoDataFrame whose geometry was never activated from being called a raster.
-        columns = getattr(features, "columns", None)
-        if columns is not None and not isinstance(columns, int):
-            raise TypeError(
-                f"{method}() needs a layer with an active geometry column; got a "
-                f"{type(features).__name__} whose columns are {list(columns)}. Call set_geometry(...) on "
-                f"it first."
-            )
-        raise TypeError(
-            f"{method}() needs a vector layer with a time attribute, or a DatasetCollection for a "
-            f"raster time stack; got {type(features).__name__}. For a single raster (no time "
-            f"dimension) use add_raster()."
-        )
-
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
         """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps between frames.
 
@@ -205,7 +134,7 @@ class TemporalMixin:
             )
 
         self._require_vector(features, "timeslider")
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="timeslider")
         if kdim not in getattr(gdf, "columns", []):
             raise KeyError(f"time field {kdim!r} not found in the feature attributes")
 

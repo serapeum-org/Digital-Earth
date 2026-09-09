@@ -247,3 +247,88 @@ class TestAttributeTemplate:
     def test_multiple_fields_build_html_template(self):
         out = WebMap()._attribute_template(["a", "b"])
         assert "template" in out and "{a}" in out["template"] and "{b}" in out["template"]
+
+
+class TestVectorBuilderRasterGuard:
+    """Every vector builder rejects a raster at the shared ``_display_gdf`` choke point.
+
+    Before the guard each builder failed differently on the same input — ``choropleth`` raised
+    ``TypeError: argument of type 'int' is not iterable`` (issue #152's exact message), ``points`` and
+    ``polygons`` raised ``has no len()``, ``heatmap`` and ``cluster`` raised ``AttributeError``, and
+    ``lines`` accepted the raster and drew nothing at all.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize(
+        "method, kwargs",
+        [
+            ("points", {}),
+            ("lines", {}),
+            ("polygons", {}),
+            ("choropleth", {"column": "value"}),
+            ("heatmap", {}),
+            ("cluster", {}),
+        ],
+    )
+    def test_raster_is_rejected_by_name(self, dataset, method, kwargs):
+        """Each builder names itself and the raster alternatives instead of failing incidentally.
+
+        Args:
+            dataset: The sample pyramids raster fixture.
+            method: The builder under test.
+            kwargs: Extra required arguments for that builder.
+
+        Test scenario:
+            A ``Dataset`` reaches the shared guard and is rejected with a message quoting the builder that
+            was called, so the caller knows both what they did and what to do instead.
+        """
+        with pytest.raises(TypeError) as excinfo:
+            getattr(WebMap(), method)(dataset, **kwargs)
+        message = str(excinfo.value)
+        assert message.startswith(f"{method}()"), f"{method} did not name itself: {message}"
+        assert "add_raster" in message, f"{method} did not name the raster builder: {message}"
+        assert "argument of type" not in message, f"{method} still leaks the incidental error: {message}"
+
+    def test_lines_no_longer_silently_accepts_a_raster(self, dataset):
+        """``lines`` used to register a layer for a raster and render nothing.
+
+        Args:
+            dataset: The sample pyramids raster fixture.
+
+        Test scenario:
+            The worst of the six failures: no exception at all, so a caller had no signal that the map
+            would come out empty.
+        """
+        m = WebMap()
+        with pytest.raises(TypeError):
+            m.lines(dataset)
+        assert m.layers == [], "a rejected raster must not leave a layer registered"
+
+    def test_a_vector_layer_still_passes_every_builder(self, points_gdf):
+        """The guard must not disturb the supported path for any point-taking builder.
+
+        Args:
+            points_gdf: The existing five-point fixture.
+
+        Test scenario:
+            Point geometry is valid for points/heatmap/cluster, so none of them may raise.
+        """
+        for method in ("points", "heatmap", "cluster"):
+            getattr(WebMap(), method)(points_gdf)
+
+    def test_a_table_without_active_geometry_is_told_to_set_geometry(self):
+        """A geometry-less table gets the ``set_geometry`` message, not raster advice.
+
+        Test scenario:
+            The shared guard separates a real table missing its active geometry from an actual raster,
+            so the two get different, accurate instructions.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        table = gpd.GeoDataFrame({"value": [1.0], "geom": [Point(0, 0)]})
+        with pytest.raises(TypeError, match="set_geometry"):
+            WebMap().points(table)
