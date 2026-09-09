@@ -35,6 +35,40 @@ class TemporalMixin:
         Raises:
             TypeError: when ``features`` exposes no ``geometry`` — a raster, a bare array, anything
                 non-vector — with the raster-capable tiers named in the message.
+
+        Examples:
+            - A vector-like input passes the guard silently (the check returns nothing):
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> layer = type("Layer", (), {"geometry": ()})()
+                >>> print(WebMap._require_features(layer, "timeslider"))
+                None
+
+                ```
+            - A raster is turned away, and the message names the type that arrived:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap._require_features(42, "timeslider")
+                ... except TypeError as err:
+                ...     print(str(err).split(". ")[0])
+                timeslider() renders a time-stepped vector layer; got a int
+
+                ```
+            - The message routes the caller to the tiers that do take a raster stack:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap._require_features(42, "timeslider")
+                ... except TypeError as err:
+                ...     print("Map.animate" in str(err), "InteractiveMap.timecube" in str(err))
+                True True
+
+                ```
+
+        See Also:
+            digitalearth.web.bigdata.BigDataMixin._require_points: the sibling geometry-kind guard this
+                mirrors, which rejects non-point input for the heatmap/cluster builders.
         """
         if not hasattr(features, "geometry"):
             raise TypeError(
@@ -76,6 +110,40 @@ class TemporalMixin:
             TypeError: when ``features`` is not a vector layer (e.g. a pyramids ``Dataset`` /
                 ``DatasetCollection`` — use ``Map.animate`` or ``InteractiveMap.timecube`` for those).
             KeyError: when ``kdim`` is not a feature attribute.
+
+        Examples:
+            - Scrub a point series by its ``time`` attribute, colouring by ``pop`` (needs the ``web``
+              extra, so this example is not executed here):
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Point               # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     {"time": [2000, 2010], "pop": [1.0, 2.0]},
+                ...     geometry=[Point(0, 0), Point(1, 1)],
+                ...     crs=4326,
+                ... )
+                >>> WebMap().timeslider(gdf, kdim="time", column="pop")._temporal_times()  # doctest: +SKIP
+                [2000, 2010]
+
+                ```
+            - A raster is rejected up front, before any reprojection happens:
+                ```python
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> from pyramids.dataset import Dataset             # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")  # doctest: +SKIP
+                >>> WebMap().timeslider(dem)                         # doctest: +SKIP
+                Traceback (most recent call last):
+                    ...
+                TypeError: timeslider() renders a time-stepped vector layer; got a Dataset. ...
+
+                ```
+
+        See Also:
+            digitalearth.static.maps.animation.AnimationMixin.animate: the matplotlib tier's raster
+                time-stack animation, which takes a ``DatasetCollection``.
+            digitalearth.interactive.temporal.TemporalMixin.timecube: the interactive tier's raster
+                time cube, the HoloViz counterpart for stacks.
         """
         _require_layer_api()
         self._require_features(features, "timeslider")
@@ -135,5 +203,34 @@ class TemporalMixin:
 
         Returns:
             The sorted distinct ``kdim`` values, or ``[]`` when :meth:`timeslider` has not been called.
+
+        Examples:
+            - A fresh map has no slider, so there are no time steps:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap()._temporal_times()
+                []
+
+                ```
+            - Once a slider is configured, the distinct steps come back in order:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap()
+                >>> m._temporal = {"layer_id": "pop", "kdim": "year", "times": [2000, 2010, 2020]}
+                >>> m._temporal_times()
+                [2000, 2010, 2020]
+
+                ```
+            - The returned list is a snapshot, so editing it leaves the slider config intact:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap()
+                >>> m._temporal = {"layer_id": "pop", "kdim": "year", "times": [2000, 2010]}
+                >>> steps = m._temporal_times()
+                >>> steps.append(2030)
+                >>> m._temporal["times"]
+                [2000, 2010]
+
+                ```
         """
         return list(self._temporal["times"]) if self._temporal else []
