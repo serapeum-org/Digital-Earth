@@ -1,10 +1,12 @@
-"""Tests for Map.animate / Map.rotate — globe animations over a raster stack."""
+"""Tests for Map.animate / Map.rotate — globe animations over a raster stack and over composites."""
 import numpy as np
 import pytest
 from matplotlib.animation import FuncAnimation, PillowWriter
 from pyramids.dataset import Dataset, GeoReference
 
+from digitalearth.base.sources import get_stack
 from digitalearth.static import Map, projections
+from digitalearth.static.maps.raster import channel_limits
 
 
 def _field(offset: float) -> Dataset:
@@ -33,6 +35,39 @@ def stack():
         list[Dataset]: three distinct global rasters.
     """
     return [_field(o) for o in (0.0, 15.0, 30.0)]
+
+
+
+def _rgb_field(shift: float = 0.0, exposure: float = 1.0, ny: int = 60, nx: int = 120) -> Dataset:
+    """A small 3-band global raster whose scene shifts and whose overall brightness scales.
+
+    Args:
+        shift: Phase shift of the pattern, so consecutive frames differ.
+        exposure: Multiplies every channel — a whole-scene brightness change, which is exactly what a
+            per-frame contrast stretch erases.
+        ny: Row count.
+        nx: Column count.
+
+    Returns:
+        Dataset: a 3-band global EPSG:4326 raster.
+    """
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    base = 0.4 + 0.3 * np.sin((xx + shift) / 13.0) + 0.2 * np.cos(yy / 9.0)
+    bands = np.stack([base * 3000.0 * exposure, base * 2600.0 * exposure, base * 2200.0 * exposure])
+    return Dataset.from_array(
+        arr=bands.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326),
+    )
+
+
+@pytest.fixture
+def rgb_stack():
+    """A 3-frame stack of 3-band rasters — a true-colour time-lapse.
+
+    Returns:
+        list[Dataset]: three distinct multiband global rasters.
+    """
+    return [_rgb_field(shift=s) for s in (0.0, 10.0, 20.0)]
 
 
 class TestAnimate:
@@ -199,6 +234,125 @@ class TestAnimate:
         anim.save(str(out), writer=PillowWriter(fps=2))
         assert out.stat().st_size > 0, "animation should still render when coastlines fail"
         assert Map.coastlines.called, "coastlines should have been attempted"
+
+
+class TestAnimateComposites:
+    """Tests for animating RGB/HSV composites — the kinds Map.animate used to refuse (issue #150)."""
+
+    @pytest.mark.parametrize("kind", ["rgb_composite", "hsv_composite"])
+    def test_composite_kind_accepted(self, rgb_stack, kind):
+        """Both composite kinds are accepted and animate over the whole stack."""
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(rgb_stack, kind=kind, fps=2)
+        assert isinstance(anim, FuncAnimation), f"expected FuncAnimation, got {type(anim)}"
+        assert len(list(anim.new_frame_seq())) == len(rgb_stack), "frame count must match the stack length"
+
+    def test_composite_animation_renders_gif(self, rgb_stack, tmp_path):
+        """A composite animation renders every frame to a non-empty GIF, titles included.
+
+        Test scenario:
+            A flat true-colour animation with per-frame titles renders without error; afterwards the axes
+            hold the final frame's title and its RGB image.
+        """
+        m = Map(crs=4326, figsize=(4, 4))
+        titles = ["t0", "t1", "t2"]
+        anim = m.animate(rgb_stack, kind="rgb_composite", fps=2, titles=titles)
+        out = tmp_path / "rgb.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, "composite animation GIF should be non-empty"
+        assert m.ax.get_title() == titles[-1], f"last title not applied: {m.ax.get_title()!r}"
+        assert m.ax.images, "each frame should draw the composite image"
+
+    def test_composite_honours_band_order(self, rgb_stack, tmp_path):
+        """A composite animation forwards bands= to the per-frame composite call."""
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(rgb_stack, kind="rgb_composite", fps=2, bands=(3, 2, 1))
+        anim.save(str(tmp_path / "bands.gif"), writer=PillowWriter(fps=2))
+        assert m.ax.images[-1].get_array().shape[-1] == 3, "a custom band order should still render RGB"
+
+    def test_rotate_accepts_composite(self, tmp_path):
+        """rotate takes a composite kind too — it shares animate's kind validation."""
+        m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
+        anim = m.rotate(_rgb_field(), kind="rgb_composite", n_frames=3, fps=4)
+        out = tmp_path / "rotrgb.gif"
+        anim.save(str(out), writer=PillowWriter(fps=4))
+        assert out.stat().st_size > 0, "composite rotation GIF should be non-empty"
+
+    def test_colorbar_refused_for_composite(self, rgb_stack):
+        """colorbar=True on a composite is refused rather than answered with a meaningless bar."""
+        m = Map(crs=4326)
+        with pytest.raises(ValueError, match="colorbar=True is not supported"):
+            m.animate(rgb_stack, kind="rgb_composite", colorbar=True)
+        assert len(m.fig.axes) == 1, "no colorbar axes should have been added before the refusal"
+
+    def test_priming_a_composite_skips_the_clim(self, rgb_stack):
+        """Composite priming fills frozen limits and injects no clim (an RGB image ignores vmin/vmax)."""
+        m = Map(crs=4326)
+        opts = {}
+        m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
+        assert "vmin" not in opts and "vmax" not in opts, f"composite priming injected a clim: {opts}"
+        assert len(opts["limits"]) == 3, f"expected one (lo, hi) per channel, got {opts['limits']!r}"
+
+    def test_priming_a_field_still_resolves_the_clim(self, stack):
+        """The scalar path is untouched — priming a field kind still fills one shared vmin/vmax."""
+        m = Map(crs=4326)
+        opts = {}
+        m._prime_animation(stack, opts, kind="imshow", colorbar=False, cbar_label=None)
+        assert opts["vmin"] is not None and opts["vmax"] is not None, "field priming must still set a clim"
+        assert "limits" not in opts, "a scalar field takes no composite stretch limits"
+
+    def test_caller_limits_are_kept(self, rgb_stack):
+        """An explicit limits= wins — the stack scan only fills a missing one."""
+        m = Map(crs=4326)
+        mine = [(0.0, 10.0), (0.0, 10.0), (0.0, 10.0)]
+        opts = {"limits": mine}
+        m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
+        assert opts["limits"] == mine, "caller-supplied limits must not be overwritten by the scan"
+
+    def test_frozen_limits_span_the_whole_stack(self):
+        """The frozen limits bracket every individual frame's own limits (widest lo/hi wins)."""
+        frames = [_rgb_field(exposure=1.0), _rgb_field(exposure=0.4)]
+        frozen = Map(crs=4326)._stack_channel_limits(frames, (1, 2, 3))
+        per_frame = [channel_limits(get_stack(f, (1, 2, 3))) for f in frames]
+        for channel, (lo, hi) in enumerate(frozen):
+            assert lo <= min(p[channel][0] for p in per_frame), f"channel {channel} lo is not the widest"
+            assert hi >= max(p[channel][1] for p in per_frame), f"channel {channel} hi is not the widest"
+
+    def test_stack_channel_limits_caps_scan(self, mocker):
+        """_stack_channel_limits scans at most _CLIM_SCAN_CAP frames of a large stack (mirrors L2)."""
+        from digitalearth.static.maps import animation as anim_mod
+
+        spy = mocker.spy(anim_mod, "channel_limits")
+        big = [_rgb_field(shift=float(s), ny=12, nx=24) for s in range(anim_mod._CLIM_SCAN_CAP * 3)]
+        limits = Map(crs=4326)._stack_channel_limits(big, (1, 2, 3))
+        cap = anim_mod._CLIM_SCAN_CAP
+        assert spy.call_count <= cap, f"scanned {spy.call_count} frames, cap is {cap}"
+        assert len(limits) == 3, "the capped scan must still yield one (lo, hi) per channel"
+
+    def test_frozen_stretch_keeps_a_real_brightness_change(self, tmp_path):
+        """One frozen stretch preserves a genuine brightness drop that a per-frame stretch would erase.
+
+        Test scenario:
+            Two frames of the same scene, the second at 40% exposure. Animated, the second frame renders
+            visibly darker because both frames share one stretch; rendered as a still each frame
+            renormalises to its own 2-98 percentile, so the drop disappears — the flicker in issue #150.
+        """
+        frames = [_rgb_field(exposure=1.0), _rgb_field(exposure=0.4)]
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(frames, kind="rgb_composite", fps=2)
+        anim.save(str(tmp_path / "dim.gif"), writer=PillowWriter(fps=2))
+        animated_dim = np.nanmean(np.asarray(m.ax.images[-1].get_array(), dtype="float64"))
+
+        stills = []
+        for frame in frames:
+            still = Map(crs=4326, figsize=(4, 4))
+            still.rgb_composite(frame)
+            stills.append(np.nanmean(np.asarray(still.ax.images[-1].get_array(), dtype="float64")))
+
+        assert stills[1] == pytest.approx(stills[0], abs=1e-6), "per-frame stretch should erase the drop"
+        assert animated_dim < stills[0] * 0.75, (
+            f"the dim frame must stay dim under a frozen stretch: {animated_dim:.3f} vs {stills[0]:.3f}"
+        )
 
 
 class TestRotate:

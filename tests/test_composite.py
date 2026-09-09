@@ -5,7 +5,7 @@ import pytest
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map
-from digitalearth.static.maps.raster import _stretch_to_unit
+from digitalearth.static.maps.raster import _stretch_to_unit, channel_limits
 
 
 @pytest.fixture
@@ -81,3 +81,56 @@ def test_hsv_composite_accepts_mask_flag(rgb_dataset):
     m = Map(crs=rgb_dataset.epsg)
     m.hsv_composite(rgb_dataset, mask_nodata=False)
     assert len(m.ax.images) == 1, "hsv_composite should still render with mask_nodata=False"
+
+
+def test_channel_limits_one_pair_per_channel():
+    """channel_limits returns the 2-98 percentile (lo, hi) of every channel, in channel order."""
+    stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1.0, 2.0, 3.0)])
+    limits = channel_limits(stack)
+    assert len(limits) == 3, f"expected one pair per channel, got {limits!r}"
+    assert all(lo < hi for lo, hi in limits), f"each channel needs a real span: {limits!r}"
+    assert limits[1][1] == pytest.approx(limits[0][1] * 2.0), "channel 1 is twice channel 0"
+
+
+def test_stretch_to_unit_uses_given_limits():
+    """Passing limits replaces the per-call percentile scan, so the same values map to a fixed output."""
+    stack = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
+    limits = [(0.0, 200.0)] * 3
+    out = _stretch_to_unit(stack, limits)
+    assert out.max() == pytest.approx(99.0 / 200.0), "the given hi (200) must set the white point"
+    assert out.min() == pytest.approx(0.0), "the given lo (0) must set the black point"
+    assert out.max() < _stretch_to_unit(stack).max(), "the per-call stretch would push the max to 1.0"
+
+
+def test_stretch_to_unit_given_degenerate_limits():
+    """Degenerate (lo == hi) limits are widened instead of dividing by zero."""
+    stack = np.dstack([np.full((4, 4), 7.0) for _ in range(3)])
+    out = _stretch_to_unit(stack, [(7.0, 7.0)] * 3)
+    assert np.isfinite(out).all(), "a zero-span limit must not produce NaN/inf"
+
+
+def test_frozen_limits_preserve_relative_brightness():
+    """Two exposures of one scene keep their brightness ratio under shared limits, not under per-frame ones."""
+    base = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
+    bright, dim = base, base * 0.4
+    limits = channel_limits(bright)
+    assert np.nanmean(_stretch_to_unit(dim, limits)) < np.nanmean(_stretch_to_unit(bright, limits)) * 0.75
+    assert np.nanmean(_stretch_to_unit(dim)) == pytest.approx(np.nanmean(_stretch_to_unit(bright)))
+
+
+def test_rgb_composite_accepts_frozen_limits(rgb_dataset):
+    """rgb_composite(limits=...) stretches on the given bounds rather than its own percentiles."""
+    wide = Map(crs=rgb_dataset.epsg)
+    wide.rgb_composite(rgb_dataset, limits=[(0.0, 1e6)] * 3)
+    own = Map(crs=rgb_dataset.epsg)
+    own.rgb_composite(rgb_dataset)
+    wide_mean = np.nanmean(np.asarray(wide.ax.images[-1].get_array(), dtype="float64"))
+    own_mean = np.nanmean(np.asarray(own.ax.images[-1].get_array(), dtype="float64"))
+    assert wide_mean < own_mean, "a far wider white point must render darker than the per-call stretch"
+
+
+def test_hsv_composite_accepts_frozen_limits(rgb_dataset):
+    """hsv_composite takes the same frozen limits and still renders one image."""
+    m = Map(crs=rgb_dataset.epsg)
+    m.hsv_composite(rgb_dataset, limits=[(0.0, 1e6)] * 3)
+    assert len(m.ax.images) == 1, "hsv_composite should render with explicit limits"

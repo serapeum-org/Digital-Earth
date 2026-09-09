@@ -1,7 +1,8 @@
 """AnimationMixin — animate a stack of rasters and rotate an orthographic globe.
 
-Drives per-frame redraws on the shared axes as a matplotlib ``FuncAnimation``, with one shared colour scale
-(and an optional single static colorbar) so colours do not flicker between frames.
+Drives per-frame redraws on the shared axes as a matplotlib ``FuncAnimation``, with one shared colour
+treatment so colours do not flicker between frames: a scalar field gets one ``vmin``/``vmax`` (and an
+optional single static colorbar), an RGB/HSV composite gets one frozen per-channel contrast stretch.
 """
 from typing import Any, List, Optional, Sequence, Tuple
 
@@ -10,14 +11,23 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from digitalearth.base.arrays import finite, read_masked_band
+from digitalearth.base.sources import get_stack
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
+from digitalearth.static.maps.raster import ChannelLimits, channel_limits
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
 
-#: Field-render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
-_ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
+#: Composite renderers accepted as an animation ``kind``. They draw an RGB image rather than a scalar
+#: field, so they take a frozen per-channel stretch instead of a clim, and admit no colorbar.
+_COMPOSITE_KINDS = ("rgb_composite", "hsv_composite")
+
+#: Default channels a composite maps to R/G/B when the caller passes no ``bands``.
+_DEFAULT_COMPOSITE_BANDS = (1, 2, 3)
+
+#: Render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
+_ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block") + _COMPOSITE_KINDS
 
 
 class AnimationMixin:
@@ -140,6 +150,36 @@ class AnimationMixin:
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
+    @staticmethod
+    def _stack_channel_limits(datasets: Sequence[Any], bands: Sequence[int],
+                              *, mask_nodata: bool = True) -> ChannelLimits:
+        """Return one ``(lo, hi)`` stretch bound per composite channel, spanning the whole stack.
+
+        The composite counterpart of :meth:`_resolve_animation_clim`. Each scanned frame contributes its own
+        per-channel 2-98 percentiles and the widest ``lo``/``hi`` per channel wins, so every frame is
+        stretched on one fixed black and white point. Without this each frame re-derives its own and the clip
+        pumps between frames even where the scene is unchanged — the artefact a viewer reads as the data
+        having changed. Frames are read as stored rather than reprojected first: the display warp resamples
+        values but does not move the percentiles enough to matter, and skipping it keeps a second warp of the
+        whole stack off the critical path. At most :data:`_CLIM_SCAN_CAP` evenly-spaced frames are scanned.
+
+        Args:
+            datasets: The animation stack.
+            bands: The 1-based band indices the composite maps to its channels.
+            mask_nodata: Whether nodata cells are excluded from the percentiles (mirrors the composite's own
+                ``mask_nodata``, so the frozen limits match what an unfrozen frame would have computed).
+
+        Returns:
+            One ``(lo, hi)`` tuple per channel, in channel order.
+        """
+        seq = list(datasets)
+        stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
+        scanned = [channel_limits(get_stack(ds, bands, mask=mask_nodata)) for ds in seq[::stride]]
+        return [
+            (min(frame[i][0] for frame in scanned), max(frame[i][1] for frame in scanned))
+            for i in range(len(scanned[0]))
+        ]
+
     def _animation_colorbar(self, opts: dict, label: Optional[str]) -> Any:
         """Add one static colorbar for an animation from the already-resolved ``cmap``/``vmin``/``vmax``.
 
@@ -154,13 +194,35 @@ class AnimationMixin:
             cbar.set_label(label)
         return cbar
 
-    def _prime_animation(self, datasets: Sequence[Any], opts: dict, *, colorbar: bool,
+    def _prime_animation(self, datasets: Sequence[Any], opts: dict, *, kind: str, colorbar: bool,
                          cbar_label: Optional[str]) -> None:
-        """Resolve one shared colour scale into ``opts`` and, if asked, add the single static colorbar.
+        """Resolve the one shared colour treatment into ``opts``, and if asked add the static colorbar.
 
-        The setup shared by :meth:`animate` and :meth:`rotate`: fill a missing ``vmin``/``vmax`` once from the
-        stack so colours don't flicker between frames, then optionally draw one persistent colorbar.
+        The setup shared by :meth:`animate` and :meth:`rotate`, branching on what ``kind`` draws:
+
+        - A **scalar field** gets a missing ``vmin``/``vmax`` filled once from the stack so colours don't
+          flicker between frames, then optionally one persistent colorbar.
+        - A **composite** (:data:`_COMPOSITE_KINDS`) gets frozen per-channel stretch ``limits`` instead. A
+          clim is meaningless for an RGB image — the composite runs its own per-channel stretch and never
+          consults ``vmin``/``vmax`` — and there is no single mappable to key a colorbar to, so an explicit
+          ``colorbar=True`` is refused rather than answered with a meaningless bar.
+
+        Limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the scan.
+
+        Raises:
+            ValueError: when ``colorbar=True`` is combined with a composite ``kind``.
         """
+        if kind in _COMPOSITE_KINDS:
+            if colorbar:
+                raise ValueError(
+                    f"colorbar=True is not supported for a {kind!r} animation: a composite renders an RGB "
+                    "image, which has no single scalar mappable to key a colorbar to"
+                )
+            opts.setdefault("limits", self._stack_channel_limits(
+                datasets, opts.get("bands", _DEFAULT_COMPOSITE_BANDS),
+                mask_nodata=opts.get("mask_nodata", True),
+            ))
+            return
         self._resolve_animation_clim(datasets, opts)
         if colorbar:
             self._animation_colorbar(opts, cbar_label)
@@ -194,30 +256,36 @@ class AnimationMixin:
         frame, so every frame gets the boundary, graticule, and limb-clipping for free. The returned
         animation is lazy: call ``anim.save("out.gif", writer=PillowWriter(fps=...))`` or display it.
 
-        All frames share **one colour scale**: ``vmin``/``vmax`` from ``kwargs`` if given, else computed once
-        from the whole stack — so the colours (and the colorbar) do not flicker between frames.
+        All frames share **one colour treatment**, so nothing flickers between them. A scalar field takes
+        ``vmin``/``vmax`` from ``kwargs`` if given, else computed once from the whole stack. A composite
+        (``"rgb_composite"`` / ``"hsv_composite"``) instead takes one per-channel contrast stretch, frozen
+        once over the stack — without which every frame would re-derive its own 2-98 percentile and the
+        clip would pump. Pass your own ``limits=[(lo, hi), ...]`` to override that scan.
 
         Args:
             stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
                 ``DatasetCollection`` datacube) — one raster per animation frame.
-            kind: The field method used to draw each frame — one of ``"imshow"`` / ``"contourf"`` /
-                ``"contour"`` / ``"pcolormesh"`` / ``"block"``.
+            kind: The method used to draw each frame — a scalar field (``"imshow"`` / ``"contourf"`` /
+                ``"contour"`` / ``"pcolormesh"`` / ``"block"``) or a true/false-colour composite
+                (``"rgb_composite"`` / ``"hsv_composite"``, which take ``bands=(r, g, b)`` through
+                ``**kwargs`` to pick their channels).
             fps: Frames per second (sets the inter-frame interval).
             titles: Optional per-frame titles; must match the stack length when given.
             ocean: When True, fill the ocean disc behind each frame (globe maps only).
             coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).
             colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared
-                colour scale.
+                colour scale. Not available on a composite ``kind`` — an RGB image has no scalar mappable.
             cbar_label: Optional label for the colorbar.
-            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
+            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``; or ``bands``,
+                ``mask_nodata``, ``limits`` for a composite).
 
         Returns:
             A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames (also kept on
             ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``kind`` is not a known field renderer, ``stack`` is empty, or ``titles`` is given
-                with a mismatched length.
+            ValueError: if ``kind`` is not a known renderer, ``stack`` is empty, ``titles`` is given with a
+                mismatched length, or ``colorbar=True`` is combined with a composite ``kind``.
         """
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
@@ -226,7 +294,7 @@ class AnimationMixin:
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):
             raise ValueError(f"titles length ({len(titles)}) must match the stack length ({len(frames)})")
-        self._prime_animation(frames, kwargs, colorbar=colorbar, cbar_label=cbar_label)
+        self._prime_animation(frames, kwargs, kind=kind, colorbar=colorbar, cbar_label=cbar_label)
 
         def draw_one(i: int) -> None:
             title = titles[i] if titles is not None else None
@@ -253,27 +321,31 @@ class AnimationMixin:
             n_frames: Number of frames spanning the full 360-degree turn.
             fps: Frames per second.
             lon0: Starting centre longitude.
-            kind: The field method used to draw the data (``"imshow"`` / ``"contourf"`` / ``"pcolormesh"`` /
-                ``"contour"`` / ``"block"``).
+            kind: The method used to draw the data — a scalar field (``"imshow"`` / ``"contourf"`` /
+                ``"pcolormesh"`` / ``"contour"`` / ``"block"``) or a composite (``"rgb_composite"`` /
+                ``"hsv_composite"``).
             ocean: When True, fill the ocean disc behind the data each frame.
             coastlines: When True, overlay coastlines each frame (best-effort).
-            colorbar: When True, add one static colorbar (drawn once) using the shared colour scale.
+            colorbar: When True, add one static colorbar (drawn once) using the shared colour scale. Not
+                available on a composite ``kind``.
             cbar_label: Optional label for the colorbar.
-            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``).
+            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``; or ``bands``,
+                ``mask_nodata``, ``limits`` for a composite).
 
         Returns:
             A :class:`matplotlib.animation.FuncAnimation` over ``n_frames`` frames (also kept on
             ``self._animation`` so it is not garbage-collected before you save/display it).
 
         Raises:
-            ValueError: if ``n_frames`` is less than 1, or ``kind`` is not a known field renderer.
+            ValueError: if ``n_frames`` is less than 1, ``kind`` is not a known renderer, or
+                ``colorbar=True`` is combined with a composite ``kind``.
         """
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
         self.globe = True
-        self._prime_animation([dataset], kwargs, colorbar=colorbar, cbar_label=cbar_label)
+        self._prime_animation([dataset], kwargs, kind=kind, colorbar=colorbar, cbar_label=cbar_label)
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
 
         def draw_one(i: int) -> None:
