@@ -3,8 +3,6 @@
 Gated on the optional ``3d`` extra: when pyvista is not installed these are skipped, so the default suite stays
 green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise them for real.
 """
-import importlib.util
-
 import numpy as np
 import pytest
 
@@ -94,24 +92,6 @@ def test_save_dispatches_png_vs_html(tmp_path):
     scene.close()
 
 
-def test_export_html_stack_is_installed():
-    """The trame/vtk.js export stack the `3d` extra promises is actually importable in this environment.
-
-    `test_save_dispatches_png_vs_html` proves the export works; this proves *why* when it does not. Both
-    dependencies below reach the environment only through `pyvista[jupyter]` — `nest_asyncio2` drives the
-    synchronous trame-server launch on every pyvista version, and `trame_vtk` serialises the scene to HTML
-    (#158).
-    """
-    assert importlib.util.find_spec("nest_asyncio2") is not None, (
-        "nest_asyncio2 is missing — Plotter.export_html cannot launch its trame server without it. It comes "
-        "from `pyvista[jupyter]`; check the `3d` extra."
-    )
-    assert importlib.util.find_spec("trame_vtk") is not None, (
-        "trame_vtk is missing — it writes the vtk.js page. It comes from `pyvista[jupyter]` (0.48) or "
-        "`trame-pyvista` (>=0.49); check the `3d` extra."
-    )
-
-
 def test_add_volume_registers_layer():
     """add_volume() ray-casts a scalar field and registers it as a layer."""
     scene = Scene3D(off_screen=True)
@@ -176,6 +156,18 @@ class _RecordingPlotter:
         self.calls.append(path)
         if self.error is not None:
             raise self.error
+
+
+def _stub_scene(component=None, error=None):
+    """Build a Scene3DBase around a recording stub, with no real render window to leak.
+
+    `export_html` and `save` only ever touch `self.plotter`, so bypassing `__init__` keeps these tests free of
+    the VTK context a real `Scene3DBase(off_screen=True)` would open and never close.
+    """
+    scene = Scene3DBase.__new__(Scene3DBase)
+    scene.plotter = _RecordingPlotter(component=component, error=error)
+    scene.layers = []
+    return scene
 
 
 class TestHouseTheme:
@@ -277,51 +269,45 @@ class TestScene3DBaseInit:
 
 
 class TestExportHtml:
-    """Tests for Scene3DBase.export_html — in particular both sides of the pyvista version switch."""
+    """Tests for Scene3DBase.export_html — in particular both sides of the trame-component capability switch."""
 
-    def test_routes_to_the_trame_component_when_registered(self, monkeypatch, tmp_path):
-        """With a `trame` component present (pyvista >=0.49) the export goes through it, not the plotter.
+    def test_routes_to_the_trame_component_when_registered(self, tmp_path):
+        """With a `trame` component present the export goes through it, not the plotter's own method.
 
         Args:
-            monkeypatch: Swaps in the recording plotter for the real one.
             tmp_path: Supplies the destination path.
 
         Test scenario:
             The component receives the path and the deprecated `Plotter.export_html` is never called — which is
-            what keeps the PyVistaDeprecationWarning off 0.49.
+            what keeps the PyVistaDeprecationWarning off pyvista >=0.49.
         """
         component = _RecordingComponent()
-        plotter = _RecordingPlotter(component=component)
-        scene = Scene3DBase(off_screen=True)
-        monkeypatch.setattr(scene, "plotter", plotter)
+        scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
         scene.export_html(out)
         assert component.calls == [out], f"The trame component should have received {out!r}, got {component.calls}"
-        assert plotter.calls == [], f"Plotter.export_html is deprecated on >=0.49, not to be called: {plotter.calls}"
+        assert scene.plotter.calls == [], f"Plotter.export_html is deprecated, not to be called: {scene.plotter.calls}"
 
-    def test_falls_back_to_the_plotter_without_a_component(self, monkeypatch, tmp_path):
-        """With no `trame` attribute (pyvista 0.48) the export uses `Plotter.export_html`.
+    def test_falls_back_to_the_plotter_without_a_component(self, tmp_path):
+        """With no `trame` attribute (pyvista 0.48 without trame-pyvista) the export uses `Plotter.export_html`.
 
         Args:
-            monkeypatch: Swaps in the recording plotter for the real one.
             tmp_path: Supplies the destination path.
 
         Test scenario:
-            The plotter's own method receives the path, so 0.48 keeps working after the >=0.49 branch was added.
+            The plotter's own method receives the path, so the pre-0.49 arrangement keeps working after the
+            component branch was added.
         """
-        plotter = _RecordingPlotter()
-        scene = Scene3DBase(off_screen=True)
-        monkeypatch.setattr(scene, "plotter", plotter)
+        scene = _stub_scene()
         out = str(tmp_path / "s.html")
         scene.export_html(out)
-        assert plotter.calls == [out], f"Plotter.export_html should have received {out!r}, got {plotter.calls}"
+        assert scene.plotter.calls == [out], f"Expected {out!r} on the plotter, got {scene.plotter.calls}"
 
     @pytest.mark.parametrize("with_component", [True, False], ids=["trame-component", "plotter-fallback"])
-    def test_returns_the_destination_path(self, monkeypatch, tmp_path, with_component):
-        """Both branches return the path they were given, so callers can chain on the result.
+    def test_returns_the_destination_it_wrote(self, tmp_path, with_component):
+        """Both branches return the same path they handed to the exporter.
 
         Args:
-            monkeypatch: Swaps in the recording plotter for the real one.
             tmp_path: Supplies the destination path.
             with_component: Whether the stub plotter carries a `trame` component.
 
@@ -330,16 +316,43 @@ class TestExportHtml:
             bare `return self.plotter...` would hand the caller None instead of the path.
         """
         component = _RecordingComponent() if with_component else None
-        scene = Scene3DBase(off_screen=True)
-        monkeypatch.setattr(scene, "plotter", _RecordingPlotter(component=component))
+        scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
+        recorded = component.calls if with_component else scene.plotter.calls
         assert scene.export_html(out) == out, "export_html must return the path it wrote"
+        assert recorded == [out], f"The returned path must be the one exported, got {recorded}"
 
-    def test_propagates_a_missing_stack_error(self, monkeypatch, tmp_path):
+    @pytest.mark.parametrize("with_component", [True, False], ids=["trame-component", "plotter-fallback"])
+    @pytest.mark.parametrize(
+        "given, written", [("s.HTML", "s.html"), ("s.htm", "s.html"), ("s", "s.html")],
+        ids=["uppercase", "htm", "suffixless"],
+    )
+    def test_normalises_the_suffix_on_both_branches(self, tmp_path, given, written, with_component):
+        """A non-`.html` suffix is rewritten before export, identically on either branch.
+
+        Args:
+            tmp_path: Supplies the destination path.
+            given: The suffix the caller asks for.
+            written: The suffix that must actually be exported.
+            with_component: Whether the stub plotter carries a `trame` component.
+
+        Test scenario:
+            trame-pyvista rewrites a non-`.html` suffix itself while pyvista 0.48's native export honours the
+            name it is given, so the same call would write two different files depending on the installed
+            pyvista. Normalising up front makes both agree, and the returned path names the file that exists.
+        """
+        component = _RecordingComponent() if with_component else None
+        scene = _stub_scene(component=component)
+        expected = str(tmp_path / written)
+        returned = scene.export_html(tmp_path / given)
+        recorded = component.calls if with_component else scene.plotter.calls
+        assert returned == expected, f"Expected the normalised path {expected!r}, got {returned!r}"
+        assert recorded == [expected], f"Expected {expected!r} to be exported, got {recorded}"
+
+    def test_propagates_a_missing_stack_error(self, tmp_path):
         """A missing trame stack surfaces pyvista's own actionable ImportError rather than a swallowed failure.
 
         Args:
-            monkeypatch: Swaps in a plotter whose export raises.
             tmp_path: Supplies the destination path.
 
         Test scenario:
@@ -347,8 +360,7 @@ class TestExportHtml:
             fallback branch must let that reach the caller with its message intact — it names what to install.
         """
         message = 'The "trame" plotter component is not registered. Install trame-pyvista: pip install trame-pyvista'
-        scene = Scene3DBase(off_screen=True)
-        monkeypatch.setattr(scene, "plotter", _RecordingPlotter(error=ImportError(message)))
+        scene = _stub_scene(error=ImportError(message))
         with pytest.raises(ImportError, match="trame-pyvista") as exc_info:
             scene.export_html(str(tmp_path / "s.html"))
         assert "not registered" in str(exc_info.value), f"The actionable message was lost: {exc_info.value}"
@@ -358,40 +370,36 @@ class TestSave:
     """Tests for Scene3DBase.save — the PNG/HTML dispatch."""
 
     @pytest.mark.parametrize("name", ["s.html", "s.HTML", "s.Html"], ids=["lower", "upper", "mixed"])
-    def test_html_dispatch_is_case_insensitive(self, monkeypatch, tmp_path, name):
-        """Any casing of the `.html` suffix takes the HTML branch.
+    def test_html_dispatch_is_case_insensitive(self, tmp_path, name):
+        """Any casing of the `.html` suffix takes the HTML branch and lands on the normalised name.
 
         Args:
-            monkeypatch: Swaps in the recording plotter for the real one.
             tmp_path: Supplies the destination path.
             name: File name whose suffix casing is under test.
 
         Test scenario:
-            `save()` lowercases before matching, so `s.HTML` exports a page instead of silently writing a PNG.
+            `save()` lowercases before matching, so `s.HTML` exports a page instead of silently writing a PNG,
+            and `export_html` normalises the suffix so every casing writes `s.html`.
         """
-        plotter = _RecordingPlotter()
-        scene = Scene3DBase(off_screen=True)
-        monkeypatch.setattr(scene, "plotter", plotter)
-        out = tmp_path / name
-        assert scene.save(str(out)) is None, "The HTML branch returns None, not a frame"
-        assert plotter.calls == [str(out)], f"Expected an HTML export for {name!r}, got {plotter.calls}"
+        scene = _stub_scene()
+        assert scene.save(str(tmp_path / name)) is None, "The HTML branch returns None, not a frame"
+        expected = str(tmp_path / "s.html")
+        assert scene.plotter.calls == [expected], f"Expected {expected!r} for {name!r}, got {scene.plotter.calls}"
 
-    def test_accepts_a_path_object(self, monkeypatch, tmp_path):
+    def test_accepts_a_path_object(self, tmp_path):
         """A `pathlib.Path` destination dispatches on suffix just as a string does.
 
         Args:
-            monkeypatch: Swaps in the recording plotter for the real one.
             tmp_path: Supplies the destination path.
 
         Test scenario:
-            `save()` calls `str(path)` before matching, so a Path ending in `.html` still takes the HTML branch.
+            `save()` calls `str(path)` before matching, so a Path ending in `.html` still takes the HTML branch,
+            and the exporter is handed a plain string.
         """
-        plotter = _RecordingPlotter()
-        scene = Scene3DBase(off_screen=True)
-        monkeypatch.setattr(scene, "plotter", plotter)
+        scene = _stub_scene()
         out = tmp_path / "s.html"
         assert scene.save(out) is None, "A Path ending in .html must take the HTML branch"
-        assert plotter.calls == [out], f"The destination should have reached export_html unchanged: {plotter.calls}"
+        assert scene.plotter.calls == [str(out)], f"The exporter should receive a str, got {scene.plotter.calls}"
 
     def test_png_branch_forwards_screenshot_kwargs(self, tmp_path):
         """Non-HTML paths screenshot, forwarding extra keywords to `Plotter.screenshot`.

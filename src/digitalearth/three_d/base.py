@@ -10,10 +10,15 @@ PyVista is a renderer, not a GIS engine: meshes are built from pyramids-sourced 
 the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``off_screen`` follows
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
-from typing import Any, List, Optional, Tuple
+import os
+from pathlib import Path
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import pyvista as pv
+
+#: Anything acceptable as an output destination.
+PathLike = Union[str, "os.PathLike[str]"]
 
 
 def house_theme() -> pv.themes.Theme:
@@ -272,7 +277,7 @@ class Scene3DBase:
         """
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
 
-    def export_html(self, path: str) -> str:
+    def export_html(self, path: PathLike) -> str:
         """Export the scene to a self-contained interactive HTML page (via trame/vtk.js).
 
         The page embeds the whole mesh, so it grows with the geometry rather than with the rendered image: about
@@ -281,39 +286,44 @@ class Scene3DBase:
         sit beside a notebook or in docs — prefer :meth:`digitalearth.three_d.Scene3D.orbit`, which writes a
         compact GIF/MP4 fly-through of the same scene.
 
+        The destination is normalised to a ``.html`` suffix before writing, and that normalised path is what
+        comes back. pyvista's own behaviour here differs by version — the ``trame-pyvista`` component used from
+        0.49 rewrites a non-``.html`` suffix, while 0.48's native export honours the name it was given — so
+        normalising up front is what makes the two agree and keeps the returned path the file that exists.
+
         Args:
-            path: Destination ``.html`` file.
+            path: Destination file. A suffix other than ``.html`` (including ``.HTML``) is replaced with
+                ``.html``; a name with no suffix gains one.
 
         Returns:
-            The ``path`` written.
+            The ``.html`` path written, as a string.
 
         Raises:
             ImportError: If the trame/vtk.js export stack is missing. pyvista raises this itself and its message
                 names the package to install; the ``3d`` extra pulls the stack via ``pyvista[jupyter]``.
 
         Examples:
-            - Export a small scene and confirm a page was written:
+            - Export a small scene; the returned path is the page that was written, so it can be passed straight
+              on:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
-                >>> scene = Scene3DBase(off_screen=True)
-                >>> _ = scene.add_mesh(pv.Sphere())
-                >>> out = scene.export_html(os.path.join(tempfile.mkdtemp(), "scene.html"))
-                >>> os.path.getsize(out) > 0
-                True
-                >>> scene.close()
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     out = scene.export_html(os.path.join(folder, "scene.html"))
+                ...     scene.close()
+                ...     os.path.basename(out), os.path.getsize(out) > 0
+                ('scene.html', True)
 
                 ```
-            - The destination is handed back, so it can be passed straight on:
+            - Any other suffix is normalised to ``.html``, and the normalised name is what comes back — so the
+              returned path always names the file that exists, on either pyvista:
                 ```python
-                >>> import os, tempfile, pyvista as pv
+                >>> from pathlib import Path
                 >>> from digitalearth.three_d.base import Scene3DBase
-                >>> scene = Scene3DBase(off_screen=True)
-                >>> _ = scene.add_mesh(pv.Cube())
-                >>> target = os.path.join(tempfile.mkdtemp(), "cube.html")
-                >>> scene.export_html(target) == target
-                True
-                >>> scene.close()
+                >>> Path("map.HTML").with_suffix(".html").name
+                'map.html'
 
                 ```
 
@@ -327,18 +337,19 @@ class Scene3DBase:
         # such attribute and implements the export natively, so the attribute doubles as the version switch.
         # Falling back (rather than raising here) keeps pyvista's own actionable ImportError when >=0.49 is
         # installed without trame-pyvista.
+        destination = str(Path(path).with_suffix(".html"))
         component = getattr(self.plotter, "trame", None)
         if component is None:
-            self.plotter.export_html(path)
+            self.plotter.export_html(destination)
         else:
-            component.export_html(path)
-        return path
+            component.export_html(destination)
+        return destination
 
-    def save(self, path: str, **kwargs: Any) -> Optional[np.ndarray]:
+    def save(self, path: PathLike, **kwargs: Any) -> Optional[np.ndarray]:
         """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
 
         The HTML branch delegates to :meth:`export_html` — see there for why a heavy scene is better served by
-        :meth:`digitalearth.three_d.Scene3D.orbit`.
+        :meth:`digitalearth.three_d.Scene3D.orbit`, and for the ``.html`` suffix normalisation it applies.
 
         Args:
             path: Output file. ``*.html`` exports an interactive page; anything else saves a PNG screenshot.
@@ -364,29 +375,19 @@ class Scene3DBase:
                 >>> scene.close()
 
                 ```
-            - An ``.html`` suffix exports an interactive page instead, and returns ``None`` rather than a frame:
+            - An ``.html`` suffix exports an interactive page instead, and returns ``None`` rather than a frame.
+              The match is case-insensitive, and :meth:`export_html` normalises the suffix it writes, so
+              ``SCENE.HTML`` lands as ``SCENE.html``:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
-                >>> scene = Scene3DBase(off_screen=True)
-                >>> _ = scene.add_mesh(pv.Sphere())
-                >>> out = os.path.join(tempfile.mkdtemp(), "scene.html")
-                >>> scene.save(out) is None
-                True
-                >>> os.path.getsize(out) > 0
-                True
-                >>> scene.close()
-
-                ```
-            - The suffix match is case-insensitive, so ``.HTML`` takes the same branch:
-                ```python
-                >>> import os, tempfile, pyvista as pv
-                >>> from digitalearth.three_d.base import Scene3DBase
-                >>> scene = Scene3DBase(off_screen=True)
-                >>> _ = scene.add_mesh(pv.Cube())
-                >>> scene.save(os.path.join(tempfile.mkdtemp(), "SCENE.HTML")) is None
-                True
-                >>> scene.close()
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     returned = scene.save(os.path.join(folder, "SCENE.HTML"))
+                ...     scene.close()
+                ...     returned is None, sorted(os.listdir(folder))
+                (True, ['SCENE.html'])
 
                 ```
 
