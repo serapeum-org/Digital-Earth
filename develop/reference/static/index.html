@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3863,12 +3863,7 @@
 <span class="normal"><a href="#__codelineno-0-299">299</a></span>
 <span class="normal"><a href="#__codelineno-0-300">300</a></span>
 <span class="normal"><a href="#__codelineno-0-301">301</a></span>
-<span class="normal"><a href="#__codelineno-0-302">302</a></span>
-<span class="normal"><a href="#__codelineno-0-303">303</a></span>
-<span class="normal"><a href="#__codelineno-0-304">304</a></span>
-<span class="normal"><a href="#__codelineno-0-305">305</a></span>
-<span class="normal"><a href="#__codelineno-0-306">306</a></span>
-<span class="normal"><a href="#__codelineno-0-307">307</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="k">class</span><span class="w"> </span><span class="nc">StaticGlyph</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-302">302</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="k">class</span><span class="w"> </span><span class="nc">StaticGlyph</span><span class="p">:</span>
 <a id="__codelineno-0-30" name="__codelineno-0-30"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Legacy static raster / catchment plotter.</span>
 <a id="__codelineno-0-31" name="__codelineno-0-31"></a>
 <a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">    .. deprecated::</span>
@@ -4142,11 +4137,6 @@
 <a id="__codelineno-0-300" name="__codelineno-0-300"></a>            <span class="n">fig</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">save</span><span class="p">,</span> <span class="n">bbox_inches</span><span class="o">=</span><span class="s2">&quot;tight&quot;</span><span class="p">,</span> <span class="n">transparent</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-301" name="__codelineno-0-301"></a>
 <a id="__codelineno-0-302" name="__codelineno-0-302"></a>        <span class="k">return</span> <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="c1">#: Legacy camelCase spelling of :meth:`plot_catchment`, kept so existing callers keep working. This is a</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="c1">#: plain attribute binding rather than a wrapper, so both names are the *same* function object; the</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="c1">#: deprecation warning every StaticGlyph entry point emits still fires either way.</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a>    <span class="n">plotCatchment</span> <span class="o">=</span> <span class="n">plot_catchment</span>  <span class="c1"># noqa: N815</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
