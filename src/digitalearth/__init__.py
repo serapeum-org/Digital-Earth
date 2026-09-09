@@ -1,9 +1,13 @@
 try:
-    from importlib.metadata import PackageNotFoundError  # type: ignore
-    from importlib.metadata import version
+    from importlib.metadata import (
+        PackageNotFoundError,  # type: ignore
+        version,
+    )
 except ImportError:  # pragma: no cover
-    from importlib_metadata import PackageNotFoundError  # type: ignore
-    from importlib_metadata import version
+    from importlib_metadata import (
+        PackageNotFoundError,  # type: ignore
+        version,
+    )
 
 
 try:
@@ -36,8 +40,18 @@ digitalearth - visualization package
 """
 
 from digitalearth.api import quickmap, quickplot  # noqa: E402
+from digitalearth.base.sources import DimensionInfo, Source, get_source  # noqa: E402
 from digitalearth.ops.batch import Batch  # noqa: E402
 from digitalearth.ops.browser import gallery  # noqa: E402
+from digitalearth.ops.plugins import load_plugins  # noqa: E402
+from digitalearth.static import (  # noqa: E402
+    Map,
+    Scene,
+    TexturedGlobe,
+    grid,
+    projections,
+    shared_colorbar,
+)
 from digitalearth.static.charts import (  # noqa: E402
     bar,
     bar_by,
@@ -52,15 +66,6 @@ from digitalearth.static.geostatistics import (  # noqa: E402
     kriging_map,
     lisa_map,
 )
-from digitalearth.ops.plugins import load_plugins  # noqa: E402
-from digitalearth.static import (  # noqa: E402
-    Map,
-    Scene,
-    TexturedGlobe,
-    grid,
-    projections,
-    shared_colorbar,
-)
 from digitalearth.static.series import (  # noqa: E402
     boxplot,
     envelope,
@@ -68,7 +73,6 @@ from digitalearth.static.series import (  # noqa: E402
     quantile_band,
     stripes,
 )
-from digitalearth.base.sources import DimensionInfo, Source, get_source  # noqa: E402
 from digitalearth.static.temporal import Climatology, TimeSeries  # noqa: E402
 
 __all__ = [

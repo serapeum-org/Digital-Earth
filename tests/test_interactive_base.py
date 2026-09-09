@@ -15,9 +15,9 @@ import sys
 
 import pytest
 
+from digitalearth.base.sources.source import Source
 from digitalearth.interactive import InteractiveMap
 from digitalearth.interactive.base import _require_holoviz
-from digitalearth.base.sources.source import Source
 from tests.test_no_competitor_imports import (
     FORBIDDEN,
     _top_level_imports,

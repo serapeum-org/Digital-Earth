@@ -122,6 +122,7 @@ class TestQuickplot3DBackend:
     def test_mixed_geometry_raises_clear_message(self):
         """Mixed point+polygon input raises the general message, not the misleading 'line geometries' one (N1)."""
         import pandas as pd
+
         from digitalearth.api import quickplot
 
         pts = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[:2]

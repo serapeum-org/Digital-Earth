@@ -1,7 +1,6 @@
 """Tests for digitalearth.static.Map — display-CRS reprojection + decoration (no Cartopy)."""
 from pathlib import Path
 
-
 import pytest
 
 from digitalearth.static import Map

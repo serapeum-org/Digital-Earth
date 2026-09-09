@@ -24,7 +24,10 @@ from digitalearth import static
 SHIM = "digitalearth.scene"
 
 #: The names the old ``digitalearth.scene`` package exported, and so the only ones the shim forwards.
-FORWARDED = ["Scene", "Map", "TexturedGlobe", "grid", "shared_colorbar"]
+#: What the shim forwards: the five names the old ``scene`` package listed in its own ``__all__``, plus
+#: ``projections`` — that one is in the package root's ``__all__`` and resolved off ``scene`` as a
+#: submodule, so leaving it out dead-ended anyone following the root API to its source.
+FORWARDED = ["Scene", "Map", "TexturedGlobe", "grid", "projections", "shared_colorbar"]
 
 
 @pytest.fixture
@@ -145,11 +148,11 @@ class TestSceneShimExports:
     """Tests for the names the shim forwards."""
 
     def test_all_is_exactly_the_forwarded_set(self, shim):
-        """``__all__`` advertises precisely the five names the old package exported.
+        """``__all__`` advertises precisely the names the shim exists to forward.
 
         Test scenario:
             The shim is a frozen compatibility surface — it must not grow new names, and must not have lost
-            one of the five it exists to forward.
+            one of the six it forwards (the old package's five, plus ``projections``; see :data:`FORWARDED`).
         """
         assert sorted(shim.__all__) == sorted(FORWARDED), (
             f"__all__ drifted: {sorted(shim.__all__)}"

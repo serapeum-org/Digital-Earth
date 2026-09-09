@@ -5,7 +5,6 @@ import pytest
 
 import digitalearth
 
-
 EXPECTED = [
     "quickplot", "quickmap", "Map", "Scene", "TexturedGlobe", "grid", "shared_colorbar", "projections",
     "get_source", "Source", "DimensionInfo",

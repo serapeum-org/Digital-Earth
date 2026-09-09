@@ -260,7 +260,11 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
-        from digitalearth.base.symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
+        from digitalearth.base.symbology import (
+            MISSING_COLOR,
+            categorical_colors,
+            resolve_categorical_cmap,
+        )
 
         gdf = self._display_gdf(features)
         categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))

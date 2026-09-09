@@ -4,11 +4,11 @@ from typing import Any, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import LineCollection, PolyCollection
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.styling.params import Classify
 from geopandas import GeoDataFrame
+from matplotlib.collections import LineCollection, PolyCollection
 from pyramids.dataset import Dataset
 
 from digitalearth.static.render_compat import group_render_kwargs

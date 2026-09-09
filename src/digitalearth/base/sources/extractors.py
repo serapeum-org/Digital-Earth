@@ -15,9 +15,9 @@ from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import mask_nodata, read_masked_band
 from digitalearth.base.crs import source_epsg
-from digitalearth.base.types import PlottableData, RasterLike
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
+from digitalearth.base.types import PlottableData, RasterLike
 
 
 def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:

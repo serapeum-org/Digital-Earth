@@ -6,8 +6,8 @@ interactive backend (the interactive tier, RP.9, stays deferred). Figures are PN
 file with a responsive CSS grid. The file has no external assets, so it opens in any browser and can be
 emailed or archived as-is.
 """
-from base64 import b64encode
 import html
+from base64 import b64encode
 from pathlib import Path
 from typing import Any, Iterable, List, Optional, Sequence
 

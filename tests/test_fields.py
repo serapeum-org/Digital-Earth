@@ -2,8 +2,8 @@
 
 import pytest
 
-from digitalearth.static import Map
 from digitalearth.base.sources import get_source
+from digitalearth.static import Map
 
 
 @pytest.mark.parametrize("kind", ["imshow", "contourf", "contour", "pcolormesh", "block"])
