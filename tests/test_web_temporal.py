@@ -152,7 +152,7 @@ class TestTimeSliderRejectsUnsupportedInput:
         pytest.importorskip("maplibre")
 
     def test_single_dataset_is_rejected(self, dataset):
-        with pytest.raises(TypeError, match=r"timeslider\(\) needs a vector layer"):
+        with pytest.raises(TypeError, match=r"timeslider\(\) does not take a raster"):
             WebMap().timeslider(dataset)
 
     def test_message_names_the_input_and_the_single_raster_builder(self, dataset):

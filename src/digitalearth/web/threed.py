@@ -56,7 +56,7 @@ class ThreeDMixin:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features, method="extrusions")
+        gdf = self._display_gdf(features, method="extrusion")
         paint: dict = {
             "fill-extrusion-opacity": float(opacity),
             "fill-extrusion-height": ["get", height] if isinstance(height, str) else float(height),
@@ -178,8 +178,12 @@ class ThreeDMixin:
             This map (chainable).
         """
         _require_layer_api()
+        # point_cloud also accepts a raw sequence of xyz triples, so the full vector guard would be too
+        # strict here; reject only a raster, which would otherwise die inside `_point_cloud_data`.
+        self._reject_raster(points, "point_cloud")
         data = self._point_cloud_data(
-            self._display_gdf(points) if hasattr(points, "geometry") else points, z_column
+            self._display_gdf(points, method="point_cloud") if hasattr(points, "geometry") else points,
+            z_column,
         )
         layer = {
             "@@type": "PointCloudLayer",

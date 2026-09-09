@@ -207,7 +207,7 @@ class BigDataMixin:
         from maplibre.sources import geopandas_to_geojson
 
         _require_layer_api()
-        gdf = self._display_gdf(features, method="deck_points")
+        gdf = self._display_gdf(features, method="deck_scatter")
         layer = {
             "@@type": "GeoJsonLayer",
             "id": self._uid("deck-scatter"),

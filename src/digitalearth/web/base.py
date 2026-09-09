@@ -305,6 +305,28 @@ class WebMapBase:
         return get_source(data, band=band)
 
     @staticmethod
+    def _reject_raster(data: Any, method: str) -> None:
+        """Raise ``TypeError`` when ``data`` is a pyramids raster, leaving anything else alone.
+
+        For the builders that legitimately accept something other than a vector layer — ``point_cloud``
+        takes a raw sequence of ``xyz`` triples — where :meth:`_require_vector` would be too strict. A
+        raster is recognised by reporting ``columns`` as an ``int`` (the grid width in cells); a table
+        reports an ``Index`` of names and a bare sequence has no ``columns`` at all.
+
+        Args:
+            data: The caller's input.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``data`` is a pyramids raster.
+        """
+        if isinstance(getattr(data, "columns", None), int):
+            raise TypeError(
+                f"{method}() does not take a raster; got {type(data).__name__}. For a single raster use "
+                f"add_raster(); for a raster time stack pass a DatasetCollection to timeslider()."
+            )
+
+    @staticmethod
     def _require_vector(features: Any, method: str) -> None:
         """Raise ``TypeError`` unless ``features`` is a vector layer.
 
@@ -361,8 +383,9 @@ class WebMapBase:
             return
         # A raster reports `columns` as an int (the grid width); a table reports an Index of names. Telling
         # the two apart keeps a GeoDataFrame whose geometry was never activated from being called a raster.
+        WebMapBase._reject_raster(features, method)
         columns = getattr(features, "columns", None)
-        if columns is not None and not isinstance(columns, int):
+        if columns is not None:
             raise TypeError(
                 f"{method}() needs a layer with an active geometry column; got a "
                 f"{type(features).__name__} whose columns are {list(columns)}. Call set_geometry(...) on "
@@ -374,7 +397,7 @@ class WebMapBase:
             f"use timeslider() with a DatasetCollection."
         )
 
-    def _display_gdf(self, features: Any, *, method: str = "this builder") -> Any:
+    def _display_gdf(self, features: Any, *, method: str) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
         The single vector choke point the point/line/polygon builders call, and so the place the tier
@@ -386,7 +409,8 @@ class WebMapBase:
 
         Args:
             features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
-            method: The calling builder's name, quoted in the guard's error message.
+            method: The calling builder's name, quoted in the guard's error message. Required, so a
+                new builder cannot silently inherit a generic label.
 
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.

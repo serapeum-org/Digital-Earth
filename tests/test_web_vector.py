@@ -271,6 +271,10 @@ class TestVectorBuilderRasterGuard:
             ("choropleth", {"column": "value"}),
             ("heatmap", {}),
             ("cluster", {}),
+            ("deck_scatter", {}),
+            ("deck_polygons", {}),
+            ("extrusion", {"height": "value"}),
+            ("point_cloud", {}),
         ],
     )
     def test_raster_is_rejected_by_name(self, dataset, method, kwargs):
@@ -291,6 +295,7 @@ class TestVectorBuilderRasterGuard:
         assert message.startswith(f"{method}()"), f"{method} did not name itself: {message}"
         assert "add_raster" in message, f"{method} did not name the raster builder: {message}"
         assert "argument of type" not in message, f"{method} still leaks the incidental error: {message}"
+        assert hasattr(WebMap, method), f"the guard label {method!r} is not a real WebMap method"
 
     def test_lines_no_longer_silently_accepts_a_raster(self, dataset):
         """``lines`` used to register a layer for a raster and render nothing.
@@ -332,3 +337,13 @@ class TestVectorBuilderRasterGuard:
         table = gpd.GeoDataFrame({"value": [1.0], "geom": [Point(0, 0)]})
         with pytest.raises(TypeError, match="set_geometry"):
             WebMap().points(table)
+
+    def test_point_cloud_still_accepts_a_raw_xyz_sequence(self):
+        """``point_cloud`` takes bare coordinate triples, so it must not get the full vector guard.
+
+        Test scenario:
+            The reason this builder uses the raster-only rejection rather than ``_require_vector``: a
+            plain sequence has no ``geometry`` and is still valid input.
+        """
+        m = WebMap().point_cloud([(0.0, 0.0, 1.0), (1.0, 1.0, 2.0)])
+        assert m.layers, "a raw xyz sequence must still register a layer"
