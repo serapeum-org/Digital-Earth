@@ -145,6 +145,59 @@ jobs:
         run: |
           xvfb-run -a pixi run -e viz3d notebooks-3d
 
+  # Resolves the `3d` extra the way a user does — `pip install .[3d]` straight from PyPI, no pixi and no
+  # lock — and then runs the one call that depends on the whole trame/vtk.js stack being right. Every other
+  # 3-D job installs from pixi.lock, which pins pyvista 0.48.4, so without this the extra's own resolution is
+  # never exercised and the >=0.49 arm of `Scene3DBase.export_html` runs only against a test stub. That is the
+  # gap that let #158 happen: the extra hand-listed pyvista 0.48's trame packages, 0.49 moved them to
+  # trame-pyvista, and nothing noticed until someone installed it. Unpinned on purpose — it is meant to break
+  # when upstream moves.
+  extra-3d-resolves:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install a virtual framebuffer + software OpenGL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
+
+      - name: Install the 3d extra from PyPI
+        run: |
+          pip install ".[3d]" pyogrio
+
+      - name: Report what the extra resolved to
+        # Printed rather than asserted: which packages carry the export differs by pyvista version, and
+        # pinning that here would recreate the hand-listed set this job exists to catch.
+        run: |
+          pip list | grep -Ei "pyvista|trame|vtk|nest.asyncio" || true
+
+      - name: Export a scene through the resolved stack
+        # `export_html` is the whole point: it is the only call that needs the trame/vtk.js stack, and the one
+        # that raised `The "trame" plotter component is not registered` on a freshly resolved environment.
+        run: |
+          xvfb-run -a python -c "
+          import pyvista as pv, tempfile, os
+          from digitalearth.three_d import Scene3D
+          print('resolved pyvista', pv.__version__)
+          pv.OFF_SCREEN = True
+          with tempfile.TemporaryDirectory() as folder:
+              scene = Scene3D(off_screen=True)
+              scene.add_mesh(pv.Sphere())
+              out = scene.export_html(os.path.join(folder, 'scene.html'))
+              size = os.path.getsize(out)
+              scene.close()
+          assert size > 0, 'export_html wrote an empty page'
+          print('exported', size, 'bytes')
+          "
+
   # The 3-D (PyVista) tier unit tests run in the viz3d env (the default py311/312/313 matrix lacks pyvista and
   # skips them). Same headless setup as notebooks-3d: VTK needs a virtual framebuffer + software GL even
   # off-screen. This is the only coverage for src/digitalearth/three_d/.
