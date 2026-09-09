@@ -10,10 +10,11 @@ PyVista is a renderer, not a GIS engine: meshes are built from pyramids-sourced 
 the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``off_screen`` follows
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
+
 import os
 import sys
 from pathlib import Path
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Union
 
 import numpy as np
 import pyvista as pv
@@ -176,9 +177,9 @@ class Scene3DBase:
 
     def __init__(
         self,
-        off_screen: Optional[bool] = None,
-        window_size: Tuple[int, int] = (1024, 768),
-        theme: Optional[pv.themes.Theme] = None,
+        off_screen: bool | None = None,
+        window_size: tuple[int, int] = (1024, 768),
+        theme: pv.themes.Theme | None = None,
         **plotter_kwargs: Any,
     ):
         self.plotter: pv.Plotter = pv.Plotter(
@@ -187,7 +188,7 @@ class Scene3DBase:
             theme=theme or house_theme(),
             **plotter_kwargs,
         )
-        self.layers: List[Tuple[Any, Any]] = []
+        self.layers: list[tuple[Any, Any]] = []
 
     def _add_actor(self, mesh: Any, actor: Any) -> Any:
         """Register a rendered ``mesh`` and its ``actor``, returning the actor.
@@ -294,7 +295,7 @@ class Scene3DBase:
         actor = self.plotter.add_volume(volume, **kwargs)
         return self._add_actor(volume, actor)
 
-    def screenshot(self, path: Optional[Destination] = None, **kwargs: Any) -> np.ndarray:
+    def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
 
         Args:
@@ -411,7 +412,7 @@ class Scene3DBase:
             component.export_html(destination)
         return destination
 
-    def save(self, path: Destination, **kwargs: Any) -> Optional[np.ndarray]:
+    def save(self, path: Destination, **kwargs: Any) -> np.ndarray | None:
         """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
 
         The HTML branch delegates to :meth:`export_html` — see there for why a heavy scene is better served by

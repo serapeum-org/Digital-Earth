@@ -3,6 +3,7 @@
 Gated on the optional ``3d`` extra: when pyvista is not installed these are skipped, so the default suite stays
 green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise them for real.
 """
+
 # The package imports have to follow pytest.importorskip("pyvista") — importing digitalearth.three_d
 # without pyvista is the very thing the skip exists to avoid — so E402 is expected throughout.
 # ruff: noqa: E402
@@ -186,7 +187,9 @@ def test_stub_scene_mirrors_the_real_attribute_set():
     """
     real = Scene3DBase(off_screen=True)
     try:
-        assert set(vars(_stub_scene())) == set(vars(real)), "the stub scene must carry the real attribute set"
+        assert set(vars(_stub_scene())) == set(vars(real)), (
+            "the stub scene must carry the real attribute set"
+        )
     finally:
         real.close()
 
@@ -202,11 +205,19 @@ class TestHouseTheme:
             colormap, SSAA anti-aliasing and a black font — the publication-grade defaults the tier renders with.
         """
         theme = house_theme()
-        assert isinstance(theme, pv.themes.DocumentTheme), f"Expected a DocumentTheme, got {type(theme).__name__}"
-        assert theme.background.hex_rgb == "#ffffff", f"Expected a white background, got {theme.background}"
+        assert isinstance(theme, pv.themes.DocumentTheme), (
+            f"Expected a DocumentTheme, got {type(theme).__name__}"
+        )
+        assert theme.background.hex_rgb == "#ffffff", (
+            f"Expected a white background, got {theme.background}"
+        )
         assert theme.cmap == "viridis", f"Expected the viridis cmap, got {theme.cmap!r}"
-        assert theme.anti_aliasing == "ssaa", f"Expected ssaa anti-aliasing, got {theme.anti_aliasing!r}"
-        assert theme.font.color.hex_rgb == "#000000", f"Expected a black font, got {theme.font.color}"
+        assert theme.anti_aliasing == "ssaa", (
+            f"Expected ssaa anti-aliasing, got {theme.anti_aliasing!r}"
+        )
+        assert theme.font.color.hex_rgb == "#000000", (
+            f"Expected a black font, got {theme.font.color}"
+        )
 
     def test_returns_an_independent_theme_each_call(self):
         """house_theme() hands back a fresh theme, so one scene's tweaks cannot leak into the next.
@@ -217,7 +228,9 @@ class TestHouseTheme:
         first = house_theme()
         first.background = "red"
         second = house_theme()
-        assert second.background.hex_rgb == "#ffffff", f"A later theme inherited a mutation: {second.background}"
+        assert second.background.hex_rgb == "#ffffff", (
+            f"A later theme inherited a mutation: {second.background}"
+        )
 
 
 class TestScene3DBaseInit:
@@ -231,9 +244,15 @@ class TestScene3DBaseInit:
             the wrapped plotter.
         """
         scene = Scene3DBase(off_screen=True)
-        assert scene.plotter.theme.cmap == "viridis", f"Expected the house theme, got cmap {scene.plotter.theme.cmap!r}"
-        assert list(scene.plotter.window_size) == [1024, 768], f"Unexpected window size: {scene.plotter.window_size}"
-        assert scene.layers == [], f"A fresh scene must own no layers, got {scene.layers}"
+        assert scene.plotter.theme.cmap == "viridis", (
+            f"Expected the house theme, got cmap {scene.plotter.theme.cmap!r}"
+        )
+        assert list(scene.plotter.window_size) == [1024, 768], (
+            f"Unexpected window size: {scene.plotter.window_size}"
+        )
+        assert scene.layers == [], (
+            f"A fresh scene must own no layers, got {scene.layers}"
+        )
         scene.close()
 
     def test_honours_an_explicit_theme(self):
@@ -263,10 +282,14 @@ class TestScene3DBaseInit:
             dimensions are not asserted: VTK does not always honour the requested size exactly (HiDPI).
         """
         scene = Scene3DBase(off_screen=True, window_size=(320, 240))
-        assert list(scene.plotter.window_size) == [320, 240], f"Unexpected window size: {scene.plotter.window_size}"
+        assert list(scene.plotter.window_size) == [320, 240], (
+            f"Unexpected window size: {scene.plotter.window_size}"
+        )
         frame = scene.screenshot()
         assert frame.ndim == 3, f"Expected a 3-D frame, got shape {frame.shape}"
-        assert frame.shape[-1] == 3, f"Expected three colour channels, got shape {frame.shape}"
+        assert frame.shape[-1] == 3, (
+            f"Expected three colour channels, got shape {frame.shape}"
+        )
         scene.close()
 
     def test_off_screen_none_follows_the_pyvista_global(self):
@@ -276,7 +299,9 @@ class TestScene3DBaseInit:
             The autouse fixture pins `pv.OFF_SCREEN` True, so a scene built with the default renders headless.
         """
         scene = Scene3DBase()
-        assert scene.plotter.off_screen is True, "off_screen=None must follow pv.OFF_SCREEN, which is True here"
+        assert scene.plotter.off_screen is True, (
+            "off_screen=None must follow pv.OFF_SCREEN, which is True here"
+        )
         scene.close()
 
     def test_forwards_extra_plotter_kwargs(self):
@@ -308,8 +333,12 @@ class TestExportHtml:
         scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
         scene.export_html(out)
-        assert component.calls == [out], f"The trame component should have received {out!r}, got {component.calls}"
-        assert scene.plotter.calls == [], f"Plotter.export_html is deprecated, not to be called: {scene.plotter.calls}"
+        assert component.calls == [out], (
+            f"The trame component should have received {out!r}, got {component.calls}"
+        )
+        assert scene.plotter.calls == [], (
+            f"Plotter.export_html is deprecated, not to be called: {scene.plotter.calls}"
+        )
 
     def test_falls_back_to_the_plotter_without_a_component(self, tmp_path):
         """With no `trame` attribute (pyvista 0.48 without trame-pyvista) the export uses `Plotter.export_html`.
@@ -324,9 +353,13 @@ class TestExportHtml:
         scene = _stub_scene()
         out = str(tmp_path / "s.html")
         scene.export_html(out)
-        assert scene.plotter.calls == [out], f"Expected {out!r} on the plotter, got {scene.plotter.calls}"
+        assert scene.plotter.calls == [out], (
+            f"Expected {out!r} on the plotter, got {scene.plotter.calls}"
+        )
 
-    @pytest.mark.parametrize("with_component", [True, False], ids=["trame-component", "plotter-fallback"])
+    @pytest.mark.parametrize(
+        "with_component", [True, False], ids=["trame-component", "plotter-fallback"]
+    )
     def test_returns_the_destination_it_wrote(self, tmp_path, with_component):
         """Both branches return the same path they handed to the exporter.
 
@@ -342,15 +375,24 @@ class TestExportHtml:
         scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
         recorded = component.calls if with_component else scene.plotter.calls
-        assert scene.export_html(out) == out, "export_html must return the path it wrote"
-        assert recorded == [out], f"The returned path must be the one exported, got {recorded}"
+        assert scene.export_html(out) == out, (
+            "export_html must return the path it wrote"
+        )
+        assert recorded == [out], (
+            f"The returned path must be the one exported, got {recorded}"
+        )
 
-    @pytest.mark.parametrize("with_component", [True, False], ids=["trame-component", "plotter-fallback"])
     @pytest.mark.parametrize(
-        "given, written", [("s.HTML", "s.html"), ("s.htm", "s.html"), ("s", "s.html")],
+        "with_component", [True, False], ids=["trame-component", "plotter-fallback"]
+    )
+    @pytest.mark.parametrize(
+        "given, written",
+        [("s.HTML", "s.html"), ("s.htm", "s.html"), ("s", "s.html")],
         ids=["uppercase", "htm", "suffixless"],
     )
-    def test_normalises_the_suffix_on_both_branches(self, tmp_path, given, written, with_component):
+    def test_normalises_the_suffix_on_both_branches(
+        self, tmp_path, given, written, with_component
+    ):
         """A non-`.html` suffix is rewritten before export, identically on either branch.
 
         Args:
@@ -369,8 +411,12 @@ class TestExportHtml:
         expected = str(tmp_path / written)
         returned = scene.export_html(tmp_path / given)
         recorded = component.calls if with_component else scene.plotter.calls
-        assert returned == expected, f"Expected the normalised path {expected!r}, got {returned!r}"
-        assert recorded == [expected], f"Expected {expected!r} to be exported, got {recorded}"
+        assert returned == expected, (
+            f"Expected the normalised path {expected!r}, got {returned!r}"
+        )
+        assert recorded == [expected], (
+            f"Expected {expected!r} to be exported, got {recorded}"
+        )
 
     def test_propagates_a_missing_stack_error(self, tmp_path):
         """A missing trame stack surfaces pyvista's own actionable ImportError rather than a swallowed failure.
@@ -386,7 +432,9 @@ class TestExportHtml:
         scene = _stub_scene(error=ImportError(message))
         with pytest.raises(ImportError, match="trame-pyvista") as exc_info:
             scene.export_html(str(tmp_path / "s.html"))
-        assert "not registered" in str(exc_info.value), f"The actionable message was lost: {exc_info.value}"
+        assert "not registered" in str(exc_info.value), (
+            f"The actionable message was lost: {exc_info.value}"
+        )
 
 
 class TestPyvistaVtkRoot:
@@ -403,7 +451,9 @@ class TestPyvistaVtkRoot:
             first is what makes the comparison exact on the versions where the component branch is reachable.
         """
         monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
-        assert base._pyvista_vtk_root() == "cvista", "the resolved root must win over the MRO walk"
+        assert base._pyvista_vtk_root() == "cvista", (
+            "the resolved root must win over the MRO walk"
+        )
 
     def test_reads_the_root_off_a_pyvista_type(self):
         """Without a resolved root the MRO of a pyvista type gives the same answer for a stock build.
@@ -413,7 +463,9 @@ class TestPyvistaVtkRoot:
         """
         root = base._pyvista_vtk_root()
         ancestry = {klass.__module__.split(".")[0] for klass in pv.PolyData.__mro__}
-        assert root in ancestry, f"{root!r} is not among pyvista's own ancestry {sorted(ancestry)}"
+        assert root in ancestry, (
+            f"{root!r} is not among pyvista's own ancestry {sorted(ancestry)}"
+        )
         assert root.startswith("vtk"), f"Expected a VTK package, got {root!r}"
         assert root in sys.modules, f"{root!r} names a package that was never imported"
 
@@ -428,7 +480,9 @@ class TestPyvistaVtkRoot:
             there, the check must degrade to the stock package name instead of breaking every export.
         """
         monkeypatch.setattr(pv, "PolyData", type("NotVtkBacked", (), {}))
-        assert base._pyvista_vtk_root() == "vtkmodules", "the fallback must be the stock VTK package"
+        assert base._pyvista_vtk_root() == "vtkmodules", (
+            "the fallback must be the stock VTK package"
+        )
 
 
 class TestVtkBuildReconciliation:
@@ -450,7 +504,9 @@ class TestVtkBuildReconciliation:
         scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
         scene.export_html(out)
-        assert component.calls == [out], f"A matching build must export normally, got {component.calls}"
+        assert component.calls == [out], (
+            f"A matching build must export normally, got {component.calls}"
+        )
 
     def test_mismatched_builds_raise_naming_the_variable(self, monkeypatch, tmp_path):
         """Two VTK builds in one process raise a RuntimeError naming `VTK_MODULE_NAME`, before exporting.
@@ -471,8 +527,12 @@ class TestVtkBuildReconciliation:
         scene = _stub_scene(component=component)
         with pytest.raises(RuntimeError, match="VTK_MODULE_NAME") as exc_info:
             scene.export_html(str(tmp_path / "s.html"))
-        assert "vtk_a_different_build" in str(exc_info.value), f"The resolved build was not named: {exc_info.value}"
-        assert component.calls == [], f"The export must not run on a mismatched build, got {component.calls}"
+        assert "vtk_a_different_build" in str(exc_info.value), (
+            f"The resolved build was not named: {exc_info.value}"
+        )
+        assert component.calls == [], (
+            f"The export must not run on a mismatched build, got {component.calls}"
+        )
 
     def test_the_fallback_branch_is_guarded_too(self, monkeypatch, tmp_path):
         """The check runs before either branch, so the no-component path is guarded as well.
@@ -491,9 +551,13 @@ class TestVtkBuildReconciliation:
         scene = _stub_scene()
         with pytest.raises(RuntimeError, match="VTK_MODULE_NAME"):
             scene.export_html(str(tmp_path / "s.html"))
-        assert scene.plotter.calls == [], f"A mismatched build must not export, got {scene.plotter.calls}"
+        assert scene.plotter.calls == [], (
+            f"A mismatched build must not export, got {scene.plotter.calls}"
+        )
 
-    def test_a_non_vtk_prefixed_backend_is_compared_correctly(self, monkeypatch, tmp_path):
+    def test_a_non_vtk_prefixed_backend_is_compared_correctly(
+        self, monkeypatch, tmp_path
+    ):
         """A backend whose name is not `vtk*` — pyvista's `cvista`, or any PYVISTA_VTK_BACKEND — still compares.
 
         Args:
@@ -530,7 +594,9 @@ class TestVtkBuildReconciliation:
         scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
         scene.export_html(out)
-        assert component.calls == [out], f"A matched cvista build must export, got {component.calls}"
+        assert component.calls == [out], (
+            f"A matched cvista build must export, got {component.calls}"
+        )
 
     def test_a_loaded_vtk_module_wins_over_the_environment(self, monkeypatch, tmp_path):
         """An already-imported `vtk_module` decides trame's build, whatever the environment says.
@@ -543,7 +609,9 @@ class TestVtkBuildReconciliation:
             trame caches its resolved binding as `sys.modules["vtk_module"]`; once that exists the environment
             variable no longer decides, so the check must read the loaded module rather than the variable.
         """
-        monkeypatch.setitem(sys.modules, "vtk_module", types.ModuleType("vtk_some_other_build"))
+        monkeypatch.setitem(
+            sys.modules, "vtk_module", types.ModuleType("vtk_some_other_build")
+        )
         monkeypatch.setenv("VTK_MODULE_NAME", base._pyvista_vtk_root())
         scene = _stub_scene(component=_RecordingComponent())
         with pytest.raises(RuntimeError, match="vtk_some_other_build"):
@@ -553,7 +621,9 @@ class TestVtkBuildReconciliation:
 class TestSave:
     """Tests for Scene3DBase.save — the PNG/HTML dispatch."""
 
-    @pytest.mark.parametrize("name", ["s.html", "s.HTML", "s.Html"], ids=["lower", "upper", "mixed"])
+    @pytest.mark.parametrize(
+        "name", ["s.html", "s.HTML", "s.Html"], ids=["lower", "upper", "mixed"]
+    )
     def test_html_dispatch_is_case_insensitive(self, tmp_path, name):
         """Any casing of the `.html` suffix takes the HTML branch and lands on the normalised name.
 
@@ -566,9 +636,13 @@ class TestSave:
             and `export_html` normalises the suffix so every casing writes `s.html`.
         """
         scene = _stub_scene()
-        assert scene.save(str(tmp_path / name)) is None, "The HTML branch returns None, not a frame"
+        assert scene.save(str(tmp_path / name)) is None, (
+            "The HTML branch returns None, not a frame"
+        )
         expected = str(tmp_path / "s.html")
-        assert scene.plotter.calls == [expected], f"Expected {expected!r} for {name!r}, got {scene.plotter.calls}"
+        assert scene.plotter.calls == [expected], (
+            f"Expected {expected!r} for {name!r}, got {scene.plotter.calls}"
+        )
 
     def test_accepts_a_path_object(self, tmp_path):
         """A `pathlib.Path` destination dispatches on suffix just as a string does.
@@ -582,8 +656,12 @@ class TestSave:
         """
         scene = _stub_scene()
         out = tmp_path / "s.html"
-        assert scene.save(out) is None, "A Path ending in .html must take the HTML branch"
-        assert scene.plotter.calls == [str(out)], f"The exporter should receive a str, got {scene.plotter.calls}"
+        assert scene.save(out) is None, (
+            "A Path ending in .html must take the HTML branch"
+        )
+        assert scene.plotter.calls == [str(out)], (
+            f"The exporter should receive a str, got {scene.plotter.calls}"
+        )
 
     def test_png_branch_forwards_screenshot_kwargs(self, tmp_path):
         """Non-HTML paths screenshot, forwarding extra keywords to `Plotter.screenshot`.
@@ -599,7 +677,9 @@ class TestSave:
         scene.add_mesh(_dem_grid(), scalars="z")
         frame = scene.save(str(tmp_path / "s.png"), transparent_background=True)
         assert frame is not None, "The PNG branch must return the rendered frame"
-        assert frame.shape[-1] == 4, f"Expected an RGBA frame from transparent_background=True, got {frame.shape}"
+        assert frame.shape[-1] == 4, (
+            f"Expected an RGBA frame from transparent_background=True, got {frame.shape}"
+        )
         scene.close()
 
 
@@ -625,4 +705,6 @@ class TestContextManager:
             `test_context_manager_closes_plotter` observes indirectly by letting a ValueError escape the block.
         """
         scene = Scene3DBase(off_screen=True)
-        assert scene.__exit__(None, None, None) is False, "__exit__ must return False so exceptions propagate"
+        assert scene.__exit__(None, None, None) is False, (
+            "__exit__ must return False so exceptions propagate"
+        )

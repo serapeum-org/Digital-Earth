@@ -10,6 +10,7 @@ The concrete regression behind this file is #158: the `3d` extra hand-listed pyv
 every version, and pyvista 0.49 moved trame support out to `trame-pyvista`, which the frozen list could not
 know about. Depending on `pyvista[jupyter]` makes the set version-correct by construction.
 """
+
 import pathlib
 import tomllib
 
@@ -45,7 +46,10 @@ def _requirements(extra: str) -> list:
     Returns:
         The extra's requirements as `packaging.requirements.Requirement` objects.
     """
-    return [Requirement(spec) for spec in _pyproject()["project"]["optional-dependencies"][extra]]
+    return [
+        Requirement(spec)
+        for spec in _pyproject()["project"]["optional-dependencies"][extra]
+    ]
 
 
 def _declaration_sites(data: dict = None) -> dict:
@@ -100,7 +104,9 @@ def test_3d_extra_takes_pyvistas_trame_stack_from_pyvista():
     `Scene3DBase.export_html` runs on trame/vtk.js, and which packages provide that differs by pyvista
     version. Requesting pyvista's own `jupyter` extra is what keeps the set correct across an upgrade.
     """
-    pyvista = [req for req in _requirements("3d") if canonicalize_name(req.name) == "pyvista"]
+    pyvista = [
+        req for req in _requirements("3d") if canonicalize_name(req.name) == "pyvista"
+    ]
     assert pyvista, "the `3d` extra must declare pyvista"
     assert "jupyter" in pyvista[0].extras, (
         "the `3d` extra must request `pyvista[jupyter]` — that extra is pyvista's trame/vtk.js export stack "
@@ -149,17 +155,23 @@ def test_declaration_sites_reads_every_table_shape():
         "tool": {
             "pixi": {
                 "pypi-dependencies": {"Root_Pkg": "*"},
-                "feature": {"f": {"target": {"win-64": {"dependencies": {"Target-Pkg": "*"}}}}},
+                "feature": {
+                    "f": {"target": {"win-64": {"dependencies": {"Target-Pkg": "*"}}}}
+                },
             }
         },
     }
     sites = _declaration_sites(document)
-    assert set(sites) == {"base-pkg", "extra-pkg", "group-pkg", "root-pkg", "target-pkg"}, (
-        f"every table must be scanned and its names canonicalised, got {sorted(sites)}"
-    )
-    assert sites["target-pkg"] == ["[tool.pixi.feature.f].target.win-64.dependencies"], (
-        f"a per-platform pin must name its own table, got {sites['target-pkg']}"
-    )
+    assert set(sites) == {
+        "base-pkg",
+        "extra-pkg",
+        "group-pkg",
+        "root-pkg",
+        "target-pkg",
+    }, f"every table must be scanned and its names canonicalised, got {sorted(sites)}"
+    assert sites["target-pkg"] == [
+        "[tool.pixi.feature.f].target.win-64.dependencies"
+    ], f"a per-platform pin must name its own table, got {sites['target-pkg']}"
     assert sites["group-pkg"] == ["[dependency-groups].'dev'"], (
         f"a dependency-group pin must be recorded, got {sites['group-pkg']}"
     )
@@ -174,7 +186,12 @@ def test_declaration_sites_records_every_table_a_package_appears_in():
     Test scenario:
         Overwriting would hide one of the sites a maintainer has to edit to remove the pin.
     """
-    document = {"project": {"dependencies": ["dup >=1"], "optional-dependencies": {"extra": ["dup >=1"]}}}
+    document = {
+        "project": {
+            "dependencies": ["dup >=1"],
+            "optional-dependencies": {"extra": ["dup >=1"]},
+        }
+    }
     assert _declaration_sites(document)["dup"] == [
         "[project].dependencies",
         "[project.optional-dependencies].'extra'",
