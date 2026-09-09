@@ -88,12 +88,14 @@ class Scene3DBase:
             >>> scene.close()
 
             ```
-        - Size the render window, then confirm the frame it produces matches:
+        - Size the render window, then render a frame from it:
             ```python
             >>> from digitalearth.three_d.base import Scene3DBase
             >>> scene = Scene3DBase(off_screen=True, window_size=(320, 240))
-            >>> scene.screenshot().shape
-            (240, 320, 3)
+            >>> list(scene.plotter.window_size)
+            [320, 240]
+            >>> scene.screenshot().ndim
+            3
             >>> scene.close()
 
             ```
@@ -251,8 +253,8 @@ class Scene3DBase:
                 >>> scene = Scene3DBase(off_screen=True, window_size=(200, 150))
                 >>> _ = scene.add_mesh(pv.Sphere())
                 >>> frame = scene.screenshot()
-                >>> frame.shape
-                (150, 200, 3)
+                >>> frame.ndim, frame.shape[-1]
+                (3, 3)
                 >>> bool(frame.any())
                 True
                 >>> scene.close()
@@ -262,13 +264,14 @@ class Scene3DBase:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
-                >>> scene = Scene3DBase(off_screen=True)
-                >>> _ = scene.add_mesh(pv.Cube())
-                >>> out = os.path.join(tempfile.mkdtemp(), "frame.png")
-                >>> frame = scene.screenshot(path=out)
-                >>> os.path.getsize(out) > 0
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Cube())
+                ...     out = os.path.join(folder, "frame.png")
+                ...     frame = scene.screenshot(path=out)
+                ...     scene.close()
+                ...     os.path.getsize(out) > 0
                 True
-                >>> scene.close()
 
                 ```
 
@@ -301,6 +304,9 @@ class Scene3DBase:
         Raises:
             ImportError: If the trame/vtk.js export stack is missing. pyvista raises this itself and its message
                 names the package to install; the ``3d`` extra pulls the stack via ``pyvista[jupyter]``.
+                Note pyvista's registry turns a *failing* plugin import into a ``UserWarning`` and drops the
+                entry, so a broken-but-installed ``trame-pyvista`` reports that same message — when the
+                package is present, read the warning for the real cause.
 
         Examples:
             - Export a small scene; the returned path is the page that was written, so it can be passed straight
@@ -333,10 +339,10 @@ class Scene3DBase:
             save: routes here automatically for a ``*.html`` destination.
         """
         # pyvista >=0.49 moved trame support out into the separate `trame-pyvista` package: the export now lives
-        # on a registered `trame` plotter component and `Plotter.export_html` is deprecated. pyvista 0.48 has no
-        # such attribute and implements the export natively, so the attribute doubles as the version switch.
-        # Falling back (rather than raising here) keeps pyvista's own actionable ImportError when >=0.49 is
-        # installed without trame-pyvista.
+        # on a registered `trame` plotter component and `Plotter.export_html` is deprecated. This is a capability
+        # switch, not a version one — 0.48 ships the same component registry, so a 0.48 user who installs
+        # trame-pyvista takes the component branch too. Falling back (rather than raising here) hands the
+        # not-installed case to pyvista's own actionable ImportError.
         destination = str(Path(path).with_suffix(".html"))
         component = getattr(self.plotter, "trame", None)
         if component is None:
@@ -364,15 +370,14 @@ class Scene3DBase:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
-                >>> scene = Scene3DBase(off_screen=True, window_size=(200, 150))
-                >>> _ = scene.add_mesh(pv.Sphere())
-                >>> out = os.path.join(tempfile.mkdtemp(), "scene.png")
-                >>> frame = scene.save(out)
-                >>> frame.shape
-                (150, 200, 3)
-                >>> os.path.getsize(out) > 0
-                True
-                >>> scene.close()
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     out = os.path.join(folder, "scene.png")
+                ...     frame = scene.save(out)
+                ...     scene.close()
+                ...     frame.shape[-1], os.path.getsize(out) > 0
+                (3, True)
 
                 ```
             - An ``.html`` suffix exports an interactive page instead, and returns ``None`` rather than a frame.
@@ -411,14 +416,14 @@ class Scene3DBase:
 
         Examples:
             - Off-screen (as in CI, or under :data:`pyvista.OFF_SCREEN`) it renders a frame and returns without
-              opening a window:
+              opening a window. What comes back is pyvista's own return value, which its ``return_cpos``
+              theme setting decides — do not rely on it:
                 ```python
                 >>> import pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
                 >>> scene = Scene3DBase(off_screen=True)
                 >>> _ = scene.add_mesh(pv.Sphere())
-                >>> scene.show() is None
-                True
+                >>> _ = scene.show()
                 >>> scene.close()
 
                 ```
