@@ -57,11 +57,18 @@ def test_set_extent(dataset):
 
 
 def test_no_cartopy_import():
-    """The scene package must not import cartopy (plan §2.4: reproject via pyramids, no Cartopy)."""
-    pkg = Path("src/digitalearth/scene")
-    for py in pkg.glob("*.py"):
+    """The static backend must not import cartopy (plan §2.4: reproject via pyramids, no Cartopy).
+
+    Anchored on ``__file__`` rather than the CWD, and ``rglob`` rather than ``glob``, so it keeps working
+    wherever pytest is invoked from and covers ``static/maps/`` too. The populated-assert is the point: this
+    test globbed the pre-rename ``scene/`` path for a while and so passed while checking nothing.
+    """
+    pkg = Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "static"
+    modules = sorted(pkg.rglob("*.py"))
+    assert len(modules) > 5, f"no modules found under {pkg} — has the package moved again?"
+    for py in modules:
         text = py.read_text(encoding="utf-8")
-        assert "import cartopy" not in text and "from cartopy" not in text
+        assert "import cartopy" not in text and "from cartopy" not in text, f"{py.name} imports cartopy"
 
 
 @pytest.mark.parametrize("layer", ["coastlines", "borders"])
