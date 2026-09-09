@@ -543,6 +543,11 @@ class Scene3DBase:
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
         """Close the plotter on exit (whether or not the body raised); exceptions propagate.
 
+        Args:
+            exc_type: Exception class raised in the block, or ``None``.
+            exc: The exception instance, or ``None``.
+            tb: The traceback, or ``None``.
+
         Returns:
             ``False`` — exceptions are not suppressed.
         """
