@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3765,9 +3765,7 @@ digitalearth.static.map.Map.animate: Combines these across a whole stack so ever
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/stretch.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-80"> 80</a></span>
-<span class="normal"><a href="#__codelineno-0-81"> 81</a></span>
-<span class="normal"><a href="#__codelineno-0-82"> 82</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-82"> 82</a></span>
 <span class="normal"><a href="#__codelineno-0-83"> 83</a></span>
 <span class="normal"><a href="#__codelineno-0-84"> 84</a></span>
 <span class="normal"><a href="#__codelineno-0-85"> 85</a></span>
@@ -3833,75 +3831,81 @@ digitalearth.static.map.Map.animate: Combines these across a whole stack so ever
 <span class="normal"><a href="#__codelineno-0-145">145</a></span>
 <span class="normal"><a href="#__codelineno-0-146">146</a></span>
 <span class="normal"><a href="#__codelineno-0-147">147</a></span>
-<span class="normal"><a href="#__codelineno-0-148">148</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-80" name="__codelineno-0-80"></a><span class="k">def</span><span class="w"> </span><span class="nf">channel_limits</span><span class="p">(</span><span class="n">stack</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
-<a id="__codelineno-0-81" name="__codelineno-0-81"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the per-channel 2-98 percentile ``(lo, hi)`` of an ``(rows, cols, n)`` stack.</span>
-<a id="__codelineno-0-82" name="__codelineno-0-82"></a>
-<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="sd">    These are the bounds :func:`stretch_to_unit` derives on every call. Computing them **once** over a</span>
-<a id="__codelineno-0-84" name="__codelineno-0-84"></a><span class="sd">    whole animation stack and passing them back in freezes the stretch, so a composite time-lapse does not</span>
-<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">    pulse as each frame re-derives its own black and white point.</span>
-<a id="__codelineno-0-86" name="__codelineno-0-86"></a>
-<a id="__codelineno-0-87" name="__codelineno-0-87"></a><span class="sd">    A channel with no finite cell at all (fully nodata, or all ``inf``) has no percentile to take and</span>
-<a id="__codelineno-0-88" name="__codelineno-0-88"></a><span class="sd">    yields ``(nan, nan)`` rather than a warning; callers treat that as &quot;this channel contributes no</span>
-<a id="__codelineno-0-89" name="__codelineno-0-89"></a><span class="sd">    bound&quot; — see :meth:`~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits`, which</span>
-<a id="__codelineno-0-90" name="__codelineno-0-90"></a><span class="sd">    drops it, and :func:`stretch_to_unit`, which falls back rather than dividing by it.</span>
-<a id="__codelineno-0-91" name="__codelineno-0-91"></a>
-<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-93" name="__codelineno-0-93"></a><span class="sd">        stack: An ``(rows, cols, n)`` channel stack (nodata already NaN).</span>
-<a id="__codelineno-0-94" name="__codelineno-0-94"></a>
-<a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="sd">        One ``(lo, hi)`` tuple per channel, in channel order; ``(nan, nan)`` for an all-nodata channel.</span>
-<a id="__codelineno-0-97" name="__codelineno-0-97"></a>
-<a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-99" name="__codelineno-0-99"></a><span class="sd">        ValueError: when ``stack`` is not 3-D.</span>
-<a id="__codelineno-0-100" name="__codelineno-0-100"></a>
-<a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-102" name="__codelineno-0-102"></a><span class="sd">        - Bound each channel of a stack whose channels are scaled copies of one another:</span>
-<a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import channel_limits</span>
-<a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])</span>
-<a id="__codelineno-0-107" name="__codelineno-0-107"></a><span class="sd">            &gt;&gt;&gt; limits = channel_limits(stack)</span>
-<a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="sd">            &gt;&gt;&gt; len(limits)</span>
-<a id="__codelineno-0-109" name="__codelineno-0-109"></a><span class="sd">            3</span>
-<a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="sd">            &gt;&gt;&gt; [round(hi) for _, hi in limits]</span>
-<a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="sd">            [97, 194, 291]</span>
-<a id="__codelineno-0-112" name="__codelineno-0-112"></a>
-<a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-114" name="__codelineno-0-114"></a><span class="sd">        - A channel with no finite cell reports ``(nan, nan)`` rather than raising or warning, and</span>
-<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">          leaves its neighbours&#39; bounds intact:</span>
-<a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import channel_limits</span>
-<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.arange(16.0).reshape(4, 4), np.full((4, 4), np.nan), np.ones((4, 4))])</span>
-<a id="__codelineno-0-120" name="__codelineno-0-120"></a><span class="sd">            &gt;&gt;&gt; limits = channel_limits(stack)</span>
-<a id="__codelineno-0-121" name="__codelineno-0-121"></a><span class="sd">            &gt;&gt;&gt; limits[1]</span>
-<a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="sd">            (nan, nan)</span>
-<a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="sd">            &gt;&gt;&gt; round(limits[0][0], 1)</span>
-<a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">            0.3</span>
-<a id="__codelineno-0-125" name="__codelineno-0-125"></a>
-<a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-148">148</a></span>
+<span class="normal"><a href="#__codelineno-0-149">149</a></span>
+<span class="normal"><a href="#__codelineno-0-150">150</a></span>
+<span class="normal"><a href="#__codelineno-0-151">151</a></span>
+<span class="normal"><a href="#__codelineno-0-152">152</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-82" name="__codelineno-0-82"></a><span class="k">def</span><span class="w"> </span><span class="nf">channel_limits</span><span class="p">(</span><span class="n">stack</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
+<a id="__codelineno-0-83" name="__codelineno-0-83"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the per-channel 2-98 percentile ``(lo, hi)`` of an ``(rows, cols, n)`` stack.</span>
+<a id="__codelineno-0-84" name="__codelineno-0-84"></a>
+<a id="__codelineno-0-85" name="__codelineno-0-85"></a><span class="sd">    These are the bounds :func:`stretch_to_unit` derives on every call. Computing them **once** over a</span>
+<a id="__codelineno-0-86" name="__codelineno-0-86"></a><span class="sd">    whole animation stack and passing them back in freezes the stretch, so a composite time-lapse does not</span>
+<a id="__codelineno-0-87" name="__codelineno-0-87"></a><span class="sd">    pulse as each frame re-derives its own black and white point.</span>
+<a id="__codelineno-0-88" name="__codelineno-0-88"></a>
+<a id="__codelineno-0-89" name="__codelineno-0-89"></a><span class="sd">    A channel with no finite cell at all (fully nodata, or all ``inf``) has no percentile to take and</span>
+<a id="__codelineno-0-90" name="__codelineno-0-90"></a><span class="sd">    yields ``(nan, nan)`` rather than a warning; callers treat that as &quot;this channel contributes no</span>
+<a id="__codelineno-0-91" name="__codelineno-0-91"></a><span class="sd">    bound&quot; — see :meth:`~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits`, which</span>
+<a id="__codelineno-0-92" name="__codelineno-0-92"></a><span class="sd">    drops it, and :func:`stretch_to_unit`, which falls back rather than dividing by it.</span>
+<a id="__codelineno-0-93" name="__codelineno-0-93"></a>
+<a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="sd">        stack: An ``(rows, cols, n)`` channel stack (nodata already NaN).</span>
+<a id="__codelineno-0-96" name="__codelineno-0-96"></a>
+<a id="__codelineno-0-97" name="__codelineno-0-97"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-98" name="__codelineno-0-98"></a><span class="sd">        One ``(lo, hi)`` tuple per channel, in channel order; ``(nan, nan)`` for an all-nodata channel.</span>
+<a id="__codelineno-0-99" name="__codelineno-0-99"></a>
+<a id="__codelineno-0-100" name="__codelineno-0-100"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-101" name="__codelineno-0-101"></a><span class="sd">        ValueError: when ``stack`` is not 3-D.</span>
+<a id="__codelineno-0-102" name="__codelineno-0-102"></a>
+<a id="__codelineno-0-103" name="__codelineno-0-103"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-104" name="__codelineno-0-104"></a><span class="sd">        - Bound each channel of a stack whose channels are scaled copies of one another:</span>
+<a id="__codelineno-0-105" name="__codelineno-0-105"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-106" name="__codelineno-0-106"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-107" name="__codelineno-0-107"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import channel_limits</span>
+<a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])</span>
+<a id="__codelineno-0-109" name="__codelineno-0-109"></a><span class="sd">            &gt;&gt;&gt; limits = channel_limits(stack)</span>
+<a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="sd">            &gt;&gt;&gt; len(limits)</span>
+<a id="__codelineno-0-111" name="__codelineno-0-111"></a><span class="sd">            3</span>
+<a id="__codelineno-0-112" name="__codelineno-0-112"></a><span class="sd">            &gt;&gt;&gt; [round(hi) for _, hi in limits]</span>
+<a id="__codelineno-0-113" name="__codelineno-0-113"></a><span class="sd">            [97, 194, 291]</span>
+<a id="__codelineno-0-114" name="__codelineno-0-114"></a>
+<a id="__codelineno-0-115" name="__codelineno-0-115"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-116" name="__codelineno-0-116"></a><span class="sd">        - A channel with no finite cell reports ``(nan, nan)`` rather than raising or warning, and</span>
+<a id="__codelineno-0-117" name="__codelineno-0-117"></a><span class="sd">          leaves its neighbours&#39; bounds intact:</span>
+<a id="__codelineno-0-118" name="__codelineno-0-118"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-119" name="__codelineno-0-119"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-120" name="__codelineno-0-120"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import channel_limits</span>
+<a id="__codelineno-0-121" name="__codelineno-0-121"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.arange(16.0).reshape(4, 4), np.full((4, 4), np.nan), np.ones((4, 4))])</span>
+<a id="__codelineno-0-122" name="__codelineno-0-122"></a><span class="sd">            &gt;&gt;&gt; limits = channel_limits(stack)</span>
+<a id="__codelineno-0-123" name="__codelineno-0-123"></a><span class="sd">            &gt;&gt;&gt; limits[1]</span>
+<a id="__codelineno-0-124" name="__codelineno-0-124"></a><span class="sd">            (nan, nan)</span>
+<a id="__codelineno-0-125" name="__codelineno-0-125"></a><span class="sd">            &gt;&gt;&gt; round(limits[0][0], 1)</span>
+<a id="__codelineno-0-126" name="__codelineno-0-126"></a><span class="sd">            0.3</span>
 <a id="__codelineno-0-127" name="__codelineno-0-127"></a>
-<a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-129" name="__codelineno-0-129"></a><span class="sd">        stretch_to_unit: Applies these bounds (or derives its own when none are given).</span>
-<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">        digitalearth.static.map.Map.animate: Combines these across a whole stack so every frame of a</span>
-<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">            composite animation shares one stretch.</span>
-<a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-133" name="__codelineno-0-133"></a>    <span class="k">if</span> <span class="n">stack</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
-<a id="__codelineno-0-134" name="__codelineno-0-134"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-135" name="__codelineno-0-135"></a>            <span class="sa">f</span><span class="s2">&quot;channel_limits needs an (rows, cols, n) channel stack, got a </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">-D array &quot;</span>
-<a id="__codelineno-0-136" name="__codelineno-0-136"></a>            <span class="sa">f</span><span class="s2">&quot;with shape </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-137" name="__codelineno-0-137"></a>        <span class="p">)</span>
-<a id="__codelineno-0-138" name="__codelineno-0-138"></a>    <span class="n">bounds</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
-<a id="__codelineno-0-139" name="__codelineno-0-139"></a>    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
-<a id="__codelineno-0-140" name="__codelineno-0-140"></a>        <span class="n">values</span> <span class="o">=</span> <span class="n">finite</span><span class="p">(</span><span class="n">stack</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">index</span><span class="p">])</span>  <span class="c1"># drops NaN *and* inf, which nanpercentile would keep</span>
-<a id="__codelineno-0-141" name="__codelineno-0-141"></a>        <span class="k">if</span> <span class="n">values</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-0-142" name="__codelineno-0-142"></a>            <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)))</span>
-<a id="__codelineno-0-143" name="__codelineno-0-143"></a>            <span class="k">continue</span>
-<a id="__codelineno-0-144" name="__codelineno-0-144"></a>        <span class="c1"># finite() already returned a fresh array, so numpy may sort it in place instead of copying</span>
-<a id="__codelineno-0-145" name="__codelineno-0-145"></a>        <span class="c1"># again — the scan reads three channels per frame, up to _CLIM_SCAN_CAP frames.</span>
-<a id="__codelineno-0-146" name="__codelineno-0-146"></a>        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">_STRETCH_PERCENTILES</span><span class="p">,</span> <span class="n">overwrite_input</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<a id="__codelineno-0-147" name="__codelineno-0-147"></a>        <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">float</span><span class="p">(</span><span class="n">lo</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">hi</span><span class="p">)))</span>
-<a id="__codelineno-0-148" name="__codelineno-0-148"></a>    <span class="k">return</span> <span class="n">bounds</span>
+<a id="__codelineno-0-128" name="__codelineno-0-128"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-129" name="__codelineno-0-129"></a>
+<a id="__codelineno-0-130" name="__codelineno-0-130"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-131" name="__codelineno-0-131"></a><span class="sd">        stretch_to_unit: Applies these bounds (or derives its own when none are given).</span>
+<a id="__codelineno-0-132" name="__codelineno-0-132"></a><span class="sd">        digitalearth.static.map.Map.animate: Combines these across a whole stack so every frame of a</span>
+<a id="__codelineno-0-133" name="__codelineno-0-133"></a><span class="sd">            composite animation shares one stretch.</span>
+<a id="__codelineno-0-134" name="__codelineno-0-134"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-135" name="__codelineno-0-135"></a>    <span class="k">if</span> <span class="n">stack</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+<a id="__codelineno-0-136" name="__codelineno-0-136"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-137" name="__codelineno-0-137"></a>            <span class="sa">f</span><span class="s2">&quot;channel_limits needs an (rows, cols, n) channel stack, got a </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">-D array &quot;</span>
+<a id="__codelineno-0-138" name="__codelineno-0-138"></a>            <span class="sa">f</span><span class="s2">&quot;with shape </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-139" name="__codelineno-0-139"></a>        <span class="p">)</span>
+<a id="__codelineno-0-140" name="__codelineno-0-140"></a>    <span class="n">bounds</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-0-141" name="__codelineno-0-141"></a>    <span class="k">for</span> <span class="n">index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
+<a id="__codelineno-0-142" name="__codelineno-0-142"></a>        <span class="n">values</span> <span class="o">=</span> <span class="n">finite</span><span class="p">(</span>
+<a id="__codelineno-0-143" name="__codelineno-0-143"></a>            <span class="n">stack</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">index</span><span class="p">]</span>
+<a id="__codelineno-0-144" name="__codelineno-0-144"></a>        <span class="p">)</span>  <span class="c1"># drops NaN *and* inf, which nanpercentile would keep</span>
+<a id="__codelineno-0-145" name="__codelineno-0-145"></a>        <span class="k">if</span> <span class="n">values</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-146" name="__codelineno-0-146"></a>            <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)))</span>
+<a id="__codelineno-0-147" name="__codelineno-0-147"></a>            <span class="k">continue</span>
+<a id="__codelineno-0-148" name="__codelineno-0-148"></a>        <span class="c1"># finite() already returned a fresh array, so numpy may sort it in place instead of copying</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a>        <span class="c1"># again — the scan reads three channels per frame, up to _CLIM_SCAN_CAP frames.</span>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a>        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">_STRETCH_PERCENTILES</span><span class="p">,</span> <span class="n">overwrite_input</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<a id="__codelineno-0-151" name="__codelineno-0-151"></a>        <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">float</span><span class="p">(</span><span class="n">lo</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">hi</span><span class="p">)))</span>
+<a id="__codelineno-0-152" name="__codelineno-0-152"></a>    <span class="k">return</span> <span class="n">bounds</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -4061,11 +4065,7 @@ ignored extra pair would hide a real mismatch between the caller's bands and the
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/stretch.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-188">188</a></span>
-<span class="normal"><a href="#__codelineno-0-189">189</a></span>
-<span class="normal"><a href="#__codelineno-0-190">190</a></span>
-<span class="normal"><a href="#__codelineno-0-191">191</a></span>
-<span class="normal"><a href="#__codelineno-0-192">192</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-192">192</a></span>
 <span class="normal"><a href="#__codelineno-0-193">193</a></span>
 <span class="normal"><a href="#__codelineno-0-194">194</a></span>
 <span class="normal"><a href="#__codelineno-0-195">195</a></span>
@@ -4141,87 +4141,101 @@ ignored extra pair would hide a real mismatch between the caller's bands and the
 <span class="normal"><a href="#__codelineno-0-265">265</a></span>
 <span class="normal"><a href="#__codelineno-0-266">266</a></span>
 <span class="normal"><a href="#__codelineno-0-267">267</a></span>
-<span class="normal"><a href="#__codelineno-0-268">268</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="k">def</span><span class="w"> </span><span class="nf">stretch_to_unit</span><span class="p">(</span><span class="n">stack</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ChannelLimits</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
-<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-channel contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``.</span>
-<a id="__codelineno-0-190" name="__codelineno-0-190"></a>
-<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">        stack: The ``(rows, cols, n)`` channel stack to stretch.</span>
-<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">        limits: Optional precomputed ``(lo, hi)`` per channel, in channel order. When omitted each channel</span>
-<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">            is stretched to its **own** 2-98 percentile — right for a still, but it makes the brightness</span>
-<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">            pump across an animation, since every frame gets its own black and white point. Pass frozen</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">            limits (see :func:`channel_limits`) to hold one stretch across a sequence of frames. A</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">            non-finite entry means &quot;no frozen bound for this channel&quot;: that one channel falls back to this</span>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">            frame&#39;s own percentile, so a channel the freeze could not measure degrades to the per-frame</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">            behaviour rather than clipping flat against an invented span.</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">        The stretched stack: same shape, ``float64``, clipped into ``[0, 1]``.</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">        ValueError: when ``limits`` is given but does not hold one ``(lo, hi)`` pair per channel. A silently</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">            ignored extra pair would hide a real mismatch between the caller&#39;s bands and their limits.</span>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">        - Each channel spans the full range on its own percentiles:</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import stretch_to_unit</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a><span class="sd">            &gt;&gt;&gt; out = stretch_to_unit(stack)</span>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">            &gt;&gt;&gt; float(out.min()), float(out.max())</span>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">            (0.0, 1.0)</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">            &gt;&gt;&gt; [round(float(out[..., i].mean()), 3) for i in range(3)]</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">            [0.5, 0.5, 0.5]</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">        - One shared set of limits keeps a real brightness difference visible, which is what holds an</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">          animation steady; each channel&#39;s own percentiles would erase it:</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import channel_limits, stretch_to_unit</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">            &gt;&gt;&gt; bright = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">            &gt;&gt;&gt; dim = bright * 0.4</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">            &gt;&gt;&gt; shared = channel_limits(bright)</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">            &gt;&gt;&gt; round(float(stretch_to_unit(bright, shared).mean()), 3)</span>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">            0.5</span>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">            &gt;&gt;&gt; round(float(stretch_to_unit(dim, shared).mean()), 3)</span>
-<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">            0.188</span>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">            &gt;&gt;&gt; round(float(stretch_to_unit(dim).mean()), 3)</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            0.5</span>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">        - A channel with no bound to freeze falls back to that frame&#39;s own, rather than an invented span:</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import stretch_to_unit</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.full((4, 4), 500.0) for _ in range(3)])</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">            &gt;&gt;&gt; out = stretch_to_unit(stack, [(float(&quot;nan&quot;), float(&quot;nan&quot;))] * 3)</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">            &gt;&gt;&gt; float(out.max())</span>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">            0.0</span>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a>    <span class="k">if</span> <span class="n">stack</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a>            <span class="sa">f</span><span class="s2">&quot;stretch_to_unit needs an (rows, cols, n) channel stack, got a </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">-D array &quot;</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a>            <span class="sa">f</span><span class="s2">&quot;with shape </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a>        <span class="p">)</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a>    <span class="n">_check_limits</span><span class="p">(</span><span class="n">limits</span><span class="p">,</span> <span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;float64&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">derived</span> <span class="o">=</span> <span class="n">channel_limits</span><span class="p">(</span><span class="n">stack</span><span class="p">)</span> <span class="k">if</span> <span class="n">limits</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">limits</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a>        <span class="n">band</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;float64&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a>        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">derived</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">lo</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">hi</span><span class="p">)):</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a>            <span class="c1"># No frozen bound for this channel — fall back to what this frame alone says rather than to a</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a>            <span class="c1"># fixed span, which would clip a live channel flat if the freeze simply never saw it (M2).</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a>            <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">channel_limits</span><span class="p">(</span><span class="n">band</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">lo</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">hi</span><span class="p">)):</span>
-<a id="__codelineno-0-264" name="__codelineno-0-264"></a>            <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span>  <span class="c1"># this frame&#39;s channel is nodata too: any span, its cells stay NaN</span>
-<a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="k">elif</span> <span class="n">hi</span> <span class="o">&lt;=</span> <span class="n">lo</span><span class="p">:</span>
-<a id="__codelineno-0-266" name="__codelineno-0-266"></a>            <span class="n">hi</span> <span class="o">=</span> <span class="n">lo</span> <span class="o">+</span> <span class="mf">1.0</span>  <span class="c1"># a constant channel: widen rather than divide by zero</span>
-<a id="__codelineno-0-267" name="__codelineno-0-267"></a>        <span class="n">out</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">band</span> <span class="o">-</span> <span class="n">lo</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">hi</span> <span class="o">-</span> <span class="n">lo</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="k">return</span> <span class="n">out</span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="k">def</span><span class="w"> </span><span class="nf">stretch_to_unit</span><span class="p">(</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a>    <span class="n">stack</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span> <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ChannelLimits</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Per-channel contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``.</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">        stack: The ``(rows, cols, n)`` channel stack to stretch.</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">        limits: Optional precomputed ``(lo, hi)`` per channel, in channel order. When omitted each channel</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">            is stretched to its **own** 2-98 percentile — right for a still, but it makes the brightness</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">            pump across an animation, since every frame gets its own black and white point. Pass frozen</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">            limits (see :func:`channel_limits`) to hold one stretch across a sequence of frames. A</span>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">            non-finite entry means &quot;no frozen bound for this channel&quot;: that one channel falls back to this</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">            frame&#39;s own percentile, so a channel the freeze could not measure degrades to the per-frame</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">            behaviour rather than clipping flat against an invented span.</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">        The stretched stack: same shape, ``float64``, clipped into ``[0, 1]``.</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">        ValueError: when ``limits`` is given but does not hold one ``(lo, hi)`` pair per channel. A silently</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">            ignored extra pair would hide a real mismatch between the caller&#39;s bands and their limits.</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a><span class="sd">        - Each channel spans the full range on its own percentiles:</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import stretch_to_unit</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a><span class="sd">            &gt;&gt;&gt; out = stretch_to_unit(stack)</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a><span class="sd">            &gt;&gt;&gt; float(out.min()), float(out.max())</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a><span class="sd">            (0.0, 1.0)</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a><span class="sd">            &gt;&gt;&gt; [round(float(out[..., i].mean()), 3) for i in range(3)]</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a><span class="sd">            [0.5, 0.5, 0.5]</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a><span class="sd">        - One shared set of limits keeps a real brightness difference visible, which is what holds an</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="sd">          animation steady; each channel&#39;s own percentiles would erase it:</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import channel_limits, stretch_to_unit</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">            &gt;&gt;&gt; bright = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">            &gt;&gt;&gt; dim = bright * 0.4</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a><span class="sd">            &gt;&gt;&gt; shared = channel_limits(bright)</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">            &gt;&gt;&gt; round(float(stretch_to_unit(bright, shared).mean()), 3)</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">            0.5</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">            &gt;&gt;&gt; round(float(stretch_to_unit(dim, shared).mean()), 3)</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">            0.188</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">            &gt;&gt;&gt; round(float(stretch_to_unit(dim).mean()), 3)</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">            0.5</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">        - A channel with no bound to freeze falls back to that frame&#39;s own, rather than an invented span:</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">            &gt;&gt;&gt; import numpy as np</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.stretch import stretch_to_unit</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">            &gt;&gt;&gt; stack = np.dstack([np.full((4, 4), 500.0) for _ in range(3)])</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">            &gt;&gt;&gt; out = stretch_to_unit(stack, [(float(&quot;nan&quot;), float(&quot;nan&quot;))] * 3)</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">            &gt;&gt;&gt; float(out.max())</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">            0.0</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a>    <span class="k">if</span> <span class="n">stack</span><span class="o">.</span><span class="n">ndim</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>            <span class="sa">f</span><span class="s2">&quot;stretch_to_unit needs an (rows, cols, n) channel stack, got a </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">ndim</span><span class="si">}</span><span class="s2">-D array &quot;</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>            <span class="sa">f</span><span class="s2">&quot;with shape </span><span class="si">{</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>        <span class="p">)</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a>    <span class="n">_check_limits</span><span class="p">(</span><span class="n">limits</span><span class="p">,</span> <span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;float64&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="n">derived</span> <span class="o">=</span> <span class="n">channel_limits</span><span class="p">(</span><span class="n">stack</span><span class="p">)</span> <span class="k">if</span> <span class="n">limits</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">limits</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a>    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]):</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="n">band</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">&quot;float64&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">derived</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">lo</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">hi</span><span class="p">)):</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a>            <span class="c1"># No frozen bound for this channel — fall back to what this frame alone says rather than to a</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a>            <span class="c1"># fixed span, which would clip a live channel flat if the freeze simply never saw it (M2).</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a>            <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">channel_limits</span><span class="p">(</span><span class="n">band</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="kc">None</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">lo</span><span class="p">)</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">hi</span><span class="p">)):</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a>            <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>                <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a>                <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>            <span class="p">)</span>  <span class="c1"># this frame&#39;s channel is nodata too: any span, its cells stay NaN</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a>        <span class="k">elif</span> <span class="n">hi</span> <span class="o">&lt;=</span> <span class="n">lo</span><span class="p">:</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>            <span class="n">hi</span> <span class="o">=</span> <span class="n">lo</span> <span class="o">+</span> <span class="mf">1.0</span>  <span class="c1"># a constant channel: widen rather than divide by zero</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a>        <span class="n">out</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">((</span><span class="n">band</span> <span class="o">-</span> <span class="n">lo</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">hi</span> <span class="o">-</span> <span class="n">lo</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">)</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a>    <span class="k">return</span> <span class="n">out</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -4388,7 +4402,9 @@ rejected by name rather than as a <code>TypeError</code> from trying to iterate 
 <span class="normal"><a href="#__codelineno-0-74">74</a></span>
 <span class="normal"><a href="#__codelineno-0-75">75</a></span>
 <span class="normal"><a href="#__codelineno-0-76">76</a></span>
-<span class="normal"><a href="#__codelineno-0-77">77</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="k">def</span><span class="w"> </span><span class="nf">require_three_bands</span><span class="p">(</span><span class="n">caller</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">bands</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-77">77</a></span>
+<span class="normal"><a href="#__codelineno-0-78">78</a></span>
+<span class="normal"><a href="#__codelineno-0-79">79</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="k">def</span><span class="w"> </span><span class="nf">require_three_bands</span><span class="p">(</span><span class="n">caller</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">bands</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Reject a composite band list that is not exactly three long.</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a>
 <a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">    A composite maps its bands to three channels (R/G/B or H/S/V), so any other count is a caller mistake.</span>
@@ -4434,7 +4450,9 @@ rejected by name rather than as a <code>TypeError</code> from trying to iterate 
 <a id="__codelineno-0-74" name="__codelineno-0-74"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">caller</span><span class="si">}</span><span class="s2">() needs exactly three bands, got None&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-75" name="__codelineno-0-75"></a>    <span class="n">named</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">bands</span><span class="p">)</span>  <span class="c1"># materialise once: a caller may hand over a one-shot iterable</span>
 <a id="__codelineno-0-76" name="__codelineno-0-76"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">named</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">3</span><span class="p">:</span>
-<a id="__codelineno-0-77" name="__codelineno-0-77"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">caller</span><span class="si">}</span><span class="s2">() needs exactly three bands, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">named</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">named</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-77" name="__codelineno-0-77"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-78" name="__codelineno-0-78"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">caller</span><span class="si">}</span><span class="s2">() needs exactly three bands, got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">named</span><span class="p">)</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">named</span><span class="si">!r}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-79" name="__codelineno-0-79"></a>        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
