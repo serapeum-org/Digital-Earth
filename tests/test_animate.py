@@ -284,10 +284,29 @@ class TestAnimateComposites:
         assert m.ax.get_title() == titles[-1], f"last title not applied: {m.ax.get_title()!r}"
         assert m.ax.images, "each frame should draw the composite image"
 
-    def test_composite_honours_band_order(self, rgb_stack, tmp_path):
-        """A composite animation forwards bands= to the per-frame composite call."""
+    def test_composite_honours_band_order(self, tmp_path):
+        """bands= reaches the freeze, so the frozen bounds come back in the order that was asked for.
+
+        Test scenario:
+            Three bands of clearly separated magnitude (10 / 100 / 1000) requested as (3, 2, 1). Asserting
+            only that the render is three channels wide would hold for any order — and would still hold if
+            the scan ignored bands= entirely and froze the default (1, 2, 3), which would silently attach
+            each bound to the wrong channel. The magnitudes make the order observable.
+        """
+        ny, nx = 20, 40
+        geo = GeoReference(geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326)
+        graded = Dataset.from_array(
+            arr=np.stack([np.full((ny, nx), scale, "float32") for scale in (10.0, 100.0, 1000.0)]),
+            geo_ref=geo,
+        )
         m = Map(crs=4326, figsize=(4, 4))
-        anim = m.animate(rgb_stack, kind="rgb_composite", fps=2, bands=(3, 2, 1))
+        opts = {"bands": (3, 2, 1)}
+        m._prime_animation([graded], opts, kind="rgb_composite", colorbar=False, cbar_label=None)
+        assert [round(lo) for lo, _ in opts["limits"]] == [1000, 100, 10], (
+            f"frozen bounds should follow the requested band order, got {opts['limits']!r}"
+        )
+
+        anim = m.animate([graded], kind="rgb_composite", fps=2, bands=(3, 2, 1))
         anim.save(str(tmp_path / "bands.gif"), writer=PillowWriter(fps=2))
         assert m.ax.images[-1].get_array().shape[-1] == 3, "a custom band order should still render RGB"
 
