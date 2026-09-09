@@ -424,11 +424,17 @@ class WebMapBase:
         surface in a popup as though it were a real value.
 
         Everything GeoJSON cannot represent is covered, because each of these reaches ``json.dumps`` and
-        fails there: ``datetime64`` (tz-naive or tz-aware), ``timedelta64`` (an ISO-8601 duration,
-        ``P1DT0H0M0S``), ``period`` (its own string form, ``2026-01``), and an ``object`` column holding
-        any of those, plus ``datetime.time`` and ``numpy.datetime64``, which the dtype checks miss
-        entirely. An object column is encoded when **any** of its values is date-like, not just its first
-        — the two orderings of ``["n/a", date(...)]`` are equally unserialisable.
+        fails there:
+
+        - ``datetime64``, tz-naive or tz-aware;
+        - ``timedelta64``, as an ISO-8601 duration (``P1DT0H0M0S``);
+        - ``period``, as its own string form (``2026-01``);
+        - ``category``, whose real dtype is unwrapped from ``.categories`` first — a repeated timestamp
+          column is routinely stored this way and matches none of the checks above;
+        - an ``object`` column holding any of those, plus ``datetime.time``, ``numpy.datetime64`` and
+          ``numpy.timedelta64``, none of which the dtype checks can see. An object column is encoded when
+          **any** of its values is date-like, not just its first — the two orderings of
+          ``["n/a", date(...)]`` are equally unserialisable.
 
         A mixed column keeps its non-date values as they are, so one GeoJSON property can hold both text
         and an ISO string. That is deliberate: stringifying the rest would destroy the types of numbers
