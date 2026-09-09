@@ -24,7 +24,12 @@ exact stack the GeoLibre app uses).
   MapLibre and deck.gl in one anywidget) ; optional **`lonboard`** (GeoArrow-fast deck.gl) for very large vector.
 - **Module:** `src/digitalearth/web/` — base + capability **mixins** composed into `WebMap`, mirroring the v0.4.0
   `Map(GeoLayerBase, …)`, the M1 `Scene3D(Scene3DBase, …)` and the M2 `InteractiveMap(InteractiveMapBase, …)`.
-- **Status:** ✅ all tasks done (DW.0–DW.6, DX.1–DX.3) on PR #96. Sizes use the same XS/S/M/L scale as M1/M2.
+- **Status:** ✅ **SHIPPED** — DW.0–DW.6 + DX.1–DX.3 merged in PR #96, released in **0.7.0**; browser-verified in
+  PR #108. **Residuals since closed** (verified against the installed code): **offline export now shipped**
+  (`ExportMixin.to_html(offline=True)` + `_inline_offline_assets` inline the maplibre-gl JS/CSS, best-effort — no
+  longer "deferred to DW.6"); the two pyramids gaps this tier needed (`to_terrain_rgb` PY-IO.9, `to_pmtiles`
+  PY-IO.8) **landed in pyramids 0.36+ and are present in 0.52** (see the GeoLibre-parity ISSUE-TRACKER). Only the
+  MPL-1 maplibre UTF-8/Windows in-house workaround and nits N1/N2 remain. Sizes use the same XS/S/M/L scale as M1/M2.
 - **Tier goal (one line):** `WebMap().basemap().choropleth(gdf, column="pop").save("map.html")` writes one
   self-contained, pan/zoom/hover web map (and, with deck.gl layers, 3-D) — from pyramids data, opening in any
   browser with nothing installed.
@@ -253,8 +258,9 @@ class WebMap(WebMapBase, ...):
 - [x] `from digitalearth.web import WebMap` works **without** the extra (lazy); calling a builder without it raises
       a clear `ImportError("install digitalearth[web]")`.
 - [x] with the extra, `WebMap().render()` returns the MapLibre widget and `.save("m.html")` writes a >1 KB HTML
-      page embedding the map. (Softened: maplibre's `to_html` CDN-references `maplibre-gl`, so it is not yet fully
-      offline — true offline bundling is deferred to DW.6. See `upstream-maplibre-issues.md` MPL-2.)
+      page embedding the map. (Offline note, now resolved: maplibre's `to_html` CDN-references `maplibre-gl`;
+      **DW.6 shipped `to_html(offline=True)` + `_inline_offline_assets`** to inline that JS/CSS, best-effort — the
+      former MPL-2 "deferred to DW.6" item is done.)
 - [x] `_to_display_source` reprojects a non-3857 raster via pyramids (no cartopy).
 
 **Tests** (`tests/test_web_base.py`)
@@ -459,9 +465,10 @@ Status legend: ✅ done · 🔜 ready · ⛔ blocked · ⏸ deferred.
    batteries) vs raw anywidget. Recommend **py-maplibregl** (it bundles MapLibre + deck.gl, the lean choice);
    confirm the package name + that deck.gl layers are first-class at DW.0.
 2. **Raster delivery** — in-browser COG tiling needs a tile server (titiler) or PMTiles. Default to the **inline
-   image-source** path, then COG/XYZ (pyramids ✅). **Confirmed pyramids gaps** (verified 0.33.0,
-   `../geolibre-parity/pyramids-gis-io-and-conversions.md`): only `to_terrain_rgb` (PY-IO.9) and a vector-tile/
-   PMTiles **writer** convenience (PY-IO.8) — PMTiles *read*, COG, XYZ tiling and overviews already exist.
+   image-source** path, then COG/XYZ (pyramids ✅). ~~Confirmed pyramids gaps~~ **RESOLVED (pyramids 0.52):** the two
+   writers this tier wanted — `to_terrain_rgb` (PY-IO.9) and `to_pmtiles`/`to_mvt` (PY-IO.8/14) — **shipped in
+   pyramids 0.36+ and are present in 0.52** (verified by API introspection). PMTiles *read*, COG, XYZ tiling and
+   overviews were already present. No pyramids raster-delivery gaps remain for this tier.
 3. **Self-contained HTML size** — inlining big data bloats the file; document the threshold and steer large data to
    a referenced COG/PMTiles URL.
 4. **Scope creep toward "the GeoLibre app"** — the standing risk (see §Scope, and the GeoLibre-parity overview's
