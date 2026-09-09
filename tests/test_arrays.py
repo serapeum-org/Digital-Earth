@@ -1,21 +1,16 @@
-"""Tests for digitalearth._arrays — shared array helpers (PA-1).
+"""Tests for digitalearth.base.arrays — shared array helpers (PA-1).
 
-Covers every public/private helper in the module: ``fig_of``, ``mask_nodata``, ``finite``, ``read_masked_band``
-and ``_band_nodata``. The dataset-reading helpers are exercised against a small in-memory fake so no real raster
+Covers every public/private helper in the module: ``mask_nodata``, ``finite``, ``read_masked_band`` and
+``_band_nodata``. ``fig_of`` moved to the static backend with the module split; see ``tests/test_figures.py``. The dataset-reading helpers are exercised against a small in-memory fake so no real raster
 or filesystem access is needed.
 """
-import matplotlib
 import numpy as np
 import pytest
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-
-from digitalearth._arrays import (  # noqa: E402
+from digitalearth.base.arrays import (  # noqa: E402
     NAN_REDUCERS,
     _band_nodata,
     finite,
-    fig_of,
     mask_nodata,
     read_masked_band,
 )
@@ -40,28 +35,6 @@ class _FakeDataset:
         return self._array
 
 
-class TestFigOf:
-    """Tests for fig_of."""
-
-    def test_returns_none_for_none(self):
-        """fig_of(None) returns None.
-
-        Test scenario:
-            No axes means no owning figure, so the helper short-circuits to None.
-        """
-        assert fig_of(None) is None, "fig_of(None) should be None"
-
-    def test_returns_owning_figure(self):
-        """fig_of(ax) returns the figure that owns ax.
-
-        Test scenario:
-            An axes created from a figure should report that exact figure object.
-        """
-        fig, ax = plt.subplots()
-        try:
-            assert fig_of(ax) is fig, "fig_of(ax) should return the owning figure"
-        finally:
-            plt.close(fig)
 
 
 class TestMaskNodata:

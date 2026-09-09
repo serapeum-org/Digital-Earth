@@ -18,7 +18,7 @@ from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from pyramids.dataset import Dataset
 
-from digitalearth._arrays import NAN_REDUCERS, read_masked_band
+from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth._render_compat import relocate_flat_style
 from digitalearth.base.symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
 from digitalearth.base.sources import get_source

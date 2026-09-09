@@ -146,14 +146,14 @@ class TestExtractorHelpers:
 
     def test_mask_nodata_passthrough_when_none(self):
         """mask_nodata returns the array unchanged (as float) when nodata is None."""
-        from digitalearth._arrays import mask_nodata
+        from digitalearth.base.arrays import mask_nodata
 
         out = mask_nodata(np.array([1, 2, 3]), None)
         np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
 
     def test_mask_nodata_replaces_with_nan(self):
         """mask_nodata replaces cells matching nodata with NaN."""
-        from digitalearth._arrays import mask_nodata
+        from digitalearth.base.arrays import mask_nodata
 
         out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
         assert np.isnan(out[1]) and not np.isnan(out[0])

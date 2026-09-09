@@ -14,7 +14,7 @@ from typing import Any, Optional, Sequence
 
 import numpy as np
 
-from digitalearth.charts import _column_or_array, _field_values, _grouped_series
+from digitalearth.base.chartdata import column_or_array, field_values, grouped_series
 
 __all__ = ["histogram", "scatter", "bar", "line", "bar_by", "line_by"]
 
@@ -52,9 +52,9 @@ def histogram(data: Any, *, column: Optional[str] = None, bins: int = 15, **opts
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    # _field_values drops non-finite (NaN/inf) values on every path (column, Dataset band or plain array),
+    # field_values drops non-finite (NaN/inf) values on every path (column, Dataset band or plain array),
     # so a raw array with NaN yields a clean histogram instead of an opaque numpy range error.
-    values = _field_values(data, column)
+    values = field_values(data, column)
     element = hv.Histogram(np.histogram(values, bins=bins))
     return element.opts(**opts) if opts else element
 
@@ -75,8 +75,8 @@ def scatter(x: Any, y: Any, *, data: Any = None, **opts: Any) -> Any:
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    xs = _column_or_array(data, x)
-    ys = _column_or_array(data, y)
+    xs = column_or_array(data, x)
+    ys = column_or_array(data, y)
     element = hv.Scatter((xs, ys))
     return element.opts(**opts) if opts else element
 
@@ -136,7 +136,7 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    keys, values = _grouped_series(data, by, column, agg)
+    keys, values = grouped_series(data, by, column, agg)
     element = hv.Bars(([str(k) for k in keys], values))
     return element.opts(**opts) if opts else element
 
@@ -158,6 +158,6 @@ def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    keys, values = _grouped_series(data, by, column, agg)
+    keys, values = grouped_series(data, by, column, agg)
     element = hv.Curve((keys, values))
     return element.opts(**opts) if opts else element

@@ -5,7 +5,7 @@ import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
-from digitalearth._arrays import NAN_REDUCERS, read_masked_band
+from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 
 
 class TimeSeries:

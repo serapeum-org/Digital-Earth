@@ -9,7 +9,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
-from digitalearth._arrays import finite, read_masked_band
+from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.animation import save_animation
 from digitalearth.scene import projections
 

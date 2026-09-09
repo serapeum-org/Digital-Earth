@@ -11,7 +11,7 @@ from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from cleopatra.glyphs.stats.histogram_glyph import HistogramGlyph
 from matplotlib.axes import Axes
 
-from digitalearth._arrays import fig_of as _fig_of
+from digitalearth.scene.figures import fig_of as _fig_of
 
 
 def envelope(

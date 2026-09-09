@@ -12,8 +12,6 @@ pyramids/cleopatra import — so the module stays a leaf consumable from anywher
 from typing import Any, Callable, Dict, Optional
 
 import numpy as np
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
 
 #: NaN-aware spatial/array reducers keyed by name — the single source consumed by the temporal time-series
 #: reducer and the quadtree per-cell aggregator (which adds its own ``"count"`` on top). Each maps a name to a
@@ -27,37 +25,6 @@ NAN_REDUCERS: Dict[str, Callable[..., Any]] = {
     "std": np.nanstd,
 }
 
-
-def fig_of(ax: Optional[Axes]) -> Optional[Figure]:
-    """Return the figure that owns ``ax``, or ``None`` when ``ax`` is ``None``.
-
-    Args:
-        ax: A matplotlib axes, or ``None``.
-
-    Returns:
-        The owning :class:`~matplotlib.figure.Figure`, or ``None`` when ``ax`` is ``None``.
-
-    Examples:
-        - An axes reports the figure that owns it:
-            ```python
-            >>> import matplotlib
-            >>> matplotlib.use("Agg")
-            >>> import matplotlib.pyplot as plt
-            >>> from digitalearth._arrays import fig_of
-            >>> fig, ax = plt.subplots()
-            >>> fig_of(ax) is fig
-            True
-
-            ```
-        - ``None`` short-circuits to ``None``:
-            ```python
-            >>> from digitalearth._arrays import fig_of
-            >>> fig_of(None) is None
-            True
-
-            ```
-    """
-    return ax.get_figure() if ax is not None else None
 
 
 def mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:
@@ -74,7 +41,7 @@ def mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:
         - The sentinel becomes ``NaN``; everything else is preserved:
             ```python
             >>> import numpy as np
-            >>> from digitalearth._arrays import mask_nodata
+            >>> from digitalearth.base.arrays import mask_nodata
             >>> mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0).tolist()
             [1.0, nan, 3.0]
 
@@ -82,7 +49,7 @@ def mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:
         - ``None`` nodata is a no-op (just a float cast):
             ```python
             >>> import numpy as np
-            >>> from digitalearth._arrays import mask_nodata
+            >>> from digitalearth.base.arrays import mask_nodata
             >>> mask_nodata(np.array([1, 2, 3]), None).tolist()
             [1.0, 2.0, 3.0]
 
@@ -107,7 +74,7 @@ def finite(arr: Any) -> np.ndarray:
         - ``NaN`` and ``inf`` are dropped and the result is flattened:
             ```python
             >>> import numpy as np
-            >>> from digitalearth._arrays import finite
+            >>> from digitalearth.base.arrays import finite
             >>> finite(np.array([[1.0, np.nan], [np.inf, 4.0]])).tolist()
             [1.0, 4.0]
 
@@ -115,7 +82,7 @@ def finite(arr: Any) -> np.ndarray:
         - An all-non-finite input collapses to an empty array:
             ```python
             >>> import numpy as np
-            >>> from digitalearth._arrays import finite
+            >>> from digitalearth.base.arrays import finite
             >>> int(finite(np.array([np.nan, -np.inf])).size)
             0
 
@@ -139,7 +106,7 @@ def _band_nodata(dataset: Any, index: int) -> Optional[float]:
         - Read the sentinel for a specific band:
             ```python
             >>> from types import SimpleNamespace
-            >>> from digitalearth._arrays import _band_nodata
+            >>> from digitalearth.base.arrays import _band_nodata
             >>> _band_nodata(SimpleNamespace(no_data_value=(-1.0, -2.0)), 1)
             -2.0
 
@@ -147,7 +114,7 @@ def _band_nodata(dataset: Any, index: int) -> Optional[float]:
         - An out-of-range index returns ``None`` instead of raising:
             ```python
             >>> from types import SimpleNamespace
-            >>> from digitalearth._arrays import _band_nodata
+            >>> from digitalearth.base.arrays import _band_nodata
             >>> _band_nodata(SimpleNamespace(no_data_value=(-1.0,)), 5) is None
             True
 
@@ -177,7 +144,7 @@ def read_masked_band(dataset: Any, band: int = 1) -> np.ndarray:
             ```python
             >>> import numpy as np
             >>> from types import SimpleNamespace
-            >>> from digitalearth._arrays import read_masked_band
+            >>> from digitalearth.base.arrays import read_masked_band
             >>> ds = SimpleNamespace(no_data_value=(-1.0,),
             ...                      read_array=lambda band=0: np.array([[5.0, -1.0]]))
             >>> read_masked_band(ds, band=1).tolist()

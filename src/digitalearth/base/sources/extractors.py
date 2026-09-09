@@ -13,7 +13,7 @@ from typing import Any, Optional
 import numpy as np
 from pyramids.dataset import Dataset
 
-from digitalearth._arrays import mask_nodata, read_masked_band
+from digitalearth.base.arrays import mask_nodata, read_masked_band
 from digitalearth.base.crs import source_epsg
 from digitalearth.base.types import PlottableData, RasterLike
 from digitalearth.base.sources.dimension import DimensionInfo

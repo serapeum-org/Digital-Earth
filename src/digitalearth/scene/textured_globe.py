@@ -35,7 +35,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth._arrays import finite, read_masked_band
+from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.base.crs import source_epsg
 from digitalearth.animation import save_animation
 
