@@ -23,7 +23,6 @@ from digitalearth.interactive.vector import VectorMixin
 
 
 class InteractiveMap(
-    InteractiveMapBase,
     RasterMixin,
     VectorMixin,
     BigDataMixin,
@@ -33,6 +32,7 @@ class InteractiveMap(
     ProjectionMixin,
     AnimationMixin,
     DashboardMixin,
+    InteractiveMapBase,
 ):
     """Interactive 2-D web map: pan/zoom/hover Bokeh layers built from pyramids data.
 

@@ -156,7 +156,9 @@ class TestPixiTaskReferences:
             f"{source} use undeclared pixi env(s): {undeclared}; declared: {sorted(declared)}"
         )
 
-    @pytest.mark.parametrize("task", ["lint", "doctests"])
+    @pytest.mark.parametrize(
+        "task", ["lint-names", "lint-format", "lint-imports", "mypy", "doctests"]
+    )
     def test_the_gates_added_for_the_migration_are_wired_up(self, task):
         """Each verification gate is defined and invoked by a real workflow step.
 
@@ -164,10 +166,13 @@ class TestPixiTaskReferences:
             task: The pixi task expected to be both defined and run by CI.
 
         Test scenario:
-            These two tasks cover code CI cannot otherwise reach — undefined names in notebook cells that
-            never execute, and the doctests, which the `main` task does not collect. Because the scan reads
-            parsed `run:` scripts, deleting the step stops satisfying this even though the workflow still
-            mentions the task in a comment.
+            These cover code the `main` task cannot reach — undefined names in notebook cells that never
+            execute, formatting and import order, the type checker, and the doctests, which `main` does not
+            collect. The three ruff gates are pinned individually rather than through the aggregate `lint`
+            task: pixi's `depends-on` stops at the first failing subtask, so running them as one CI step
+            would let a formatting slip hide the import-order result. Because the scan reads parsed `run:`
+            scripts, deleting a step stops satisfying this even though the workflow still names the task in
+            a comment.
         """
         assert task in _tasks(), (
             f"the {task!r} task is not defined in [tool.pixi.tasks]"

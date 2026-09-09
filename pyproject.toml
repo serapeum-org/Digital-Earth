@@ -235,7 +235,7 @@ exclude = [
 
 [[tool.mypy.overrides]]
 module = "digitalearth.api"  # 19 errors at baseline
-disable_error_code = ["attr-defined", "call-arg", "no-any-return"]
+disable_error_code = ["no-any-return"]
 
 [[tool.mypy.overrides]]
 module = "digitalearth.web.vector"  # 9 errors at baseline
@@ -330,9 +330,6 @@ disable_error_code = ["exit-return", "no-any-return"]
 module = "digitalearth.base.arrays"  # 1 error at baseline
 disable_error_code = ["no-any-return"]
 
-[[tool.mypy.overrides]]
-module = "digitalearth.interactive.map"  # 1 error at baseline
-disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
 module = "digitalearth.static.figures"  # 1 error at baseline
@@ -358,17 +355,11 @@ disable_error_code = ["exit-return"]
 module = "digitalearth.three_d.globe"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
-[[tool.mypy.overrides]]
-module = "digitalearth.three_d.scene3d"  # 1 error at baseline
-disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
 module = "digitalearth.three_d.terrain"  # 1 error at baseline
 disable_error_code = ["union-attr"]
 
-[[tool.mypy.overrides]]
-module = "digitalearth.web.map"  # 1 error at baseline
-disable_error_code = ["misc"]
 
 [[tool.mypy.overrides]]
 module = "digitalearth.web.raster"  # 1 error at baseline

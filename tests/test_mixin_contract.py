@@ -265,7 +265,14 @@ class TestMixinRuntimeBases:
 
 
 class TestComposedClassMro:
-    """Tests for the exact method-resolution order of the composed backend classes."""
+    """Tests for the exact method-resolution order of the composed backend classes.
+
+    All four backends list their capability mixins first and their backend base last. That order is load
+    bearing rather than stylistic: with the mixins typed against that base (see :mod:`digitalearth.web.base`
+    and friends), listing the base *first* puts it both before and after its own subclasses, and C3 cannot
+    linearize it — mypy then falls back to ``[cls, object]`` and every attribute on the class silently
+    becomes ``Any``. ``static.Map`` always had the working order; the other three were corrected to match.
+    """
 
     @pytest.mark.parametrize(
         "module, name, expected",
@@ -275,7 +282,6 @@ class TestComposedClassMro:
                 "InteractiveMap",
                 [
                     "InteractiveMap",
-                    "InteractiveMapBase",
                     "RasterMixin",
                     "VectorMixin",
                     "BigDataMixin",
@@ -285,6 +291,7 @@ class TestComposedClassMro:
                     "ProjectionMixin",
                     "AnimationMixin",
                     "DashboardMixin",
+                    "InteractiveMapBase",
                     "object",
                 ],
             ),
@@ -293,7 +300,6 @@ class TestComposedClassMro:
                 "WebMap",
                 [
                     "WebMap",
-                    "WebMapBase",
                     "RasterMixin",
                     "VectorMixin",
                     "BigDataMixin",
@@ -301,6 +307,7 @@ class TestComposedClassMro:
                     "TemporalMixin",
                     "DecorationMixin",
                     "ExportMixin",
+                    "WebMapBase",
                     "object",
                 ],
             ),
@@ -309,21 +316,21 @@ class TestComposedClassMro:
                 "Scene3D",
                 [
                     "Scene3D",
-                    "Scene3DBase",
                     "TerrainMixin",
                     "PointCloudMixin",
                     "VolumeMixin",
                     "VectorMixin",
                     "GlobeMixin",
                     "AnimationMixin",
+                    "Scene3DBase",
                     "object",
                 ],
             ),
         ],
         ids=["interactive", "web", "three_d"],
     )
-    def test_mro_is_base_then_mixins_then_object(self, module, name, expected):
-        """Each composed class linearises to its base, then its mixins in declaration order, then `object`.
+    def test_mro_is_mixins_then_base_then_object(self, module, name, expected):
+        """Each composed class linearises to its mixins in declaration order, then its base, then `object`.
 
         Args:
             module: Module holding the composed class.

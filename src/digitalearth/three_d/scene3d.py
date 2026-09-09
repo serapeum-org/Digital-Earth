@@ -28,13 +28,13 @@ __all__ = ["Scene3D", "house_theme"]
 
 
 class Scene3D(
-    Scene3DBase,
     TerrainMixin,
     PointCloudMixin,
     VolumeMixin,
     VectorMixin,
     GlobeMixin,
     AnimationMixin,
+    Scene3DBase,
 ):
     """A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.
 

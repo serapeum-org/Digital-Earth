@@ -8,8 +8,24 @@
 #
 #     git config blame.ignoreRevsFile .git-blame-ignore-revs
 #
-# GitHub applies this file automatically in its blame view. Add one full 40-character SHA per line, newest
-# last, with a comment naming what the commit did.
-
-# style: apply ruff format and import sorting across src and tests
-901ecea91970a5be1fc353475e02e515a25456da
+# GitHub applies this file automatically in its blame view.
+#
+# ---------------------------------------------------------------------------------------------------------
+# ACTION REQUIRED AFTER MERGING #178
+#
+# This repo squash-merges, so the branch commit that carried the ruff reformat does not survive onto `main` —
+# its SHA is rewritten into the single squash commit. A branch SHA listed here would therefore name an object
+# that `main` does not contain, and git skips an unresolvable entry **silently**, so the file would look
+# correct while doing nothing.
+#
+# The reformat is part of #178's squash commit. Once it is merged, append that commit's full 40-character SHA
+# below:
+#
+#     git log --oneline -1 main        # the squash commit for #178
+#
+# and add it as:
+#
+#     # chore(lint,types): enforce the formatter and make mypy pass (#178)
+#     <40-char sha>
+#
+# One full SHA per line, newest last, each with a comment naming what the commit did.
