@@ -3,7 +3,7 @@
 Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into cleopatra ``ArrayGlyph`` field
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -14,7 +14,6 @@ from digitalearth.base.sources import get_stack
 from digitalearth.base.stretch import (
     ChannelLimits,
     DEFAULT_COMPOSITE_BANDS,
-    channel_limits,
     require_three_bands,
     stretch_to_unit,
 )
@@ -196,7 +195,7 @@ class RasterMixin:
 
         See Also:
             hsv_composite: The same three bands read as hue/saturation/value instead.
-            channel_limits: Derives the ``limits`` this accepts.
+            digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("rgb_composite", bands)
         ds = self._reproject(dataset)
@@ -269,7 +268,7 @@ class RasterMixin:
 
         See Also:
             rgb_composite: The same three bands mapped straight to red/green/blue.
-            channel_limits: Derives the ``limits`` this accepts.
+            digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         from matplotlib.colors import hsv_to_rgb
 

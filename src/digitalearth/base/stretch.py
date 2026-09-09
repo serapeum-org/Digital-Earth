@@ -127,8 +127,8 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
 
     See Also:
         stretch_to_unit: Applies these bounds (or derives its own when none are given).
-        digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits: Combines them across a
-            whole animation stack so every frame shares one stretch.
+        digitalearth.static.map.Map.animate: Combines these across a whole stack so every frame of a
+            composite animation shares one stretch.
     """
     if stack.ndim != 3:
         raise ValueError(
