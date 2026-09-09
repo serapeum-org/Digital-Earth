@@ -25,7 +25,21 @@ class TestGroups:
 
     def test_declares_known_extension_points(self):
         """GROUPS advertises the styles and sources extension points."""
-        assert "digitalearth.styles" in GROUPS and "digitalearth.base.sources" in GROUPS
+        assert "digitalearth.styles" in GROUPS and "digitalearth.sources" in GROUPS
+
+    def test_group_names_are_frozen_public_contract(self):
+        """GROUPS is exactly these two names, and never tracks where our modules live.
+
+        Test scenario:
+            A plugin package writes these strings verbatim in its own ``pyproject.toml``, so they are a
+            published contract rather than an import path. The backend restructure moved ``sources`` to
+            ``digitalearth.base.sources`` and a find/replace rewrote this constant with it, which would
+            have broken every installed source plugin. Pinning the exact tuple makes that class of
+            accident fail loudly instead of silently.
+        """
+        assert GROUPS == ("digitalearth.styles", "digitalearth.sources"), (
+            f"entry-point group names are a public contract and must not change, got {GROUPS!r}"
+        )
 
 
 class TestIterPlugins:

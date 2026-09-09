@@ -21,7 +21,12 @@ logger = logging.getLogger(__name__)
 
 #: The entry-point groups Digital-Earth looks up. ``styles`` extend the autostyle library; ``sources``
 #: register new input adapters. A plugin package targets one of these group names.
-GROUPS = ("digitalearth.styles", "digitalearth.base.sources")
+#:
+#: These are **public contract strings**, not module paths: a plugin package writes them verbatim in its
+#: own ``pyproject.toml``. They are deliberately decoupled from where our code happens to live, so moving
+#: a module must never rename one -- doing so silently breaks every installed plugin, and no test of ours
+#: would notice because the plugins live outside this repo.
+GROUPS = ("digitalearth.styles", "digitalearth.sources")
 
 
 def iter_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> Iterator[EntryPoint]:
