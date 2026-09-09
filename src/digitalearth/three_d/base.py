@@ -117,17 +117,35 @@ class Scene3DBase:
     def export_html(self, path: str) -> str:
         """Export the scene to a self-contained interactive HTML page (via trame/vtk.js).
 
+        The page embeds the whole mesh, so it grows with the geometry rather than with the rendered image: about
+        a 1 MB vtk.js floor plus ~19 bytes per point (a 12x12 grid gives 1.1 MB, 512x512 gives 6 MB, and a
+        4700x4700 DEM gives ~430 MB). Past a modest tile the result is technically interactive but too heavy to
+        sit beside a notebook or in docs — prefer :meth:`digitalearth.three_d.Scene3D.orbit`, which writes a
+        compact GIF/MP4 fly-through of the same scene.
+
         Args:
             path: Destination ``.html`` file.
 
         Returns:
             The ``path`` written.
         """
-        self.plotter.export_html(path)
+        # pyvista >=0.49 moved trame support out into the separate `trame-pyvista` package: the export now lives
+        # on a registered `trame` plotter component and `Plotter.export_html` is deprecated. pyvista 0.48 has no
+        # such attribute and implements the export natively, so the attribute doubles as the version switch.
+        # Falling back (rather than raising here) keeps pyvista's own actionable ImportError when >=0.49 is
+        # installed without trame-pyvista.
+        component = getattr(self.plotter, "trame", None)
+        if component is None:
+            self.plotter.export_html(path)
+        else:
+            component.export_html(path)
         return path
 
     def save(self, path: str, **kwargs: Any) -> Optional[np.ndarray]:
         """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
+
+        The HTML branch delegates to :meth:`export_html` — see there for why a heavy scene is better served by
+        :meth:`digitalearth.three_d.Scene3D.orbit`.
 
         Args:
             path: Output file. ``*.html`` exports an interactive page; anything else saves a PNG screenshot.

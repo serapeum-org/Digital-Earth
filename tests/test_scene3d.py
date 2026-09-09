@@ -3,6 +3,8 @@
 Gated on the optional ``3d`` extra: when pyvista is not installed these are skipped, so the default suite stays
 green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise them for real.
 """
+import importlib.util
+
 import numpy as np
 import pytest
 
@@ -89,6 +91,24 @@ def test_save_dispatches_png_vs_html(tmp_path):
     assert png_result is not None and png_result.ndim == 3
     assert html_result is None
     scene.close()
+
+
+def test_export_html_stack_is_installed():
+    """The trame/vtk.js export stack the `3d` extra promises is actually importable in this environment.
+
+    `test_save_dispatches_png_vs_html` proves the export works; this proves *why* when it does not. Both
+    dependencies below reach the environment only through `pyvista[jupyter]` — `nest_asyncio2` drives the
+    synchronous trame-server launch on every pyvista version, and `trame_vtk` serialises the scene to HTML
+    (#158).
+    """
+    assert importlib.util.find_spec("nest_asyncio2") is not None, (
+        "nest_asyncio2 is missing — Plotter.export_html cannot launch its trame server without it. It comes "
+        "from `pyvista[jupyter]`; check the `3d` extra."
+    )
+    assert importlib.util.find_spec("trame_vtk") is not None, (
+        "trame_vtk is missing — it writes the vtk.js page. It comes from `pyvista[jupyter]` (0.48) or "
+        "`trame-pyvista` (>=0.49); check the `3d` extra."
+    )
 
 
 def test_add_volume_registers_layer():
