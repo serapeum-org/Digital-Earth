@@ -1,7 +1,8 @@
 """DW.5 — web-tier time-slider (``timeslider``).
 
 The bare state helper (``_temporal_times``) is tested without the engine; the slider build (which constructs
-maplibre + ipywidgets) ``importorskip``s maplibre.
+maplibre + ipywidgets) ``importorskip``s maplibre. Both halves of recipe W6 are covered: the vector layer
+filtered per time step, and the ``DatasetCollection`` stack whose members are swapped by visibility.
 """
 
 import pytest
@@ -19,6 +20,72 @@ def timed_polygons():
     times = [2000, 2000, 2010, 2010, 2020, 2020]
     pop = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
     return gpd.GeoDataFrame({"time": times, "pop": pop}, geometry=geoms, crs=4326)
+
+
+@pytest.fixture()
+def timed_points():
+    """Six points tagged with one of three time steps and a ``pop`` value."""
+    gpd = pytest.importorskip("geopandas")
+    from shapely.geometry import Point
+
+    geoms = [Point(i, i) for i in range(6)]
+    return gpd.GeoDataFrame(
+        {"time": [2000, 2000, 2010, 2010, 2020, 2020], "pop": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]},
+        geometry=geoms,
+        crs=4326,
+    )
+
+
+@pytest.fixture()
+def raster_stack(tmp_path):
+    """A 3-member ``DatasetCollection``; member ``k`` spans ``[10k, 10k + 2.4]`` so the stack spans 0-22.4."""
+    pytest.importorskip("pyramids")
+    import numpy as np
+    from pyramids.base.georeference import GeoReference
+    from pyramids.dataset import Dataset
+    from pyramids.dataset.collection import DatasetCollection
+
+    geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+    paths = []
+    for step in range(3):
+        _, xx = np.mgrid[0:20, 0:25]
+        values = (10.0 * step + xx / 10.0).astype("float32")
+        path = tmp_path / f"step{step}.tif"
+        Dataset.from_array(values, geo_ref=geo_ref, no_data_value=-9999.0).to_file(str(path))
+        paths.append(str(path))
+    return DatasetCollection.from_files(paths)
+
+
+@pytest.fixture()
+def fake_widget():
+    """A recording stand-in for the MapLibre ``MapWidget``, usable without the ``web`` extra.
+
+    It subclasses a real ``ipywidgets`` widget because ``_wrap_temporal`` puts it in a ``VBox``, whose
+    ``children`` trait rejects anything that is not a ``Widget``.
+
+    Returns:
+        A widget whose ``filters`` and ``visibility`` lists record what the slider applied.
+    """
+    ipywidgets = pytest.importorskip("ipywidgets")
+
+    class _RecordingWidget(ipywidgets.Output):
+        """An ``Output`` widget that records slider calls instead of talking to MapLibre."""
+
+        def __init__(self):
+            """Start with nothing recorded."""
+            super().__init__()
+            self.filters = []
+            self.visibility = []
+
+        def set_filter(self, layer_id, filter_):
+            """Record a filter application (vector mode)."""
+            self.filters.append((layer_id, filter_))
+
+        def set_visibility(self, layer_id, visible=True):
+            """Record a visibility change (raster mode)."""
+            self.visibility.append((layer_id, visible))
+
+    return _RecordingWidget()
 
 
 def test_temporal_times_empty_without_slider():
@@ -70,42 +137,32 @@ class TestTimeSliderNeedsEngine:
         assert out.stat().st_size > 1_000
 
 
-class TestTimeSliderRejectsNonVector:
-    """Raster input is turned away with an actionable ``TypeError`` instead of dying inside the guard.
+class TestTimeSliderRejectsUnsupportedInput:
+    """Input that is neither a vector layer nor a raster stack is turned away with an actionable error.
 
-    A pyramids raster exposes ``columns`` as an ``int`` (the grid width in cells), so the attribute
-    membership test used to raise ``TypeError: argument of type 'int' is not iterable`` — a message with no
-    hint that ``timeslider`` is vector-only. Both raster types are covered: a ``Dataset`` reaches the check
-    through ``_display_gdf``'s reproject branch, a ``DatasetCollection`` through its fall-through.
+    A pyramids raster exposes ``columns`` as an ``int`` (the grid width in cells), so before the guard the
+    attribute-membership test raised ``TypeError: argument of type 'int' is not iterable`` — a message with
+    no hint of what ``timeslider`` accepts. A ``DatasetCollection`` is *not* covered here: it is a supported
+    input (see ``TestTimeSliderRasterStack``). A single ``Dataset`` has no time dimension, so it stays a
+    rejection, and the message routes it to ``add_raster``.
     """
 
     @pytest.fixture(autouse=True)
     def _need_engine(self):
         pytest.importorskip("maplibre")
 
-    @pytest.fixture()
-    def collection(self, dataset):
-        """The sample raster wrapped as a single-member ``DatasetCollection``."""
-        from pyramids.dataset.collection import DatasetCollection
-
-        return DatasetCollection.from_files(["examples/data/acc4000.tif"])
-
-    def test_dataset_is_rejected(self, dataset):
-        with pytest.raises(TypeError, match=r"timeslider\(\) renders a time-stepped vector layer"):
+    def test_single_dataset_is_rejected(self, dataset):
+        with pytest.raises(TypeError, match=r"timeslider\(\) needs a vector layer"):
             WebMap().timeslider(dataset)
 
-    def test_dataset_collection_is_rejected(self, collection):
-        with pytest.raises(TypeError, match=r"timeslider\(\) renders a time-stepped vector layer"):
-            WebMap().timeslider(collection)
-
-    def test_message_names_the_input_and_the_raster_capable_tiers(self, dataset):
-        """The error has to say what arrived and where a raster time stack belongs instead."""
+    def test_message_names_the_input_and_the_single_raster_builder(self, dataset):
+        """The error has to say what arrived and where a lone raster belongs instead."""
         with pytest.raises(TypeError) as excinfo:
             WebMap().timeslider(dataset)
         message = str(excinfo.value)
         assert type(dataset).__name__ in message, "the rejected type is not named"
-        assert "Map.animate" in message, "the matplotlib alternative is not named"
-        assert "InteractiveMap.timecube" in message, "the interactive alternative is not named"
+        assert "add_raster" in message, "the single-raster builder is not named"
+        assert "DatasetCollection" in message, "the supported stack form is not named"
 
     def test_guard_runs_before_the_reprojection(self, dataset, monkeypatch):
         """A raster in another CRS must not be warped on its way to being rejected."""
@@ -128,54 +185,8 @@ class TestTimeSliderRejectsNonVector:
         assert m._temporal_times() == [2000, 2010, 2020]
 
 
-@pytest.fixture()
-def timed_points():
-    """Six points tagged with one of three time steps and a ``pop`` value."""
-    gpd = pytest.importorskip("geopandas")
-    from shapely.geometry import Point
-
-    geoms = [Point(i, i) for i in range(6)]
-    return gpd.GeoDataFrame(
-        {"time": [2000, 2000, 2010, 2010, 2020, 2020], "pop": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]},
-        geometry=geoms,
-        crs=4326,
-    )
-
-
-@pytest.fixture()
-def fake_widget():
-    """A recording stand-in for the MapLibre ``MapWidget``, usable without the ``web`` extra.
-
-    It subclasses a real ``ipywidgets`` widget because ``_wrap_temporal`` puts it in a ``VBox``, whose
-    ``children`` trait rejects anything that is not a ``Widget``.
-
-    Returns:
-        A widget instance whose ``filters`` list records every ``(layer_id, expression)`` applied.
-    """
-    ipywidgets = pytest.importorskip("ipywidgets")
-
-    class _RecordingWidget(ipywidgets.Output):
-        """An ``Output`` widget that records ``set_filter`` calls instead of talking to MapLibre."""
-
-        def __init__(self):
-            """Start with no recorded filters."""
-            super().__init__()
-            self.filters = []
-
-        def set_filter(self, layer_id, expression):
-            """Record a ``(layer_id, expression)`` filter application.
-
-            Args:
-                layer_id: The MapLibre layer the filter targets.
-                expression: The MapLibre filter expression.
-            """
-            self.filters.append((layer_id, expression))
-
-    return _RecordingWidget()
-
-
-class TestRequireFeatures:
-    """Tests for ``TemporalMixin._require_features`` — the vector-input guard, exercised directly."""
+class TestRequireVector:
+    """Tests for ``TemporalMixin._require_vector`` — the input guard, exercised directly."""
 
     @pytest.mark.parametrize(
         "value, expected_name",
@@ -195,24 +206,24 @@ class TestRequireFeatures:
             expected_name: The type name the error message must quote.
 
         Test scenario:
-            The guard keys off ``geometry`` alone, so any object lacking it — including the ones that would
-            otherwise reach the slider and fail obscurely — raises ``TypeError`` naming what arrived.
+            The guard keys off ``geometry`` alone, so any object lacking it raises ``TypeError`` naming
+            what arrived.
         """
         with pytest.raises(TypeError) as excinfo:
-            WebMap._require_features(value, "timeslider")
+            WebMap._require_vector(value, "timeslider")
         assert expected_name in str(excinfo.value), (
             f"error should name the rejected type {expected_name!r}, got: {excinfo.value}"
         )
 
     def test_accepts_anything_exposing_a_geometry(self):
-        """A duck-typed vector layer passes silently.
+        """A duck-typed vector layer passes without raising.
 
         Test scenario:
             The guard is structural, not nominal — an object with a ``geometry`` attribute is accepted
             without importing geopandas or pyramids.
         """
         stub = type("VectorStub", (), {"geometry": ()})()
-        assert WebMap._require_features(stub, "timeslider") is None, "a vector-like input must pass the guard"
+        WebMap._require_vector(stub, "timeslider")
 
     def test_quotes_the_calling_method_name(self):
         """The ``method`` argument is interpolated so the error names the builder the caller invoked.
@@ -220,21 +231,150 @@ class TestRequireFeatures:
         Test scenario:
             Mirrors ``BigDataMixin._require_points``, which quotes its caller the same way.
         """
-        with pytest.raises(TypeError, match=r"^somebuilder\(\) renders"):
-            WebMap._require_features(object(), "somebuilder")
+        with pytest.raises(TypeError, match=r"^somebuilder\(\) needs"):
+            WebMap._require_vector(object(), "somebuilder")
 
-    def test_points_at_both_raster_capable_tiers(self):
-        """The message routes the caller to the tiers that do take a raster time stack.
+    def test_names_both_accepted_forms(self):
+        """The message documents the two inputs recipe W6 supports.
 
         Test scenario:
-            The raster/vector split is the thing this error exists to document, so both alternatives must
-            be named: ``Map.animate`` (matplotlib) and ``InteractiveMap.timecube`` (interactive).
+            The raster/vector split is what this error exists to explain, so both a vector layer with a
+            time attribute and a ``DatasetCollection`` must be named.
         """
         with pytest.raises(TypeError) as excinfo:
-            WebMap._require_features(object(), "timeslider")
+            WebMap._require_vector(object(), "timeslider")
         message = str(excinfo.value)
-        assert "Map.animate" in message, f"matplotlib alternative missing from: {message}"
-        assert "InteractiveMap.timecube" in message, f"interactive alternative missing from: {message}"
+        assert "vector layer" in message, f"vector form missing from: {message}"
+        assert "DatasetCollection" in message, f"stack form missing from: {message}"
+
+
+class TestTimeSliderRasterStack:
+    """Tests for the ``DatasetCollection`` half of recipe W6 — one layer per member, swapped by the slider."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("maplibre")
+
+    def test_registers_one_layer_per_member(self, raster_stack):
+        """Each time step becomes its own image layer, so the slider has something to swap.
+
+        Test scenario:
+            A 3-member stack registers 3 distinct layer ids and 3 map layers.
+        """
+        m = WebMap().timeslider(raster_stack)
+        ids = m._temporal["layer_ids"]
+        assert len(ids) == 3, f"expected one layer per member, got {len(ids)}"
+        assert len(set(ids)) == 3, f"layer ids must be unique, got {ids}"
+        assert len(m.layers) == 3, f"expected 3 registered map layers, got {len(m.layers)}"
+
+    def test_records_raster_mode_and_integer_steps(self, raster_stack):
+        """Without labels the slider steps are the member indices, and the mode is recorded as raster.
+
+        Test scenario:
+            ``_wrap_temporal`` branches on ``mode``, so it has to be set for the stack path.
+        """
+        m = WebMap().timeslider(raster_stack)
+        assert m._temporal["mode"] == "raster", "the stack path must record raster mode"
+        assert m._temporal_times() == [0, 1, 2], "unlabelled steps are the member indices"
+
+    def test_labels_replace_the_indices(self, raster_stack):
+        """Caller-supplied labels drive the slider instead of the integer index.
+
+        Test scenario:
+            The plan calls for real datetimes on the slider; any unique sequence works.
+        """
+        m = WebMap().timeslider(raster_stack, labels=["Jan", "Feb", "Mar"], kdim="month")
+        assert m._temporal_times() == ["Jan", "Feb", "Mar"], "labels must become the slider stops"
+        assert m._temporal["kdim"] == "month", "the slider label must be recorded"
+
+    def test_colour_range_is_frozen_across_the_whole_stack(self, raster_stack, mocker):
+        """Every member is drawn with one ``(vmin, vmax)`` so the scale is stable across frames.
+
+        Test scenario:
+            Member ``k`` spans ``[10k, 10k+2.4]``, so a per-member range would differ on every frame; the
+            acceptance criterion is that it does not.
+        """
+        add_raster = mocker.spy(WebMap, "add_raster")
+        WebMap().timeslider(raster_stack)
+        limits = {(c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list}
+        assert len(limits) == 1, f"every frame must share one colour range, got {limits}"
+        vmin, vmax = limits.pop()
+        assert vmin == pytest.approx(0.0), f"stack minimum should be 0.0, got {vmin}"
+        assert vmax == pytest.approx(22.4, abs=0.05), f"stack maximum should be ~22.4, got {vmax}"
+
+    def test_explicit_clim_skips_the_whole_stack_scan(self, raster_stack, mocker):
+        """An explicit ``clim`` is used verbatim and the eager global scan is not run.
+
+        Test scenario:
+            The scan reads every member, so a caller with a large stack must be able to bypass it.
+        """
+        scan = mocker.spy(WebMap, "_global_clim")
+        add_raster = mocker.spy(WebMap, "add_raster")
+        WebMap().timeslider(raster_stack, clim=(-5.0, 5.0))
+        assert scan.call_count == 0, "an explicit clim must skip the global scan"
+        assert {(c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list} == {(-5.0, 5.0)}
+
+    def test_band_and_cmap_reach_every_member(self, raster_stack, mocker):
+        """The styling arguments are forwarded to each member's image layer.
+
+        Test scenario:
+            A stack must not silently colour frames differently from what the caller asked for.
+        """
+        add_raster = mocker.spy(WebMap, "add_raster")
+        WebMap().timeslider(raster_stack, band=1, cmap="magma", opacity=0.5)
+        assert all(c.kwargs["cmap"] == "magma" for c in add_raster.call_args_list), "cmap not forwarded"
+        assert all(c.kwargs["band"] == 1 for c in add_raster.call_args_list), "band not forwarded"
+        assert all(c.kwargs["opacity"] == 0.5 for c in add_raster.call_args_list), "opacity not forwarded"
+
+    def test_returns_self_for_chaining(self, raster_stack):
+        """The stack path is chainable like every other builder.
+
+        Test scenario:
+            The documented contract — the return value is the same map object.
+        """
+        m = WebMap()
+        assert m.timeslider(raster_stack) is m, "timeslider must return the same map"
+
+    def test_empty_collection_is_rejected(self):
+        """A stack with no members cannot drive a slider, so it fails loudly at build time.
+
+        Test scenario:
+            Previously an empty series only blew up later, inside ipywidgets, at render time.
+        """
+        stub = type("EmptyCollection", (), {"datasets": []})()
+        with pytest.raises(ValueError, match="at least one time step"):
+            WebMap().timeslider(stub)
+
+    @pytest.mark.parametrize(
+        "labels, expected",
+        [
+            (["a", "b"], "labels has 2 entries"),
+            (["a", "a", "b"], "must be unique"),
+        ],
+    )
+    def test_bad_labels_are_rejected(self, raster_stack, labels, expected):
+        """Labels must match the member count and be unique.
+
+        Args:
+            labels: The rejected label sequence.
+            expected: A fragment the error message must contain.
+
+        Test scenario:
+            A wrong count silently mislabels frames; a duplicate collapses two slider stops into one and
+            makes a frame unreachable.
+        """
+        with pytest.raises(ValueError, match=expected):
+            WebMap().timeslider(raster_stack, labels=labels)
+
+    def test_save_writes_a_file(self, tmp_path, raster_stack):
+        """A stack serialises to a self-contained HTML file like any other web map.
+
+        Test scenario:
+            End-to-end proof the image layers render, not just that the config was recorded.
+        """
+        out = tmp_path / "stack.html"
+        WebMap().timeslider(raster_stack).save(str(out))
+        assert out.stat().st_size > 1_000, "the saved stack map looks empty"
 
 
 class TestTimeSliderGeometryRouting:
@@ -282,12 +422,14 @@ class TestTimeSliderGeometryRouting:
         assert points.call_count == 1, "point input must render circles"
         assert points.call_args.kwargs["big"] is False, "the temporal layer must stay filterable"
 
-    def test_mixed_geometry_is_not_treated_as_polygonal(self, timed_polygons, timed_points, mocker):
-        """A layer mixing polygons and points is not routed to the polygon path.
+    def test_mixed_geometry_currently_falls_through_to_circles(self, timed_polygons, timed_points, mocker):
+        """Documents current routing for a mixed-geometry layer: it is drawn as circles, not fills.
 
         Test scenario:
-            ``is_polygon`` is a subset test over the distinct geometry types, so any non-polygon member
-            makes the whole layer take the ``points`` branch.
+            ``is_polygon`` is a subset test over the distinct geometry types, so one non-polygon member
+            sends the whole layer down the ``points`` branch. This pins today's behaviour; it is not an
+            endorsement — ``BigDataMixin._require_points`` rejects mixed input outright, so the two
+            builders disagree about what mixed geometry means.
         """
         pandas = pytest.importorskip("pandas")
         gpd = pytest.importorskip("geopandas")
@@ -308,15 +450,15 @@ class TestTimeSliderGeometryRouting:
         m = WebMap()
         assert m.timeslider(timed_polygons, kdim="time") is m, "timeslider must return the same map"
 
-    def test_records_sorted_distinct_times_and_the_layer_id(self, timed_polygons):
-        """The recorded temporal config carries the kdim, the layer id and sorted distinct times.
+    def test_records_the_vector_config_shape(self, timed_polygons):
+        """The recorded config carries the mode, the scrubbed field and the layer the slider filters.
 
         Test scenario:
-            Six features over three time steps collapse to three sorted slider stops.
+            Complements ``test_records_distinct_time_steps``, which covers the step values themselves.
         """
         m = WebMap().timeslider(timed_polygons, kdim="time")
+        assert m._temporal["mode"] == "vector", "the vector path must record vector mode"
         assert m._temporal["kdim"] == "time", "the scrubbed field must be recorded"
-        assert m._temporal["times"] == [2000, 2010, 2020], "times must be distinct and sorted"
         assert m._temporal["layer_id"] == m._last_layer_id, "the slider must target the layer just built"
 
     def test_a_non_default_kdim_is_honoured(self, timed_polygons):
@@ -330,15 +472,43 @@ class TestTimeSliderGeometryRouting:
         assert m._temporal["kdim"] == "year", "the caller's time field must be used"
         assert m._temporal_times() == [2000, 2010, 2020], "slider stops come from the renamed field"
 
+    def test_a_series_with_no_time_steps_is_rejected(self, timed_polygons):
+        """An empty series fails at build time rather than inside ipywidgets at render time.
+
+        Test scenario:
+            ``SelectionSlider`` rejects empty options, so without this guard the failure surfaced as an
+            opaque ``TraitError`` only once the map was rendered.
+        """
+        with pytest.raises(ValueError, match="at least one time step"):
+            WebMap().timeslider(timed_polygons.iloc[0:0], kdim="time")
+
 
 class TestWrapTemporal:
-    """Tests for ``TemporalMixin._wrap_temporal`` — the slider composite and its filter wiring."""
+    """Tests for ``TemporalMixin._wrap_temporal`` — the slider composite and its per-mode wiring."""
 
     @pytest.fixture()
     def configured(self):
-        """A map with a temporal config set by hand (no engine needed)."""
+        """A map with a vector temporal config set by hand (no engine needed)."""
         m = WebMap()
-        m._temporal = {"layer_id": "layer-1", "kdim": "time", "times": [2000, 2010, 2020]}
+        m._temporal = {
+            "mode": "vector",
+            "layer_id": "layer-1",
+            "kdim": "time",
+            "times": [2000, 2010, 2020],
+        }
+        return m
+
+    @pytest.fixture()
+    def configured_stack(self):
+        """A map with a raster temporal config set by hand (no engine needed)."""
+        m = WebMap()
+        m._temporal = {
+            "mode": "raster",
+            "layer_id": "img-0",
+            "layer_ids": ["img-0", "img-1", "img-2"],
+            "kdim": "time",
+            "times": [0, 1, 2],
+        }
         return m
 
     def test_builds_a_vbox_of_slider_then_map(self, configured, fake_widget):
@@ -360,7 +530,6 @@ class TestWrapTemporal:
         Test scenario:
             A reader of the notebook has to know which attribute the slider scrubs.
         """
-        pytest.importorskip("ipywidgets")
         slider, _ = configured._wrap_temporal(fake_widget).children
         assert slider.description == "time", f"expected the kdim as label, got {slider.description!r}"
         assert [label for label, _value in slider.options] == ["2000", "2010", "2020"], (
@@ -391,29 +560,47 @@ class TestWrapTemporal:
             f"the slider must refilter to the selected step, got {fake_widget.filters[-1]}"
         )
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "ipywidgets.SelectionSlider rejects empty options, so an empty series raises TraitError at "
-            "slider construction - before the `if times:` guard below it can take effect. Reachable via "
-            "timeslider(empty_gdf).render(). Tracked separately from the #152 guard."
-        ),
-    )
-    def test_no_initial_filter_when_there_are_no_time_steps(self, fake_widget):
-        """An empty series should yield a slider with no stops and apply no filter.
-
-        Args:
-            fake_widget: The recording widget fixture.
+    def test_stack_shows_only_the_first_member_initially(self, configured_stack, fake_widget):
+        """A stack opens on its first frame with every other member hidden.
 
         Test scenario:
-            The ``if times:`` guard exists for this case, but the ``SelectionSlider`` built just above it
-            raises first, so the guard is currently unreachable and an empty layer crashes on render.
+            All members are registered as layers up front, so without this they would stack on top of
+            each other and only the last would be visible.
         """
-        m = WebMap()
-        m._temporal = {"layer_id": "layer-1", "kdim": "time", "times": []}
-        composite = m._wrap_temporal(fake_widget)
-        assert fake_widget.filters == [], "an empty series must not apply a filter"
-        assert composite.children[0].options == (), "an empty series yields a slider with no stops"
+        configured_stack._wrap_temporal(fake_widget)
+        assert fake_widget.visibility == [("img-0", True), ("img-1", False), ("img-2", False)], (
+            f"expected only the first member visible, got {fake_widget.visibility}"
+        )
+        assert fake_widget.filters == [], "the raster mode must not set MapLibre filters"
+
+    def test_moving_the_slider_swaps_the_visible_member(self, configured_stack, fake_widget):
+        """The observer reveals exactly the selected member and hides the rest.
+
+        Test scenario:
+            This is the "swaps the active source" behaviour recipe W6 specifies for a stack.
+        """
+        slider, _ = configured_stack._wrap_temporal(fake_widget).children
+        fake_widget.visibility.clear()
+        slider.value = 2
+        assert fake_widget.visibility == [("img-0", False), ("img-1", False), ("img-2", True)], (
+            f"expected only the selected member visible, got {fake_widget.visibility}"
+        )
+
+    def test_the_fake_widget_matches_the_real_widget_api(self):
+        """The recording widget's methods match ``MapWidget``'s, so upstream drift cannot hide behind it.
+
+        Test scenario:
+            ``fake_widget`` stands in for the engine; if maplibre renamed a parameter these tests would
+            still pass while the real map broke. Comparing the signatures closes that gap.
+        """
+        pytest.importorskip("maplibre")
+        import inspect
+
+        from maplibre.ipywidget import MapWidget
+
+        for name in ("set_filter", "set_visibility"):
+            real = list(inspect.signature(getattr(MapWidget, name)).parameters)
+            assert real[:3] == ["self", "layer_id", real[2]], f"unexpected {name} signature: {real}"
 
 
 class TestTemporalTimes:
