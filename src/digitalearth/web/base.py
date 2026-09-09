@@ -406,11 +406,86 @@ class WebMapBase:
             f"use timeslider() with a DatasetCollection."
         )
 
+    @staticmethod
+    def _json_safe(gdf: Any) -> Any:
+        """Return ``gdf`` with date-like columns encoded as ISO-8601 text.
+
+        MapLibre ingests a GeoDataFrame by serialising it to GeoJSON with ``json.dumps``, and GeoJSON has
+        no date type — so a ``Timestamp`` column raises ``TypeError: Object of type Timestamp is not JSON
+        serializable`` and takes the whole map with it. A timestamp is the norm for the data this tier
+        renders (alerts, detections, observations), and ``timeslider`` is hit hardest since the ``kdim`` it
+        scrubs is usually the column that breaks the serialisation — so the coercion happens here rather
+        than being left to the caller.
+
+        ISO-8601 is the encoding because it is what GeoJSON consumers expect, it still sorts
+        lexicographically — which is what keeps :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`
+        ordering its steps correctly — and MapLibre expressions can compare the strings directly. Missing
+        values become ``None`` (GeoJSON ``null``) rather than the string ``"NaT"``, which would otherwise
+        surface in a popup as though it were a real value.
+
+        Three dtypes are covered, because all three reach ``json.dumps`` and fail there: ``datetime64``
+        (tz-naive or tz-aware), ``timedelta64`` (an ISO-8601 duration, ``P1DT0H0M0S``), and an
+        ``object`` column holding ``datetime.date`` / ``datetime``/ ``timedelta`` values, which the dtype
+        checks miss entirely.
+
+        Args:
+            gdf: The display-CRS GeoDataFrame about to be handed to ``add_source``.
+
+        Returns:
+            The same object when it holds no date-like column, else a shallow copy with those columns
+            converted. The input is never mutated — it is the caller's frame.
+        """
+        import datetime as dt
+
+        import pandas as pd
+        from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
+
+        def iso_series(series: Any) -> Any:
+            """ISO-encode a date-like series as ``object`` dtype, with missing values as real ``None``.
+
+            Built element-wise into an explicit ``object`` Series rather than via ``.map`` / ``.where``:
+            pandas 3 infers a ``str`` dtype for those, whose missing marker is a float ``nan``, and
+            ``json.dumps`` writes that as the invalid JSON literal ``NaN`` instead of ``null``.
+            """
+            encoded = [
+                None if pd.isna(value) else value.isoformat()  # date/datetime/timedelta all have it
+                for value in series
+            ]
+            return pd.Series(encoded, index=series.index, dtype=object)
+
+        def converted(series: Any) -> Any:
+            """Return the ISO-encoded form of ``series``, or ``None`` when it needs no change."""
+            if is_datetime64_any_dtype(series) or is_timedelta64_dtype(series):
+                return iso_series(series)
+            if series.dtype == object:
+                present = series.dropna()
+                # datetime and Timestamp subclass date; Timedelta subclasses timedelta.
+                if len(present) and isinstance(present.iloc[0], (dt.date, dt.timedelta)):
+                    return iso_series(series)
+            return None
+
+        geometry_name = getattr(getattr(gdf, "geometry", None), "name", None)
+        changed = {}
+        for name in gdf.columns:
+            if name == geometry_name:
+                continue
+            encoded = converted(gdf[name])
+            if encoded is not None:
+                changed[name] = encoded
+        if not changed:
+            return gdf
+        out = gdf.copy()
+        for name, series in changed.items():
+            out[name] = series
+        return out
+
     def _display_gdf(self, features: Any, *, method: str) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
         The single vector choke point the point/line/polygon builders call, and so the place the tier
-        rejects non-vector input (:meth:`_require_vector`) before any reprojection is paid for. A pyramids
+        rejects non-vector input (:meth:`_require_vector`) before any reprojection is paid for, and the
+        place date-like columns are made JSON-safe (:meth:`_json_safe`) before the frame reaches
+        ``add_source``. A pyramids
         ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form ``maplibre.Map.add_source`` accepts
         for vector data), so it is reprojected through pyramids (``to_crs``) when needed and returned as-is; a
         bare GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import —
@@ -422,7 +497,8 @@ class WebMapBase:
                 new builder cannot silently inherit a generic label.
 
         Returns:
-            A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
+            A GeoDataFrame in the display CRS (EPSG:4326 by default), with date-like columns ISO-encoded,
+            ready for ``add_source``.
 
         Raises:
             TypeError: when ``features`` is not a vector layer.
@@ -431,11 +507,11 @@ class WebMapBase:
         if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
-            return features
+            return self._json_safe(features)
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
-            return features.to_crs(self.crs)
-        return features
+            return self._json_safe(features.to_crs(self.crs))
+        return self._json_safe(features)
 
     def add_underlay(self, layer: Any) -> "WebMapBase":
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.

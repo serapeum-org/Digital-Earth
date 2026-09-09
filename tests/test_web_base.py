@@ -323,3 +323,184 @@ def test_reimport_is_stable():
     """The package re-imports cleanly (no import-time engine side effects)."""
     mod = importlib.reload(importlib.import_module("digitalearth.web"))
     assert hasattr(mod, "WebMap")
+
+
+class TestJsonSafeDatetimes:
+    """Date-like columns are ISO-encoded before the frame reaches GeoJSON (issue #156)."""
+
+    @staticmethod
+    def _frame(**extra):
+        """A point frame with a tz-naive datetime column and a NaT, plus any extra columns."""
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        columns = {
+            "name": ["a", "b", "c"],
+            "score": [1.0, 2.0, 3.0],
+            "from_date": pd.to_datetime(["2026-01-01 06:00", "2026-02-01 18:30", None]),
+        }
+        columns.update(extra)
+        return gpd.GeoDataFrame(
+            columns,
+            geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
+            crs=4326,
+        )
+
+    def test_timestamps_become_iso_strings(self):
+        """A Timestamp column is replaced by ISO-8601 text, which json can serialise."""
+        import json
+
+        out = WebMap()._json_safe(self._frame())
+        assert out["from_date"].iloc[0].startswith("2026-01-01T06:00:00")
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_nat_becomes_null_not_the_string(self):
+        """A missing timestamp serialises as null rather than the text 'NaT'."""
+        out = WebMap()._json_safe(self._frame())
+        assert out["from_date"].iloc[2] is None
+
+    def test_a_missing_value_serialises_as_json_null_not_nan(self):
+        """The encoded column must be ``object`` dtype so the gap survives as JSON ``null``.
+
+        Test scenario:
+            pandas 3 infers a ``str`` dtype for ``.map`` / ``.where`` results, whose missing marker is a
+            float ``nan`` — and ``json.dumps`` writes that as the bare literal ``NaN``, which is not valid
+            JSON and is not what a GeoJSON consumer expects. Building an explicit ``object`` Series is
+            what keeps it a real ``None``.
+        """
+        import json
+
+        out = WebMap()._json_safe(self._frame())
+        assert out["from_date"].dtype == object, f"encoded column must stay object, got {out['from_date'].dtype}"
+        payload = json.dumps(out.drop(columns="geometry").to_dict(orient="records"))
+        assert "null" in payload, f"the missing timestamp did not become null: {payload}"
+        assert "NaN" not in payload, f"invalid JSON NaN leaked into the payload: {payload}"
+
+    def test_iso_text_still_sorts_chronologically(self):
+        """The encoding keeps timeslider's ordering valid — lexicographic == chronological."""
+        out = WebMap()._json_safe(self._frame())
+        stamps = [s for s in out["from_date"] if s is not None]
+        assert stamps == sorted(stamps)
+
+    def test_frames_without_datetimes_are_passed_through(self):
+        """No date-like column means no copy — the caller's frame is returned as-is."""
+        frame = self._frame().drop(columns="from_date")
+        assert WebMap()._json_safe(frame) is frame
+
+    def test_the_callers_frame_is_not_mutated(self):
+        """Coercion happens on a copy; the frame the caller still holds keeps its dtype."""
+        import pandas as pd
+
+        frame = self._frame()
+        WebMap()._json_safe(frame)
+        assert pd.api.types.is_datetime64_any_dtype(frame["from_date"])
+
+    def test_timezone_aware_columns_keep_their_offset(self):
+        """A tz-aware column encodes with its UTC offset, not silently as naive local time."""
+        import pandas as pd
+
+        frame = self._frame()
+        frame["from_date"] = frame["from_date"].dt.tz_localize("UTC")
+        out = WebMap()._json_safe(frame)
+        assert out["from_date"].iloc[0] == "2026-01-01T06:00:00+00:00", (
+            f"expected a UTC offset in the encoding, got {out['from_date'].iloc[0]!r}"
+        )
+
+    def test_object_columns_of_dates_are_encoded_too(self):
+        """A column of ``datetime.date`` objects has dtype ``object``, so the dtype checks miss it.
+
+        It still fails ``json.dumps`` with "Object of type date is not JSON serializable", so it has to
+        be covered — the original fix for this issue keyed only on ``is_datetime64_any_dtype``.
+        """
+        import datetime as dt
+        import json
+
+        frame = self._frame(day=[dt.date(2026, 1, 1), dt.date(2026, 2, 1), None])
+        out = WebMap()._json_safe(frame)
+        assert out["day"].iloc[0] == "2026-01-01", f"date not ISO-encoded: {out['day'].iloc[0]!r}"
+        assert out["day"].iloc[2] is None, "a missing date must become null"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_timedelta_columns_become_iso_durations(self):
+        """``timedelta64`` also fails json.dumps; it encodes as an ISO-8601 duration."""
+        import json
+
+        import pandas as pd
+
+        frame = self._frame(age=pd.to_timedelta([1, 2, None], unit="D"))
+        out = WebMap()._json_safe(frame)
+        assert out["age"].iloc[0] == "P1DT0H0M0S", f"unexpected duration: {out['age'].iloc[0]!r}"
+        assert out["age"].iloc[2] is None, "a missing duration must become null"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_non_date_object_columns_are_left_alone(self):
+        """A plain object column (strings) must not be touched by the date encoding."""
+        frame = self._frame(label=["x", "y", "z"])
+        out = WebMap()._json_safe(frame)
+        assert list(out["label"]) == ["x", "y", "z"], "a string column was altered"
+
+    def test_the_geometry_column_is_never_encoded(self):
+        """Geometry is what MapLibre actually needs; it must survive untouched."""
+        frame = self._frame()
+        out = WebMap()._json_safe(frame)
+        assert out.geometry.equals(frame.geometry), "geometry was altered by the encoding"
+
+
+class TestDatetimeFramesReachTheMap:
+    """End-to-end: a dated frame now renders and saves through every vector builder (issue #156)."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("maplibre")
+
+    @pytest.fixture()
+    def dated_points(self):
+        """An event-feed-shaped point layer: a value column and a datetime column."""
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import Point
+
+        return gpd.GeoDataFrame(
+            {"score": [1.0, 2.0], "from_date": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        )
+
+    @pytest.mark.parametrize("method, kwargs", [
+        ("points", {"column": "score"}),
+        ("heatmap", {}),
+        ("cluster", {}),
+    ])
+    def test_point_builders_save_a_dated_frame(self, tmp_path, dated_points, method, kwargs):
+        """Each point builder serialises a datetime column instead of raising.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+            dated_points: The dated point layer.
+            method: The builder under test.
+            kwargs: Extra required arguments for that builder.
+
+        Test scenario:
+            Every one of these previously died on
+            ``TypeError: Object of type Timestamp is not JSON serializable``.
+        """
+        out = tmp_path / f"{method}.html"
+        getattr(WebMap(), method)(dated_points, **kwargs).save(str(out))
+        assert out.stat().st_size > 1_000, f"{method} wrote an empty page"
+
+    def test_timeslider_scrubs_the_datetime_column_it_encoded(self, tmp_path, dated_points):
+        """The slider still orders its steps after the column becomes ISO text.
+
+        Test scenario:
+            timeslider is the builder this bug hit hardest — the kdim it scrubs is usually the very
+            column that broke serialisation. The steps must stay in chronological order, which is why
+            ISO-8601 (lexicographically sortable) is the right encoding.
+        """
+        m = WebMap().timeslider(dated_points, kdim="from_date")
+        steps = m._temporal_times()
+        assert steps == sorted(steps), f"slider steps lost their order: {steps}"
+        assert all(isinstance(s, str) for s in steps), f"steps should be ISO text, got {steps}"
+        out = tmp_path / "slider.html"
+        m.save(str(out))
+        assert out.stat().st_size > 1_000, "the saved slider page looks empty"
