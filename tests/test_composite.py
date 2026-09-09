@@ -134,3 +134,33 @@ def test_hsv_composite_accepts_frozen_limits(rgb_dataset):
     m = Map(crs=rgb_dataset.epsg)
     m.hsv_composite(rgb_dataset, limits=[(0.0, 1e6)] * 3)
     assert len(m.ax.images) == 1, "hsv_composite should render with explicit limits"
+
+
+def test_channel_limits_all_nodata_channel_is_nan_not_a_warning():
+    """A channel with no finite cell yields (nan, nan) quietly — no All-NaN RuntimeWarning escapes."""
+    import warnings
+
+    stack = np.dstack([np.arange(100.0).reshape(10, 10), np.full((10, 10), np.nan), np.ones((10, 10))])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        limits = channel_limits(stack)
+    assert np.isnan(limits[1]).all(), f"an all-nodata channel should report (nan, nan), got {limits[1]}"
+    assert np.isfinite(limits[0]).all(), "a live channel next to a dead one must keep real bounds"
+
+
+def test_channel_limits_ignores_infinities():
+    """Infinities are dropped alongside NaN, so one inf cell cannot become the white point."""
+    band = np.arange(100.0).reshape(10, 10).copy()
+    band[0, 0] = np.inf
+    limits = channel_limits(np.dstack([band, band, band]))
+    assert np.isfinite(limits[0]).all(), f"inf leaked into the bounds: {limits[0]}"
+    assert limits[0][1] < 100.0, f"the white point should come from the finite values, got {limits[0][1]}"
+
+
+def test_stretch_to_unit_survives_non_finite_limits():
+    """Non-finite limits fall back instead of dividing by nan, leaving live channels usable."""
+    stack = np.dstack([np.arange(100.0).reshape(10, 10), np.full((10, 10), np.nan), np.ones((10, 10))])
+    out = _stretch_to_unit(stack, [(np.nan, np.nan)] * 3)
+    assert np.isnan(out[..., 1]).all(), "an all-nodata channel stays NaN (it renders transparent)"
+    assert np.isfinite(out[..., 0]).all(), "a live channel must not be poisoned by the fallback"
+    assert out[..., 0].min() >= 0.0 and out[..., 0].max() <= 1.0, "the fallback must still clip into [0, 1]"

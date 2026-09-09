@@ -8,6 +8,7 @@ from typing import Any, List, Optional, Sequence, Tuple
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
+from digitalearth.base.arrays import finite
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
@@ -28,15 +29,24 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
     whole animation stack and passing them back in freezes the stretch, so a composite time-lapse does not
     pulse as each frame re-derives its own black and white point.
 
+    A channel with no finite cell at all (fully nodata, or all ``inf``) has no percentile to take and
+    yields ``(nan, nan)`` rather than a warning; callers treat that as "this channel contributes no
+    bound" — see :meth:`~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits`, which
+    drops it, and :func:`_stretch_to_unit`, which falls back rather than dividing by it.
+
     Args:
         stack: An ``(rows, cols, n)`` channel stack (nodata already NaN).
 
     Returns:
-        One ``(lo, hi)`` tuple per channel, in channel order.
+        One ``(lo, hi)`` tuple per channel, in channel order; ``(nan, nan)`` for an all-nodata channel.
     """
     bounds: List[Tuple[float, float]] = []
     for index in range(stack.shape[2]):
-        lo, hi = np.nanpercentile(stack[..., index].astype("float64"), _STRETCH_PERCENTILES)
+        values = finite(stack[..., index])  # drops NaN *and* inf, which nanpercentile would keep
+        if values.size == 0:
+            bounds.append((float("nan"), float("nan")))
+            continue
+        lo, hi = np.percentile(values, _STRETCH_PERCENTILES)
         bounds.append((float(lo), float(hi)))
     return bounds
 
@@ -55,11 +65,14 @@ def _stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) 
         The stretched stack: same shape, ``float64``, clipped into ``[0, 1]``.
     """
     out = np.empty(stack.shape, dtype="float64")
+    derived = channel_limits(stack) if limits is None else limits
     for i in range(stack.shape[2]):
         band = stack[..., i].astype("float64")
-        lo, hi = np.nanpercentile(band, _STRETCH_PERCENTILES) if limits is None else limits[i]
-        if hi <= lo:
-            hi = lo + 1.0
+        lo, hi = derived[i]
+        if not (np.isfinite(lo) and np.isfinite(hi)):
+            lo, hi = 0.0, 1.0  # an all-nodata channel: stretch to anything, its cells stay NaN
+        elif hi <= lo:
+            hi = lo + 1.0  # a constant channel: widen rather than divide by zero
         out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
     return out
 

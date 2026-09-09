@@ -60,6 +60,27 @@ def _rgb_field(shift: float = 0.0, exposure: float = 1.0, ny: int = 60, nx: int 
     )
 
 
+def _rgb_field_with_dead_channel(shift: float = 0.0, ny: int = 60, nx: int = 120) -> Dataset:
+    """A 3-band raster whose **second** channel is entirely nodata.
+
+    Args:
+        shift: Phase shift of the pattern in the two live channels.
+        ny: Row count.
+        nx: Column count.
+
+    Returns:
+        Dataset: a 3-band raster with channel 2 fully nodata (-9999).
+    """
+    yy, xx = np.mgrid[0:ny, 0:nx]
+    base = 0.4 + 0.3 * np.sin((xx + shift) / 13.0) + 0.2 * np.cos(yy / 9.0)
+    bands = np.stack([base * 3000.0, np.full_like(base, -9999.0), base * 2200.0])
+    return Dataset.from_array(
+        arr=bands.astype("float32"),
+        geo_ref=GeoReference(geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326),
+        no_data_value=-9999.0,
+    )
+
+
 @pytest.fixture
 def rgb_stack():
     """A 3-frame stack of 3-band rasters — a true-colour time-lapse.
@@ -328,6 +349,75 @@ class TestAnimateComposites:
         cap = anim_mod._CLIM_SCAN_CAP
         assert spy.call_count <= cap, f"scanned {spy.call_count} frames, cap is {cap}"
         assert len(limits) == 3, "the capped scan must still yield one (lo, hi) per channel"
+
+
+    @pytest.mark.parametrize("kind", ["rgb_composite", "hsv_composite"])
+    def test_colorbar_refused_for_either_composite(self, rgb_stack, kind):
+        """Both composite kinds refuse a colorbar, not just the RGB one."""
+        m = Map(crs=4326)
+        with pytest.raises(ValueError, match=f"{kind}"):
+            m.animate(rgb_stack, kind=kind, colorbar=True)
+
+    @pytest.mark.parametrize("position", ["first", "last"])
+    def test_one_dead_frame_does_not_poison_the_channel(self, position):
+        """An all-nodata frame contributes no bound, wherever it sits in the stack.
+
+        Test scenario:
+            One frame's second channel is entirely nodata, placed either first or last in the stack. Its
+            (nan, nan) must be dropped rather than folded in: min/max against nan is order-dependent, so a
+            dead *first* frame would otherwise return (nan, nan) and blank that channel for every frame of
+            the animation, while a dead *last* frame would happen to survive. Both orders must agree with
+            the live frame's own bounds.
+        """
+        live = _rgb_field(shift=5.0)
+        dead = _rgb_field_with_dead_channel(shift=5.0)
+        stack = [dead, live] if position == "first" else [live, dead]
+        frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
+        lo, hi = frozen[1]
+        assert np.isfinite(lo) and np.isfinite(hi), f"a dead frame poisoned channel 2: {frozen[1]}"
+        assert (lo, hi) == pytest.approx(channel_limits(get_stack(live, (1, 2, 3)))[1]), (
+            "the surviving frame's own bounds should be the frozen ones"
+        )
+
+    def test_channel_dead_in_every_frame_falls_back(self):
+        """A channel with no finite cell anywhere falls back to (0, 1), like _stack_clim's empty case."""
+        stack = [_rgb_field_with_dead_channel(shift=s) for s in (0.0, 10.0)]
+        frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
+        assert frozen[1] == (0.0, 1.0), f"an entirely dead channel should fall back to (0, 1): {frozen[1]}"
+        assert all(np.isfinite(v) for pair in frozen for v in pair), f"no bound may be non-finite: {frozen}"
+
+    def test_dead_channel_still_renders(self, tmp_path):
+        """A stack with one dead channel still animates instead of failing or blanking every frame."""
+        stack = [_rgb_field_with_dead_channel(shift=0.0), _rgb_field(shift=10.0)]
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(stack, kind="rgb_composite", fps=2)
+        out = tmp_path / "dead.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, "an animation with a dead channel should still render"
+        rendered = np.asarray(m.ax.images[-1].get_array(), dtype="float64")
+        assert np.isfinite(rendered[..., 0]).any(), "the live channels must not be blanked by the dead one"
+
+    def test_mask_nodata_is_threaded_into_the_frozen_limits(self):
+        """mask_nodata=False reaches the stack scan, so the nodata sentinel widens the frozen limits.
+
+        Test scenario:
+            A frame carrying real -9999 nodata cells. Masked (the default) those cells are excluded and the
+            low bound sits in the data range; unmasked the sentinel participates, dragging the low bound far
+            below it — proving the flag is forwarded rather than defaulted.
+        """
+        stack = [_rgb_field_with_dead_channel(shift=0.0), _rgb_field(shift=10.0)]
+        masked, unmasked = {}, {"mask_nodata": False}
+        Map(crs=4326)._prime_animation(stack, masked, kind="rgb_composite", colorbar=False, cbar_label=None)
+        Map(crs=4326)._prime_animation(stack, unmasked, kind="rgb_composite", colorbar=False, cbar_label=None)
+        assert unmasked["limits"][1][0] < masked["limits"][1][0], (
+            f"mask_nodata=False should widen the low bound: {unmasked['limits'][1]} vs {masked['limits'][1]}"
+        )
+
+    def test_two_band_composite_limits(self):
+        """The scan follows the bands it is given — two bands yield two channel bounds, not three."""
+        stack = [_rgb_field(shift=s) for s in (0.0, 10.0)]
+        frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2))
+        assert len(frozen) == 2, f"expected one bound per requested band, got {frozen!r}"
 
     def test_frozen_stretch_keeps_a_real_brightness_change(self, tmp_path):
         """One frozen stretch preserves a genuine brightness drop that a per-frame stretch would erase.

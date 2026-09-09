@@ -4,6 +4,7 @@ Drives per-frame redraws on the shared axes as a matplotlib ``FuncAnimation``, w
 treatment so colours do not flicker between frames: a scalar field gets one ``vmin``/``vmax`` (and an
 optional single static colorbar), an RGB/HSV composite gets one frozen per-channel contrast stretch.
 """
+from math import isfinite
 from typing import Any, List, Optional, Sequence, Tuple
 
 from matplotlib.animation import FuncAnimation
@@ -163,6 +164,11 @@ class AnimationMixin:
         values but does not move the percentiles enough to matter, and skipping it keeps a second warp of the
         whole stack off the critical path. At most :data:`_CLIM_SCAN_CAP` evenly-spaced frames are scanned.
 
+        A frame whose channel is entirely nodata contributes no bound for that channel rather than a ``nan``
+        that would swallow the others (``min``/``max`` against ``nan`` is order-dependent, so a dead **first**
+        frame would otherwise blank the channel for the whole animation). A channel dead in *every* scanned
+        frame falls back to ``(0, 1)`` — the same fallback :meth:`_stack_clim` uses for an all-nodata stack.
+
         Args:
             datasets: The animation stack.
             bands: The 1-based band indices the composite maps to its channels.
@@ -175,10 +181,12 @@ class AnimationMixin:
         seq = list(datasets)
         stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
         scanned = [channel_limits(get_stack(ds, bands, mask=mask_nodata)) for ds in seq[::stride]]
-        return [
-            (min(frame[i][0] for frame in scanned), max(frame[i][1] for frame in scanned))
-            for i in range(len(scanned[0]))
-        ]
+        limits: List[Tuple[float, float]] = []
+        for index in range(len(scanned[0])):
+            lows = [frame[index][0] for frame in scanned if isfinite(frame[index][0])]
+            highs = [frame[index][1] for frame in scanned if isfinite(frame[index][1])]
+            limits.append((min(lows), max(highs)) if lows and highs else (0.0, 1.0))
+        return limits
 
     def _animation_colorbar(self, opts: dict, label: Optional[str]) -> Any:
         """Add one static colorbar for an animation from the already-resolved ``cmap``/``vmin``/``vmax``.
