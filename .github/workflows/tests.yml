@@ -205,7 +205,7 @@ jobs:
         # thing a user gets from PyPI.
         run: |
           uv build --wheel --out-dir dist
-          pip install --no-deps --no-index dist/*.whl
+          pip install --no-deps --no-index --only-binary :all: dist/*.whl
 
       - name: Export a scene through the resolved stack
         # `export_html` is the whole point: it is the only call that needs the trame/vtk.js stack, and the one
