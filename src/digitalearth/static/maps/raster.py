@@ -39,6 +39,38 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
 
     Returns:
         One ``(lo, hi)`` tuple per channel, in channel order; ``(nan, nan)`` for an all-nodata channel.
+
+    Examples:
+        - Bound each channel of a stack whose channels are scaled copies of one another:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import channel_limits
+            >>> stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])
+            >>> limits = channel_limits(stack)
+            >>> len(limits)
+            3
+            >>> [round(hi) for _, hi in limits]
+            [97, 194, 291]
+
+            ```
+        - A channel with no finite cell reports ``(nan, nan)`` rather than raising or warning, and
+          leaves its neighbours' bounds intact:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.maps.raster import channel_limits
+            >>> stack = np.dstack([np.arange(16.0).reshape(4, 4), np.full((4, 4), np.nan), np.ones((4, 4))])
+            >>> limits = channel_limits(stack)
+            >>> limits[1]
+            (nan, nan)
+            >>> round(limits[0][0], 1)
+            0.3
+
+            ```
+
+    See Also:
+        _stretch_to_unit: Applies these bounds (or derives its own when none are given).
+        digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits: Combines them across a
+            whole animation stack so every frame shares one stretch.
     """
     bounds: List[Tuple[float, float]] = []
     for index in range(stack.shape[2]):
@@ -228,6 +260,28 @@ class RasterMixin:
                 1
 
                 ```
+            - Frozen ``limits`` replace the per-call stretch: a white point far above the data renders it
+                black, which is what holds a sequence of frames on one scale:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> rgb = Dataset.from_array(arr=np.stack([base, base, base]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
+                >>> m = Map(crs=rgb.epsg)
+                >>> _ = m.rgb_composite(rgb, limits=[(0.0, 1e6)] * 3)
+                >>> round(float(np.nanmax(m.ax.images[-1].get_array())), 3)
+                0.0
+
+                ```
+
+        See Also:
+            hsv_composite: The same three bands read as hue/saturation/value instead.
+            channel_limits: Derives the ``limits`` this accepts.
         """
         ds = self._reproject(dataset)
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
@@ -256,6 +310,46 @@ class RasterMixin:
 
         Returns:
             The image mappable (registered as a Scene layer).
+
+        Examples:
+            - Read three bands as hue/saturation/value and render the resulting RGB image:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> hsv = Dataset.from_array(arr=np.stack([base, base * 0.5, base * 0.25]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
+                >>> m = Map(crs=hsv.epsg)
+                >>> _ = m.hsv_composite(hsv)
+                >>> len(m.ax.images)
+                1
+
+                ```
+            - The rendered image is band-last RGB, one value per channel per cell:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> hsv = Dataset.from_array(arr=np.stack([base, base * 0.5, base * 0.25]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
+                >>> m = Map(crs=hsv.epsg)
+                >>> _ = m.hsv_composite(hsv)
+                >>> m.ax.images[-1].get_array().shape[-1]
+                3
+
+                ```
+
+        See Also:
+            rgb_composite: The same three bands mapped straight to red/green/blue.
+            channel_limits: Derives the ``limits`` this accepts.
         """
         from matplotlib.colors import hsv_to_rgb
 

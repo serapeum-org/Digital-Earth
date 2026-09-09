@@ -294,6 +294,62 @@ class AnimationMixin:
         Raises:
             ValueError: if ``kind`` is not a known renderer, ``stack`` is empty, ``titles`` is given with a
                 mismatched length, or ``colorbar=True`` is combined with a composite ``kind``.
+
+        Examples:
+            - Animate a two-frame scalar stack; the animation is lazy, so no frame is drawn yet:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> stack = [Dataset.from_array(arr=np.full((60, 120), value, "float32"), geo_ref=geo)
+                ...          for value in (1.0, 2.0)]
+                >>> m = Map(crs=4326)
+                >>> anim = m.animate(stack, fps=2)
+                >>> len(list(anim.new_frame_seq()))
+                2
+
+                ```
+            - A true-colour stack animates as a composite, on one stretch frozen over the whole stack:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), value, "float32")] * 3),
+                ...                             geo_ref=geo) for value in (1.0, 2.0)]
+                >>> m = Map(crs=4326)
+                >>> anim = m.animate(stack, kind="rgb_composite", fps=2)
+                >>> len(list(anim.new_frame_seq()))
+                2
+
+                ```
+            - A composite has no scalar mappable, so asking for a colorbar is refused rather than
+                answered with a meaningless bar:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> stack = [Dataset.from_array(arr=np.stack([np.full((60, 120), 1.0, "float32")] * 3),
+                ...                             geo_ref=geo)]
+                >>> Map(crs=4326).animate(stack, kind="rgb_composite",
+                ...                       colorbar=True)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: colorbar=True is not supported for a 'rgb_composite' animation: ...
+
+                ```
+
+        See Also:
+            rotate: Spin one field on an orthographic globe instead of stepping through a stack.
+            save_animation: Write the returned animation to an mp4/GIF.
         """
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
@@ -347,6 +403,44 @@ class AnimationMixin:
         Raises:
             ValueError: if ``n_frames`` is less than 1, ``kind`` is not a known renderer, or
                 ``colorbar=True`` is combined with a composite ``kind``.
+
+        Examples:
+            - Spin one field over four frames; the map is forced into globe mode:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> field = Dataset.from_array(arr=np.full((60, 120), 1.0, "float32"), geo_ref=geo)
+                >>> m = Map(crs=4326)
+                >>> anim = m.rotate(field, n_frames=4, fps=4)
+                >>> len(list(anim.new_frame_seq()))
+                4
+                >>> m.globe
+                True
+
+                ```
+            - A composite spins too, sharing animate's kind validation:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(geo=(-180.0, 3.0, 0.0, 90.0, 0.0, -3.0), epsg=4326)
+                >>> rgb = Dataset.from_array(arr=np.stack([np.full((60, 120), 1.0, "float32")] * 3),
+                ...                          geo_ref=geo)
+                >>> anim = Map(crs=4326).rotate(rgb, kind="rgb_composite", n_frames=3)
+                >>> len(list(anim.new_frame_seq()))
+                3
+
+                ```
+
+        See Also:
+            animate: Step through a stack of rasters instead of spinning one.
+            save_animation: Write the returned animation to an mp4/GIF.
         """
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
