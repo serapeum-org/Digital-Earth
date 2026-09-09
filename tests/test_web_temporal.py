@@ -68,3 +68,61 @@ class TestTimeSliderNeedsEngine:
         out = tmp_path / "temporal.html"
         WebMap().timeslider(timed_polygons, kdim="time", column="pop").save(str(out))
         assert out.stat().st_size > 1_000
+
+
+class TestTimeSliderRejectsNonVector:
+    """Raster input is turned away with an actionable ``TypeError`` instead of dying inside the guard.
+
+    A pyramids raster exposes ``columns`` as an ``int`` (the grid width in cells), so the attribute
+    membership test used to raise ``TypeError: argument of type 'int' is not iterable`` — a message with no
+    hint that ``timeslider`` is vector-only. Both raster types are covered: a ``Dataset`` reaches the check
+    through ``_display_gdf``'s reproject branch, a ``DatasetCollection`` through its fall-through.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("maplibre")
+
+    @pytest.fixture()
+    def collection(self, dataset):
+        """The sample raster wrapped as a single-member ``DatasetCollection``."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        return DatasetCollection.from_files(["examples/data/acc4000.tif"])
+
+    def test_dataset_is_rejected(self, dataset):
+        with pytest.raises(TypeError, match=r"timeslider\(\) renders a time-stepped vector layer"):
+            WebMap().timeslider(dataset)
+
+    def test_dataset_collection_is_rejected(self, collection):
+        with pytest.raises(TypeError, match=r"timeslider\(\) renders a time-stepped vector layer"):
+            WebMap().timeslider(collection)
+
+    def test_message_names_the_input_and_the_raster_capable_tiers(self, dataset):
+        """The error has to say what arrived and where a raster time stack belongs instead."""
+        with pytest.raises(TypeError) as excinfo:
+            WebMap().timeslider(dataset)
+        message = str(excinfo.value)
+        assert type(dataset).__name__ in message, "the rejected type is not named"
+        assert "Map.animate" in message, "the matplotlib alternative is not named"
+        assert "InteractiveMap.timecube" in message, "the interactive alternative is not named"
+
+    def test_guard_runs_before_the_reprojection(self, dataset, monkeypatch):
+        """A raster in another CRS must not be warped on its way to being rejected."""
+        assert dataset.epsg != 4326, "fixture must not already be in the display CRS for this to bite"
+        warps = []
+        monkeypatch.setattr(type(dataset), "to_crs", lambda self, *a, **k: warps.append(a))
+        with pytest.raises(TypeError):
+            WebMap().timeslider(dataset)
+        assert warps == [], "the raster was reprojected before being rejected"
+
+    def test_bare_array_is_rejected_too(self):
+        """Non-pyramids, non-vector input used to fall through to a misleading ``KeyError``."""
+        np = pytest.importorskip("numpy")
+        with pytest.raises(TypeError, match="ndarray"):
+            WebMap().timeslider(np.zeros((4, 5)))
+
+    def test_vector_input_still_passes_the_guard(self, timed_polygons):
+        """The guard must not disturb the supported path."""
+        m = WebMap().timeslider(timed_polygons, kdim="time", column="pop")
+        assert m._temporal_times() == [2000, 2010, 2020]

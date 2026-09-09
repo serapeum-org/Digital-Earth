@@ -17,6 +17,32 @@ from digitalearth.web.base import _require_layer_api
 class TemporalMixin:
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
+    @staticmethod
+    def _require_features(features: Any, method: str) -> None:
+        """Raise ``TypeError`` unless ``features`` is a vector layer (the only thing the slider maps).
+
+        The raster/vector split across the temporal APIs is the thing a caller is most likely to get wrong,
+        and a raster that reaches the attribute-membership test below dies inside it on an unrelated error:
+        a pyramids ``Dataset``/``DatasetCollection`` exposes ``columns`` as an ``int`` (the grid width in
+        cells), so ``kdim not in ...`` raises ``TypeError: argument of type 'int' is not iterable`` before
+        the intended ``KeyError`` can. Called *before* :meth:`_display_gdf` so a raster in another CRS is
+        not warped on its way to being rejected.
+
+        Args:
+            features: The caller's input, expected to be a pyramids ``FeatureCollection`` / GeoDataFrame.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``features`` exposes no ``geometry`` — a raster, a bare array, anything
+                non-vector — with the raster-capable tiers named in the message.
+        """
+        if not hasattr(features, "geometry"):
+            raise TypeError(
+                f"{method}() renders a time-stepped vector layer; got a "
+                f"{type(features).__name__}. For a raster time stack use the matplotlib tier "
+                f"(Map.animate) or the interactive tier (InteractiveMap.timecube)."
+            )
+
     def timeslider(
         self,
         features: Any,
@@ -47,9 +73,12 @@ class TemporalMixin:
             This map (chainable). The slider appears when the map is rendered/shown in a notebook.
 
         Raises:
+            TypeError: when ``features`` is not a vector layer (e.g. a pyramids ``Dataset`` /
+                ``DatasetCollection`` — use ``Map.animate`` or ``InteractiveMap.timecube`` for those).
             KeyError: when ``kdim`` is not a feature attribute.
         """
         _require_layer_api()
+        self._require_features(features, "timeslider")
         gdf = self._display_gdf(features)
         if kdim not in getattr(gdf, "columns", []):
             raise KeyError(f"time field {kdim!r} not found in the feature attributes")
