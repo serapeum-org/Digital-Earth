@@ -1,0 +1,15 @@
+# Revisions to skip when running `git blame`.
+#
+# Only whole-tree mechanical reformats belong here — commits that changed how the code is written without
+# changing what it does. Listing one keeps `git blame` pointing at the commit that last altered a line's
+# meaning instead of the one that re-wrapped it.
+#
+# Enable it locally with:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub applies this file automatically in its blame view. Add one full 40-character SHA per line, newest
+# last, with a comment naming what the commit did.
+
+# style: apply ruff format and import sorting across src and tests
+901ecea91970a5be1fc353475e02e515a25456da
