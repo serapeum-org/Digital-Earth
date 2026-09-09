@@ -1,10 +1,10 @@
-"""Tests for RP.11 — plugin discovery via entry points (digitalearth.plugins)."""
+"""Tests for RP.11 — plugin discovery via entry points (digitalearth.ops.plugins)."""
 
 from importlib.metadata import EntryPoint
 
 import pytest
 
-from digitalearth.plugins import GROUPS, iter_plugins, load_plugins
+from digitalearth.ops.plugins import GROUPS, iter_plugins, load_plugins
 
 
 class _FakeEP:
@@ -66,7 +66,7 @@ class TestLoadPlugins:
                 raise RuntimeError("boom")
 
         eps = [_BrokenEP(), _FakeEP("good", {"ok": True})]
-        with caplog.at_level(logging.WARNING, logger="digitalearth.plugins"):
+        with caplog.at_level(logging.WARNING, logger="digitalearth.ops.plugins"):
             loaded = load_plugins("digitalearth.styles", eps=eps)
         assert loaded == {"good": {"ok": True}}, f"only the healthy plugin should load, got {loaded}"
         assert any("broken" in r.message for r in caplog.records), "the skipped plugin should be logged"

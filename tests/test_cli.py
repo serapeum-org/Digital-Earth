@@ -1,11 +1,11 @@
-"""Tests for RP.11 — the digitalearth command line (digitalearth.cli)."""
+"""Tests for RP.11 — the digitalearth command line (digitalearth.ops.cli)."""
 
 from pathlib import Path
 
 import pytest
 from pyramids.feature import FeatureCollection
 
-from digitalearth.cli import _load, _parse_crs, _plot_kwargs, build_parser, main
+from digitalearth.ops.cli import _load, _parse_crs, _plot_kwargs, build_parser, main
 
 
 class TestParseCrs:
@@ -149,7 +149,7 @@ class TestBackend:
         """matplotlib.use must run inside a function, never at module import scope."""
         import inspect
 
-        import digitalearth.cli as climod
+        import digitalearth.ops.cli as climod
 
         for line in inspect.getsource(climod).splitlines():
             if "matplotlib.use(" in line:
@@ -157,7 +157,7 @@ class TestBackend:
 
     def test_main_forces_agg_on_invocation(self, tmp_path, dataset, mocker):
         """main() selects the Agg backend when invoked (force=True), not merely on import."""
-        spy = mocker.patch("digitalearth.cli.matplotlib.use")
+        spy = mocker.patch("digitalearth.ops.cli.matplotlib.use")
         src = tmp_path / "in.tif"
         dataset.to_file(str(src))
         rc = main(

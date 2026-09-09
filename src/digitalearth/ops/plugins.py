@@ -38,7 +38,7 @@ def iter_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> I
     Examples:
         - An unknown / unused group yields nothing:
             ```python
-            >>> from digitalearth.plugins import iter_plugins
+            >>> from digitalearth.ops.plugins import iter_plugins
             >>> list(iter_plugins("digitalearth.nonexistent"))
             []
 
@@ -46,7 +46,7 @@ def iter_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> I
         - Inspect a supplied entry point without importing its target:
             ```python
             >>> from importlib.metadata import EntryPoint
-            >>> from digitalearth.plugins import iter_plugins
+            >>> from digitalearth.ops.plugins import iter_plugins
             >>> ep = EntryPoint("demo", "my_pkg.styles:LIBRARY", "digitalearth.styles")
             >>> [e.name for e in iter_plugins("digitalearth.styles", eps=[ep])]
             ['demo']
@@ -77,7 +77,7 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
     Examples:
         - With nothing installed under the group, the result is empty:
             ```python
-            >>> from digitalearth.plugins import load_plugins
+            >>> from digitalearth.ops.plugins import load_plugins
             >>> load_plugins("digitalearth.nonexistent")
             {}
 
@@ -88,7 +88,7 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
             ...     name = "extra"
             ...     def load(self):
             ...         return {"cmap": "magma"}
-            >>> from digitalearth.plugins import load_plugins
+            >>> from digitalearth.ops.plugins import load_plugins
             >>> loaded = load_plugins("digitalearth.styles", eps=[FakeEP()])
             >>> loaded["extra"]["cmap"]
             'magma'
@@ -104,7 +104,7 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
             ...     name = "good"
             ...     def load(self):
             ...         return {"cmap": "viridis"}
-            >>> from digitalearth.plugins import load_plugins
+            >>> from digitalearth.ops.plugins import load_plugins
             >>> load_plugins("digitalearth.styles", eps=[BrokenEP(), GoodEP()])
             {'good': {'cmap': 'viridis'}}
 

@@ -4,8 +4,8 @@ Two subcommands wrap the existing API so plots can be produced from a shell or a
 
 * ``digitalearth plot INPUT [-o OUT] [options]`` — render one input via :func:`~digitalearth.api.quickmap`.
 * ``digitalearth batch INPUTS... -o OUTDIR [--html PAGE] [options]`` — render many via
-  :class:`~digitalearth.batch.Batch`, optionally collecting them into a static HTML gallery
-  (:func:`~digitalearth.browser.gallery`).
+  :class:`~digitalearth.ops.batch.Batch`, optionally collecting them into a static HTML gallery
+  (:func:`~digitalearth.ops.browser.gallery`).
 
 The CLI always renders headless (matplotlib ``Agg``); human-facing progress goes to ``stderr`` so any piped
 ``stdout`` stays clean. This is earthkit-plots' ``cli/`` entry point, scoped to Digital-Earth's API.
@@ -19,8 +19,8 @@ import matplotlib
 from pyramids.dataset import Dataset
 
 from digitalearth.api import quickmap
-from digitalearth.batch import Batch
-from digitalearth.browser import gallery
+from digitalearth.ops.batch import Batch
+from digitalearth.ops.browser import gallery
 
 __all__ = ["build_parser", "main"]
 
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     Examples:
         - Parse a ``plot`` invocation and read back the options:
             ```python
-            >>> from digitalearth.cli import build_parser
+            >>> from digitalearth.ops.cli import build_parser
             >>> args = build_parser().parse_args(["plot", "in.tif", "-o", "out.png", "--kind", "contourf"])
             >>> args.input, args.output, args.kind, args.crs
             ('in.tif', 'out.png', 'contourf', 3857)
@@ -96,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
             ```
         - Parse a ``batch`` invocation with a gallery page and a non-EPSG CRS:
             ```python
-            >>> from digitalearth.cli import build_parser
+            >>> from digitalearth.ops.cli import build_parser
             >>> args = build_parser().parse_args(
             ...     ["batch", "a.tif", "b.tif", "-o", "out", "--html", "g.html", "--no-colorbar"])
             >>> args.inputs, args.outdir, args.html, args.colorbar
@@ -157,7 +157,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ```python
             >>> import tempfile, os
             >>> from pyramids.dataset import Dataset
-            >>> from digitalearth.cli import main
+            >>> from digitalearth.ops.cli import main
             >>> epsg = Dataset.read_file("examples/data/acc4000.tif").epsg
             >>> out = os.path.join(tempfile.mkdtemp(), "acc.png")
             >>> main(["plot", "examples/data/acc4000.tif", "-o", out, "--crs", str(epsg), "--no-colorbar"])

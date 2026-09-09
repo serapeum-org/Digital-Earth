@@ -1,10 +1,10 @@
-"""Tests for RP.11 — Batch rendering driver (digitalearth.batch)."""
+"""Tests for RP.11 — Batch rendering driver (digitalearth.ops.batch)."""
 
 from pathlib import Path
 
 import pytest
 
-from digitalearth.batch import Batch, _default_namer
+from digitalearth.ops.batch import Batch, _default_namer
 from digitalearth.static import Map
 
 

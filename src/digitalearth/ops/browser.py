@@ -2,7 +2,7 @@
 
 This is the "browser frame" of earthkit-plots, deliberately kept **static**: there is no server and no
 interactive backend (the interactive tier, RP.9, stays deferred). Figures are PNGs — typically produced by
-:class:`~digitalearth.batch.Batch` — and :func:`gallery` base64-embeds them into one standalone ``.html``
+:class:`~digitalearth.ops.batch.Batch` — and :func:`gallery` base64-embeds them into one standalone ``.html``
 file with a responsive CSS grid. The file has no external assets, so it opens in any browser and can be
 emailed or archived as-is.
 """
@@ -83,7 +83,7 @@ def gallery(
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
             >>> from pathlib import Path
-            >>> from digitalearth.browser import gallery
+            >>> from digitalearth.ops.browser import gallery
             >>> d = Path(tempfile.mkdtemp())
             >>> fig = plt.figure(); _ = fig.subplots().plot([0, 1], [1, 0]); img = d / "a.png"
             >>> fig.savefig(img); plt.close(fig)
@@ -101,7 +101,7 @@ def gallery(
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
             >>> from pathlib import Path
-            >>> from digitalearth.browser import gallery
+            >>> from digitalearth.ops.browser import gallery
             >>> d = Path(tempfile.mkdtemp())
             >>> fig = plt.figure(); _ = fig.subplots().plot([0, 1], [1, 0]); img = d / "a.png"
             >>> fig.savefig(img); plt.close(fig)
@@ -112,7 +112,7 @@ def gallery(
             ```
 
     See Also:
-        digitalearth.batch.Batch: produces the PNG series this page typically embeds.
+        digitalearth.ops.batch.Batch: produces the PNG series this page typically embeds.
     """
     images = [Path(p) for p in images]
     if captions is not None and len(captions) != len(images):

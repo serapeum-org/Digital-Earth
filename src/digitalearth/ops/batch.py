@@ -47,7 +47,7 @@ class Batch:
     Examples:
         - Configure a batch and read back its shared options:
             ```python
-            >>> from digitalearth.batch import Batch
+            >>> from digitalearth.ops.batch import Batch
             >>> b = Batch(crs=3857, kind="contourf", ext="png")
             >>> b.ext
             'png'
@@ -80,7 +80,7 @@ class Batch:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.dataset import Dataset
-                >>> from digitalearth.batch import Batch
+                >>> from digitalearth.ops.batch import Batch
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> m = Batch(colorbar=False).render_one(ds, crs=ds.epsg)
                 >>> len(m.layers)
@@ -122,7 +122,7 @@ class Batch:
                 >>> import matplotlib, tempfile, os
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.dataset import Dataset
-                >>> from digitalearth.batch import Batch
+                >>> from digitalearth.ops.batch import Batch
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> out = tempfile.mkdtemp()
                 >>> paths = Batch(crs=ds.epsg, colorbar=False).run([ds], out, namer=lambda item, i: "acc")

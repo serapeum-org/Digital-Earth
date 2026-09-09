@@ -1,9 +1,9 @@
-"""Tests for RP.11 — static HTML gallery (digitalearth.browser)."""
+"""Tests for RP.11 — static HTML gallery (digitalearth.ops.browser)."""
 
 import matplotlib.pyplot as plt
 import pytest
 
-from digitalearth.browser import gallery
+from digitalearth.ops.browser import gallery
 
 
 @pytest.fixture

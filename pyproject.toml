@@ -80,7 +80,7 @@ web = [
 ]
 
 [project.scripts]
-digitalearth = "digitalearth.cli:main"
+digitalearth = "digitalearth.ops.cli:main"
 
 [dependency-groups]
 dev = [

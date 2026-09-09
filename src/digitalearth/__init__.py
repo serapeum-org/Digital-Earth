@@ -36,8 +36,8 @@ digitalearth - visualization package
 """
 
 from digitalearth.api import quickmap, quickplot  # noqa: E402
-from digitalearth.batch import Batch  # noqa: E402
-from digitalearth.browser import gallery  # noqa: E402
+from digitalearth.ops.batch import Batch  # noqa: E402
+from digitalearth.ops.browser import gallery  # noqa: E402
 from digitalearth.static.charts import (  # noqa: E402
     bar,
     bar_by,
@@ -52,7 +52,7 @@ from digitalearth.static.geostatistics import (  # noqa: E402
     kriging_map,
     lisa_map,
 )
-from digitalearth.plugins import load_plugins  # noqa: E402
+from digitalearth.ops.plugins import load_plugins  # noqa: E402
 from digitalearth.static import (  # noqa: E402
     Map,
     Scene,
