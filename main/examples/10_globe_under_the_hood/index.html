@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4382,7 +4382,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="10-under-the-hood-how-the-globe-frame-is-built">10 — Under the hood: how the globe frame is built<a class="anchor-link" href="#10-under-the-hood-how-the-globe-frame-is-built">¶</a></h1><p>Digital-Earth draws projected/globe maps <strong>without Cartopy</strong>. Instead of a live per-draw transform, it reprojects the data upstream (pyramids) and assembles a <strong>static projected frame</strong> from pyramids' coordinate transform + numpy. This notebook opens up that machinery in <code>digitalearth.scene.projections</code> and plots each step directly with matplotlib (no <code>Map</code>, no network):</p>
+<h1 id="10-under-the-hood-how-the-globe-frame-is-built">10 — Under the hood: how the globe frame is built<a class="anchor-link" href="#10-under-the-hood-how-the-globe-frame-is-built">¶</a></h1><p>Digital-Earth draws projected/globe maps <strong>without Cartopy</strong>. Instead of a live per-draw transform, it reprojects the data upstream (pyramids) and assembles a <strong>static projected frame</strong> from pyramids' coordinate transform + numpy. This notebook opens up that machinery in <code>digitalearth.static.projections</code> and plots each step directly with matplotlib (no <code>Map</code>, no network):</p>
 <ol>
 <li><code>projection_frame(crs)</code> — the <strong>boundary</strong> polygon + projected limits.</li>
 <li><code>_convex_hull</code> — how that boundary is built from sphere samples.</li>
@@ -4428,7 +4428,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="o">%</span><span class="n">matplotlib</span> <span class="n">inline</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base.crs</span><span class="w"> </span><span class="kn">import</span> <span class="n">reproject_coordinates</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">reproject</span><span class="p">(</span><span class="n">lon</span><span class="p">,</span> <span class="n">lat</span><span class="p">,</span> <span class="n">crs</span><span class="p">):</span>
@@ -4443,7 +4443,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <div class="clipboard-copy-txt" id="cell-1">%matplotlib inline
 import numpy as np
 import matplotlib.pyplot as plt
-from digitalearth.scene import projections
+from digitalearth.static import projections
 from pyramids.base.crs import reproject_coordinates
 
 def reproject(lon, lat, crs):

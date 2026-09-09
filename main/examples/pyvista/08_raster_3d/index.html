@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4329,7 +4329,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="n">pv</span><span class="o">.</span><span class="n">OFF_SCREEN</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># headless: scenes render to an image, no interactive window</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_source</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_source</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.three_d</span><span class="w"> </span><span class="kn">import</span> <span class="n">Scene3D</span>
 
 <span class="n">ROOT</span> <span class="o">=</span> <span class="n">Path</span><span class="o">.</span><span class="n">cwd</span><span class="p">()</span>
@@ -4399,7 +4399,7 @@ import geopandas as gpd
 pv.OFF_SCREEN = True  # headless: scenes render to an image, no interactive window
 
 from pyramids.dataset import Dataset
-from digitalearth.sources import get_source
+from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
 
 ROOT = Path.cwd()

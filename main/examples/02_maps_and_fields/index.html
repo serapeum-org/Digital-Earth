@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4474,12 +4474,12 @@ print("DEM:", DEM)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">from pyramids.dataset import Dataset
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 ds = Dataset.read_file(DEM)</div>
 </div>
@@ -4838,7 +4838,7 @@ m.fig;</div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="automatic-ecmwf-magics-styling">Automatic ECMWF Magics styling<a class="anchor-link" href="#automatic-ecmwf-magics-styling">¶</a></h2><p>Every field above was styled by hand (<code>cmap</code>, <code>levels</code>). For <strong>meteorological</strong> fields you usually don't
-want to — each variable has a <em>canonical</em> operational look. <code>digitalearth.autostyle</code> ports ECMWF <strong>Magics</strong>
+want to — each variable has a <em>canonical</em> operational look. <code>digitalearth.base.autostyle</code> ports ECMWF <strong>Magics</strong>
 identity matching: give it a field's name (or CF <code>standard_name</code>, or units) and it returns the canonical
 colormap <strong>and</strong> contour levels. <code>Map</code>/<code>auto_style</code> consult it automatically, so a recognised field is drawn
 the ECMWF way without you specifying anything.</p>
@@ -4864,7 +4864,7 @@ the ECMWF way without you specifying anything.</p>
 </div>
 </clipboard-copy>
 </div>
-<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.autostyle</span><span class="w"> </span><span class="kn">import</span> <span class="n">magics_style</span>
+<div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.autostyle</span><span class="w"> </span><span class="kn">import</span> <span class="n">magics_style</span>
 
 <span class="c1"># Resolve a few fields by name / standard_name / units — each gets a canonical cmap + contour levels.</span>
 <span class="k">for</span> <span class="n">ident</span> <span class="ow">in</span> <span class="p">[</span>
@@ -4877,7 +4877,7 @@ the ECMWF way without you specifying anything.</p>
     <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">ident</span><span class="si">}</span><span class="s2"> -&gt; magics:</span><span class="si">{</span><span class="n">style</span><span class="p">[</span><span class="s1">'magics_name'</span><span class="p">]</span><span class="si">:</span><span class="s2">&gt;4</span><span class="si">}</span><span class="s2">  cmap=</span><span class="si">{</span><span class="n">style</span><span class="p">[</span><span class="s1">'cmap'</span><span class="p">]</span><span class="si">:</span><span class="s2">&lt;10</span><span class="si">}</span><span class="s2">  "</span>
           <span class="sa">f</span><span class="s2">"levels=</span><span class="si">{</span><span class="n">style</span><span class="p">[</span><span class="s1">'levels'</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">..</span><span class="si">{</span><span class="n">style</span><span class="p">[</span><span class="s1">'levels'</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">style</span><span class="p">[</span><span class="s1">'units'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
 </pre></div>
-<div class="clipboard-copy-txt" id="cell-8">from digitalearth.autostyle import magics_style
+<div class="clipboard-copy-txt" id="cell-8">from digitalearth.base.autostyle import magics_style
 
 # Resolve a few fields by name / standard_name / units — each gets a canonical cmap + contour levels.
 for ident in [

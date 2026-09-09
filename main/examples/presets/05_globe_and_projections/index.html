@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4349,8 +4349,8 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.netcdf</span><span class="w"> </span><span class="kn">import</span> <span class="n">NetCDF</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span> <span class="k">as</span> <span class="n">proj</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">projections</span> <span class="k">as</span> <span class="n">proj</span>
 
 <span class="c1"># Real climate data, fetched from the internet: NOAA ERSST v5 monthly sea-surface temperature</span>
 <span class="c1"># (2-degree global grid), via the pydata/xarray-data mirror on GitHub. It is committed under</span>
@@ -4410,8 +4410,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pyramids.netcdf import NetCDF
 from pyramids.dataset import Dataset, GeoReference
-from digitalearth.scene import Map
-from digitalearth.scene import projections as proj
+from digitalearth.static import Map
+from digitalearth.static import projections as proj
 
 # Real climate data, fetched from the internet: NOAA ERSST v5 monthly sea-surface temperature
 # (2-degree global grid), via the pydata/xarray-data mirror on GitHub. It is committed under

@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4329,7 +4329,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">matplotlib.colors</span><span class="w"> </span><span class="kn">import</span> <span class="n">LinearSegmentedColormap</span><span class="p">,</span> <span class="n">ListedColormap</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">grid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">grid</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.styling.palettes</span><span class="w"> </span><span class="kn">import</span> <span class="n">available_palettes</span><span class="p">,</span> <span class="n">get_palette</span><span class="p">,</span> <span class="n">make_diverging</span><span class="p">,</span> <span class="n">perceptual_colormap</span>
 
 <span class="n">DATA</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'../../../examples/data'</span><span class="p">)</span>   <span class="c1"># notebook-relative path (docs/examples/presets -&gt; repo root)</span>
@@ -4341,7 +4341,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 from pyramids.dataset import Dataset
-from digitalearth.scene import Map, grid
+from digitalearth.static import Map, grid
 from cleopatra.styling.palettes import available_palettes, get_palette, make_diverging, perceptual_colormap
 
 DATA = Path('../../../examples/data')   # notebook-relative path (docs/examples/presets -&gt; repo root)

@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4407,8 +4407,8 @@ print("DEM:", DEM)</div>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset.collection</span><span class="w"> </span><span class="kn">import</span> <span class="n">DatasetCollection</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">series</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.temporal</span><span class="w"> </span><span class="kn">import</span> <span class="n">TimeSeries</span><span class="p">,</span> <span class="n">Climatology</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">series</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static.temporal</span><span class="w"> </span><span class="kn">import</span> <span class="n">TimeSeries</span><span class="p">,</span> <span class="n">Climatology</span>
 
 <span class="c1"># Build a 12-month synthetic 'snow line' stack by scaling the DEM with a seasonal cycle.</span>
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
@@ -4426,8 +4426,8 @@ print("DEM:", DEM)</div>
 import matplotlib.pyplot as plt
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.dataset.collection import DatasetCollection
-from digitalearth import series
-from digitalearth.temporal import TimeSeries, Climatology
+from digitalearth.static import series
+from digitalearth.static.temporal import TimeSeries, Climatology
 
 # Build a 12-month synthetic 'snow line' stack by scaling the DEM with a seasonal cycle.
 ds = Dataset.read_file(DEM)

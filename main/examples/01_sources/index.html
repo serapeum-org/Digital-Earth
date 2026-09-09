@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4272,7 +4272,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h1 id="1-sources-one-uniform-wrapper-over-every-input">1 · Sources — one uniform wrapper over every input<a class="anchor-link" href="#1-sources-one-uniform-wrapper-over-every-input">¶</a></h1><p>Every Digital-Earth plot reads from a <strong><code>Source</code></strong>: a small object holding the data grid <code>z</code>, the coordinate axes <code>x</code>/<code>y</code>, the <code>crs</code>, and free-form <code>metadata</code>. <code>digitalearth.sources.get_source</code> builds one from <em>any</em> supported input — a pyramids <code>Dataset</code> (raster), <code>NetCDF</code>, <code>DatasetCollection</code>, <code>FeatureCollection</code>, or a raw NumPy array — so the rest of the library never has to care where the data came from.</p>
+<h1 id="1-sources-one-uniform-wrapper-over-every-input">1 · Sources — one uniform wrapper over every input<a class="anchor-link" href="#1-sources-one-uniform-wrapper-over-every-input">¶</a></h1><p>Every Digital-Earth plot reads from a <strong><code>Source</code></strong>: a small object holding the data grid <code>z</code>, the coordinate axes <code>x</code>/<code>y</code>, the <code>crs</code>, and free-form <code>metadata</code>. <code>digitalearth.base.sources.get_source</code> builds one from <em>any</em> supported input — a pyramids <code>Dataset</code> (raster), <code>NetCDF</code>, <code>DatasetCollection</code>, <code>FeatureCollection</code>, or a raw NumPy array — so the rest of the library never has to care where the data came from.</p>
 <p><strong>pyramids is the only GIS dependency</strong> (no xarray/rasterio): coordinates, CRS and nodata all come from the pyramids object.</p>
 <p>This notebook builds a <code>Source</code> from each input type and inspects what comes out. The sample data is a <strong>real elevation DEM of the Lisbon region</strong> (421×547 cells, EPSG:4326).</p>
 <p><strong>Covered here:</strong> raster <code>Dataset</code> → <code>Source</code>, NaN-masking of nodata, coordinate vectors, a raw NumPy array, and one member of a <code>DatasetCollection</code>.</p>
@@ -4390,7 +4390,7 @@ print("DEM:", DEM)</div>
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_source</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_source</span>
 
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
 <span class="n">src</span> <span class="o">=</span> <span class="n">get_source</span><span class="p">(</span><span class="n">ds</span><span class="p">)</span>
@@ -4400,7 +4400,7 @@ print("DEM:", DEM)</div>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'crs      :'</span><span class="p">,</span> <span class="n">src</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">from pyramids.dataset import Dataset
-from digitalearth.sources import get_source
+from digitalearth.base.sources import get_source
 
 ds = Dataset.read_file(DEM)
 src = get_source(ds)
