@@ -180,7 +180,7 @@ def test_composite_rejects_a_wrong_band_count(rgb_dataset, method, bands):
     [
         ([(0.0, 1.0)], "3 channels"),
         ([(0.0, 1.0)] * 5, "3 channels"),
-        ((0.0, 1.0), "2 entries but the stack has 3 channels"),
+        ((0.0, 1.0), "not a single pair"),
         ([(0.0, 1.0), (0.0, 1.0), 3.0], r"limits\[2\] must be a"),
     ],
 )
@@ -189,6 +189,12 @@ def test_stretch_to_unit_rejects_malformed_limits(limits, expected):
     stack = np.dstack([np.arange(16.0).reshape(4, 4) for _ in range(3)])
     with pytest.raises(ValueError, match=expected):
         stretch_to_unit(stack, limits)
+
+
+def test_stretch_to_unit_rejects_a_two_dimensional_array():
+    """stretch_to_unit documents an (rows, cols, n) stack too, and now says so like its sibling."""
+    with pytest.raises(ValueError, match="needs an .rows, cols, n. channel stack"):
+        stretch_to_unit(np.arange(16.0).reshape(4, 4))
 
 
 def test_channel_limits_rejects_a_two_dimensional_array():

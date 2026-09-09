@@ -162,16 +162,26 @@ def _check_limits(limits: Optional[ChannelLimits], channels: int) -> None:
 
     Raises:
         ValueError: when ``limits`` is not ``None`` and does not hold exactly ``channels`` ``(lo, hi)`` pairs.
+            A bare pair is called out separately, since passing ``(lo, hi)`` where a list of them belongs is
+            the mistake people actually make.
     """
     if limits is None:
         return
-    if len(limits) != channels:
+    # Checked element-wise rather than with np.shape(limits): a ragged list makes numpy raise its own
+    # "inhomogeneous shape" error, which says nothing about limits.
+    if len(limits) == 2 and all(np.ndim(value) == 0 for value in limits):
         raise ValueError(
-            f"limits has {len(limits)} entries but the stack has {channels} channels; pass one (lo, hi) "
-            f"pair per channel"
+            f"limits must be one (lo, hi) pair per channel, not a single pair: got {tuple(limits)!r} for "
+            f"{channels} channels"
+        )
+    count = len(limits)
+    if count != channels:
+        raise ValueError(
+            f"limits has {count} entr{'y' if count == 1 else 'ies'} but the stack has {channels} "
+            f"channels; pass one (lo, hi) pair per channel"
         )
     for index, pair in enumerate(limits):
-        if np.shape(pair) != (2,):
+        if np.ndim(pair) != 1 or len(pair) != 2:
             raise ValueError(f"limits[{index}] must be a (lo, hi) pair, got {pair!r}")
 
 
@@ -235,6 +245,11 @@ def stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) -
 
             ```
     """
+    if stack.ndim != 3:
+        raise ValueError(
+            f"stretch_to_unit needs an (rows, cols, n) channel stack, got a {stack.ndim}-D array "
+            f"with shape {stack.shape}"
+        )
     _check_limits(limits, stack.shape[2])
     out = np.empty(stack.shape, dtype="float64")
     derived = channel_limits(stack) if limits is None else limits
