@@ -186,8 +186,13 @@ class AnimationMixin:
 
         Returns:
             One ``(lo, hi)`` tuple per channel, in channel order.
+
+        Raises:
+            ValueError: when ``datasets`` is empty, so there is nothing to derive a stretch from.
         """
         seq = list(datasets)
+        if not seq:
+            raise ValueError("cannot derive composite limits from an empty stack")
         stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
         # Measure what the frame will actually render: the composites stretch get_stack(self._reproject(ds)),
         # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS (M1).
