@@ -80,6 +80,12 @@ jobs:
         # was routinely skipped, which trains contributors to reach for --no-verify. It is clean as of #172,
         # so it is gated here: the per-module baseline in pyproject.toml is a ratchet that may shrink and must
         # never grow, and a module with no entry there is checked in full.
+        #
+        # `!cancelled()` so this reports even when the lint step above failed. The three checks are
+        # independent, and a contributor fixing one should not have to push again to discover the next.
+        # It still fails the job, so this weakens nothing — it only stops the first failure from masking
+        # the others.
+        if: ${{ !cancelled() }}
         run: |
           pixi run -e dev mypy
 
@@ -87,6 +93,7 @@ jobs:
         # The five doctests this branch migrated by hand are the only migrated code no other job covers:
         # `main` sets testpaths = ["tests"] with no --doctest-modules, and ruff's F821 does not analyse
         # doctest bodies, so a missing import inside a `>>>` block would sail through the step above.
+        if: ${{ !cancelled() }}
         run: |
           pixi run -e dev doctests
 
