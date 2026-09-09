@@ -32,6 +32,7 @@ class RasterMixin:
         opacity: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        visible: bool = True,
     ) -> "RasterMixin":
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -47,6 +48,9 @@ class RasterMixin:
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
+            visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
+                :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
+                every frame showing at once — including in a saved page, which carries no slider.
 
         Returns:
             This map (chainable).
@@ -77,6 +81,7 @@ class RasterMixin:
             type=LayerType.RASTER,
             source=src_id,
             paint={"raster-opacity": float(opacity)},
+            layout={"visibility": "visible" if visible else "none"},
         )
 
         def apply(widget: Any) -> None:

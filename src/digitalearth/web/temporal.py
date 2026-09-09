@@ -177,8 +177,10 @@ class TemporalMixin:
         """Build the raster half of :meth:`timeslider`: one image layer per member, swapped by the slider.
 
         Every member is drawn with the same ``(vmin, vmax)`` so the colour scale is identical on the first
-        and last frame — the acceptance criterion for a stack. The layers are all registered up front;
-        :meth:`_wrap_temporal` hides all but the active one at render time.
+        and last frame — the acceptance criterion for a stack. All members are registered up front, but only
+        the first is built **visible**: the slider toggles from that state, and :meth:`save`, which
+        serialises the map without a slider, then writes a page showing one frame instead of the whole
+        stack piled up with only the last member on top.
 
         Args:
             collection: A pyramids ``DatasetCollection`` whose members are ordered time steps.
@@ -213,8 +215,18 @@ class TemporalMixin:
 
         vmin, vmax = clim if clim is not None else self._global_clim(collection, band)
         layer_ids: List[str] = []
-        for member in members:
-            self.add_raster(member, band=band, cmap=cmap, opacity=opacity, vmin=vmin, vmax=vmax)
+        for index, member in enumerate(members):
+            # Only the first frame is built visible. The slider toggles from there, and a page saved
+            # without a slider then shows one frame rather than the whole stack piled up.
+            self.add_raster(
+                member,
+                band=band,
+                cmap=cmap,
+                opacity=opacity,
+                vmin=vmin,
+                vmax=vmax,
+                visible=index == 0,
+            )
             layer_ids.append(self._last_layer_id)
 
         self._temporal = {

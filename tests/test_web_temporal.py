@@ -399,15 +399,60 @@ class TestTimeSliderRasterStack:
         with pytest.raises(ValueError, match=expected):
             WebMap().timeslider(raster_stack, labels=labels)
 
-    def test_save_writes_a_file(self, tmp_path, raster_stack):
-        """A stack serialises to a self-contained HTML file like any other web map.
+    def test_only_the_first_member_is_built_visible(self, raster_stack):
+        """All members are registered, but only the first starts visible.
 
         Test scenario:
-            End-to-end proof the image layers render, not just that the config was recorded.
+            The slider toggles from this state. Without it every frame would be piled up at once and the
+            last member would simply cover the rest.
+        """
+        m = WebMap().timeslider(raster_stack)
+        visibilities = [
+            layer.layout.get("visibility") for layer in self._raster_layers(m)
+        ]
+        assert visibilities == ["visible", "none", "none"], (
+            f"expected only the first frame visible, got {visibilities}"
+        )
+
+    def test_save_shows_exactly_one_frame(self, tmp_path, raster_stack):
+        """A saved page carries no slider, so it must not show the whole stack at once.
+
+        Test scenario:
+            ``save`` serialises the map without the slider composite. Asserting only that the file is
+            non-empty let a page through that inlined every frame and showed whichever landed on top.
         """
         out = tmp_path / "stack.html"
         WebMap().timeslider(raster_stack).save(str(out))
+        html = out.read_text(encoding="utf-8", errors="replace")
         assert out.stat().st_size > 1_000, "the saved stack map looks empty"
+        assert html.count('"visibility": "visible"') == 1, "a saved stack must show exactly one frame"
+        assert html.count('"visibility": "none"') == 2, "the other frames must be serialised hidden"
+
+    @staticmethod
+    def _raster_layers(m):
+        """Return the ``maplibre`` Layer objects the map registered, in add order.
+
+        Args:
+            m: The built :class:`WebMap`.
+
+        Returns:
+            The layers captured by replaying each registered ``apply`` callable against a recorder.
+        """
+
+        class _Recorder:
+            def __init__(self):
+                self.added = []
+
+            def add_source(self, *args, **kwargs):
+                pass
+
+            def add_layer(self, layer):
+                self.added.append(layer)
+
+        recorder = _Recorder()
+        for apply in m.layers:
+            apply(recorder)
+        return recorder.added
 
 
 class TestTimeSliderGeometryRouting:
@@ -619,7 +664,7 @@ class TestWrapTemporal:
             f"expected only the selected member visible, got {fake_widget.visibility}"
         )
 
-    def test_the_fake_widget_matches_the_real_widget_api(self):
+    def test_the_fake_widget_matches_the_real_widget_api(self, fake_widget):
         """The recording widget's methods match ``MapWidget``'s, so upstream drift cannot hide behind it.
 
         Test scenario:
@@ -631,9 +676,15 @@ class TestWrapTemporal:
 
         from maplibre.ipywidget import MapWidget
 
-        for name in ("set_filter", "set_visibility"):
+        expected = {
+            "set_filter": ["self", "layer_id", "filter_"],
+            "set_visibility": ["self", "layer_id", "visible"],
+        }
+        for name, params in expected.items():
             real = list(inspect.signature(getattr(MapWidget, name)).parameters)
-            assert real[:3] == ["self", "layer_id", real[2]], f"unexpected {name} signature: {real}"
+            assert real == params, f"{name} signature drifted: expected {params}, got {real}"
+            fake = list(inspect.signature(getattr(fake_widget, name)).parameters)
+            assert fake == params[1:], f"the recording widget's {name} no longer matches: {fake}"
 
 
 class TestTemporalTimes:
