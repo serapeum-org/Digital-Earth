@@ -25,13 +25,26 @@ PYVISTA_OWNED_PREFIXES = ("trame",)
 
 
 def _pyproject() -> dict:
-    """Return the parsed pyproject.toml (parsed per call, so no caller can mutate a shared copy)."""
+    """Read and parse the project's pyproject.toml.
+
+    Parsed per call rather than cached, so no caller can mutate a copy the next one will read.
+
+    Returns:
+        The parsed document.
+    """
     with (ROOT / "pyproject.toml").open("rb") as handle:
         return tomllib.load(handle)
 
 
 def _requirements(extra: str) -> list:
-    """Return one extra's requirements, parsed."""
+    """Return one extra's requirements, parsed.
+
+    Args:
+        extra: Name of the key in `[project.optional-dependencies]`.
+
+    Returns:
+        The extra's requirements as `packaging.requirements.Requirement` objects.
+    """
     return [Requirement(spec) for spec in _pyproject()["project"]["optional-dependencies"][extra]]
 
 
