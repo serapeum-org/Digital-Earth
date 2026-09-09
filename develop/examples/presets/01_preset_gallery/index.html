@@ -4302,7 +4302,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">grid</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">grid</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">cleopatra.styling.colors</span><span class="w"> </span><span class="kn">import</span> <span class="n">DATA_STYLES</span>
 
 <span class="n">DATA</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s1">'../../../examples/data'</span><span class="p">)</span>   <span class="c1"># notebook-relative path (docs/examples/presets -&gt; repo root)</span>
@@ -4313,7 +4313,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 from pathlib import Path
 import numpy as np
 from pyramids.dataset import Dataset
-from digitalearth.scene import Map, grid
+from digitalearth.static import Map, grid
 from cleopatra.styling.colors import DATA_STYLES
 
 DATA = Path('../../../examples/data')   # notebook-relative path (docs/examples/presets -&gt; repo root)
@@ -4443,7 +4443,7 @@ examples: ['acton', 'aerosol_optical_depth_550nm', 'air_temperature', 'anomaly',
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="one-field-many-presets">One field, many presets<a class="anchor-link" href="#one-field-many-presets">¶</a></h2><p>The quickest way to feel the library is to render the <strong>same</strong> elevation field under a spread of presets. <code>digitalearth.scene.grid</code> lays out a grid of shared-CRS maps; each panel just calls <code>imshow(dem, style=...)</code>.</p>
+<h2 id="one-field-many-presets">One field, many presets<a class="anchor-link" href="#one-field-many-presets">¶</a></h2><p>The quickest way to feel the library is to render the <strong>same</strong> elevation field under a spread of presets. <code>digitalearth.static.grid</code> lays out a grid of shared-CRS maps; each panel just calls <code>imshow(dem, style=...)</code>.</p>
 </div>
 </div>
 </div>

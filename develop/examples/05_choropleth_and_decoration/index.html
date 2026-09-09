@@ -4406,7 +4406,7 @@ print("DEM:", DEM)</div>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span>
 
 <span class="n">ds</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="n">DEM</span><span class="p">)</span>
 <span class="n">coarse</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">resample</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">cell_size</span> <span class="o">*</span> <span class="mi">12</span><span class="p">)</span>   <span class="c1"># coarse cells -&gt; polygon features</span>
@@ -4417,7 +4417,7 @@ print("DEM:", DEM)</div>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-2">import numpy as np
 from pyramids.dataset import Dataset
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 ds = Dataset.read_file(DEM)
 coarse = ds.resample(ds.cell_size * 12)   # coarse cells -&gt; polygon features

@@ -4406,9 +4406,9 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="13-charts-map-decorations">13 — Charts &amp; map decorations<a class="anchor-link" href="#13-charts-map-decorations">¶</a></h1><p>This notebook demos the remaining earthkit-plots primitives just added to Digital-Earth — all wired onto cleopatra/pyramids, all runnable offline on synthetic data:</p>
 <ul>
-<li><strong>Charts</strong> (<code>digitalearth.charts</code>): <code>line</code>, <code>bar</code>, <code>histogram</code>.</li>
+<li><strong>Charts</strong> (<code>digitalearth.static.charts</code>): <code>line</code>, <code>bar</code>, <code>histogram</code>.</li>
 <li><strong>Map decorations</strong> (<code>Map</code>): <code>quiverkey</code>, <code>text</code> / <code>annotate</code> at lon/lat, <code>stock_img</code> backdrop.</li>
-<li><strong>Layout</strong> (<code>digitalearth.scene</code>): <code>grid</code> multi-panel + <code>shared_colorbar</code>.</li>
+<li><strong>Layout</strong> (<code>digitalearth.static</code>): <code>grid</code> multi-panel + <code>shared_colorbar</code>.</li>
 </ul>
 </div>
 </div>
@@ -4447,7 +4447,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.dataset</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span><span class="p">,</span> <span class="n">GeoReference</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">charts</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.scene</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">grid</span><span class="p">,</span> <span class="n">shared_colorbar</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">Map</span><span class="p">,</span> <span class="n">grid</span><span class="p">,</span> <span class="n">shared_colorbar</span>
 
 <span class="c1"># A smooth synthetic field on a lon/lat grid covering Europe (-10..50 E, 30..70 N).</span>
 <span class="n">ny</span><span class="p">,</span> <span class="n">nx</span> <span class="o">=</span> <span class="mi">80</span><span class="p">,</span> <span class="mi">120</span>
@@ -4470,7 +4470,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 import numpy as np
 from pyramids.dataset import Dataset, GeoReference
 from digitalearth import charts
-from digitalearth.scene import Map, grid, shared_colorbar
+from digitalearth.static import Map, grid, shared_colorbar
 
 # A smooth synthetic field on a lon/lat grid covering Europe (-10..50 E, 30..70 N).
 ny, nx = 80, 120

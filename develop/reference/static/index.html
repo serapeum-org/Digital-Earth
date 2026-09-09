@@ -3577,9 +3577,9 @@
 
         <p>Legacy static raster / catchment plotter.</p>
 <p>.. deprecated::
-    <code>StaticGlyph</code> predates the :class:<code>~digitalearth.scene.map.Map</code> scene API and is retained only for
+    <code>StaticGlyph</code> predates the :class:<code>~digitalearth.static.map.Map</code> scene API and is retained only for
     backward compatibility — every entry point emits a :class:<code>DeprecationWarning</code>. Prefer
-    :func:<code>~digitalearth.api.quickmap</code> or :class:<code>~digitalearth.scene.map.Map</code>.</p>
+    :func:<code>~digitalearth.api.quickmap</code> or :class:<code>~digitalearth.static.map.Map</code>.</p>
 
 
 
@@ -3589,7 +3589,7 @@
 
 
               <details class="mkdocstrings-source">
-                <summary>Source code in <code>src/digitalearth/static.py</code></summary>
+                <summary>Source code in <code>src/digitalearth/static/glyph.py</code></summary>
                 <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-28"> 28</a></span>
 <span class="normal"><a href="#__codelineno-0-29"> 29</a></span>
 <span class="normal"><a href="#__codelineno-0-30"> 30</a></span>
@@ -3855,9 +3855,9 @@
 <a id="__codelineno-0-29" name="__codelineno-0-29"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Legacy static raster / catchment plotter.</span>
 <a id="__codelineno-0-30" name="__codelineno-0-30"></a>
 <a id="__codelineno-0-31" name="__codelineno-0-31"></a><span class="sd">    .. deprecated::</span>
-<a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">        ``StaticGlyph`` predates the :class:`~digitalearth.scene.map.Map` scene API and is retained only for</span>
+<a id="__codelineno-0-32" name="__codelineno-0-32"></a><span class="sd">        ``StaticGlyph`` predates the :class:`~digitalearth.static.map.Map` scene API and is retained only for</span>
 <a id="__codelineno-0-33" name="__codelineno-0-33"></a><span class="sd">        backward compatibility — every entry point emits a :class:`DeprecationWarning`. Prefer</span>
-<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        :func:`~digitalearth.api.quickmap` or :class:`~digitalearth.scene.map.Map`.</span>
+<a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="sd">        :func:`~digitalearth.api.quickmap` or :class:`~digitalearth.static.map.Map`.</span>
 <a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-36" name="__codelineno-0-36"></a>
 <a id="__codelineno-0-37" name="__codelineno-0-37"></a>    <span class="n">figure_default_options</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
@@ -4191,7 +4191,7 @@ fig: [matplotlib figure object]
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/glyph.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-55"> 55</a></span>
 <span class="normal"><a href="#__codelineno-0-56"> 56</a></span>
 <span class="normal"><a href="#__codelineno-0-57"> 57</a></span>
@@ -4500,7 +4500,7 @@ save : [bool/str], optional
 
 
             <details class="mkdocstrings-source">
-              <summary>Source code in <code>src/digitalearth/static.py</code></summary>
+              <summary>Source code in <code>src/digitalearth/static/glyph.py</code></summary>
               <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-182">182</a></span>
 <span class="normal"><a href="#__codelineno-0-183">183</a></span>
 <span class="normal"><a href="#__codelineno-0-184">184</a></span>
