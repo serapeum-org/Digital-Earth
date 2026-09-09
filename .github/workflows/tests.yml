@@ -75,6 +75,14 @@ jobs:
         run: |
           pixi run -e dev lint
 
+      - name: Type-check
+        # mypy was configured and wired into pre-commit long before it could pass — 403 errors meant the hook
+        # was routinely skipped, which trains contributors to reach for --no-verify. It is clean as of #172,
+        # so it is gated here: the per-module baseline in pyproject.toml is a ratchet that may shrink and must
+        # never grow, and a module with no entry there is checked in full.
+        run: |
+          pixi run -e dev mypy
+
       - name: Run the doctests
         # The five doctests this branch migrated by hand are the only migrated code no other job covers:
         # `main` sets testpaths = ["tests"] with no --doctest-modules, and ruff's F821 does not analyse

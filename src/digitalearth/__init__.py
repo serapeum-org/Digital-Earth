@@ -1,14 +1,4 @@
-try:
-    from importlib.metadata import (
-        PackageNotFoundError,  # type: ignore
-        version,
-    )
-except ImportError:  # pragma: no cover
-    from importlib_metadata import (
-        PackageNotFoundError,  # type: ignore
-        version,
-    )
-
+from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version(__name__)
@@ -21,8 +11,8 @@ __email__ = "moah.farag@gmail.com"
 __docformat__ = "restructuredtext"
 
 # Let users know if they're missing any of our hard dependencies
-hard_dependencies = ()  # ("numpy", "pandas", "gdal")
-missing_dependencies = []
+hard_dependencies: tuple[str, ...] = ()  # ("numpy", "pandas", "gdal")
+missing_dependencies: list[str] = []
 
 for dependency in hard_dependencies:
     try:

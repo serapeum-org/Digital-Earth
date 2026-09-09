@@ -206,6 +206,170 @@ exclude = [
     "planning/",
 ]
 
+
+# --- mypy baseline (#172) -------------------------------------------------------------------------------
+#
+# Recorded 2026-09-09 against 113 remaining errors, down from 403. The 290 already closed were closed by
+# TYPING them, not by listing them here: the backend mixins now declare the composed-class contract their
+# methods reach through `self`, and the fluent builders return PEP 673 `Self`.
+#
+# What is left is genuinely per-module, so it is listed per-module rather than globally disabled: a blanket
+# `disable_error_code` would also silence these codes in code written tomorrow, which is the failure mode
+# this baseline exists to avoid. New modules are checked in full from the moment they are added, because a
+# module with no entry here inherits the strict settings above.
+#
+# THIS LIST IS A RATCHET. It may shrink; it must never grow. Draining an entry is a normal, small piece of
+# work: delete it, run `pixi run -e dev mypy`, fix what surfaces. The counts below are what each module owed
+# on the day the baseline was taken.
+#
+# The dominant causes, so the entries are not mysterious:
+#   * attr-defined  — the base classes call methods their mixins provide (the inverse of the coupling now
+#                     typed on the mixin side); plus untyped third-party surface (pyramids, cleopatra).
+#   * no-any-return — a function annotated with a real return type forwards an untyped third-party call.
+#   * union-attr    — an Optional attribute used without a narrowing guard; these are worth real fixes.
+#   * arg-type      — numpy arrays passed where a Sequence[float] is declared.
+
+[[tool.mypy.overrides]]
+module = "digitalearth.api"  # 19 errors at baseline
+disable_error_code = ["attr-defined", "call-arg", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.vector"  # 9 errors at baseline
+disable_error_code = ["attr-defined", "list-item", "no-any-return", "no-redef"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.vector"  # 8 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.threed"  # 8 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.base"  # 5 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return"]
+
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.animation"  # 4 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.bigdata"  # 4 errors at baseline
+disable_error_code = ["attr-defined", "misc", "type-var"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.base"  # 3 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.bigdata"  # 3 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.raster"  # 3 errors at baseline
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.decoration"  # 3 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.vector"  # 3 errors at baseline
+disable_error_code = ["arg-type", "no-any-return", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.render_compat"  # 3 errors at baseline
+disable_error_code = ["arg-type", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.temporal.climatology"  # 3 errors at baseline
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.temporal"  # 3 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.base.crs"  # 2 errors at baseline
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.decoration"  # 2 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.temporal"  # 2 errors at baseline
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.glyph"  # 2 errors at baseline
+disable_error_code = ["arg-type", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.raster"  # 2 errors at baseline
+disable_error_code = ["dict-item", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.scene"  # 2 errors at baseline
+disable_error_code = ["assignment", "exit-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.series"  # 2 errors at baseline
+disable_error_code = ["arg-type", "assignment"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.base"  # 2 errors at baseline
+disable_error_code = ["exit-return", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.base.arrays"  # 1 error at baseline
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.map"  # 1 error at baseline
+disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.figures"  # 1 error at baseline
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.geostatistics"  # 1 error at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.projection"  # 1 error at baseline
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.projections"  # 1 error at baseline
+disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.textured_globe"  # 1 error at baseline
+disable_error_code = ["exit-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.globe"  # 1 error at baseline
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.scene3d"  # 1 error at baseline
+disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.terrain"  # 1 error at baseline
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.map"  # 1 error at baseline
+disable_error_code = ["misc"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.raster"  # 1 error at baseline
+disable_error_code = ["union-attr"]
+
 [tool.commitizen]
 name = "cz_conventional_commits"
 version_provider = "pep621"
