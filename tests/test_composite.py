@@ -17,7 +17,9 @@ def rgb_dataset(dataset):
     """
     base = np.nan_to_num(dataset.read_array(band=0).astype("float32"))
     arr3 = np.stack([base, base * 0.5, base * 0.25])  # (3, rows, cols)
-    return Dataset.from_array(arr=arr3, geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg))
+    return Dataset.from_array(
+        arr=arr3, geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg)
+    )
 
 
 def test_stretch_to_unit_range():
@@ -43,7 +45,11 @@ def test_rgb_composite(rgb_dataset):
     assert len(m.layers) == 1
     assert len(m.ax.images) == 1
     # band-first must be transposed back to band-last (rows, cols, 3), not a garbled (cols, 3, 3)
-    assert m.ax.images[-1].get_array().shape == (rgb_dataset.rows, rgb_dataset.columns, 3)
+    assert m.ax.images[-1].get_array().shape == (
+        rgb_dataset.rows,
+        rgb_dataset.columns,
+        3,
+    )
 
 
 def test_hsv_composite(rgb_dataset):
@@ -52,7 +58,11 @@ def test_hsv_composite(rgb_dataset):
     m.hsv_composite(rgb_dataset)
     assert len(m.layers) == 1
     assert len(m.ax.images) == 1
-    assert m.ax.images[-1].get_array().shape == (rgb_dataset.rows, rgb_dataset.columns, 3)
+    assert m.ax.images[-1].get_array().shape == (
+        rgb_dataset.rows,
+        rgb_dataset.columns,
+        3,
+    )
 
 
 def test_rgb_composite_custom_band_order(rgb_dataset):
@@ -73,11 +83,15 @@ def test_rgb_composite_mask_flag_controls_nodata(rgb_dataset):
     m = Map(crs=rgb_dataset.epsg)
     m.rgb_composite(rgb_dataset, mask_nodata=False)
     arr = np.asarray(m.ax.images[-1].get_array(), dtype="float64")
-    assert np.isfinite(arr).all(), "mask_nodata=False should keep every cell finite (raw stretch)"
+    assert np.isfinite(arr).all(), (
+        "mask_nodata=False should keep every cell finite (raw stretch)"
+    )
 
 
 def test_hsv_composite_accepts_mask_flag(rgb_dataset):
     """hsv_composite accepts the mask_nodata flag and still renders one image (review L2)."""
     m = Map(crs=rgb_dataset.epsg)
     m.hsv_composite(rgb_dataset, mask_nodata=False)
-    assert len(m.ax.images) == 1, "hsv_composite should still render with mask_nodata=False"
+    assert len(m.ax.images) == 1, (
+        "hsv_composite should still render with mask_nodata=False"
+    )

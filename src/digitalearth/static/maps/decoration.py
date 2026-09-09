@@ -7,6 +7,7 @@ The reference data comes from ``cleopatra.basemap.reference`` (``natural_earth``
 the globe limb-splitting; ``add_features`` for the flat, hole-aware reprojected render) — these helpers
 moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 """
+
 import logging
 from typing import Any, List, Optional, Tuple
 
@@ -42,8 +43,12 @@ def _to_feature_style(kind: str, style: dict) -> dict:
     Returns:
         A style dict keyed for the underlying matplotlib collection.
     """
-    mapping = {"facecolor": "facecolors", "edgecolor": "edgecolors",
-               "linewidth": "linewidths", "linestyle": "linestyles"}
+    mapping = {
+        "facecolor": "facecolors",
+        "edgecolor": "edgecolors",
+        "linewidth": "linewidths",
+        "linestyle": "linestyles",
+    }
     out: dict = {}
     for key, value in style.items():
         if kind == "line" and key in ("facecolor", "edgecolor"):
@@ -58,7 +63,9 @@ def _to_feature_style(kind: str, style: dict) -> dict:
 class DecorationMixin:
     """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.static.map.Map`."""
 
-    def _reproject_point(self, lon: float, lat: float, crs: Any) -> Optional[Tuple[float, float]]:
+    def _reproject_point(
+        self, lon: float, lat: float, crs: Any
+    ) -> Optional[Tuple[float, float]]:
         """Reproject one ``(lon, lat)`` in ``crs`` to the display CRS; ``None`` if it lands off the globe.
 
         A point on the far side of a clipped/globe display CRS reprojects to non-finite coordinates, which
@@ -99,8 +106,16 @@ class DecorationMixin:
             return None
         return self.ax.text(xy[0], xy[1], s, **kwargs)
 
-    def annotate(self, lon: float, lat: float, s: str, *, xytext: Any = None, crs: Any = 4326,
-                 **kwargs) -> Any:
+    def annotate(
+        self,
+        lon: float,
+        lat: float,
+        s: str,
+        *,
+        xytext: Any = None,
+        crs: Any = 4326,
+        **kwargs,
+    ) -> Any:
         """Annotate a ``lon``/``lat`` location (reprojected), optionally with an arrow.
 
         Like :meth:`text` but via ``Axes.annotate``: the annotated point ``xy`` is the reprojected
@@ -124,8 +139,14 @@ class DecorationMixin:
             return None
         return self.ax.annotate(s, xy=xy, xytext=xytext, **kwargs)
 
-    def stock_img(self, dataset: Any = None, *, zorder: float = -3.0, cmap: str = "gist_earth",
-                  **kwargs) -> Any:
+    def stock_img(
+        self,
+        dataset: Any = None,
+        *,
+        zorder: float = -3.0,
+        cmap: str = "gist_earth",
+        **kwargs,
+    ) -> Any:
         """Draw a background raster (a "stock image" backdrop) beneath all data layers.
 
         Pass a pyramids ``Dataset`` (e.g. a low-res relief/imagery raster) to draw as the backdrop — it is
@@ -158,7 +179,6 @@ class DecorationMixin:
             im.set_zorder(zorder)
         return im
 
-
     def _project_line_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
         """Project lon/lat line parts to the display CRS, split at the projection limb.
 
@@ -178,9 +198,12 @@ class DecorationMixin:
             xy = np.asarray(part, dtype=float)
             if xy.size == 0:
                 continue
-            x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
-                                         from_crs=4326, to_crs=self.crs)
-            segments += projections._split_finite(np.asarray(x, float), np.asarray(y, float))
+            x, y = reproject_coordinates(
+                xy[:, 0].tolist(), xy[:, 1].tolist(), from_crs=4326, to_crs=self.crs
+            )
+            segments += projections._split_finite(
+                np.asarray(x, float), np.asarray(y, float)
+            )
         return segments
 
     def _project_polygon_features(self, parts: List[np.ndarray]) -> List[np.ndarray]:
@@ -206,12 +229,17 @@ class DecorationMixin:
             if xy.size == 0:
                 continue
             xy = projections.densify_lonlat(xy, step_deg=1.0)
-            x, y = reproject_coordinates(xy[:, 0].tolist(), xy[:, 1].tolist(),
-                                         from_crs=4326, to_crs=self.crs)
-            rings += projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
+            x, y = reproject_coordinates(
+                xy[:, 0].tolist(), xy[:, 1].tolist(), from_crs=4326, to_crs=self.crs
+            )
+            rings += projections.close_visible_runs(
+                np.asarray(x, float), np.asarray(y, float), boundary
+            )
         return rings
 
-    def _fill_globe_polygons(self, rings: List[np.ndarray], *, facecolor: Any, zorder: float) -> Any:
+    def _fill_globe_polygons(
+        self, rings: List[np.ndarray], *, facecolor: Any, zorder: float
+    ) -> Any:
         """Fill projected rings with a solid colour on a globe (map-specific overlay; clipped at frame time).
 
         cleopatra ``PolygonGlyph`` only fills when given per-polygon *values*, so a uniform land/ocean fill is
@@ -230,12 +258,22 @@ class DecorationMixin:
         if not rings:
             return None
         with self._preserve_view():
-            pc = PolyCollection(rings, facecolors=facecolor, edgecolors="none", zorder=zorder)
+            pc = PolyCollection(
+                rings, facecolors=facecolor, edgecolors="none", zorder=zorder
+            )
             self.ax.add_collection(pc)
         return self._add_layer(None, pc)
 
-    def _natural_earth(self, layer: str, resolution: str, defaults: dict, *, polygon: bool = False,
-                       zorder: float = 0.5, **kwargs) -> Any:
+    def _natural_earth(
+        self,
+        layer: str,
+        resolution: str,
+        defaults: dict,
+        *,
+        polygon: bool = False,
+        zorder: float = 0.5,
+        **kwargs,
+    ) -> Any:
         """Draw a Natural-Earth vector layer reprojected to the display CRS, clipped to the current view.
 
         On a **globe** map, line layers (coastline/borders/rivers) are projected per-line and split at the
@@ -260,17 +298,27 @@ class DecorationMixin:
             style = {**defaults, **kwargs}
             if polygon:
                 facecolor = style.get("facecolor", style.get("color", "#efefdb"))
-                return self._fill_globe_polygons(self._project_polygon_features(parts),
-                                                 facecolor=facecolor, zorder=zorder)
-            style.pop("edgecolor", None); style.pop("facecolor", None)
+                return self._fill_globe_polygons(
+                    self._project_polygon_features(parts),
+                    facecolor=facecolor,
+                    zorder=zorder,
+                )
+            style.pop("edgecolor", None)
+            style.pop("facecolor", None)
             segments = self._project_line_features(parts)
             return [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in segments]
         kind = "polygon" if layer in _POLYGON_LAYERS else "line"
         style = _to_feature_style(kind, {**defaults, **kwargs})
-        had_data = (bool(self.layers) or bool(self.ax.images)
-                    or bool(self.ax.collections) or bool(self.ax.lines))
+        had_data = (
+            bool(self.layers)
+            or bool(self.ax.images)
+            or bool(self.ax.collections)
+            or bool(self.ax.lines)
+        )
         add_features(self.ax, layer, resolution, crs=self.crs, zorder=zorder, **style)
-        if not had_data:  # add_features pinned the (empty) view; fit it to the layer we just drew
+        if (
+            not had_data
+        ):  # add_features pinned the (empty) view; fit it to the layer we just drew
             self.ax.autoscale()
         return self.ax
 
@@ -282,7 +330,11 @@ class DecorationMixin:
             on a flat map).
         """
         return self._natural_earth(
-            "coastline", resolution, {"color": "black", "linewidth": 0.5}, zorder=2.5, **kwargs
+            "coastline",
+            resolution,
+            {"color": "black", "linewidth": 0.5},
+            zorder=2.5,
+            **kwargs,
         )
 
     def borders(self, resolution: str = "110m", **kwargs) -> Any:
@@ -293,7 +345,11 @@ class DecorationMixin:
             flat map).
         """
         return self._natural_earth(
-            "borders", resolution, {"color": "gray", "linewidth": 0.4}, zorder=2.5, **kwargs
+            "borders",
+            resolution,
+            {"color": "gray", "linewidth": 0.4},
+            zorder=2.5,
+            **kwargs,
         )
 
     def land(self, resolution: str = "110m", **kwargs) -> Any:
@@ -308,7 +364,12 @@ class DecorationMixin:
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "land", resolution, {"color": "#efefdb", "edgecolor": "none"}, polygon=True, zorder=-1.5, **kwargs
+            "land",
+            resolution,
+            {"color": "#efefdb", "edgecolor": "none"},
+            polygon=True,
+            zorder=-1.5,
+            **kwargs,
         )
 
     def ocean(self, resolution: str = "110m", **kwargs) -> Any:
@@ -325,8 +386,12 @@ class DecorationMixin:
         color = kwargs.pop("color", "#cfe6f5")
         if self.globe:
             boundary = self._frame()[0]
-            return self._fill_globe_polygons([np.asarray(boundary)], facecolor=color, zorder=-2.0)
-        return self._natural_earth("ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs)
+            return self._fill_globe_polygons(
+                [np.asarray(boundary)], facecolor=color, zorder=-2.0
+            )
+        return self._natural_earth(
+            "ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs
+        )
 
     def lakes(self, resolution: str = "110m", **kwargs) -> Any:
         """Fill Natural-Earth lake polygons.
@@ -339,7 +404,12 @@ class DecorationMixin:
             the reprojected plot artist on a flat map).
         """
         return self._natural_earth(
-            "lakes", resolution, {"color": "#cfe6f5", "edgecolor": "none"}, polygon=True, zorder=-1.4, **kwargs
+            "lakes",
+            resolution,
+            {"color": "#cfe6f5", "edgecolor": "none"},
+            polygon=True,
+            zorder=-1.4,
+            **kwargs,
         )
 
     def rivers(self, resolution: str = "110m", **kwargs) -> Any:
@@ -350,7 +420,11 @@ class DecorationMixin:
             flat map).
         """
         return self._natural_earth(
-            "rivers", resolution, {"color": "#5a8fcf", "linewidth": 0.4}, zorder=2.4, **kwargs
+            "rivers",
+            resolution,
+            {"color": "#5a8fcf", "linewidth": 0.4},
+            zorder=2.4,
+            **kwargs,
         )
 
     def basemap(self, source: Any = None, **kwargs) -> Any:
@@ -360,4 +434,3 @@ class DecorationMixin:
             The tile artist ``add_tiles`` added to the axes.
         """
         return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
-

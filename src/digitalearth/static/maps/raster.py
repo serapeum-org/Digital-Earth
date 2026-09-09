@@ -3,6 +3,7 @@
 Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into cleopatra ``ArrayGlyph`` field
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
+
 from typing import Any, List, Optional, Sequence
 
 import numpy as np
@@ -24,7 +25,6 @@ def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
             hi = lo + 1.0
         out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
     return out
-
 
 
 class RasterMixin:
@@ -57,7 +57,9 @@ class RasterMixin:
         """
         src = self._prepare(dataset, band)
         z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
-        if opts.pop("cyclic", False):  # close the antimeridian seam for global fields (T5.2)
+        if opts.pop(
+            "cyclic", False
+        ):  # close the antimeridian seam for global fields (T5.2)
             z_values, x_values = add_cyclic_column(z_values, x_values)
         if cmap is None:
             cmap = auto_style(src).get("cmap")  # per-variable default (T6.2)
@@ -84,7 +86,9 @@ class RasterMixin:
             **placement,
             **opts,
         )
-        return self._render_glyph(glyph, kind=kind, add_colorbar=add_colorbar, **plot_style)
+        return self._render_glyph(
+            glyph, kind=kind, add_colorbar=add_colorbar, **plot_style
+        )
 
     def imshow(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
@@ -141,8 +145,14 @@ class RasterMixin:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
         return self._extent_of(ds.x, ds.y)
 
-    def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
-                      **opts) -> Any:
+    def rgb_composite(
+        self,
+        dataset: Any,
+        bands: Sequence[int] = (1, 2, 3),
+        *,
+        mask_nodata: bool = True,
+        **opts,
+    ) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
         Args:
@@ -176,19 +186,31 @@ class RasterMixin:
                 ```
         """
         ds = self._reproject(dataset)
-        stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
+        stack = get_stack(
+            ds, bands, mask=mask_nodata
+        )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
         band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
-            band_first, rgb_bands=RgbBands(list(range(len(bands)))), extent=self._extent(ds),
-            ax=self.ax, fig=self.fig, **opts,
+            band_first,
+            rgb_bands=RgbBands(list(range(len(bands)))),
+            extent=self._extent(ds),
+            ax=self.ax,
+            fig=self.fig,
+            **opts,
         )
         return self._render_glyph(glyph, **plot_style)
 
-    def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
-                      **opts) -> Any:
+    def hsv_composite(
+        self,
+        dataset: Any,
+        bands: Sequence[int] = (1, 2, 3),
+        *,
+        mask_nodata: bool = True,
+        **opts,
+    ) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
         Args:
@@ -204,13 +226,19 @@ class RasterMixin:
         from matplotlib.colors import hsv_to_rgb
 
         ds = self._reproject(dataset)
-        stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
-        rgb = hsv_to_rgb(_stretch_to_unit(stack))                      # (rows, cols, 3) RGB
+        stack = get_stack(
+            ds, bands, mask=mask_nodata
+        )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
+        rgb = hsv_to_rgb(_stretch_to_unit(stack))  # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's RgbBands path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
-            band_first, rgb_bands=RgbBands([0, 1, 2]), extent=self._extent(ds), ax=self.ax, fig=self.fig,
+            band_first,
+            rgb_bands=RgbBands([0, 1, 2]),
+            extent=self._extent(ds),
+            ax=self.ax,
+            fig=self.fig,
             **opts,
         )
         return self._render_glyph(glyph, **plot_style)
@@ -230,4 +258,3 @@ class RasterMixin:
             self._field(member, kind="contour", band=band, add_colorbar=False, **opts)
             for member in collection.datasets
         ]
-

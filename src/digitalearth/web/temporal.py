@@ -59,7 +59,9 @@ class TemporalMixin:
         # big=False on every path: the slider filters a per-feature MapLibre layer, so the data must not
         # auto-route to a deck.gl layer (which has no per-feature layer id to filter) (M3).
         if is_polygon and column is not None:
-            self.choropleth(gdf, column=column, scheme=scheme, k=k, cmap=cmap, opacity=opacity)
+            self.choropleth(
+                gdf, column=column, scheme=scheme, k=k, cmap=cmap, opacity=opacity
+            )
         elif is_polygon:
             self.polygons(gdf, opacity=opacity, big=False)
         else:

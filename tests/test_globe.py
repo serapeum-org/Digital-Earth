@@ -1,4 +1,5 @@
 """Tests for DC.5/DC.6 — Map(globe=) projection frame, graticule, set_global."""
+
 import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
@@ -10,9 +11,9 @@ def test_globe_frame_applied_on_render(dataset):
     """A globe Map draws a boundary patch and equal aspect after render()."""
     m = Map(crs=projections.orthographic(lon=-9, lat=39), globe=True)
     m.imshow(dataset)
-    assert not m.ax.patches            # frame not applied until render
+    assert not m.ax.patches  # frame not applied until render
     m.render()
-    assert m.ax.patches                # boundary patch added
+    assert m.ax.patches  # boundary patch added
     assert m.ax.get_aspect() == 1.0
     assert m._framed is True
 
@@ -21,7 +22,8 @@ def test_globe_frame_idempotent(dataset):
     """render() applies the frame once (no duplicate boundary patches)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     m.imshow(dataset)
-    m.render(); n = len(m.ax.patches)
+    m.render()
+    n = len(m.ax.patches)
     m.render()
     assert len(m.ax.patches) == n
 
@@ -117,7 +119,11 @@ def test_globe_choropleth_drops_far_side():
     fc["val"] = range(len(fc))
     m = Map(crs=projections.orthographic(lon=-9, lat=39), globe=True)
     pc = m.choropleth(fc, column="val")
-    verts = np.vstack([p.vertices for p in pc.get_paths()]) if pc.get_paths() else np.zeros((1, 2))
+    verts = (
+        np.vstack([p.vertices for p in pc.get_paths()])
+        if pc.get_paths()
+        else np.zeros((1, 2))
+    )
     assert np.isfinite(verts).all()  # no inf reached the PolyCollection
 
 
@@ -173,8 +179,12 @@ def test_grid_cells_without_nodata(global_field, mocker):
     """
     m = Map(crs=4326)  # matches the field's CRS -> _reproject returns it unchanged
     reprojected = m._reproject(global_field)
-    mocker.patch.object(type(reprojected), "no_data_value",
-                        new_callable=mocker.PropertyMock, return_value=[None])
+    mocker.patch.object(
+        type(reprojected),
+        "no_data_value",
+        new_callable=mocker.PropertyMock,
+        return_value=[None],
+    )
     mocker.patch.object(m, "_reproject", return_value=reprojected)
     pc = m.grid_cells(global_field)
     assert len(pc.get_paths()) > 0
@@ -200,7 +210,8 @@ def _add_features_drawing(*verts):
     def fake(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
         xlim, ylim = ax.get_xlim(), ax.get_ylim()
         ax.add_collection(LineCollection([np.asarray(v, dtype=float) for v in verts]))
-        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         return ax
 
     return fake
@@ -215,7 +226,9 @@ def test_natural_earth_flat_without_data_autoscales_to_layer(mocker):
     m = Map(crs=4326)  # flat, no imshow -> had_data is False
     m.coastlines()
     assert m.ax.collections  # the layer drew something
-    assert m.ax.get_xlim()[0] <= -50 and m.ax.get_xlim()[1] >= 50  # fitted to the layer, not pinned
+    assert (
+        m.ax.get_xlim()[0] <= -50 and m.ax.get_xlim()[1] >= 50
+    )  # fitted to the layer, not pinned
 
 
 # --------------------------------------------------------------------- #43 globe land/ocean fills
@@ -229,8 +242,12 @@ def land_fc():
         list[numpy.ndarray]: closed `(N, 2)` lon/lat rings spanning both hemispheres of an ortho globe —
             the coordinate-array shape ``cleopatra.basemap.reference.natural_earth`` yields for a polygon layer.
     """
-    near = np.array([(-20, -20), (20, -20), (20, 20), (-20, 20), (-20, -20)], float)      # near side
-    straddle = np.array([(60, -30), (120, -30), (120, 30), (60, 30), (60, -30)], float)   # crosses the limb
+    near = np.array(
+        [(-20, -20), (20, -20), (20, 20), (-20, 20), (-20, -20)], float
+    )  # near side
+    straddle = np.array(
+        [(60, -30), (120, -30), (120, 30), (60, 30), (60, -30)], float
+    )  # crosses the limb
     return [near, straddle]
 
 
@@ -246,7 +263,10 @@ def test_project_polygon_features_finite_and_closed(land_fc):
 
 def test_project_polygon_features_skips_empty():
     """_project_polygon_features ignores empty rings and projects the rest."""
-    parts = [np.empty((0, 2)), np.array([(-10, -10), (10, -10), (10, 10), (-10, 10), (-10, -10)], float)]
+    parts = [
+        np.empty((0, 2)),
+        np.array([(-10, -10), (10, -10), (10, 10), (-10, 10), (-10, -10)], float),
+    ]
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     rings = m._project_polygon_features(parts)
     assert len(rings) == 1 and np.isfinite(np.vstack(rings)).all()
@@ -265,7 +285,9 @@ def test_project_polygon_features_handles_multiple_parts():
 
 def test_land_fill_finite_on_globe(land_fc, mocker):
     """land() on a globe draws a finite, closed PolyCollection (Natural Earth mocked, no network)."""
-    mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=land_fc)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+    )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     pc = m.land()
     assert pc is not None and pc.get_paths()
@@ -275,12 +297,16 @@ def test_land_fill_finite_on_globe(land_fc, mocker):
 
 def test_land_fill_preserves_extent_and_zorder(land_fc, dataset, mocker):
     """land() keeps the axes limits and sits below the data raster (background z-order)."""
-    mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=land_fc)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+    )
     m = Map(crs=projections.orthographic(-75, 42), globe=True)
     img = m.imshow(dataset)
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
     pc = m.land()
-    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, "land() blew out the extent"
+    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, (
+        "land() blew out the extent"
+    )
     assert pc.get_zorder() < img.get_zorder(), "land must draw beneath the data raster"
 
 
@@ -288,7 +314,9 @@ def test_ocean_below_land_zorder():
     """ocean() draws below land() (ocean is the deepest background layer)."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     ocean = m.ocean()
-    assert ocean.get_zorder() < -1.5, f"ocean zorder should sit below land (-1.5), got {ocean.get_zorder()}"
+    assert ocean.get_zorder() < -1.5, (
+        f"ocean zorder should sit below land (-1.5), got {ocean.get_zorder()}"
+    )
 
 
 def test_ocean_flat_uses_add_features(mocker):
@@ -312,7 +340,9 @@ def test_fill_globe_polygons_empty_returns_none():
 
 def test_lakes_fill_on_globe_above_land(land_fc, mocker):
     """lakes() fills polygons on a globe and sits just above land (so lakes show on the land)."""
-    mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=land_fc)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+    )
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     pc = m.lakes()
     assert pc is not None and pc.get_paths()
@@ -331,7 +361,9 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
 
 def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):
     """land() fills finite rings on a cylindrical (rectangular-boundary) framed map, not just a disc."""
-    mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=land_fc)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+    )
     m = Map(crs=3857, globe=True)  # Web-Mercator boundary is a rectangle, not a circle
     pc = m.land()
     assert pc is not None and pc.get_paths()
@@ -357,13 +389,17 @@ def test_project_polygon_features_single_exterior_ring(mocker):
     exterior = np.array([(-20, -20), (20, -20), (20, 20), (-20, 20), (-20, -20)], float)
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     rings = m._project_polygon_features([exterior])
-    assert len(rings) == 1, f"a single exterior ring should yield one ring, got {len(rings)}"
+    assert len(rings) == 1, (
+        f"a single exterior ring should yield one ring, got {len(rings)}"
+    )
     assert np.isfinite(np.vstack(rings)).all(), "exterior ring must be finite"
 
 
 def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     """A globe base map (ocean + land + coastlines + data) frames and saves a non-empty PNG."""
-    mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=land_fc)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.natural_earth", return_value=land_fc
+    )
     m = Map(crs=projections.orthographic(-30, 20), globe=True)
     m.ocean()
     m.imshow(dataset)

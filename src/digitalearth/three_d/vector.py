@@ -12,6 +12,7 @@ Polygons come from the GeoDataFrame pyramids returns (a ``FeatureCollection``, w
 this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_competitor_imports`` guard). CRS work
 stays in pyramids.
 """
+
 from typing import Any, Iterator, List, Optional, Union
 
 import numpy as np
@@ -41,7 +42,9 @@ def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
     """
     geom_type = geom.geom_type
     if geom_type not in ("Polygon", "MultiPolygon"):
-        raise TypeError(f"extruded_polygons expects Polygon/MultiPolygon geometries, got {geom_type}")
+        raise TypeError(
+            f"extruded_polygons expects Polygon/MultiPolygon geometries, got {geom_type}"
+        )
     parts = geom.geoms if geom_type == "MultiPolygon" else [geom]
     for part in parts:
         yield np.asarray(part.exterior.coords, dtype="float64")
@@ -106,7 +109,9 @@ class VectorMixin:
         pts = np.asarray(points, dtype="float64")
         vec = np.asarray(vectors, dtype="float64")
         if pts.shape != vec.shape:
-            raise ValueError(f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}")
+            raise ValueError(
+                f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}"
+            )
         cloud = pv.PolyData(pts)
         cloud[VECTORS] = vec
         cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
@@ -171,7 +176,9 @@ class VectorMixin:
                 prisms.append(prism)
 
         if not prisms:
-            raise ValueError("extruded_polygons received no polygon geometries to extrude")
+            raise ValueError(
+                "extruded_polygons received no polygon geometries to extrude"
+            )
         merged = pv.MultiBlock(prisms).combine()
         scalars = VALUE if colours is not None else None
         return self.add_mesh(merged, scalars=scalars, cmap=cmap, **kwargs)

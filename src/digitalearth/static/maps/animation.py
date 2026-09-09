@@ -3,6 +3,7 @@
 Drives per-frame redraws on the shared axes as a matplotlib ``FuncAnimation``, with one shared colour scale
 (and an optional single static colorbar) so colours do not flicker between frames.
 """
+
 from typing import Any, List, Optional, Sequence, Tuple
 
 from matplotlib.animation import FuncAnimation
@@ -23,13 +24,16 @@ _ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
 class AnimationMixin:
     """Stack animation and globe rotation for :class:`~digitalearth.static.map.Map`."""
 
-    def _animate_frames(self, draw_one: Any, n_frames: int, fps: float) -> FuncAnimation:
+    def _animate_frames(
+        self, draw_one: Any, n_frames: int, fps: float
+    ) -> FuncAnimation:
         """Drive ``n_frames`` of ``draw_one(i)`` on this Map's axes as a :class:`FuncAnimation`.
 
         Each frame clears the axes and resets the per-frame layer/frame state, calls ``draw_one(i)`` to draw
         frame ``i``, then (on a globe) sets the full-domain extent and applies the projection frame. No
         colorbar is added per frame — pass a fixed ``vmin``/``vmax`` to keep colours stable instead.
         """
+
         def _f(i: int) -> None:
             self.ax.clear()
             self.layers = []
@@ -39,13 +43,23 @@ class AnimationMixin:
                 self.set_global()
                 self._apply_frame()
 
-        anim = FuncAnimation(self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False)
+        anim = FuncAnimation(
+            self.fig, _f, frames=n_frames, interval=1000.0 / fps, blit=False
+        )
         self._animation = anim  # keep a strong reference so it isn't garbage-collected before save (L3)
-        self._animation_fps = float(fps)  # so save_animation writes at the rate the scene was built for
+        self._animation_fps = float(
+            fps
+        )  # so save_animation writes at the rate the scene was built for
         return anim
 
-    def save_animation(self, path: str, *, fps: Optional[float] = None, gif: Optional[str] = None,
-                       **kwargs: Any) -> Any:
+    def save_animation(
+        self,
+        path: str,
+        *,
+        fps: Optional[float] = None,
+        gif: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Save the animation built by :meth:`animate` / :meth:`rotate`, optionally also deriving a GIF.
 
         Passing ``gif`` draws the frames **once**: the clip is encoded to ``path``, then the GIF is derived
@@ -135,7 +149,9 @@ class AnimationMixin:
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
             seq = list(datasets)
-            stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
+            stride = max(
+                1, len(seq) // _CLIM_SCAN_CAP
+            )  # cap the scan to ~_CLIM_SCAN_CAP frames
             lo, hi = self._stack_clim(seq[::stride])
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
@@ -147,15 +163,23 @@ class AnimationMixin:
         across frames. Call :meth:`_resolve_animation_clim` first so ``opts`` has the shared clim.
         """
         cmap = opts.setdefault("cmap", "viridis")
-        mappable = ScalarMappable(norm=Normalize(vmin=opts.get("vmin"), vmax=opts.get("vmax")), cmap=cmap)
+        mappable = ScalarMappable(
+            norm=Normalize(vmin=opts.get("vmin"), vmax=opts.get("vmax")), cmap=cmap
+        )
         mappable.set_array([])
         cbar = self.fig.colorbar(mappable, ax=self.ax)
         if label is not None:
             cbar.set_label(label)
         return cbar
 
-    def _prime_animation(self, datasets: Sequence[Any], opts: dict, *, colorbar: bool,
-                         cbar_label: Optional[str]) -> None:
+    def _prime_animation(
+        self,
+        datasets: Sequence[Any],
+        opts: dict,
+        *,
+        colorbar: bool,
+        cbar_label: Optional[str],
+    ) -> None:
         """Resolve one shared colour scale into ``opts`` and, if asked, add the single static colorbar.
 
         The setup shared by :meth:`animate` and :meth:`rotate`: fill a missing ``vmin``/``vmax`` once from the
@@ -165,8 +189,16 @@ class AnimationMixin:
         if colorbar:
             self._animation_colorbar(opts, cbar_label)
 
-    def _draw_animation_frame(self, data: Any, kind: str, opts: dict, *, ocean: bool, coastlines: bool,
-                              title: Optional[str] = None) -> None:
+    def _draw_animation_frame(
+        self,
+        data: Any,
+        kind: str,
+        opts: dict,
+        *,
+        ocean: bool,
+        coastlines: bool,
+        title: Optional[str] = None,
+    ) -> None:
         """Draw one animation frame: optional ocean disc, the field, optional coastlines, optional title.
 
         The per-frame body shared by :meth:`animate` and :meth:`rotate`. Ocean fill and coastlines are
@@ -184,9 +216,19 @@ class AnimationMixin:
         if title is not None:
             self.set_title(title)
 
-    def animate(self, stack: Any, *, kind: str = "imshow", fps: float = 3.0,
-                titles: Optional[Sequence[str]] = None, ocean: bool = False, coastlines: bool = False,
-                colorbar: bool = False, cbar_label: Optional[str] = None, **kwargs) -> FuncAnimation:
+    def animate(
+        self,
+        stack: Any,
+        *,
+        kind: str = "imshow",
+        fps: float = 3.0,
+        titles: Optional[Sequence[str]] = None,
+        ocean: bool = False,
+        coastlines: bool = False,
+        colorbar: bool = False,
+        cbar_label: Optional[str] = None,
+        **kwargs,
+    ) -> FuncAnimation:
         """Animate a stack of rasters over this map, returning a matplotlib :class:`FuncAnimation`.
 
         Each frame reprojects ``stack[i]`` to the display CRS (pyramids), renders it with the ``kind`` method
@@ -220,24 +262,41 @@ class AnimationMixin:
                 with a mismatched length.
         """
         if kind not in _ANIMATION_KINDS:
-            raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
+            raise ValueError(
+                f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}"
+            )
         frames = list(stack)
         if not frames:
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):
-            raise ValueError(f"titles length ({len(titles)}) must match the stack length ({len(frames)})")
+            raise ValueError(
+                f"titles length ({len(titles)}) must match the stack length ({len(frames)})"
+            )
         self._prime_animation(frames, kwargs, colorbar=colorbar, cbar_label=cbar_label)
 
         def draw_one(i: int) -> None:
             title = titles[i] if titles is not None else None
-            self._draw_animation_frame(frames[i], kind, kwargs, ocean=ocean, coastlines=coastlines,
-                                       title=title)
+            self._draw_animation_frame(
+                frames[i], kind, kwargs, ocean=ocean, coastlines=coastlines, title=title
+            )
 
         return self._animate_frames(draw_one, len(frames), fps)
 
-    def rotate(self, dataset: Any, *, lat: float = 15.0, n_frames: int = 24, fps: float = 8.0,
-               lon0: float = -180.0, kind: str = "imshow", ocean: bool = False, coastlines: bool = False,
-               colorbar: bool = False, cbar_label: Optional[str] = None, **kwargs) -> FuncAnimation:
+    def rotate(
+        self,
+        dataset: Any,
+        *,
+        lat: float = 15.0,
+        n_frames: int = 24,
+        fps: float = 8.0,
+        lon0: float = -180.0,
+        kind: str = "imshow",
+        ocean: bool = False,
+        coastlines: bool = False,
+        colorbar: bool = False,
+        cbar_label: Optional[str] = None,
+        **kwargs,
+    ) -> FuncAnimation:
         """Spin an orthographic globe over a single field by sweeping the centre longitude.
 
         Forces a globe map and redraws ``dataset`` on ``n_frames`` orthographic projections whose centre
@@ -271,13 +330,19 @@ class AnimationMixin:
         if n_frames < 1:
             raise ValueError("rotate needs n_frames >= 1")
         if kind not in _ANIMATION_KINDS:
-            raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
+            raise ValueError(
+                f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}"
+            )
         self.globe = True
-        self._prime_animation([dataset], kwargs, colorbar=colorbar, cbar_label=cbar_label)
+        self._prime_animation(
+            [dataset], kwargs, colorbar=colorbar, cbar_label=cbar_label
+        )
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
 
         def draw_one(i: int) -> None:
             self.crs = projections.orthographic(lon=lons[i], lat=lat)
-            self._draw_animation_frame(dataset, kind, kwargs, ocean=ocean, coastlines=coastlines)
+            self._draw_animation_frame(
+                dataset, kind, kwargs, ocean=ocean, coastlines=coastlines
+            )
 
         return self._animate_frames(draw_one, n_frames, fps)

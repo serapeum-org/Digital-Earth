@@ -108,7 +108,9 @@ class DecorationMixin:
 
         return self.add_underlay(apply)
 
-    def basemap(self, provider: str = "CartoDark", *, opacity: float = 1.0) -> "DecorationMixin":
+    def basemap(
+        self, provider: str = "CartoDark", *, opacity: float = 1.0
+    ) -> "DecorationMixin":
         """Add a named raster basemap beneath the data (recipe W1).
 
         Args:
@@ -158,7 +160,9 @@ class DecorationMixin:
         from maplibre.controls import NavigationControl
 
         control = NavigationControl(
-            show_compass=show_compass, show_zoom=show_zoom, visualize_pitch=visualize_pitch
+            show_compass=show_compass,
+            show_zoom=show_zoom,
+            visualize_pitch=visualize_pitch,
         )
 
         def apply(widget: Any) -> None:
@@ -167,7 +171,11 @@ class DecorationMixin:
         return self.add_layer(layer=apply)
 
     def scale_bar(
-        self, *, position: str = "bottom-left", unit: str = "metric", max_width: int = 100
+        self,
+        *,
+        position: str = "bottom-left",
+        unit: str = "metric",
+        max_width: int = 100,
     ) -> "DecorationMixin":
         """Add a MapLibre scale bar (ED.13).
 
@@ -271,6 +279,7 @@ class DecorationMixin:
             raise ValueError("measure() needs distance and/or area enabled")
         _check_position(position)
         from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
+
         options = MapboxDrawOptions(
             display_controls_default=False,
             controls=MapboxDrawControls(line_string=distance, polygon=area, trash=True),
@@ -318,7 +327,9 @@ class DecorationMixin:
         _require_layer_api()
         layer_id = layer or self._last_layer_id
         if layer_id is None:
-            raise ValueError("popup() needs a layer — draw a data layer first or pass layer=...")
+            raise ValueError(
+                "popup() needs a layer — draw a data layer first or pass layer=..."
+            )
         kwargs = self._attribute_template(fields)
 
         def apply(widget: Any) -> None:
@@ -345,7 +356,9 @@ class DecorationMixin:
         _require_layer_api()
         layer_id = layer or self._last_layer_id
         if layer_id is None:
-            raise ValueError("tooltip() needs a layer — draw a data layer first or pass layer=...")
+            raise ValueError(
+                "tooltip() needs a layer — draw a data layer first or pass layer=..."
+            )
         kwargs = self._attribute_template(fields)
 
         def apply(widget: Any) -> None:

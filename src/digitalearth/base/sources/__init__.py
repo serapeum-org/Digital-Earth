@@ -10,6 +10,7 @@ This package is a thin, pyramids-only extraction layer (no ``xarray``/``rasterio
 own leaf module (:mod:`digitalearth.base.sources.source`) so importing it here and from :mod:`.extractors` does
 not create a cycle.
 """
+
 from typing import Optional
 
 import numpy as np

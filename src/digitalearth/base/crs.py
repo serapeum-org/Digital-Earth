@@ -3,6 +3,7 @@
 A leaf module (no pyramids/cleopatra/matplotlib import) so both :mod:`digitalearth.base.sources.extractors` and
 :mod:`digitalearth.static.map` can resolve a vector layer's EPSG the same way.
 """
+
 from typing import Any, Optional
 
 __all__ = ["source_epsg"]

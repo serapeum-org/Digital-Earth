@@ -10,6 +10,7 @@ see ``planning/interactive-3d/00-architecture-and-ingestion.md``.
 returns (no import needed). A genuine need to import them is a signal to push the capability into pyramids, not to
 relax this test.
 """
+
 import ast
 import pathlib
 
@@ -79,5 +80,7 @@ def test_tiers_import_no_gis_competitor():
 def test_guard_detects_a_forbidden_import(tmp_path):
     """The guard's import scanner flags a forbidden import (so the rule has real teeth)."""
     sample = tmp_path / "bad_module.py"
-    sample.write_text("import xarray as xr\nfrom rasterio import open\n", encoding="utf-8")
+    sample.write_text(
+        "import xarray as xr\nfrom rasterio import open\n", encoding="utf-8"
+    )
     assert FORBIDDEN & set(_top_level_imports(sample)) == {"xarray", "rasterio"}

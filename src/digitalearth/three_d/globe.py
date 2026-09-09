@@ -9,6 +9,7 @@ only to drape the already-prepared lon/lat numpy field onto a sphere.
 geovista pulls cartopy transitively — that is *its* dependency, never imported here (the HARD RULE /
 ``test_no_competitor_imports`` guard); this module imports only ``geovista`` itself, lazily.
 """
+
 from typing import Any
 
 import numpy as np

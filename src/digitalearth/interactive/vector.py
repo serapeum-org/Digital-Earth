@@ -233,8 +233,9 @@ class VectorMixin:
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
-    def _categorical_polygons(self, features: Any, column: str, *, cmap: str = "viridis",
-                              **opts: Any) -> "VectorMixin":
+    def _categorical_polygons(
+        self, features: Any, column: str, *, cmap: str = "viridis", **opts: Any
+    ) -> "VectorMixin":
         """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
 
         The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
@@ -267,8 +268,12 @@ class VectorMixin:
         )
 
         gdf = self._display_gdf(features)
-        categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))
-        cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
+        categories, colors = categorical_colors(
+            gdf[column], resolve_categorical_cmap(cmap)
+        )
+        cmap_by_label = {
+            str(category): color for category, color in zip(categories, colors)
+        }
         # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
         # categorically (a numeric column would map continuously and interpolate the palette).
         gdf = gdf.copy()
@@ -632,7 +637,12 @@ class VectorMixin:
         crs = gv.util.process_crs(self.crs)
         if column:
             reducer = reducers.get(aggregator, np.mean)
-            element = gv.HexTiles((x, y, gdf[column].to_numpy()), kdims=["x", "y"], vdims=[column], crs=crs)
+            element = gv.HexTiles(
+                (x, y, gdf[column].to_numpy()),
+                kdims=["x", "y"],
+                vdims=[column],
+                crs=crs,
+            )
         else:  # no value column -> count points per hex (np.size), no value dimension
             reducer = np.size
             element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)

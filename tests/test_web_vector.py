@@ -34,7 +34,9 @@ def points_gdf():
     from shapely.geometry import Point
 
     geoms = [Point(x, x) for x in range(5)]
-    return gpd.GeoDataFrame({"value": [0.0, 1.0, 2.0, 3.0, 4.0]}, geometry=geoms, crs=4326)
+    return gpd.GeoDataFrame(
+        {"value": [0.0, 1.0, 2.0, 3.0, 4.0]}, geometry=geoms, crs=4326
+    )
 
 
 class TestColorExpr:
@@ -53,11 +55,17 @@ class TestColorExpr:
         expr = WebMap()._color_expr(values, "pop", "quantiles", 4, "viridis")
         edges, _ = classify(values, "quantiles", 4)
 
-        assert expr[0] == "step", f"graduated colouring must be a step expression, got {expr[0]!r}"
-        assert expr[1] == ["get", "pop"], "the step input must read the column with ['get', column]"
+        assert expr[0] == "step", (
+            f"graduated colouring must be a step expression, got {expr[0]!r}"
+        )
+        assert expr[1] == ["get", "pop"], (
+            "the step input must read the column with ['get', column]"
+        )
         # step layout: [step, [get,col], color0, e1, color1, e2, color2, ...] -> interior edges only.
         interior = [expr[i] for i in range(3, len(expr), 2)]
-        assert np.allclose(interior, edges[1:-1]), f"step stops {interior} != classifier {edges[1:-1]}"
+        assert np.allclose(interior, edges[1:-1]), (
+            f"step stops {interior} != classifier {edges[1:-1]}"
+        )
 
     def test_graduated_records_breaks_on_the_map(self):
         """The full class edges are exposed on ``last_breaks`` for an out-of-band legend."""
@@ -75,9 +83,13 @@ class TestColorExpr:
         expr = m._color_expr(np.array([0.0, 10.0]), "v", None, 5, "viridis")
         assert expr[:3] == ["interpolate", ["linear"], ["get", "v"]]
         stops = [expr[i] for i in range(3, len(expr), 2)]
-        assert stops[0] == 0.0 and stops[-1] == 10.0, f"ramp should span the data: {stops}"
+        assert stops[0] == 0.0 and stops[-1] == 10.0, (
+            f"ramp should span the data: {stops}"
+        )
         colors = [expr[i] for i in range(4, len(expr), 2)]
-        assert all(c.startswith("#") for c in colors), f"ramp colours must be hex: {colors}"
+        assert all(c.startswith("#") for c in colors), (
+            f"ramp colours must be hex: {colors}"
+        )
 
     def test_constant_values_do_not_crash_continuous(self):
         """A constant column widens the range instead of producing a zero-width ramp."""
@@ -88,12 +100,28 @@ class TestColorExpr:
     def test_categorical_match_expression(self):
         """scheme='categorical' compiles a MapLibre `match` over the distinct values (DC.8)."""
         m = WebMap()
-        expr = m._color_expr(np.array(["a", "b", "a", "c"], dtype=object), "kind", "categorical", 5, "tab10")
-        assert expr[0] == "match", f"categorical colouring must be a match expression, got {expr[0]!r}"
-        assert expr[1] == ["get", "kind"], "the match input must read the column with ['get', column]"
-        assert expr[2] == "a" and expr[4] == "b" and expr[6] == "c", f"category literals misordered: {expr}"
-        assert expr[-1] == "#cccccc", "the match expression must end with a default colour"
-        assert m.last_breaks == ["a", "b", "c"], f"categories should be recorded: {m.last_breaks}"
+        expr = m._color_expr(
+            np.array(["a", "b", "a", "c"], dtype=object),
+            "kind",
+            "categorical",
+            5,
+            "tab10",
+        )
+        assert expr[0] == "match", (
+            f"categorical colouring must be a match expression, got {expr[0]!r}"
+        )
+        assert expr[1] == ["get", "kind"], (
+            "the match input must read the column with ['get', column]"
+        )
+        assert expr[2] == "a" and expr[4] == "b" and expr[6] == "c", (
+            f"category literals misordered: {expr}"
+        )
+        assert expr[-1] == "#cccccc", (
+            "the match expression must end with a default colour"
+        )
+        assert m.last_breaks == ["a", "b", "c"], (
+            f"categories should be recorded: {m.last_breaks}"
+        )
 
     def test_categorical_numeric_literals_are_json_native(self):
         """Numeric categories are coerced to native int for the MapLibre literal."""
@@ -105,10 +133,16 @@ class TestColorExpr:
     def test_categorical_whole_float_labels_narrow_to_int(self):
         """Whole-valued float categories become int labels — MapLibre rejects non-integer match labels (M1)."""
         m = WebMap()
-        expr = m._color_expr(np.array([1.0, 2.0, 1.0, 3.0]), "zone", "categorical", 5, "tab10")
+        expr = m._color_expr(
+            np.array([1.0, 2.0, 1.0, 3.0]), "zone", "categorical", 5, "tab10"
+        )
         literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
-        assert literals == [1, 2, 3] and all(type(v) is int for v in literals), f"float cats must narrow: {literals}"
-        assert all(type(b) is int for b in m.last_breaks), f"recorded breaks must narrow too: {m.last_breaks}"
+        assert literals == [1, 2, 3] and all(type(v) is int for v in literals), (
+            f"float cats must narrow: {literals}"
+        )
+        assert all(type(b) is int for b in m.last_breaks), (
+            f"recorded breaks must narrow too: {m.last_breaks}"
+        )
 
     def test_categorical_non_integer_float_rejected(self):
         """A non-integer float category cannot key a MapLibre match and is rejected clearly (M1)."""
@@ -118,7 +152,9 @@ class TestColorExpr:
     def test_cmap_hex_count_and_format(self):
         """``_cmap_hex`` returns the requested number of hex colours."""
         colors = WebMap()._cmap_hex("viridis", 4)
-        assert len(colors) == 4 and all(c.startswith("#") and len(c) == 7 for c in colors)
+        assert len(colors) == 4 and all(
+            c.startswith("#") and len(c) == 7 for c in colors
+        )
 
 
 class TestVectorBuildersNeedEngine:
@@ -133,7 +169,9 @@ class TestVectorBuildersNeedEngine:
 
         m = WebMap().choropleth(polygons_gdf, column="pop", scheme="quantiles", k=4)
         assert len(m.layers) == 1, "choropleth should register exactly one layer"
-        assert m._last_layer_id is not None, "the data layer id must be recorded for popup/tooltip"
+        assert m._last_layer_id is not None, (
+            "the data layer id must be recorded for popup/tooltip"
+        )
         assert m.last_breaks is not None, "choropleth must record its class breaks"
         assert isinstance(m.render(), MapWidget)
 
@@ -177,7 +215,9 @@ class TestDecorationNeedsEngine:
         with pytest.raises(ValueError, match="unknown basemap provider") as exc:
             WebMap().basemap("NoSuchProvider")
         # the suggestion list uses the canonical, correctly-cased names, not "Cartodark"/"Osm" (N1)
-        assert "CartoDark" in str(exc.value) and "OSM" in str(exc.value), f"mis-cased names: {exc.value}"
+        assert "CartoDark" in str(exc.value) and "OSM" in str(exc.value), (
+            f"mis-cased names: {exc.value}"
+        )
 
     def test_basemap_registers_an_underlay(self, polygons_gdf):
         """A basemap added after data is still drawn first (underlay at index 0)."""
@@ -201,7 +241,13 @@ class TestDecorationNeedsEngine:
         """ED.13 — nav/scale/fullscreen controls register and the map still renders."""
         from maplibre.ipywidget import MapWidget
 
-        m = WebMap().polygons(polygons_gdf).navigation().scale_bar(unit="imperial").fullscreen()
+        m = (
+            WebMap()
+            .polygons(polygons_gdf)
+            .navigation()
+            .scale_bar(unit="imperial")
+            .fullscreen()
+        )
         assert len(m.layers) == 4, "data layer + 3 controls"
         assert isinstance(m.render(), MapWidget)
 
@@ -225,7 +271,9 @@ class TestDecorationNeedsEngine:
             WebMap().polygons(polygons_gdf).measure(distance=False, area=False)
         # the mode guard is checked before position, so it wins when both are invalid (N4)
         with pytest.raises(ValueError, match="distance and/or area"):
-            WebMap().polygons(polygons_gdf).measure(distance=False, area=False, position="bad")
+            WebMap().polygons(polygons_gdf).measure(
+                distance=False, area=False, position="bad"
+            )
 
     def test_control_position_is_validated(self):
         """An unknown control corner fails fast with a clear error rather than at render time (N3)."""
@@ -246,4 +294,6 @@ class TestAttributeTemplate:
 
     def test_multiple_fields_build_html_template(self):
         out = WebMap()._attribute_template(["a", "b"])
-        assert "template" in out and "{a}" in out["template"] and "{b}" in out["template"]
+        assert (
+            "template" in out and "{a}" in out["template"] and "{b}" in out["template"]
+        )

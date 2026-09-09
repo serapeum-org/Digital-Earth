@@ -10,7 +10,9 @@ def test_spaghetti_over_collection(dataset):
     """spaghetti contours every member of a DatasetCollection on one shared axes."""
     from pyramids.dataset.collection import DatasetCollection
 
-    dc = DatasetCollection.from_files(["examples/data/acc4000.tif", "examples/data/acc4000.tif"])
+    dc = DatasetCollection.from_files(
+        ["examples/data/acc4000.tif", "examples/data/acc4000.tif"]
+    )
     m = Map(crs=dataset.epsg)
     artists = m.spaghetti(dc)
     assert len(artists) == 2

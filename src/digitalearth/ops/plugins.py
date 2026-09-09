@@ -11,6 +11,7 @@ At runtime :func:`load_plugins` discovers and loads those entry points. This is 
 ``importlib.metadata`` plumbing — no third-party dependency — and is the mechanism behind earthkit-plots'
 ``_plugins.py``, scoped here to the extension points Digital-Earth actually offers.
 """
+
 import logging
 from importlib.metadata import EntryPoint, entry_points
 from typing import Any, Dict, Iterator, Optional, Sequence
@@ -29,7 +30,9 @@ logger = logging.getLogger(__name__)
 GROUPS = ("digitalearth.styles", "digitalearth.sources")
 
 
-def iter_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> Iterator[EntryPoint]:
+def iter_plugins(
+    group: str, *, eps: Optional[Sequence[EntryPoint]] = None
+) -> Iterator[EntryPoint]:
     """Yield the entry points registered under ``group`` (without loading them).
 
     Args:
@@ -63,7 +66,9 @@ def iter_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> I
         yield ep
 
 
-def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> Dict[str, Any]:
+def load_plugins(
+    group: str, *, eps: Optional[Sequence[EntryPoint]] = None
+) -> Dict[str, Any]:
     """Discover and **load** every plugin registered under ``group``.
 
     Each entry point is imported via ``EntryPoint.load()`` and collected by its name. Loading is what
@@ -122,6 +127,8 @@ def load_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> D
     for ep in iter_plugins(group, eps=eps):
         try:
             loaded[ep.name] = ep.load()
-        except Exception as exc:  # one broken plugin must not abort discovery of the rest
+        except (
+            Exception
+        ) as exc:  # one broken plugin must not abort discovery of the rest
             logger.warning("skipping plugin %r in group %r: %s", ep.name, group, exc)
     return loaded

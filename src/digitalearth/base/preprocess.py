@@ -7,6 +7,7 @@ Two small operations from earthkit-plots' pipeline that prepare global gridded d
 - :func:`add_cyclic_column` appends the first data column so a global contour/pcolormesh has no seam at the
   antimeridian. This is pure array bookkeeping (numpy), so it lives in the digitalearth wiring.
 """
+
 from typing import Any, Tuple
 
 import numpy as np

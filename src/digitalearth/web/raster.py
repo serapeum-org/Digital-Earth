@@ -65,7 +65,9 @@ class RasterMixin:
                 getattr(values, "size", 0),
             )
         y = np.asarray(source.y.values, dtype=float)
-        if y.size > 1 and y[0] < y[-1]:  # ascending y → flip so PNG row 0 is the northern edge
+        if (
+            y.size > 1 and y[0] < y[-1]
+        ):  # ascending y → flip so PNG row 0 is the northern edge
             values = values[::-1]
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
         coordinates = self._image_coordinates(source.x.values, source.y.values)
@@ -140,7 +142,11 @@ class RasterMixin:
         from matplotlib.colors import Normalize
 
         array = np.ma.asarray(values).astype(float)
-        data = array.filled(np.nan) if np.ma.isMaskedArray(array) else np.asarray(array, dtype=float)
+        data = (
+            array.filled(np.nan)
+            if np.ma.isMaskedArray(array)
+            else np.asarray(array, dtype=float)
+        )
         valid = np.isfinite(data)
         if not valid.any():
             raise ValueError("add_raster got a band with no finite values to colour")

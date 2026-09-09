@@ -1,4 +1,5 @@
 """DimensionInfo — a labelled coordinate/value axis used by :class:`~digitalearth.base.sources.source.Source`."""
+
 from dataclasses import dataclass
 from typing import Optional
 

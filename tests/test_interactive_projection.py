@@ -26,9 +26,9 @@ class TestProjection:
         """Under a projection, image() emits a gv.Image (crs-aware) so GeoViews can reproject it."""
         m.projection("Robinson")
         m.image(dataset)
-        assert isinstance(
-            m.layers[0], gv.Image
-        ), f"expected gv.Image under a projection, got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], gv.Image), (
+            f"expected gv.Image under a projection, got {type(m.layers[0])}"
+        )
 
     def test_no_projection_keeps_plain_hv_image(self, m, dataset):
         m.image(dataset)
@@ -42,9 +42,9 @@ class TestProjection:
         proj = hv.Store.lookup_options("matplotlib", obj, "plot").kwargs.get(
             "projection"
         )
-        assert (
-            proj is not None
-        ), "render() must pass the projection through to the mpl backend"
+        assert proj is not None, (
+            "render() must pass the projection through to the mpl backend"
+        )
         assert "Orthographic" in type(proj).__name__
 
     def test_orthographic_png_export(self, m, dataset, tmp_path):

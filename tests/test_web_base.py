@@ -24,9 +24,7 @@ from tests.test_no_competitor_imports import (
     test_tiers_import_no_gis_competitor,
 )
 
-_WEB_ROOT = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "web"
-)
+_WEB_ROOT = pathlib.Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "web"
 
 
 class TestLazyImport:
@@ -45,10 +43,14 @@ class TestLazyImport:
         for mod in _WEB_ROOT.rglob("*.py"):
             tree = ast.parse(mod.read_text(encoding="utf-8"))
             top_level = set()
-            for node in tree.body:  # module body only — function-local imports stay lazy
+            for (
+                node
+            ) in tree.body:  # module body only — function-local imports stay lazy
                 if isinstance(node, ast.Import):
                     top_level.update(alias.name.split(".")[0] for alias in node.names)
-                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                elif (
+                    isinstance(node, ast.ImportFrom) and node.module and node.level == 0
+                ):
                     top_level.add(node.module.split(".")[0])
             assert not top_level & engine, (
                 f"{mod.name} imports the MapLibre engine at module top — the tier promises a lazy "
@@ -68,7 +70,9 @@ class TestLazyImport:
 
     def test_missing_engine_raises_actionable_error(self, monkeypatch):
         """With maplibre unimportable, the lazy import points at the install command."""
-        monkeypatch.setitem(sys.modules, "maplibre", None)  # makes `import maplibre` raise
+        monkeypatch.setitem(
+            sys.modules, "maplibre", None
+        )  # makes `import maplibre` raise
         with pytest.raises(ImportError, match=r"digitalearth\[web\]"):
             _require_maplibre()
 
@@ -111,7 +115,9 @@ class TestDisplaySource:
 
     def test_reprojects_to_display_crs(self, dataset):
         m = WebMap(crs=3857)
-        assert dataset.epsg != 3857, "fixture must start in a non-display CRS for this test"
+        assert dataset.epsg != 3857, (
+            "fixture must start in a non-display CRS for this test"
+        )
         src = m._to_display_source(dataset)
         assert src.crs == 3857
 
@@ -185,13 +191,17 @@ class TestRegistryAndRender:
         monkeypatch.setattr(IPython.display, "display", shown.append)
         widget = WebMap().show()
         assert isinstance(widget, MapWidget)
-        assert shown == [widget], "show() must push the widget through IPython display once"
+        assert shown == [widget], (
+            "show() must push the widget through IPython display once"
+        )
 
     def test_repr_mimebundle_delegates_to_widget(self):
         bundle = WebMap()._repr_mimebundle_()
         # ipywidgets returns the (data, metadata) tuple form of the protocol; older hooks return a bare dict.
         data = bundle[0] if isinstance(bundle, tuple) else bundle
-        assert isinstance(data, dict) and data, "expected the widget's non-empty mimebundle"
+        assert isinstance(data, dict) and data, (
+            "expected the widget's non-empty mimebundle"
+        )
         assert "application/vnd.jupyter.widget-view+json" in data
 
 
@@ -218,7 +228,9 @@ class TestUtf8Shim:
 
         real_open = builtins.open
 
-        def _sentinel(*args, **kwargs):  # a fresh, un-shimmed reader (no _digitalearth_utf8 flag)
+        def _sentinel(
+            *args, **kwargs
+        ):  # a fresh, un-shimmed reader (no _digitalearth_utf8 flag)
             raise AssertionError("this reader should have been rebound by the shim")
 
         fake = types.ModuleType("maplibre._fake_reader_holder")
@@ -227,7 +239,9 @@ class TestUtf8Shim:
         # start from an un-patched reader (monkeypatch auto-restores after the test)
         monkeypatch.setattr(_utils, "read_internal_file", _sentinel)
 
-        def _fake_open(file, *args, **kwargs):  # fail the probe like Windows cp1252 does
+        def _fake_open(
+            file, *args, **kwargs
+        ):  # fail the probe like Windows cp1252 does
             if "pywidget.js" in str(file) and not kwargs.get("encoding"):
                 raise UnicodeDecodeError("charmap", b"\x9d", 0, 1, "simulated cp1252")
             return real_open(file, *args, **kwargs)
@@ -237,14 +251,20 @@ class TestUtf8Shim:
         base._patch_maplibre_html_encoding()
 
         shim = _utils.read_internal_file
-        assert getattr(shim, "_digitalearth_utf8", False), "the canonical _utils reader must be shimmed"
-        assert fake.read_internal_file is shim, "a submodule holding the reader by name must be rebound too"
+        assert getattr(shim, "_digitalearth_utf8", False), (
+            "the canonical _utils reader must be shimmed"
+        )
+        assert fake.read_internal_file is shim, (
+            "a submodule holding the reader by name must be rebound too"
+        )
 
     def test_save_writes_utf8_non_ascii_title(self, tmp_path):
         """`save` writes the HTML as UTF-8 so a non-ASCII title round-trips (the write-side cp1252 fix)."""
         out = tmp_path / "u.html"
         WebMap(center=(0.0, 0.0), zoom=2).save(str(out), title="façade ′ café —")
-        assert "façade ′ café —" in out.read_text(encoding="utf-8"), "unicode title must survive the write"
+        assert "façade ′ café —" in out.read_text(encoding="utf-8"), (
+            "unicode title must survive the write"
+        )
 
 
 class TestStyleResolution:
@@ -271,7 +291,13 @@ class TestConstructionDefaults:
     def test_default_configuration(self):
         """A bare ``WebMap()`` defaults to EPSG:4326 (MapLibre lon/lat), zoom 2, dark style, height 500."""
         m = WebMap()
-        assert (m.center, m.zoom, m.style, m.crs, m.height) == (None, 2, "dark", 4326, 500)
+        assert (m.center, m.zoom, m.style, m.crs, m.height) == (
+            None,
+            2,
+            "dark",
+            4326,
+            500,
+        )
         assert m.layers == []
 
     @pytest.mark.parametrize(

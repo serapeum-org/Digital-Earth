@@ -10,6 +10,7 @@ PyVista is a renderer, not a GIS engine: meshes are built from pyramids-sourced 
 the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``off_screen`` follows
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
+
 from typing import Any, List, Optional, Tuple
 
 import numpy as np

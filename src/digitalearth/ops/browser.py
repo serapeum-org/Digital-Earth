@@ -6,6 +6,7 @@ interactive backend (the interactive tier, RP.9, stays deferred). Figures are PN
 file with a responsive CSS grid. The file has no external assets, so it opens in any browser and can be
 emailed or archived as-is.
 """
+
 import html
 from base64 import b64encode
 from pathlib import Path
@@ -116,11 +117,15 @@ def gallery(
     """
     images = [Path(p) for p in images]
     if captions is not None and len(captions) != len(images):
-        raise ValueError(f"captions ({len(captions)}) must match images ({len(images)})")
+        raise ValueError(
+            f"captions ({len(captions)}) must match images ({len(images)})"
+        )
     labels = list(captions) if captions is not None else [p.name for p in images]
     cards = "\n".join(_card(img, label) for img, label in zip(images, labels))
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    page = _PAGE.format(title=html.escape(title, quote=True), columns=columns, cards=cards)
+    page = _PAGE.format(
+        title=html.escape(title, quote=True), columns=columns, cards=cards
+    )
     out.write_text(page, encoding="utf-8")
     return out

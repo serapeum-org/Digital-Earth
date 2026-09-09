@@ -373,7 +373,9 @@ class RasterMixin:
             )
         ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
         side = max(64, int(np.sqrt(max_pixels)))
-        read_band = band - 1  # pyramids preview/read_part are 0-based (like Dataset.read_array)
+        read_band = (
+            band - 1
+        )  # pyramids preview/read_part are 0-based (like Dataset.read_array)
 
         def _frame(x_range: Any = None, y_range: Any = None) -> Any:
             if (

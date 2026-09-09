@@ -68,7 +68,10 @@ class TestAutoStyle:
         """A group whose 'match' is a bare string (not a list) is handled."""
         mocker.patch(
             "digitalearth.base.autostyle.load_library",
-            return_value={"default": {"cmap": "viridis"}, "ice": {"match": "siconc", "cmap": "Blues_r"}},
+            return_value={
+                "default": {"cmap": "viridis"},
+                "ice": {"match": "siconc", "cmap": "Blues_r"},
+            },
         )
         assert auto_style(_source("siconc"))["cmap"] == "Blues_r"
 

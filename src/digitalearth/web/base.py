@@ -85,7 +85,10 @@ def _patch_maplibre_html_encoding() -> None:
     # name and still holds the original (e.g. `maplibre.map`) so no un-shimmed reference is left behind.
     _utils.read_internal_file = read_internal_file
     for name, module in list(sys.modules.items()):
-        if name.startswith("maplibre") and getattr(module, "read_internal_file", None) is original:
+        if (
+            name.startswith("maplibre")
+            and getattr(module, "read_internal_file", None) is original
+        ):
             module.read_internal_file = read_internal_file
 
 
@@ -319,12 +322,16 @@ class WebMapBase:
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
         """
-        if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
+        if hasattr(features, "epsg") and hasattr(
+            features, "to_crs"
+        ):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
             return features
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
-        if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
+        if (
+            crs_epsg is not None and crs_epsg != self.crs
+        ):  # a bare GeoDataFrame in another CRS
             return features.to_crs(self.crs)
         return features
 
@@ -480,7 +487,9 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
         """
-        kind = (fmt or ("png" if str(path).lower().endswith(".png") else "html")).lower()
+        kind = (
+            fmt or ("png" if str(path).lower().endswith(".png") else "html")
+        ).lower()
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)

@@ -46,17 +46,23 @@ class TestHelpers:
 
     def test_style_of_strips_match_keys(self):
         """_style_of drops the match-only keys, keeping just the renderable style."""
-        params = {"match": ["x"], "standard_name": ["y"], "match_units": ["K"], "cmap": "viridis", "units": "m"}
+        params = {
+            "match": ["x"],
+            "standard_name": ["y"],
+            "match_units": ["K"],
+            "cmap": "viridis",
+            "units": "m",
+        }
         assert _style_of(params) == {"cmap": "viridis", "units": "m"}
 
     @pytest.mark.parametrize(
         "alias, name, expected",
         [
-            ("precip", "precipitation", True),   # prefix within a token
-            ("2t", "2t_daily_mean", True),        # at a token start after the boundary
-            ("tp", "output", False),              # mid-token coincidence is rejected
-            ("rain", "terrain", False),           # mid-token coincidence is rejected
-            ("", "anything", False),              # an empty alias never matches (N1 guard)
+            ("precip", "precipitation", True),  # prefix within a token
+            ("2t", "2t_daily_mean", True),  # at a token start after the boundary
+            ("tp", "output", False),  # mid-token coincidence is rejected
+            ("rain", "terrain", False),  # mid-token coincidence is rejected
+            ("", "anything", False),  # an empty alias never matches (N1 guard)
         ],
     )
     def test_alias_in(self, alias, name, expected):
@@ -76,7 +82,11 @@ class TestLoadMagicsLibrary:
     def test_covers_common_fields(self):
         """The shipped library defines the common operational fields."""
         lib = load_magics_library()
-        assert {"temperature_2m", "mean_sea_level_pressure", "total_precipitation"} <= set(lib)
+        assert {
+            "temperature_2m",
+            "mean_sea_level_pressure",
+            "total_precipitation",
+        } <= set(lib)
 
     def test_entries_carry_canonical_style(self):
         """Every entry carries a colormap and a magics_name (its canonical style identity)."""
@@ -118,15 +128,22 @@ class TestMagicsStyle:
     def test_standard_name_takes_precedence_over_units(self):
         """With no name, standard_name is tried before units (and a conflicting unit is ignored)."""
         style = magics_style(standard_name="air_temperature", units="gpm")
-        assert style["magics_name"] == "t2m", "standard_name (t2m) must win over the gpm unit (z)"
+        assert style["magics_name"] == "t2m", (
+            "standard_name (t2m) must win over the gpm unit (z)"
+        )
 
     @pytest.mark.parametrize(
         "name, standard_name, units, expected",
         [
-            ("T2M", None, None, "t2m"),                                  # name, upper-case
-            ("Total_Precipitation", None, None, "tp"),                   # name, mixed-case substring
-            (None, "AIR_PRESSURE_AT_MEAN_SEA_LEVEL", None, "msl"),       # standard_name, upper-case
-            (None, None, "GPM", "z"),                                    # units, upper-case
+            ("T2M", None, None, "t2m"),  # name, upper-case
+            ("Total_Precipitation", None, None, "tp"),  # name, mixed-case substring
+            (
+                None,
+                "AIR_PRESSURE_AT_MEAN_SEA_LEVEL",
+                None,
+                "msl",
+            ),  # standard_name, upper-case
+            (None, None, "GPM", "z"),  # units, upper-case
         ],
     )
     def test_matching_is_case_insensitive(self, name, standard_name, units, expected):
@@ -167,7 +184,9 @@ class TestMagicsStyle:
             name: A field name whose leading token starts with an alias.
             expected: The magics_name it should resolve to.
         """
-        assert magics_style(name)["magics_name"] == expected, f"{name!r} -> {magics_style(name)}"
+        assert magics_style(name)["magics_name"] == expected, (
+            f"{name!r} -> {magics_style(name)}"
+        )
 
     def test_no_match_returns_none(self):
         """An unrecognised field returns None so the caller can fall back."""
@@ -190,7 +209,11 @@ class TestAutoStyleIntegration:
     def test_magics_supplies_levels(self):
         """A recognised field carries canonical contour levels, not just a colormap."""
         style = auto_style(_source("msl"))
-        assert style["units"] == "hPa" and style["levels"][0] == 960 and style["magics_name"] == "msl"
+        assert (
+            style["units"] == "hPa"
+            and style["levels"][0] == 960
+            and style["magics_name"] == "msl"
+        )
 
     def test_resolves_by_standard_name(self):
         """auto_style matches on the Source's standard_name when the variable name is opaque."""

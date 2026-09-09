@@ -9,6 +9,7 @@ Using a ``StructuredGrid`` from pyramids' real x/y cell-centre coordinates (rath
 non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in **Fortran order**
 (``ravel(order="F")``) to line up with the structured point ordering — C-order silently mirrors the terrain.
 """
+
 from typing import Any, Optional
 
 import numpy as np
@@ -49,7 +50,9 @@ def _vertical_unit_scale(crs: Any) -> float:
     return 1.0
 
 
-def _terrain_mesh(z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: float) -> pv.StructuredGrid:
+def _terrain_mesh(
+    z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: float
+) -> pv.StructuredGrid:
     """Build a ``StructuredGrid`` surface from a 2-D elevation array and 1-D coordinate vectors.
 
     Args:
@@ -63,7 +66,10 @@ def _terrain_mesh(z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: f
     """
     z = np.asarray(z, dtype="float64")
     xx, yy = np.meshgrid(np.asarray(x, dtype="float64"), np.asarray(y, dtype="float64"))
-    zz = np.nan_to_num(z, nan=float(np.nanmin(z)) if np.isfinite(z).any() else 0.0) * z_exaggeration
+    zz = (
+        np.nan_to_num(z, nan=float(np.nanmin(z)) if np.isfinite(z).any() else 0.0)
+        * z_exaggeration
+    )
     grid = pv.StructuredGrid(xx, yy, zz)
     # VTK structured points are Fortran-ordered: ravel(order="F") keeps the terrain right-side up (see module docs).
     grid.point_data[ELEVATION] = z.ravel(order="F")

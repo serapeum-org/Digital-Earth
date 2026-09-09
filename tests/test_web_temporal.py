@@ -44,7 +44,9 @@ class TestTimeSliderNeedsEngine:
     def test_render_returns_slider_plus_map(self, timed_polygons):
         import ipywidgets
 
-        composite = WebMap().timeslider(timed_polygons, kdim="time", column="pop").render()
+        composite = (
+            WebMap().timeslider(timed_polygons, kdim="time", column="pop").render()
+        )
         assert isinstance(composite, ipywidgets.VBox)
         slider, _map = composite.children
         assert isinstance(slider, ipywidgets.SelectionSlider)
@@ -53,16 +55,22 @@ class TestTimeSliderNeedsEngine:
     def test_large_polygon_series_stays_filterable(self, timed_polygons):
         """A large temporal polygon set must keep a per-feature layer id for the filter (M3)."""
         m = WebMap()
-        m.big_data_threshold = 2  # 6 polygons > 2; must NOT auto-route to deck (no layer id to filter)
+        m.big_data_threshold = (
+            2  # 6 polygons > 2; must NOT auto-route to deck (no layer id to filter)
+        )
         m.timeslider(timed_polygons, kdim="time")
         assert m._deck_layers is None, "temporal layers must not auto-route to deck.gl"
-        assert m._temporal["layer_id"] is not None, "the slider needs a filterable layer id"
+        assert m._temporal["layer_id"] is not None, (
+            "the slider needs a filterable layer id"
+        )
 
     def test_render_without_slider_is_bare_map(self, timed_polygons):
         from maplibre.ipywidget import MapWidget
 
         m = WebMap().choropleth(timed_polygons, column="pop")
-        assert isinstance(m.render(), MapWidget), "no timeslider → bare map, not a composite"
+        assert isinstance(m.render(), MapWidget), (
+            "no timeslider → bare map, not a composite"
+        )
 
     def test_save_writes_a_file(self, tmp_path, timed_polygons):
         out = tmp_path / "temporal.html"

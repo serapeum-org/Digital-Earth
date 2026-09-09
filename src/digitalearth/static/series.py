@@ -4,6 +4,7 @@ These are the non-map specialty plots from earthkit-plots (T7.3): envelope/quant
 multi-box plots, and warming stripes. The rendering primitives live in cleopatra; this module only turns
 numpy ensembles/series into the arrays those glyphs expect and draws them onto a (optionally shared) axes.
 """
+
 from typing import Any, Optional, Sequence
 
 import numpy as np
@@ -75,11 +76,15 @@ def boxplot(values: Any, *, ax: Optional[Axes] = None, **kwargs) -> Any:
     return HistogramGlyph(values, ax=ax, fig=_fig_of(ax)).boxplot(ax=ax, **kwargs)
 
 
-def multiboxplot(groups: Sequence[Sequence[float]], *, ax: Optional[Axes] = None, **kwargs) -> Any:
+def multiboxplot(
+    groups: Sequence[Sequence[float]], *, ax: Optional[Axes] = None, **kwargs
+) -> Any:
     """Draw grouped box plots, one box per group (``HistogramGlyph.multiboxplot``)."""
     return HistogramGlyph(groups, ax=ax, fig=_fig_of(ax)).multiboxplot(ax=ax, **kwargs)
 
 
 def stripes(values: Sequence[float], *, ax: Optional[Axes] = None, **kwargs) -> Any:
     """Draw a warming-stripes bar strip of a 1-D series (``HistogramGlyph.stripes``)."""
-    return HistogramGlyph(np.asarray(values), ax=ax, fig=_fig_of(ax)).stripes(ax=ax, **kwargs)
+    return HistogramGlyph(np.asarray(values), ax=ax, fig=_fig_of(ax)).stripes(
+        ax=ax, **kwargs
+    )

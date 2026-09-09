@@ -11,6 +11,7 @@ GIF/MP4 writing uses PyVista's ``open_gif``/``open_movie`` (which need ``imageio
 the ``3d`` extra). No GIS is touched here: animation is pure rendering of already-built meshes; data still comes
 from pyramids upstream.
 """
+
 from typing import Any, Callable, Iterable
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
@@ -28,7 +29,9 @@ def _open_writer(plotter: Any, path: str, framerate: int) -> None:
         plotter.open_movie(path, framerate=framerate)
     else:
         plotter.open_gif(path, fps=framerate)
-    if not hasattr(plotter, "mwriter"):  # pragma: no cover - defensive against an upstream API change
+    if not hasattr(
+        plotter, "mwriter"
+    ):  # pragma: no cover - defensive against an upstream API change
         raise AttributeError(
             "PyVista did not expose a frame writer ('mwriter') after open_gif/open_movie; "
             "the installed pyvista version may be incompatible with digitalearth's animation helpers."
@@ -85,7 +88,9 @@ class AnimationMixin:
             orbital_path = self.plotter.generate_orbital_path(n_points=n_frames)
             self.plotter.orbit_on_path(orbital_path, write_frames=True, **orbit_kwargs)
         finally:
-            _finalize_frames(self.plotter)  # always flush/close the writer, even if rendering raised
+            _finalize_frames(
+                self.plotter
+            )  # always flush/close the writer, even if rendering raised
         return path
 
     def animate(
@@ -134,7 +139,9 @@ class AnimationMixin:
                 update(self, frame)
                 self.plotter.write_frame()
         finally:
-            _finalize_frames(self.plotter)  # always flush/close the writer, even if a frame raised
+            _finalize_frames(
+                self.plotter
+            )  # always flush/close the writer, even if a frame raised
         return path
 
     def jupyter(self, backend: str = "trame") -> None:

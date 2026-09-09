@@ -25,9 +25,9 @@ class TestTiles:
     def test_tiles_is_wmts_underlay(self, m, dataset):
         m.image(dataset).tiles("CartoLight")
         assert isinstance(m.layers[0], gv.element.WMTS), f"got {type(m.layers[0])}"
-        assert isinstance(
-            m.layers[1], hv.Image
-        ), "tiles must insert beneath the data layers"
+        assert isinstance(m.layers[1], hv.Image), (
+            "tiles must insert beneath the data layers"
+        )
 
     def test_unknown_provider_raises_with_catalog(self, m):
         with pytest.raises(ValueError, match="unknown tile provider"):
@@ -83,9 +83,9 @@ class TestTiles:
 
     def test_overlay_level_puts_tiles_on_top(self, m, dataset):
         m.image(dataset).tiles("CartoLight", level="overlay")
-        assert isinstance(
-            m.layers[-1], gv.element.WMTS
-        ), "overlay tiles must be the top layer"
+        assert isinstance(m.layers[-1], gv.element.WMTS), (
+            "overlay tiles must be the top layer"
+        )
 
 
 class TestCoastlinesAndFeatures:
@@ -102,13 +102,13 @@ class TestCoastlinesAndFeatures:
 
     def test_features_underlay_vs_overlay_order(self, m, dataset):
         m.image(dataset).features(land=True, borders=True)
-        assert isinstance(
-            m.layers[0], gv.element.Feature
-        ), "land must underlay the raster"
+        assert isinstance(m.layers[0], gv.element.Feature), (
+            "land must underlay the raster"
+        )
         assert isinstance(m.layers[1], hv.Image)
-        assert isinstance(
-            m.layers[2], gv.element.Feature
-        ), "borders must overlay the raster"
+        assert isinstance(m.layers[2], gv.element.Feature), (
+            "borders must overlay the raster"
+        )
 
     def test_features_none_requested_is_noop(self, m):
         m.features()
@@ -149,9 +149,9 @@ class TestTogglesAndCompose:
     def test_coastline_style_opts_forwarded(self, m):
         m.coastlines(line_width=2.0)
         style = hv.Store.lookup_options("bokeh", m.layers[-1], "style").kwargs
-        assert (
-            style["line_width"] == 2.0
-        ), f"feature opts not applied: {style.get('line_width')}"
+        assert style["line_width"] == 2.0, (
+            f"feature opts not applied: {style.get('line_width')}"
+        )
 
     def test_image_tiles_coastlines_compose(self, m, dataset):
         """The DI.1 acceptance chain: raster + basemap + coastline in one ordered overlay."""
@@ -161,6 +161,6 @@ class TestTogglesAndCompose:
         kinds = [type(layer) for layer in overlay]
         assert len(overlay) == 3, f"expected 3 layers, got {len(overlay)}"
         assert issubclass(kinds[0], gv.element.WMTS), "tiles must be the bottom layer"
-        assert issubclass(
-            kinds[2], gv.element.Feature
-        ), "coastline must be the top layer"
+        assert issubclass(kinds[2], gv.element.Feature), (
+            "coastline must be the top layer"
+        )

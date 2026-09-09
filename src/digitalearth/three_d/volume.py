@@ -14,6 +14,7 @@ uniform grid in Fortran order). Without this, the first cube axis would land on 
 Volume rendering uses ``cell_data`` on a grid sized ``shape[::-1] + 1`` (one more point than cells per axis);
 isosurfacing uses ``point_data`` on a grid sized ``shape[::-1]``.
 """
+
 from typing import Any, Optional, Sequence
 
 import numpy as np
@@ -107,7 +108,9 @@ class VolumeMixin:
         # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
         # on other scenes — this only affects a plotter that's actually showing a volume).
         self.plotter.disable_anti_aliasing()
-        actor = self.add_volume(_volume_grid(_cube(data)), cmap=cmap, opacity=opacity, **kwargs)
+        actor = self.add_volume(
+            _volume_grid(_cube(data)), cmap=cmap, opacity=opacity, **kwargs
+        )
         return actor
 
     def isosurface(
@@ -146,6 +149,8 @@ class VolumeMixin:
                 ```
         """
         grid = _point_grid(_cube(data))
-        contour_kwargs = {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+        contour_kwargs = (
+            {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+        )
         mesh = grid.contour(scalars=FIELD, **contour_kwargs)
         return self.add_mesh(mesh, scalars=FIELD, cmap=cmap, **kwargs)

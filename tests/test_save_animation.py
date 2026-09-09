@@ -4,6 +4,7 @@ The encoders themselves are cleopatra's (and ffmpeg's); what Digital-Earth owns 
 written, at what frame rate, and — the substantive decision — that the intermediate video is written at full
 chroma when a GIF is going to be derived from it, since a subsampled source permanently caps the GIF's colour.
 """
+
 from typing import Any, Dict, List
 
 import numpy as np
@@ -19,10 +20,16 @@ from digitalearth.static.animation import FULL_CHROMA_PIX_FMT, save_animation
 def calls(monkeypatch) -> Dict[str, List[Any]]:
     """Record the cleopatra calls instead of invoking ffmpeg."""
     recorded: Dict[str, List[Any]] = {"save": [], "gif": []}
-    monkeypatch.setattr(de_animation, "_cleopatra_save_animation",
-                        lambda anim, path, **kw: recorded["save"].append((path, kw)))
-    monkeypatch.setattr(de_animation, "gif_from_video",
-                        lambda src, path, **kw: recorded["gif"].append((src, path, kw)))
+    monkeypatch.setattr(
+        de_animation,
+        "_cleopatra_save_animation",
+        lambda anim, path, **kw: recorded["save"].append((path, kw)),
+    )
+    monkeypatch.setattr(
+        de_animation,
+        "gif_from_video",
+        lambda src, path, **kw: recorded["gif"].append((src, path, kw)),
+    )
     return recorded
 
 
@@ -32,7 +39,9 @@ def anim() -> FuncAnimation:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots()
-    return FuncAnimation(fig, lambda i: ax.plot([i], [i]), frames=2, interval=100, blit=False)
+    return FuncAnimation(
+        fig, lambda i: ax.plot([i], [i]), frames=2, interval=100, blit=False
+    )
 
 
 class TestDirectSave:
@@ -69,7 +78,10 @@ class TestDerivedGif:
     """With gif=, the frames are drawn once and read back off the written video."""
 
     def test_returns_both_paths(self, anim, calls):
-        assert save_animation(anim, "clip.mp4", gif="clip.gif") == ("clip.mp4", "clip.gif")
+        assert save_animation(anim, "clip.mp4", gif="clip.gif") == (
+            "clip.mp4",
+            "clip.gif",
+        )
 
     def test_derives_the_gif_from_the_written_video(self, anim, calls):
         save_animation(anim, "clip.mp4", gif="clip.gif")
@@ -95,8 +107,16 @@ class TestDerivedGif:
         assert calls["gif"][0][2]["fps"] == 9.0
 
     def test_gif_options_override_the_inherited_rate(self, anim, calls):
-        save_animation(anim, "clip.mp4", fps=9, gif="clip.gif", gif_options={"fps": 4, "max_colors": 64})
-        assert calls["gif"][0][2]["fps"] == 4, "gif_options should override the inherited rate"
+        save_animation(
+            anim,
+            "clip.mp4",
+            fps=9,
+            gif="clip.gif",
+            gif_options={"fps": 4, "max_colors": 64},
+        )
+        assert calls["gif"][0][2]["fps"] == 4, (
+            "gif_options should override the inherited rate"
+        )
         assert calls["gif"][0][2]["max_colors"] == 64, "gif_options should be forwarded"
 
     @pytest.mark.parametrize("fps", [2.5, 7.4, 0.6, 12])
@@ -104,7 +124,9 @@ class TestDerivedGif:
         """Rounding only the video left the two files of one animation playing at different speeds."""
         save_animation(anim, "clip.mp4", fps=fps, gif="clip.gif")
         video_fps, gif_fps = calls["save"][0][1]["fps"], calls["gif"][0][2]["fps"]
-        assert video_fps == gif_fps, f"video is {video_fps} fps but the GIF is {gif_fps} fps"
+        assert video_fps == gif_fps, (
+            f"video is {video_fps} fps but the GIF is {gif_fps} fps"
+        )
 
     def test_deriving_a_gif_from_a_gif_is_refused(self, anim, calls):
         with pytest.raises(ValueError, match="already a GIF"):
@@ -126,15 +148,21 @@ class TestDerivedGif:
         """gif_from_video types fps as a float, so a fractional rate is meaningful and must not be coerced —
         but two files of one animation playing at different speeds is worth saying out loud."""
         with pytest.warns(RuntimeWarning, match="different speeds"):
-            save_animation(anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 4.5})
-        assert calls["gif"][0][2]["fps"] == 4.5, "the caller's rate should reach gif_from_video unchanged"
+            save_animation(
+                anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 4.5}
+            )
+        assert calls["gif"][0][2]["fps"] == 4.5, (
+            "the caller's rate should reach gif_from_video unchanged"
+        )
 
     def test_a_matching_gif_options_rate_is_silent(self, anim, calls):
         import warnings as _warnings
 
         with _warnings.catch_warnings(record=True) as caught:
             _warnings.simplefilter("always")
-            save_animation(anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 12})
+            save_animation(
+                anim, "clip.mp4", fps=12, gif="clip.gif", gif_options={"fps": 12}
+            )
         assert not [w for w in caught if "different speeds" in str(w.message)]
 
     def test_a_non_gif_derived_path_is_refused(self, anim, calls):
@@ -208,7 +236,9 @@ def test_a_real_gif_is_written_end_to_end(tmp_path):
     fig, ax = plt.subplots(figsize=(1, 1))
     ax.set_axis_off()
     frames = [np.zeros((4, 4)), np.ones((4, 4))]
-    anim = FuncAnimation(fig, lambda i: ax.imshow(frames[i]), frames=2, interval=200, blit=False)
+    anim = FuncAnimation(
+        fig, lambda i: ax.imshow(frames[i]), frames=2, interval=200, blit=False
+    )
     out = tmp_path / "clip.gif"
     assert save_animation(anim, str(out), fps=2) == str(out)
     assert out.exists(), f"{out} was not written"

@@ -79,11 +79,15 @@ class VectorMixin:
                 resolve_categorical_cmap,
             )
 
-            categories, colors = categorical_colors(values, resolve_categorical_cmap(cmap))
+            categories, colors = categorical_colors(
+                values, resolve_categorical_cmap(cmap)
+            )
             expr = ["match", ["get", column]]
             for category, color in zip(categories, colors):
                 expr.extend([_native(category), color])
-            expr.append(MISSING_COLOR)  # fallback for values outside the known categories (shared by all tiers)
+            expr.append(
+                MISSING_COLOR
+            )  # fallback for values outside the known categories (shared by all tiers)
             self.last_breaks = [_native(c) for c in categories]
             return expr
 
@@ -92,7 +96,9 @@ class VectorMixin:
 
             try:
                 edges, _ = classify(values, scheme, k)
-            except ValueError as err:  # constant / single-feature column, unknown scheme, k<1, …
+            except (
+                ValueError
+            ) as err:  # constant / single-feature column, unknown scheme, k<1, …
                 raise ValueError(
                     f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
                 ) from err
@@ -287,7 +293,10 @@ class VectorMixin:
                     column,
                 )
             return self.deck_polygons(gdf)
-        paint: dict = {"fill-opacity": float(opacity), "fill-outline-color": outline_color}
+        paint: dict = {
+            "fill-opacity": float(opacity),
+            "fill-outline-color": outline_color,
+        }
         if column is not None:
             paint["fill-color"] = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap

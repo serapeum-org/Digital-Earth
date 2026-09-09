@@ -4,6 +4,7 @@ Wires geostatista's spatial-statistics + kriging outputs into Digital-Earth's ma
 the computation; these tests only assert the *visualization* (categorical LISA/hotspot maps with the
 conventional palette, and the kriged-surface composition).
 """
+
 import geopandas as gpd
 import matplotlib
 import pytest
@@ -29,7 +30,9 @@ from digitalearth.static.geostatistics import (  # noqa: E402
 def _rendered_colors(scene, categories):
     """Read the hex colour the drawn choropleth actually renders for each sorted category."""
     collection = scene.ax.collections[-1]
-    assert isinstance(collection.norm, BoundaryNorm)  # discrete class codes, not a continuous scale
+    assert isinstance(
+        collection.norm, BoundaryNorm
+    )  # discrete class codes, not a continuous scale
     cmap, norm = collection.get_cmap(), collection.norm
     return {cat: to_hex(cmap(norm(i))) for i, cat in enumerate(categories)}
 
@@ -39,7 +42,9 @@ def clustered_polygons() -> FeatureCollection:
     """A 6×6 grid of unit squares with a sharp low/high west–east split — yields real HH/LL clusters."""
     polys = [box(i, j, i + 1, j + 1) for j in range(6) for i in range(6)]
     vals = [(0.0 if i < 3 else 10.0) for _ in range(6) for i in range(6)]
-    return FeatureCollection(gpd.GeoDataFrame({"v": vals}, geometry=polys, crs="EPSG:32631"))
+    return FeatureCollection(
+        gpd.GeoDataFrame({"v": vals}, geometry=polys, crs="EPSG:32631")
+    )
 
 
 class TestLisaMap:
@@ -68,20 +73,30 @@ class TestLisaMap:
         cats = _categories(lm["cluster"])
         rendered = _rendered_colors(scene, cats)
         set2 = [to_hex(c) for c in colormaps["Set2"].colors]
-        assert rendered["HH"].lower() != LISA_COLORS["HH"].lower()  # the override replaced the semantic palette
+        assert (
+            rendered["HH"].lower() != LISA_COLORS["HH"].lower()
+        )  # the override replaced the semantic palette
         for i, cat in enumerate(cats):
             assert rendered[cat].lower() == set2[i % len(set2)].lower()
 
     def test_unknown_class_uses_tab10_fallback(self):
         """A class absent from the semantic map renders in the qualitative tab10 fallback, not a semantic colour."""
         polys = [box(0, 0, 1, 1), box(1, 0, 2, 1)]
-        fc = FeatureCollection(gpd.GeoDataFrame({"cluster": ["HH", "ZZ"]}, geometry=polys, crs="EPSG:32631"))
+        fc = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"cluster": ["HH", "ZZ"]}, geometry=polys, crs="EPSG:32631"
+            )
+        )
         scene = lisa_map(fc)
         cats = _categories(fc["cluster"])
         rendered = _rendered_colors(scene, cats)
-        assert rendered["HH"].lower() == LISA_COLORS["HH"].lower()  # known class keeps its semantic colour
+        assert (
+            rendered["HH"].lower() == LISA_COLORS["HH"].lower()
+        )  # known class keeps its semantic colour
         fallback = [to_hex(c) for c in colormaps["tab10"].colors]
-        assert rendered["ZZ"].lower() == fallback[cats.index("ZZ") % len(fallback)].lower()
+        assert (
+            rendered["ZZ"].lower() == fallback[cats.index("ZZ") % len(fallback)].lower()
+        )
 
     def test_scheme_override_rejected(self, clustered_polygons):
         """A non-categorical scheme is a clear error, not a confusing keyword collision."""
@@ -143,8 +158,11 @@ class TestKrigingMap:
         """Passing samples adds a second (scatter) layer over the surface."""
         cx, cy = dataset.bbox[0] + 1000.0, dataset.bbox[1] + 1000.0
         samples = FeatureCollection(
-            gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=[Point(cx, cy), Point(cx + 4000.0, cy + 4000.0)],
-                             crs=f"EPSG:{dataset.epsg}")
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0]},
+                geometry=[Point(cx, cy), Point(cx + 4000.0, cy + 4000.0)],
+                crs=f"EPSG:{dataset.epsg}",
+            )
         )
         scene = kriging_map(dataset, samples=samples)
         assert len(scene.layers) == 2
@@ -165,7 +183,11 @@ class TestKrigingMap:
 
         coords = [(i * 1.7 % 10, i * 2.3 % 10) for i in range(30)]
         pts = [Point(x, y) for x, y in coords]
-        fc = Samples(gpd.GeoDataFrame({"v": [x + y for x, y in coords]}, geometry=pts, crs="EPSG:32631"))
+        fc = Samples(
+            gpd.GeoDataFrame(
+                {"v": [x + y for x, y in coords]}, geometry=pts, crs="EPSG:32631"
+            )
+        )
         surface = fc.krige("v", "spherical", cell_size=0.5)
         scene = kriging_map(surface, samples=fc)
         assert len(scene.layers) == 2

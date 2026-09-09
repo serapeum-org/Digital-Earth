@@ -10,6 +10,7 @@ Two subcommands wrap the existing API so plots can be produced from a shell or a
 The CLI always renders headless (matplotlib ``Agg``); human-facing progress goes to ``stderr`` so any piped
 ``stdout`` stays clean. This is earthkit-plots' ``cli/`` entry point, scoped to Digital-Earth's API.
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -38,7 +39,9 @@ def _load(path: Any) -> Any:
     """
     try:
         return Dataset.read_file(str(path))
-    except Exception as raster_error:  # not a raster pyramids can open — try it as vector
+    except (
+        Exception
+    ) as raster_error:  # not a raster pyramids can open — try it as vector
         from pyramids.feature import FeatureCollection
 
         try:
@@ -49,14 +52,37 @@ def _load(path: Any) -> Any:
 
 def _add_plot_options(parser: argparse.ArgumentParser) -> None:
     """Attach the shared plotting flags (forwarded to ``quickmap``) to a subcommand parser."""
-    parser.add_argument("--crs", type=_parse_crs, default=3857, help="display CRS (EPSG int or proj4 string)")
-    parser.add_argument("--kind", default="auto", help="raster renderer: auto|imshow|contourf|contour|pcolormesh")
-    parser.add_argument("--cmap", default=None, help="colormap name (default: auto-styled)")
-    parser.add_argument("--levels", type=int, default=None, help="number of contour levels")
-    parser.add_argument("--domain", default=None, help="named region / domain to set the extent")
-    parser.add_argument("--basemap", action="store_true", help="overlay an XYZ tile basemap (needs network)")
-    parser.add_argument("--coastlines", action="store_true", help="overlay coastlines (needs network)")
-    parser.add_argument("--no-colorbar", dest="colorbar", action="store_false", help="omit the colorbar")
+    parser.add_argument(
+        "--crs",
+        type=_parse_crs,
+        default=3857,
+        help="display CRS (EPSG int or proj4 string)",
+    )
+    parser.add_argument(
+        "--kind",
+        default="auto",
+        help="raster renderer: auto|imshow|contourf|contour|pcolormesh",
+    )
+    parser.add_argument(
+        "--cmap", default=None, help="colormap name (default: auto-styled)"
+    )
+    parser.add_argument(
+        "--levels", type=int, default=None, help="number of contour levels"
+    )
+    parser.add_argument(
+        "--domain", default=None, help="named region / domain to set the extent"
+    )
+    parser.add_argument(
+        "--basemap",
+        action="store_true",
+        help="overlay an XYZ tile basemap (needs network)",
+    )
+    parser.add_argument(
+        "--coastlines", action="store_true", help="overlay coastlines (needs network)"
+    )
+    parser.add_argument(
+        "--no-colorbar", dest="colorbar", action="store_false", help="omit the colorbar"
+    )
     parser.set_defaults(colorbar=True)
 
 
@@ -104,20 +130,34 @@ def build_parser() -> argparse.ArgumentParser:
 
             ```
     """
-    parser = argparse.ArgumentParser(prog="digitalearth", description="Render geospatial data to images.")
+    parser = argparse.ArgumentParser(
+        prog="digitalearth", description="Render geospatial data to images."
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     plot = sub.add_parser("plot", help="render a single input to an image")
     plot.add_argument("input", help="raster or vector file to plot")
-    plot.add_argument("-o", "--output", default=None, help="output image path (default: <input>.png)")
+    plot.add_argument(
+        "-o", "--output", default=None, help="output image path (default: <input>.png)"
+    )
     _add_plot_options(plot)
     plot.set_defaults(func=_cmd_plot)
 
-    batch = sub.add_parser("batch", help="render many inputs, optionally into an HTML gallery")
+    batch = sub.add_parser(
+        "batch", help="render many inputs, optionally into an HTML gallery"
+    )
     batch.add_argument("inputs", nargs="+", help="raster/vector files to plot")
-    batch.add_argument("-o", "--outdir", required=True, help="directory to write images into")
-    batch.add_argument("--html", default=None, help="also write a self-contained HTML gallery to this path")
-    batch.add_argument("--ext", default="png", help="output image format (default: png)")
+    batch.add_argument(
+        "-o", "--outdir", required=True, help="directory to write images into"
+    )
+    batch.add_argument(
+        "--html",
+        default=None,
+        help="also write a self-contained HTML gallery to this path",
+    )
+    batch.add_argument(
+        "--ext", default="png", help="output image format (default: png)"
+    )
     _add_plot_options(batch)
     batch.set_defaults(func=_cmd_batch)
     return parser
@@ -167,7 +207,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             ```
     """
-    matplotlib.use("Agg", force=True)  # render headless to a file — set on invocation, never on import
+    matplotlib.use(
+        "Agg", force=True
+    )  # render headless to a file — set on invocation, never on import
     args = build_parser().parse_args(argv)
     exit_code: int = args.func(args)
     return exit_code

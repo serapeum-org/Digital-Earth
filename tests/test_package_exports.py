@@ -1,4 +1,5 @@
 """Tests for the top-level digitalearth public surface (PC-4)."""
+
 import importlib
 
 import pytest
@@ -6,13 +7,37 @@ import pytest
 import digitalearth
 
 EXPECTED = [
-    "quickplot", "quickmap", "Map", "Scene", "TexturedGlobe", "grid", "shared_colorbar", "projections",
-    "get_source", "Source", "DimensionInfo",
-    "line", "bar", "histogram", "scatter", "bar_by", "line_by", "statistics",
-    "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",
-    "TimeSeries", "Climatology",
-    "lisa_map", "hotspot_map", "kriging_map",
-    "Batch", "gallery", "load_plugins",
+    "quickplot",
+    "quickmap",
+    "Map",
+    "Scene",
+    "TexturedGlobe",
+    "grid",
+    "shared_colorbar",
+    "projections",
+    "get_source",
+    "Source",
+    "DimensionInfo",
+    "line",
+    "bar",
+    "histogram",
+    "scatter",
+    "bar_by",
+    "line_by",
+    "statistics",
+    "envelope",
+    "quantile_band",
+    "boxplot",
+    "multiboxplot",
+    "stripes",
+    "TimeSeries",
+    "Climatology",
+    "lisa_map",
+    "hotspot_map",
+    "kriging_map",
+    "Batch",
+    "gallery",
+    "load_plugins",
 ]
 
 
@@ -49,8 +74,12 @@ class TestPackageExports:
             ``digitalearth.TimeSeries`` is ``digitalearth.static.temporal.TimeSeries`` (no shadow/duplicate).
         """
         temporal = importlib.import_module("digitalearth.static.temporal")
-        assert digitalearth.TimeSeries is temporal.TimeSeries, "TimeSeries is not the temporal one"
-        assert digitalearth.Climatology is temporal.Climatology, "Climatology is not the temporal one"
+        assert digitalearth.TimeSeries is temporal.TimeSeries, (
+            "TimeSeries is not the temporal one"
+        )
+        assert digitalearth.Climatology is temporal.Climatology, (
+            "Climatology is not the temporal one"
+        )
 
     def test_projections_is_the_submodule(self):
         """The re-exported ``projections`` is the static.projections submodule.
@@ -58,7 +87,9 @@ class TestPackageExports:
         Test scenario:
             ``digitalearth.projections`` resolves a known projection factory (web_mercator -> 3857).
         """
-        assert digitalearth.projections.get("web_mercator") == 3857, "projections submodule not wired"
+        assert digitalearth.projections.get("web_mercator") == 3857, (
+            "projections submodule not wired"
+        )
 
 
 #: The subpackages the backend-per-package layout introduced, and a module each must contain.
@@ -85,8 +116,12 @@ class TestSubpackageLayout:
             the package itself being unimportable or a module having failed to move into it.
         """
         module = importlib.import_module(package)
-        assert module.__doc__, f"{package} should carry a module docstring explaining what it holds"
-        assert importlib.import_module(member) is not None, f"{member} should live under {package}"
+        assert module.__doc__, (
+            f"{package} should carry a module docstring explaining what it holds"
+        )
+        assert importlib.import_module(member) is not None, (
+            f"{member} should live under {package}"
+        )
 
     @pytest.mark.parametrize("package", [p for p, _ in LAYOUT])
     def test_subpackage_is_a_real_package(self, package):
@@ -97,7 +132,9 @@ class TestSubpackageLayout:
             ``digitalearth.scene``, which the split deliberately turned into a plain shim module.
         """
         module = importlib.import_module(package)
-        assert hasattr(module, "__path__"), f"{package} should be a package with submodules"
+        assert hasattr(module, "__path__"), (
+            f"{package} should be a package with submodules"
+        )
 
     def test_old_flat_module_paths_are_gone(self):
         """The pre-split top-level module paths no longer resolve.
@@ -106,7 +143,13 @@ class TestSubpackageLayout:
             ``digitalearth.batch``/``cli``/``browser``/``plugins`` moved under ``ops``; leaving a working
             alias behind would let stale imports silently keep the flat layout alive.
         """
-        for stale in ("digitalearth.batch", "digitalearth.cli", "digitalearth.browser",
-                      "digitalearth.plugins", "digitalearth._arrays", "digitalearth._crs"):
+        for stale in (
+            "digitalearth.batch",
+            "digitalearth.cli",
+            "digitalearth.browser",
+            "digitalearth.plugins",
+            "digitalearth._arrays",
+            "digitalearth._crs",
+        ):
             with pytest.raises(ModuleNotFoundError):
                 importlib.import_module(stale)

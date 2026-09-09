@@ -38,17 +38,30 @@ def _render_and_collect(uri: str):
     with sync_playwright() as play:
         try:
             browser = play.chromium.launch()
-        except Exception as exc:  # browser not installed / cannot launch -> skip, don't fail
+        except (
+            Exception
+        ) as exc:  # browser not installed / cannot launch -> skip, don't fail
             pytest.skip(f"Chromium not available for Playwright: {exc}")
         page = browser.new_page(viewport={"width": 900, "height": 700})
         page.on("pageerror", lambda err: page_errors.append(str(err)))
-        page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+        page.on(
+            "console",
+            lambda msg: (
+                console_errors.append(msg.text) if msg.type == "error" else None
+            ),
+        )
         page.goto(uri, wait_until="load")
         try:
-            page.wait_for_selector("canvas", timeout=20000)  # the MapLibre / deck.gl WebGL canvas
-        except PWTimeout:  # no canvas in time -> the canvas_count assertion below reports it
+            page.wait_for_selector(
+                "canvas", timeout=20000
+            )  # the MapLibre / deck.gl WebGL canvas
+        except (
+            PWTimeout
+        ):  # no canvas in time -> the canvas_count assertion below reports it
             pass
-        page.wait_for_timeout(3000)  # let deck.gl finish its first render after the libs load
+        page.wait_for_timeout(
+            3000
+        )  # let deck.gl finish its first render after the libs load
         canvas_count = page.locator("canvas").count()
         browser.close()
     return page_errors, console_errors, canvas_count
@@ -85,13 +98,22 @@ def polygons_gdf():
 
 #: deck-specific markers a console *error* would carry if deck.gl rejected the spec. Deliberately narrow — the
 #: bare words ``layer`` / ``geojson`` match unrelated MapLibre messages, so only deck-flavoured tokens are used.
-_DECK_ERROR_MARKERS = ("deck", "@@", "geojsonlayer", "pointcloudlayer", "scenegraphlayer", "tile3dlayer")
+_DECK_ERROR_MARKERS = (
+    "deck",
+    "@@",
+    "geojsonlayer",
+    "pointcloudlayer",
+    "scenegraphlayer",
+    "tile3dlayer",
+)
 
 
 def _assert_html_has_deck_spec(html_path):
     """Fail if the saved HTML never embedded a deck.gl layer spec (guards a regression in ``save()``)."""
     html = html_path.read_text(encoding="utf-8")
-    assert "@@type" in html, f"saved HTML embeds no deck.gl layer spec (no '@@type' accessor): {html_path}"
+    assert "@@type" in html, (
+        f"saved HTML embeds no deck.gl layer spec (no '@@type' accessor): {html_path}"
+    )
 
 
 def _assert_clean_deck_render(page_errors, console_errors, canvas_count):
@@ -100,10 +122,16 @@ def _assert_clean_deck_render(page_errors, console_errors, canvas_count):
     Note: MapLibre owns the base canvas, so ``canvas_count`` is a liveness check; deck-specific proof comes from
     the no-rejection gate plus the caller's :func:`_assert_html_has_deck_spec` check on the embedded JSON.
     """
-    assert not page_errors, f"uncaught JS error rendering the deck.gl layer: {page_errors}"
-    deck_errors = [e for e in console_errors if any(k in e.lower() for k in _DECK_ERROR_MARKERS)]
+    assert not page_errors, (
+        f"uncaught JS error rendering the deck.gl layer: {page_errors}"
+    )
+    deck_errors = [
+        e for e in console_errors if any(k in e.lower() for k in _DECK_ERROR_MARKERS)
+    ]
     assert not deck_errors, f"deck.gl rejected the layer spec: {deck_errors}"
-    assert canvas_count >= 1, "no canvas rendered — deck.gl / MapLibre did not initialise"
+    assert canvas_count >= 1, (
+        "no canvas rendered — deck.gl / MapLibre did not initialise"
+    )
 
 
 class TestDeckRendersInBrowser:

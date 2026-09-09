@@ -6,6 +6,7 @@ StaticGlyph`` must keep working, and importing it must stay *silent* — the dep
 entry point of the class, not on the import, so a user who merely imports the backend is not warned about a
 class they may never touch.
 """
+
 import importlib
 import sys
 import warnings
@@ -81,7 +82,9 @@ class TestStaticPackageSurface:
             warnings.simplefilter("always")
             importlib.import_module("digitalearth.static")
         messages = [f"{w.category.__name__}: {w.message}" for w in caught]
-        assert not messages, f"importing digitalearth.static should be silent, got: {messages}"
+        assert not messages, (
+            f"importing digitalearth.static should be silent, got: {messages}"
+        )
 
     def test_static_glyph_import_path_works(self):
         """``from digitalearth.static import StaticGlyph`` binds the class from static.glyph.
@@ -92,7 +95,9 @@ class TestStaticPackageSurface:
         """
         from digitalearth.static.glyph import StaticGlyph as Defined
 
-        assert StaticGlyph is Defined, "the re-export should be the class defined in static.glyph"
+        assert StaticGlyph is Defined, (
+            "the re-export should be the class defined in static.glyph"
+        )
 
     def test_all_is_the_expected_surface(self):
         """``__all__`` advertises exactly the six documented names.
@@ -122,7 +127,9 @@ class TestStaticPackageSurface:
         from digitalearth import static
 
         defined = getattr(importlib.import_module(module_path), name)
-        assert getattr(static, name) is defined, f"digitalearth.static.{name} is not {module_path}.{name}"
+        assert getattr(static, name) is defined, (
+            f"digitalearth.static.{name} is not {module_path}.{name}"
+        )
 
     @pytest.mark.parametrize("name", sorted(set(STATIC_EXPORTS) - {"StaticGlyph"}))
     def test_non_deprecated_exports_match_the_package_root(self, name):

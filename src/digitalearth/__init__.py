@@ -77,18 +77,42 @@ from digitalearth.static.temporal import Climatology, TimeSeries  # noqa: E402
 
 __all__ = [
     # one-call API + composition
-    "quickplot", "quickmap", "Map", "Scene", "TexturedGlobe", "grid", "shared_colorbar", "projections",
+    "quickplot",
+    "quickmap",
+    "Map",
+    "Scene",
+    "TexturedGlobe",
+    "grid",
+    "shared_colorbar",
+    "projections",
     # data view
-    "get_source", "Source", "DimensionInfo",
+    "get_source",
+    "Source",
+    "DimensionInfo",
     # charts and statistical series
-    "line", "bar", "bar_by", "line_by", "histogram", "scatter", "statistics",
-    "envelope", "quantile_band", "boxplot", "multiboxplot", "stripes",
+    "line",
+    "bar",
+    "bar_by",
+    "line_by",
+    "histogram",
+    "scatter",
+    "statistics",
+    "envelope",
+    "quantile_band",
+    "boxplot",
+    "multiboxplot",
+    "stripes",
     # temporal products
-    "TimeSeries", "Climatology",
+    "TimeSeries",
+    "Climatology",
     # geostatistics visualization (composes geostatista outputs)
-    "lisa_map", "hotspot_map", "kriging_map",
+    "lisa_map",
+    "hotspot_map",
+    "kriging_map",
     # operational tier
-    "Batch", "gallery", "load_plugins",
+    "Batch",
+    "gallery",
+    "load_plugins",
 ]
 
 # --- back-compat: submodules that moved in the backend restructure -------------------------------------------

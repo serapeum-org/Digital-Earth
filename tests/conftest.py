@@ -1,8 +1,8 @@
 import shutil
 from pathlib import Path
 
-import pytest
 import geopandas as gpd
+import pytest
 from geopandas.geodataframe import GeoDataFrame
 from pyramids.dataset import Dataset
 

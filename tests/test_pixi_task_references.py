@@ -13,6 +13,7 @@ step was gone. Matrix environments (`-e ${{ matrix.environment }}`) are expanded
 so the py311/py312/py313 legs are covered too. Every set-based assertion is paired with a check that the
 scan actually found something, so none of them can pass vacuously.
 """
+
 import functools
 import pathlib
 import re
@@ -82,7 +83,9 @@ def _workflow_invocations() -> list:
 
 def _hook_invocations() -> list:
     """Return (env, name) pairs from every hook `entry:` in .pre-commit-config.yaml."""
-    document = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    document = yaml.safe_load(
+        (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
     found = []
     for repo in document.get("repos") or []:
         for hook in repo.get("hooks") or []:
@@ -103,8 +106,12 @@ class TestPixiTaskReferences:
             invocation syntax or the YAML shape fails loudly instead of silently disabling this file.
         """
         workflow, hooks = _workflow_invocations(), _hook_invocations()
-        assert len(workflow) >= 10, f"expected the workflows to invoke >=10 pixi commands, found {workflow}"
-        assert len(hooks) >= 3, f"expected the hooks to invoke >=3 pixi commands, found {hooks}"
+        assert len(workflow) >= 10, (
+            f"expected the workflows to invoke >=10 pixi commands, found {workflow}"
+        )
+        assert len(hooks) >= 3, (
+            f"expected the hooks to invoke >=3 pixi commands, found {hooks}"
+        )
 
     @pytest.mark.parametrize("source", ["workflows", "hooks"])
     def test_task_references_are_defined(self, source):
@@ -118,9 +125,15 @@ class TestPixiTaskReferences:
             in [tool.pixi.tasks]. A renamed or deleted task would otherwise surface only at run time.
         """
         tasks = _tasks()
-        pairs = _workflow_invocations() if source == "workflows" else _hook_invocations()
-        missing = sorted({name for _, name in pairs if name not in EXECUTABLES and name not in tasks})
-        assert not missing, f"{source} run undefined pixi task(s): {missing}; defined: {sorted(tasks)}"
+        pairs = (
+            _workflow_invocations() if source == "workflows" else _hook_invocations()
+        )
+        missing = sorted(
+            {name for _, name in pairs if name not in EXECUTABLES and name not in tasks}
+        )
+        assert not missing, (
+            f"{source} run undefined pixi task(s): {missing}; defined: {sorted(tasks)}"
+        )
 
     @pytest.mark.parametrize("source", ["workflows", "hooks"])
     def test_referenced_environments_are_declared(self, source):
@@ -134,9 +147,13 @@ class TestPixiTaskReferences:
             expanded first, so py311/py312/py313 are checked as well as the literal names.
         """
         declared = _environments()
-        pairs = _workflow_invocations() if source == "workflows" else _hook_invocations()
+        pairs = (
+            _workflow_invocations() if source == "workflows" else _hook_invocations()
+        )
         undeclared = sorted({env for env, _ in pairs} - declared)
-        assert not undeclared, f"{source} use undeclared pixi env(s): {undeclared}; declared: {sorted(declared)}"
+        assert not undeclared, (
+            f"{source} use undeclared pixi env(s): {undeclared}; declared: {sorted(declared)}"
+        )
 
     @pytest.mark.parametrize("task", ["lint", "doctests"])
     def test_the_gates_added_for_the_migration_are_wired_up(self, task):
@@ -151,15 +168,22 @@ class TestPixiTaskReferences:
             parsed `run:` scripts, deleting the step stops satisfying this even though the workflow still
             mentions the task in a comment.
         """
-        assert task in _tasks(), f"the {task!r} task is not defined in [tool.pixi.tasks]"
+        assert task in _tasks(), (
+            f"the {task!r} task is not defined in [tool.pixi.tasks]"
+        )
         invoked = {name for _, name in _workflow_invocations()}
-        assert task in invoked, f"the {task!r} task is defined but no workflow step runs it"
+        assert task in invoked, (
+            f"the {task!r} task is defined but no workflow step runs it"
+        )
 
 
 def _notebooks() -> list:
     """Return every example notebook, excluding checkpoint copies."""
-    return sorted(p for p in (ROOT / "docs" / "examples").glob("**/*.ipynb")
-                  if ".ipynb_checkpoints" not in p.as_posix())
+    return sorted(
+        p
+        for p in (ROOT / "docs" / "examples").glob("**/*.ipynb")
+        if ".ipynb_checkpoints" not in p.as_posix()
+    )
 
 
 def _task_skipped() -> set:
@@ -168,16 +192,25 @@ def _task_skipped() -> set:
     Matching goes through pytest's own `fnmatch_ex`, the function that implements `--ignore-glob`, so this
     reflects what pytest actually does rather than a second guess at its glob semantics.
     """
-    globs = [arg.split("=", 1)[1] for arg in shlex.split(_tasks()["notebooks"]["cmd"])
-             if arg.startswith("--ignore-glob=")]
+    globs = [
+        arg.split("=", 1)[1]
+        for arg in shlex.split(_tasks()["notebooks"]["cmd"])
+        if arg.startswith("--ignore-glob=")
+    ]
     return {p for p in _notebooks() if any(fnmatch_ex(glob, p) for glob in globs)}
 
 
 def _hook_excluded() -> set:
     """Return the notebooks the pre-commit `notebook-check` hook's exclude regex filters out."""
-    document = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-    hook = next(h for repo in document["repos"] for h in repo.get("hooks") or []
-                if h.get("id") == "notebook-check")
+    document = yaml.safe_load(
+        (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    hook = next(
+        h
+        for repo in document["repos"]
+        for h in repo.get("hooks") or []
+        if h.get("id") == "notebook-check"
+    )
     pattern = re.compile(hook["exclude"])
     return {p for p in _notebooks() if pattern.match(p.relative_to(ROOT).as_posix())}
 
@@ -193,9 +226,17 @@ class TestNotebookSkipListsMirror:
             task's argument list stopped being found. Pin a floor under each.
         """
         notebooks = _notebooks()
-        globs = [a for a in shlex.split(_tasks()["notebooks"]["cmd"]) if a.startswith("--ignore-glob=")]
-        assert len(notebooks) >= 40, f"expected >=40 example notebooks, found {len(notebooks)}"
-        assert len(globs) >= 5, f"expected the notebooks task to declare >=5 ignore-globs, found {globs}"
+        globs = [
+            a
+            for a in shlex.split(_tasks()["notebooks"]["cmd"])
+            if a.startswith("--ignore-glob=")
+        ]
+        assert len(notebooks) >= 40, (
+            f"expected >=40 example notebooks, found {len(notebooks)}"
+        )
+        assert len(globs) >= 5, (
+            f"expected the notebooks task to declare >=5 ignore-globs, found {globs}"
+        )
 
     def test_hook_regex_excludes_exactly_what_the_task_skips(self):
         """The hook's exclude regex filters exactly the notebooks the task's ignore-globs skip.
@@ -205,10 +246,18 @@ class TestNotebookSkipListsMirror:
             written in different languages — shell globs against a regex — so nothing but this test keeps
             them in step. A notebook in one set and not the other is checked by only one of the two gates.
         """
-        task_only = sorted(p.relative_to(ROOT).as_posix() for p in _task_skipped() - _hook_excluded())
-        hook_only = sorted(p.relative_to(ROOT).as_posix() for p in _hook_excluded() - _task_skipped())
-        assert not task_only, f"the task skips these but the pre-commit hook still checks them: {task_only}"
-        assert not hook_only, f"the hook skips these but the notebooks task still runs them: {hook_only}"
+        task_only = sorted(
+            p.relative_to(ROOT).as_posix() for p in _task_skipped() - _hook_excluded()
+        )
+        hook_only = sorted(
+            p.relative_to(ROOT).as_posix() for p in _hook_excluded() - _task_skipped()
+        )
+        assert not task_only, (
+            f"the task skips these but the pre-commit hook still checks them: {task_only}"
+        )
+        assert not hook_only, (
+            f"the hook skips these but the notebooks task still runs them: {hook_only}"
+        )
 
 
 class TestRuffPinsAgree:
@@ -224,12 +273,22 @@ class TestRuffPinsAgree:
         """
         dev = _pyproject()["dependency-groups"]["dev"]
         pinned = [d for d in dev if d.replace(" ", "").startswith("ruff==")]
-        assert len(pinned) == 1, f"expected exactly one pinned ruff in the dev extra, found {pinned}"
+        assert len(pinned) == 1, (
+            f"expected exactly one pinned ruff in the dev extra, found {pinned}"
+        )
         pyproject_version = pinned[0].split("==")[1].strip()
 
-        document = yaml.safe_load((ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
-        revs = [repo["rev"] for repo in document["repos"] if "ruff-pre-commit" in repo.get("repo", "")]
-        assert len(revs) == 1, f"expected exactly one ruff-pre-commit repo, found {revs}"
+        document = yaml.safe_load(
+            (ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+        )
+        revs = [
+            repo["rev"]
+            for repo in document["repos"]
+            if "ruff-pre-commit" in repo.get("repo", "")
+        ]
+        assert len(revs) == 1, (
+            f"expected exactly one ruff-pre-commit repo, found {revs}"
+        )
         hook_version = revs[0].lstrip("v")
 
         assert pyproject_version == hook_version, (

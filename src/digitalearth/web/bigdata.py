@@ -78,10 +78,22 @@ class BigDataMixin:
         if weight is not None:
             values = np.asarray(self._require_column(gdf, weight), dtype=float)
             finite = values[np.isfinite(values)]
-            lo, hi = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
+            lo, hi = (
+                (float(finite.min()), float(finite.max()))
+                if finite.size
+                else (0.0, 1.0)
+            )
             if hi <= lo:
                 hi = lo + 1.0
-            paint["heatmap-weight"] = ["interpolate", ["linear"], ["get", weight], lo, 0.0, hi, 1.0]
+            paint["heatmap-weight"] = [
+                "interpolate",
+                ["linear"],
+                ["get", weight],
+                lo,
+                0.0,
+                hi,
+                1.0,
+            ]
 
         src_id, layer_id = self._uid("heat-src"), self._uid("heatmap")
         layer = Layer(id=layer_id, type=LayerType.HEATMAP, source=src_id, paint=paint)

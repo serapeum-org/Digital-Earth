@@ -111,9 +111,9 @@ class TestDisplaySource:
 
     def test_reprojects_to_display_crs(self, dataset):
         m = InteractiveMap(crs=3857)
-        assert (
-            dataset.epsg != 3857
-        ), "fixture must start in a non-display CRS for this test"
+        assert dataset.epsg != 3857, (
+            "fixture must start in a non-display CRS for this test"
+        )
         src = m._to_display_source(dataset)
         assert src.crs == 3857
 
@@ -222,9 +222,9 @@ class TestStyledAndHelpers:
         assert not np.ma.isMaskedArray(out), "output must be a plain ndarray"
         assert np.isnan(out[1]) and out[0] == 1.0, f"masked cell not NaN-filled: {out}"
         plain = np.array([4.0, 5.0])
-        assert np.array_equal(
-            _masked_to_nan(plain), plain
-        ), "plain arrays must pass through"
+        assert np.array_equal(_masked_to_nan(plain), plain), (
+            "plain arrays must pass through"
+        )
 
 
 class TestShowAndRepr:
@@ -250,9 +250,9 @@ class TestShowAndRepr:
         el = hv.Points([(0, 0)])
         out = InteractiveMap().add_element(el).show()
         assert out is el, "show() must return the rendered object"
-        assert shown == [
-            el
-        ], f"display() should receive the rendered object once, got {shown}"
+        assert shown == [el], (
+            f"display() should receive the rendered object once, got {shown}"
+        )
 
     def test_show_without_ipython_still_returns_object(self, monkeypatch):
         """``show()`` degrades to returning the object when IPython is absent.
@@ -281,9 +281,9 @@ class TestShowAndRepr:
                 return {"text/plain": "fake"}
 
         bundle = InteractiveMap().add_element(_FakeElement())._repr_mimebundle_()
-        assert bundle == {
-            "text/plain": "fake"
-        }, f"hook result not passed through: {bundle}"
+        assert bundle == {"text/plain": "fake"}, (
+            f"hook result not passed through: {bundle}"
+        )
 
     def test_repr_mimebundle_without_hook_is_empty(self):
         """An element without a mimebundle hook degrades to an empty bundle.
@@ -341,9 +341,9 @@ class TestConstructionDefaults:
         if data_epsg is not None:
             data.epsg = data_epsg
         result = InteractiveMap(crs=crs)._needs_reproject(data)
-        assert (
-            result is expected
-        ), f"crs={crs!r}, data_epsg={data_epsg!r}: expected {expected}, got {result}"
+        assert result is expected, (
+            f"crs={crs!r}, data_epsg={data_epsg!r}: expected {expected}, got {result}"
+        )
 
     def test_composition_includes_all_mixins(self):
         """``InteractiveMap`` composes the base plus all nine capability mixins.

@@ -19,13 +19,17 @@ import tempfile
 from typing import Any
 
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
-_ASSET_RE = re.compile(r'<(script|link)[^>]*?(?:src|href)="(?P<url>https?://[^"]+?\.(?:js|css))"[^>]*?>(?:</script>)?')
+_ASSET_RE = re.compile(
+    r'<(script|link)[^>]*?(?:src|href)="(?P<url>https?://[^"]+?\.(?:js|css))"[^>]*?>(?:</script>)?'
+)
 
 
 class ExportMixin:
     """Export builders (HTML / offline HTML / PNG) for :class:`~digitalearth.web.map.WebMap`."""
 
-    def to_html(self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any) -> str:
+    def to_html(
+        self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any
+    ) -> str:
         """Return the map as a standalone HTML string.
 
         Args:
@@ -83,7 +87,9 @@ class ExportMixin:
             )
         return new_html
 
-    def _render_png(self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any) -> str:
+    def _render_png(
+        self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any
+    ) -> str:
         """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
 
         Tries Playwright, then Selenium; both render the standalone HTML offscreen and screenshot it. Neither

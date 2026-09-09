@@ -3,6 +3,7 @@
 Sets the axes extent from a bbox or named domain, builds and caches the projection boundary/graticule for a
 globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
+
 from typing import Any, Optional, Sequence
 
 from cleopatra.basemap.projection import apply_projection_frame
@@ -52,7 +53,10 @@ class ProjectionMixin:
             return
         west, south, east, north = bbox
         xs, ys = reproject_coordinates(
-            [west, east, west, east], [south, south, north, north], from_crs=4326, to_crs=self.crs
+            [west, east, west, east],
+            [south, south, north, north],
+            from_crs=4326,
+            to_crs=self.crs,
         )
         self.set_extent([min(xs), max(xs), min(ys), max(ys)])
 
@@ -65,7 +69,9 @@ class ProjectionMixin:
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
         """
-        self._graticule_lines = projections.graticule(self.crs, lon_step=lon_step, lat_step=lat_step)
+        self._graticule_lines = projections.graticule(
+            self.crs, lon_step=lon_step, lat_step=lat_step
+        )
 
     def _frame(self) -> tuple:
         """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).
@@ -94,7 +100,10 @@ class ProjectionMixin:
             return None
         boundary, xlim, ylim = self._frame()
         patch = apply_projection_frame(
-            self.ax, boundary_xy=boundary, xlim=xlim, ylim=ylim,
+            self.ax,
+            boundary_xy=boundary,
+            xlim=xlim,
+            ylim=ylim,
             graticule_lines=self._graticule_lines,
         )
         self._framed = True
@@ -113,4 +122,3 @@ class ProjectionMixin:
         """Apply the projection frame (for a globe map) then show the figure."""
         self._apply_frame()
         super().show()
-

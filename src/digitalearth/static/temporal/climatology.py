@@ -1,4 +1,5 @@
 """Climatology — group a time series by a periodic label and plot the group means + spread plume."""
+
 from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -40,11 +41,15 @@ class Climatology:
             ```
     """
 
-    def __init__(self, collection: Any, labels: Sequence, band: int = 1, reducer: str = "mean"):
+    def __init__(
+        self, collection: Any, labels: Sequence, band: int = 1, reducer: str = "mean"
+    ):
         self._series = TimeSeries(collection, band=band, reducer=reducer)
         self.labels = list(labels)
         if len(self.labels) != len(collection.datasets):
-            raise ValueError("labels length must match the number of collection members")
+            raise ValueError(
+                "labels length must match the number of collection members"
+            )
 
     def climatology(self) -> Tuple[List, np.ndarray, np.ndarray, np.ndarray]:
         """Aggregate the series by group label.
@@ -73,7 +78,9 @@ class Climatology:
         """
         groups, mean, low, high = self.climatology()
         x = np.arange(len(groups))
-        glyph = LineGlyph(x, mean, ax=ax, fig=ax.get_figure() if ax is not None else None)
+        glyph = LineGlyph(
+            x, mean, ax=ax, fig=ax.get_figure() if ax is not None else None
+        )
         line = glyph.line(ax=ax, **kwargs)
         plot_ax = line[1] if isinstance(line, tuple) else ax
         series.envelope(x, low, high, ax=plot_ax, alpha=0.25)

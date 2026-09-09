@@ -6,6 +6,7 @@ directory, and it renders + saves one figure per input, closing each figure so a
 memory-bounded. It is the operational counterpart of earthkit-plots' ``Batch``/``workflows`` — pure
 orchestration over the existing visualization API (no new GIS or matplotlib machinery).
 """
+
 import logging
 from pathlib import Path
 from typing import Any, Callable, Iterable, List, Optional, Set
@@ -57,7 +58,13 @@ class Batch:
             ```
     """
 
-    def __init__(self, plotter: Callable[..., Map] = quickmap, *, ext: str = "png", **defaults: Any) -> None:
+    def __init__(
+        self,
+        plotter: Callable[..., Map] = quickmap,
+        *,
+        ext: str = "png",
+        **defaults: Any,
+    ) -> None:
         """Store the plotting callable, output format, and shared plot options."""
         self.plotter = plotter
         self.ext = ext.lstrip(".")
@@ -141,8 +148,14 @@ class Batch:
         for index, item in enumerate(items):
             scene = self.render_one(item, **overrides)
             stem = namer(item, index)
-            if stem in used:  # disambiguate a colliding name so an earlier image is not overwritten
-                logger.warning("batch output name %r already used; disambiguating with index %d", stem, index)
+            if (
+                stem in used
+            ):  # disambiguate a colliding name so an earlier image is not overwritten
+                logger.warning(
+                    "batch output name %r already used; disambiguating with index %d",
+                    stem,
+                    index,
+                )
                 stem = f"{stem}_{index}"
             used.add(stem)
             path = out / f"{stem}.{self.ext}"

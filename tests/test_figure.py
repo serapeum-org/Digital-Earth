@@ -1,4 +1,5 @@
 """Tests for digitalearth.static.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
+
 import numpy as np
 import pytest
 
@@ -40,7 +41,9 @@ class TestGrid:
         fig, maps = grid(1, 2, crs=dataset.epsg)
         for m in maps:
             m.imshow(dataset)
-        assert all(len(m.ax.images) == 1 for m in maps), "each panel should hold its own image"
+        assert all(len(m.ax.images) == 1 for m in maps), (
+            "each panel should hold its own image"
+        )
 
 
 class TestSharedColorbar:
