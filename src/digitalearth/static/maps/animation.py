@@ -15,7 +15,7 @@ from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.base.sources import get_stack
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
-from digitalearth.static.maps.raster import ChannelLimits, channel_limits
+from digitalearth.static.maps.raster import ChannelLimits, channel_limits, require_three_bands
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
@@ -235,7 +235,8 @@ class AnimationMixin:
         flicker back with nothing to notice.
 
         Raises:
-            ValueError: when ``colorbar=True`` is combined with a composite ``kind``.
+            ValueError: when ``colorbar=True`` is combined with a composite ``kind``, or when a composite's
+                ``bands`` does not hold exactly three indices.
         """
         if kind in _COMPOSITE_KINDS:
             if colorbar:
@@ -243,10 +244,11 @@ class AnimationMixin:
                     f"colorbar=True is not supported for a {kind!r} animation: a composite renders an RGB "
                     "image, which has no single scalar mappable to key a colorbar to"
                 )
+            bands = opts.get("bands", _DEFAULT_COMPOSITE_BANDS)
+            require_three_bands(kind, bands)  # before the scan, not after it (M3)
             if opts.get("limits") is None:  # absent *or* explicitly None (H1)
                 opts["limits"] = self._stack_channel_limits(
-                    datasets, opts.get("bands", _DEFAULT_COMPOSITE_BANDS),
-                    mask_nodata=opts.get("mask_nodata", True),
+                    datasets, bands, mask_nodata=opts.get("mask_nodata", True),
                 )
             return
         self._resolve_animation_clim(datasets, opts)

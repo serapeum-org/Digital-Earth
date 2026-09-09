@@ -492,6 +492,20 @@ class TestAnimateComposites:
             f"mask_nodata=False should widen the low bound: {unmasked['limits'][1]} vs {masked['limits'][1]}"
         )
 
+    @pytest.mark.parametrize("bands", [(1, 2), (1, 2, 3, 4)])
+    def test_wrong_band_count_is_refused_before_the_scan(self, rgb_stack, bands, mocker):
+        """A wrong band count fails up front, naming the caller — not mid-render as a bare IndexError.
+
+        Test scenario:
+            Priming used to scan up to 24 frames off disk and only then die inside FuncAnimation.save, where
+            PillowWriter.finish() raises over the top of the real error. The check must therefore run before
+            the scan, so no frame is read at all.
+        """
+        spy = mocker.spy(Map, "_stack_channel_limits")
+        with pytest.raises(ValueError, match="needs exactly three bands"):
+            Map(crs=4326).animate(rgb_stack, kind="rgb_composite", bands=bands)
+        assert spy.call_count == 0, "the stack must not be scanned before the band count is checked"
+
     def test_two_band_composite_limits(self):
         """The scan follows the bands it is given — two bands yield two channel bounds, not three."""
         stack = [_rgb_field(shift=s) for s in (0.0, 10.0)]

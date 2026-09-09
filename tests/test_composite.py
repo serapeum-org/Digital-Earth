@@ -164,3 +164,12 @@ def test_stretch_to_unit_survives_non_finite_limits():
     assert np.isnan(out[..., 1]).all(), "an all-nodata channel stays NaN (it renders transparent)"
     assert np.isfinite(out[..., 0]).all(), "a live channel must not be poisoned by the fallback"
     assert out[..., 0].min() >= 0.0 and out[..., 0].max() <= 1.0, "the fallback must still clip into [0, 1]"
+
+
+@pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
+@pytest.mark.parametrize("bands", [(1,), (1, 2), (1, 2, 3, 1)])
+def test_composite_rejects_a_wrong_band_count(rgb_dataset, method, bands):
+    """Both composites refuse a band list that is not exactly three, naming themselves in the message."""
+    m = Map(crs=rgb_dataset.epsg)
+    with pytest.raises(ValueError, match=f"{method}\\(\\) needs exactly three bands"):
+        getattr(m, method)(rgb_dataset, bands=bands)

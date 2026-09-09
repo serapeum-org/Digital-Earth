@@ -22,6 +22,45 @@ _STRETCH_PERCENTILES = [2, 98]
 ChannelLimits = Sequence[Tuple[float, float]]
 
 
+def require_three_bands(caller: str, bands: Sequence[int]) -> None:
+    """Reject a composite band list that is not exactly three long.
+
+    A composite maps its bands to three channels (R/G/B or H/S/V), so any other count is a caller mistake.
+    Checked up front because the failure otherwise surfaces deep inside the renderer: from an animation it
+    lands after the whole stack has been scanned, as a bare ``IndexError`` raised while matplotlib's writer
+    is already unwinding, with the real complaint buried in a chained traceback.
+
+    Args:
+        caller: The method name to name in the message (e.g. ``"rgb_composite"``).
+        bands: The band indices to check.
+
+    Raises:
+        ValueError: when ``bands`` does not hold exactly three indices.
+
+    Examples:
+        - Three bands pass silently:
+            ```python
+            >>> from digitalearth.static.maps.raster import require_three_bands
+            >>> require_three_bands("rgb_composite", (1, 2, 3)) is None
+            True
+
+            ```
+        - Any other count names the caller, the count and the value it got:
+            ```python
+            >>> from digitalearth.static.maps.raster import require_three_bands
+            >>> require_three_bands("rgb_composite", (1, 2))
+            Traceback (most recent call last):
+                ...
+            ValueError: rgb_composite() needs exactly three bands, got 2: (1, 2)
+
+            ```
+    """
+    if len(tuple(bands)) != 3:
+        raise ValueError(
+            f"{caller}() needs exactly three bands, got {len(tuple(bands))}: {tuple(bands)!r}"
+        )
+
+
 def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
     """Return the per-channel 2-98 percentile ``(lo, hi)`` of an ``(rows, cols, n)`` stack.
 
@@ -290,6 +329,7 @@ class RasterMixin:
             hsv_composite: The same three bands read as hue/saturation/value instead.
             channel_limits: Derives the ``limits`` this accepts.
         """
+        require_three_bands("rgb_composite", bands)
         ds = self._reproject(dataset)
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
@@ -360,6 +400,7 @@ class RasterMixin:
         """
         from matplotlib.colors import hsv_to_rgb
 
+        require_three_bands("hsv_composite", bands)
         ds = self._reproject(dataset)
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         rgb = hsv_to_rgb(_stretch_to_unit(stack, limits))              # (rows, cols, 3) RGB
