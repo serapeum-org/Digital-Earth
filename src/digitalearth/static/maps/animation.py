@@ -235,7 +235,7 @@ class AnimationMixin:
             if views is None:
                 lo, hi = self._stack_clim(_scan_subset(datasets))
             else:
-                lo, hi = self._clim_across_views(list(datasets)[0], views)
+                lo, hi = self._clim_across_views(next(iter(datasets)), views)
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 

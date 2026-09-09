@@ -163,7 +163,8 @@ def test_stretch_to_unit_survives_non_finite_limits():
     out = stretch_to_unit(stack, [(np.nan, np.nan)] * 3)
     assert np.isnan(out[..., 1]).all(), "an all-nodata channel stays NaN (it renders transparent)"
     assert np.isfinite(out[..., 0]).all(), "a live channel must not be poisoned by the fallback"
-    assert out[..., 0].min() >= 0.0 and out[..., 0].max() <= 1.0, "the fallback must still clip into [0, 1]"
+    assert out[..., 0].min() >= 0.0, "the fallback must still clip at the black point"
+    assert out[..., 0].max() <= 1.0, "the fallback must still clip at the white point"
 
 
 @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
@@ -171,8 +172,9 @@ def test_stretch_to_unit_survives_non_finite_limits():
 def test_composite_rejects_a_wrong_band_count(rgb_dataset, method, bands):
     """Both composites refuse a band list that is not exactly three, naming themselves in the message."""
     m = Map(crs=rgb_dataset.epsg)
+    render = getattr(m, method)
     with pytest.raises(ValueError, match=f"{method}\\(\\) needs exactly three bands"):
-        getattr(m, method)(rgb_dataset, bands=bands)
+        render(rgb_dataset, bands=bands)
 
 
 @pytest.mark.parametrize(
@@ -193,14 +195,16 @@ def test_stretch_to_unit_rejects_malformed_limits(limits, expected):
 
 def test_stretch_to_unit_rejects_a_two_dimensional_array():
     """stretch_to_unit documents an (rows, cols, n) stack too, and now says so like its sibling."""
+    band = np.arange(16.0).reshape(4, 4)
     with pytest.raises(ValueError, match="needs an .rows, cols, n. channel stack"):
-        stretch_to_unit(np.arange(16.0).reshape(4, 4))
+        stretch_to_unit(band)
 
 
 def test_channel_limits_rejects_a_two_dimensional_array():
     """channel_limits documents an (rows, cols, n) stack, so it says so when handed a plain band."""
+    band = np.arange(16.0).reshape(4, 4)
     with pytest.raises(ValueError, match="needs an .rows, cols, n. channel stack"):
-        channel_limits(np.arange(16.0).reshape(4, 4))
+        channel_limits(band)
 
 
 def test_rgb_composite_rejects_malformed_limits(rgb_dataset):

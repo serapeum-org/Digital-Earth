@@ -190,9 +190,10 @@ class TestAnimate:
             clims.append(tuple(round(c) for c in m.ax.images[0].get_clim()))
         assert len(set(clims)) == 1, f"frames must share one colour scale, got {clims}"
         assert clims[0][0] == 0, f"shared clim should start at the stack minimum, got {clims[0]}"
-        assert 800 < clims[0][1] <= 1000, (
+        assert clims[0][1] > 800, (
             f"the scale spans what the globe renders, which drops the off-hemisphere extreme: {clims[0]}"
         )
+        assert clims[0][1] <= 1000, f"the scale cannot exceed the stack maximum: {clims[0]}"
 
     def test_resolve_clim_fills_missing_bounds(self, stack):
         """_resolve_animation_clim computes a global clim only for the missing bound(s)."""
@@ -332,7 +333,8 @@ class TestAnimateComposites:
         m = Map(crs=4326)
         opts = {}
         m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
-        assert "vmin" not in opts and "vmax" not in opts, f"composite priming injected a clim: {opts}"
+        assert "vmin" not in opts, f"composite priming injected a vmin: {opts}"
+        assert "vmax" not in opts, f"composite priming injected a vmax: {opts}"
         assert len(opts["limits"]) == 3, f"expected one (lo, hi) per channel, got {opts['limits']!r}"
 
     def test_priming_a_field_still_resolves_the_clim(self, stack):
@@ -340,7 +342,8 @@ class TestAnimateComposites:
         m = Map(crs=4326)
         opts = {}
         m._prime_animation(stack, opts, kind="imshow", colorbar=False, cbar_label=None)
-        assert opts["vmin"] is not None and opts["vmax"] is not None, "field priming must still set a clim"
+        assert opts["vmin"] is not None, "field priming must still set a vmin"
+        assert opts["vmax"] is not None, "field priming must still set a vmax"
         assert "limits" not in opts, "a scalar field takes no composite stretch limits"
 
     def test_caller_limits_are_kept(self, rgb_stack):
@@ -518,7 +521,8 @@ class TestAnimateComposites:
         stack = [dead, live] if position == "first" else [live, dead]
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
         lo, hi = frozen[1]
-        assert np.isfinite(lo) and np.isfinite(hi), f"a dead frame poisoned channel 2: {frozen[1]}"
+        assert np.isfinite(lo), f"a dead frame poisoned channel 2's low bound: {frozen[1]}"
+        assert np.isfinite(hi), f"a dead frame poisoned channel 2's high bound: {frozen[1]}"
         assert (lo, hi) == pytest.approx(channel_limits(get_stack(live, (1, 2, 3)))[1]), (
             "the surviving frame's own bounds should be the frozen ones"
         )
@@ -596,8 +600,9 @@ class TestAnimateComposites:
             the scan, so no frame is read at all.
         """
         spy = mocker.spy(Map, "_stack_channel_limits")
+        m = Map(crs=4326)
         with pytest.raises(ValueError, match="needs exactly three bands"):
-            Map(crs=4326).animate(rgb_stack, kind="rgb_composite", bands=bands)
+            m.animate(rgb_stack, kind="rgb_composite", bands=bands)
         assert spy.call_count == 0, "the stack must not be scanned before the band count is checked"
 
     def test_a_refused_rotate_leaves_the_map_alone(self):
@@ -609,14 +614,16 @@ class TestAnimateComposites:
             been switched to a globe by a call that never ran.
         """
         m = Map(crs=4326)
+        frame = _rgb_field()
         with pytest.raises(ValueError, match="colorbar=True is not supported"):
-            m.rotate(_rgb_field(), kind="rgb_composite", n_frames=3, colorbar=True)
+            m.rotate(frame, kind="rgb_composite", n_frames=3, colorbar=True)
         assert m.globe is False, "a rotate that raised must not have switched the Map into globe mode"
 
     def test_empty_stack_has_no_limits_to_derive(self):
         """The helper says so rather than raising IndexError off an empty scan (reachable directly)."""
+        m = Map(crs=4326)
         with pytest.raises(ValueError, match="empty stack"):
-            Map(crs=4326)._stack_channel_limits([], (1, 2, 3))
+            m._stack_channel_limits([], (1, 2, 3))
 
     def test_two_band_composite_limits(self):
         """The scan follows the bands it is given — two bands yield two channel bounds, not three."""
