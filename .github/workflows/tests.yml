@@ -172,17 +172,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
 
-      - name: Install the 3d extra from PyPI
-        # --only-binary :all: keeps a dependency's setup script from running on this runner; every
-        # package the extra resolves to publishes wheels, so it costs nothing here.
+      - name: Install a pinned resolver
         run: |
-          pip install --only-binary :all: ".[3d]" pyogrio
+          pip install --only-binary :all: "uv==0.12.1"
+
+      - name: Resolve the 3d extra against PyPI
+        # The unpinned resolution this job exists for, kept separate from the install: uv resolves the extra
+        # against PyPI as it stands right now and writes the result as an exact, hash-verified requirements
+        # file. So the resolution is still free to drift — that is what catches an upstream move — while what
+        # actually gets installed below is locked and checksum-checked.
+        run: |
+          echo pyogrio > extra-requirements.in
+          uv pip compile pyproject.toml extra-requirements.in \
+            --extra 3d --generate-hashes --output-file resolved-requirements.txt
 
       - name: Report what the extra resolved to
         # Printed rather than asserted: which packages carry the export differs by pyvista version, and
         # pinning that here would recreate the hand-listed set this job exists to catch.
         run: |
-          pip list | grep -Ei "pyvista|trame|vtk|nest.asyncio" || true
+          grep -Ei "^(pyvista|trame|vtk|nest-asyncio)" resolved-requirements.txt || true
+
+      - name: Install the resolved set
+        # --require-hashes makes every download checksum-verified against the file resolved above, and
+        # --only-binary :all: keeps a source distribution's setup script from running on the runner. The
+        # project itself installs with --no-deps: its dependencies are already in place, pinned.
+        run: |
+          pip install --require-hashes --only-binary :all: -r resolved-requirements.txt
+          pip install --no-deps .
 
       - name: Export a scene through the resolved stack
         # `export_html` is the whole point: it is the only call that needs the trame/vtk.js stack, and the one
