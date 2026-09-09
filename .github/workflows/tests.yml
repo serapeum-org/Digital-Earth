@@ -59,8 +59,10 @@ jobs:
   # .pre-commit-config.yaml.
   #
   # mypy runs on this leg only — ubuntu, the dev env, with python_version = "3.12" (see the note in
-  # pyproject.toml on why the checker target leads requires-python). Platform- and version-conditional typing is
-  # therefore not type-checked anywhere; the py311/py312/py313 x 3-OS matrix above covers it at run time only.
+  # pyproject.toml on why the checker target leads requires-python). src/ currently has no sys.version_info,
+  # sys.platform or platform.system() branch, so nothing is being missed today; the caveat is that if one is ever
+  # added, only its 3.12/Linux side is type-checked. The py311/py312/py313 x 3-OS matrix above covers the rest at
+  # run time only.
   lint-and-doctests:
     runs-on: ubuntu-latest
     permissions:
@@ -100,9 +102,10 @@ jobs:
           pixi run -e dev mypy
 
       - name: Run the doctests
-        # The five doctests this branch migrated by hand are the only migrated code no other job covers:
-        # `main` sets testpaths = ["tests"] with no --doctest-modules, and ruff's F821 does not analyse
-        # doctest bodies, so a missing import inside a `>>>` block would sail through the step above.
+        # The doctests in src/ are the only code no other job covers: `main` sets testpaths = ["tests"] with
+        # no --doctest-modules, and ruff's F821 does not analyse doctest bodies, so a missing import inside a
+        # `>>>` block would sail through the step above. The task currently collects 82 (21 more are skipped in
+        # this env; three_d's need viz3d and run via `doctests-3d`).
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: |
           pixi run -e dev doctests
