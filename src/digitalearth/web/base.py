@@ -424,9 +424,10 @@ class WebMapBase:
         surface in a popup as though it were a real value.
 
         Three dtypes are covered, because all three reach ``json.dumps`` and fail there: ``datetime64``
-        (tz-naive or tz-aware), ``timedelta64`` (an ISO-8601 duration, ``P1DT0H0M0S``), and an
-        ``object`` column holding ``datetime.date`` / ``datetime``/ ``timedelta`` values, which the dtype
-        checks miss entirely.
+        (tz-naive or tz-aware), ``timedelta64`` (an ISO-8601 duration, ``P1DT0H0M0S``), ``period`` (its own
+        string form, ``2026-01``), and an ``object`` column holding any of those, which the dtype checks
+        miss entirely. A mixed object column encodes only its date-like values and passes the rest
+        through untouched.
 
         Args:
             gdf: The display-CRS GeoDataFrame about to be handed to ``add_source``.
@@ -434,11 +435,76 @@ class WebMapBase:
         Returns:
             The same object when it holds no date-like column, else a shallow copy with those columns
             converted. The input is never mutated — it is the caller's frame.
+
+        Examples:
+            - A datetime column becomes ISO-8601 text, which ``json`` can serialise:
+                ```python
+                >>> import geopandas as gpd, pandas as pd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"when": pd.to_datetime(["2026-01-01 06:00", "2026-02-01 18:30"])},
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> list(WebMap._json_safe(gdf)["when"])
+                ['2026-01-01T06:00:00', '2026-02-01T18:30:00']
+
+                ```
+            - A missing timestamp becomes ``None``, so it reaches the map as JSON ``null`` rather than
+              the text ``"NaT"``:
+                ```python
+                >>> import json
+                >>> import geopandas as gpd, pandas as pd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"when": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> gdf.loc[1, "when"] = pd.NaT
+                >>> json.dumps(WebMap._json_safe(gdf).drop(columns="geometry").to_dict(orient="records"))
+                '[{"when": "2026-01-01T00:00:00"}, {"when": null}]'
+
+                ```
+            - A frame with nothing date-like is handed back untouched, with no copy taken:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"n": [1, 2]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+                ... )
+                >>> WebMap._json_safe(gdf) is gdf
+                True
+
+                ```
+
+        See Also:
+            digitalearth.web.base.WebMapBase._display_gdf: the choke point that applies this to every
+                vector builder's input.
         """
         import datetime as dt
 
         import pandas as pd
         from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
+
+        def missing(value: Any) -> bool:
+            """Whether ``value`` is a null marker, tolerating values ``pd.isna`` refuses to judge."""
+            try:
+                return bool(pd.isna(value))
+            except (TypeError, ValueError):  # e.g. a list/array element — not a null marker
+                return False
+
+        def iso(value: Any) -> Any:
+            """ISO-encode one date-like value; anything else is returned untouched."""
+            if missing(value):
+                return None
+            # datetime and Timestamp subclass date; Timedelta subclasses timedelta.
+            if isinstance(value, (dt.date, dt.timedelta)):
+                return value.isoformat()
+            if isinstance(value, pd.Period):
+                return str(value)
+            return value
 
         def iso_series(series: Any) -> Any:
             """ISO-encode a date-like series as ``object`` dtype, with missing values as real ``None``.
@@ -447,20 +513,18 @@ class WebMapBase:
             pandas 3 infers a ``str`` dtype for those, whose missing marker is a float ``nan``, and
             ``json.dumps`` writes that as the invalid JSON literal ``NaN`` instead of ``null``.
             """
-            encoded = [
-                None if pd.isna(value) else value.isoformat()  # date/datetime/timedelta all have it
-                for value in series
-            ]
-            return pd.Series(encoded, index=series.index, dtype=object)
+            return pd.Series([iso(value) for value in series], index=series.index, dtype=object)
 
         def converted(series: Any) -> Any:
             """Return the ISO-encoded form of ``series``, or ``None`` when it needs no change."""
             if is_datetime64_any_dtype(series) or is_timedelta64_dtype(series):
                 return iso_series(series)
+            if isinstance(series.dtype, pd.PeriodDtype):
+                return iso_series(series)
             if series.dtype == object:
                 present = series.dropna()
-                # datetime and Timestamp subclass date; Timedelta subclasses timedelta.
-                if len(present) and isinstance(present.iloc[0], (dt.date, dt.timedelta)):
+                if len(present) and isinstance(present.iloc[0], (dt.date, dt.timedelta, pd.Period)):
+                    # A mixed column encodes only its date-like values; `iso` passes the rest through.
                     return iso_series(series)
             return None
 
@@ -502,6 +566,10 @@ class WebMapBase:
 
         Raises:
             TypeError: when ``features`` is not a vector layer.
+
+        See Also:
+            digitalearth.web.base.WebMapBase._require_vector: the input guard applied first.
+            digitalearth.web.base.WebMapBase._json_safe: the date encoding applied to the result.
         """
         self._require_vector(features, method)
         if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)

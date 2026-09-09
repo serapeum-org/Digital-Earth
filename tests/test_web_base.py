@@ -446,6 +446,120 @@ class TestJsonSafeDatetimes:
         out = WebMap()._json_safe(frame)
         assert out.geometry.equals(frame.geometry), "geometry was altered by the encoding"
 
+    def test_a_mixed_object_column_encodes_only_its_dates(self):
+        """A column holding dates *and* other values must not crash on the non-dates.
+
+        Test scenario:
+            The dtype checks cannot see inside an object column, so the encoder samples the first
+            non-null value to decide whether to convert. If it then called ``isoformat()`` on every
+            element, a column of ``[date, "n/a"]`` would raise ``AttributeError`` — turning a frame that
+            merely rendered oddly into one that cannot render at all.
+        """
+        import datetime as dt
+        import json
+
+        frame = self._frame(mixed=[dt.date(2026, 1, 1), "n/a", 5])
+        out = WebMap()._json_safe(frame)
+        assert list(out["mixed"]) == ["2026-01-01", "n/a", 5], f"mixed column mangled: {list(out['mixed'])}"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_period_columns_are_encoded(self):
+        """``period`` is date-like and fails json.dumps just like the rest.
+
+        Test scenario:
+            A monthly/quarterly series is a natural fit for a period column, and it raised
+            "Object of type Period is not JSON serializable" before being covered.
+        """
+        import json
+
+        import pandas as pd
+
+        frame = self._frame(month=pd.period_range("2026-01", periods=3, freq="M"))
+        out = WebMap()._json_safe(frame)
+        assert list(out["month"]) == ["2026-01", "2026-02", "2026-03"], f"periods mangled: {list(out['month'])}"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_an_all_null_datetime_column_becomes_all_null(self):
+        """Every value missing is still a datetime column, and must encode to nulls, not 'NaT'.
+
+        Test scenario:
+            The sampling shortcut for object columns looks at the first non-null value; a column with
+            none at all must not slip through as raw NaT.
+        """
+        import json
+
+        import pandas as pd
+
+        frame = self._frame()
+        frame["from_date"] = pd.to_datetime([None, None, None])
+        out = WebMap()._json_safe(frame)
+        assert list(out["from_date"]) == [None, None, None], f"expected all null, got {list(out['from_date'])}"
+        payload = json.dumps(out.drop(columns="geometry").to_dict(orient="records"))
+        assert "NaN" not in payload and "NaT" not in payload, f"a null marker leaked: {payload}"
+
+    def test_an_empty_frame_is_handled(self):
+        """A zero-row frame with a datetime column must not raise.
+
+        Test scenario:
+            A filtered-to-empty event feed is a normal thing to hand a map.
+        """
+        import geopandas as gpd
+        import pandas as pd
+
+        empty = gpd.GeoDataFrame({"from_date": pd.to_datetime([])}, geometry=[], crs=4326)
+        out = WebMap()._json_safe(empty)
+        assert len(out) == 0, "an empty frame must stay empty"
+
+    def test_sub_second_precision_survives(self):
+        """Microseconds are kept, so an ordering by timestamp is not silently coarsened.
+
+        Test scenario:
+            A strftime pattern of second resolution would truncate these, collapsing distinct events to
+            the same instant; ``isoformat()`` keeps them apart.
+        """
+        import pandas as pd
+
+        frame = self._frame()
+        frame["from_date"] = pd.to_datetime(
+            ["2026-01-01 00:00:00.123456", "2026-01-01 00:00:00.654321", "2026-01-01 00:00:01.000000"]
+        )
+        out = WebMap()._json_safe(frame)
+        assert out["from_date"].iloc[0] == "2026-01-01T00:00:00.123456", (
+            f"sub-second precision lost: {out['from_date'].iloc[0]!r}"
+        )
+        assert len(set(out["from_date"])) == 3, "distinct instants collapsed to the same string"
+
+    def test_encoding_is_idempotent(self):
+        """Encoding an already-encoded frame is a no-op, so a double pass cannot corrupt it.
+
+        Test scenario:
+            The second call sees only string columns, finds nothing date-like, and returns the frame
+            unchanged — which is what makes the choke point safe to call more than once.
+        """
+        once = WebMap()._json_safe(self._frame())
+        twice = WebMap()._json_safe(once)
+        assert twice is once, "a second pass should return the same object"
+
+    def test_every_date_like_column_is_encoded_not_just_the_first(self):
+        """A frame with several date-like columns has all of them converted.
+
+        Test scenario:
+            Event feeds routinely carry both a start and an end timestamp (GDACS `from_date`/`to_date`).
+        """
+        import datetime as dt
+        import json
+
+        import pandas as pd
+
+        frame = self._frame(
+            to_date=pd.to_datetime(["2026-03-01", "2026-04-01", "2026-05-01"]),
+            day=[dt.date(2026, 1, 1), dt.date(2026, 2, 1), dt.date(2026, 3, 1)],
+        )
+        out = WebMap()._json_safe(frame)
+        for column in ("from_date", "to_date", "day"):
+            assert out[column].dtype == object, f"{column} was not encoded"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
 
 class TestDatetimeFramesReachTheMap:
     """End-to-end: a dated frame now renders and saves through every vector builder (issue #156)."""
