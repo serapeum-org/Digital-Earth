@@ -153,7 +153,6 @@ class TemporalMixin:
                 features, kdim=kdim, labels=labels, band=band, cmap=cmap, opacity=opacity, clim=clim
             )
 
-        self._require_vector(features, "timeslider")
         gdf = self._display_gdf(features, method="timeslider")
         if kdim not in getattr(gdf, "columns", []):
             raise KeyError(f"time field {kdim!r} not found in the feature attributes")

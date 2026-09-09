@@ -31,6 +31,10 @@ _INSTALL_HINT = (
     "(or, in this repo, `pixi install -e web`)."
 )
 
+#: How many column names an "active geometry missing" error quotes before it elides the rest — a wide
+#: table would otherwise print hundreds of names into a traceback.
+_MAX_COLUMNS_IN_ERROR = 12
+
 #: Short style aliases → CartoCDN basemap slugs. A bare name resolves to the CartoCDN style URL; a full URL
 #: (or a MapLibre style ``dict``) is passed through untouched. CartoCDN basemaps need no API token.
 _STYLE_ALIASES = {
@@ -221,6 +225,8 @@ class WebMapBase:
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
         self.big_data_threshold = 50_000
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
+        #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
+        #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
         self._temporal: Optional[dict] = None
 
     def _uid(self, prefix: str) -> str:
@@ -386,10 +392,13 @@ class WebMapBase:
         WebMapBase._reject_raster(features, method)
         columns = getattr(features, "columns", None)
         if columns is not None:
+            names = [str(name) for name in columns]
+            shown = names[:_MAX_COLUMNS_IN_ERROR]
+            if len(names) > _MAX_COLUMNS_IN_ERROR:
+                shown.append(f"... (+{len(names) - _MAX_COLUMNS_IN_ERROR} more)")
             raise TypeError(
                 f"{method}() needs a layer with an active geometry column; got a "
-                f"{type(features).__name__} whose columns are {list(columns)}. Call set_geometry(...) on "
-                f"it first."
+                f"{type(features).__name__} whose columns are {shown}. Call set_geometry(...) on it first."
             )
         raise TypeError(
             f"{method}() needs a vector layer (a pyramids FeatureCollection / GeoDataFrame); got "

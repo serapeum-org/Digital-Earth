@@ -322,7 +322,8 @@ class TestVectorBuilderRasterGuard:
             Point geometry is valid for points/heatmap/cluster, so none of them may raise.
         """
         for method in ("points", "heatmap", "cluster"):
-            getattr(WebMap(), method)(points_gdf)
+            m = getattr(WebMap(), method)(points_gdf)
+            assert m.layers, f"{method} accepted the layer but registered nothing"
 
     def test_a_table_without_active_geometry_is_told_to_set_geometry(self):
         """A geometry-less table gets the ``set_geometry`` message, not raster advice.
