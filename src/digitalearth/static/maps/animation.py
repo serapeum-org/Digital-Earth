@@ -231,9 +231,10 @@ class AnimationMixin:
         - A **scalar field** gets a missing ``vmin``/``vmax`` filled once from the stack so colours don't
           flicker between frames, then optionally one persistent colorbar.
         - A **composite** (:data:`_COMPOSITE_KINDS`) gets frozen per-channel stretch ``limits`` instead. A
-          clim is meaningless for an RGB image — the composite runs its own per-channel stretch and never
-          consults ``vmin``/``vmax`` — and there is no single mappable to key a colorbar to, so an explicit
-          ``colorbar=True`` is refused rather than answered with a meaningless bar.
+          clim is meaningless for an RGB image — the composite runs its own per-channel stretch, so nothing
+          in its render path reads ``vmin``/``vmax`` (they are still forwarded to the glyph with every other
+          kwarg; they simply have no colour scale to move). There is likewise no single mappable to key a
+          colorbar to, so an explicit ``colorbar=True`` is refused rather than answered with a useless bar.
 
         Real limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the
         scan. A ``limits`` of ``None`` counts as absent and is filled, matching how
@@ -311,8 +312,10 @@ class AnimationMixin:
             colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared
                 colour scale. Not available on a composite ``kind`` — an RGB image has no scalar mappable.
             cbar_label: Optional label for the colorbar.
-            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``; or ``bands``,
-                ``mask_nodata``, ``limits`` for a composite).
+            **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``cmap``, ``vmin``, ``vmax``
+                and the rest of its styling; a composite takes ``bands``, ``mask_nodata`` and ``limits``.
+                ``vmin``/``vmax`` are accepted on a composite because they reach the glyph like any other
+                kwarg, but an RGB image has no colour scale for them to move — use ``limits``.
 
         Returns:
             A :class:`matplotlib.animation.FuncAnimation` over ``len(stack)`` frames (also kept on
@@ -420,8 +423,10 @@ class AnimationMixin:
             colorbar: When True, add one static colorbar (drawn once) using the shared colour scale. Not
                 available on a composite ``kind``.
             cbar_label: Optional label for the colorbar.
-            **kwargs: Forwarded to the ``kind`` method (e.g. ``cmap``, ``vmin``, ``vmax``; or ``bands``,
-                ``mask_nodata``, ``limits`` for a composite).
+            **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``cmap``, ``vmin``, ``vmax``
+                and the rest of its styling; a composite takes ``bands``, ``mask_nodata`` and ``limits``.
+                ``vmin``/``vmax`` are accepted on a composite because they reach the glyph like any other
+                kwarg, but an RGB image has no colour scale for them to move — use ``limits``.
 
         Returns:
             A :class:`matplotlib.animation.FuncAnimation` over ``n_frames`` frames (also kept on
