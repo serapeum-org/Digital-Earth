@@ -12,7 +12,7 @@ caller can build a legend out-of-band; the ``measure`` tool exposes the drawn ge
 geodesic distance/area (the GIS part).
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
@@ -63,7 +63,13 @@ def _check_position(position: str) -> None:
         )
 
 
-class DecorationMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class DecorationMixin(_MixinBase):
     """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`."""
 
     def tiles(

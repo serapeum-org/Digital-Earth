@@ -14,7 +14,7 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.
 """
 
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from digitalearth.web.base import _require_layer_api
 
@@ -26,7 +26,13 @@ _DEFAULT_TERRAIN_TILES = (
 )
 
 
-class ThreeDMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class ThreeDMixin(_MixinBase):
     """3-D builders for :class:`~digitalearth.web.map.WebMap` (fill-extrusion + deck.gl + terrain/globe)."""
 
     def extrusion(

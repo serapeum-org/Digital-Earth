@@ -4,7 +4,7 @@ Sets the axes extent from a bbox or named domain, builds and caches the projecti
 globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
 
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from cleopatra.basemap.projection import apply_projection_frame
 from pyramids.base.crs import reproject_coordinates
@@ -12,8 +12,13 @@ from pyramids.base.crs import reproject_coordinates
 from digitalearth.static import projections
 from digitalearth.static.domains import DomainLike, resolve_domain
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class ProjectionMixin:
+
+class ProjectionMixin(_MixinBase):
     """Extent/domain and globe projection-frame behaviour for :class:`~digitalearth.static.map.Map`."""
 
     def set_extent(self, bbox: Sequence[float]) -> None:

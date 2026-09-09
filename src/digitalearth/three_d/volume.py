@@ -15,7 +15,7 @@ Volume rendering uses ``cell_data`` on a grid sized ``shape[::-1] + 1`` (one mor
 isosurfacing uses ``point_data`` on a grid sized ``shape[::-1]``.
 """
 
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import numpy as np
 import pyvista as pv
@@ -65,7 +65,13 @@ def _point_grid(cube: np.ndarray) -> pv.ImageData:
     return grid
 
 
-class VolumeMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class VolumeMixin(_MixinBase):
     """Adds :meth:`volume` and :meth:`isosurface` — render a 3-D scalar field — to a :class:`Scene3D`."""
 
     def volume(

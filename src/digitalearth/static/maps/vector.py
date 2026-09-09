@@ -5,7 +5,7 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -52,7 +52,13 @@ def _draw_missing_neutral(artist: Any) -> None:
     artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
 
 
-class VectorMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class VectorMixin(_MixinBase):
     """Vector-data and vector-field renders for :class:`~digitalearth.static.map.Map`."""
 
     def _vector_input(

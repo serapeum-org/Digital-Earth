@@ -16,12 +16,17 @@ is intentional (this tier reads as HoloViews to its users); the static↔interac
 in the tier plan's feature-parity matrix.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class RasterMixin:
+
+class RasterMixin(_MixinBase):
     """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti."""
 
     def _image_element(

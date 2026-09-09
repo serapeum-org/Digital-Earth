@@ -10,7 +10,7 @@ geovista pulls cartopy transitively — that is *its* dependency, never imported
 ``test_no_competitor_imports`` guard); this module imports only ``geovista`` itself, lazily.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -61,7 +61,13 @@ def _require_geovista():
     return gv
 
 
-class GlobeMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class GlobeMixin(_MixinBase):
     """Adds :meth:`globe` — render a global lon/lat field on a textured sphere — to a :class:`Scene3D`."""
 
     def globe(

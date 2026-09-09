@@ -9,12 +9,17 @@ The slider is wired at :meth:`render` time via :meth:`_wrap_temporal` (returning
 imported lazily.
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from digitalearth.web.base import _require_layer_api
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class TemporalMixin:
+
+class TemporalMixin(_MixinBase):
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
     def timeslider(

@@ -10,7 +10,7 @@ non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in *
 (``ravel(order="F")``) to line up with the structured point ordering — C-order silently mirrors the terrain.
 """
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pyvista as pv
@@ -76,7 +76,13 @@ def _terrain_mesh(
     return grid
 
 
-class TerrainMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class TerrainMixin(_MixinBase):
     """Adds :meth:`terrain` — render a DEM/raster as 3-D relief — to a :class:`Scene3D`."""
 
     def terrain(

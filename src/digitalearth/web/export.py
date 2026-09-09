@@ -16,7 +16,7 @@ these are hooks it calls, not overrides). urllib / browser libs are imported laz
 import pathlib
 import re
 import tempfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
 _ASSET_RE = re.compile(
@@ -24,7 +24,13 @@ _ASSET_RE = re.compile(
 )
 
 
-class ExportMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class ExportMixin(_MixinBase):
     """Export builders (HTML / offline HTML / PNG) for :class:`~digitalearth.web.map.WebMap`."""
 
     def to_html(

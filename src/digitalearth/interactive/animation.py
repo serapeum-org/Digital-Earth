@@ -7,12 +7,17 @@ registered: ``play`` binds a ``panel.widgets.Player`` to its time kdim for auto-
 matplotlib backend or a client-side **scrubber** HTML that animates offline with no server.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class AnimationMixin:
+
+class AnimationMixin(_MixinBase):
     """Animation builders (DI.11): Player playback + GIF/MP4/scrubber export of a time cube."""
 
     def _time_dynamicmap(self) -> Any:

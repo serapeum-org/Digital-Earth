@@ -12,7 +12,7 @@ the ``3d`` extra). No GIS is touched here: animation is pure rendering of alread
 from pyramids upstream.
 """
 
-from typing import Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
@@ -45,7 +45,13 @@ def _finalize_frames(plotter: Any) -> None:
         writer.close()
 
 
-class AnimationMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class AnimationMixin(_MixinBase):
     """Adds :meth:`orbit`, :meth:`animate`, and :meth:`jupyter` to a :class:`Scene3D`."""
 
     def orbit(

@@ -11,12 +11,17 @@ plain hover. Each method documents this rather than implying full interactivity 
 All CRS work (crop, the un-projection of drawn geometry) goes through pyramids.
 """
 
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class InteractionMixin:
+
+class InteractionMixin(_MixinBase):
     """Interactivity builders (DI.7 + DI.8): tap-to-inspect, rich hover, draw-AOI, linked selection."""
 
     def hover(

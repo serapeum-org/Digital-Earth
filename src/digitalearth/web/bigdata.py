@@ -15,14 +15,19 @@ GeoArrow) renderer would be a separate widget and is left as a future enhancemen
 Builders that colour by value reuse the base ``_color_expr`` helpers; numpy/maplibre are imported lazily.
 """
 
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from loguru import logger
 
 from digitalearth.web.base import _require_layer_api
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class BigDataMixin:
+
+class BigDataMixin(_MixinBase):
     """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`."""
 
     @staticmethod

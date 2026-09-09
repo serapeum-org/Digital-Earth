@@ -10,12 +10,17 @@ colormap and colorbar do not jump as the slider moves.
 materialise a frame (``dmap[0]``) to assert on it.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class TemporalMixin:
+
+class TemporalMixin(_MixinBase):
     """Time-slider datacube builder (DI.3)."""
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:

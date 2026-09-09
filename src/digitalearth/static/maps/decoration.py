@@ -9,7 +9,7 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 """
 
 import logging
-from typing import Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
@@ -60,7 +60,13 @@ def _to_feature_style(kind: str, style: dict) -> dict:
     return out
 
 
-class DecorationMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class DecorationMixin(_MixinBase):
     """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.static.map.Map`."""
 
     def _reproject_point(

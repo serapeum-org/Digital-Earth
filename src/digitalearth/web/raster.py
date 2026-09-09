@@ -10,7 +10,7 @@ matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazil
 the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from loguru import logger
 
@@ -20,7 +20,13 @@ from digitalearth.web.base import _require_layer_api
 _LARGE_RASTER_PIXELS = 4_000_000
 
 
-class RasterMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class RasterMixin(_MixinBase):
     """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
     def add_raster(

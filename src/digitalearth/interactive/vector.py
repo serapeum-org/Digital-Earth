@@ -15,12 +15,17 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class VectorMixin:
+
+class VectorMixin(_MixinBase):
     """Vector builders (DI.1b): point, line and polygon layers with hover tooltips."""
 
     def _display_gdf(self, features: Any) -> Any:

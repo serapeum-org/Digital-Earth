@@ -12,14 +12,19 @@ polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expres
 cleopatra / matplotlib / numpy are imported lazily inside the methods; importing the tier needs none of them.
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 from loguru import logger
 
 from digitalearth.web.base import _require_layer_api
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class VectorMixin:
+
+class VectorMixin(_MixinBase):
     """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`."""
 
     def _color_expr(

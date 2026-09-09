@@ -16,7 +16,7 @@ live app must be *served*, not converted. ``save_app`` is the offline path (pre-
 from functools import reduce
 from importlib.util import find_spec
 from operator import mul as _mul
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any, Sequence
 
 from digitalearth.interactive.base import _require_holoviz
 
@@ -51,7 +51,13 @@ def _require_panel() -> Any:
     return pn
 
 
-class DashboardMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class DashboardMixin(_MixinBase):
     """Panel dashboard builders (DI.4): wrap the map + reactive widgets into a servable/exportable app."""
 
     def dashboard(

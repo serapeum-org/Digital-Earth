@@ -10,7 +10,7 @@ deterministic arrays. Reprojection still happens upstream in pyramids; Datashade
 projected planar coordinates.
 """
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from loguru import logger
 
@@ -50,7 +50,13 @@ def _resolve_aggregator(aggregator: Any, column: Optional[str]) -> Any:
     return getattr(ds, aggregator)(column)
 
 
-class BigDataMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class BigDataMixin(_MixinBase):
     """Datashader builders (DI.2): viewport-rasterized density layers for huge vector data."""
 
     def _as_element(self, layer: Any, *, vdims: Optional[list] = None) -> Any:

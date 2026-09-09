@@ -9,12 +9,17 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class DecorationMixin:
+
+class DecorationMixin(_MixinBase):
     """Decoration builders (DI.1c): tile basemaps, Natural-Earth features, legend/colorbar toggles."""
 
     def tiles(

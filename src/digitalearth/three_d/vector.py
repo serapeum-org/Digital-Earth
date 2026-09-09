@@ -13,7 +13,7 @@ this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_com
 stays in pyramids.
 """
 
-from typing import Any, Iterator, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Union
 
 import numpy as np
 import pyvista as pv
@@ -65,7 +65,13 @@ def _extrude_ring(ring: np.ndarray, height: float) -> pv.PolyData:
     return face.triangulate().extrude((0.0, 0.0, float(height)), capping=True)
 
 
-class VectorMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class VectorMixin(_MixinBase):
     """Adds :meth:`vectors` and :meth:`extruded_polygons` to a :class:`Scene3D`."""
 
     def vectors(

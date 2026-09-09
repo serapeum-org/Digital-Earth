@@ -4,7 +4,7 @@ Drives per-frame redraws on the shared axes as a matplotlib ``FuncAnimation``, w
 (and an optional single static colorbar) so colours do not flicker between frames.
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
 from matplotlib.animation import FuncAnimation
 from matplotlib.cm import ScalarMappable
@@ -21,7 +21,13 @@ _CLIM_SCAN_CAP = 24
 _ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
 
 
-class AnimationMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class AnimationMixin(_MixinBase):
     """Stack animation and globe rotation for :class:`~digitalearth.static.map.Map`."""
 
     def _animate_frames(

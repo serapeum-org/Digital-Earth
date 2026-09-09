@@ -10,12 +10,17 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class ProjectionMixin:
+
+class ProjectionMixin(_MixinBase):
     """Projection builders (DI.9): arbitrary display projections via the matplotlib backend."""
 
     def projection(self, name: Any, **opts: Any) -> "ProjectionMixin":

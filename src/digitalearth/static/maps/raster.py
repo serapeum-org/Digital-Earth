@@ -4,7 +4,7 @@ Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into c
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
 
-from typing import Any, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -27,7 +27,13 @@ def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
     return out
 
 
-class RasterMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class RasterMixin(_MixinBase):
     """Raster field renders and composites for :class:`~digitalearth.static.map.Map`."""
 
     def _field(
