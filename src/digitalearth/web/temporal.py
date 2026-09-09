@@ -147,6 +147,8 @@ class TemporalMixin:
             digitalearth.interactive.temporal.TemporalMixin.timecube: the interactive tier's raster
                 time cube.
         """
+        import pandas as pd
+
         _require_layer_api()
         if hasattr(features, "datasets"):  # a pyramids DatasetCollection — the raster stack path
             return self._timeslider_stack(
@@ -157,7 +159,10 @@ class TemporalMixin:
         if kdim not in getattr(gdf, "columns", []):
             raise KeyError(f"time field {kdim!r} not found in the feature attributes")
 
-        times = sorted(gdf[kdim].unique().tolist())
+        # Features with no time value cannot sit at any step, and a None among the values would make the
+        # sort raise once `_display_gdf` has encoded a NaT to None ("'<' not supported between instances
+        # of 'NoneType' and 'str'"). Drop them; the empty check below still catches a series with none.
+        times = sorted(value for value in gdf[kdim].unique().tolist() if not pd.isna(value))
         if not times:
             raise ValueError(
                 f"timeslider() needs at least one time step, but no feature carries a {kdim!r} value"
