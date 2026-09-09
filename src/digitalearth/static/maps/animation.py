@@ -171,8 +171,11 @@ class AnimationMixin:
 
         A frame whose channel is entirely nodata contributes no bound for that channel rather than a ``nan``
         that would swallow the others (``min``/``max`` against ``nan`` is order-dependent, so a dead **first**
-        frame would otherwise blank the channel for the whole animation). A channel dead in *every* scanned
-        frame falls back to ``(0, 1)`` — the same fallback :meth:`_stack_clim` uses for an all-nodata stack.
+        frame would otherwise blank the channel for the whole animation). A channel dead in every *scanned*
+        frame reports ``(nan, nan)``, which :func:`~digitalearth.static.maps.raster._stretch_to_unit` reads as
+        "no frozen bound for this channel" and answers per frame. Reporting a fixed span here instead would be
+        wrong whenever the scan stride aliases with the nodata pattern — dead in every scanned frame is not
+        dead in every frame, and the frames that do carry data would then clip flat against that span.
 
         Args:
             datasets: The animation stack.
@@ -194,7 +197,8 @@ class AnimationMixin:
         for index in range(len(scanned[0])):
             lows = [frame[index][0] for frame in scanned if isfinite(frame[index][0])]
             highs = [frame[index][1] for frame in scanned if isfinite(frame[index][1])]
-            limits.append((min(lows), max(highs)) if lows and highs else (0.0, 1.0))
+            # No usable bound: hand back nan rather than a span the unscanned frames may not fit (M2).
+            limits.append((min(lows), max(highs)) if lows and highs else (float("nan"), float("nan")))
         return limits
 
     def _animation_colorbar(self, opts: dict, label: Optional[str]) -> Any:

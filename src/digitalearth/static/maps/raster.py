@@ -91,7 +91,10 @@ def _stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) 
         limits: Optional precomputed ``(lo, hi)`` per channel, in channel order. When omitted each channel
             is stretched to its **own** 2-98 percentile — right for a still, but it makes the brightness
             pump across an animation, since every frame gets its own black and white point. Pass frozen
-            limits (see :func:`channel_limits`) to hold one stretch across a sequence of frames.
+            limits (see :func:`channel_limits`) to hold one stretch across a sequence of frames. A
+            non-finite entry means "no frozen bound for this channel": that one channel falls back to this
+            frame's own percentile, so a channel the freeze could not measure degrades to the per-frame
+            behaviour rather than clipping flat against an invented span.
 
     Returns:
         The stretched stack: same shape, ``float64``, clipped into ``[0, 1]``.
@@ -102,7 +105,11 @@ def _stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) 
         band = stack[..., i].astype("float64")
         lo, hi = derived[i]
         if not (np.isfinite(lo) and np.isfinite(hi)):
-            lo, hi = 0.0, 1.0  # an all-nodata channel: stretch to anything, its cells stay NaN
+            # No frozen bound for this channel — fall back to what this frame alone says rather than to a
+            # fixed span, which would clip a live channel flat if the freeze simply never saw it (M2).
+            lo, hi = channel_limits(band[..., None])[0]
+        if not (np.isfinite(lo) and np.isfinite(hi)):
+            lo, hi = 0.0, 1.0  # this frame's channel is nodata too: any span, its cells stay NaN
         elif hi <= lo:
             hi = lo + 1.0  # a constant channel: widen rather than divide by zero
         out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)

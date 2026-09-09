@@ -6,7 +6,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.sources import get_stack
 from digitalearth.static import Map, projections
-from digitalearth.static.maps.raster import channel_limits
+from digitalearth.static.maps.raster import _stretch_to_unit, channel_limits
 
 
 def _field(offset: float) -> Dataset:
@@ -435,12 +435,35 @@ class TestAnimateComposites:
             "the surviving frame's own bounds should be the frozen ones"
         )
 
-    def test_channel_dead_in_every_frame_falls_back(self):
-        """A channel with no finite cell anywhere falls back to (0, 1), like _stack_clim's empty case."""
+    def test_channel_dead_in_every_frame_reports_no_bound(self):
+        """A channel the scan never saw alive reports (nan, nan) — "no frozen bound", not a span."""
         stack = [_rgb_field_with_dead_channel(shift=s) for s in (0.0, 10.0)]
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
-        assert frozen[1] == (0.0, 1.0), f"an entirely dead channel should fall back to (0, 1): {frozen[1]}"
-        assert all(np.isfinite(v) for pair in frozen for v in pair), f"no bound may be non-finite: {frozen}"
+        assert np.isnan(frozen[1]).all(), f"an unmeasurable channel should report (nan, nan): {frozen[1]}"
+        assert all(np.isfinite(v) for v in frozen[0] + frozen[2]), f"live channels keep real bounds: {frozen}"
+
+    def test_strided_scan_does_not_clip_a_live_channel_flat(self):
+        """A channel the stride never samples alive still renders on its own stretch, not saturated.
+
+        Test scenario:
+            50 frames means a stride of 2, so only the even indices are scanned. Channel 2 is nodata on
+            exactly those, and carries real data on the odd ones. Answering that with a fixed (0, 1) span
+            would push every real value through clip((500 - 0) / 1) = 1.0 and blow the channel out in every
+            frame that has data; falling back per frame keeps it in range.
+        """
+        stack = []
+        for index in range(50):
+            dead = index % 2 == 0
+            stack.append(_rgb_field_with_dead_channel(shift=float(index), ny=12, nx=24) if dead
+                         else _rgb_field(shift=float(index), ny=12, nx=24))
+        frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
+        assert np.isnan(frozen[1]).all(), f"the unscanned-alive channel should report no bound: {frozen[1]}"
+
+        live = get_stack(stack[1], (1, 2, 3))
+        stretched = _stretch_to_unit(live, frozen)
+        channel = stretched[..., 1]
+        assert channel.min() < channel.max(), "a live channel must keep real contrast, not clip flat"
+        assert channel.mean() < 0.9, f"the channel reads as blown out: mean {channel.mean():.3f}"
 
     def test_dead_channel_still_renders(self, tmp_path):
         """A stack with one dead channel still animates instead of failing or blanking every frame."""
