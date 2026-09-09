@@ -739,6 +739,69 @@ class TestJsonSafeDatetimes:
         assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the display path did not encode"
         assert out.crs is not None, "the CRS was lost by the encoding copy"
 
+    def test_a_renamed_geometry_column_is_still_excluded(self):
+        """Geometry is found by its active name, not by the literal string "geometry".
+
+        Test scenario:
+            `rename_geometry` is common when a layer comes from a GeoPackage or PostGIS. Excluding the
+            wrong column would send geometry through the encoder.
+        """
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"when": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        ).rename_geometry("shape")
+        out = WebMap()._json_safe(frame)
+        assert out.geometry.equals(frame.geometry), "the renamed geometry column was altered"
+        assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the date column was not encoded"
+
+    def test_a_non_default_index_is_preserved(self):
+        """The encoded column keeps the frame's index, so it aligns on assignment.
+
+        Test scenario:
+            A filtered frame carries a gapped index; building the replacement Series with a fresh
+            RangeIndex would misalign the values or produce NaN.
+        """
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"when": pd.to_datetime(["2026-01-01", "2026-02-01", "2026-03-01"])},
+            geometry=[Point(i, i) for i in range(3)],
+            crs=4326,
+        )
+        filtered = frame.iloc[[0, 2]]
+        out = WebMap()._json_safe(filtered)
+        assert list(out.index) == [0, 2], f"index not preserved: {list(out.index)}"
+        assert list(out["when"]) == ["2026-01-01T00:00:00", "2026-03-01T00:00:00"], (
+            f"values misaligned against the index: {list(out['when'])}"
+        )
+
+    def test_the_reprojection_branch_encodes_too(self):
+        """A frame in another CRS takes the reproject branch of ``_display_gdf`` and must be encoded.
+
+        Test scenario:
+            ``_display_gdf`` has three return paths; this is the one a caller in a projected CRS hits, and
+            it applies the encoding to the *reprojected* frame rather than the original.
+        """
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"when": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            geometry=[Point(500000, 5800000), Point(510000, 5810000)],
+            crs=3857,
+        )
+        out = WebMap()._display_gdf(frame, method="points")
+        assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the reprojected frame was not encoded"
+        assert out.crs.to_epsg() == 4326, f"expected the display CRS, got {out.crs.to_epsg()}"
+
 
 class TestDatetimeFramesReachTheMap:
     """End-to-end: a dated frame now renders and saves through every vector builder (issue #156)."""
