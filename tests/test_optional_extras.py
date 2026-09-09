@@ -14,13 +14,13 @@ import pathlib
 import tomllib
 
 from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 #: Repository root — this file lives in `<root>/tests/`.
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-#: Package-name prefixes that belong to pyvista's own `jupyter` extra and must not be restated by us. Re-pinning
-#: any of them anywhere in the project re-creates the drift #158 describes, so every table is checked, not just
-#: the `3d` extra.
+#: Canonical package names that belong to pyvista's own `jupyter` extra and must not be restated by us. Matched
+#: as prefixes against canonicalised names, so `Trame-VTK` and `trame_vtk` are caught alongside `trame-vtk`.
 PYVISTA_OWNED_PREFIXES = ("trame",)
 
 
@@ -35,29 +35,46 @@ def _requirements(extra: str) -> list:
     return [Requirement(spec) for spec in _pyproject()["project"]["optional-dependencies"][extra]]
 
 
-def _every_declared_package() -> dict:
-    """Return every declared package name, mapped to the table it was declared in.
+def _declaration_sites() -> dict:
+    """Return every declared package, canonicalised, mapped to the list of tables declaring it.
 
-    Covers the base `[project].dependencies`, every `[project.optional-dependencies]` extra, and the pixi
-    dependency tables (`[tool.pixi.pypi-dependencies]`, `[tool.pixi.dependencies]` and any per-feature
-    equivalents) — the four places a stray pin could reappear.
+    Covers all five places a pin can live: `[project].dependencies`, every `[project.optional-dependencies]`
+    extra, `[dependency-groups]` (which is where pixi derives the `dev`, `docs` and `notebook` features, so a
+    pin there reaches every environment), and the pixi dependency tables including their per-feature and
+    per-platform variants.
+
+    Returns:
+        Mapping of canonical package name to the tables it appears in.
     """
     data = _pyproject()
-    found = {}
+    sites: dict = {}
+
+    def record(name: str, table: str) -> None:
+        sites.setdefault(canonicalize_name(name), []).append(table)
+
     for spec in data["project"].get("dependencies", []):
-        found[Requirement(spec).name] = "[project].dependencies"
+        record(Requirement(spec).name, "[project].dependencies")
     for extra, specs in data["project"].get("optional-dependencies", {}).items():
         for spec in specs:
-            found[Requirement(spec).name] = f"[project.optional-dependencies].{extra!r}"
-    pixi = data.get("tool", {}).get("pixi", {})
-    tables = [("[tool.pixi.%s]" % key, pixi.get(key, {})) for key in ("dependencies", "pypi-dependencies")]
-    for feature, body in pixi.get("feature", {}).items():
+            record(Requirement(spec).name, f"[project.optional-dependencies].{extra!r}")
+    for group, specs in data.get("dependency-groups", {}).items():
+        for spec in specs:
+            if isinstance(spec, str):
+                record(Requirement(spec).name, f"[dependency-groups].{group!r}")
+
+    def walk_pixi(body: dict, label: str) -> None:
+        """Record a pixi table's dependency keys, recursing through its per-platform `target` tables."""
         for key in ("dependencies", "pypi-dependencies"):
-            tables.append((f"[tool.pixi.feature.{feature}.{key}]", body.get(key, {})))
-    for label, table in tables:
-        for name in table:
-            found[name] = label
-    return found
+            for name in body.get(key, {}):
+                record(name, f"{label}.{key}")
+        for platform, target in body.get("target", {}).items():
+            walk_pixi(target, f"{label}.target.{platform}")
+
+    pixi = data.get("tool", {}).get("pixi", {})
+    walk_pixi(pixi, "[tool.pixi]")
+    for feature, body in pixi.get("feature", {}).items():
+        walk_pixi(body, f"[tool.pixi.feature.{feature}]")
+    return sites
 
 
 def test_3d_extra_takes_pyvistas_trame_stack_from_pyvista():
@@ -66,7 +83,7 @@ def test_3d_extra_takes_pyvistas_trame_stack_from_pyvista():
     `Scene3DBase.export_html` runs on trame/vtk.js, and which packages provide that differs by pyvista
     version. Requesting pyvista's own `jupyter` extra is what keeps the set correct across an upgrade.
     """
-    pyvista = [req for req in _requirements("3d") if req.name == "pyvista"]
+    pyvista = [req for req in _requirements("3d") if canonicalize_name(req.name) == "pyvista"]
     assert pyvista, "the `3d` extra must declare pyvista"
     assert "jupyter" in pyvista[0].extras, (
         "the `3d` extra must request `pyvista[jupyter]` — that extra is pyvista's trame/vtk.js export stack "
@@ -78,12 +95,13 @@ def test_no_dependency_table_hand_lists_the_trame_stack():
     """No `trame*` pin anywhere in the project — pyvista's own extra owns those versions.
 
     Re-listing them is what froze the set to pyvista 0.48's shape and broke `export_html` on 0.49. Checking
-    only the `3d` extra would miss the same pin reappearing in the base dependencies, in another extra, or in
-    a pixi table, so every declaration site is scanned.
+    only the `3d` extra would miss the same pin reappearing in the base dependencies, in another extra, in a
+    dependency group (which reaches every pixi environment) or in a pixi table, so every site is scanned and
+    names are canonicalised first — `Trame-VTK` resolves to the same distribution as `trame-vtk`.
     """
     restated = {
-        name: table
-        for name, table in _every_declared_package().items()
+        name: tables
+        for name, tables in _declaration_sites().items()
         if any(name.startswith(prefix) for prefix in PYVISTA_OWNED_PREFIXES)
     }
     assert not restated, (
