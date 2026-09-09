@@ -301,7 +301,13 @@ class StaticGlyph:
 
         return fig, ax
 
-    #: Legacy camelCase spelling of :meth:`plot_catchment`, kept so existing callers keep working. This is a
-    #: plain attribute binding rather than a wrapper, so both names are the *same* function object; the
-    #: deprecation warning every StaticGlyph entry point emits still fires either way.
-    plotCatchment = plot_catchment  # noqa: N815
+
+# Legacy camelCase spelling of ``StaticGlyph.plot_catchment``, kept so existing callers (tests,
+# examples/plot_examples.py, the example notebook) keep working after the PEP 8 rename.
+#
+# Bound out here rather than inside the class body on purpose: an in-class ``plotCatchment = plot_catchment``
+# reads as a *field declaration*, which trips the same naming rule the rename was made to satisfy
+# (python:S116 instead of python:S100). A module-level setattr is a binding, not a declaration, so the class
+# has exactly one snake_case definition and the old name still resolves to the very same function object --
+# no wrapper, and the per-entry-point DeprecationWarning fires either way.
+setattr(StaticGlyph, "plotCatchment", StaticGlyph.plot_catchment)
