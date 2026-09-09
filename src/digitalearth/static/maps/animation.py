@@ -471,8 +471,10 @@ class AnimationMixin:
             raise ValueError("rotate needs n_frames >= 1")
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
-        self.globe = True
+        # Prime first: it is the last thing that can refuse the call (a composite with colorbar=True, or a
+        # wrong band count), and a refused rotate must not leave the Map switched into globe mode (L3).
         self._prime_animation([dataset], kwargs, kind=kind, colorbar=colorbar, cbar_label=cbar_label)
+        self.globe = True
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
 
         def draw_one(i: int) -> None:

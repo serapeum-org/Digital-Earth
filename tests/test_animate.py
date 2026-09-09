@@ -506,6 +506,19 @@ class TestAnimateComposites:
             Map(crs=4326).animate(rgb_stack, kind="rgb_composite", bands=bands)
         assert spy.call_count == 0, "the stack must not be scanned before the band count is checked"
 
+    def test_a_refused_rotate_leaves_the_map_alone(self):
+        """rotate validates before it mutates: a refused call must not switch the Map into globe mode.
+
+        Test scenario:
+            n_frames and kind are both checked before anything is touched, but globe was set before the
+            priming that raises on a composite + colorbar, so the caller was left holding a Map that had
+            been switched to a globe by a call that never ran.
+        """
+        m = Map(crs=4326)
+        with pytest.raises(ValueError, match="colorbar=True is not supported"):
+            m.rotate(_rgb_field(), kind="rgb_composite", n_frames=3, colorbar=True)
+        assert m.globe is False, "a rotate that raised must not have switched the Map into globe mode"
+
     def test_empty_stack_has_no_limits_to_derive(self):
         """The helper says so rather than raising IndexError off an empty scan (reachable directly)."""
         with pytest.raises(ValueError, match="empty stack"):
