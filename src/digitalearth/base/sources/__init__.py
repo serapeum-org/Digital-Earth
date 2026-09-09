@@ -14,10 +14,10 @@ from typing import Optional
 
 import numpy as np
 
-from digitalearth.base.types import PlottableData
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.extractors import extract, get_stack
 from digitalearth.base.sources.source import Source
+from digitalearth.base.types import PlottableData
 
 __all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
 

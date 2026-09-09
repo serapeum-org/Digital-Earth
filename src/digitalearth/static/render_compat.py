@@ -23,6 +23,8 @@ from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
 from cleopatra.styling.scaling import ColorScale, ColorScaling
 
+__all__ = ["group_render_kwargs", "prepare_plot_kwargs", "relocate_flat_style"]
+
 #: Flat ``color_scale=`` spellings -> the ``ColorScale`` enum the renderer needs (its ``.value``s carry dashes,
 #: so a bare string like ``"power"`` constructs a ColorScaling but blows up at render time). Digital-Earth keeps
 #: accepting the friendly names.

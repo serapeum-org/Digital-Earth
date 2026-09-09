@@ -9,9 +9,9 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
-from digitalearth.static.scene import Scene
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.static.scene import Scene
 
 
 class GeoLayerBase(Scene):

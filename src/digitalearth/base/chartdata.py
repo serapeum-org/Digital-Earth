@@ -16,11 +16,14 @@ The four helpers split by what the chart needs from the data:
 They lost their leading underscore when they moved here: as module-private helpers of ``charts`` they were
 already being imported by a second backend, so the shared surface is now spelled as public.
 """
-from typing import Any, Optional, Sequence
+
+from typing import Any, Optional
 
 import numpy as np
 
 from digitalearth.base.arrays import finite, read_masked_band
+
+__all__ = ["as_finite_array", "column_or_array", "field_values", "grouped_series"]
 
 
 def column_or_array(data: Any, value: Any) -> Optional[np.ndarray]:

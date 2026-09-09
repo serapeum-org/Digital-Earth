@@ -7,21 +7,25 @@ vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching
 from typing import Any, List, Optional, Sequence, Tuple
 
 import numpy as np
-from shapely import MultiPoint, box, voronoi_polygons
-from shapely.affinity import scale as affine_scale
-from matplotlib.path import Path as MplPath
-from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
-from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
+from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
+from cleopatra.glyphs.primitives.flow_glyph import FlowGlyph
 from cleopatra.glyphs.primitives.polygon_glyph import PolygonGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
-from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
+from cleopatra.glyphs.stats.kde_glyph import KDEGlyph
+from matplotlib.path import Path as MplPath
 from pyramids.dataset import Dataset
+from shapely import MultiPoint, box, voronoi_polygons
+from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
-from digitalearth.static.render_compat import relocate_flat_style
-from digitalearth.base.symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
 from digitalearth.base.sources import get_source
+from digitalearth.base.symbology import (
+    MISSING_COLOR,
+    nulls_to_none,
+    resolve_categorical_cmap,
+)
+from digitalearth.static.render_compat import relocate_flat_style
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).

@@ -64,25 +64,24 @@ class TestStaticGlyphDeprecation:
 class TestStaticPackageSurface:
     """Tests for what digitalearth.static re-exports and how quietly it does it."""
 
-    def test_import_emits_no_warning(self):
+    def test_import_emits_no_warning(self, monkeypatch):
         """Importing digitalearth.static is silent.
+
+        Args:
+            monkeypatch: Evicts the module-cache entry and the package attribute, restoring both on teardown.
 
         Test scenario:
             The package body is re-executed with the module cache evicted and every warning recorded; it
             must produce none. StaticGlyph is re-exported here, so a warning at import time would fire for
             everyone who touches the matplotlib backend at all, not just legacy users.
         """
-        cached = sys.modules.pop("digitalearth.static", None)
-        try:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                importlib.import_module("digitalearth.static")
-            messages = [f"{w.category.__name__}: {w.message}" for w in caught]
-            assert not messages, f"importing digitalearth.static should be silent, got: {messages}"
-        finally:
-            if cached is not None:
-                sys.modules["digitalearth.static"] = cached
-                digitalearth.static = cached
+        monkeypatch.setattr(digitalearth, "static", digitalearth.static, raising=False)
+        monkeypatch.delitem(sys.modules, "digitalearth.static", raising=False)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            importlib.import_module("digitalearth.static")
+        messages = [f"{w.category.__name__}: {w.message}" for w in caught]
+        assert not messages, f"importing digitalearth.static should be silent, got: {messages}"
 
     def test_static_glyph_import_path_works(self):
         """``from digitalearth.static import StaticGlyph`` binds the class from static.glyph.

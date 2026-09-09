@@ -85,8 +85,8 @@ def test_api_voronoi(points_fc):
 def test_voronoi_drops_nonfinite_on_globe():
     """Far-side points (non-finite in a clipped/globe CRS) are dropped, not crashed on (M1)."""
     import geopandas as gpd
-    from shapely.geometry import Point
     from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
 
     # 180/150 lon are on the far hemisphere of an orthographic centred at (0, 0) -> reproject to inf.
     gdf = gpd.GeoDataFrame(

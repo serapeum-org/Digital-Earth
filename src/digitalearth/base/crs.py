@@ -5,6 +5,8 @@ A leaf module (no pyramids/cleopatra/matplotlib import) so both :mod:`digitalear
 """
 from typing import Any, Optional
 
+__all__ = ["source_epsg"]
+
 
 def source_epsg(features: Any, default: Optional[int] = None) -> Optional[int]:
     """Best-effort EPSG code of a ``FeatureCollection`` / ``GeoDataFrame``.

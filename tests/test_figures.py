@@ -6,6 +6,7 @@ backend. ``fig_of`` is a one-liner, so the coverage here is about its *contract*
 it must work for every kind of axes the backend actually creates (plain, gridded, inset, 3-D), it must be a
 pure lookup that creates nothing, and ``None`` must be the only input that yields ``None``.
 """
+
 import matplotlib
 import pytest
 
@@ -15,7 +16,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from digitalearth.static.figures import fig_of  # noqa: E402
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def closed_figures():
     """Close every figure a test leaves behind.
 
@@ -81,7 +82,9 @@ class TestFigOf:
         """
         fig, axes = plt.subplots(2, 2)
         figures = {id(fig_of(ax)) for ax in axes.ravel()}
-        assert figures == {id(fig)}, "all four axes should report the single parent figure"
+        assert figures == {id(fig)}, (
+            "all four axes should report the single parent figure"
+        )
 
     def test_distinct_figures_are_not_confused(self, closed_figures):
         """Axes from two different figures resolve to their own figures.
@@ -92,8 +95,12 @@ class TestFigOf:
         """
         first, first_ax = plt.subplots()
         second, second_ax = plt.subplots()
-        assert fig_of(first_ax) is first, "the first axes should still report the first figure"
-        assert fig_of(second_ax) is second, "the second axes should report the second figure"
+        assert fig_of(first_ax) is first, (
+            "the first axes should still report the first figure"
+        )
+        assert fig_of(second_ax) is second, (
+            "the second axes should report the second figure"
+        )
 
     def test_three_dimensional_axes_supported(self, closed_figures):
         """A 3-D axes reports its figure too.
@@ -114,7 +121,9 @@ class TestFigOf:
         """
         plt.close("all")
         assert fig_of(None) is None, "fig_of(None) should be None"
-        assert plt.get_fignums() == [], f"fig_of must not create a figure, found {plt.get_fignums()}"
+        assert plt.get_fignums() == [], (
+            f"fig_of must not create a figure, found {plt.get_fignums()}"
+        )
 
     def test_result_is_stable_across_calls(self, closed_figures):
         """Repeated calls return the identical figure object.
@@ -123,4 +132,6 @@ class TestFigOf:
             The lookup is pure, so two calls on the same axes give the same object — no copy, no rebuild.
         """
         fig, ax = plt.subplots()
-        assert fig_of(ax) is fig_of(ax), "repeated lookups should return the same object"
+        assert fig_of(ax) is fig_of(ax), (
+            "repeated lookups should return the same object"
+        )

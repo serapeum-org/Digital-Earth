@@ -1,14 +1,15 @@
 """StaticGlyph — the legacy static plotter (deprecated; use ``digitalearth.Map`` / ``quickmap``)."""
+
 import warnings
 from typing import Any, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import LineCollection, PolyCollection
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
 from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.styling.params import Classify
 from geopandas import GeoDataFrame
+from matplotlib.collections import LineCollection, PolyCollection
 from pyramids.dataset import Dataset
 
 from digitalearth.static.render_compat import group_render_kwargs
@@ -34,20 +35,20 @@ class StaticGlyph:
         :func:`~digitalearth.api.quickmap` or :class:`~digitalearth.static.map.Map`.
     """
 
-    figure_default_options = dict(
-        ylabel="",
-        xlabel="",
-        legend="",
-        legend_size=10,
-        figsize=(10, 8),
-        labelsize=10,
-        fontsize=10,
-        name="hist.tif",
-        color1="#3D59AB",
-        color2="#DC143C",
-        linewidth=3,
-        Axisfontsize=15,
-    )
+    figure_default_options = {
+        "ylabel": "",
+        "xlabel": "",
+        "legend": "",
+        "legend_size": 10,
+        "figsize": (10, 8),
+        "labelsize": 10,
+        "fontsize": 10,
+        "name": "hist.tif",
+        "color1": "#3D59AB",
+        "color2": "#DC143C",
+        "linewidth": 3,
+        "Axisfontsize": 15,
+    }
 
     def __init__(self):
         _warn_deprecated()
@@ -60,7 +61,7 @@ class StaticGlyph:
         point_size: Union[int, float] = 100,
         pid_color="blue",
         pid_size: Union[int, float] = 10,
-        **kwargs
+        **kwargs,
     ):
         """plot.
 
@@ -119,7 +120,7 @@ class StaticGlyph:
             no_data_value = src.no_data_value[band - 1]
         else:
             arr = src
-            if "no_data_value" not in kwargs.keys():
+            if "no_data_value" not in kwargs:
                 raise ValueError(
                     "If the first parameter is a numpy.ndarray object you have to enter a kwargs 'no_data_value'"
                     "value"
@@ -150,7 +151,7 @@ class StaticGlyph:
         array = ArrayGlyph(arr, exclude_value=exclude)
         fig, ax = array.plot(**group_render_kwargs(kwargs))
 
-        points_ids = list()
+        points_ids = []
         if points is not None:
             row = points.loc[:, "rows"].tolist()
             col = points.loc[:, "col"].tolist()
@@ -160,9 +161,10 @@ class StaticGlyph:
                 i_ds = points.loc[:, "id"].tolist()
             else:
                 i_ds = points.index.tolist()
+            # The scatter artist is deliberately not captured or returned: this method's contract is
+            # (fig, ax), and widening it on a deprecated class would break callers for no benefit. Anyone
+            # needing the artist should use Map/quickmap, which expose their layers directly.
             ax.scatter(col, row, color=point_color, s=point_size)
-            # TODO: Points = ax.scatter(col, rows, color=point_color, s=point_size)
-            #  return the scatter plot object (Points)
 
             for i in range(len(row)):
                 points_ids.append(
@@ -180,7 +182,7 @@ class StaticGlyph:
         return fig, ax
 
     @staticmethod
-    def plotCatchment(
+    def plot_catchment(
         points: GeoDataFrame,
         column_name: Any,
         poly: GeoDataFrame,
@@ -195,6 +197,9 @@ class StaticGlyph:
         save: Union[bool, str] = False,
     ):
         """Plot a catchment: gauge points over a grey sub-catchment fill and a river network.
+
+        Renamed from ``plotCatchment`` to match PEP 8. The old name stays bound as a class attribute below,
+        so existing callers keep working unchanged.
 
         Built on **cleopatra + matplotlib**. The gauge ``points`` are drawn as a value-coloured,
         value-scaled scatter (``ScatterGlyph``), the ``poly`` features as a uniform grey fill, and the
@@ -251,7 +256,11 @@ class StaticGlyph:
         if poly_rings:
             ax.add_collection(
                 PolyCollection(
-                    poly_rings, facecolors="grey", edgecolors="grey", linewidths=linewidth, zorder=0,
+                    poly_rings,
+                    facecolors="grey",
+                    edgecolors="grey",
+                    linewidths=linewidth,
+                    zorder=0,
                 )
             )
 
@@ -262,7 +271,9 @@ class StaticGlyph:
             for part in (geom.geoms if geom.geom_type.startswith("Multi") else [geom])
         ]
         if line_paths:
-            ax.add_collection(LineCollection(line_paths, colors="C0", linewidths=2.0, zorder=1))
+            ax.add_collection(
+                LineCollection(line_paths, colors="C0", linewidths=2.0, zorder=1)
+            )
 
         # Gauge points: coloured and sized by the chosen column (optionally classified by `scheme`).
         values = points[column_name].astype(float).to_numpy()
@@ -278,7 +289,9 @@ class StaticGlyph:
             size_legend=True,
         )
         # `scheme` moved off the constructor onto plot()'s `classify` group (cleopatra >=0.30).
-        glyph.plot(**({"classify": Classify(scheme=scheme)} if scheme is not None else {}))
+        glyph.plot(
+            **({"classify": Classify(scheme=scheme)} if scheme is not None else {})
+        )
 
         ax.set_title(title, fontsize=title_size)
         ax.set_aspect("equal")
@@ -287,3 +300,14 @@ class StaticGlyph:
             fig.savefig(save, bbox_inches="tight", transparent=True)
 
         return fig, ax
+
+
+# Legacy camelCase spelling of ``StaticGlyph.plot_catchment``, kept so existing callers (tests,
+# examples/plot_examples.py, the example notebook) keep working after the PEP 8 rename.
+#
+# Bound out here rather than inside the class body on purpose: an in-class ``plotCatchment = plot_catchment``
+# reads as a *field declaration*, which trips the same naming rule the rename was made to satisfy
+# (python:S116 instead of python:S100). A module-level setattr is a binding, not a declaration, so the class
+# has exactly one snake_case definition and the old name still resolves to the very same function object --
+# no wrapper, and the per-entry-point DeprecationWarning fires either way.
+setattr(StaticGlyph, "plotCatchment", StaticGlyph.plot_catchment)

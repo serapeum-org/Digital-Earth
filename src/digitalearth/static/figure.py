@@ -7,8 +7,8 @@ only — the rendering stays in each ``Map`` (pyramids + cleopatra).
 """
 from typing import Any, List, Optional, Tuple
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.figure import Figure
 
 from digitalearth.static.map import Map

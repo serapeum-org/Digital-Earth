@@ -8,9 +8,9 @@ Runs in the ``interactive`` pixi env.
 import numpy as np
 import pytest
 
-from digitalearth.interactive import InteractiveMap
 from digitalearth.base.sources import Source
 from digitalearth.base.sources.dimension import DimensionInfo
+from digitalearth.interactive import InteractiveMap
 
 hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")

@@ -11,9 +11,9 @@ import logging
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
-from matplotlib.collections import PolyCollection
-from cleopatra.basemap.tiles import add_tiles
 from cleopatra.basemap.reference import add_features, natural_earth
+from cleopatra.basemap.tiles import add_tiles
+from matplotlib.collections import PolyCollection
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.static import projections

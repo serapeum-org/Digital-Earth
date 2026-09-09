@@ -10,9 +10,9 @@ import numpy as np
 import pytest
 from matplotlib.animation import FuncAnimation
 
+from digitalearth.static import Map
 from digitalearth.static import animation as de_animation
 from digitalearth.static.animation import FULL_CHROMA_PIX_FMT, save_animation
-from digitalearth.static import Map
 
 
 @pytest.fixture

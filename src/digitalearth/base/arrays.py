@@ -1,9 +1,10 @@
 """Shared array helpers — the small numpy chores duplicated across the wiring modules.
 
 Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`,
-:mod:`digitalearth.static.map`, :mod:`digitalearth.static.charts`, :mod:`digitalearth.static.series` and
-:mod:`digitalearth.static.temporal`, with subtly different nodata-masking rules. They live here once so every
-caller masks the same way.
+:mod:`digitalearth.static.charts`, :mod:`digitalearth.static.temporal` and
+:mod:`digitalearth.static.textured_globe`, with subtly different nodata-masking rules. They live here once so
+every caller masks the same way. (``static.map`` and ``static.series`` were consumers before the backend
+restructure split ``fig_of`` out into :mod:`digitalearth.static.figures`; they no longer import from here.)
 
 Masking uses an **exact** comparison against the nodata sentinel (``arr == nodata``): a nodata value is a sentinel
 read straight from the dataset, so it is reproduced exactly in the array, and an exact test cannot accidentally null
@@ -18,6 +19,8 @@ the matplotlib backend rather than to the engine-neutral shared layer.
 from typing import Any, Callable, Dict, Optional
 
 import numpy as np
+
+__all__ = ["NAN_REDUCERS", "finite", "mask_nodata", "read_masked_band"]
 
 #: NaN-aware spatial/array reducers keyed by name — the single source consumed by the temporal time-series
 #: reducer and the quadtree per-cell aggregator (which adds its own ``"count"`` on top). Each maps a name to a

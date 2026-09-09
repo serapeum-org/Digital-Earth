@@ -38,8 +38,6 @@ class _FakeDataset:
         return self._array
 
 
-
-
 class TestMaskNodata:
     """Tests for mask_nodata."""
 
@@ -94,7 +92,8 @@ class TestMaskNodata:
         out = mask_nodata([1, 2, 3], 2)
         assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
         assert np.isnan(out[1]), "the integer sentinel should be masked after the float cast"
-        assert out[0] == 1.0 and out[2] == 3.0, f"non-sentinel cells changed: {out}"
+        assert out[0] == 1.0, f"leading non-sentinel cell changed: {out}"
+        assert out[2] == 3.0, f"trailing non-sentinel cell changed: {out}"
 
     def test_nan_sentinel_matches_nothing(self):
         """A NaN sentinel masks nothing, because NaN != NaN under an exact comparison.
@@ -104,7 +103,8 @@ class TestMaskNodata:
             leaves finite values untouched (its NaN cells are already NaN), so no real value is lost.
         """
         out = mask_nodata(np.array([1.0, np.nan, 3.0]), np.nan)
-        assert out[0] == 1.0 and out[2] == 3.0, f"finite values must survive a NaN sentinel: {out}"
+        assert out[0] == 1.0, f"leading finite value must survive a NaN sentinel: {out}"
+        assert out[2] == 3.0, f"trailing finite value must survive a NaN sentinel: {out}"
         assert np.isnan(out[1]), "an already-NaN cell stays NaN"
 
     def test_empty_input_stays_empty(self):
@@ -178,7 +178,8 @@ class TestFinite:
             A 0-d input is ravelled to shape (1,), so downstream code can index it uniformly.
         """
         out = finite(3.0)
-        assert out.shape == (1,) and out[0] == 3.0, f"expected [3.0], got {out}"
+        assert out.shape == (1,), f"expected one value, got shape {out.shape}"
+        assert out[0] == 3.0, f"expected [3.0], got {out}"
 
     def test_integer_input_is_cast_to_float(self):
         """finite casts integer input to float64.

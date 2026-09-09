@@ -8,10 +8,10 @@ from typing import Any, List, Optional, Sequence
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
-from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
+from digitalearth.static.render_compat import relocate_flat_style
 
 
 def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:

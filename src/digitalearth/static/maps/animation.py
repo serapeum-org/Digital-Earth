@@ -10,8 +10,8 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from digitalearth.base.arrays import finite, read_masked_band
-from digitalearth.static.animation import save_animation
 from digitalearth.static import projections
+from digitalearth.static.animation import save_animation
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24

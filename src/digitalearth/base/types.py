@@ -13,6 +13,8 @@ from typing import Any, Protocol, Union, runtime_checkable
 
 import numpy as np
 
+__all__ = ["PlottableData", "RasterLike", "VectorLike"]
+
 
 @runtime_checkable
 class RasterLike(Protocol):

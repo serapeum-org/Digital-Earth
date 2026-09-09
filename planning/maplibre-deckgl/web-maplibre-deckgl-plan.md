@@ -199,7 +199,7 @@ src/digitalearth/web/
   map.py             # WebMap(WebMapBase, RasterMixin, VectorMixin, BigDataMixin, ThreeDMixin, TemporalMixin,
                      #   DecorationMixin, ExportMixin) — thin composition
 ```
-- **Reuse, don't rebuild:** consume `digitalearth/sources/` `Source` + extractors; add engine-specific *builders*
+- **Reuse, don't rebuild:** consume `digitalearth/base/sources/` `Source` + extractors; add engine-specific *builders*
   (Source → MapLibre source/paint spec or deck.gl layer). No new data model.
 - **One widget, two layer systems:** `maplibre` hosts MapLibre style layers *and* deck.gl layers in a single
   anywidget — so `WebMap` overlays both (MapLibre basemap + deck.gl big-data/3-D) without a second engine, matching

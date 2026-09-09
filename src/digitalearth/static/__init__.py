@@ -18,13 +18,36 @@ geostatistical maps (:mod:`~digitalearth.static.geostatistics`) and animation
 provide for themselves.
 
 ``StaticGlyph`` (:mod:`digitalearth.static.glyph`) is the package's original entry point and is
-**deprecated** — prefer ``Map``/``quickmap``. It is re-exported here so ``from digitalearth.static import
-StaticGlyph`` keeps working; importing it emits no warning, but every one of its entry points does.
+**deprecated** — prefer ``Map``/``quickmap``. It stays importable as ``from digitalearth.static import
+StaticGlyph``, but is resolved **lazily** through a PEP 562 module ``__getattr__``: the package facade
+imports :mod:`digitalearth.static`, so an eager re-export would load the deprecated module on every
+``import digitalearth``. Importing it emits no warning; every one of its entry points does. Removing it
+later is then a one-line deletion here.
 """
+
 from digitalearth.static.figure import grid, shared_colorbar
-from digitalearth.static.glyph import StaticGlyph
 from digitalearth.static.map import Map
 from digitalearth.static.scene import Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 
 __all__ = ["Scene", "Map", "TexturedGlobe", "StaticGlyph", "grid", "shared_colorbar"]
+
+
+def __getattr__(name: str):
+    """Resolve ``StaticGlyph`` lazily so ``import digitalearth`` does not load the deprecated module.
+
+    Args:
+        name: The attribute being looked up on the ``digitalearth.static`` package.
+
+    Returns:
+        The :class:`~digitalearth.static.glyph.StaticGlyph` class.
+
+    Raises:
+        AttributeError: for any other name.
+    """
+    if name == "StaticGlyph":
+        from digitalearth.static.glyph import StaticGlyph
+
+        globals()[name] = StaticGlyph
+        return StaticGlyph
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -11,8 +11,8 @@ pv = pytest.importorskip("pyvista")
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.terrain import (
-    ELEVATION,
     _METRES_PER_DEGREE,
+    ELEVATION,
     _terrain_mesh,
     _vertical_unit_scale,
 )
