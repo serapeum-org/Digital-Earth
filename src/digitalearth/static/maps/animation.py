@@ -417,10 +417,14 @@ Real limits already in ``opts`` are kept, so a caller can pass their own ``limit
         animation is lazy: call ``anim.save("out.gif", writer=PillowWriter(fps=...))`` or display it.
 
         All frames share **one colour treatment**, so nothing flickers between them. A scalar field takes
-        ``vmin``/``vmax`` from ``kwargs`` if given, else computed once from the whole stack. A composite
+        ``vmin``/``vmax`` from ``kwargs`` if given, else measured once over the stack. A composite
         (``"rgb_composite"`` / ``"hsv_composite"``) instead takes one per-channel contrast stretch, frozen
         once over the stack — without which every frame would re-derive its own 2-98 percentile and the
         clip would pump. Pass your own ``limits=[(lo, hi), ...]`` to override that scan.
+
+        Either scan measures frames **as they will be drawn**, reprojected into the display CRS, so the
+        animation lands on the same scale as the equivalent still. On a globe that means the scale spans
+        what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.
 
         Args:
             stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
@@ -532,6 +536,11 @@ Real limits already in ``opts`` are kept, so a caller can pass their own ``limit
         **Terminal for this Map's projection:** ``rotate`` sets ``globe=True`` and sweeps the display CRS
         (:attr:`crs`) as the animation renders, leaving the Map centred on the **final** frame. Treat a
         rotated Map as consumed by the animation — create a fresh ``Map`` if you need the original projection.
+
+        The colour treatment is measured across the projections the sweep will actually use, not the one the
+        Map was built with, so a rotation is not scaled to whichever hemisphere happened to face front when
+        it started. A view that shows none of the data — a full sweep passes the far side — contributes
+        nothing rather than failing the animation.
 
         Args:
             dataset: The pyramids ``Dataset`` to spin (reprojected per frame).
