@@ -1,7 +1,8 @@
-"""Guards against drift between the CI workflows, the pre-commit hooks and the pixi task table.
+"""Guards against drift between the CI workflows, the pre-commit hooks and the project's own config.
 
-Two kinds of drift are covered: a task reference that no longer resolves, and the notebook skip-list
-falling out of step with the hook regex that is documented as mirroring it.
+Four kinds of drift are covered: a task reference that no longer resolves, the notebook skip-list falling out
+of step with the hook regex that is documented as mirroring it, a composite gate that quietly stops fanning
+out to one of the checks it aggregates, and the mypy baseline growing instead of shrinking.
 
 `pixi run -e <env> <name>` accepts either a task from `[tool.pixi.tasks]` or a bare executable in the
 environment, so a task that is renamed or deleted fails only at run time — in CI, or in a hook the author
@@ -294,4 +295,203 @@ class TestRuffPinsAgree:
         assert pyproject_version == hook_version, (
             f"ruff pins disagree: pyproject dev extra has {pyproject_version!r}, "
             f".pre-commit-config.yaml has {revs[0]!r}"
+        )
+
+
+#: The checks the composite `lint` task must keep fanning out to. Splitting it into three (#171) is what put
+#: the formatter and the import sorter behind a gate; dropping one from `depends-on` would un-gate it in
+#: silence, because `pixi run -e dev lint` would still exit 0.
+LINT_GATES = ["lint-names", "lint-format", "lint-imports"]
+
+#: `(task, tokens its command must contain)` for the gates that only work if they are pointed at the right
+#: trees in the right mode. `--check` is what makes the formatter a gate rather than a rewrite.
+GATE_ARGUMENTS = [
+    ("lint-format", ["ruff", "format", "--check", "src", "tests"]),
+    ("lint-imports", ["ruff", "check", "--select", "I", "src", "tests"]),
+    ("lint-names", ["ruff", "check", "--select", "F821", "src", "tests", "docs"]),
+]
+
+#: Number of modules in the mypy baseline when it was recorded at #172. The table documents itself as a
+#: ratchet that may shrink and must never grow, which is only true if something counts.
+MYPY_BASELINE_CEILING = 35
+
+
+def _mypy() -> dict:
+    """Return the `[tool.mypy]` table, including its `overrides` array."""
+    return _pyproject()["tool"]["mypy"]
+
+
+def _mypy_overrides() -> list:
+    """Return the `[[tool.mypy.overrides]]` entries — the per-module baseline."""
+    return _mypy().get("overrides") or []
+
+
+class TestLintGateFansOut:
+    """Tests that the composite `lint` task still runs all three of the checks it aggregates."""
+
+    def test_lint_depends_on_every_gate(self):
+        """`lint` fans out to the name check, the formatter and the import sorter.
+
+        Test scenario:
+            CI and the pre-commit hook both invoke `lint`, never the three parts. It carries no `cmd` of its
+            own, so a gate dropped from `depends-on` disappears from every caller at once while the gate
+            still reports success — the shape of the drift #171 was filed for.
+        """
+        lint = _tasks()["lint"]
+        assert lint.get("depends-on") == LINT_GATES, (
+            f"`lint` must depend on {LINT_GATES}, found {lint.get('depends-on')}"
+        )
+        assert "cmd" not in lint, (
+            "`lint` should stay a pure aggregator; a `cmd` on it would run outside the fan-out"
+        )
+
+    @pytest.mark.parametrize(
+        "task, tokens", GATE_ARGUMENTS, ids=[name for name, _ in GATE_ARGUMENTS]
+    )
+    def test_gate_command_covers_the_intended_trees(self, task, tokens):
+        """Each lint gate runs the intended tool, in check mode, over the intended trees.
+
+        Args:
+            task: The pixi task under test.
+            tokens: Command-line tokens its `cmd` must contain.
+
+        Test scenario:
+            A gate narrowed to `src` would stop covering `tests/`, and a formatter invoked without `--check`
+            would rewrite files and exit 0 instead of failing — both leave a green CI over a drifting tree.
+        """
+        command = shlex.split(_tasks()[task]["cmd"])
+        missing = [token for token in tokens if token not in command]
+        assert not missing, f"the {task!r} command is missing {missing}: {command}"
+
+    def test_every_depends_on_target_is_a_defined_task(self):
+        """Every name in any task's `depends-on` resolves to another declared task.
+
+        Test scenario:
+            A dependency naming a task that was renamed or deleted fails only when that task is run. This
+            walks the whole table rather than just `lint`, so the same slip is caught anywhere.
+        """
+        tasks = _tasks()
+        dangling = sorted(
+            {
+                f"{name} -> {dependency}"
+                for name, body in tasks.items()
+                if isinstance(body, dict)
+                for dependency in body.get("depends-on") or []
+                if dependency not in tasks
+            }
+        )
+        assert not dangling, f"tasks depend on undefined task(s): {dangling}"
+
+    def test_the_type_check_gate_is_wired_up(self):
+        """The `mypy` task is defined and a real workflow step runs it.
+
+        Test scenario:
+            mypy was configured and hooked into pre-commit long before it could pass, so the hook was
+            routinely skipped. It is clean as of #172 and CI now has a `Type-check` step; without this the
+            step could be dropped and the baseline below would go on being maintained for nothing.
+        """
+        assert "mypy" in _tasks(), "the 'mypy' task is not defined in [tool.pixi.tasks]"
+        invoked = {name for _, name in _workflow_invocations()}
+        assert "mypy" in invoked, (
+            "the 'mypy' task is defined but no workflow step runs it"
+        )
+
+
+class TestMypyBaseline:
+    """Tests for the per-module mypy baseline in `[[tool.mypy.overrides]]`."""
+
+    def test_the_baseline_is_read_and_is_not_empty(self):
+        """The overrides array parses and holds entries.
+
+        Test scenario:
+            Every assertion below iterates the array; an empty or mis-keyed one would pass them all while
+            checking nothing.
+        """
+        assert _mypy_overrides(), (
+            "[[tool.mypy.overrides]] should hold the per-module baseline"
+        )
+
+    def test_the_baseline_has_not_grown(self):
+        """The baseline holds no more modules than it did when it was recorded.
+
+        Test scenario:
+            The table calls itself a ratchet that may shrink and must never grow, but nothing enforced that.
+            Draining an entry is meant to be routine; adding one silently exempts a module from the type
+            gate. Lower this ceiling as entries are drained.
+        """
+        overrides = _mypy_overrides()
+        assert len(overrides) <= MYPY_BASELINE_CEILING, (
+            f"the mypy baseline grew to {len(overrides)} modules (ceiling {MYPY_BASELINE_CEILING}); "
+            "fix the new errors instead of baselining them, or justify raising the ceiling"
+        )
+
+    def test_every_entry_names_a_module_that_exists(self):
+        """Each baselined module resolves to a real file or package under `src/`.
+
+        Test scenario:
+            An entry left behind by a rename silences nothing and hides how much debt is really left. The
+            backend restructure moved every module in the package, which is exactly when this rots.
+        """
+        stale = []
+        for override in _mypy_overrides():
+            module = override["module"]
+            path = ROOT / "src" / pathlib.Path(*module.split("."))
+            if not (
+                path.with_suffix(".py").exists() or (path / "__init__.py").exists()
+            ):
+                stale.append(module)
+        assert not stale, (
+            f"the mypy baseline names module(s) that no longer exist: {stale}"
+        )
+
+    def test_no_entry_silences_a_whole_subtree(self):
+        """No baseline entry uses a wildcard module pattern.
+
+        Test scenario:
+            The table's own rationale is that a blanket disable would also silence these codes in code
+            written tomorrow. `module = "digitalearth.web.*"` reintroduces exactly that, one line at a time,
+            and reads almost identically to a legitimate per-module entry.
+        """
+        wildcards = sorted(
+            override["module"]
+            for override in _mypy_overrides()
+            if "*" in override["module"]
+        )
+        assert not wildcards, (
+            f"the baseline must stay per-module; wildcard entries silence future code too: {wildcards}"
+        )
+
+    def test_every_entry_lists_specific_error_codes(self):
+        """Each entry disables a non-empty list of named error codes and nothing broader.
+
+        Test scenario:
+            `disable_error_code` names what is owed; `ignore_errors` or `follow_imports = "skip"` would turn
+            a numbered debt into a blanket exemption that no longer shrinks as the module improves.
+        """
+        offenders = []
+        for override in _mypy_overrides():
+            codes = override.get("disable_error_code")
+            extra = set(override) - {"module", "disable_error_code"}
+            if not codes or not isinstance(codes, list) or extra:
+                offenders.append(
+                    f"{override['module']}: codes={codes!r} extra_keys={sorted(extra)}"
+                )
+        assert not offenders, (
+            f"every baseline entry must disable a specific list of codes and nothing else: {offenders}"
+        )
+
+    def test_the_global_settings_do_not_disable_anything(self):
+        """`[tool.mypy]` itself disables no error codes and ignores no errors.
+
+        Test scenario:
+            The whole point of a per-module baseline is that new modules are checked in full. A global
+            `disable_error_code` (or `ignore_errors`) would exempt every module at once — including ones
+            with no entry here — and would make the per-module list look stricter than the project is.
+        """
+        settings = _mypy()
+        assert "disable_error_code" not in settings, (
+            "[tool.mypy] must not disable error codes globally; baseline them per module instead"
+        )
+        assert not settings.get("ignore_errors", False), (
+            "[tool.mypy] must not set ignore_errors"
         )
