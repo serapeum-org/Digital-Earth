@@ -373,6 +373,36 @@ class TestExportHtml:
         assert "not registered" in str(exc_info.value), f"The actionable message was lost: {exc_info.value}"
 
 
+class TestPyvistaVtkRoot:
+    """Tests for the public derivation of the VTK package pyvista is bound to."""
+
+    def test_reads_the_root_off_a_pyvista_type(self):
+        """The root comes from the MRO of a pyvista type, giving `vtkmodules` for a stock build.
+
+        Test scenario:
+            Deriving it this way avoids `pyvista._vtk._VTK_ROOT`, which is private and moved between pyvista
+            0.48 and 0.49 — the module path does not even exist on 0.48.
+        """
+        root = base._pyvista_vtk_root()
+        ancestry = {klass.__module__.split(".")[0] for klass in pv.PolyData.__mro__}
+        assert root in ancestry, f"{root!r} is not among pyvista's own ancestry {sorted(ancestry)}"
+        assert root.startswith("vtk"), f"Expected a VTK package, got {root!r}"
+        assert root in sys.modules, f"{root!r} names a package that was never imported"
+
+    def test_falls_back_when_no_vtk_ancestor_is_found(self, monkeypatch):
+        """A pyvista type with no VTK ancestry yields the stock default rather than raising.
+
+        Args:
+            monkeypatch: Replaces `pyvista.PolyData` with a plain class.
+
+        Test scenario:
+            The derivation walks an MRO it does not control. If a future pyvista stops exposing a VTK base
+            there, the check must degrade to the stock package name instead of breaking every export.
+        """
+        monkeypatch.setattr(pv, "PolyData", type("NotVtkBacked", (), {}))
+        assert base._pyvista_vtk_root() == "vtkmodules", "the fallback must be the stock VTK package"
+
+
 class TestVtkBuildReconciliation:
     """Tests for the VTK-build check `export_html` runs before using the trame component."""
 
