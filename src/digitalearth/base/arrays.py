@@ -1,13 +1,19 @@
 """Shared array helpers — the small numpy chores duplicated across the wiring modules.
 
-Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`, :mod:`digitalearth.static.map`,
-:mod:`digitalearth.static.charts`, :mod:`digitalearth.static.series` and :mod:`digitalearth.static.temporal`, with subtly different
-nodata-masking rules. They live here once so every caller masks the same way.
+Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`,
+:mod:`digitalearth.static.map`, :mod:`digitalearth.static.charts`, :mod:`digitalearth.static.series` and
+:mod:`digitalearth.static.temporal`, with subtly different nodata-masking rules. They live here once so every
+caller masks the same way.
 
 Masking uses an **exact** comparison against the nodata sentinel (``arr == nodata``): a nodata value is a sentinel
 read straight from the dataset, so it is reproduced exactly in the array, and an exact test cannot accidentally null
 legitimate values that merely sit close to the sentinel (which ``np.isclose`` could). This is pure numpy — no
-pyramids/cleopatra import — so the module stays a leaf consumable from anywhere.
+pyramids/cleopatra import — so the module stays a leaf consumable from anywhere, which is what qualifies it for
+:mod:`digitalearth.base`.
+
+The one matplotlib chore that used to sit alongside these (``fig_of``) is not here: when the old flat
+``digitalearth._arrays`` was split it went to :mod:`digitalearth.static.figures`, since a figure lookup belongs to
+the matplotlib backend rather than to the engine-neutral shared layer.
 """
 from typing import Any, Callable, Dict, Optional
 
@@ -24,7 +30,6 @@ NAN_REDUCERS: Dict[str, Callable[..., Any]] = {
     "max": np.nanmax,
     "std": np.nanstd,
 }
-
 
 
 def mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:

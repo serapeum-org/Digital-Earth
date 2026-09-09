@@ -1,10 +1,11 @@
-"""Interactive (HoloViz / Bokeh) charts — the interactive-tier counterpart of :mod:`digitalearth.static.charts` (DC.6).
+"""Interactive (HoloViz / Bokeh) charts — the counterpart of :mod:`digitalearth.static.charts` (DC.6).
 
 ``digitalearth.static.charts`` renders static matplotlib charts via cleopatra; these return **HoloViews elements**
 (``hv.Histogram`` / ``hv.Scatter`` / ``hv.Bars`` / ``hv.Curve``) for pan/zoom/hover charts in the interactive
 tier — surfacing DC.1 (histogram), DC.3 (scatter) and DC.4 (aggregate bar/line) on the HoloViz stack. The
-field-extraction and aggregation logic is shared with :mod:`digitalearth.static.charts` (one source of truth); only
-the rendering engine differs.
+field-extraction and aggregation logic is shared with the static tier and lives in
+:mod:`digitalearth.base.chartdata` (one source of truth, engine-neutral so neither backend owns it); only the
+rendering engine differs.
 
 holoviews is imported lazily (the optional ``interactive`` extra): importing this module needs no engine; only
 calling a chart builder does, and a missing extra raises an actionable :class:`ImportError`.

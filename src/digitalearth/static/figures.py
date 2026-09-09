@@ -1,8 +1,9 @@
 """The figure that owns an axes — the one matplotlib chore the static backend shares.
 
-Split out of the old ``digitalearth.base.arrays`` when that module was divided: everything else in it is plain
+Split out of the old flat ``digitalearth._arrays`` when that module was divided: everything else in it is plain
 numpy and now lives in :mod:`digitalearth.base.arrays`, while this needs :mod:`matplotlib` and so belongs to
-the static backend. Only :mod:`digitalearth.static.charts` and :mod:`digitalearth.static.series` use it.
+the static backend. Keeping it out of :mod:`digitalearth.base` is what lets that subpackage stay free of any
+renderer import. Only :mod:`digitalearth.static.charts` and :mod:`digitalearth.static.series` use it.
 """
 from typing import Optional
 
