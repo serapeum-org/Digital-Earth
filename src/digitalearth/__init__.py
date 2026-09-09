@@ -1,17 +1,27 @@
+# `importlib.metadata` is stdlib from 3.8 on and `requires-python` floors at 3.11, so the
+# `importlib_metadata` backport this used to fall back to can never be reached: read the version straight
+# from the installed distribution's metadata.
 from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version(__name__)
 except PackageNotFoundError:  # pragma: no cover
+    # Running from a source tree that was never installed (e.g. pytest's `pythonpath = ["src"]`): there is
+    # no distribution to read a version off, so report "unknown" rather than failing the import.
     __version__ = "unknown"
 
-# documentation format
 __author__ = "Mostafa Farrag"
 __email__ = "moah.farag@gmail.com"
+#: Docstring dialect the API reference is rendered from.
 __docformat__ = "restructuredtext"
 
-# Let users know if they're missing any of our hard dependencies
+#: Modules whose absence should be reported as one collected ImportError rather than as whichever
+#: `from ... import` happened to run first. Currently empty (the commented-out names show the intended
+#: shape), so the loop below is a no-op: every dependency is declared in `pyproject.toml` and installed
+#: with the package. The annotation is what tells mypy the element type — an empty literal gives it
+#: nothing to infer from, and this is a module-level name other code may read.
 hard_dependencies: tuple[str, ...] = ()  # ("numpy", "pandas", "gdal")
+#: The subset of `hard_dependencies` that failed to import, collected by the loop below.
 missing_dependencies: list[str] = []
 
 for dependency in hard_dependencies:
@@ -25,8 +35,13 @@ if missing_dependencies:
     raise ImportError("Missing required dependencies {0}".format(missing_dependencies))
 
 
-__doc__ = """
-digitalearth - visualization package
+# Assigned rather than written as a module docstring at the top of the file: the imports above have to run
+# first (the version lookup and the dependency check), and a docstring is only a docstring in first position.
+__doc__ = """digitalearth — geospatial visualization built on pyramids, cleopatra and geostatista.
+
+Reads data through pyramids and renders it through one subpackage per backend: `static` (matplotlib, the
+default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre + deck.gl), over the
+engine-neutral `base`. `quickmap`/`quickplot` are the one-call entry points; `Map` is the composable scene.
 """
 
 from digitalearth.api import quickmap, quickplot  # noqa: E402

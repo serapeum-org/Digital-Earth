@@ -67,7 +67,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class DecorationMixin(_MixinBase):
-    """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.static.map.Map`."""
+    """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.static.map.Map`.
+
+    A capability mixin of :class:`~digitalearth.static.map.Map`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the shared figure/axes, the layer registry and the
+    display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
+    it was before the annotation.
+
+    See Also:
+        digitalearth.static.map.Map: the composition that supplies the state these methods use.
+        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
+    """
 
     def _reproject_point(
         self, lon: float, lat: float, crs: Any

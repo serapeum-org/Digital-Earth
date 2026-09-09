@@ -78,7 +78,22 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class PointCloudMixin(_MixinBase):
-    """Adds :meth:`point_cloud` — render scattered 3-D points — to a :class:`Scene3D`."""
+    """Adds :meth:`point_cloud` — render scattered 3-D points — to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def point_cloud(
         self,

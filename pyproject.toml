@@ -209,7 +209,7 @@ exclude = [
 
 # --- mypy baseline (#172) -------------------------------------------------------------------------------
 #
-# Recorded 2026-09-09 against 113 remaining errors, down from 403. The 290 already closed were closed by
+# Recorded 2026-09-09 against 109 remaining errors, down from 403. The 294 already closed were closed by
 # TYPING them, not by listing them here: the backend mixins now declare the composed-class contract their
 # methods reach through `self`, and the fluent builders return PEP 673 `Self`.
 #

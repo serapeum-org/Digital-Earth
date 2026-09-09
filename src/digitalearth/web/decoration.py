@@ -70,7 +70,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class DecorationMixin(_MixinBase):
-    """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`."""
+    """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def tiles(
         self,
@@ -89,8 +103,8 @@ class DecorationMixin(_MixinBase):
             opacity: Raster opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable); the basemap is registered as an underlay so data drawn before or after
-            it still renders on top.
+            The same map instance, so builder calls chain; the basemap is registered as an underlay so
+            data drawn before or after it still renders on top.
         """
         Layer, LayerType = _require_layer_api()
         src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
@@ -123,7 +137,7 @@ class DecorationMixin(_MixinBase):
             opacity: Basemap opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``provider`` is not a known basemap name.
@@ -154,7 +168,7 @@ class DecorationMixin(_MixinBase):
             visualize_pitch: Show the map pitch on the compass.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners.
@@ -189,7 +203,7 @@ class DecorationMixin(_MixinBase):
             max_width: Maximum scale-bar width in pixels.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners.
@@ -212,7 +226,7 @@ class DecorationMixin(_MixinBase):
             position: Corner placement for the fullscreen button.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners.
@@ -243,7 +257,7 @@ class DecorationMixin(_MixinBase):
             fullscreen: Add a fullscreen toggle.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         if navigation:
             self.navigation()
@@ -272,7 +286,7 @@ class DecorationMixin(_MixinBase):
             position: Corner placement for the draw toolbar.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: if neither ``distance`` nor ``area`` is enabled, or if ``position`` is not one of the
@@ -323,7 +337,7 @@ class DecorationMixin(_MixinBase):
             layer: Target layer id; defaults to the most recently added data layer.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
@@ -352,7 +366,7 @@ class DecorationMixin(_MixinBase):
             layer: Target layer id; defaults to the most recently added data layer.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).

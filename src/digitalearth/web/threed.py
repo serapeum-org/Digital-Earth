@@ -33,7 +33,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class ThreeDMixin(_MixinBase):
-    """3-D builders for :class:`~digitalearth.web.map.WebMap` (fill-extrusion + deck.gl + terrain/globe)."""
+    """3-D builders for :class:`~digitalearth.web.map.WebMap` (fill-extrusion + deck.gl + terrain/globe).
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def extrusion(
         self,
@@ -61,7 +75,7 @@ class ThreeDMixin(_MixinBase):
             opacity: Extrusion opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
@@ -107,7 +121,7 @@ class ThreeDMixin(_MixinBase):
             encoding: Terrain-RGB encoding of the DEM tiles (``"terrarium"`` or ``"mapbox"``).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         _require_layer_api()
         from maplibre.sources import RasterDEMSource
@@ -130,7 +144,7 @@ class ThreeDMixin(_MixinBase):
             enabled: ``True`` for the globe projection; ``False`` restores Web Mercator.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         _require_layer_api()
         projection = "globe" if enabled else "mercator"
@@ -196,7 +210,7 @@ class ThreeDMixin(_MixinBase):
             point_size: Point size in pixels.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         _require_layer_api()
         data = self._point_cloud_data(
@@ -225,7 +239,7 @@ class ThreeDMixin(_MixinBase):
             opacity: Layer opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         _require_layer_api()
         layer = {
@@ -257,7 +271,7 @@ class ThreeDMixin(_MixinBase):
             size: Model size scale factor.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         _require_layer_api()
         layer = {

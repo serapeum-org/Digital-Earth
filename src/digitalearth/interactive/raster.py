@@ -27,7 +27,22 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class RasterMixin(_MixinBase):
-    """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti."""
+    """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def _image_element(
         self, data: Any, *, band: int = 1, vname: Optional[str] = None
@@ -85,7 +100,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         src = self._to_display_source(data, band=band)
         arr = _masked_to_nan(src.z.values)
@@ -114,7 +129,7 @@ class RasterMixin(_MixinBase):
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Examples:
             - Compose three bands of a satellite stack into true colour:
@@ -191,7 +206,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         src = self._to_display_source(data, band=band)
@@ -231,7 +246,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         return self._contour_layer(data, band=band, levels=levels, filled=False, **opts)
 
@@ -258,14 +273,25 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         return self._contour_layer(data, band=band, levels=levels, filled=True, **opts)
 
     def _contour_layer(
         self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
     ) -> Self:
-        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer."""
+        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
+
+        Args:
+            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``, reprojected to the display CRS.
+            band: 1-based band the contours are traced from.
+            levels: Contour levels (a count or an explicit sequence); ``None`` uses 10 levels.
+            filled: Whether to fill between levels (``filled_contours``) or draw lines (``contours``).
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+        """
         gv, hv = _require_holoviz()
         from holoviews.operation import contours as contour_op
 
@@ -316,7 +342,8 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            This map (chainable) — one contour layer registered per member.
+            The same map instance, so builder calls chain — one contour layer is registered per
+            member.
         """
         cycle_colour = "color" not in opts and "cmap" not in opts
         for index, member in enumerate(collection.datasets):
@@ -356,7 +383,7 @@ class RasterMixin(_MixinBase):
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             AttributeError: when ``dataset`` lacks the pyramids COG/overview read surface

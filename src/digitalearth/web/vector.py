@@ -25,7 +25,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class VectorMixin(_MixinBase):
-    """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`."""
+    """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def _color_expr(
         self,
@@ -145,7 +159,7 @@ class VectorMixin(_MixinBase):
             paint: The MapLibre paint dict for the layer.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, _ = _require_layer_api()
         src_id, layer_id = self._uid(f"{prefix}-src"), self._uid(prefix)
@@ -194,7 +208,7 @@ class VectorMixin(_MixinBase):
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
@@ -242,7 +256,7 @@ class VectorMixin(_MixinBase):
             opacity: Line opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
@@ -284,7 +298,7 @@ class VectorMixin(_MixinBase):
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features)
@@ -346,7 +360,7 @@ class VectorMixin(_MixinBase):
             outline_color: Polygon outline colour.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             KeyError: when ``column`` is not a feature attribute.

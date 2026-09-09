@@ -249,7 +249,7 @@ class WebMapBase:
             layer: A ``maplibre`` ``Layer``/spec, or a callable ``apply(widget)``.
 
         Returns:
-            This map, so builder calls chain: ``m.add_raster(dem).basemap()``.
+            The same map instance, so builder calls chain: ``m.add_raster(dem).basemap()``.
 
         Examples:
             - Registration appends in order and returns the map for chaining (any object stands in for a
@@ -345,7 +345,7 @@ class WebMapBase:
             layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         self.layers.insert(0, layer)
         return self

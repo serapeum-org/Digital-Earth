@@ -162,7 +162,8 @@ class Scene3DBase:
         """Enter the runtime context, returning the scene.
 
         Returns:
-            This scene.
+            The same scene instance, so ``with Scene3D(...) as scene:`` binds this object (and
+            :meth:`__exit__` closes its plotter).
         """
         return self
 

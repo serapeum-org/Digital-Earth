@@ -178,7 +178,7 @@ class InteractiveMapBase:
             element: Any HoloViews/GeoViews element (or overlay-able object).
 
         Returns:
-            This map, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
+            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
 
         Examples:
             - Registration appends in order and returns the map for chaining (any object can

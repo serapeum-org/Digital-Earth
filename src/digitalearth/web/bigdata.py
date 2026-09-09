@@ -28,7 +28,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class BigDataMixin(_MixinBase):
-    """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`."""
+    """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     @staticmethod
     def _require_points(gdf: Any, method: str) -> None:
@@ -68,7 +82,7 @@ class BigDataMixin(_MixinBase):
             opacity: Heatmap layer opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         import numpy as np
 
@@ -132,7 +146,7 @@ class BigDataMixin(_MixinBase):
             text_color: Colour of the cluster count label.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
@@ -191,7 +205,7 @@ class BigDataMixin(_MixinBase):
             layer: A deck.gl JSON layer dict (``{"@@type": ..., ...}``).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         if self._deck_layers is None:
             self._deck_layers = []
@@ -219,7 +233,7 @@ class BigDataMixin(_MixinBase):
             radius: Point radius in pixels.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from maplibre.sources import geopandas_to_geojson
 
@@ -253,7 +267,7 @@ class BigDataMixin(_MixinBase):
             line_color: RGBA outline colour (0-255 per channel).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from maplibre.sources import geopandas_to_geojson
 

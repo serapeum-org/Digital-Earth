@@ -58,7 +58,22 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class DashboardMixin(_MixinBase):
-    """Panel dashboard builders (DI.4): wrap the map + reactive widgets into a servable/exportable app."""
+    """Panel dashboard builders (DI.4): wrap the map + reactive widgets into a servable/exportable app.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def dashboard(
         self,

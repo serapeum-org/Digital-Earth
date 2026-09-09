@@ -31,7 +31,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class ExportMixin(_MixinBase):
-    """Export builders (HTML / offline HTML / PNG) for :class:`~digitalearth.web.map.WebMap`."""
+    """Export builders (HTML / offline HTML / PNG) for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def to_html(
         self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any

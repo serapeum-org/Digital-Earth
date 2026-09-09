@@ -27,7 +27,21 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class RasterMixin(_MixinBase):
-    """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
+    """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path).
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def add_raster(
         self,
@@ -55,7 +69,7 @@ class RasterMixin(_MixinBase):
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         import numpy as np
 
