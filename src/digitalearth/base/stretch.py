@@ -184,6 +184,46 @@ def stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) -
     Raises:
         ValueError: when ``limits`` is given but does not hold one ``(lo, hi)`` pair per channel. A silently
             ignored extra pair would hide a real mismatch between the caller's bands and their limits.
+
+    Examples:
+        - Each channel spans the full range on its own percentiles:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.stretch import stretch_to_unit
+            >>> stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])
+            >>> out = stretch_to_unit(stack)
+            >>> float(out.min()), float(out.max())
+            (0.0, 1.0)
+            >>> [round(float(out[..., i].mean()), 3) for i in range(3)]
+            [0.5, 0.5, 0.5]
+
+            ```
+        - One shared set of limits keeps a real brightness difference visible, which is what holds an
+          animation steady; each channel's own percentiles would erase it:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.stretch import channel_limits, stretch_to_unit
+            >>> bright = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
+            >>> dim = bright * 0.4
+            >>> shared = channel_limits(bright)
+            >>> round(float(stretch_to_unit(bright, shared).mean()), 3)
+            0.5
+            >>> round(float(stretch_to_unit(dim, shared).mean()), 3)
+            0.188
+            >>> round(float(stretch_to_unit(dim).mean()), 3)
+            0.5
+
+            ```
+        - A channel with no bound to freeze falls back to that frame's own, rather than an invented span:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.stretch import stretch_to_unit
+            >>> stack = np.dstack([np.full((4, 4), 500.0) for _ in range(3)])
+            >>> out = stretch_to_unit(stack, [(float("nan"), float("nan"))] * 3)
+            >>> float(out.max())
+            0.0
+
+            ```
     """
     _check_limits(limits, stack.shape[2])
     out = np.empty(stack.shape, dtype="float64")
