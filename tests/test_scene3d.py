@@ -3,6 +3,9 @@
 Gated on the optional ``3d`` extra: when pyvista is not installed these are skipped, so the default suite stays
 green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise them for real.
 """
+# The package imports have to follow pytest.importorskip("pyvista") — importing digitalearth.three_d
+# without pyvista is the very thing the skip exists to avoid — so E402 is expected throughout.
+# ruff: noqa: E402
 import numpy as np
 import pytest
 
