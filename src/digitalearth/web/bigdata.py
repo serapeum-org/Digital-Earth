@@ -68,7 +68,7 @@ class BigDataMixin:
         import numpy as np
 
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="heatmap")
         self._require_points(gdf, "heatmap")
         paint: dict = {
             "heatmap-radius": float(radius),
@@ -120,7 +120,7 @@ class BigDataMixin:
         from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
         src_id = self._uid("cluster-src")
         source = GeoJSONSource(
@@ -207,7 +207,7 @@ class BigDataMixin:
         from maplibre.sources import geopandas_to_geojson
 
         _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="deck_scatter")
         layer = {
             "@@type": "GeoJsonLayer",
             "id": self._uid("deck-scatter"),
@@ -241,7 +241,7 @@ class BigDataMixin:
         from maplibre.sources import geopandas_to_geojson
 
         _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="deck_polygons")
         layer = {
             "@@type": "GeoJsonLayer",
             "id": self._uid("deck-polygons"),

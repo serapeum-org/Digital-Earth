@@ -186,7 +186,7 @@ class VectorMixin:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).
         if big or (big is None and column is None and self._route_big(gdf, "points")):
@@ -234,7 +234,7 @@ class VectorMixin:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="lines")
         paint: dict = {"line-width": float(width), "line-opacity": float(opacity)}
         if column is not None:
             paint["line-color"] = self._color_expr(
@@ -276,7 +276,7 @@ class VectorMixin:
             This map (chainable).
         """
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
         if big or (big is None and column is None and self._route_big(gdf, "polygons")):
@@ -339,7 +339,7 @@ class VectorMixin:
             ValueError: propagated from the classifier (unknown scheme, constant data, …).
         """
         Layer, LayerType = _require_layer_api()
-        gdf = self._display_gdf(features)
+        gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
         paint = {
             "fill-color": self._color_expr(values, column, scheme, k, cmap),
