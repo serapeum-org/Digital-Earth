@@ -498,7 +498,8 @@ class TestJsonSafeDatetimes:
         out = WebMap()._json_safe(frame)
         assert list(out["from_date"]) == [None, None, None], f"expected all null, got {list(out['from_date'])}"
         payload = json.dumps(out.drop(columns="geometry").to_dict(orient="records"))
-        assert "NaN" not in payload and "NaT" not in payload, f"a null marker leaked: {payload}"
+        assert "NaN" not in payload, f"a NaN leaked into the payload: {payload}"
+        assert "NaT" not in payload, f"a NaT leaked into the payload: {payload}"
 
     def test_an_empty_frame_is_handled(self):
         """A zero-row frame with a datetime column must not raise.
@@ -885,7 +886,7 @@ class TestDatetimeFramesReachTheMap:
     def _need_engine(self):
         pytest.importorskip("maplibre")
 
-    @pytest.fixture()
+    @pytest.fixture
     def dated_points(self):
         """An event-feed-shaped point layer: a value column and a datetime column."""
         gpd = pytest.importorskip("geopandas")
@@ -898,7 +899,7 @@ class TestDatetimeFramesReachTheMap:
             crs=4326,
         )
 
-    @pytest.fixture()
+    @pytest.fixture
     def dated_polygons(self):
         """An area layer carrying a value column and a datetime column."""
         gpd = pytest.importorskip("geopandas")
@@ -1044,5 +1045,6 @@ class TestDatetimeFramesReachTheMap:
             geometry=[Point(0, 0), Point(1, 1)],
             crs=4326,
         )
+        m = WebMap()
         with pytest.raises(ValueError, match="at least one time step"):
-            WebMap().timeslider(frame, kdim="from_date")
+            m.timeslider(frame, kdim="from_date")

@@ -119,6 +119,124 @@ def _require_maplibre() -> tuple:
     return MapOptions, MapWidget
 
 
+def _is_missing(value: Any) -> bool:
+    """Whether ``value`` is a null marker, tolerating values ``pandas.isna`` refuses to judge.
+
+    Args:
+        value: One cell of a GeoDataFrame column.
+
+    Returns:
+        ``True`` only for a scalar null. A container is a value in its own right — ``pandas.isna``
+        judges it element-wise, so a one-element array holding ``NaN`` would otherwise be replaced
+        wholesale by ``None``.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if isinstance(value, (np.ndarray, list, tuple, dict, set)):
+        return False
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_date_like(value: Any) -> bool:
+    """Whether ``value`` is one of the types GeoJSON cannot represent and :func:`_iso` therefore encodes.
+
+    Args:
+        value: One cell of a GeoDataFrame column.
+
+    Returns:
+        ``True`` for a date, time, duration or period in any of its stdlib, numpy or pandas spellings.
+    """
+    import datetime as dt
+
+    import numpy as np
+    import pandas as pd
+
+    # datetime and Timestamp subclass date; Timedelta subclasses timedelta; time is separate.
+    return isinstance(value, (dt.date, dt.time, dt.timedelta, np.datetime64, np.timedelta64, pd.Period))
+
+
+def _iso(value: Any) -> Any:
+    """ISO-encode one date-like value; anything else is returned untouched.
+
+    Args:
+        value: One cell of a GeoDataFrame column.
+
+    Returns:
+        ``None`` for a missing value, ISO-8601 text for a date-like one, and ``value`` itself for
+        anything else — which is what lets a mixed column keep its non-date entries.
+    """
+    import datetime as dt
+
+    import numpy as np
+    import pandas as pd
+
+    if _is_missing(value):
+        return None
+    if isinstance(value, (dt.timedelta, np.timedelta64)):
+        # Neither a plain datetime.timedelta nor a numpy scalar has isoformat(); pandas' wrapper has.
+        return pd.Timedelta(value).isoformat()
+    if isinstance(value, np.datetime64):
+        return pd.Timestamp(value).isoformat()
+    if isinstance(value, (dt.date, dt.time)):
+        return value.isoformat()
+    if isinstance(value, pd.Period):
+        return str(value)
+    return value
+
+
+def _iso_series(series: Any) -> Any:
+    """ISO-encode a date-like series as ``object`` dtype, with missing values as real ``None``.
+
+    Built element-wise into an explicit ``object`` Series rather than via ``.map`` / ``.where``: pandas 3
+    infers a ``str`` dtype for those, whose missing marker is a float ``nan``, and ``json.dumps`` writes
+    that as the invalid JSON literal ``NaN`` instead of ``null``.
+
+    Args:
+        series: The column to encode.
+
+    Returns:
+        An ``object``-dtype Series carrying the same index.
+    """
+    import pandas as pd
+
+    return pd.Series([_iso(value) for value in series], index=series.index, dtype=object)
+
+
+def _date_encoded(series: Any) -> Any:
+    """Return the ISO-encoded form of ``series``, or ``None`` when it needs no change.
+
+    Args:
+        series: One column of the frame about to be serialised.
+
+    Returns:
+        The encoded Series, or ``None`` to leave the column exactly as it is.
+    """
+    import pandas as pd
+    from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
+
+    dtype = series.dtype
+    if isinstance(dtype, pd.CategoricalDtype):
+        # A categorical wraps its real dtype in `.categories`; a repeated timestamp column is routinely
+        # stored this way, and it matched none of the checks below.
+        dtype = dtype.categories.dtype
+    if (
+        is_datetime64_any_dtype(dtype)
+        or is_timedelta64_dtype(dtype)
+        or isinstance(dtype, pd.PeriodDtype)
+    ):
+        return _iso_series(series)
+    if series.dtype == object and any(_is_date_like(value) for value in series):
+        # Scans for *any* date-like value rather than sampling the first non-null one: a column of
+        # ["n/a", date(...)] is just as unserialisable as one in the other order, and sampling made the
+        # outcome depend on row order. The scan stops at the first hit.
+        return _iso_series(series)
+    return None
+
+
 def _require_layer_api() -> tuple:
     """Import and return ``(Layer, LayerType)``, raising the actionable error when the engine is absent.
 
@@ -508,73 +626,7 @@ class WebMapBase:
             digitalearth.web.base.WebMapBase._display_gdf: the choke point that applies this to every
                 vector builder's input.
         """
-        import datetime as dt
-
-        import numpy as np
         import pandas as pd
-        from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
-
-        def missing(value: Any) -> bool:
-            """Whether ``value`` is a null marker, tolerating values ``pd.isna`` refuses to judge."""
-            if isinstance(value, (np.ndarray, list, tuple, dict, set)):
-                # A container is a value in its own right. `pd.isna` judges it element-wise, so a
-                # one-element array holding NaN would otherwise be replaced wholesale by None.
-                return False
-            try:
-                return bool(pd.isna(value))
-            except (TypeError, ValueError):
-                return False
-
-        def date_like(value: Any) -> bool:
-            """Whether ``value`` is one of the types GeoJSON cannot represent and we therefore encode."""
-            # datetime and Timestamp subclass date; Timedelta subclasses timedelta; time is separate.
-            return isinstance(
-                value, (dt.date, dt.time, dt.timedelta, np.datetime64, np.timedelta64, pd.Period)
-            )
-
-        def iso(value: Any) -> Any:
-            """ISO-encode one date-like value; anything else is returned untouched."""
-            if missing(value):
-                return None
-            if isinstance(value, (dt.timedelta, np.timedelta64)):
-                # Neither a plain datetime.timedelta nor a numpy scalar has isoformat(); pandas' has.
-                return pd.Timedelta(value).isoformat()
-            if isinstance(value, np.datetime64):
-                return pd.Timestamp(value).isoformat()
-            if isinstance(value, (dt.date, dt.time)):
-                return value.isoformat()
-            if isinstance(value, pd.Period):
-                return str(value)
-            return value
-
-        def iso_series(series: Any) -> Any:
-            """ISO-encode a date-like series as ``object`` dtype, with missing values as real ``None``.
-
-            Built element-wise into an explicit ``object`` Series rather than via ``.map`` / ``.where``:
-            pandas 3 infers a ``str`` dtype for those, whose missing marker is a float ``nan``, and
-            ``json.dumps`` writes that as the invalid JSON literal ``NaN`` instead of ``null``.
-            """
-            return pd.Series([iso(value) for value in series], index=series.index, dtype=object)
-
-        def converted(series: Any) -> Any:
-            """Return the ISO-encoded form of ``series``, or ``None`` when it needs no change."""
-            dtype = series.dtype
-            if isinstance(dtype, pd.CategoricalDtype):
-                # A categorical wraps its real dtype in `.categories`; a repeated timestamp column is
-                # routinely stored this way, and it matched none of the checks below.
-                dtype = dtype.categories.dtype
-            if (
-                is_datetime64_any_dtype(dtype)
-                or is_timedelta64_dtype(dtype)
-                or isinstance(dtype, pd.PeriodDtype)
-            ):
-                return iso_series(series)
-            if series.dtype == object and any(date_like(value) for value in series):
-                # Scans for *any* date-like value rather than sampling the first non-null one: a column
-                # of ["n/a", date(...)] is just as unserialisable as one in the other order, and sampling
-                # made the outcome depend on row order. The scan stops at the first hit.
-                return iso_series(series)
-            return None
 
         columns = getattr(gdf, "columns", None)
         if columns is None:  # a GeoSeries satisfies the vector guard but has no columns to encode
@@ -589,7 +641,7 @@ class WebMapBase:
                 # A duplicate column label selects a DataFrame; leave it for geopandas to complain about
                 # rather than failing here on an attribute the caller never sees.
                 continue
-            encoded = converted(series)
+            encoded = _date_encoded(series)
             if encoded is not None:
                 changed[name] = encoded
         if not changed:
