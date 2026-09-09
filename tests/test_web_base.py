@@ -560,6 +560,185 @@ class TestJsonSafeDatetimes:
             assert out[column].dtype == object, f"{column} was not encoded"
         json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
 
+    @pytest.mark.parametrize("values, expected", [
+        (["n/a", "DATE"], ["n/a", "2026-01-01"]),
+        ([None, "n/a", "DATE"], [None, "n/a", "2026-01-01"]),
+        ([1, "DATE"], [1, "2026-01-01"]),
+        (["DATE", "n/a"], ["2026-01-01", "n/a"]),
+    ])
+    def test_a_date_anywhere_in_an_object_column_triggers_encoding(self, values, expected):
+        """Encoding must not depend on which row the first date happens to sit in.
+
+        Args:
+            values: The object column, with "DATE" standing in for a ``datetime.date``.
+            expected: The encoded column.
+
+        Test scenario:
+            Sampling only the first non-null value left ``["n/a", date(...)]`` unconverted, so it still
+            died on "Object of type date is not JSON serializable" — the very error being fixed. The two
+            orderings are equally unserialisable and must behave the same.
+        """
+        import datetime as dt
+        import json
+
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        column = [dt.date(2026, 1, 1) if v == "DATE" else v for v in values]
+        frame = gpd.GeoDataFrame(
+            {"c": pd.Series(column, dtype=object)},
+            geometry=[Point(i, i) for i in range(len(column))],
+            crs=4326,
+        )
+        out = WebMap()._json_safe(frame)
+        assert list(out["c"]) == expected, f"expected {expected}, got {list(out['c'])}"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_a_plain_timedelta_is_encoded(self):
+        """``datetime.timedelta`` has no ``isoformat()`` — only pandas' subclass does.
+
+        Test scenario:
+            An object column holding a plain timedelta raised
+            ``AttributeError: 'datetime.timedelta' object has no attribute 'isoformat'`` out of the
+            encoder itself, which is worse than the serialisation error it was meant to prevent.
+        """
+        import datetime as dt
+        import json
+
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"gap": pd.Series([dt.timedelta(days=1), "x"], dtype=object)},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        )
+        out = WebMap()._json_safe(frame)
+        assert list(out["gap"]) == ["P1DT0H0M0S", "x"], f"unexpected encoding: {list(out['gap'])}"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    @pytest.mark.parametrize("value, expected", [
+        ("TIME", "06:30:00"),
+        ("NPDATETIME", "2026-01-01T00:00:00"),
+    ])
+    def test_time_and_numpy_datetime_are_encoded(self, value, expected):
+        """``datetime.time`` and ``numpy.datetime64`` also fail ``json.dumps`` and are covered.
+
+        Args:
+            value: Marker selecting which scalar type to build.
+            expected: Its ISO encoding.
+
+        Test scenario:
+            Neither is caught by the datetime64/timedelta64 dtype checks — ``time`` is not a ``date``
+            subclass, and a ``numpy.datetime64`` in an object column has no pandas dtype to match.
+        """
+        import datetime as dt
+        import json
+
+        import geopandas as gpd
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import Point
+
+        scalar = dt.time(6, 30) if value == "TIME" else np.datetime64("2026-01-01")
+        frame = gpd.GeoDataFrame(
+            {"c": pd.Series([scalar], dtype=object)}, geometry=[Point(0, 0)], crs=4326
+        )
+        out = WebMap()._json_safe(frame)
+        assert out["c"].iloc[0] == expected, f"expected {expected!r}, got {out['c'].iloc[0]!r}"
+        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+
+    def test_a_text_column_is_returned_without_a_copy(self):
+        """Scanning an object column for dates must not convert one that holds none.
+
+        Test scenario:
+            The scan looks at every value now, so a plain text column is the case most at risk of being
+            copied or coerced for nothing.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"label": ["a", "b"]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+        )
+        assert WebMap()._json_safe(frame) is frame, "a text-only frame must not be copied"
+
+    def test_a_numeric_column_with_nan_is_left_alone(self):
+        """Only date-like columns are touched; a float column keeps its dtype and its NaN.
+
+        Test scenario:
+            The null handling is per date-like column, not global — converting a numeric column to
+            object would change what the classification builders read downstream.
+        """
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"score": [1.0, float("nan")]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+        )
+        out = WebMap()._json_safe(frame)
+        assert out is frame, "a numeric column must not be encoded"
+        assert pd.api.types.is_float_dtype(out["score"]), "the float dtype was changed"
+
+    def test_a_list_valued_element_does_not_break_the_null_check(self):
+        """``pd.isna`` raises on a list rather than judging it; such a value counts as present.
+
+        Test scenario:
+            Without the guard the whole call would die on
+            ``ValueError: The truth value of an array ... is ambiguous`` for a frame that merely holds a
+            list-valued attribute alongside a date.
+        """
+        import datetime as dt
+
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"c": pd.Series([[1, 2], dt.date(2026, 1, 1)], dtype=object)},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        )
+        out = WebMap()._json_safe(frame)
+        assert out["c"].iloc[0] == [1, 2], f"the list value was altered: {out['c'].iloc[0]!r}"
+        assert out["c"].iloc[1] == "2026-01-01", f"the date was not encoded: {out['c'].iloc[1]!r}"
+
+    def test_a_geoseries_is_returned_untouched(self):
+        """A GeoSeries passes the vector guard but has no columns to encode.
+
+        Test scenario:
+            ``_json_safe`` reads ``.columns``, which ``_require_vector`` does not guarantee — only
+            ``.geometry`` is.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        series = gpd.GeoSeries([Point(0, 0), Point(1, 1)], crs=4326)
+        assert WebMap()._json_safe(series) is series, "a GeoSeries must pass straight through"
+
+    def test_the_feature_collection_branch_encodes_too(self):
+        """A pyramids ``FeatureCollection`` takes its own branch of ``_display_gdf`` and must be encoded.
+
+        Test scenario:
+            Three return paths reach ``add_source``; the FeatureCollection one is the branch a pyramids
+            user actually hits, and it is a GeoDataFrame subclass, so the copy must preserve the subclass.
+        """
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"when": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        )
+        out = WebMap()._display_gdf(frame, method="points")
+        assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the display path did not encode"
+        assert out.crs is not None, "the CRS was lost by the encoding copy"
+
 
 class TestDatetimeFramesReachTheMap:
     """End-to-end: a dated frame now renders and saves through every vector builder (issue #156)."""
@@ -618,3 +797,54 @@ class TestDatetimeFramesReachTheMap:
         out = tmp_path / "slider.html"
         m.save(str(out))
         assert out.stat().st_size > 1_000, "the saved slider page looks empty"
+
+    def test_a_missing_time_value_does_not_break_the_slider(self, tmp_path):
+        """A NaT in the kdim drops that step instead of raising when the steps are sorted.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            Encoding maps NaT to None, and sorting a mix of str and None raises
+            "'<' not supported between instances of 'NoneType' and 'str'". A feature with no time cannot
+            sit at any step, so it is dropped — an event feed with an open-ended `to_date` is normal.
+        """
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"from_date": pd.to_datetime(["2026-01-01", "2026-02-01", "2026-03-01"])},
+            geometry=[Point(i, i) for i in range(3)],
+            crs=4326,
+        )
+        frame.loc[1, "from_date"] = pd.NaT
+        m = WebMap().timeslider(frame, kdim="from_date")
+        assert m._temporal_times() == ["2026-01-01T00:00:00", "2026-03-01T00:00:00"], (
+            f"the missing step should be dropped, got {m._temporal_times()}"
+        )
+        out = tmp_path / "slider.html"
+        m.save(str(out))
+        assert out.stat().st_size > 1_000, "the saved slider page looks empty"
+
+    def test_a_kdim_of_only_missing_values_is_rejected(self, tmp_path):
+        """Dropping the missing steps must not turn an all-empty series into a silent empty slider.
+
+        Args:
+            tmp_path: pytest's per-test directory (unused; keeps the signature uniform).
+
+        Test scenario:
+            The empty check runs after the drop, so a column of nothing but NaT still raises the
+            actionable ValueError rather than building a slider with no stops.
+        """
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"from_date": pd.to_datetime([None, None])},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        )
+        with pytest.raises(ValueError, match="at least one time step"):
+            WebMap().timeslider(frame, kdim="from_date")
