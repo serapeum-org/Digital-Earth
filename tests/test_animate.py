@@ -453,15 +453,22 @@ class TestAnimateComposites:
             assert lo <= min(p[channel][0] for p in per_frame), f"channel {channel} lo is not the widest"
             assert hi >= max(p[channel][1] for p in per_frame), f"channel {channel} hi is not the widest"
 
-    def test_stack_channel_limits_caps_scan(self, mocker):
-        """_stack_channel_limits scans at most _CLIM_SCAN_CAP frames of a large stack (mirrors L2)."""
+    @pytest.mark.parametrize("frames", [25, 47, 72])
+    def test_stack_channel_limits_caps_scan(self, mocker, frames):
+        """The scan never reads more than _CLIM_SCAN_CAP frames, including the awkward sizes.
+
+        Test scenario:
+            A floor-divided stride returns 1 for any stack under twice the cap, so 25 and 47 frames were
+            both read in full while the docstring promised 24. Only an exact multiple of the cap (72) hid
+            it, which is what the original test used.
+        """
         from digitalearth.static.maps import animation as anim_mod
 
         spy = mocker.spy(anim_mod, "channel_limits")
-        big = [_rgb_field(shift=float(s), ny=12, nx=24) for s in range(anim_mod._CLIM_SCAN_CAP * 3)]
+        big = [_rgb_field(shift=float(s), ny=12, nx=24) for s in range(frames)]
         limits = Map(crs=4326)._stack_channel_limits(big, (1, 2, 3))
         cap = anim_mod._CLIM_SCAN_CAP
-        assert spy.call_count <= cap, f"scanned {spy.call_count} frames, cap is {cap}"
+        assert spy.call_count <= cap, f"scanned {spy.call_count} of {frames} frames, cap is {cap}"
         assert len(limits) == 3, "the capped scan must still yield one (lo, hi) per channel"
 
 

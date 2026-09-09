@@ -38,7 +38,9 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
         Every ``stride``-th frame, where the stride is chosen so at most :data:`_CLIM_SCAN_CAP` come back.
     """
     seq = list(datasets)
-    return seq[::max(1, len(seq) // _CLIM_SCAN_CAP)]
+    # Round the stride UP: a floor divide returns 1 for anything under twice the cap, so a 47-frame stack
+    # would scan all 47 while claiming a cap of 24.
+    return seq[::-(-len(seq) // _CLIM_SCAN_CAP) if seq else 1]
 
 
 def _union_channel_limits(scanned: Sequence[Sequence[Tuple[float, float]]]) -> List[Tuple[float, float]]:
