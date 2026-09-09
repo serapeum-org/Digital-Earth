@@ -194,11 +194,18 @@ jobs:
 
       - name: Install the resolved set
         # --require-hashes makes every download checksum-verified against the file resolved above, and
-        # --only-binary :all: keeps a source distribution's setup script from running on the runner. The
-        # project itself installs with --no-deps: its dependencies are already in place, pinned.
+        # --only-binary :all: keeps a source distribution's setup script from running on the runner.
         run: |
           pip install --require-hashes --only-binary :all: -r resolved-requirements.txt
-          pip install --no-deps .
+
+      - name: Build and install the project itself
+        # Built to a wheel first and installed from that file with --no-index, so this step resolves nothing
+        # and reaches no index — its dependencies are already in place from the locked set above. Installing
+        # the built artifact rather than the source tree also means the export below runs against the same
+        # thing a user gets from PyPI.
+        run: |
+          uv build --wheel --out-dir dist
+          pip install --no-deps --no-index dist/*.whl
 
       - name: Export a scene through the resolved stack
         # `export_html` is the whole point: it is the only call that needs the trame/vtk.js stack, and the one
