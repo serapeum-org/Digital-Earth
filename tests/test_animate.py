@@ -404,6 +404,46 @@ class TestAnimateComposites:
             f"animated frame {animated:.4f} should render like the still {still:.4f}"
         )
 
+    def test_rotate_freezes_on_the_views_it_sweeps(self, tmp_path):
+        """rotate measures the projections it is about to draw, not the CRS it happened to be built with.
+
+        Test scenario:
+            rotate assigns its display CRS inside the frame callback, so priming against the Map's build-time
+            CRS described a view no frame uses — and on the documented Map(crs=4326) usage that meant no warp
+            at all. Driven end to end, the last rendered frame must match the still at that same projection;
+            frozen on the unwarped bounds it comes out about 8% dark against a 2% residue for the union.
+        """
+        frame = _rgb_field()
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.rotate(frame, kind="rgb_composite", n_frames=4, lon0=-180.0, fps=4)
+        anim.save(str(tmp_path / "spin.gif"), writer=PillowWriter(fps=4))
+        rendered = np.nanmean(np.asarray(m.ax.images[-1].get_array(), dtype="float64"))
+
+        still = Map(crs=m.crs, globe=True, figsize=(4, 4))
+        still.rgb_composite(frame)
+        expected = np.nanmean(np.asarray(still.ax.images[-1].get_array(), dtype="float64"))
+        assert rendered == pytest.approx(expected, rel=0.05), (
+            f"the swept frame {rendered:.4f} should render like the still at that view {expected:.4f}"
+        )
+
+    def test_the_view_scan_restores_the_display_crs(self):
+        """Priming borrows the display CRS to measure each view and must hand it back untouched."""
+        frame = _rgb_field()
+        views = [projections.orthographic(lon=-180.0 + k * 90.0, lat=15.0) for k in range(4)]
+        spun = Map(crs=4326, figsize=(4, 4))
+        primed = {}
+        spun._prime_animation([frame], primed, kind="rgb_composite", colorbar=False, cbar_label=None,
+                              views=views)
+        assert spun.crs == 4326, f"the scan must restore the display CRS it borrowed, left {spun.crs!r}"
+
+        per_view = []
+        for view in views:
+            probe = Map(crs=view, figsize=(4, 4))
+            per_view.append(channel_limits(get_stack(probe._reproject(frame), (1, 2, 3))))
+        for channel, (lo, hi) in enumerate(primed["limits"]):
+            assert lo <= min(v[channel][0] for v in per_view) + 1e-6, f"channel {channel} lo too high"
+            assert hi >= max(v[channel][1] for v in per_view) - 1e-6, f"channel {channel} hi too low"
+
     def test_frozen_limits_span_the_whole_stack(self):
         """The frozen limits bracket every individual frame's own limits (widest lo/hi wins)."""
         frames = [_rgb_field(exposure=1.0), _rgb_field(exposure=0.4)]

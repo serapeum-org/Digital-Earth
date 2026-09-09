@@ -41,6 +41,28 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     return seq[::max(1, len(seq) // _CLIM_SCAN_CAP)]
 
 
+def _union_channel_limits(scanned: Sequence[Sequence[Tuple[float, float]]]) -> List[Tuple[float, float]]:
+    """Combine per-scan channel bounds into the widest ``(lo, hi)`` each channel takes.
+
+    Non-finite bounds are dropped rather than folded in: ``min``/``max`` against ``nan`` returns whichever
+    argument came first, so a scan that could not measure a channel would otherwise blank or keep it
+    depending purely on where it sat in the sequence. A channel no scan could measure reports
+    ``(nan, nan)`` — "no frozen bound" — which the stretch answers per frame.
+
+    Args:
+        scanned: One per-channel bound list per scanned frame or view.
+
+    Returns:
+        One ``(lo, hi)`` tuple per channel, in channel order.
+    """
+    limits: List[Tuple[float, float]] = []
+    for index in range(len(scanned[0])):
+        lows = [bounds[index][0] for bounds in scanned if isfinite(bounds[index][0])]
+        highs = [bounds[index][1] for bounds in scanned if isfinite(bounds[index][1])]
+        limits.append((min(lows), max(highs)) if lows and highs else (float("nan"), float("nan")))
+    return limits
+
+
 #: Composite renderers accepted as an animation ``kind``. They draw an RGB image rather than a scalar
 #: field, so they take a frozen per-channel stretch instead of a clim, and admit no colorbar.
 _COMPOSITE_KINDS = ("rgb_composite", "hsv_composite")
@@ -168,7 +190,8 @@ class AnimationMixin:
             opts["vmax"] = hi if vmax is None else vmax
 
     def _stack_channel_limits(self, datasets: Sequence[Any], bands: Sequence[int],
-                              *, mask_nodata: bool = True) -> ChannelLimits:
+                              *, mask_nodata: bool = True,
+                              views: Optional[Sequence[Any]] = None) -> ChannelLimits:
         """Return one ``(lo, hi)`` stretch bound per composite channel, spanning the whole stack.
 
         The composite counterpart of :meth:`_resolve_animation_clim`. Each scanned frame contributes its own
@@ -181,9 +204,10 @@ class AnimationMixin:
         the stored values would put the animation on a visibly different stretch from the equivalent still.
         That costs one extra warp per scanned frame, bounded by :data:`_CLIM_SCAN_CAP` evenly-spaced frames.
 
-        :meth:`rotate` is the exception it cannot cover: it sweeps the display CRS as it renders, so its bounds
-        are frozen on whichever projection is in force when the animation is built. Its frames stay consistent
-        with **each other**, which is the point, rather than with any one still.
+        ``views`` covers :meth:`rotate`, whose frames differ by projection rather than by data: it sweeps the
+        display CRS as it renders, so measuring the CRS in force at build time would describe a view none of
+        its frames use. Given the projections it is about to sweep, the scan measures the dataset under a
+        sample of them and unions the result, at one warp per sampled view.
 
         A frame whose channel is entirely nodata contributes no bound for that channel rather than a ``nan``
         that would swallow the others (``min``/``max`` against ``nan`` is order-dependent, so a dead **first**
@@ -199,6 +223,9 @@ class AnimationMixin:
             mask_nodata: Whether nodata cells are excluded from the percentiles, mirroring the composite's
                 own ``mask_nodata`` so both read the same cells. The result is still not any single frame's
                 own stretch — it is the union across the scanned frames, which is the whole point.
+            views: Optional display CRSs the frames will actually be drawn in. When given, the first dataset
+                is measured under a sample of them instead of under the current display CRS — the shape
+                :meth:`rotate` needs, where every frame is the same data in a different projection.
 
         Returns:
             One ``(lo, hi)`` tuple per channel, in channel order.
@@ -206,19 +233,45 @@ class AnimationMixin:
         Raises:
             ValueError: when ``datasets`` is empty, so there is nothing to derive a stretch from.
         """
-        if not list(datasets):
+        seq = list(datasets)
+        if not seq:
             raise ValueError("cannot derive composite limits from an empty stack")
         # Measure what the frame will actually render: the composites stretch get_stack(self._reproject(ds)),
-        # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS (M1).
-        scanned = [channel_limits(get_stack(self._reproject(ds), bands, mask=mask_nodata))
-                   for ds in _scan_subset(datasets)]
-        limits: List[Tuple[float, float]] = []
-        for index in range(len(scanned[0])):
-            lows = [frame[index][0] for frame in scanned if isfinite(frame[index][0])]
-            highs = [frame[index][1] for frame in scanned if isfinite(frame[index][1])]
-            # No usable bound: hand back nan rather than a span the unscanned frames may not fit (M2).
-            limits.append((min(lows), max(highs)) if lows and highs else (float("nan"), float("nan")))
-        return limits
+        # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS.
+        if views is None:
+            scanned = [channel_limits(get_stack(self._reproject(ds), bands, mask=mask_nodata))
+                       for ds in _scan_subset(seq)]
+        else:
+            scanned = self._scan_across_views(seq[0], bands, views, mask_nodata=mask_nodata)
+        return _union_channel_limits(scanned)
+
+    def _scan_across_views(self, dataset: Any, bands: Sequence[int], views: Sequence[Any],
+                           *, mask_nodata: bool = True) -> List[List[Tuple[float, float]]]:
+        """Measure ``dataset`` once under each sampled display CRS in ``views``.
+
+        The rotation counterpart of the per-frame scan: :meth:`rotate` redraws one dataset under a sweep of
+        projections, so the bounds that matter are the ones those projections produce, not the ones the CRS
+        happening to sit on the Map at build time produces. The display CRS is restored afterwards, so a
+        Map primed but never rendered is left as it was found.
+
+        Args:
+            dataset: The raster every frame draws.
+            bands: The 1-based band indices the composite maps to its channels.
+            views: The display CRSs the animation will sweep; sampled by :func:`_scan_subset`.
+            mask_nodata: Whether nodata cells are excluded from the percentiles.
+
+        Returns:
+            One per-channel bound list per sampled view.
+        """
+        original = self.crs
+        try:
+            measured = []
+            for view in _scan_subset(views):
+                self.crs = view
+                measured.append(channel_limits(get_stack(self._reproject(dataset), bands, mask=mask_nodata)))
+            return measured
+        finally:
+            self.crs = original
 
     def _animation_colorbar(self, opts: dict, label: Optional[str]) -> Any:
         """Add one static colorbar for an animation from the already-resolved ``cmap``/``vmin``/``vmax``.
@@ -235,7 +288,7 @@ class AnimationMixin:
         return cbar
 
     def _prime_animation(self, datasets: Sequence[Any], opts: dict, *, kind: str, colorbar: bool,
-                         cbar_label: Optional[str]) -> None:
+                         cbar_label: Optional[str], views: Optional[Sequence[Any]] = None) -> None:
         """Resolve the one shared colour treatment into ``opts``, and if asked add the static colorbar.
 
         The setup shared by :meth:`animate` and :meth:`rotate`, branching on what ``kind`` draws:
@@ -248,7 +301,7 @@ class AnimationMixin:
           kwarg; they simply have no colour scale to move). There is likewise no single mappable to key a
           colorbar to, so an explicit ``colorbar=True`` is refused rather than answered with a useless bar.
 
-        Real limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the
+Real limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the
         scan. A ``limits`` of ``None`` counts as absent and is filled, matching how
         :meth:`_resolve_animation_clim` treats a ``None`` ``vmin``/``vmax`` — an explicit ``limits=None`` is
         what a wrapper forwarding an optional passes, and silently skipping the freeze there would put the
@@ -268,7 +321,7 @@ class AnimationMixin:
             require_three_bands(kind, bands)  # before the scan, not after it (M3)
             if opts.get("limits") is None:  # absent *or* explicitly None (H1)
                 opts["limits"] = self._stack_channel_limits(
-                    datasets, bands, mask_nodata=opts.get("mask_nodata", True),
+                    datasets, bands, mask_nodata=opts.get("mask_nodata", True), views=views,
                 )
             return
         self._resolve_animation_clim(datasets, opts)
@@ -490,14 +543,17 @@ class AnimationMixin:
             raise ValueError("rotate needs n_frames >= 1")
         if kind not in _ANIMATION_KINDS:
             raise ValueError(f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}")
-        # Prime first: it is the last thing that can refuse the call (a composite with colorbar=True, or a
-        # wrong band count), and a refused rotate must not leave the Map switched into globe mode (L3).
-        self._prime_animation([dataset], kwargs, kind=kind, colorbar=colorbar, cbar_label=cbar_label)
-        self.globe = True
         lons = [lon0 + k * (360.0 / n_frames) for k in range(n_frames)]
+        views = [projections.orthographic(lon=lon, lat=lat) for lon in lons]
+        # Prime first: it is the last thing that can refuse the call (a composite with colorbar=True, or a
+        # wrong band count), and a refused rotate must not leave the Map switched into globe mode. Hand it
+        # the projections about to be swept, so a composite freezes on the views it will really draw.
+        self._prime_animation([dataset], kwargs, kind=kind, colorbar=colorbar, cbar_label=cbar_label,
+                              views=views)
+        self.globe = True
 
         def draw_one(i: int) -> None:
-            self.crs = projections.orthographic(lon=lons[i], lat=lat)
+            self.crs = views[i]
             self._draw_animation_frame(dataset, kind, kwargs, ocean=ocean, coastlines=coastlines)
 
         return self._animate_frames(draw_one, n_frames, fps)
