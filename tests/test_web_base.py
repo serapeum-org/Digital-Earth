@@ -15,7 +15,6 @@ import pathlib
 import sys
 
 import numpy as np
-
 import pytest
 
 from digitalearth.base.sources.source import Source
@@ -719,9 +718,8 @@ class TestJsonSafeDatetimes:
             copied or coerced for nothing.
         """
         import geopandas as gpd
-        from shapely.geometry import Point
-
         import pandas as pd
+        from shapely.geometry import Point
 
         frame = gpd.GeoDataFrame(
             {"label": pd.Series(["a", "b"], dtype=object)},
