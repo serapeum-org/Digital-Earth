@@ -119,6 +119,124 @@ def _require_maplibre() -> tuple:
     return MapOptions, MapWidget
 
 
+def _is_missing(value: Any) -> bool:
+    """Whether ``value`` is a null marker, tolerating values ``pandas.isna`` refuses to judge.
+
+    Args:
+        value: One cell of a GeoDataFrame column.
+
+    Returns:
+        ``True`` only for a scalar null. A container is a value in its own right — ``pandas.isna``
+        judges it element-wise, so a one-element array holding ``NaN`` would otherwise be replaced
+        wholesale by ``None``.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if isinstance(value, (np.ndarray, list, tuple, dict, set)):
+        return False
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _is_date_like(value: Any) -> bool:
+    """Whether ``value`` is one of the types GeoJSON cannot represent and :func:`_iso` therefore encodes.
+
+    Args:
+        value: One cell of a GeoDataFrame column.
+
+    Returns:
+        ``True`` for a date, time, duration or period in any of its stdlib, numpy or pandas spellings.
+    """
+    import datetime as dt
+
+    import numpy as np
+    import pandas as pd
+
+    # datetime and Timestamp subclass date; Timedelta subclasses timedelta; time is separate.
+    return isinstance(value, (dt.date, dt.time, dt.timedelta, np.datetime64, np.timedelta64, pd.Period))
+
+
+def _iso(value: Any) -> Any:
+    """ISO-encode one date-like value; anything else is returned untouched.
+
+    Args:
+        value: One cell of a GeoDataFrame column.
+
+    Returns:
+        ``None`` for a missing value, ISO-8601 text for a date-like one, and ``value`` itself for
+        anything else — which is what lets a mixed column keep its non-date entries.
+    """
+    import datetime as dt
+
+    import numpy as np
+    import pandas as pd
+
+    if _is_missing(value):
+        return None
+    if isinstance(value, (dt.timedelta, np.timedelta64)):
+        # Neither a plain datetime.timedelta nor a numpy scalar has isoformat(); pandas' wrapper has.
+        return pd.Timedelta(value).isoformat()
+    if isinstance(value, np.datetime64):
+        return pd.Timestamp(value).isoformat()
+    if isinstance(value, (dt.date, dt.time)):
+        return value.isoformat()
+    if isinstance(value, pd.Period):
+        return str(value)
+    return value
+
+
+def _iso_series(series: Any) -> Any:
+    """ISO-encode a date-like series as ``object`` dtype, with missing values as real ``None``.
+
+    Built element-wise into an explicit ``object`` Series rather than via ``.map`` / ``.where``: pandas 3
+    infers a ``str`` dtype for those, whose missing marker is a float ``nan``, and ``json.dumps`` writes
+    that as the invalid JSON literal ``NaN`` instead of ``null``.
+
+    Args:
+        series: The column to encode.
+
+    Returns:
+        An ``object``-dtype Series carrying the same index.
+    """
+    import pandas as pd
+
+    return pd.Series([_iso(value) for value in series], index=series.index, dtype=object)
+
+
+def _date_encoded(series: Any) -> Any:
+    """Return the ISO-encoded form of ``series``, or ``None`` when it needs no change.
+
+    Args:
+        series: One column of the frame about to be serialised.
+
+    Returns:
+        The encoded Series, or ``None`` to leave the column exactly as it is.
+    """
+    import pandas as pd
+    from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
+
+    dtype = series.dtype
+    if isinstance(dtype, pd.CategoricalDtype):
+        # A categorical wraps its real dtype in `.categories`; a repeated timestamp column is routinely
+        # stored this way, and it matched none of the checks below.
+        dtype = dtype.categories.dtype
+    if (
+        is_datetime64_any_dtype(dtype)
+        or is_timedelta64_dtype(dtype)
+        or isinstance(dtype, pd.PeriodDtype)
+    ):
+        return _iso_series(series)
+    if series.dtype == object and any(_is_date_like(value) for value in series):
+        # Scans for *any* date-like value rather than sampling the first non-null one: a column of
+        # ["n/a", date(...)] is just as unserialisable as one in the other order, and sampling made the
+        # outcome depend on row order. The scan stops at the first hit.
+        return _iso_series(series)
+    return None
+
+
 def _require_layer_api() -> tuple:
     """Import and return ``(Layer, LayerType)``, raising the actionable error when the engine is absent.
 
@@ -406,12 +524,141 @@ class WebMapBase:
             f"use timeslider() with a DatasetCollection."
         )
 
+    @staticmethod
+    def _json_safe(gdf: Any) -> Any:
+        """Return ``gdf`` with date-like columns encoded as ISO-8601 text.
+
+        MapLibre ingests a GeoDataFrame by serialising it to GeoJSON with ``json.dumps``, and GeoJSON has
+        no date type — so a ``Timestamp`` column raises ``TypeError: Object of type Timestamp is not JSON
+        serializable`` and takes the whole map with it. A timestamp is the norm for the data this tier
+        renders (alerts, detections, observations), and ``timeslider`` is hit hardest since the ``kdim`` it
+        scrubs is usually the column that breaks the serialisation — so the coercion happens here rather
+        than being left to the caller.
+
+        ISO-8601 is the encoding because it is what GeoJSON consumers expect, it still sorts
+        lexicographically — which is what keeps :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider`
+        ordering its steps correctly — and MapLibre expressions can compare the strings directly. Missing
+        values become ``None`` (GeoJSON ``null``) rather than the string ``"NaT"``, which would otherwise
+        surface in a popup as though it were a real value.
+
+        Everything GeoJSON cannot represent is covered, because each of these reaches ``json.dumps`` and
+        fails there:
+
+        - ``datetime64``, tz-naive or tz-aware;
+        - ``timedelta64``, as an ISO-8601 duration (``P1DT0H0M0S``);
+        - ``period``, as its own string form (``2026-01``);
+        - ``category``, whose real dtype is unwrapped from ``.categories`` first — a repeated timestamp
+          column is routinely stored this way and matches none of the checks above;
+        - an ``object`` column holding any of those, plus ``datetime.time``, ``numpy.datetime64`` and
+          ``numpy.timedelta64``, none of which the dtype checks can see. An object column is encoded when
+          **any** of its values is date-like, not just its first — the two orderings of
+          ``["n/a", date(...)]`` are equally unserialisable.
+
+        A mixed column keeps its non-date values as they are, so one GeoJSON property can hold both text
+        and an ISO string. That is deliberate: stringifying the rest would destroy the types of numbers
+        that serialise perfectly well, and a column mixing dates with other values is already outside what
+        a MapLibre expression can compare meaningfully.
+
+        Two caveats on ordering, both mattering only when ``timeslider`` steps through the column:
+
+        - ISO *timestamps* sort chronologically only while the UTC offset is constant. A tz-aware column
+          spanning a DST change encodes offsets that differ, and lexicographic order then diverges from
+          chronological order — convert such a column to UTC first.
+        - ISO *durations* do not sort lexicographically at all: ``P10DT0H0M0S`` precedes ``P1DT0H0M0S``
+          as text. A ``timedelta64`` column is fine as a rendered attribute, but is not a usable
+          ``kdim``.
+
+        Colouring by an encoded column needs ``scheme="categorical"``: the graduated schemes parse the
+        property as a float and cannot read ISO text. (Colouring by a date column never worked — before
+        this encoding it failed later, in ``json.dumps``.)
+
+        Args:
+            gdf: The display-CRS GeoDataFrame about to be handed to ``add_source``.
+
+        Returns:
+            The same object when it holds no date-like column, else a copy with those columns converted.
+            The input is never mutated — it is the caller's frame.
+
+        Examples:
+            - A datetime column becomes ISO-8601 text, which ``json`` can serialise:
+                ```python
+                >>> import geopandas as gpd, pandas as pd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"when": pd.to_datetime(["2026-01-01 06:00", "2026-02-01 18:30"])},
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> list(WebMap._json_safe(gdf)["when"])
+                ['2026-01-01T06:00:00', '2026-02-01T18:30:00']
+
+                ```
+            - A missing timestamp becomes ``None``, so it reaches the map as JSON ``null`` rather than
+              the text ``"NaT"``:
+                ```python
+                >>> import json
+                >>> import geopandas as gpd, pandas as pd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"when": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> gdf.loc[1, "when"] = pd.NaT
+                >>> json.dumps(WebMap._json_safe(gdf).drop(columns="geometry").to_dict(orient="records"))
+                '[{"when": "2026-01-01T00:00:00"}, {"when": null}]'
+
+                ```
+            - A frame with nothing date-like is handed back untouched, with no copy taken:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> gdf = gpd.GeoDataFrame(
+                ...     {"n": [1, 2]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+                ... )
+                >>> WebMap._json_safe(gdf) is gdf
+                True
+
+                ```
+
+        See Also:
+            digitalearth.web.base.WebMapBase._display_gdf: the choke point that applies this to every
+                vector builder's input.
+        """
+        import pandas as pd
+
+        columns = getattr(gdf, "columns", None)
+        if columns is None:  # a GeoSeries satisfies the vector guard but has no columns to encode
+            return gdf
+        geometry_name = getattr(getattr(gdf, "geometry", None), "name", None)
+        changed = {}
+        for name in columns:
+            if name == geometry_name:
+                continue
+            series = gdf[name]
+            if not isinstance(series, pd.Series):
+                # A duplicate column label selects a DataFrame; leave it for geopandas to complain about
+                # rather than failing here on an attribute the caller never sees.
+                continue
+            encoded = _date_encoded(series)
+            if encoded is not None:
+                changed[name] = encoded
+        if not changed:
+            return gdf
+        out = gdf.copy()
+        for name, series in changed.items():
+            out[name] = series
+        return out
+
     def _display_gdf(self, features: Any, *, method: str) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
         The single vector choke point the point/line/polygon builders call, and so the place the tier
-        rejects non-vector input (:meth:`_require_vector`) before any reprojection is paid for. A pyramids
-        ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form ``maplibre.Map.add_source`` accepts
+        rejects non-vector input (:meth:`_require_vector`) before any reprojection is paid for, and the
+        place date-like columns are made JSON-safe (:meth:`_json_safe`) before the frame reaches
+        ``add_source``. A pyramids ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form
+        ``maplibre.Map.add_source`` accepts
         for vector data), so it is reprojected through pyramids (``to_crs``) when needed and returned as-is; a
         bare GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import —
         pyramids owns the reprojection and the GeoDataFrame type.
@@ -422,20 +669,25 @@ class WebMapBase:
                 new builder cannot silently inherit a generic label.
 
         Returns:
-            A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
+            A GeoDataFrame in the display CRS (EPSG:4326 by default), with date-like columns ISO-encoded,
+            ready for ``add_source``.
 
         Raises:
             TypeError: when ``features`` is not a vector layer.
+
+        See Also:
+            digitalearth.web.base.WebMapBase._require_vector: the input guard applied first.
+            digitalearth.web.base.WebMapBase._json_safe: the date encoding applied to the result.
         """
         self._require_vector(features, method)
         if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
-            return features
+            return self._json_safe(features)
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
-            return features.to_crs(self.crs)
-        return features
+            return self._json_safe(features.to_crs(self.crs))
+        return self._json_safe(features)
 
     def add_underlay(self, layer: Any) -> "WebMapBase":
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
