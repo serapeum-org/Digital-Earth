@@ -93,7 +93,11 @@ class TemporalMixin:
         Args:
             features: A ``FeatureCollection`` / GeoDataFrame whose features carry ``kdim``, or a pyramids
                 ``DatasetCollection`` whose members are ordered time steps.
-            kdim: The time attribute to scrub (vector), or the slider's label (raster).
+            kdim: The time attribute to scrub (vector), or the slider's label (raster). A feature whose
+                ``kdim`` is missing gets no slider step — but it is still **drawn**, so it stays hidden
+                behind the live slider (no step's filter matches it) and stays visible in a saved page
+                (which carries no slider, and so no filter at all). Drop such rows before calling if
+                that matters.
             labels: Raster only — per-member slider labels (e.g. datetimes) shown instead of the integer
                 index; must match the member count and be unique.
             band: Raster only — the 1-based band drawn for every member.
@@ -110,8 +114,8 @@ class TemporalMixin:
         Raises:
             TypeError: when ``features`` is neither a vector layer nor a ``DatasetCollection``.
             KeyError: when ``kdim`` is not a feature attribute (vector).
-            ValueError: when the series has no time steps, or when ``labels`` does not match the member
-                count or repeats a label (raster).
+            ValueError: when the series has no time step left once the missing values are dropped, or
+                when ``labels`` does not match the member count or repeats a label (raster).
 
         Examples:
             - Scrub a point series by its ``time`` attribute (needs the ``web`` extra, so this example is
@@ -147,6 +151,8 @@ class TemporalMixin:
             digitalearth.interactive.temporal.TemporalMixin.timecube: the interactive tier's raster
                 time cube.
         """
+        import pandas as pd
+
         _require_layer_api()
         if hasattr(features, "datasets"):  # a pyramids DatasetCollection — the raster stack path
             return self._timeslider_stack(
@@ -157,7 +163,10 @@ class TemporalMixin:
         if kdim not in getattr(gdf, "columns", []):
             raise KeyError(f"time field {kdim!r} not found in the feature attributes")
 
-        times = sorted(gdf[kdim].unique().tolist())
+        # Features with no time value cannot sit at any step, and a None among the values would make the
+        # sort raise once `_display_gdf` has encoded a NaT to None ("'<' not supported between instances
+        # of 'NoneType' and 'str'"). Drop them; the empty check below still catches a series with none.
+        times = sorted(value for value in gdf[kdim].unique().tolist() if not pd.isna(value))
         if not times:
             raise ValueError(
                 f"timeslider() needs at least one time step, but no feature carries a {kdim!r} value"

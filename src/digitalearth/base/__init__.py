@@ -26,6 +26,9 @@ What lives here:
 * :mod:`~digitalearth.base.arrays` — nodata masking and the finite-value reductions.
 * :mod:`~digitalearth.base.crs` — the best-effort EPSG lookup.
 * :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
+* :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend
+  shares, so a true-colour render is identical across tiers and a sequence of frames can be frozen on
+  one stretch.
 * :mod:`~digitalearth.base.types` — the ``RasterLike`` / ``VectorLike`` structural Protocols.
 
 Anything a *single* backend needs belongs in that backend instead: the matplotlib figure lookup that used to sit

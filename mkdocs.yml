@@ -188,6 +188,7 @@ nav:
   - Reference:
     - TexturedGlobe (3-D globe): reference/textured_globe.md
     - Saving animations: reference/animation.md
+    - Composite stretch: reference/stretch.md
     - StaticGlyph: reference/static.md
   - About:
     - Change-log: change-log.md
