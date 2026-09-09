@@ -4,7 +4,7 @@ The *mechanics* of styling (colormaps, norms, levels) live in cleopatra; the *do
 called ``t2m`` should use a temperature colormap" — is a geospatial concern and lives here, driven by a
 per-variable YAML library under ``autostyle/library/``.
 
-Two layers cooperate. The richer :func:`~digitalearth.autostyle.magics.magics_style` (RP.10) ports ECMWF
+Two layers cooperate. The richer :func:`~digitalearth.base.autostyle.magics.magics_style` (RP.10) ports ECMWF
 Magics' operational identity matching — name → CF ``standard_name`` → units — and resolves canonical
 colormap *and* contour levels for common meteorological fields; :func:`auto_style` consults it first and
 falls back to the lighter substring library (``variables.yml``) for everything else.
@@ -15,8 +15,8 @@ from typing import Any, Dict
 
 import yaml
 
-from digitalearth.autostyle.magics import load_magics_library, magics_style
-from digitalearth.sources.source import Source
+from digitalearth.base.autostyle.magics import load_magics_library, magics_style
+from digitalearth.base.sources.source import Source
 
 __all__ = ["auto_style", "load_library", "load_magics_library", "magics_style"]
 
@@ -33,7 +33,7 @@ def load_library() -> Dict[str, dict]:
     Examples:
         - The shipped library defines a default and several variable groups:
             ```python
-            >>> from digitalearth.autostyle import load_library
+            >>> from digitalearth.base.autostyle import load_library
             >>> lib = load_library()
             >>> lib["default"]["cmap"]
             'viridis'
@@ -55,9 +55,9 @@ def load_library() -> Dict[str, dict]:
 
 
 def auto_style(source: Source) -> Dict[str, Any]:
-    """Resolve cleopatra style parameters for a :class:`~digitalearth.sources.source.Source`.
+    """Resolve cleopatra style parameters for a :class:`~digitalearth.base.sources.source.Source`.
 
-    The richer ECMWF Magics identity matching (:func:`~digitalearth.autostyle.magics.magics_style`) is tried
+    The richer ECMWF Magics identity matching (:func:`~digitalearth.base.autostyle.magics.magics_style`) is tried
     first — on the source's variable name, then CF ``standard_name``, then ``units`` — and when it recognises
     the field it contributes a canonical colormap *and* contour ``levels``. Otherwise the source's variable
     name is matched (case-insensitive substring) against the lighter ``variables.yml`` groups, the first
@@ -74,8 +74,8 @@ def auto_style(source: Source) -> Dict[str, Any]:
         - A temperature-like variable selects the temperature colormap:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import Source, DimensionInfo
-            >>> from digitalearth.autostyle import auto_style
+            >>> from digitalearth.base.sources import Source, DimensionInfo
+            >>> from digitalearth.base.autostyle import auto_style
             >>> src = Source(DimensionInfo(np.zeros((2, 2)), "z"), DimensionInfo(np.array([0.0]), "x"),
             ...              DimensionInfo(np.array([0.0]), "y"), metadata={"variable": "t2m"})
             >>> auto_style(src)["cmap"]
@@ -85,8 +85,8 @@ def auto_style(source: Source) -> Dict[str, Any]:
         - An unrecognised variable falls back to the default colormap:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import Source, DimensionInfo
-            >>> from digitalearth.autostyle import auto_style
+            >>> from digitalearth.base.sources import Source, DimensionInfo
+            >>> from digitalearth.base.autostyle import auto_style
             >>> src = Source(DimensionInfo(np.zeros((2, 2)), "z"), DimensionInfo(np.array([0.0]), "x"),
             ...              DimensionInfo(np.array([0.0]), "y"), metadata={"variable": "mystery"})
             >>> auto_style(src)["cmap"]
@@ -96,8 +96,8 @@ def auto_style(source: Source) -> Dict[str, Any]:
         - An operational field also picks up canonical Magics contour levels and units:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import Source, DimensionInfo
-            >>> from digitalearth.autostyle import auto_style
+            >>> from digitalearth.base.sources import Source, DimensionInfo
+            >>> from digitalearth.base.autostyle import auto_style
             >>> src = Source(DimensionInfo(np.zeros((2, 2)), "z"), DimensionInfo(np.array([0.0]), "x"),
             ...              DimensionInfo(np.array([0.0]), "y"), metadata={"variable": "msl"})
             >>> style = auto_style(src)

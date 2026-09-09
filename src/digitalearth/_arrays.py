@@ -1,6 +1,6 @@
 """Shared array helpers — the small numpy chores duplicated across the wiring modules.
 
-Three operations recurred verbatim across :mod:`digitalearth.sources.extractors`, :mod:`digitalearth.scene.map`,
+Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`, :mod:`digitalearth.scene.map`,
 :mod:`digitalearth.charts`, :mod:`digitalearth.series` and :mod:`digitalearth.temporal`, with subtly different
 nodata-masking rules. They live here once so every caller masks the same way.
 

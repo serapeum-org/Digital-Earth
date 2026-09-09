@@ -36,7 +36,7 @@ from matplotlib.colors import Normalize
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth._arrays import finite, read_masked_band
-from digitalearth._crs import source_epsg
+from digitalearth.base.crs import source_epsg
 from digitalearth.animation import save_animation
 
 #: Default shape of the global equirectangular canvas built by :meth:`TexturedGlobe.from_dataset`,

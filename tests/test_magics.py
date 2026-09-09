@@ -3,15 +3,15 @@
 import numpy as np
 import pytest
 
-from digitalearth.autostyle import auto_style
-from digitalearth.autostyle.magics import (
+from digitalearth.base.autostyle import auto_style
+from digitalearth.base.autostyle.magics import (
     _alias_in,
     _as_list,
     _style_of,
     load_magics_library,
     magics_style,
 )
-from digitalearth.sources import DimensionInfo, Source
+from digitalearth.base.sources import DimensionInfo, Source
 
 
 def _source(variable="", standard_name=None, units=None):

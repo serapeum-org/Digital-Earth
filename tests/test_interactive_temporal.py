@@ -102,8 +102,8 @@ class TestGlobalClim:
 
     def test_all_nodata_members_fall_back_to_unit_range(self, m, cube, monkeypatch):
         """When every member is all-NaN, the range falls back to (0.0, 1.0) instead of erroring."""
-        from digitalearth.sources.dimension import DimensionInfo
-        from digitalearth.sources.source import Source
+        from digitalearth.base.sources.dimension import DimensionInfo
+        from digitalearth.base.sources.source import Source
 
         def _all_nan_source(self, data, *, band=1):
             grid = np.full((2, 2), np.nan)

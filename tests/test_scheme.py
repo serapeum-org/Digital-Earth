@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from matplotlib.colors import BoundaryNorm, to_hex
 
-from digitalearth._symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
+from digitalearth.base.symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
 from digitalearth.scene import Map
 
 

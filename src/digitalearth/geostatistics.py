@@ -30,7 +30,7 @@ from typing import Any
 
 from matplotlib.colors import ListedColormap
 
-from digitalearth._symbology import MISSING_COLOR, _categories
+from digitalearth.base.symbology import MISSING_COLOR, _categories
 from digitalearth.scene import Map
 
 #: Conventional LISA (local Moran) cluster colours — GeoDa/PySAL scheme. Keyed by the ``cluster`` label
@@ -63,7 +63,7 @@ def _palette(categories: list[Any], color_map: dict[str, str]) -> ListedColormap
     """Build a ``ListedColormap`` mapping each category to its conventional colour.
 
     Digital-Earth's categorical machinery colours the *sorted* distinct categories position by position (see
-    :func:`digitalearth._symbology.categorical_colors`). Building the colormap from the same sorted category
+    :func:`digitalearth.base.symbology.categorical_colors`). Building the colormap from the same sorted category
     list pins each semantic class to its conventional colour regardless of which classes are present; a class
     missing from ``color_map`` falls back to a qualitative ``tab10`` cycle. Returning a colormap *object* (not a
     registered name) keeps the palette local to the call — no process-global registry is mutated.

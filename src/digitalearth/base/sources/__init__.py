@@ -2,22 +2,22 @@
 
 Public surface::
 
-    from digitalearth.sources import Source, DimensionInfo, get_source
+    from digitalearth.base.sources import Source, DimensionInfo, get_source
     src = get_source(dataset)          # pyramids Dataset/NetCDF/DatasetCollection/FeatureCollection or numpy
     src.z.values, src.x.values, src.crs
 
 This package is a thin, pyramids-only extraction layer (no ``xarray``/``rasterio``). ``Source`` lives in its
-own leaf module (:mod:`digitalearth.sources.source`) so importing it here and from :mod:`.extractors` does
+own leaf module (:mod:`digitalearth.base.sources.source`) so importing it here and from :mod:`.extractors` does
 not create a cycle.
 """
 from typing import Optional
 
 import numpy as np
 
-from digitalearth._types import PlottableData
-from digitalearth.sources.dimension import DimensionInfo
-from digitalearth.sources.extractors import extract, get_stack
-from digitalearth.sources.source import Source
+from digitalearth.base.types import PlottableData
+from digitalearth.base.sources.dimension import DimensionInfo
+from digitalearth.base.sources.extractors import extract, get_stack
+from digitalearth.base.sources.source import Source
 
 __all__ = ["Source", "DimensionInfo", "get_source", "get_stack"]
 
@@ -48,7 +48,7 @@ def get_source(
         - Wrap a raw 2-D numpy array (pixel-index axes, no CRS):
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import get_source
+            >>> from digitalearth.base.sources import get_source
             >>> src = get_source(np.arange(12.0).reshape(3, 4))
             >>> src.z.values.shape
             (3, 4)
@@ -61,7 +61,7 @@ def get_source(
         - Supply explicit coordinates for a numpy array:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import get_source
+            >>> from digitalearth.base.sources import get_source
             >>> src = get_source(np.zeros((2, 2)), x=np.array([10.0, 20.0]),
             ...                  y=np.array([5.0, 6.0]))
             >>> src.x.values.tolist()

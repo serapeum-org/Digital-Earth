@@ -10,8 +10,8 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from digitalearth.scene.scene import Scene
-from digitalearth.sources import get_source
-from digitalearth.sources.source import Source
+from digitalearth.base.sources import get_source
+from digitalearth.base.sources.source import Source
 
 
 class GeoLayerBase(Scene):

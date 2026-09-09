@@ -9,9 +9,9 @@ import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
 from digitalearth._render_compat import relocate_flat_style
-from digitalearth.autostyle import auto_style
-from digitalearth.preprocess import add_cyclic_column
-from digitalearth.sources import get_stack
+from digitalearth.base.autostyle import auto_style
+from digitalearth.base.preprocess import add_cyclic_column
+from digitalearth.base.sources import get_stack
 
 
 def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:

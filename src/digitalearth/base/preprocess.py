@@ -39,7 +39,7 @@ def add_cyclic_column(z: np.ndarray, x: np.ndarray) -> Tuple[np.ndarray, np.ndar
         - Closing a 2x3 global field adds one wrap-around column:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.preprocess import add_cyclic_column
+            >>> from digitalearth.base.preprocess import add_cyclic_column
             >>> z = np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
             >>> x = np.array([0.0, 120.0, 240.0])
             >>> z2, x2 = add_cyclic_column(z, x)

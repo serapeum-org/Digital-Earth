@@ -69,7 +69,7 @@ class AnimationMixin:
                 ```python
                 >>> import numpy as np, os, tempfile
                 >>> from digitalearth.three_d import Scene3D
-                >>> from digitalearth.sources import get_source
+                >>> from digitalearth.base.sources import get_source
                 >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
                 >>> scene = Scene3D(off_screen=True)
                 >>> _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
@@ -115,7 +115,7 @@ class AnimationMixin:
                 ```python
                 >>> import numpy as np, os, tempfile
                 >>> from digitalearth.three_d import Scene3D
-                >>> from digitalearth.sources import get_source
+                >>> from digitalearth.base.sources import get_source
                 >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
                 >>> scene = Scene3D(off_screen=True)
                 >>> _ = scene.terrain(get_source(dem))

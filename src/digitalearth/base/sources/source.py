@@ -4,12 +4,12 @@ A ``Source`` is the single representation every Digital-Earth plot method reads 
 array (``z``), the coordinate axes (``x``/``y``), the CRS, and free-form metadata, regardless of whether
 the input was a pyramids raster, NetCDF variable, dataset collection, feature collection or raw numpy.
 
-This module is a **leaf**: it imports nothing from :mod:`digitalearth.sources.extractors`, so that
+This module is a **leaf**: it imports nothing from :mod:`digitalearth.base.sources.extractors`, so that
 ``extractors`` and the package ``__init__`` can both import ``Source`` without creating an import cycle.
 """
 from typing import Any, Optional
 
-from digitalearth.sources.dimension import DimensionInfo
+from digitalearth.base.sources.dimension import DimensionInfo
 
 
 class Source:
@@ -31,7 +31,7 @@ class Source:
         - Build a raster Source by hand and read its grid + axes:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import Source, DimensionInfo
+            >>> from digitalearth.base.sources import Source, DimensionInfo
             >>> z = DimensionInfo(np.arange(6.0).reshape(2, 3), "z", "mm")
             >>> src = Source(z, DimensionInfo(np.array([0.0, 1.0, 2.0]), "x"),
             ...              DimensionInfo(np.array([0.0, 1.0]), "y"), crs=4326,
@@ -47,7 +47,7 @@ class Source:
         - Missing metadata keys fall back to the supplied default:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources import Source, DimensionInfo
+            >>> from digitalearth.base.sources import Source, DimensionInfo
             >>> src = Source(None, DimensionInfo(np.array([0.0]), "x"),
             ...              DimensionInfo(np.array([0.0]), "y"))
             >>> src.metadata("variable", "unknown")

@@ -1,9 +1,9 @@
-"""Tests for digitalearth.sources.get_stack — the multiband band-stack reader (PC-5)."""
+"""Tests for digitalearth.base.sources.get_stack — the multiband band-stack reader (PC-5)."""
 import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.sources import get_stack
+from digitalearth.base.sources import get_stack
 
 
 @pytest.fixture

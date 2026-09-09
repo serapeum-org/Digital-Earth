@@ -25,7 +25,7 @@ class TestGroups:
 
     def test_declares_known_extension_points(self):
         """GROUPS advertises the styles and sources extension points."""
-        assert "digitalearth.styles" in GROUPS and "digitalearth.sources" in GROUPS
+        assert "digitalearth.styles" in GROUPS and "digitalearth.base.sources" in GROUPS
 
 
 class TestIterPlugins:

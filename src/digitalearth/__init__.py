@@ -68,7 +68,7 @@ from digitalearth.series import (  # noqa: E402
     quantile_band,
     stripes,
 )
-from digitalearth.sources import DimensionInfo, Source, get_source  # noqa: E402
+from digitalearth.base.sources import DimensionInfo, Source, get_source  # noqa: E402
 from digitalearth.temporal import Climatology, TimeSeries  # noqa: E402
 
 __all__ = [

@@ -9,7 +9,7 @@ import pytest
 pv = pytest.importorskip("pyvista")
 pytest.importorskip("imageio")
 
-from digitalearth.sources import get_source
+from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.animation import _MOVIE_SUFFIXES, _open_writer
 

@@ -14,10 +14,10 @@ import numpy as np
 from pyramids.dataset import Dataset
 
 from digitalearth._arrays import mask_nodata, read_masked_band
-from digitalearth._crs import source_epsg
-from digitalearth._types import PlottableData, RasterLike
-from digitalearth.sources.dimension import DimensionInfo
-from digitalearth.sources.source import Source
+from digitalearth.base.crs import source_epsg
+from digitalearth.base.types import PlottableData, RasterLike
+from digitalearth.base.sources.dimension import DimensionInfo
+from digitalearth.base.sources.source import Source
 
 
 def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:

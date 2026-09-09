@@ -133,7 +133,7 @@ class TestRgb:
         """A constant (zero-span) channel must stretch without NaN/inf from a 0 or NaN scale (M1)."""
         import numpy as np
 
-        import digitalearth.sources as sources_mod
+        import digitalearth.base.sources as sources_mod
 
         src = m._to_display_source(dataset)
         rows, cols = src.z.values.shape

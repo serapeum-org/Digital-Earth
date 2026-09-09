@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 from geostatista import Weights, getis_ord_gi, local_morans  # noqa: E402
 from pyramids.feature import FeatureCollection  # noqa: E402
 
-from digitalearth._symbology import _categories  # noqa: E402
+from digitalearth.base.symbology import _categories  # noqa: E402
 from digitalearth.geostatistics import (  # noqa: E402
     HOTSPOT_COLORS,
     LISA_COLORS,

@@ -85,21 +85,21 @@ def resolve_categorical_cmap(cmap: Any = None) -> Any:
     Examples:
         - The continuous default is swapped for a qualitative colormap:
             ```python
-            >>> from digitalearth._symbology import resolve_categorical_cmap
+            >>> from digitalearth.base.symbology import resolve_categorical_cmap
             >>> resolve_categorical_cmap("viridis")
             'tab10'
 
             ```
         - No colormap at all resolves to the same qualitative default:
             ```python
-            >>> from digitalearth._symbology import resolve_categorical_cmap
+            >>> from digitalearth.base.symbology import resolve_categorical_cmap
             >>> resolve_categorical_cmap()
             'tab10'
 
             ```
         - An explicitly chosen colormap is left untouched:
             ```python
-            >>> from digitalearth._symbology import resolve_categorical_cmap
+            >>> from digitalearth.base.symbology import resolve_categorical_cmap
             >>> resolve_categorical_cmap("Set2")
             'Set2'
 
@@ -129,7 +129,7 @@ def is_null(value: Any) -> bool:
             ```python
             >>> import numpy as np
             >>> import pandas as pd
-            >>> from digitalearth._symbology import is_null
+            >>> from digitalearth.base.symbology import is_null
             >>> [is_null(v) for v in (None, np.nan, pd.NA, pd.NaT)]
             [True, True, True, True]
             >>> [is_null(v) for v in ("urban", 0, False)]
@@ -166,7 +166,7 @@ def nulls_to_none(values: Any) -> np.ndarray:
         - `pd.NA` is normalized to `None`, so it cannot become a category:
             ```python
             >>> import pandas as pd
-            >>> from digitalearth._symbology import nulls_to_none
+            >>> from digitalearth.base.symbology import nulls_to_none
             >>> nulls_to_none(pd.array(["urban", pd.NA], dtype="string")).tolist()
             ['urban', None]
 
@@ -236,7 +236,7 @@ def categorical_colors(
     Examples:
         - Distinct string categories get distinct colours:
             ```python
-            >>> from digitalearth._symbology import categorical_colors
+            >>> from digitalearth.base.symbology import categorical_colors
             >>> cats, colors = categorical_colors(["a", "b", "a", "c"])
             >>> cats
             ['a', 'b', 'c']
@@ -246,7 +246,7 @@ def categorical_colors(
             ```
         - More categories than the colormap → colours cycle (never runs out):
             ```python
-            >>> from digitalearth._symbology import categorical_colors
+            >>> from digitalearth.base.symbology import categorical_colors
             >>> cats, colors = categorical_colors(list(range(12)), cmap="tab10")
             >>> len(colors)
             12

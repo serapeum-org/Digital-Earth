@@ -20,8 +20,8 @@ from pyramids.dataset import Dataset
 
 from digitalearth._arrays import NAN_REDUCERS, read_masked_band
 from digitalearth._render_compat import relocate_flat_style
-from digitalearth._symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
-from digitalearth.sources import get_source
+from digitalearth.base.symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
+from digitalearth.base.sources import get_source
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
@@ -34,7 +34,7 @@ def _draw_missing_neutral(artist: Any) -> None:
     cleopatra maps a missing category to ``NaN`` in the class codes, and a ``ListedColormap``'s default "bad"
     colour is fully transparent — so a feature whose attribute is missing is drawn as *nothing*, making it
     indistinguishable from a feature that was never in the collection. The web and interactive tiers both draw
-    :data:`~digitalearth._symbology.MISSING_COLOR` there; this matches them, so missing data reads as missing on
+    :data:`~digitalearth.base.symbology.MISSING_COLOR` there; this matches them, so missing data reads as missing on
     all three tiers.
 
     ``with_extremes`` returns a *new* colormap rather than mutating in place, which matters: the glyph's may be

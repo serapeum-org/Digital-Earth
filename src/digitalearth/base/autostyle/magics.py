@@ -72,7 +72,7 @@ def load_magics_library() -> Dict[str, dict]:
     Examples:
         - The shipped library covers common operational fields:
             ```python
-            >>> from digitalearth.autostyle.magics import load_magics_library
+            >>> from digitalearth.base.autostyle.magics import load_magics_library
             >>> lib = load_magics_library()
             >>> "mean_sea_level_pressure" in lib
             True
@@ -82,7 +82,7 @@ def load_magics_library() -> Dict[str, dict]:
             ```
         - Read a field's canonical contour interval straight from the library:
             ```python
-            >>> from digitalearth.autostyle.magics import load_magics_library
+            >>> from digitalearth.base.autostyle.magics import load_magics_library
             >>> load_magics_library()["total_precipitation"]["levels"][:4]
             [0, 1, 2, 5]
 
@@ -126,7 +126,7 @@ def magics_style(
     Examples:
         - Match by name and read the canonical contour interval:
             ```python
-            >>> from digitalearth.autostyle.magics import magics_style
+            >>> from digitalearth.base.autostyle.magics import magics_style
             >>> style = magics_style("t2m")
             >>> style["cmap"], style["magics_name"]
             ('coolwarm', 't2m')
@@ -136,14 +136,14 @@ def magics_style(
             ```
         - Match by CF standard_name when the short name is unknown:
             ```python
-            >>> from digitalearth.autostyle.magics import magics_style
+            >>> from digitalearth.base.autostyle.magics import magics_style
             >>> magics_style(standard_name="air_pressure_at_mean_sea_level")["units"]
             'hPa'
 
             ```
         - An unrecognised field returns ``None`` (the caller falls back to a default style):
             ```python
-            >>> from digitalearth.autostyle.magics import magics_style
+            >>> from digitalearth.base.autostyle.magics import magics_style
             >>> magics_style("mystery_field") is None
             True
             >>> magics_style("output") is None  # "tp" is not matched mid-token

@@ -13,7 +13,7 @@ from typing import Any
 
 import numpy as np
 
-from digitalearth.sources import Source, get_source
+from digitalearth.base.sources import Source, get_source
 
 #: Fallback scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field (used only if the mesh
 #: exposes no active scalars). Prefer ``mesh.active_scalars_name`` so the binding tracks geovista's own choice.
@@ -77,8 +77,8 @@ class GlobeMixin:
         """Drape a global lon/lat field onto a 3-D sphere and register it as a layer.
 
         Args:
-            data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.sources.get_source` accepts), or an
-                already-built :class:`~digitalearth.sources.Source`, whose x/y are longitude/latitude and whose
+            data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts), or an
+                already-built :class:`~digitalearth.base.sources.Source`, whose x/y are longitude/latitude and whose
                 z is the field to drape.
             band: 1-based band index to read.
             cmap: Colormap for the draped field.
@@ -98,7 +98,7 @@ class GlobeMixin:
                 ```python
                 >>> import numpy as np
                 >>> from digitalearth.three_d import Scene3D
-                >>> from digitalearth.sources import get_source
+                >>> from digitalearth.base.sources import get_source
                 >>> lon = np.linspace(-180, 180, 37)
                 >>> lat = np.linspace(-90, 90, 19)
                 >>> field = np.add.outer(np.cos(np.deg2rad(lat)), np.zeros(len(lon)))

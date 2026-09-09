@@ -1,4 +1,4 @@
-"""DimensionInfo — a labelled coordinate/value axis used by :class:`~digitalearth.sources.source.Source`."""
+"""DimensionInfo — a labelled coordinate/value axis used by :class:`~digitalearth.base.sources.source.Source`."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -10,7 +10,7 @@ class DimensionInfo:
     """A named array of values with optional units.
 
     Wraps one axis (``x``/``y``) or the data array (``z``) of a
-    :class:`~digitalearth.sources.source.Source` together with a human label and
+    :class:`~digitalearth.base.sources.source.Source` together with a human label and
     optional unit string, mirroring earthkit-plots' ``DimensionInfo``.
 
     Attributes:
@@ -22,7 +22,7 @@ class DimensionInfo:
         - Wrap a coordinate vector and read its label/units:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources.dimension import DimensionInfo
+            >>> from digitalearth.base.sources.dimension import DimensionInfo
             >>> dim = DimensionInfo(np.array([0.0, 1.0, 2.0]), "x", "m")
             >>> dim.name
             'x'
@@ -35,7 +35,7 @@ class DimensionInfo:
         - Units default to None when omitted:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.sources.dimension import DimensionInfo
+            >>> from digitalearth.base.sources.dimension import DimensionInfo
             >>> dim = DimensionInfo(np.array([1, 2]), "z")
             >>> dim.units is None
             True

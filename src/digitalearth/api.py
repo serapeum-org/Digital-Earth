@@ -11,7 +11,7 @@ from typing import Any, Optional
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
-from digitalearth._types import PlottableData
+from digitalearth.base.types import PlottableData
 from digitalearth.scene import Map
 
 __all__ = [

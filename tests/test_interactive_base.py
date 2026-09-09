@@ -17,7 +17,7 @@ import pytest
 
 from digitalearth.interactive import InteractiveMap
 from digitalearth.interactive.base import _require_holoviz
-from digitalearth.sources.source import Source
+from digitalearth.base.sources.source import Source
 from tests.test_no_competitor_imports import (
     FORBIDDEN,
     _top_level_imports,
@@ -132,7 +132,7 @@ class TestDisplaySource:
     def test_source_passes_through_untouched(self):
         import numpy as np
 
-        from digitalearth.sources.dimension import DimensionInfo
+        from digitalearth.base.sources.dimension import DimensionInfo
 
         src = Source(
             DimensionInfo(np.zeros((2, 2)), "z"),

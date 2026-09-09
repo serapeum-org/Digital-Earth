@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 #: The entry-point groups Digital-Earth looks up. ``styles`` extend the autostyle library; ``sources``
 #: register new input adapters. A plugin package targets one of these group names.
-GROUPS = ("digitalearth.styles", "digitalearth.sources")
+GROUPS = ("digitalearth.styles", "digitalearth.base.sources")
 
 
 def iter_plugins(group: str, *, eps: Optional[Sequence[EntryPoint]] = None) -> Iterator[EntryPoint]:

@@ -3,7 +3,7 @@
 import pytest
 
 from digitalearth.scene import Map
-from digitalearth.sources import get_source
+from digitalearth.base.sources import get_source
 
 
 @pytest.mark.parametrize("kind", ["imshow", "contourf", "contour", "pcolormesh", "block"])
