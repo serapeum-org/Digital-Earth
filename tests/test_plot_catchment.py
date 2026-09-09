@@ -18,7 +18,9 @@ def catchment():
     poly["geometry"] = poly.geometry.buffer(800.0)
     coords = list(zip(pts.geometry.x.tolist(), pts.geometry.y.tolist()))
     lines = gpd.GeoDataFrame(
-        geometry=[LineString([coords[i], coords[i + 1]]) for i in range(len(coords) - 1)],
+        geometry=[
+            LineString([coords[i], coords[i + 1]]) for i in range(len(coords) - 1)
+        ],
         crs=pts.crs,
     )
     return pts, poly, lines
@@ -81,3 +83,35 @@ def test_static_uses_native_scatter_backend():
     text = open(glyph_mod.__file__, encoding="utf-8").read()
     assert "from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph" in text
     assert "import cartopy" not in text and " as gplt" not in text
+
+
+class TestCatchmentNameAliases:
+    """The PEP 8 rename must not have broken the legacy spelling."""
+
+    def test_both_spellings_are_the_same_function(self):
+        """``plotCatchment`` is bound to ``plot_catchment``, not a copy of it.
+
+        Test scenario:
+            The method was renamed for PEP 8 (SonarCloud python:S100) while ``plotCatchment`` stayed bound as
+            a class attribute. Both names must resolve to one object, so behaviour cannot drift between them.
+        """
+        assert StaticGlyph.plotCatchment is StaticGlyph.plot_catchment, (
+            "the legacy spelling should be the same function object, not a separate wrapper"
+        )
+
+    def test_new_name_renders(self, catchment, tmp_path):
+        """``plot_catchment`` draws the three layers and returns (fig, ax).
+
+        Args:
+            catchment: Fixture supplying points, polygons and lines.
+            tmp_path: pytest temporary directory.
+
+        Test scenario:
+            The canonical name must work in its own right, not merely as an alias target.
+        """
+        pts, poly, lines = catchment
+        fig, ax = StaticGlyph.plot_catchment(
+            pts, "value", poly, lines, title="Catchment"
+        )
+        assert fig is not None, "plot_catchment should return a figure"
+        assert ax is not None, "plot_catchment should return an axes"
