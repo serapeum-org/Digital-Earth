@@ -447,6 +447,26 @@ class TestAnimateComposites:
             assert lo <= min(v[channel][0] for v in per_view) + 1e-6, f"channel {channel} lo too high"
             assert hi >= max(v[channel][1] for v in per_view) - 1e-6, f"channel {channel} hi too low"
 
+    def test_a_sweep_that_never_shows_the_data_still_freezes(self):
+        """Every sampled view failing to warp falls back to the data as stored, rather than raising.
+
+        Test scenario:
+            A small local raster spun on an orthographic globe spends part of the sweep entirely on the far
+            side, where pyramids has nothing to transform and raises. Those views contribute no bound; if
+            none of them shows anything the scan must still return a usable stretch.
+        """
+        ny, nx = 6, 6
+        local = Dataset.from_array(
+            arr=np.stack([np.full((ny, nx), value, "float32") for value in (10.0, 20.0, 30.0)]),
+            geo_ref=GeoReference(geo=(100.0, 0.1, 0.0, 10.0, 0.0, -0.1), epsg=4326),
+        )
+        away = [projections.orthographic(lon=-80.0 + offset, lat=-60.0) for offset in (0.0, 5.0)]
+        frozen = Map(crs=4326)._stack_channel_limits([local], (1, 2, 3), views=away)
+        assert len(frozen) == 3, f"a stretch must still come back, got {frozen!r}"
+        assert all(np.isfinite(value) for pair in frozen for value in pair), (
+            f"the stored-data fallback must produce real bounds: {frozen!r}"
+        )
+
     def test_frozen_limits_span_the_whole_stack(self):
         """The frozen limits bracket every individual frame's own limits (widest lo/hi wins)."""
         frames = [_rgb_field(exposure=1.0), _rgb_field(exposure=0.4)]

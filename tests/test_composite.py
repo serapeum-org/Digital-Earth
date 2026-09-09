@@ -208,3 +208,11 @@ def test_rgb_composite_rejects_malformed_limits(rgb_dataset):
     m = Map(crs=rgb_dataset.epsg)
     with pytest.raises(ValueError, match="3 channels"):
         m.rgb_composite(rgb_dataset, limits=[(0.0, 1.0)])
+
+
+def test_require_three_bands_rejects_none():
+    """bands=None is named rather than left to fail as a TypeError from iterating it."""
+    from digitalearth.base.stretch import require_three_bands
+
+    with pytest.raises(ValueError, match="needs exactly three bands, got None"):
+        require_three_bands("rgb_composite", None)
