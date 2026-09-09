@@ -25,6 +25,22 @@ from digitalearth.static.animation import save_animation
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
 
+def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
+    """Return at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames of ``datasets``.
+
+    Both stack scans — the scalar clim and the composite stretch — sample rather than read every frame, and
+    they must sample the same way; keeping the stride in one place is what guarantees that.
+
+    Args:
+        datasets: The animation stack.
+
+    Returns:
+        Every ``stride``-th frame, where the stride is chosen so at most :data:`_CLIM_SCAN_CAP` come back.
+    """
+    seq = list(datasets)
+    return seq[::max(1, len(seq) // _CLIM_SCAN_CAP)]
+
+
 #: Composite renderers accepted as an animation ``kind``. They draw an RGB image rather than a scalar
 #: field, so they take a frozen per-channel stretch instead of a clim, and admit no colorbar.
 _COMPOSITE_KINDS = ("rgb_composite", "hsv_composite")
@@ -147,9 +163,7 @@ class AnimationMixin:
         """
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
-            seq = list(datasets)
-            stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
-            lo, hi = self._stack_clim(seq[::stride])
+            lo, hi = self._stack_clim(_scan_subset(datasets))
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
@@ -192,14 +206,12 @@ class AnimationMixin:
         Raises:
             ValueError: when ``datasets`` is empty, so there is nothing to derive a stretch from.
         """
-        seq = list(datasets)
-        if not seq:
+        if not list(datasets):
             raise ValueError("cannot derive composite limits from an empty stack")
-        stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
         # Measure what the frame will actually render: the composites stretch get_stack(self._reproject(ds)),
         # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS (M1).
         scanned = [channel_limits(get_stack(self._reproject(ds), bands, mask=mask_nodata))
-                   for ds in seq[::stride]]
+                   for ds in _scan_subset(datasets)]
         limits: List[Tuple[float, float]] = []
         for index in range(len(scanned[0])):
             lows = [frame[index][0] for frame in scanned if isfinite(frame[index][0])]

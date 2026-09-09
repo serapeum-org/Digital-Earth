@@ -37,7 +37,6 @@ def stack():
     return [_field(o) for o in (0.0, 15.0, 30.0)]
 
 
-
 def _rgb_field(shift: float = 0.0, exposure: float = 1.0, ny: int = 60, nx: int = 120) -> Dataset:
     """A small 3-band global raster whose scene shifts and whose overall brightness scales.
 

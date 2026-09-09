@@ -18,7 +18,7 @@ from digitalearth.base.arrays import finite
 
 
 #: Percentiles clipped off each channel by the default composite contrast stretch.
-_STRETCH_PERCENTILES = [2, 98]
+_STRETCH_PERCENTILES = (2, 98)
 
 #: The three bands a composite maps to its channels when the caller names none. Defined here so the
 #: renderers and the animation scan cannot drift apart about what a bare composite means.
@@ -131,7 +131,9 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
         if values.size == 0:
             bounds.append((float("nan"), float("nan")))
             continue
-        lo, hi = np.percentile(values, _STRETCH_PERCENTILES)
+        # finite() already returned a fresh array, so numpy may sort it in place instead of copying
+        # again — the scan reads three channels per frame, up to _CLIM_SCAN_CAP frames.
+        lo, hi = np.percentile(values, _STRETCH_PERCENTILES, overwrite_input=True)
         bounds.append((float(lo), float(hi)))
     return bounds
 
