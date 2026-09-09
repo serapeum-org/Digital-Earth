@@ -10,7 +10,7 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
@@ -23,7 +23,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 class ProjectionMixin(_MixinBase):
     """Projection builders (DI.9): arbitrary display projections via the matplotlib backend."""
 
-    def projection(self, name: Any, **opts: Any) -> "ProjectionMixin":
+    def projection(self, name: Any, **opts: Any) -> Self:
         """Set the display projection, rendering through the matplotlib backend.
 
         Args:
@@ -90,7 +90,7 @@ class ProjectionMixin(_MixinBase):
             )
         return factory()
 
-    def graticule(self, **opts: Any) -> "ProjectionMixin":
+    def graticule(self, **opts: Any) -> Self:
         """Add a longitude/latitude graticule (parity with ``Map.graticule``).
 
         Args:

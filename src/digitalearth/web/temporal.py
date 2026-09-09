@@ -9,7 +9,7 @@ The slider is wired at :meth:`render` time via :meth:`_wrap_temporal` (returning
 imported lazily.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.web.base import _require_layer_api
 
@@ -32,7 +32,7 @@ class TemporalMixin(_MixinBase):
         k: int = 5,
         cmap: str = "viridis",
         opacity: float = 0.85,
-    ) -> "TemporalMixin":
+    ) -> Self:
         """Render a time-stepped vector layer with a slider over the ``kdim`` field (recipe W6).
 
         All features are drawn once (so the classification spans the whole series and the colour scale is

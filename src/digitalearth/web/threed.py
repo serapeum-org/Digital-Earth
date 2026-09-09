@@ -14,7 +14,7 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.web.base import _require_layer_api
 
@@ -46,7 +46,7 @@ class ThreeDMixin(_MixinBase):
         cmap: str = "viridis",
         color: str = "#3388ff",
         opacity: float = 0.9,
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Draw a 3-D choropleth: polygons extruded by ``height`` and coloured by ``column`` (recipe W5).
 
         Args:
@@ -96,7 +96,7 @@ class ThreeDMixin(_MixinBase):
         *,
         exaggeration: float = 1.0,
         encoding: str = "terrarium",
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Drape the map over 3-D terrain from a raster-DEM source (recipe W5).
 
         Args:
@@ -123,7 +123,7 @@ class ThreeDMixin(_MixinBase):
 
         return self.add_layer(layer=apply)
 
-    def globe(self, enabled: bool = True) -> "ThreeDMixin":
+    def globe(self, enabled: bool = True) -> Self:
         """Switch the map to the spherical globe projection (or back to Web Mercator).
 
         Args:
@@ -185,7 +185,7 @@ class ThreeDMixin(_MixinBase):
         z_column: Optional[str] = None,
         color: Sequence[int] = (255, 140, 0),
         point_size: float = 2.0,
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
 
         Args:
@@ -213,7 +213,7 @@ class ThreeDMixin(_MixinBase):
         }
         return self._add_deck_layer(layer)
 
-    def tiles_3d(self, url: str, *, opacity: float = 1.0) -> "ThreeDMixin":
+    def tiles_3d(self, url: str, *, opacity: float = 1.0) -> Self:
         """Render an OGC 3D Tiles / Cesium tileset as a deck.gl ``Tile3DLayer`` (recipe W5).
 
         **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not
@@ -243,7 +243,7 @@ class ThreeDMixin(_MixinBase):
         lat: float,
         *,
         size: float = 1.0,
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Place a glTF/GLB 3-D model at ``(lng, lat)`` as a deck.gl ``ScenegraphLayer`` (recipe W5).
 
         **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not

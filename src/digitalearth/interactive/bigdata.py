@@ -10,7 +10,7 @@ deterministic arrays. Reprojection still happens upstream in pyramids; Datashade
 projected planar coordinates.
 """
 
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Self
 
 from loguru import logger
 
@@ -85,7 +85,7 @@ class BigDataMixin(_MixinBase):
         dynamic: bool = True,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Add a server-rasterized density layer that re-aggregates on zoom.
 
         Produces a numeric image (Bokeh keeps colorbar + hover + live recolor), aggregating all
@@ -132,7 +132,7 @@ class BigDataMixin(_MixinBase):
         column: Optional[str] = None,
         dynamic: bool = True,
         **opts: Any,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Add a fully shaded (RGB) density layer — categorical blends via ``color_key`` (DI.2a).
 
         Unlike :meth:`rasterize` the colour-mapping happens server-side too (no Bokeh colorbar /
@@ -187,7 +187,7 @@ class BigDataMixin(_MixinBase):
         color_key: Optional[dict] = None,
         dynamic: bool = True,
         **opts: Any,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Datashade millions of ordered track points as line density (GPS/AIS, DI.2b).
 
         Point rows are connected into per-track paths (NaN-separated, the ``Canvas.line`` recipe)

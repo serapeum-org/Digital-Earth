@@ -19,7 +19,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 """
 
 import pathlib
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Self
 
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
@@ -239,7 +239,7 @@ class WebMapBase:
         self._id_counter += 1
         return f"{prefix}-{self._id_counter}"
 
-    def add_layer(self, layer: Any) -> "WebMapBase":
+    def add_layer(self, layer: Any) -> Self:
         """Register ``layer`` and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here. A layer
@@ -335,7 +335,7 @@ class WebMapBase:
             return features.to_crs(self.crs)
         return features
 
-    def add_underlay(self, layer: Any) -> "WebMapBase":
+    def add_underlay(self, layer: Any) -> Self:
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
 
         Basemaps/tiles call this so they sit beneath the data layers regardless of when they are added —

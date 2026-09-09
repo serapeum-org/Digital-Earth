@@ -10,7 +10,7 @@ matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazil
 the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
@@ -38,7 +38,7 @@ class RasterMixin(_MixinBase):
         opacity: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
         The band is reprojected to the display CRS (lon/lat) through pyramids, normalised over its finite

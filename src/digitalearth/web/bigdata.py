@@ -15,7 +15,7 @@ GeoArrow) renderer would be a separate widget and is left as a future enhancemen
 Builders that colour by value reuse the base ``_color_expr`` helpers; numpy/maplibre are imported lazily.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from loguru import logger
 
@@ -56,7 +56,7 @@ class BigDataMixin(_MixinBase):
         radius: float = 30.0,
         intensity: float = 1.0,
         opacity: float = 0.8,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render a point ``FeatureCollection`` as a MapLibre heatmap (recipe W4).
 
         Args:
@@ -118,7 +118,7 @@ class BigDataMixin(_MixinBase):
         max_zoom: int = 14,
         color: str = "#51bbd6",
         text_color: str = "#ffffff",
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render a point ``FeatureCollection`` as MapLibre clustered circles + count labels (recipe W4).
 
         Builds a clustered GeoJSON source and three layers: cluster bubbles (sized by point count), the count
@@ -181,7 +181,7 @@ class BigDataMixin(_MixinBase):
         self._last_layer_id = unclustered.id
         return self.add_layer(layer=apply)
 
-    def _add_deck_layer(self, layer: dict) -> "BigDataMixin":
+    def _add_deck_layer(self, layer: dict) -> Self:
         """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.
 
         All deck layers are applied together (deck.gl owns one overlay), so the first deck builder registers
@@ -210,7 +210,7 @@ class BigDataMixin(_MixinBase):
         *,
         fill_color: Sequence[int] = (51, 136, 255, 200),
         radius: float = 5.0,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Args:
@@ -244,7 +244,7 @@ class BigDataMixin(_MixinBase):
         *,
         fill_color: Sequence[int] = (51, 136, 255, 180),
         line_color: Sequence[int] = (255, 255, 255, 255),
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Args:

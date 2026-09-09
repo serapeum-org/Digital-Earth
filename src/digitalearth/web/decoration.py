@@ -12,7 +12,7 @@ caller can build a legend out-of-band; the ``measure`` tool exposes the drawn ge
 geodesic distance/area (the GIS part).
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
@@ -79,7 +79,7 @@ class DecorationMixin(_MixinBase):
         attribution: str = "",
         tile_size: int = 256,
         opacity: float = 1.0,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
         Args:
@@ -114,9 +114,7 @@ class DecorationMixin(_MixinBase):
 
         return self.add_underlay(apply)
 
-    def basemap(
-        self, provider: str = "CartoDark", *, opacity: float = 1.0
-    ) -> "DecorationMixin":
+    def basemap(self, provider: str = "CartoDark", *, opacity: float = 1.0) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
         Args:
@@ -146,7 +144,7 @@ class DecorationMixin(_MixinBase):
         show_compass: bool = True,
         show_zoom: bool = True,
         visualize_pitch: bool = False,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add MapLibre navigation controls — zoom buttons and a compass (ED.13).
 
         Args:
@@ -182,7 +180,7 @@ class DecorationMixin(_MixinBase):
         position: str = "bottom-left",
         unit: str = "metric",
         max_width: int = 100,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a MapLibre scale bar (ED.13).
 
         Args:
@@ -207,7 +205,7 @@ class DecorationMixin(_MixinBase):
 
         return self.add_layer(layer=apply)
 
-    def fullscreen(self, *, position: str = "top-right") -> "DecorationMixin":
+    def fullscreen(self, *, position: str = "top-right") -> Self:
         """Add a MapLibre fullscreen toggle control (ED.13).
 
         Args:
@@ -232,7 +230,7 @@ class DecorationMixin(_MixinBase):
 
     def controls(
         self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add the common navigation / scale / fullscreen controls in one call (ED.13).
 
         A convenience over :meth:`navigation`, :meth:`scale_bar` and :meth:`fullscreen`. Note: py-maplibregl
@@ -257,7 +255,7 @@ class DecorationMixin(_MixinBase):
 
     def measure(
         self, *, distance: bool = True, area: bool = True, position: str = "top-left"
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a draw-based measure tool — draw a line (distance) or polygon (area) to measure (ED.10).
 
         Note this adds a **drawing** control, not a live on-map readout: it does not display the distance/area
@@ -316,7 +314,7 @@ class DecorationMixin(_MixinBase):
 
     def popup(
         self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Show an attribute popup on **click** for a layer's features (recipe W2).
 
         Args:
@@ -345,7 +343,7 @@ class DecorationMixin(_MixinBase):
 
     def tooltip(
         self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Show an attribute tooltip on **hover** for a layer's features (recipe W2).
 
         Args:

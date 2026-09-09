@@ -11,7 +11,7 @@ plain hover. Each method documents this rather than implying full interactivity 
 All CRS work (crop, the un-projection of drawn geometry) goes through pyramids.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
@@ -30,7 +30,7 @@ class InteractionMixin(_MixinBase):
         tooltips: Optional[list] = None,
         formatters: Optional[dict] = None,
         layer: int = -1,
-    ) -> "InteractionMixin":
+    ) -> Self:
         """Configure the Bokeh hover tooltips on a registered layer (DI.7).
 
         Args:
@@ -133,9 +133,7 @@ class InteractionMixin(_MixinBase):
 
         return self.on_tap(_profile, source=source)
 
-    def draw(
-        self, kind: str = "box", *, num_objects: Optional[int] = None
-    ) -> "InteractionMixin":
+    def draw(self, kind: str = "box", *, num_objects: Optional[int] = None) -> Self:
         """Add a draw/edit tool so the user can sketch an area-of-interest (DI.8).
 
         Wraps a HoloViews draw stream around a fresh annotation layer: ``"box"`` → ``BoxEdit``,

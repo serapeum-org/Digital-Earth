@@ -12,7 +12,7 @@ polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expres
 cleopatra / matplotlib / numpy are imported lazily inside the methods; importing the tier needs none of them.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
@@ -135,7 +135,7 @@ class VectorMixin(_MixinBase):
         prefix: str,
         layer_type: Any,
         paint: dict,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Register a GeoJSON source + a typed layer with ``paint`` and record it as the last data layer.
 
         Args:
@@ -177,7 +177,7 @@ class VectorMixin(_MixinBase):
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
         Args:
@@ -228,7 +228,7 @@ class VectorMixin(_MixinBase):
         width: float = 2.0,
         color: str = "#3388ff",
         opacity: float = 1.0,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a line ``FeatureCollection`` as a MapLibre line layer (recipe W2).
 
         Args:
@@ -267,7 +267,7 @@ class VectorMixin(_MixinBase):
         opacity: float = 0.6,
         outline_color: str = "#ffffff",
         big: Optional[bool] = None,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
 
         Args:
@@ -320,7 +320,7 @@ class VectorMixin(_MixinBase):
         cmap: str = "viridis",
         opacity: float = 0.85,
         outline_color: str = "#ffffff",
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
         Graduated by default (``scheme="quantiles"``): the class breaks come from

@@ -11,7 +11,7 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Self, Tuple
 
 import numpy as np
 import pyvista as pv
@@ -158,7 +158,7 @@ class Scene3DBase:
         """Close the wrapped plotter and free its render window."""
         self.plotter.close()
 
-    def __enter__(self) -> "Scene3DBase":
+    def __enter__(self) -> Self:
         """Enter the runtime context, returning the scene.
 
         Returns:

@@ -9,7 +9,7 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
@@ -29,7 +29,7 @@ class DecorationMixin(_MixinBase):
         level: str = "underlay",
         api_key: Any = None,
         **opts: Any,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
 
         Args:
@@ -132,7 +132,7 @@ class DecorationMixin(_MixinBase):
         gv, hv = _require_holoviz()
         return sorted(gv.tile_sources.tile_sources)
 
-    def coastlines(self, resolution: str = "110m", **opts: Any) -> "DecorationMixin":
+    def coastlines(self, resolution: str = "110m", **opts: Any) -> Self:
         """Add the Natural-Earth coastline on top of the data layers.
 
         Args:
@@ -173,7 +173,7 @@ class DecorationMixin(_MixinBase):
         lakes: bool = False,
         resolution: str = "110m",
         **opts: Any,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add Natural-Earth context layers (land/ocean beneath the data, borders/rivers on top).
 
         Args:
@@ -249,9 +249,7 @@ class DecorationMixin(_MixinBase):
 
         return reproject_coordinates(xs, ys, from_crs=crs, to_crs=self.crs)
 
-    def text(
-        self, lon: Any, lat: Any, s: str, *, crs: Any = 4326, **opts: Any
-    ) -> "DecorationMixin":
+    def text(self, lon: Any, lat: Any, s: str, *, crs: Any = 4326, **opts: Any) -> Self:
         """Add a single text annotation at ``(lon, lat)`` (reprojected to the display CRS).
 
         Args:
@@ -274,7 +272,7 @@ class DecorationMixin(_MixinBase):
 
     def labels(
         self, features: Any, column: str, *, crs: Any = 4326, **opts: Any
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add per-feature text labels from a point ``FeatureCollection`` column.
 
         Args:
@@ -314,7 +312,7 @@ class DecorationMixin(_MixinBase):
             element = element.opts(**opts)
         return self.add_element(element)
 
-    def colorbar(self, show: bool = True) -> "DecorationMixin":
+    def colorbar(self, show: bool = True) -> Self:
         """Toggle the colorbar on the most recently added layer.
 
         Args:
@@ -344,7 +342,7 @@ class DecorationMixin(_MixinBase):
         self.layers[-1] = self.layers[-1].opts(colorbar=show)
         return self
 
-    def legend(self, show: bool = True) -> "DecorationMixin":
+    def legend(self, show: bool = True) -> Self:
         """Toggle the Bokeh legend on the most recently added layer.
 
         Args:

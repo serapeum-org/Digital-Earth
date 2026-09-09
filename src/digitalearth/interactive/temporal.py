@@ -10,7 +10,7 @@ colormap and colorbar do not jump as the slider moves.
 materialise a frame (``dmap[0]``) to assert on it.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
@@ -58,7 +58,7 @@ class TemporalMixin(_MixinBase):
         clim: Optional[Tuple[float, float]] = None,
         colorbar: bool = True,
         **opts: Any,
-    ) -> "TemporalMixin":
+    ) -> Self:
         """Render a ``DatasetCollection`` as an interactive time-slider map.
 
         Builds an ``hv.DynamicMap`` whose ``frame(t)`` constructs an I1 ``hv.Image`` from the *t*-th

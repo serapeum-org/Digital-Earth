@@ -15,7 +15,7 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
@@ -85,7 +85,7 @@ class VectorMixin(_MixinBase):
         rasterize: Any = "auto",
         rasterize_threshold: int = 50_000,
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a point layer, optionally coloured by an attribute column.
 
         Args:
@@ -134,7 +134,7 @@ class VectorMixin(_MixinBase):
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
-    def path(self, features: Any, **opts: Any) -> "VectorMixin":
+    def path(self, features: Any, **opts: Any) -> Self:
         """Add a line layer (LineString / MultiLineString features).
 
         Args:
@@ -170,7 +170,7 @@ class VectorMixin(_MixinBase):
         rasterize: Any = "auto",
         rasterize_threshold: int = 50_000,
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a polygon layer — outlines only, or filled by an attribute column.
 
         Args:
@@ -240,7 +240,7 @@ class VectorMixin(_MixinBase):
 
     def _categorical_polygons(
         self, features: Any, column: str, *, cmap: str = "viridis", **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
 
         The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
@@ -307,7 +307,7 @@ class VectorMixin(_MixinBase):
         cmap: str = "viridis",
         clim: Optional[Tuple[float, float]] = None,
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a choropleth — polygons filled and coloured by ``column`` (hover shows the value).
 
         A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``. Pass
@@ -406,7 +406,7 @@ class VectorMixin(_MixinBase):
         color_by: Optional[str] = "magnitude",
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a u/v vector field as interactive arrows (parity with ``Map.quiver``, recipe I6).
 
         Args:
@@ -434,7 +434,7 @@ class VectorMixin(_MixinBase):
 
     def streamlines(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add streamlines of a u/v field via the matplotlib backend (parity with ``Map.streamplot``).
 
         Bokeh has no streamline integrator, so streamlines render through HoloViews' matplotlib
@@ -469,7 +469,7 @@ class VectorMixin(_MixinBase):
 
     def barbs(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add wind barbs of a u/v field — **matplotlib backend only** (parity with ``Map.barbs``).
 
         ``gv.WindBarbs`` has no Bokeh renderer, so barbs are a static matplotlib layer; this logs
@@ -518,7 +518,7 @@ class VectorMixin(_MixinBase):
         rasterize_threshold: int = 50_000,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add an unstructured triangular mesh (parity with ``Map.tricontour``/``tripcolor``, recipe I7).
 
         Connectivity comes from one of two sources, both pyramids-fed:
@@ -607,7 +607,7 @@ class VectorMixin(_MixinBase):
         column: Optional[str] = None,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add an equal-area hex-bin density layer (honest no-overplot density, recipe I7).
 
         Args:
@@ -665,7 +665,7 @@ class VectorMixin(_MixinBase):
         filled: bool = True,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a 2-D kernel-density layer of point positions (parity with ``Map.kde``, recipe I7).
 
         Args:
@@ -699,7 +699,7 @@ class VectorMixin(_MixinBase):
         node_id: str = "id",
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a network / origin-destination flow map (parity-plus for ``Map.sankey``, recipe I9).
 
         Args:
@@ -768,7 +768,7 @@ class VectorMixin(_MixinBase):
 
     def flow(
         self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Spatial-flow alias of :meth:`graph` mirroring ``Map.sankey``'s framing (DI.15).
 
         Args:

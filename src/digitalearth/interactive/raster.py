@@ -16,7 +16,7 @@ is intentional (this tier reads as HoloViews to its users); the static↔interac
 in the tier plan's feature-parity matrix.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
@@ -58,7 +58,7 @@ class RasterMixin(_MixinBase):
         alpha: float = 1.0,
         colorbar: bool = True,
         **opts: Any,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a colour-mapped raster layer with hover readout (interactive ``imshow``).
 
         Args:
@@ -105,9 +105,7 @@ class RasterMixin(_MixinBase):
         )
         return self.add_element(element)
 
-    def rgb(
-        self, data: Any, *, bands: Sequence[int] = (1, 2, 3), **opts: Any
-    ) -> "RasterMixin":
+    def rgb(self, data: Any, *, bands: Sequence[int] = (1, 2, 3), **opts: Any) -> Self:
         """Add a true-colour composite from three raster bands (2–98 % percentile stretch).
 
         Args:
@@ -168,7 +166,7 @@ class RasterMixin(_MixinBase):
 
     def quadmesh(
         self, data: Any, *, band: int = 1, cmap: Optional[str] = None, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).
 
         Unlike :meth:`image` (regular grid), a ``QuadMesh`` draws each cell from its coordinate
@@ -211,7 +209,7 @@ class RasterMixin(_MixinBase):
 
     def contours(
         self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add line contours of a raster band.
 
         Args:
@@ -239,7 +237,7 @@ class RasterMixin(_MixinBase):
 
     def filled_contours(
         self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add filled contour bands of a raster band.
 
         Args:
@@ -266,7 +264,7 @@ class RasterMixin(_MixinBase):
 
     def _contour_layer(
         self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer."""
         gv, hv = _require_holoviz()
         from holoviews.operation import contours as contour_op
@@ -293,9 +291,7 @@ class RasterMixin(_MixinBase):
         "#17becf",
     )
 
-    def spaghetti(
-        self, collection: Any, *, band: int = 1, **opts: Any
-    ) -> "RasterMixin":
+    def spaghetti(self, collection: Any, *, band: int = 1, **opts: Any) -> Self:
         """Overlay each member of a ``DatasetCollection`` as line contours (ensemble spaghetti).
 
         Each member gets a distinct colour from a cycling palette so the strands are
@@ -341,7 +337,7 @@ class RasterMixin(_MixinBase):
         dynamic: bool = True,
         cmap: Optional[str] = None,
         **opts: Any,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a large raster / COG by loading only the viewport at a decimated overview (DI.14).
 
         The raster analogue of the vector Datashader path: instead of materialising a multi-GB raster,
