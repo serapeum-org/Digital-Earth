@@ -330,6 +330,20 @@ class TestAnimateComposites:
         m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
         assert opts["limits"] == mine, "caller-supplied limits must not be overwritten by the scan"
 
+    def test_explicit_none_limits_are_still_frozen(self, rgb_stack):
+        """An explicit ``limits=None`` is filled, not treated as "the caller already chose".
+
+        Test scenario:
+            Forwarding an optional through a wrapper passes the kwarg as None rather than omitting it. Key
+            presence alone would leave that None in place, _stretch_to_unit would fall back to its per-frame
+            percentiles, and the clip would pump exactly as it did before the freeze existed — silently.
+        """
+        m = Map(crs=4326)
+        opts = {"limits": None}
+        m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
+        assert opts["limits"] is not None, "an explicit limits=None must still be filled from the stack"
+        assert len(opts["limits"]) == 3, f"expected one bound per channel, got {opts['limits']!r}"
+
     def test_frozen_limits_span_the_whole_stack(self):
         """The frozen limits bracket every individual frame's own limits (widest lo/hi wins)."""
         frames = [_rgb_field(exposure=1.0), _rgb_field(exposure=0.4)]

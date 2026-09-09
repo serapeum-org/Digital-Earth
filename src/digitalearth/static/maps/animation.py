@@ -215,7 +215,11 @@ class AnimationMixin:
           consults ``vmin``/``vmax`` — and there is no single mappable to key a colorbar to, so an explicit
           ``colorbar=True`` is refused rather than answered with a meaningless bar.
 
-        Limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the scan.
+        Real limits already in ``opts`` are kept, so a caller can pass their own ``limits=`` to override the
+        scan. A ``limits`` of ``None`` counts as absent and is filled, matching how
+        :meth:`_resolve_animation_clim` treats a ``None`` ``vmin``/``vmax`` — an explicit ``limits=None`` is
+        what a wrapper forwarding an optional passes, and silently skipping the freeze there would put the
+        flicker back with nothing to notice.
 
         Raises:
             ValueError: when ``colorbar=True`` is combined with a composite ``kind``.
@@ -226,10 +230,11 @@ class AnimationMixin:
                     f"colorbar=True is not supported for a {kind!r} animation: a composite renders an RGB "
                     "image, which has no single scalar mappable to key a colorbar to"
                 )
-            opts.setdefault("limits", self._stack_channel_limits(
-                datasets, opts.get("bands", _DEFAULT_COMPOSITE_BANDS),
-                mask_nodata=opts.get("mask_nodata", True),
-            ))
+            if opts.get("limits") is None:  # absent *or* explicitly None (H1)
+                opts["limits"] = self._stack_channel_limits(
+                    datasets, opts.get("bands", _DEFAULT_COMPOSITE_BANDS),
+                    mask_nodata=opts.get("mask_nodata", True),
+                )
             return
         self._resolve_animation_clim(datasets, opts)
         if colorbar:
