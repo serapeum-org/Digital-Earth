@@ -654,6 +654,63 @@ class TestJsonSafeDatetimes:
         assert out["c"].iloc[0] == expected, f"expected {expected!r}, got {out['c'].iloc[0]!r}"
         json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
 
+    @pytest.mark.parametrize("categories, encoded", [
+        (["2026-01-01", "2026-01-01", "2026-02-01"], True),
+        (["a", "b", "a"], False),
+    ])
+    def test_a_categorical_column_is_unwrapped_before_the_dtype_checks(self, categories, encoded):
+        """A categorical wraps its real dtype in ``.categories`` and matched none of the dtype tests.
+
+        Args:
+            categories: The column values, timestamps or plain text.
+            encoded: Whether that column should be converted.
+
+        Test scenario:
+            Storing a repeated timestamp column as a category is routine for an event feed, and it still
+            raised issue #156's exact TypeError. A categorical of text must stay untouched, so the
+            unwrapping cannot simply convert every categorical.
+        """
+        import json
+
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        values = pd.to_datetime(categories) if encoded else pd.Series(categories)
+        frame = gpd.GeoDataFrame(
+            {"c": pd.Series(values).astype("category")},
+            geometry=[Point(i, i) for i in range(len(categories))],
+            crs=4326,
+        )
+        assert isinstance(frame["c"].dtype, pd.CategoricalDtype), "the fixture must be categorical"
+        out = WebMap()._json_safe(frame)
+        if encoded:
+            assert out["c"].iloc[0] == "2026-01-01T00:00:00", f"not encoded: {out['c'].iloc[0]!r}"
+            json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        else:
+            assert out is frame, "a categorical of text must not be copied"
+
+    def test_a_one_element_array_holding_nan_is_not_treated_as_missing(self):
+        """``pd.isna`` judges a container element-wise, which would swallow the whole value.
+
+        Test scenario:
+            ``bool(pd.isna(np.array([nan])))`` is True, so a one-element array holding NaN was silently
+            replaced by None — losing a real cell value rather than encoding a date.
+        """
+        import geopandas as gpd
+        import numpy as np
+        import pandas as pd
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"c": pd.Series([np.array([np.nan]), pd.Timestamp("2026-01-01")], dtype=object)},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
+        )
+        out = WebMap()._json_safe(frame)
+        assert isinstance(out["c"].iloc[0], np.ndarray), f"the array was replaced: {out['c'].iloc[0]!r}"
+        assert out["c"].iloc[1] == "2026-01-01T00:00:00", "the date alongside it was not encoded"
+
     def test_a_text_column_is_returned_without_a_copy(self):
         """Scanning an object column for dates must not convert one that holds none.
 
