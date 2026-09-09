@@ -5,7 +5,7 @@ import pytest
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.static import Map
-from digitalearth.static.maps.raster import _stretch_to_unit, channel_limits
+from digitalearth.base.stretch import channel_limits, stretch_to_unit
 
 
 @pytest.fixture
@@ -21,9 +21,9 @@ def rgb_dataset(dataset):
 
 
 def test_stretch_to_unit_range():
-    """_stretch_to_unit maps each channel into [0, 1]."""
+    """stretch_to_unit maps each channel into [0, 1]."""
     stack = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
-    out = _stretch_to_unit(stack)
+    out = stretch_to_unit(stack)
     assert out.min() >= 0.0 and out.max() <= 1.0
     assert out.shape == stack.shape
 
@@ -31,7 +31,7 @@ def test_stretch_to_unit_range():
 def test_stretch_to_unit_constant_band():
     """A constant channel (equal percentiles) stretches to all-zeros without dividing by zero."""
     stack = np.dstack([np.full((4, 4), 7.0), np.zeros((4, 4)), np.ones((4, 4))])
-    out = _stretch_to_unit(stack)
+    out = stretch_to_unit(stack)
     assert np.all(out[..., 0] == 0.0)
     assert np.isfinite(out).all()
 
@@ -96,16 +96,16 @@ def test_stretch_to_unit_uses_given_limits():
     """Passing limits replaces the per-call percentile scan, so the same values map to a fixed output."""
     stack = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
     limits = [(0.0, 200.0)] * 3
-    out = _stretch_to_unit(stack, limits)
+    out = stretch_to_unit(stack, limits)
     assert out.max() == pytest.approx(99.0 / 200.0), "the given hi (200) must set the white point"
     assert out.min() == pytest.approx(0.0), "the given lo (0) must set the black point"
-    assert out.max() < _stretch_to_unit(stack).max(), "the per-call stretch would push the max to 1.0"
+    assert out.max() < stretch_to_unit(stack).max(), "the per-call stretch would push the max to 1.0"
 
 
 def test_stretch_to_unit_given_degenerate_limits():
     """Degenerate (lo == hi) limits are widened instead of dividing by zero."""
     stack = np.dstack([np.full((4, 4), 7.0) for _ in range(3)])
-    out = _stretch_to_unit(stack, [(7.0, 7.0)] * 3)
+    out = stretch_to_unit(stack, [(7.0, 7.0)] * 3)
     assert np.isfinite(out).all(), "a zero-span limit must not produce NaN/inf"
 
 
@@ -114,8 +114,8 @@ def test_frozen_limits_preserve_relative_brightness():
     base = np.dstack([np.arange(100.0).reshape(10, 10) for _ in range(3)])
     bright, dim = base, base * 0.4
     limits = channel_limits(bright)
-    assert np.nanmean(_stretch_to_unit(dim, limits)) < np.nanmean(_stretch_to_unit(bright, limits)) * 0.75
-    assert np.nanmean(_stretch_to_unit(dim)) == pytest.approx(np.nanmean(_stretch_to_unit(bright)))
+    assert np.nanmean(stretch_to_unit(dim, limits)) < np.nanmean(stretch_to_unit(bright, limits)) * 0.75
+    assert np.nanmean(stretch_to_unit(dim)) == pytest.approx(np.nanmean(stretch_to_unit(bright)))
 
 
 def test_rgb_composite_accepts_frozen_limits(rgb_dataset):
@@ -160,7 +160,7 @@ def test_channel_limits_ignores_infinities():
 def test_stretch_to_unit_survives_non_finite_limits():
     """Non-finite limits fall back instead of dividing by nan, leaving live channels usable."""
     stack = np.dstack([np.arange(100.0).reshape(10, 10), np.full((10, 10), np.nan), np.ones((10, 10))])
-    out = _stretch_to_unit(stack, [(np.nan, np.nan)] * 3)
+    out = stretch_to_unit(stack, [(np.nan, np.nan)] * 3)
     assert np.isnan(out[..., 1]).all(), "an all-nodata channel stays NaN (it renders transparent)"
     assert np.isfinite(out[..., 0]).all(), "a live channel must not be poisoned by the fallback"
     assert out[..., 0].min() >= 0.0 and out[..., 0].max() <= 1.0, "the fallback must still clip into [0, 1]"
@@ -188,7 +188,7 @@ def test_stretch_to_unit_rejects_malformed_limits(limits, expected):
     """Too few, too many, a bare pair, or a non-pair entry each raise a message naming limits."""
     stack = np.dstack([np.arange(16.0).reshape(4, 4) for _ in range(3)])
     with pytest.raises(ValueError, match=expected):
-        _stretch_to_unit(stack, limits)
+        stretch_to_unit(stack, limits)
 
 
 def test_channel_limits_rejects_a_two_dimensional_array():

@@ -6,7 +6,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.sources import get_stack
 from digitalearth.static import Map, projections
-from digitalearth.static.maps.raster import _stretch_to_unit, channel_limits
+from digitalearth.base.stretch import channel_limits, stretch_to_unit
 
 
 def _field(offset: float) -> Dataset:
@@ -335,7 +335,7 @@ class TestAnimateComposites:
 
         Test scenario:
             Forwarding an optional through a wrapper passes the kwarg as None rather than omitting it. Key
-            presence alone would leave that None in place, _stretch_to_unit would fall back to its per-frame
+            presence alone would leave that None in place, stretch_to_unit would fall back to its per-frame
             percentiles, and the clip would pump exactly as it did before the freeze existed — silently.
         """
         m = Map(crs=4326)
@@ -460,7 +460,7 @@ class TestAnimateComposites:
         assert np.isnan(frozen[1]).all(), f"the unscanned-alive channel should report no bound: {frozen[1]}"
 
         live = get_stack(stack[1], (1, 2, 3))
-        stretched = _stretch_to_unit(live, frozen)
+        stretched = stretch_to_unit(live, frozen)
         channel = stretched[..., 1]
         assert channel.min() < channel.max(), "a live channel must keep real contrast, not clip flat"
         assert channel.mean() < 0.9, f"the channel reads as blown out: mean {channel.mean():.3f}"

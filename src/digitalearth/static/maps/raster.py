@@ -8,192 +8,17 @@ from typing import Any, List, Optional, Sequence, Tuple
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
-from digitalearth.base.arrays import finite
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
+from digitalearth.base.stretch import (
+    ChannelLimits,
+    DEFAULT_COMPOSITE_BANDS,
+    channel_limits,
+    require_three_bands,
+    stretch_to_unit,
+)
 from digitalearth.static.render_compat import relocate_flat_style
-
-
-#: Percentiles clipped off each channel by the default composite contrast stretch.
-_STRETCH_PERCENTILES = [2, 98]
-
-#: One ``(lo, hi)`` stretch bound per composite channel, in channel order.
-ChannelLimits = Sequence[Tuple[float, float]]
-
-
-def require_three_bands(caller: str, bands: Sequence[int]) -> None:
-    """Reject a composite band list that is not exactly three long.
-
-    A composite maps its bands to three channels (R/G/B or H/S/V), so any other count is a caller mistake.
-    Checked up front because the failure otherwise surfaces deep inside the renderer: from an animation it
-    lands after the whole stack has been scanned, as a bare ``IndexError`` raised while matplotlib's writer
-    is already unwinding, with the real complaint buried in a chained traceback.
-
-    Args:
-        caller: The method name to name in the message (e.g. ``"rgb_composite"``).
-        bands: The band indices to check.
-
-    Raises:
-        ValueError: when ``bands`` does not hold exactly three indices.
-
-    Examples:
-        - Three bands pass silently:
-            ```python
-            >>> from digitalearth.static.maps.raster import require_three_bands
-            >>> require_three_bands("rgb_composite", (1, 2, 3)) is None
-            True
-
-            ```
-        - Any other count names the caller, the count and the value it got:
-            ```python
-            >>> from digitalearth.static.maps.raster import require_three_bands
-            >>> require_three_bands("rgb_composite", (1, 2))
-            Traceback (most recent call last):
-                ...
-            ValueError: rgb_composite() needs exactly three bands, got 2: (1, 2)
-
-            ```
-    """
-    if len(tuple(bands)) != 3:
-        raise ValueError(
-            f"{caller}() needs exactly three bands, got {len(tuple(bands))}: {tuple(bands)!r}"
-        )
-
-
-def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
-    """Return the per-channel 2-98 percentile ``(lo, hi)`` of an ``(rows, cols, n)`` stack.
-
-    These are the bounds :func:`_stretch_to_unit` derives on every call. Computing them **once** over a
-    whole animation stack and passing them back in freezes the stretch, so a composite time-lapse does not
-    pulse as each frame re-derives its own black and white point.
-
-    A channel with no finite cell at all (fully nodata, or all ``inf``) has no percentile to take and
-    yields ``(nan, nan)`` rather than a warning; callers treat that as "this channel contributes no
-    bound" — see :meth:`~digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits`, which
-    drops it, and :func:`_stretch_to_unit`, which falls back rather than dividing by it.
-
-    Args:
-        stack: An ``(rows, cols, n)`` channel stack (nodata already NaN).
-
-    Returns:
-        One ``(lo, hi)`` tuple per channel, in channel order; ``(nan, nan)`` for an all-nodata channel.
-
-    Raises:
-        ValueError: when ``stack`` is not 3-D.
-
-    Examples:
-        - Bound each channel of a stack whose channels are scaled copies of one another:
-            ```python
-            >>> import numpy as np
-            >>> from digitalearth.static.maps.raster import channel_limits
-            >>> stack = np.dstack([np.arange(100.0).reshape(10, 10) * scale for scale in (1, 2, 3)])
-            >>> limits = channel_limits(stack)
-            >>> len(limits)
-            3
-            >>> [round(hi) for _, hi in limits]
-            [97, 194, 291]
-
-            ```
-        - A channel with no finite cell reports ``(nan, nan)`` rather than raising or warning, and
-          leaves its neighbours' bounds intact:
-            ```python
-            >>> import numpy as np
-            >>> from digitalearth.static.maps.raster import channel_limits
-            >>> stack = np.dstack([np.arange(16.0).reshape(4, 4), np.full((4, 4), np.nan), np.ones((4, 4))])
-            >>> limits = channel_limits(stack)
-            >>> limits[1]
-            (nan, nan)
-            >>> round(limits[0][0], 1)
-            0.3
-
-            ```
-
-    See Also:
-        _stretch_to_unit: Applies these bounds (or derives its own when none are given).
-        digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits: Combines them across a
-            whole animation stack so every frame shares one stretch.
-    """
-    if stack.ndim != 3:
-        raise ValueError(
-            f"channel_limits needs an (rows, cols, n) channel stack, got a {stack.ndim}-D array "
-            f"with shape {stack.shape}"
-        )
-    bounds: List[Tuple[float, float]] = []
-    for index in range(stack.shape[2]):
-        values = finite(stack[..., index])  # drops NaN *and* inf, which nanpercentile would keep
-        if values.size == 0:
-            bounds.append((float("nan"), float("nan")))
-            continue
-        lo, hi = np.percentile(values, _STRETCH_PERCENTILES)
-        bounds.append((float(lo), float(hi)))
-    return bounds
-
-
-def _check_limits(limits: Optional[ChannelLimits], channels: int) -> None:
-    """Reject a ``limits`` argument that is not one ``(lo, hi)`` pair per channel.
-
-    Both composites take ``limits`` from the caller, so the shapes people actually get wrong are worth
-    naming: too few pairs used to raise ``IndexError``, a bare ``(lo, hi)`` tuple ``TypeError: cannot unpack
-    non-iterable float``, and too many were accepted silently — the worst of the three, since it hides a
-    mismatch between the caller's band list and their limits list.
-
-    Args:
-        limits: The caller's limits, or ``None`` (which is always valid — it means "derive them").
-        channels: How many channels the stack holds.
-
-    Raises:
-        ValueError: when ``limits`` is not ``None`` and does not hold exactly ``channels`` ``(lo, hi)`` pairs.
-    """
-    if limits is None:
-        return
-    if len(limits) != channels:
-        raise ValueError(
-            f"limits has {len(limits)} entries but the stack has {channels} channels; pass one (lo, hi) "
-            f"pair per channel"
-        )
-    for index, pair in enumerate(limits):
-        if np.shape(pair) != (2,):
-            raise ValueError(f"limits[{index}] must be a (lo, hi) pair, got {pair!r}")
-
-
-def _stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) -> np.ndarray:
-    """Per-channel contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``.
-
-    Args:
-        stack: The ``(rows, cols, n)`` channel stack to stretch.
-        limits: Optional precomputed ``(lo, hi)`` per channel, in channel order. When omitted each channel
-            is stretched to its **own** 2-98 percentile — right for a still, but it makes the brightness
-            pump across an animation, since every frame gets its own black and white point. Pass frozen
-            limits (see :func:`channel_limits`) to hold one stretch across a sequence of frames. A
-            non-finite entry means "no frozen bound for this channel": that one channel falls back to this
-            frame's own percentile, so a channel the freeze could not measure degrades to the per-frame
-            behaviour rather than clipping flat against an invented span.
-
-    Returns:
-        The stretched stack: same shape, ``float64``, clipped into ``[0, 1]``.
-
-    Raises:
-        ValueError: when ``limits`` is given but does not hold one ``(lo, hi)`` pair per channel. A silently
-            ignored extra pair would hide a real mismatch between the caller's bands and their limits.
-    """
-    _check_limits(limits, stack.shape[2])
-    out = np.empty(stack.shape, dtype="float64")
-    derived = channel_limits(stack) if limits is None else limits
-    for i in range(stack.shape[2]):
-        band = stack[..., i].astype("float64")
-        lo, hi = derived[i]
-        if not (np.isfinite(lo) and np.isfinite(hi)):
-            # No frozen bound for this channel — fall back to what this frame alone says rather than to a
-            # fixed span, which would clip a live channel flat if the freeze simply never saw it (M2).
-            lo, hi = channel_limits(band[..., None])[0]
-        if not (np.isfinite(lo) and np.isfinite(hi)):
-            lo, hi = 0.0, 1.0  # this frame's channel is nodata too: any span, its cells stay NaN
-        elif hi <= lo:
-            hi = lo + 1.0  # a constant channel: widen rather than divide by zero
-        out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
-    return out
-
 
 
 class RasterMixin:
@@ -310,7 +135,7 @@ class RasterMixin:
         """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
         return self._extent_of(ds.x, ds.y)
 
-    def rgb_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
+    def rgb_composite(self, dataset: Any, bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS, *, mask_nodata: bool = True,
                       limits: Optional[ChannelLimits] = None, **opts) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
 
@@ -378,7 +203,7 @@ class RasterMixin:
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
-        band_first = np.moveaxis(_stretch_to_unit(stack, limits), -1, 0)
+        band_first = np.moveaxis(stretch_to_unit(stack, limits), -1, 0)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
             band_first, rgb_bands=RgbBands(list(range(len(bands)))), extent=self._extent(ds),
@@ -386,7 +211,7 @@ class RasterMixin:
         )
         return self._render_glyph(glyph, **plot_style)
 
-    def hsv_composite(self, dataset: Any, bands: Sequence[int] = (1, 2, 3), *, mask_nodata: bool = True,
+    def hsv_composite(self, dataset: Any, bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS, *, mask_nodata: bool = True,
                       limits: Optional[ChannelLimits] = None, **opts) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
 
@@ -451,7 +276,7 @@ class RasterMixin:
         require_three_bands("hsv_composite", bands)
         ds = self._reproject(dataset)
         stack = get_stack(ds, bands, mask=mask_nodata)  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
-        rgb = hsv_to_rgb(_stretch_to_unit(stack, limits))              # (rows, cols, 3) RGB
+        rgb = hsv_to_rgb(stretch_to_unit(stack, limits))              # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's RgbBands path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)
         plot_style = relocate_flat_style(opts)

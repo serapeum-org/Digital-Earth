@@ -13,9 +13,14 @@ from matplotlib.colors import Normalize
 
 from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.base.sources import get_stack
+from digitalearth.base.stretch import (
+    ChannelLimits,
+    DEFAULT_COMPOSITE_BANDS,
+    channel_limits,
+    require_three_bands,
+)
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
-from digitalearth.static.maps.raster import ChannelLimits, channel_limits, require_three_bands
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
@@ -23,9 +28,6 @@ _CLIM_SCAN_CAP = 24
 #: Composite renderers accepted as an animation ``kind``. They draw an RGB image rather than a scalar
 #: field, so they take a frozen per-channel stretch instead of a clim, and admit no colorbar.
 _COMPOSITE_KINDS = ("rgb_composite", "hsv_composite")
-
-#: Default channels a composite maps to R/G/B when the caller passes no ``bands``.
-_DEFAULT_COMPOSITE_BANDS = (1, 2, 3)
 
 #: Render methods accepted as the ``kind`` of an animation frame (validated up front, N1).
 _ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block") + _COMPOSITE_KINDS
@@ -249,7 +251,7 @@ class AnimationMixin:
                     f"colorbar=True is not supported for a {kind!r} animation: a composite renders an RGB "
                     "image, which has no single scalar mappable to key a colorbar to"
                 )
-            bands = opts.get("bands", _DEFAULT_COMPOSITE_BANDS)
+            bands = opts.get("bands", DEFAULT_COMPOSITE_BANDS)
             require_three_bands(kind, bands)  # before the scan, not after it (M3)
             if opts.get("limits") is None:  # absent *or* explicitly None (H1)
                 opts["limits"] = self._stack_channel_limits(
