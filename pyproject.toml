@@ -194,7 +194,11 @@ mypy_path = "src"
 packages = ["digitalearth"]
 explicit_package_bases = true
 warn_return_any = true
-warn_unused_configs = false
+# On, because the baseline below is a ratchet: an entry naming a module that was renamed or deleted would
+# otherwise be accepted in silence, and this repo has just renamed `scene/` -> `static/`. With this on, mypy
+# names the dead entry (`note: unused section(s)`) so draining the list stays honest. It is a diagnostic, not
+# a gate — it does not change the exit code — so it reports the rot without turning a rename into a red CI.
+warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
 ignore_missing_imports = true
