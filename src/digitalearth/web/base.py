@@ -423,11 +423,22 @@ class WebMapBase:
         values become ``None`` (GeoJSON ``null``) rather than the string ``"NaT"``, which would otherwise
         surface in a popup as though it were a real value.
 
-        Three dtypes are covered, because all three reach ``json.dumps`` and fail there: ``datetime64``
-        (tz-naive or tz-aware), ``timedelta64`` (an ISO-8601 duration, ``P1DT0H0M0S``), ``period`` (its own
-        string form, ``2026-01``), and an ``object`` column holding any of those, which the dtype checks
-        miss entirely. A mixed object column encodes only its date-like values and passes the rest
-        through untouched.
+        Everything GeoJSON cannot represent is covered, because each of these reaches ``json.dumps`` and
+        fails there: ``datetime64`` (tz-naive or tz-aware), ``timedelta64`` (an ISO-8601 duration,
+        ``P1DT0H0M0S``), ``period`` (its own string form, ``2026-01``), and an ``object`` column holding
+        any of those, plus ``datetime.time`` and ``numpy.datetime64``, which the dtype checks miss
+        entirely. An object column is encoded when **any** of its values is date-like, not just its first
+        — the two orderings of ``["n/a", date(...)]`` are equally unserialisable.
+
+        A mixed column keeps its non-date values as they are, so one GeoJSON property can hold both text
+        and an ISO string. That is deliberate: stringifying the rest would destroy the types of numbers
+        that serialise perfectly well, and a column mixing dates with other values is already outside what
+        a MapLibre expression can compare meaningfully.
+
+        One caveat on ordering: ISO text sorts chronologically only while the UTC offset is constant. A
+        tz-aware column spanning a DST change encodes offsets that differ, and lexicographic order then
+        diverges from chronological order — convert such a column to UTC before handing it over if
+        ``timeslider`` must step through it in true time order.
 
         Args:
             gdf: The display-CRS GeoDataFrame about to be handed to ``add_source``.
@@ -485,6 +496,7 @@ class WebMapBase:
         """
         import datetime as dt
 
+        import numpy as np
         import pandas as pd
         from pandas.api.types import is_datetime64_any_dtype, is_timedelta64_dtype
 
@@ -492,15 +504,24 @@ class WebMapBase:
             """Whether ``value`` is a null marker, tolerating values ``pd.isna`` refuses to judge."""
             try:
                 return bool(pd.isna(value))
-            except (TypeError, ValueError):  # e.g. a list/array element — not a null marker
+            except (TypeError, ValueError):  # e.g. a list/ndarray element — not a null marker
                 return False
+
+        def date_like(value: Any) -> bool:
+            """Whether ``value`` is one of the types GeoJSON cannot represent and we therefore encode."""
+            # datetime and Timestamp subclass date; Timedelta subclasses timedelta; time is separate.
+            return isinstance(value, (dt.date, dt.time, dt.timedelta, np.datetime64, pd.Period))
 
         def iso(value: Any) -> Any:
             """ISO-encode one date-like value; anything else is returned untouched."""
             if missing(value):
                 return None
-            # datetime and Timestamp subclass date; Timedelta subclasses timedelta.
-            if isinstance(value, (dt.date, dt.timedelta)):
+            if isinstance(value, dt.timedelta):
+                # A plain datetime.timedelta has no isoformat(); only pandas' subclass does.
+                return pd.Timedelta(value).isoformat()
+            if isinstance(value, np.datetime64):
+                return pd.Timestamp(value).isoformat()
+            if isinstance(value, (dt.date, dt.time)):
                 return value.isoformat()
             if isinstance(value, pd.Period):
                 return str(value)
@@ -517,23 +538,33 @@ class WebMapBase:
 
         def converted(series: Any) -> Any:
             """Return the ISO-encoded form of ``series``, or ``None`` when it needs no change."""
-            if is_datetime64_any_dtype(series) or is_timedelta64_dtype(series):
+            if (
+                is_datetime64_any_dtype(series)
+                or is_timedelta64_dtype(series)
+                or isinstance(series.dtype, pd.PeriodDtype)
+            ):
                 return iso_series(series)
-            if isinstance(series.dtype, pd.PeriodDtype):
+            if series.dtype == object and any(date_like(value) for value in series):
+                # Scans for *any* date-like value rather than sampling the first non-null one: a column
+                # of ["n/a", date(...)] is just as unserialisable as one in the other order, and sampling
+                # made the outcome depend on row order. The scan stops at the first hit.
                 return iso_series(series)
-            if series.dtype == object:
-                present = series.dropna()
-                if len(present) and isinstance(present.iloc[0], (dt.date, dt.timedelta, pd.Period)):
-                    # A mixed column encodes only its date-like values; `iso` passes the rest through.
-                    return iso_series(series)
             return None
 
+        columns = getattr(gdf, "columns", None)
+        if columns is None:  # a GeoSeries satisfies the vector guard but has no columns to encode
+            return gdf
         geometry_name = getattr(getattr(gdf, "geometry", None), "name", None)
         changed = {}
-        for name in gdf.columns:
+        for name in columns:
             if name == geometry_name:
                 continue
-            encoded = converted(gdf[name])
+            series = gdf[name]
+            if not isinstance(series, pd.Series):
+                # A duplicate column label selects a DataFrame; leave it for geopandas to complain about
+                # rather than failing here on an attribute the caller never sees.
+                continue
+            encoded = converted(series)
             if encoded is not None:
                 changed[name] = encoded
         if not changed:
