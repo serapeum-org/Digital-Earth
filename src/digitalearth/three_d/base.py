@@ -11,6 +11,7 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
 import os
+import sys
 from pathlib import Path
 from typing import Any, List, Optional, Tuple, Union
 
@@ -60,6 +61,57 @@ def house_theme() -> pv.themes.Theme:
     theme.anti_aliasing = "ssaa"
     theme.font.color = "black"
     return theme
+
+
+def _pyvista_vtk_root() -> str:
+    """Return the top-level VTK package pyvista is bound to (``vtkmodules`` for a stock build).
+
+    Read off the MRO of a pyvista type rather than from ``pyvista._vtk``, which is private and moved between
+    0.48 and 0.49.
+
+    Returns:
+        The package name, e.g. ``"vtkmodules"``.
+    """
+    for klass in pv.PolyData.__mro__:
+        root = klass.__module__.split(".")[0]
+        if root.startswith("vtk"):
+            return root
+    return "vtkmodules"
+
+
+def _trame_vtk_root() -> str:
+    """Return the top-level VTK package trame will use.
+
+    trame resolves its VTK binding through ``VTK_MODULE_NAME``, caching the import as ``vtk_module``.
+
+    Returns:
+        The package name, e.g. ``"vtkmodules"``.
+    """
+    resolved = sys.modules.get("vtk_module")
+    if resolved is not None:
+        return resolved.__name__
+    return os.environ.get("VTK_MODULE_NAME", "vtkmodules")
+
+
+def _require_one_vtk_build() -> None:
+    """Raise if trame and pyvista are bound to different VTK builds.
+
+    A process must use one VTK build: objects cannot be shared between two, and handing a mesh from one to a
+    renderer built against the other fails deep inside trame on a wrapped-type mismatch. pyvista performs this
+    same check inside its (deprecated) ``Plotter.export_html``; going straight to the plotter component skips
+    it, so it is reproduced here — deliberately as a ``RuntimeError``, matching upstream, so a misconfiguration
+    cannot be mistaken for a missing package.
+
+    Raises:
+        RuntimeError: If the two roots differ, naming the variable to set.
+    """
+    trame_root, pyvista_root = _trame_vtk_root(), _pyvista_vtk_root()
+    if trame_root != pyvista_root:
+        raise RuntimeError(
+            f"trame is using the {trame_root!r} VTK build but PyVista is using {pyvista_root!r}. Objects "
+            f"cannot be shared between two VTK builds — set VTK_MODULE_NAME={pyvista_root!r} before importing "
+            "trame, or install a single VTK."
+        )
 
 
 class Scene3DBase:
@@ -307,6 +359,8 @@ class Scene3DBase:
                 Note pyvista's registry turns a *failing* plugin import into a ``UserWarning`` and drops the
                 entry, so a broken-but-installed ``trame-pyvista`` reports that same message — when the
                 package is present, read the warning for the real cause.
+            RuntimeError: If trame and pyvista are bound to different VTK builds — the message names
+                ``VTK_MODULE_NAME``, the variable that reconciles them.
 
         Examples:
             - Export a small scene; the returned path is the page that was written, so it can be passed straight
@@ -342,12 +396,15 @@ class Scene3DBase:
         # on a registered `trame` plotter component and `Plotter.export_html` is deprecated. This is a capability
         # switch, not a version one — 0.48 ships the same component registry, so a 0.48 user who installs
         # trame-pyvista takes the component branch too. Falling back (rather than raising here) hands the
-        # not-installed case to pyvista's own actionable ImportError.
+        # not-installed case to pyvista's own actionable ImportError. Going straight to the component also
+        # skips the VTK-build reconciliation pyvista does inside its deprecated Plotter.export_html, so
+        # _require_one_vtk_build reproduces it rather than losing the error that names VTK_MODULE_NAME.
         destination = str(Path(path).with_suffix(".html"))
         component = getattr(self.plotter, "trame", None)
         if component is None:
             self.plotter.export_html(destination)
         else:
+            _require_one_vtk_build()
             component.export_html(destination)
         return destination
 

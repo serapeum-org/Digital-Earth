@@ -6,12 +6,15 @@ green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise 
 # The package imports have to follow pytest.importorskip("pyvista") — importing digitalearth.three_d
 # without pyvista is the very thing the skip exists to avoid — so E402 is expected throughout.
 # ruff: noqa: E402
+import sys
+import types
+
 import numpy as np
 import pytest
 
 pv = pytest.importorskip("pyvista")
 
-from digitalearth.three_d import Scene3D
+from digitalearth.three_d import Scene3D, base
 from digitalearth.three_d.base import Scene3DBase, house_theme
 
 
@@ -368,6 +371,85 @@ class TestExportHtml:
         with pytest.raises(ImportError, match="trame-pyvista") as exc_info:
             scene.export_html(str(tmp_path / "s.html"))
         assert "not registered" in str(exc_info.value), f"The actionable message was lost: {exc_info.value}"
+
+
+class TestVtkBuildReconciliation:
+    """Tests for the VTK-build check `export_html` runs before using the trame component."""
+
+    def test_matching_builds_export_normally(self, monkeypatch, tmp_path):
+        """When trame and pyvista resolve the same VTK build the export proceeds untouched.
+
+        Args:
+            monkeypatch: Points `VTK_MODULE_NAME` at pyvista's own build.
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            The stock arrangement — both on `vtkmodules` — must not trip the guard.
+        """
+        monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
+        monkeypatch.setenv("VTK_MODULE_NAME", base._pyvista_vtk_root())
+        component = _RecordingComponent()
+        scene = _stub_scene(component=component)
+        out = str(tmp_path / "s.html")
+        scene.export_html(out)
+        assert component.calls == [out], f"A matching build must export normally, got {component.calls}"
+
+    def test_mismatched_builds_raise_naming_the_variable(self, monkeypatch, tmp_path):
+        """Two VTK builds in one process raise a RuntimeError naming `VTK_MODULE_NAME`, before exporting.
+
+        Args:
+            monkeypatch: Points `VTK_MODULE_NAME` at a different build than pyvista's.
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            Objects cannot be shared between VTK builds. pyvista makes this check inside its deprecated
+            `Plotter.export_html`; the component branch skips that, so the check is reproduced here — as a
+            `RuntimeError` rather than an `ImportError`, so it cannot be mistaken for a missing package. The
+            component must not be reached.
+        """
+        monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
+        monkeypatch.setenv("VTK_MODULE_NAME", "vtk_a_different_build")
+        component = _RecordingComponent()
+        scene = _stub_scene(component=component)
+        with pytest.raises(RuntimeError, match="VTK_MODULE_NAME") as exc_info:
+            scene.export_html(str(tmp_path / "s.html"))
+        assert "vtk_a_different_build" in str(exc_info.value), f"The resolved build was not named: {exc_info.value}"
+        assert component.calls == [], f"The export must not run on a mismatched build, got {component.calls}"
+
+    def test_the_fallback_branch_skips_the_check(self, monkeypatch, tmp_path):
+        """Without a component the check is irrelevant — pyvista runs its own inside `Plotter.export_html`.
+
+        Args:
+            monkeypatch: Points `VTK_MODULE_NAME` at a different build than pyvista's.
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            Duplicating the guard on the fallback branch would raise before pyvista could produce its own,
+            better-placed error, so a mismatch must still reach `Plotter.export_html`.
+        """
+        monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
+        monkeypatch.setenv("VTK_MODULE_NAME", "vtk_a_different_build")
+        scene = _stub_scene()
+        out = str(tmp_path / "s.html")
+        scene.export_html(out)
+        assert scene.plotter.calls == [out], f"The fallback must defer to pyvista's check, got {scene.plotter.calls}"
+
+    def test_a_loaded_vtk_module_wins_over_the_environment(self, monkeypatch, tmp_path):
+        """An already-imported `vtk_module` decides trame's build, whatever the environment says.
+
+        Args:
+            monkeypatch: Installs a fake resolved `vtk_module` that disagrees with `VTK_MODULE_NAME`.
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            trame caches its resolved binding as `sys.modules["vtk_module"]`; once that exists the environment
+            variable no longer decides, so the check must read the loaded module rather than the variable.
+        """
+        monkeypatch.setitem(sys.modules, "vtk_module", types.ModuleType("vtk_some_other_build"))
+        monkeypatch.setenv("VTK_MODULE_NAME", base._pyvista_vtk_root())
+        scene = _stub_scene(component=_RecordingComponent())
+        with pytest.raises(RuntimeError, match="vtk_some_other_build"):
+            scene.export_html(str(tmp_path / "s.html"))
 
 
 class TestSave:
