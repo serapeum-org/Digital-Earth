@@ -79,6 +79,9 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
     Returns:
         One ``(lo, hi)`` tuple per channel, in channel order; ``(nan, nan)`` for an all-nodata channel.
 
+    Raises:
+        ValueError: when ``stack`` is not 3-D.
+
     Examples:
         - Bound each channel of a stack whose channels are scaled copies of one another:
             ```python
@@ -111,6 +114,11 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
         digitalearth.static.maps.animation.AnimationMixin._stack_channel_limits: Combines them across a
             whole animation stack so every frame shares one stretch.
     """
+    if stack.ndim != 3:
+        raise ValueError(
+            f"channel_limits needs an (rows, cols, n) channel stack, got a {stack.ndim}-D array "
+            f"with shape {stack.shape}"
+        )
     bounds: List[Tuple[float, float]] = []
     for index in range(stack.shape[2]):
         values = finite(stack[..., index])  # drops NaN *and* inf, which nanpercentile would keep
@@ -120,6 +128,33 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
         lo, hi = np.percentile(values, _STRETCH_PERCENTILES)
         bounds.append((float(lo), float(hi)))
     return bounds
+
+
+def _check_limits(limits: Optional[ChannelLimits], channels: int) -> None:
+    """Reject a ``limits`` argument that is not one ``(lo, hi)`` pair per channel.
+
+    Both composites take ``limits`` from the caller, so the shapes people actually get wrong are worth
+    naming: too few pairs used to raise ``IndexError``, a bare ``(lo, hi)`` tuple ``TypeError: cannot unpack
+    non-iterable float``, and too many were accepted silently — the worst of the three, since it hides a
+    mismatch between the caller's band list and their limits list.
+
+    Args:
+        limits: The caller's limits, or ``None`` (which is always valid — it means "derive them").
+        channels: How many channels the stack holds.
+
+    Raises:
+        ValueError: when ``limits`` is not ``None`` and does not hold exactly ``channels`` ``(lo, hi)`` pairs.
+    """
+    if limits is None:
+        return
+    if len(limits) != channels:
+        raise ValueError(
+            f"limits has {len(limits)} entries but the stack has {channels} channels; pass one (lo, hi) "
+            f"pair per channel"
+        )
+    for index, pair in enumerate(limits):
+        if np.shape(pair) != (2,):
+            raise ValueError(f"limits[{index}] must be a (lo, hi) pair, got {pair!r}")
 
 
 def _stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) -> np.ndarray:
@@ -137,7 +172,12 @@ def _stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) 
 
     Returns:
         The stretched stack: same shape, ``float64``, clipped into ``[0, 1]``.
+
+    Raises:
+        ValueError: when ``limits`` is given but does not hold one ``(lo, hi)`` pair per channel. A silently
+            ignored extra pair would hide a real mismatch between the caller's bands and their limits.
     """
+    _check_limits(limits, stack.shape[2])
     out = np.empty(stack.shape, dtype="float64")
     derived = channel_limits(stack) if limits is None else limits
     for i in range(stack.shape[2]):
@@ -288,6 +328,10 @@ class RasterMixin:
         Returns:
             The image mappable (registered as a Scene layer).
 
+        Raises:
+            ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
+                one ``(lo, hi)`` pair per channel.
+
         Examples:
             - Composite three bands of a multiband raster into one RGB image:
                 ```python
@@ -357,6 +401,10 @@ class RasterMixin:
 
         Returns:
             The image mappable (registered as a Scene layer).
+
+        Raises:
+            ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
+                one ``(lo, hi)`` pair per channel.
 
         Examples:
             - Read three bands as hue/saturation/value and render the resulting RGB image:

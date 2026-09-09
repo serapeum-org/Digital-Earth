@@ -173,3 +173,32 @@ def test_composite_rejects_a_wrong_band_count(rgb_dataset, method, bands):
     m = Map(crs=rgb_dataset.epsg)
     with pytest.raises(ValueError, match=f"{method}\\(\\) needs exactly three bands"):
         getattr(m, method)(rgb_dataset, bands=bands)
+
+
+@pytest.mark.parametrize(
+    "limits, expected",
+    [
+        ([(0.0, 1.0)], "3 channels"),
+        ([(0.0, 1.0)] * 5, "3 channels"),
+        ((0.0, 1.0), "2 entries but the stack has 3 channels"),
+        ([(0.0, 1.0), (0.0, 1.0), 3.0], r"limits\[2\] must be a"),
+    ],
+)
+def test_stretch_to_unit_rejects_malformed_limits(limits, expected):
+    """Too few, too many, a bare pair, or a non-pair entry each raise a message naming limits."""
+    stack = np.dstack([np.arange(16.0).reshape(4, 4) for _ in range(3)])
+    with pytest.raises(ValueError, match=expected):
+        _stretch_to_unit(stack, limits)
+
+
+def test_channel_limits_rejects_a_two_dimensional_array():
+    """channel_limits documents an (rows, cols, n) stack, so it says so when handed a plain band."""
+    with pytest.raises(ValueError, match="needs an .rows, cols, n. channel stack"):
+        channel_limits(np.arange(16.0).reshape(4, 4))
+
+
+def test_rgb_composite_rejects_malformed_limits(rgb_dataset):
+    """The length check reaches the public composite kwarg, not just the private helper."""
+    m = Map(crs=rgb_dataset.epsg)
+    with pytest.raises(ValueError, match="3 channels"):
+        m.rgb_composite(rgb_dataset, limits=[(0.0, 1.0)])
