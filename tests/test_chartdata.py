@@ -7,13 +7,19 @@ return types, dtypes, key ordering and the two deliberately different non-finite
 (:func:`column_or_array` keeps non-finite values so paired inputs stay index-aligned, :func:`field_values`
 drops them) — because those are the parts every backend depends on and no renderer test can assert.
 """
+
 from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from digitalearth.base.chartdata import as_finite_array, column_or_array, field_values, grouped_series
+from digitalearth.base.chartdata import (
+    as_finite_array,
+    column_or_array,
+    field_values,
+    grouped_series,
+)
 
 
 @pytest.fixture(scope="function")
@@ -37,7 +43,9 @@ def frame():
 class TestColumnOrArray:
     """Tests for column_or_array."""
 
-    @pytest.mark.parametrize("data", [None, pd.DataFrame({"v": [1.0]})], ids=["no-data", "with-data"])
+    @pytest.mark.parametrize(
+        "data", [None, pd.DataFrame({"v": [1.0]})], ids=["no-data", "with-data"]
+    )
     def test_none_value_passes_through(self, data):
         """A None value returns None whether or not data is supplied.
 
@@ -93,7 +101,9 @@ class TestColumnOrArray:
             0-d string array — the branch that keeps the helper usable outside the data= plumbing.
         """
         out = column_or_array(None, "abc")
-        assert out.shape == (), f"a bare string should coerce to a 0-d array, got shape {out.shape}"
+        assert out.shape == (), (
+            f"a bare string should coerce to a 0-d array, got shape {out.shape}"
+        )
         assert out.dtype.kind == "U", f"expected a unicode dtype, got {out.dtype}"
 
     def test_data_without_columns_attribute_falls_back_to_asarray(self):
@@ -104,7 +114,9 @@ class TestColumnOrArray:
             up as a column — the guard that stops mappings from being mistaken for DataFrames.
         """
         out = column_or_array({"a": [1.0, 2.0]}, "a")
-        assert out.shape == (), f"the dict should not be indexed as a frame, got shape {out.shape}"
+        assert out.shape == (), (
+            f"the dict should not be indexed as a frame, got shape {out.shape}"
+        )
 
     def test_array_like_is_coerced_verbatim(self):
         """A list value is coerced to an array without filtering or reordering.
@@ -198,7 +210,9 @@ class TestGroupedSeries:
         keys, values = grouped_series(frame, "cat", "i", "sum")
         assert keys == ["a", "b"], f"keys should be sorted ascending, got {keys}"
         assert isinstance(keys, list), f"keys should be a list, got {type(keys)}"
-        assert values.dtype == np.float64, f"expected float64 values, got {values.dtype}"
+        assert values.dtype == np.float64, (
+            f"expected float64 values, got {values.dtype}"
+        )
         np.testing.assert_array_equal(values, [6.0, 4.0])
 
     def test_none_column_counts_rows(self, frame):
@@ -211,13 +225,16 @@ class TestGroupedSeries:
         assert keys == ["a", "b"], f"unexpected keys: {keys}"
         np.testing.assert_array_equal(values, [2.0, 2.0])
 
-    @pytest.mark.parametrize("agg, expected", [
-        ("mean", [3.0, 2.0]),
-        ("sum", [6.0, 4.0]),
-        ("min", [2.0, 1.0]),
-        ("max", [4.0, 3.0]),
-        ("count", [2.0, 2.0]),
-    ])
+    @pytest.mark.parametrize(
+        "agg, expected",
+        [
+            ("mean", [3.0, 2.0]),
+            ("sum", [6.0, 4.0]),
+            ("min", [2.0, 1.0]),
+            ("max", [4.0, 3.0]),
+            ("count", [2.0, 2.0]),
+        ],
+    )
     def test_named_aggregations(self, frame, agg, expected):
         """Each pandas aggregation name is forwarded and returned as floats.
 
@@ -258,7 +275,9 @@ class TestGroupedSeries:
         """
         with pytest.raises(TypeError, match=r"cannot aggregate column 's'") as exc_info:
             grouped_series(frame, "cat", "s", agg)
-        assert f"agg={agg!r}" in str(exc_info.value), f"message should name the agg: {exc_info.value}"
+        assert f"agg={agg!r}" in str(exc_info.value), (
+            f"message should name the agg: {exc_info.value}"
+        )
 
     def test_original_error_is_chained(self, frame):
         """The underlying pandas/numpy error is kept as the cause.
@@ -268,7 +287,9 @@ class TestGroupedSeries:
         """
         with pytest.raises(TypeError) as exc_info:
             grouped_series(frame, "cat", "s", "mean")
-        assert exc_info.value.__cause__ is not None, "the pandas error should be chained as __cause__"
+        assert exc_info.value.__cause__ is not None, (
+            "the pandas error should be chained as __cause__"
+        )
 
     def test_grouping_by_a_time_like_key_preserves_order(self):
         """Grouping by an ordered numeric key returns the keys ascending.
@@ -276,7 +297,9 @@ class TestGroupedSeries:
         Test scenario:
             Years supplied out of order come back sorted, which is what a line-by-time chart needs.
         """
-        data = pd.DataFrame({"year": [2010, 2000, 2010, 2000], "v": [4.0, 1.0, 6.0, 3.0]})
+        data = pd.DataFrame(
+            {"year": [2010, 2000, 2010, 2000], "v": [4.0, 1.0, 6.0, 3.0]}
+        )
         keys, values = grouped_series(data, "year", "v", "mean")
         assert keys == [2000, 2010], f"keys should be sorted ascending, got {keys}"
         np.testing.assert_allclose(values, [2.0, 5.0])
@@ -299,10 +322,13 @@ class TestAsFiniteArray:
         assert out.ndim == 1, f"a Dataset band should be flattened, got {out.ndim}-D"
         assert sorted(out.tolist()) == [1.0, 2.0, 3.0], f"nodata not dropped: {out}"
 
-    @pytest.mark.parametrize("attrs, label", [
-        ({"read_array": lambda band=0: np.array([1.0])}, "read_array only"),
-        ({"no_data_value": (-1.0,)}, "no_data_value only"),
-    ])
+    @pytest.mark.parametrize(
+        "attrs, label",
+        [
+            ({"read_array": lambda band=0: np.array([1.0])}, "read_array only"),
+            ({"no_data_value": (-1.0,)}, "no_data_value only"),
+        ],
+    )
     def test_half_a_duck_is_not_a_dataset(self, attrs, label):
         """An object exposing only one of the two attributes takes the asarray path.
 
@@ -315,7 +341,9 @@ class TestAsFiniteArray:
             numpy.asarray, which wraps it as a 0-d object array rather than reading a band.
         """
         out = as_finite_array(SimpleNamespace(**attrs))
-        assert out.dtype == object, f"{label} should fall through to asarray, got dtype {out.dtype}"
+        assert out.dtype == object, (
+            f"{label} should fall through to asarray, got dtype {out.dtype}"
+        )
 
     def test_two_dimensional_array_keeps_its_shape(self):
         """A raw 2-D array is passed through unchanged for overlaid histograms.

@@ -115,7 +115,11 @@ def _imported_targets(tree: ast.AST, module: Path) -> set[str]:
             targets.update(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
             if node.level:
-                base = package[: len(package) - (node.level - 1)] if node.level > 1 else package
+                base = (
+                    package[: len(package) - (node.level - 1)]
+                    if node.level > 1
+                    else package
+                )
                 prefix = ".".join(base + ([node.module] if node.module else []))
             else:
                 prefix = node.module or ""
@@ -156,8 +160,12 @@ def _dynamic_import_literals(tree: ast.AST) -> set[str]:
         if not isinstance(node, ast.Call) or not node.args:
             continue
         func = node.func
-        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
-        if name in {"import_module", "__import__"} and isinstance(node.args[0], ast.Constant):
+        name = (
+            func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+        )
+        if name in {"import_module", "__import__"} and isinstance(
+            node.args[0], ast.Constant
+        ):
             if isinstance(node.args[0].value, str):
                 found.add(node.args[0].value)
     return found
@@ -165,7 +173,9 @@ def _dynamic_import_literals(tree: ast.AST) -> set[str]:
 
 def test_base_package_is_populated():
     """Guard against the walk silently passing because it found nothing."""
-    assert len(_modules()) > 5, f"expected several modules under {BASE}, found {len(_modules())}"
+    assert len(_modules()) > 5, (
+        f"expected several modules under {BASE}, found {len(_modules())}"
+    )
 
 
 @pytest.mark.parametrize("module", _modules(), ids=_module_id)
@@ -197,7 +207,10 @@ class TestOffenderRules:
     def test_matplotlib_rendering_surface_is_rejected(self):
         """The colour carve-out must not become 'matplotlib is fine in base/'."""
         assert _offenders({"matplotlib.pyplot"}) == {"matplotlib.pyplot"}
-        assert _offenders({"matplotlib.figure", "matplotlib.axes"}) == {"matplotlib.figure", "matplotlib.axes"}
+        assert _offenders({"matplotlib.figure", "matplotlib.axes"}) == {
+            "matplotlib.figure",
+            "matplotlib.axes",
+        }
         assert _offenders({"matplotlib"}) == {"matplotlib"}
 
     def test_matplotlib_colour_registry_is_allowed(self):
@@ -207,8 +220,13 @@ class TestOffenderRules:
 
     @pytest.mark.parametrize(
         "target",
-        ["digitalearth.static", "digitalearth.static.figures", "digitalearth.interactive.charts",
-         "digitalearth.web.base", "digitalearth.three_d.globe"],
+        [
+            "digitalearth.static",
+            "digitalearth.static.figures",
+            "digitalearth.interactive.charts",
+            "digitalearth.web.base",
+            "digitalearth.three_d.globe",
+        ],
     )
     def test_sibling_backends_are_rejected(self, target):
         """Importing a backend inverts the layering and pulls its engine in behind it.
@@ -216,9 +234,14 @@ class TestOffenderRules:
         Args:
             target: A dotted path into one of the four backend subpackages.
         """
-        assert _offenders({target}) == {target}, f"{target} should be rejected from base/"
+        assert _offenders({target}) == {target}, (
+            f"{target} should be rejected from base/"
+        )
 
-    @pytest.mark.parametrize("target", ["digitalearth.base.arrays", "digitalearth.ops.plugins", "numpy", "pandas"])
+    @pytest.mark.parametrize(
+        "target",
+        ["digitalearth.base.arrays", "digitalearth.ops.plugins", "numpy", "pandas"],
+    )
     def test_neutral_dependencies_are_allowed(self, target):
         """``base/`` may import itself, ops, and plain data libraries.
 
@@ -227,28 +250,40 @@ class TestOffenderRules:
         """
         assert _offenders({target}) == set(), f"{target} should be allowed in base/"
 
-    @pytest.mark.parametrize("engine", ["mpl_toolkits", "pylab", "vtk", "plotly", "folium", "cleopatra"])
+    @pytest.mark.parametrize(
+        "engine", ["mpl_toolkits", "pylab", "vtk", "plotly", "folium", "cleopatra"]
+    )
     def test_every_banned_engine_is_rejected(self, engine):
         """Each renderer on the deny-list is actually rejected.
 
         Args:
             engine: A top-level package name from :data:`BANNED_PACKAGES`.
         """
-        assert _offenders({f"{engine}.thing"}) == {f"{engine}.thing"}, f"{engine} should be banned in base/"
+        assert _offenders({f"{engine}.thing"}) == {f"{engine}.thing"}, (
+            f"{engine} should be banned in base/"
+        )
 
     def test_relative_imports_are_resolved_and_checked(self):
         """``from ..static.figures import fig_of`` must be caught like its absolute spelling."""
         source = "from ..static.figures import fig_of\n"
         module = BASE / "symbology.py"
         targets = _imported_targets(ast.parse(source), module)
-        assert "digitalearth.static.figures" in targets, f"relative import not resolved: {sorted(targets)}"
+        assert "digitalearth.static.figures" in targets, (
+            f"relative import not resolved: {sorted(targets)}"
+        )
         assert _offenders(targets), "a relative backend import must be rejected"
 
     def test_relative_sibling_import_inside_base_is_allowed(self):
         """A relative import that stays inside ``base/`` resolves and is permitted."""
-        targets = _imported_targets(ast.parse("from .arrays import finite\n"), BASE / "chartdata.py")
-        assert "digitalearth.base.arrays" in targets, f"expected base sibling, got {sorted(targets)}"
-        assert _offenders(targets) == set(), "a base-internal relative import must be allowed"
+        targets = _imported_targets(
+            ast.parse("from .arrays import finite\n"), BASE / "chartdata.py"
+        )
+        assert "digitalearth.base.arrays" in targets, (
+            f"expected base sibling, got {sorted(targets)}"
+        )
+        assert _offenders(targets) == set(), (
+            "a base-internal relative import must be allowed"
+        )
 
     @pytest.mark.parametrize(
         "module, expected",
@@ -270,15 +305,26 @@ class TestOffenderRules:
             Getting this wrong by one level would silently mis-resolve every relative import — and, because a
             mis-resolved path matches no rule, would fail *open* rather than loudly.
         """
-        assert _package_of(module) == expected, f"{module.name} anchors at {_package_of(module)}"
+        assert _package_of(module) == expected, (
+            f"{module.name} anchors at {_package_of(module)}"
+        )
 
     def test_deep_relative_import_climbs_out_of_base(self):
         """``from ..static import x`` in a nested module still resolves to the backend and is rejected."""
-        targets = _imported_targets(ast.parse("from ...static import figures\n"), BASE / "sources" / "source.py")
-        assert "digitalearth.static" in targets, f"expected digitalearth.static, got {sorted(targets)}"
-        assert _offenders(targets), "a backend reached by a deep relative import must be rejected"
+        targets = _imported_targets(
+            ast.parse("from ...static import figures\n"), BASE / "sources" / "source.py"
+        )
+        assert "digitalearth.static" in targets, (
+            f"expected digitalearth.static, got {sorted(targets)}"
+        )
+        assert _offenders(targets), (
+            "a backend reached by a deep relative import must be rejected"
+        )
 
     def test_dynamic_import_literals_are_detected(self):
         """Both string-import spellings are picked up."""
         source = 'import importlib\nimportlib.import_module("cleopatra")\n__import__("matplotlib.pyplot")\n'
-        assert _dynamic_import_literals(ast.parse(source)) == {"cleopatra", "matplotlib.pyplot"}
+        assert _dynamic_import_literals(ast.parse(source)) == {
+            "cleopatra",
+            "matplotlib.pyplot",
+        }

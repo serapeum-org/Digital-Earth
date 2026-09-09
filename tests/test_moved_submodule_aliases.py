@@ -66,7 +66,9 @@ class TestMovedSubmoduleAliases:
             warnings.simplefilter("ignore", DeprecationWarning)
             module = getattr(digitalearth, name)
         expected = _MOVED_SUBMODULES[name]
-        assert module.__name__ == expected, f"{name} resolved to {module.__name__}, expected {expected}"
+        assert module.__name__ == expected, (
+            f"{name} resolved to {module.__name__}, expected {expected}"
+        )
 
     @pytest.mark.parametrize("name", MOVED)
     def test_alias_warns_on_first_access(self, name, uncached):
@@ -81,9 +83,13 @@ class TestMovedSubmoduleAliases:
             warnings.simplefilter("always")
             getattr(digitalearth, name)
         deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-        assert deprecations, f"accessing digitalearth.{name} should emit a DeprecationWarning"
+        assert deprecations, (
+            f"accessing digitalearth.{name} should emit a DeprecationWarning"
+        )
         message = str(deprecations[0].message)
-        assert _MOVED_SUBMODULES[name] in message, f"warning should name the new path, got: {message}"
+        assert _MOVED_SUBMODULES[name] in message, (
+            f"warning should name the new path, got: {message}"
+        )
 
     def test_from_import_form_works(self, uncached):
         """``from digitalearth import series`` — the form seven notebooks used — resolves again."""
@@ -92,7 +98,9 @@ class TestMovedSubmoduleAliases:
             warnings.simplefilter("always")
             from digitalearth import series
         assert series.__name__ == "digitalearth.static.series", f"got {series.__name__}"
-        assert any(issubclass(w.category, DeprecationWarning) for w in caught), "the from-form should warn too"
+        assert any(issubclass(w.category, DeprecationWarning) for w in caught), (
+            "the from-form should warn too"
+        )
 
     def test_warning_is_not_repeated_after_resolution(self, uncached):
         """The alias caches, so a hot path does not warn on every attribute access."""
@@ -109,13 +117,17 @@ class TestMovedSubmoduleAliases:
 
     def test_unknown_attribute_still_raises_attribute_error(self):
         """``__getattr__`` must not swallow genuine typos."""
-        with pytest.raises(AttributeError, match="no attribute 'definitely_not_a_module'"):
+        with pytest.raises(
+            AttributeError, match="no attribute 'definitely_not_a_module'"
+        ):
             digitalearth.definitely_not_a_module
 
     def test_dir_includes_the_aliases(self):
         """``dir()`` lists the aliases so tab-completion still finds them."""
         listed = dir(digitalearth)
-        assert set(MOVED) <= set(listed), f"missing from dir(): {sorted(set(MOVED) - set(listed))}"
+        assert set(MOVED) <= set(listed), (
+            f"missing from dir(): {sorted(set(MOVED) - set(listed))}"
+        )
 
     @pytest.mark.parametrize("name", MOVED)
     def test_alias_is_not_in_the_supported_facade(self, name):
@@ -124,12 +136,16 @@ class TestMovedSubmoduleAliases:
         Args:
             name: A pre-restructure submodule name.
         """
-        assert name not in digitalearth.__all__, f"{name} is a deprecated alias and must not be in __all__"
+        assert name not in digitalearth.__all__, (
+            f"{name} is a deprecated alias and must not be in __all__"
+        )
 
     def test_every_target_actually_exists(self):
         """The table cannot point at a module that no longer exists."""
         for name, target in _MOVED_SUBMODULES.items():
-            assert importlib.import_module(target), f"{name} points at missing module {target}"
+            assert importlib.import_module(target), (
+                f"{name} points at missing module {target}"
+            )
 
 
 def _fresh_interpreter(code: str) -> str:
@@ -147,9 +163,15 @@ def _fresh_interpreter(code: str) -> str:
     repo = Path(__file__).resolve().parents[1]
     env = {**os.environ, "PYTHONPATH": str(repo / "src"), "MPLBACKEND": "Agg"}
     result = subprocess.run(
-        [sys.executable, "-c", textwrap.dedent(code)], capture_output=True, text=True, env=env, cwd=str(repo)
+        [sys.executable, "-c", textwrap.dedent(code)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=str(repo),
     )
-    assert result.returncode == 0, f"subprocess failed:\n{result.stdout}\n{result.stderr}"
+    assert result.returncode == 0, (
+        f"subprocess failed:\n{result.stdout}\n{result.stderr}"
+    )
     return result.stdout.strip()
 
 
@@ -194,4 +216,6 @@ class TestFacadeStaysClean:
         """The lazy resolution must not break the documented back-compat path."""
         from digitalearth.static import StaticGlyph
 
-        assert StaticGlyph.__module__ == "digitalearth.static.glyph", f"got {StaticGlyph.__module__}"
+        assert StaticGlyph.__module__ == "digitalearth.static.glyph", (
+            f"got {StaticGlyph.__module__}"
+        )

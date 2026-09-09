@@ -24,6 +24,7 @@ imports :mod:`digitalearth.static`, so an eager re-export would load the depreca
 ``import digitalearth``. Importing it emits no warning; every one of its entry points does. Removing it
 later is then a one-line deletion here.
 """
+
 from digitalearth.static.figure import grid, shared_colorbar
 from digitalearth.static.map import Map
 from digitalearth.static.scene import Scene

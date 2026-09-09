@@ -16,6 +16,7 @@ The four helpers split by what the chart needs from the data:
 They lost their leading underscore when they moved here: as module-private helpers of ``charts`` they were
 already being imported by a second backend, so the shared surface is now spelled as public.
 """
+
 from typing import Any, Optional
 
 import numpy as np

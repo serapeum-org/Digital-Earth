@@ -11,6 +11,7 @@ package exported and warns on import. The shim has exactly three obligations, an
 Every test imports the shim through :func:`importlib.import_module` after evicting it from ``sys.modules``,
 because a module body — and therefore ``warnings.warn`` — runs only on the first import of a process.
 """
+
 import importlib
 import sys
 import warnings
@@ -71,7 +72,9 @@ class TestSceneShimWarning:
             A fresh import (module cache evicted) raises a DeprecationWarning whose text opens with the
             deprecated module's own name.
         """
-        with pytest.warns(DeprecationWarning, match=r"digitalearth\.scene is deprecated"):
+        with pytest.warns(
+            DeprecationWarning, match=r"digitalearth\.scene is deprecated"
+        ):
             importlib.import_module(SHIM)
 
     def test_warning_names_the_replacement(self, evicted_shim):
@@ -84,11 +87,19 @@ class TestSceneShimWarning:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
             importlib.import_module(SHIM)
-        messages = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
+        messages = [
+            str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+        ]
         assert messages, "importing the shim should record a DeprecationWarning"
         text = messages[0]
-        for expected in ("digitalearth.static", "matplotlib backend", "removed in a future release"):
-            assert expected in text, f"warning should mention {expected!r}, got: {text!r}"
+        for expected in (
+            "digitalearth.static",
+            "matplotlib backend",
+            "removed in a future release",
+        ):
+            assert expected in text, (
+                f"warning should mention {expected!r}, got: {text!r}"
+            )
 
     def test_only_one_warning_per_import(self, evicted_shim):
         """The shim warns exactly once, not once per forwarded name.
@@ -101,7 +112,9 @@ class TestSceneShimWarning:
             warnings.simplefilter("always")
             importlib.import_module(SHIM)
         deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
-        assert len(deprecations) == 1, f"expected exactly one DeprecationWarning, got {len(deprecations)}"
+        assert len(deprecations) == 1, (
+            f"expected exactly one DeprecationWarning, got {len(deprecations)}"
+        )
 
     def test_importing_static_directly_does_not_warn(self):
         """The replacement module is warning-free, so the warning really is about the old path.
@@ -115,8 +128,14 @@ class TestSceneShimWarning:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 importlib.import_module("digitalearth.static")
-            deprecations = [str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)]
-            assert not deprecations, f"digitalearth.static must not warn on import, got: {deprecations}"
+            deprecations = [
+                str(w.message)
+                for w in caught
+                if issubclass(w.category, DeprecationWarning)
+            ]
+            assert not deprecations, (
+                f"digitalearth.static must not warn on import, got: {deprecations}"
+            )
         finally:
             if cached is not None:
                 sys.modules["digitalearth.static"] = cached
@@ -133,7 +152,9 @@ class TestSceneShimExports:
             The shim is a frozen compatibility surface — it must not grow new names, and must not have lost
             one of the five it exists to forward.
         """
-        assert sorted(shim.__all__) == sorted(FORWARDED), f"__all__ drifted: {sorted(shim.__all__)}"
+        assert sorted(shim.__all__) == sorted(FORWARDED), (
+            f"__all__ drifted: {sorted(shim.__all__)}"
+        )
 
     @pytest.mark.parametrize("name", FORWARDED)
     def test_forwarded_name_is_the_static_object(self, shim, name):
@@ -177,7 +198,9 @@ class TestSceneShimExports:
             warnings.simplefilter("ignore", DeprecationWarning)
             from digitalearth.scene import Map
 
-        assert Map is static.Map, "the legacy from-import should bind the current Map class"
+        assert Map is static.Map, (
+            "the legacy from-import should bind the current Map class"
+        )
 
     def test_static_glyph_is_not_forwarded(self, shim):
         """The shim does not forward StaticGlyph, which the old scene package never exported.
@@ -186,14 +209,23 @@ class TestSceneShimExports:
             ``StaticGlyph`` lives on ``digitalearth.static``; forwarding it here would invent a legacy path
             that never existed.
         """
-        assert not hasattr(shim, "StaticGlyph"), "the shim should forward only what scene itself exported"
+        assert not hasattr(shim, "StaticGlyph"), (
+            "the shim should forward only what scene itself exported"
+        )
 
 
 class TestSceneShimSubmodules:
     """Tests for the deliberately un-aliased submodule paths."""
 
-    @pytest.mark.parametrize("path", ["digitalearth.scene.maps", "digitalearth.scene.maps.vector",
-                                      "digitalearth.scene.map", "digitalearth.scene.domains"])
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "digitalearth.scene.maps",
+            "digitalearth.scene.maps.vector",
+            "digitalearth.scene.map",
+            "digitalearth.scene.domains",
+        ],
+    )
     def test_submodule_paths_are_not_aliased(self, evicted_shim, path):
         """Old deep import paths raise ModuleNotFoundError instead of resolving.
 
@@ -222,4 +254,6 @@ class TestSceneShimSubmodules:
             resolves, so the migration advice is correct.
         """
         module = importlib.import_module("digitalearth.static.maps.vector")
-        assert module is not None, "digitalearth.static.maps.vector should be importable"
+        assert module is not None, (
+            "digitalearth.static.maps.vector should be importable"
+        )
