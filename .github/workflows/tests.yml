@@ -207,12 +207,12 @@ jobs:
           uv build --wheel --out-dir dist
           python -c "
           import hashlib, pathlib
-          wheel = next(pathlib.Path('dist').glob('*.whl'))
+          wheel = next(pathlib.Path('dist').glob('*.whl')).resolve()
           digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
           pathlib.Path('project-requirements.txt').write_text(f'{wheel.as_uri()} --hash=sha256:{digest}')
           "
           cat project-requirements.txt
-          pip install --no-deps --no-index --require-hashes -r project-requirements.txt
+          pip install --no-deps --no-index --only-binary :all: --require-hashes -r project-requirements.txt
 
       - name: Export a scene through the resolved stack
         # `export_html` is the whole point: it is the only call that needs the trame/vtk.js stack, and the one
