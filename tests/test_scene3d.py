@@ -265,7 +265,8 @@ class TestScene3DBaseInit:
         scene = Scene3DBase(off_screen=True, window_size=(320, 240))
         assert list(scene.plotter.window_size) == [320, 240], f"Unexpected window size: {scene.plotter.window_size}"
         frame = scene.screenshot()
-        assert frame.ndim == 3 and frame.shape[-1] == 3, f"Expected an RGB frame, got shape {frame.shape}"
+        assert frame.ndim == 3, f"Expected a 3-D frame, got shape {frame.shape}"
+        assert frame.shape[-1] == 3, f"Expected three colour channels, got shape {frame.shape}"
         scene.close()
 
     def test_off_screen_none_follows_the_pyvista_global(self):

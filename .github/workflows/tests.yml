@@ -173,8 +173,10 @@ jobs:
           sudo apt-get install -y xvfb libgl1 libglx-mesa0 libgl1-mesa-dri
 
       - name: Install the 3d extra from PyPI
+        # --only-binary :all: keeps a dependency's setup script from running on this runner; every
+        # package the extra resolves to publishes wheels, so it costs nothing here.
         run: |
-          pip install ".[3d]" pyogrio
+          pip install --only-binary :all: ".[3d]" pyogrio
 
       - name: Report what the extra resolved to
         # Printed rather than asserted: which packages carry the export differs by pyvista version, and
