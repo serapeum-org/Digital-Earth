@@ -18,6 +18,12 @@ in the tier plan's feature-parity matrix.
 
 from typing import Any, Optional, Sequence, Tuple
 
+from digitalearth.base.stretch import (
+    ChannelLimits,
+    DEFAULT_COMPOSITE_BANDS,
+    require_three_bands,
+    stretch_to_unit,
+)
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
 
@@ -101,13 +107,20 @@ class RasterMixin:
         return self.add_element(element)
 
     def rgb(
-        self, data: Any, *, bands: Sequence[int] = (1, 2, 3), **opts: Any
+        self,
+        data: Any,
+        *,
+        bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
+        limits: Optional[ChannelLimits] = None,
+        **opts: Any,
     ) -> "RasterMixin":
         """Add a true-colour composite from three raster bands (2–98 % percentile stretch).
 
         Args:
             data: A pyramids multiband ``Dataset``; reprojected to the display CRS first.
             bands: The three 1-based band indices composing ``(R, G, B)``.
+            limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call
+                percentile scan, so a sequence of frames can share one black and white point.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -126,15 +139,13 @@ class RasterMixin:
                 ```
 
         Raises:
-            ValueError: when ``bands`` does not name exactly three bands.
+            ValueError: when ``bands`` does not name exactly three bands, or ``limits`` is given without
+                one ``(lo, hi)`` pair per channel.
         """
-        import numpy as np
-
         from digitalearth.base.sources import get_stack
 
         gv, hv = _require_holoviz()
-        if len(bands) != 3:
-            raise ValueError(f"rgb() needs exactly three bands, got {tuple(bands)!r}")
+        require_three_bands("rgb", bands)
         # Reproject once into a local handle, then feed both the coordinate extraction (get_source,
         # via _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
         # already-reprojected dataset, so a single warp here keeps them consistent (H1).
@@ -142,18 +153,10 @@ class RasterMixin:
             data = data.to_crs(self.crs)
         src = self._to_display_source(data, band=bands[0])
         stack = get_stack(data, bands)
-        channels = []
-        for index in range(3):
-            channel = stack[:, :, index]
-            with np.errstate(
-                invalid="ignore"
-            ):  # an all-nodata channel -> NaN bounds (renders transparent)
-                low, high = np.nanpercentile(channel, (2.0, 98.0))
-            span = high - low
-            # Guard a zero / NaN span (constant or all-nodata channel) so the stretch never divides
-            # by zero/NaN for the finite pixels; genuinely-nodata pixels stay NaN (transparent).
-            scale = span if np.isfinite(span) and span > 0 else 1.0
-            channels.append(np.clip((channel - np.nan_to_num(low)) / scale, 0.0, 1.0))
+        # One shared stretch for every backend (base/stretch.py). Passing `limits` holds it fixed across a
+        # sequence of frames, the same way the matplotlib tier freezes an animation.
+        stretched = stretch_to_unit(stack, limits)
+        channels = [stretched[:, :, index] for index in range(3)]
         element = hv.RGB(
             (src.x.values, src.y.values, *channels),
             kdims=["x", "y"],
