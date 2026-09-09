@@ -1,4 +1,4 @@
-"""Tests for digitalearth.sources — one per input type, plus the no-competitor-imports guard.
+"""Tests for digitalearth.base.sources — one per input type, plus the no-competitor-imports guard.
 
 Run from the repository root (data paths are repo-root-relative); ``MPLBACKEND=Agg`` is set in pytest config.
 """
@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from digitalearth.sources import DimensionInfo, Source, get_source
+from digitalearth.base.sources import DimensionInfo, Source, get_source
 
 
 def test_raster_source(dataset):
@@ -123,44 +123,44 @@ def test_dimension_info_dataclass():
 
 
 class TestExtractorHelpers:
-    """Tests for the private helpers in digitalearth.sources.extractors."""
+    """Tests for the private helpers in digitalearth.base.sources.extractors."""
 
     def test_band_item_normal(self):
         """_band_item returns seq[index] for a valid index."""
-        from digitalearth.sources.extractors import _band_item
+        from digitalearth.base.sources.extractors import _band_item
 
         assert _band_item(("a", "b"), 1) == "b"
 
     def test_band_item_empty_returns_default(self):
         """_band_item returns the default for an empty/None sequence."""
-        from digitalearth.sources.extractors import _band_item
+        from digitalearth.base.sources.extractors import _band_item
 
         assert _band_item((), 0, default="x") == "x"
         assert _band_item(None, 0, default="x") == "x"
 
     def test_band_item_out_of_range_returns_default(self):
         """_band_item returns the default when the index is out of range."""
-        from digitalearth.sources.extractors import _band_item
+        from digitalearth.base.sources.extractors import _band_item
 
         assert _band_item(("a",), 5, default=None) is None
 
     def test_mask_nodata_passthrough_when_none(self):
         """mask_nodata returns the array unchanged (as float) when nodata is None."""
-        from digitalearth._arrays import mask_nodata
+        from digitalearth.base.arrays import mask_nodata
 
         out = mask_nodata(np.array([1, 2, 3]), None)
         np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
 
     def test_mask_nodata_replaces_with_nan(self):
         """mask_nodata replaces cells matching nodata with NaN."""
-        from digitalearth._arrays import mask_nodata
+        from digitalearth.base.arrays import mask_nodata
 
         out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
         assert np.isnan(out[1]) and not np.isnan(out[0])
 
     def test_from_netcdf_no_variables_raises(self):
         """_from_netcdf raises ValueError when the NetCDF exposes no variables."""
-        from digitalearth.sources.extractors import _from_netcdf
+        from digitalearth.base.sources.extractors import _from_netcdf
 
         class _StubNetCDF:
             variable_names: list = []
@@ -184,9 +184,11 @@ def test_feature_source_polygon_uses_centroid():
 def test_no_competitor_imports():
     """The sources package must not import xarray/rasterio/fiona/etc. (CLAUDE.md: pyramids is the only GIS dep)."""
     forbidden = ("xarray", "rasterio", "rioxarray", "fiona", "netCDF4", "cfgrib", "osgeo", "cartopy")
-    pkg = Path("src/digitalearth/sources")
+    pkg = Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "base" / "sources"
+    modules = sorted(pkg.rglob("*.py"))
+    assert modules, f"no modules found under {pkg} — has the package moved again?"
     offenders = []
-    for py in pkg.glob("*.py"):
+    for py in modules:
         text = py.read_text(encoding="utf-8")
         for mod in forbidden:
             if f"import {mod}" in text or f"from {mod}" in text:

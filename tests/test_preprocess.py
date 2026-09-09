@@ -3,8 +3,8 @@
 import numpy as np
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.preprocess import add_cyclic_column, wrap_longitude
-from digitalearth.scene import Map
+from digitalearth.base.preprocess import add_cyclic_column, wrap_longitude
+from digitalearth.static import Map
 
 
 class TestAddCyclicColumn:

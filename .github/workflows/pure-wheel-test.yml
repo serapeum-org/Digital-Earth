@@ -65,7 +65,7 @@ jobs:
         # drops out of [tool.setuptools.package-data] the wheel still imports
         # but styling breaks at runtime, so assert it is bundled.
         run: |
-          pixi run -e dev python -m zipfile -l dist/*.whl | grep "digitalearth/autostyle/library/variables.yml"
+          pixi run -e dev python -m zipfile -l dist/*.whl | grep "digitalearth/base/autostyle/library/variables.yml"
 
       - name: Upload wheel artifact
         uses: actions/upload-artifact@v4

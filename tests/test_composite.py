@@ -4,8 +4,8 @@ import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.scene import Map
-from digitalearth.scene.maps.raster import _stretch_to_unit
+from digitalearth.static import Map
+from digitalearth.static.maps.raster import _stretch_to_unit
 
 
 @pytest.fixture

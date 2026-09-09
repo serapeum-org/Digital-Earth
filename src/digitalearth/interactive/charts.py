@@ -1,20 +1,21 @@
-"""Interactive (HoloViz / Bokeh) charts — the interactive-tier counterpart of :mod:`digitalearth.charts` (DC.6).
+"""Interactive (HoloViz / Bokeh) charts — the counterpart of :mod:`digitalearth.static.charts` (DC.6).
 
-``digitalearth.charts`` renders static matplotlib charts via cleopatra; these return **HoloViews elements**
+``digitalearth.static.charts`` renders static matplotlib charts via cleopatra; these return **HoloViews elements**
 (``hv.Histogram`` / ``hv.Scatter`` / ``hv.Bars`` / ``hv.Curve``) for pan/zoom/hover charts in the interactive
 tier — surfacing DC.1 (histogram), DC.3 (scatter) and DC.4 (aggregate bar/line) on the HoloViz stack. The
-field-extraction and aggregation logic is shared with :mod:`digitalearth.charts` (one source of truth); only
-the rendering engine differs.
+field-extraction and aggregation logic is shared with the static tier and lives in
+:mod:`digitalearth.base.chartdata` (one source of truth, engine-neutral so neither backend owns it); only the
+rendering engine differs.
 
 holoviews is imported lazily (the optional ``interactive`` extra): importing this module needs no engine; only
 calling a chart builder does, and a missing extra raises an actionable :class:`ImportError`.
 """
 
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
-from digitalearth.charts import _column_or_array, _field_values, _grouped_series
+from digitalearth.base.chartdata import column_or_array, field_values, grouped_series
 
 __all__ = ["histogram", "scatter", "bar", "line", "bar_by", "line_by"]
 
@@ -52,9 +53,9 @@ def histogram(data: Any, *, column: Optional[str] = None, bins: int = 15, **opts
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    # _field_values drops non-finite (NaN/inf) values on every path (column, Dataset band or plain array),
+    # field_values drops non-finite (NaN/inf) values on every path (column, Dataset band or plain array),
     # so a raw array with NaN yields a clean histogram instead of an opaque numpy range error.
-    values = _field_values(data, column)
+    values = field_values(data, column)
     element = hv.Histogram(np.histogram(values, bins=bins))
     return element.opts(**opts) if opts else element
 
@@ -75,8 +76,8 @@ def scatter(x: Any, y: Any, *, data: Any = None, **opts: Any) -> Any:
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    xs = _column_or_array(data, x)
-    ys = _column_or_array(data, y)
+    xs = column_or_array(data, x)
+    ys = column_or_array(data, y)
     element = hv.Scatter((xs, ys))
     return element.opts(**opts) if opts else element
 
@@ -136,7 +137,7 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    keys, values = _grouped_series(data, by, column, agg)
+    keys, values = grouped_series(data, by, column, agg)
     element = hv.Bars(([str(k) for k in keys], values))
     return element.opts(**opts) if opts else element
 
@@ -158,6 +159,6 @@ def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum
         ImportError: when the ``interactive`` extra is not installed.
     """
     hv = _require_holoviews()
-    keys, values = _grouped_series(data, by, column, agg)
+    keys, values = grouped_series(data, by, column, agg)
     element = hv.Curve((keys, values))
     return element.opts(**opts) if opts else element

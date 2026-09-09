@@ -21,8 +21,8 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 import pathlib
 from typing import Any, List, Optional
 
-from digitalearth.sources import get_source
-from digitalearth.sources.source import Source
+from digitalearth.base.sources import get_source
+from digitalearth.base.sources.source import Source
 
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -347,7 +347,7 @@ class WebMapBase:
         """Resolve a colormap name: the caller's ``cmap`` if given, else the autostyle default.
 
         Mirrors the interactive tier's ``_auto_cmap`` so a variable looks the same across tiers (the same
-        ``digitalearth.autostyle`` variable→style lookup, incl. the ECMWF-Magics match); falls back to
+        ``digitalearth.base.autostyle`` variable→style lookup, incl. the ECMWF-Magics match); falls back to
         ``"viridis"`` for an unrecognised field.
 
         Args:
@@ -359,7 +359,7 @@ class WebMapBase:
         """
         if cmap is not None:
             return cmap
-        from digitalearth.autostyle import auto_style
+        from digitalearth.base.autostyle import auto_style
 
         return auto_style(source).get("cmap", "viridis")
 

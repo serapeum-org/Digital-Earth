@@ -15,7 +15,7 @@ import sys
 
 import pytest
 
-from digitalearth.sources.source import Source
+from digitalearth.base.sources.source import Source
 from digitalearth.web import WebMap
 from digitalearth.web.base import _require_maplibre, _resolve_style
 from tests.test_no_competitor_imports import (
@@ -130,7 +130,7 @@ class TestDisplaySource:
     def test_source_passes_through_untouched(self):
         import numpy as np
 
-        from digitalearth.sources.dimension import DimensionInfo
+        from digitalearth.base.sources.dimension import DimensionInfo
 
         src = Source(
             DimensionInfo(np.zeros((2, 2)), "z"),

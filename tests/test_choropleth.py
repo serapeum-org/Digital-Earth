@@ -2,7 +2,7 @@
 
 import pytest
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 @pytest.fixture
@@ -44,9 +44,8 @@ def test_choropleth_polygon_count(polygons):
 
 def test_polygon_vertices_multipolygon():
     """_polygon_vertices expands a MultiPolygon into one ring per part."""
-    from shapely.geometry import MultiPolygon, Polygon
-
     import geopandas as gpd
+    from shapely.geometry import MultiPolygon, Polygon
 
     p1 = Polygon([(0, 0), (1, 0), (1, 1)])
     p2 = Polygon([(2, 2), (3, 2), (3, 3)])

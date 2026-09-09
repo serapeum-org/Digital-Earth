@@ -7,7 +7,7 @@ matplotlib.use("Agg")
 
 from pyramids.feature import FeatureCollection  # noqa: E402
 
-from digitalearth.scene import Map  # noqa: E402
+from digitalearth.static import Map  # noqa: E402
 
 
 @pytest.fixture

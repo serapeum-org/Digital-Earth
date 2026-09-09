@@ -10,7 +10,7 @@ import pytest
 
 pv = pytest.importorskip("pyvista")
 
-from digitalearth.sources import get_source
+from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d import globe as globe_mod
 

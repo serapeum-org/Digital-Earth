@@ -1,10 +1,10 @@
-"""Tests for digitalearth.scene.Scene — the shared-axes glyph host."""
+"""Tests for digitalearth.static.Scene — the shared-axes glyph host."""
 
 import numpy as np
 import pytest
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
 
-from digitalearth.scene import Scene
+from digitalearth.static import Scene
 
 
 def _render(scene, arr, kind="imshow"):

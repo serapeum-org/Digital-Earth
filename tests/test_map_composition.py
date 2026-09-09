@@ -4,13 +4,13 @@ Pins the architecture: Map is GeoLayerBase(Scene) plus five capability mixins, a
 contributed by the expected mixin. Behaviour is covered by the per-feature test modules; this only guards the
 class structure so an accidental re-flattening or mis-wiring is caught.
 """
-from digitalearth.scene import Map, Scene
-from digitalearth.scene.maps.animation import AnimationMixin
-from digitalearth.scene.maps.base import GeoLayerBase
-from digitalearth.scene.maps.decoration import DecorationMixin
-from digitalearth.scene.maps.projection import ProjectionMixin
-from digitalearth.scene.maps.raster import RasterMixin
-from digitalearth.scene.maps.vector import VectorMixin
+from digitalearth.static import Map, Scene
+from digitalearth.static.maps.animation import AnimationMixin
+from digitalearth.static.maps.base import GeoLayerBase
+from digitalearth.static.maps.decoration import DecorationMixin
+from digitalearth.static.maps.projection import ProjectionMixin
+from digitalearth.static.maps.raster import RasterMixin
+from digitalearth.static.maps.vector import VectorMixin
 
 
 class TestMapComposition:

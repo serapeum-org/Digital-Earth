@@ -238,7 +238,7 @@ class VectorMixin:
         """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
 
         The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
-        gets a colour from :func:`digitalearth._symbology.categorical_colors`. The colour column is cast to
+        gets a colour from :func:`digitalearth.base.symbology.categorical_colors`. The colour column is cast to
         **string** and the colours are handed to GeoViews as a ``{label: colour}`` dict ``cmap`` — a numeric
         column would otherwise be treated as a continuous dimension and the palette interpolated, so this is
         what guarantees one discrete colour per distinct value (no continuous colorbar). Missing values
@@ -260,7 +260,11 @@ class VectorMixin:
         Returns:
             This map (chainable).
         """
-        from digitalearth._symbology import MISSING_COLOR, categorical_colors, resolve_categorical_cmap
+        from digitalearth.base.symbology import (
+            MISSING_COLOR,
+            categorical_colors,
+            resolve_categorical_cmap,
+        )
 
         gdf = self._display_gdf(features)
         categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))

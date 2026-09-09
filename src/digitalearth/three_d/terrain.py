@@ -1,7 +1,7 @@
 """TerrainMixin — render a raster/DEM as 3-D relief on a :class:`Scene3D`.
 
 Turns a pyramids raster into a PyVista ``StructuredGrid`` whose z is the (exaggerated) elevation, so a DEM
-becomes a true 3-D surface. Built from the uniform :class:`~digitalearth.sources.Source` (numpy z + 1-D x/y
+becomes a true 3-D surface. Built from the uniform :class:`~digitalearth.base.sources.Source` (numpy z + 1-D x/y
 coordinate vectors + CRS) — **no xarray/rasterio**; CRS/reproject stays in pyramids.
 
 Using a ``StructuredGrid`` from pyramids' real x/y cell-centre coordinates (rather than an axis-aligned
@@ -14,7 +14,7 @@ from typing import Any, Optional
 import numpy as np
 import pyvista as pv
 
-from digitalearth.sources import Source, get_source
+from digitalearth.base.sources import Source, get_source
 
 #: Attribute name the elevation scalar is stored under on the generated mesh.
 ELEVATION = "elevation"
@@ -34,7 +34,7 @@ def _vertical_unit_scale(crs: Any) -> float:
     an unknown/unparseable CRS falls back to ``1.0`` (treat as already-consistent units).
 
     Args:
-        crs: The :class:`~digitalearth.sources.Source` CRS (an EPSG int, or anything pyramids can resolve).
+        crs: The :class:`~digitalearth.base.sources.Source` CRS (an EPSG int, or anything pyramids can resolve).
 
     Returns:
         float: ``1 / _METRES_PER_DEGREE`` for a geographic CRS, else ``1.0``.
@@ -85,13 +85,13 @@ class TerrainMixin:
     ) -> Any:
         """Render a raster/DEM as a 3-D relief surface and register it as a layer.
 
-        The raster is read through pyramids (via :func:`~digitalearth.sources.get_source` — numpy + coords +
+        The raster is read through pyramids (via :func:`~digitalearth.base.sources.get_source` — numpy + coords +
         CRS, no xarray), turned into a warped ``StructuredGrid``, and added to the plotter. Colour by elevation
         (default) or pass ``scalars=None`` to colour by something else / a uniform colour.
 
         Args:
             data: A pyramids ``Dataset`` (or anything :func:`get_source` accepts), or an already-built
-                :class:`~digitalearth.sources.Source`, holding the elevation raster.
+                :class:`~digitalearth.base.sources.Source`, holding the elevation raster.
             band: 1-based band index to read.
             z_exaggeration: Vertical exaggeration of the relief (``1.0`` = true scale; ``>1`` accentuates terrain).
             cmap: Matplotlib/colorcet colormap name for the elevation surface.
@@ -106,7 +106,7 @@ class TerrainMixin:
                 ```python
                 >>> import numpy as np, pyvista as pv
                 >>> from digitalearth.three_d import Scene3D
-                >>> from digitalearth.sources import get_source
+                >>> from digitalearth.base.sources import get_source
                 >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
                 >>> scene = Scene3D(off_screen=True)
                 >>> actor = scene.terrain(get_source(dem), z_exaggeration=3.0)

@@ -20,8 +20,8 @@ from functools import reduce
 from operator import mul
 from typing import Any, List, Optional
 
-from digitalearth.sources import get_source
-from digitalearth.sources.source import Source
+from digitalearth.base.sources import get_source
+from digitalearth.base.sources.source import Source
 
 #: The pip extra / pixi env that provides the HoloViz engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -246,7 +246,7 @@ class InteractiveMapBase:
     def _auto_cmap(self, source: Source, cmap: Optional[str]) -> str:
         """Resolve a colormap: the caller's ``cmap`` if given, else the autostyle default (DI.12).
 
-        Defers to :func:`digitalearth.autostyle.auto_style` (the same variable→style lookup the static
+        Defers to :func:`digitalearth.base.autostyle.auto_style` (the same variable→style lookup the static
         ``Map`` uses, incl. the ECMWF-Magics match) so a variable looks the same across tiers; falls
         back to ``"viridis"`` for an unrecognised field.
 
@@ -259,7 +259,7 @@ class InteractiveMapBase:
         """
         if cmap is not None:
             return cmap
-        from digitalearth.autostyle import auto_style
+        from digitalearth.base.autostyle import auto_style
 
         return auto_style(source).get("cmap", "viridis")
 

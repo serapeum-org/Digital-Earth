@@ -1,10 +1,10 @@
-"""Tests for RP.11 — plugin discovery via entry points (digitalearth.plugins)."""
+"""Tests for RP.11 — plugin discovery via entry points (digitalearth.ops.plugins)."""
 
 from importlib.metadata import EntryPoint
 
 import pytest
 
-from digitalearth.plugins import GROUPS, iter_plugins, load_plugins
+from digitalearth.ops.plugins import GROUPS, iter_plugins, load_plugins
 
 
 class _FakeEP:
@@ -26,6 +26,20 @@ class TestGroups:
     def test_declares_known_extension_points(self):
         """GROUPS advertises the styles and sources extension points."""
         assert "digitalearth.styles" in GROUPS and "digitalearth.sources" in GROUPS
+
+    def test_group_names_are_frozen_public_contract(self):
+        """GROUPS is exactly these two names, and never tracks where our modules live.
+
+        Test scenario:
+            A plugin package writes these strings verbatim in its own ``pyproject.toml``, so they are a
+            published contract rather than an import path. The backend restructure moved ``sources`` to
+            ``digitalearth.base.sources`` and a find/replace rewrote this constant with it, which would
+            have broken every installed source plugin. Pinning the exact tuple makes that class of
+            accident fail loudly instead of silently.
+        """
+        assert GROUPS == ("digitalearth.styles", "digitalearth.sources"), (
+            f"entry-point group names are a public contract and must not change, got {GROUPS!r}"
+        )
 
 
 class TestIterPlugins:
@@ -66,7 +80,7 @@ class TestLoadPlugins:
                 raise RuntimeError("boom")
 
         eps = [_BrokenEP(), _FakeEP("good", {"ok": True})]
-        with caplog.at_level(logging.WARNING, logger="digitalearth.plugins"):
+        with caplog.at_level(logging.WARNING, logger="digitalearth.ops.plugins"):
             loaded = load_plugins("digitalearth.styles", eps=eps)
         assert loaded == {"good": {"ok": True}}, f"only the healthy plugin should load, got {loaded}"
         assert any("broken" in r.message for r in caplog.records), "the skipped plugin should be logged"

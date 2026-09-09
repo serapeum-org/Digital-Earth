@@ -4,7 +4,7 @@ import pytest
 
 import digitalearth
 from digitalearth import api as qp
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 def test_quickplot_returns_finished_map(dataset):

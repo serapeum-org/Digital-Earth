@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 @pytest.fixture
@@ -73,8 +73,8 @@ def test_sankey_multilinestring_expands_parts():
         A FeatureCollection with one MultiLineString of two parts plus one LineString yields three paths,
         and the per-feature 'flow'/'w' columns are repeated across the MultiLineString's parts without error.
     """
-    from shapely.geometry import MultiLineString
     from pyramids.feature import FeatureCollection
+    from shapely.geometry import MultiLineString
 
     multi = MultiLineString([[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 3.0)]])
     single = LineString([(4.0, 4.0), (5.0, 5.0)])

@@ -2,7 +2,7 @@
 
 import pytest
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 @pytest.mark.parametrize("kind", ["tricontourf", "tricontour", "tripcolor"])

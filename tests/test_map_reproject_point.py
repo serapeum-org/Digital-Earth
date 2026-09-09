@@ -4,8 +4,10 @@ import numpy as np
 
 matplotlib.use("Agg")
 
-from digitalearth.scene import Map  # noqa: E402
-from digitalearth.scene import projections  # noqa: E402
+from digitalearth.static import (
+    Map,  # noqa: E402
+    projections,  # noqa: E402
+)
 
 
 class TestReprojectPoint:

@@ -1,10 +1,9 @@
-"""Tests for digitalearth.scene.Map — display-CRS reprojection + decoration (no Cartopy)."""
+"""Tests for digitalearth.static.Map — display-CRS reprojection + decoration (no Cartopy)."""
 from pathlib import Path
-
 
 import pytest
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 def test_needs_reproject(dataset):
@@ -16,7 +15,7 @@ def test_needs_reproject(dataset):
 
 def test_render_without_auto_cmap(dataset, mocker):
     """When auto_style supplies no cmap, _render leaves cmap unset (no opts['cmap']) and still draws."""
-    mocker.patch("digitalearth.scene.maps.raster.auto_style", return_value={})
+    mocker.patch("digitalearth.static.maps.raster.auto_style", return_value={})
     m = Map(crs=dataset.epsg)
     m.imshow(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
     assert len(m.layers) == 1 and len(m.ax.images) == 1
@@ -57,11 +56,19 @@ def test_set_extent(dataset):
 
 
 def test_no_cartopy_import():
-    """The scene package must not import cartopy (plan §2.4: reproject via pyramids, no Cartopy)."""
-    pkg = Path("src/digitalearth/scene")
-    for py in pkg.glob("*.py"):
+    """The static backend must not import cartopy (plan §2.4: reproject via pyramids, no Cartopy).
+
+    Anchored on ``__file__`` rather than the CWD, and ``rglob`` rather than ``glob``, so it keeps working
+    wherever pytest is invoked from and covers ``static/maps/`` too. The populated-assert is the point: this
+    test globbed the pre-rename ``scene/`` path for a while and so passed while checking nothing.
+    """
+    pkg = Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "static"
+    modules = sorted(pkg.rglob("*.py"))
+    assert len(modules) > 5, f"no modules found under {pkg} — has the package moved again?"
+    for py in modules:
         text = py.read_text(encoding="utf-8")
-        assert "import cartopy" not in text and "from cartopy" not in text
+        assert "import cartopy" not in text, f"{py.name} has `import cartopy`"
+        assert "from cartopy" not in text, f"{py.name} has `from cartopy`"
 
 
 @pytest.mark.parametrize("layer", ["coastlines", "borders"])
@@ -90,7 +97,7 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
         ax.set_xlim(xlim); ax.set_ylim(ylim)
         return ax
 
-    mocker.patch("digitalearth.scene.maps.decoration.add_features", side_effect=fake_add_features)
+    mocker.patch("digitalearth.static.maps.decoration.add_features", side_effect=fake_add_features)
 
     m = Map(crs=3857)
     m.imshow(dataset)
@@ -118,7 +125,7 @@ def test_coastlines_preserve_extent_of_plain_line(mocker):
         ax.set_xlim(xlim); ax.set_ylim(ylim)
         return ax
 
-    mocker.patch("digitalearth.scene.maps.decoration.add_features", side_effect=fake_add_features)
+    mocker.patch("digitalearth.static.maps.decoration.add_features", side_effect=fake_add_features)
 
     m = Map(crs=3857)
     m.ax.plot([0, 1], [0, 1])  # a raw line artist, not a registered data layer
@@ -130,7 +137,7 @@ def test_coastlines_preserve_extent_of_plain_line(mocker):
 
 def test_to_feature_style_routes_color_and_drops_line_fill():
     """_to_feature_style maps singular keys to plural collection keys and ignores fill/edge on line layers."""
-    from digitalearth.scene.maps.decoration import _to_feature_style
+    from digitalearth.static.maps.decoration import _to_feature_style
 
     poly = _to_feature_style("polygon", {"color": "red", "edgecolor": "k", "linewidth": 2, "alpha": 0.5})
     assert poly == {"facecolors": "red", "edgecolors": "k", "linewidths": 2, "alpha": 0.5}
@@ -162,7 +169,7 @@ def test_basemap_tiles(dataset, mocker):
         assert crs == 3857  # basemap must forward the display CRS to the tile fetch
         return ax.imshow(np.zeros((2, 2, 3)))
 
-    spy = mocker.patch("digitalearth.scene.maps.decoration.add_tiles", side_effect=fake_add_tiles)
+    spy = mocker.patch("digitalearth.static.maps.decoration.add_tiles", side_effect=fake_add_tiles)
 
     m = Map(crs=3857)
     m.imshow(dataset)
@@ -183,7 +190,7 @@ def test_text_at_lonlat(dataset):
 
 def test_text_far_side_globe_skipped():
     """A lon/lat on the far side of a globe reprojects to non-finite and is skipped (returns None)."""
-    from digitalearth.scene import projections
+    from digitalearth.static import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     # (180, 0) is the antipode of the ortho centre -> off the visible disc
@@ -203,7 +210,7 @@ def test_annotate_with_arrow(dataset):
 
 def test_annotate_far_side_globe_skipped():
     """annotate() also skips an off-globe point."""
-    from digitalearth.scene import projections
+    from digitalearth.static import projections
 
     m = Map(crs=projections.orthographic(lon=0, lat=0), globe=True)
     assert m.annotate(180.0, 0.0, "hidden") is None
@@ -234,7 +241,7 @@ def test_stock_img_tiles_graceful_offline(mocker, caplog):
 
     mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
     m = Map(crs=3857)
-    with caplog.at_level(logging.DEBUG, logger="digitalearth.scene.maps.decoration"):
+    with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.decoration"):
         assert m.stock_img() is None
     assert any("tile basemap unavailable" in r.message for r in caplog.records), \
         "the swallowed exception should be logged at DEBUG so failures are diagnosable"

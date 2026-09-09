@@ -1,9 +1,9 @@
-"""Tests for digitalearth._types — structural Protocols for pyramids inputs (PC-1)."""
+"""Tests for digitalearth.base.types — structural Protocols for pyramids inputs (PC-1)."""
 import numpy as np
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
-from digitalearth._types import PlottableData, RasterLike, VectorLike
+from digitalearth.base.types import PlottableData, RasterLike, VectorLike
 
 
 class TestRasterLike:

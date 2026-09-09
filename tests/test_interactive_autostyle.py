@@ -8,9 +8,9 @@ Runs in the ``interactive`` pixi env.
 import numpy as np
 import pytest
 
+from digitalearth.base.sources import Source
+from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.interactive import InteractiveMap
-from digitalearth.sources import Source
-from digitalearth.sources.dimension import DimensionInfo
 
 hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
@@ -43,7 +43,7 @@ class TestAutostyleDefaults:
     """``image`` resolves its colormap from ``auto_style`` when ``cmap`` is not given (DI.12)."""
 
     def test_temperature_variable_picks_magics_cmap(self, m):
-        from digitalearth.autostyle import auto_style
+        from digitalearth.base.autostyle import auto_style
 
         src = _source("t2m")
         expected = auto_style(src)["cmap"]
@@ -78,7 +78,7 @@ class TestSourceIngestion:
 
     def test_source_input_matches_dataset_input(self, m, dataset):
         """A Source extracted from the dataset renders the same element type as the dataset."""
-        from digitalearth.sources import get_source
+        from digitalearth.base.sources import get_source
 
         src = get_source(dataset.to_crs(3857))
         InteractiveMap(crs=3857).image(src)
@@ -110,7 +110,7 @@ class TestQuickplotBackend:
 
     def test_matplotlib_backend_still_returns_static_map(self, dataset):
         from digitalearth.api import quickplot
-        from digitalearth.scene import Map
+        from digitalearth.static import Map
 
         out = quickplot(dataset, crs=dataset.epsg)
         assert isinstance(out, Map), "default backend must remain the static Map"

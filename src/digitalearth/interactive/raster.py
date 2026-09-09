@@ -130,7 +130,7 @@ class RasterMixin:
         """
         import numpy as np
 
-        from digitalearth.sources import get_stack
+        from digitalearth.base.sources import get_stack
 
         gv, hv = _require_holoviz()
         if len(bands) != 3:

@@ -1,0 +1,429 @@
+"""charts — non-map x–y charts (line, bar, histogram) wired onto cleopatra glyphs.
+
+These are the earthkit-plots chart primitives that are **not** maps: a line/marker series, a bar chart, and a
+histogram. The rendering lives in cleopatra (``LineGlyph``, ``HistogramGlyph``); this module only adapts
+numpy arrays (or a pyramids ``Dataset`` band, with nodata dropped) into the inputs those glyphs expect.
+Parallel to :mod:`digitalearth.static.series` (the ensemble/statistical series plots).
+"""
+from typing import Any, Optional, Sequence
+
+import numpy as np
+from cleopatra.glyphs.primitives.line_glyph import LineGlyph
+from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+from cleopatra.glyphs.stats.histogram_glyph import HistogramGlyph
+from matplotlib.axes import Axes
+
+from digitalearth.base.arrays import finite
+from digitalearth.base.chartdata import (
+    as_finite_array,
+    column_or_array,
+    field_values,
+    grouped_series,
+)
+from digitalearth.static.figures import fig_of as _fig_of
+
+__all__ = ["line", "bar", "bar_by", "line_by", "histogram", "scatter", "statistics"]
+
+
+def statistics(
+    data: Any,
+    *,
+    column: Optional[str] = None,
+    quantiles: Sequence[float] = (0.25, 0.5, 0.75),
+) -> dict:
+    """Summarise a field — count/min/max/mean/std plus the requested quantiles (DC.5).
+
+    A thin numpy reduction (not a GIS op): the input is coerced to its finite values and summarised. Accepts a
+    GeoDataFrame/DataFrame with ``column``, a pyramids ``Dataset`` (first band, nodata dropped), or a plain
+    array. Quantiles are returned under ``q<pct>`` keys (e.g. ``q50`` for the median); the percent is formatted
+    with ``:g``, so fractional quantiles stay distinct (``q50`` vs ``q50.5``). Two quantiles that differ only
+    below ~1e-6 would format to the same key and raise ``ValueError`` rather than silently overwrite.
+
+    Args:
+        data: A (Geo)DataFrame (with ``column``), a pyramids ``Dataset``, or an array-like of numbers.
+        column: Attribute/column name to summarise when ``data`` is a (Geo)DataFrame.
+        quantiles: Quantiles in ``[0, 1]`` to include (default the quartiles ``0.25``/``0.5``/``0.75``).
+
+    Returns:
+        dict: ``count`` (int) plus ``min``/``max``/``mean``/``std`` and one ``q<pct>`` entry per quantile,
+        all floats.
+
+    Raises:
+        ValueError: if there are no finite values to summarise, or if two quantiles collide on one key.
+        KeyError: if ``column`` is given but absent from ``data``.
+
+    Examples:
+        - Summarise a plain sequence (median is ``q50``):
+            ```python
+            >>> from digitalearth.static.charts import statistics
+            >>> s = statistics([1, 2, 3, 4])
+            >>> (s["count"], s["min"], s["max"], s["mean"], s["q50"])
+            (4, 1.0, 4.0, 2.5, 2.5)
+
+            ```
+        - Summarise a GeoDataFrame column:
+            ```python
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.charts import statistics
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"pop": [10.0, 20.0, 30.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> statistics(gdf, column="pop")["mean"]
+            20.0
+
+            ```
+        - Pick custom quantiles:
+            ```python
+            >>> from digitalearth.static.charts import statistics
+            >>> sorted(statistics(range(101), quantiles=(0.1, 0.9)))
+            ['count', 'max', 'mean', 'min', 'q10', 'q90', 'std']
+
+            ```
+    """
+    arr = field_values(data, column)
+    if arr.size == 0:
+        raise ValueError("no finite values to summarise")
+    summary: dict = {
+        "count": int(arr.size),
+        "min": float(arr.min()),
+        "max": float(arr.max()),
+        "mean": float(arr.mean()),
+        "std": float(arr.std()),
+    }
+    for q in quantiles:
+        # ``:g`` keeps integer percents clean (0.25 -> "q25") while still distinguishing fractional
+        # quantiles (0.5 -> "q50", 0.505 -> "q50.5"), so near-equal quantiles do not collide on one key.
+        key = f"q{q * 100:g}"
+        if key in summary:
+            # Two quantiles that format to the same key (differing only below ~1e-6) would silently
+            # overwrite each other — surface it instead.
+            raise ValueError(f"quantiles collide on key {key!r}; use quantiles that differ by more than ~1e-6")
+        summary[key] = float(np.quantile(arr, q))
+    return summary
+
+
+def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color: Any = None,
+         **kwargs) -> Axes:
+    """Draw an x–y line/marker series (cleopatra ``LineGlyph.line``); returns the Axes.
+
+    Args:
+        x: 1-D sequence of x-coordinates.
+        y: y-values — 1-D for a single series, or 2-D ``(len(x), n_series)`` for several series sharing ``x``.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        label: Legend label(s) — a string for one series, or a list matching the columns of a 2-D ``y``.
+        color: Line colour(s) passed through to the glyph.
+        **kwargs: Forwarded to ``LineGlyph.line`` / ``Axes.plot`` (e.g. ``marker``, ``linestyle``, ``alpha``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` the series was drawn on (one ``Line2D`` per series).
+
+    Examples:
+        - A single series adds one line:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.charts import line
+            >>> ax = line([0, 1, 2, 3], [0, 1, 4, 9], label="y = x²")
+            >>> len(ax.lines)
+            1
+
+            ```
+        - A 2-D ``y`` draws one line per column (e.g. ensemble members):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from digitalearth.static.charts import line
+            >>> y = np.column_stack([[0, 1, 2], [0, 2, 4]])
+            >>> ax = line([0, 1, 2], y)
+            >>> len(ax.lines)
+            2
+
+            ```
+    """
+    glyph = LineGlyph(np.asarray(x), np.asarray(y), ax=ax, fig=_fig_of(ax))
+    _, ax, _ = glyph.line(ax=ax, label=label, color=color, **kwargs)
+    return ax
+
+
+def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, **kwargs) -> Axes:
+    """Draw a bar chart of a single series (cleopatra ``LineGlyph.bar``); returns the Axes.
+
+    Args:
+        x: 1-D sequence of bar positions / categories.
+        heights: 1-D sequence of bar heights, the same length as ``x``.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        color: Bar colour(s) passed through to the glyph.
+        **kwargs: Forwarded to ``LineGlyph.bar`` / ``Axes.bar`` (e.g. ``width``, ``alpha``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` the bars were drawn on (one bar per element of ``x``).
+
+    Examples:
+        - A four-category bar chart adds four bars:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.charts import bar
+            >>> ax = bar([0, 1, 2, 3], [3, 1, 4, 1])
+            >>> len(ax.containers[0])
+            4
+
+            ```
+        - The drawn heights match the input:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.charts import bar
+            >>> ax = bar([0, 1, 2], [2.0, 5.0, 3.0])
+            >>> [round(float(rect.get_height()), 1) for rect in ax.containers[0]]
+            [2.0, 5.0, 3.0]
+
+            ```
+    """
+    glyph = LineGlyph(np.asarray(x), np.asarray(heights), ax=ax, fig=_fig_of(ax))
+    _, ax, _ = glyph.bar(ax=ax, color=color, **kwargs)
+    return ax
+
+
+def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
+              ax: Optional[Axes] = None, **kwargs):
+    """Draw a histogram of array, raster, or field values (cleopatra ``HistogramGlyph.histogram``).
+
+    Args:
+        values: A 1-D/2-D sequence of numbers, a pyramids ``Dataset`` (its first band is used, with nodata
+            and non-finite cells dropped), or a GeoDataFrame/DataFrame when ``column`` is given (the one-call
+            ``histogram(gdf, column="pop")`` field path, DC.1). A 2-D array draws one overlaid histogram per
+            column. Non-finite (``NaN``/``inf``) values are dropped on the 1-D and ``column``/``Dataset``
+            paths; a 2-D array keeps its shape (drop non-finite yourself before passing a 2-D array with gaps).
+        column: Attribute/column name to histogram when ``values`` is a (Geo)DataFrame; its finite values are
+            used.
+        bins: Number of histogram bins.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to ``HistogramGlyph.histogram`` (e.g. ``color``, ``alpha``, ``rwidth``).
+
+    Returns:
+        ``(fig, ax, hist)`` — the figure, the axes, and the histogram info dict from cleopatra.
+
+    Examples:
+        - A histogram of 1-D values returns the figure/axes and counts that sum to the sample size:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.charts import histogram
+            >>> fig, ax, hist = histogram([1, 1, 2, 3, 3, 3], bins=3)
+            >>> len(ax.patches)
+            3
+
+            ```
+        - A pyramids Dataset is histogrammed over its first band (nodata dropped):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static.charts import histogram
+            >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
+            >>> ds = Dataset.from_array(
+            ...     arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
+            >>> fig, ax, hist = histogram(ds, bins=4)
+            >>> len(ax.patches)
+            4
+
+            ```
+        - A GeoDataFrame column is histogrammed in one call (DC.1):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.charts import histogram
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"pop": [1.0, 1.0, 2.0, 3.0]},
+            ...     geometry=[Point(i, i) for i in range(4)],
+            ...     crs=4326,
+            ... )
+            >>> fig, ax, hist = histogram(gdf, column="pop", bins=3)
+            >>> len(ax.patches)
+            3
+
+            ```
+    """
+    if column is not None:
+        arr = field_values(values, column)
+    else:
+        arr = as_finite_array(values)
+        if arr.ndim == 1:
+            # Drop NaN/inf on the 1-D raw path so a raw array with non-finite values histograms cleanly
+            # (a 2-D array keeps its shape for the overlaid-per-column case, so it is left untouched).
+            arr = finite(arr)
+    glyph = HistogramGlyph(arr, ax=ax, fig=_fig_of(ax))
+    return glyph.histogram(bins=bins, **kwargs)
+
+
+def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: Any = None,
+            ax: Optional[Axes] = None, **kwargs) -> Axes:
+    """Draw a field-vs-field scatter (cleopatra ``ScatterGlyph``); returns the Axes (DC.3).
+
+    Plots ``y`` against ``x`` as a point cloud, optionally colouring points by ``color_by`` and sizing them by
+    ``size_by``. With a (Geo)DataFrame ``data``, ``x``/``y``/``color_by``/``size_by`` may be column names;
+    otherwise they are array-likes.
+
+    Args:
+        x: x values, or a column name of ``data``.
+        y: y values (same length as ``x``), or a column name of ``data``.
+        data: Optional (Geo)DataFrame; when given, the other arguments may name its columns.
+        color_by: Optional values (or column name) mapped to point colour (adds a colorbar).
+        size_by: Optional magnitudes (or column name) mapped to point size.
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to ``ScatterGlyph`` (e.g. ``cmap``, ``point_size``, ``vmin``, ``vmax``, ``alpha``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` the scatter was drawn on (one ``PathCollection``).
+
+    Raises:
+        KeyError: if a column name is given but absent from ``data``.
+        ValueError: if ``x`` and ``y`` differ in shape (from ``ScatterGlyph``).
+
+    Examples:
+        - Two arrays draw one scatter collection:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from digitalearth.static.charts import scatter
+            >>> ax = scatter([1, 2, 3], [4, 5, 6])
+            >>> len(ax.collections)
+            1
+
+            ```
+        - Field vs field from a GeoDataFrame by column name:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.charts import scatter
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"a": [1.0, 2.0, 3.0], "b": [3.0, 2.0, 1.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = scatter("a", "b", data=gdf)
+            >>> len(ax.collections)
+            1
+
+            ```
+    """
+    xs = column_or_array(data, x)
+    ys = column_or_array(data, y)
+    values = column_or_array(data, color_by)
+    sizes = column_or_array(data, size_by)
+    glyph = ScatterGlyph(xs, ys, values=values, sizes=sizes, ax=ax, fig=_fig_of(ax), **kwargs)
+    _, ax, _ = glyph.plot(ax=ax)
+    return ax
+
+
+def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",
+           ax: Optional[Axes] = None, **kwargs) -> Axes:
+    """Bar chart of an aggregate per category (DC.4).
+
+    Groups ``data`` by the ``by`` column and draws one bar per group of ``column`` aggregated with ``agg``
+    (or the row count when ``column`` is ``None``). Bars sit at integer positions labelled with the category
+    names, so non-numeric categories render correctly.
+
+    Args:
+        data: A (Geo)DataFrame.
+        by: Category column to group on.
+        column: Value column to aggregate; ``None`` counts rows per category.
+        agg: Aggregation name (``"sum"``/``"mean"``/``"count"``/``"min"``/``"max"``/``"median"``).
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to :func:`bar` (e.g. ``color``, ``width``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` with one bar per category, x-tick-labelled by category.
+
+    Examples:
+        - Sum a value column per category:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.charts import bar_by
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"cat": ["a", "a", "b"], "v": [1.0, 2.0, 3.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = bar_by(gdf, "cat", "v", agg="sum")
+            >>> [float(round(rect.get_height(), 1)) for rect in ax.containers[0]]
+            [3.0, 3.0]
+
+            ```
+        - Count rows per category (no value column):
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.charts import bar_by
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"cat": ["a", "a", "b"]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = bar_by(gdf, "cat")
+            >>> [int(rect.get_height()) for rect in ax.containers[0]]
+            [2, 1]
+
+            ```
+    """
+    keys, values = grouped_series(data, by, column, agg)
+    ax = bar(range(len(keys)), values, ax=ax, **kwargs)
+    ax.set_xticks(range(len(keys)))
+    ax.set_xticklabels([str(key) for key in keys])
+    return ax
+
+
+def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",
+            ax: Optional[Axes] = None, **kwargs) -> Axes:
+    """Line chart of an aggregate per ordered key — e.g. a value summed by year (DC.4).
+
+    Groups ``data`` by the ``by`` column (typically a time/ordered field), aggregates ``column`` with ``agg``
+    (or counts rows when ``column`` is ``None``), and draws a line over the sorted keys.
+
+    Args:
+        data: A (Geo)DataFrame.
+        by: Ordered/time column to group on (kept in ascending key order).
+        column: Value column to aggregate; ``None`` counts rows per key.
+        agg: Aggregation name (``"sum"``/``"mean"``/``"count"``/…).
+        ax: Existing axes to draw on; a new figure/axes is created when ``None``.
+        **kwargs: Forwarded to :func:`line` (e.g. ``label``, ``color``, ``marker``).
+
+    Returns:
+        The :class:`matplotlib.axes.Axes` with the aggregated series as one line.
+
+    Examples:
+        - Mean of a value by year:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import Point
+            >>> from digitalearth.static.charts import line_by
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"year": [2000, 2000, 2010], "v": [1.0, 3.0, 5.0]},
+            ...     geometry=[Point(i, i) for i in range(3)],
+            ...     crs=4326,
+            ... )
+            >>> ax = line_by(gdf, "year", "v", agg="mean")
+            >>> len(ax.lines)
+            1
+
+            ```
+    """
+    keys, values = grouped_series(data, by, column, agg)
+    return line(keys, values, ax=ax, **kwargs)

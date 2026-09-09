@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, box
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 ORTHO = "+proj=ortho +lat_0=0 +lon_0=0 +datum=WGS84"  # clips the far hemisphere -> non-finite coords
 
@@ -248,7 +248,7 @@ class TestDefensiveBranches:
     def test_api_wrappers_swallow_colorbar_errors(self, monkeypatch, value_points):
         """Every api.* wrapper returns its Map even if the aggregated colorbar raises (except: pass)."""
         from digitalearth import api
-        from digitalearth.scene import Map as MapCls
+        from digitalearth.static import Map as MapCls
 
         def boom(self, *args, **kwargs):
             raise RuntimeError("colorbar boom")

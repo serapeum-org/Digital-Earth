@@ -1,5 +1,5 @@
-"""Tests for digitalearth._crs.source_epsg — best-effort EPSG resolution (PA-8)."""
-from digitalearth._crs import source_epsg
+"""Tests for digitalearth.base.crs.source_epsg — best-effort EPSG resolution (PA-8)."""
+from digitalearth.base.crs import source_epsg
 
 
 class _FakeCRS:

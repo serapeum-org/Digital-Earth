@@ -1,9 +1,9 @@
-"""Tests for digitalearth._symbology — categorical (distinct-value → colour) mapping (DC.8)."""
+"""Tests for digitalearth.base.symbology — categorical (distinct-value → colour) mapping (DC.8)."""
 import numpy as np
 import pandas as pd
 import pytest
 
-from digitalearth._symbology import (
+from digitalearth.base.symbology import (
     categorical_colors,
     is_null,
     nulls_to_none,

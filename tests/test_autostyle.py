@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 from pyramids.dataset import GeoReference
 
-from digitalearth.autostyle import auto_style, load_library
-from digitalearth.scene import Map
-from digitalearth.sources import DimensionInfo, Source
+from digitalearth.base.autostyle import auto_style, load_library
+from digitalearth.base.sources import DimensionInfo, Source
+from digitalearth.static import Map
 
 
 def _source(variable):
@@ -67,7 +67,7 @@ class TestAutoStyle:
     def test_string_match_pattern(self, mocker):
         """A group whose 'match' is a bare string (not a list) is handled."""
         mocker.patch(
-            "digitalearth.autostyle.load_library",
+            "digitalearth.base.autostyle.load_library",
             return_value={"default": {"cmap": "viridis"}, "ice": {"match": "siconc", "cmap": "Blues_r"}},
         )
         assert auto_style(_source("siconc"))["cmap"] == "Blues_r"

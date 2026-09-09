@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from digitalearth.temporal import Climatology, TimeSeries
+from digitalearth.static.temporal import Climatology, TimeSeries
 
 
 @pytest.fixture

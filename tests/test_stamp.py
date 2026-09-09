@@ -6,7 +6,7 @@ own figure, that it is inherited by every scene type, and that its failure modes
 import numpy as np
 import pytest
 
-from digitalearth.scene import Map, Scene
+from digitalearth.static import Map, Scene
 
 
 @pytest.fixture
