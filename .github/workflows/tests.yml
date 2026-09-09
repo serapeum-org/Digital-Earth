@@ -51,10 +51,12 @@ jobs:
   # `if <gitignored data>.exists():`, or one of the network-heavy notebooks the `notebooks` job skips. Those cells are
   # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
   # The `lint` task is an alias for lint-names (F821 over src/tests/docs) + lint-format + lint-imports (both over
-  # src/tests), so a step edit is not needed to add a ruff gate — widen the task instead. Still scoped: the rest of
-  # the ruleset carries ~455 pre-existing E/W/UP findings (import ordering is no longer among them — it is gated to
-  # zero by lint-imports as of #171) and examples/ is the exploratory scratch tree, both out of scope here. Keep the
-  # version in step with the ruff-pre-commit rev in .pre-commit-config.yaml.
+  # src/tests), so a step edit is not needed to add a ruff gate — widen the task instead. Still scoped: over
+  # src/tests the rest of the ruleset carries ~455 pre-existing findings — 425 UP, 20 E, 10 F401, and no W. Note
+  # that F is only partly gated: lint-names selects F821 alone, so the 10 F401 are backlog, not policy. Import
+  # ordering is no longer among any of it — lint-imports holds I at zero as of #171. examples/ is the exploratory
+  # scratch tree and is out of scope here. Keep the version in step with the ruff-pre-commit rev in
+  # .pre-commit-config.yaml.
   #
   # mypy runs on this leg only — ubuntu, the dev env, with python_version = "3.12" (see the note in
   # pyproject.toml on why the checker target leads requires-python). Platform- and version-conditional typing is
