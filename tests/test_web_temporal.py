@@ -234,6 +234,39 @@ class TestRequireVector:
         with pytest.raises(TypeError, match=r"^somebuilder\(\) needs"):
             WebMap._require_vector(object(), "somebuilder")
 
+    def test_a_table_without_an_active_geometry_is_told_to_set_geometry(self):
+        """A GeoDataFrame whose geometry was never activated is not misreported as a raster.
+
+        Test scenario:
+            ``hasattr(gdf, "geometry")`` is False for a GeoDataFrame built without ``geometry=``, so a
+            geometry-only check would send a perfectly good table off to the raster tier. A raster reports
+            ``columns`` as an ``int``; a table reports an ``Index``, which is what separates them.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        table = gpd.GeoDataFrame({"time": [1, 2], "geom": [Point(0, 0), Point(1, 1)]})
+        with pytest.raises(TypeError) as excinfo:
+            WebMap._require_vector(table, "timeslider")
+        message = str(excinfo.value)
+        assert "set_geometry" in message, f"the fix for a geometry-less table is not named: {message}"
+        assert "add_raster" not in message, f"a table must not be given raster advice: {message}"
+
+    def test_a_raster_still_gets_the_raster_message(self, dataset):
+        """The int-``columns`` branch must not swallow the raster case it was added beside.
+
+        Args:
+            dataset: The sample pyramids raster fixture.
+
+        Test scenario:
+            A ``Dataset`` also has ``columns``, but as an ``int``, so it keeps the raster-tier advice.
+        """
+        with pytest.raises(TypeError) as excinfo:
+            WebMap._require_vector(dataset, "timeslider")
+        message = str(excinfo.value)
+        assert "add_raster" in message, f"the raster branch lost its advice: {message}"
+        assert "set_geometry" not in message, f"a raster must not be told to set_geometry: {message}"
+
     def test_names_both_accepted_forms(self):
         """The message documents the two inputs recipe W6 supports.
 

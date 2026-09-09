@@ -38,7 +38,9 @@ class TemporalMixin:
 
         Raises:
             TypeError: when ``features`` exposes no ``geometry`` — a single raster, a bare array, anything
-                non-vector — naming the accepted forms and the single-raster alternative.
+                non-vector — naming the accepted forms and the single-raster alternative. A table that has
+                columns but no *active* geometry (``set_geometry`` never called) gets its own message
+                naming ``set_geometry``, rather than being misreported as a raster.
 
         Examples:
             - A vector-like input passes the guard silently (the check returns nothing):
@@ -74,12 +76,22 @@ class TemporalMixin:
             digitalearth.web.bigdata.BigDataMixin._require_points: the sibling geometry-kind guard this
                 mirrors, which rejects non-point input for the heatmap/cluster builders.
         """
-        if not hasattr(features, "geometry"):
+        if hasattr(features, "geometry"):
+            return
+        # A raster reports `columns` as an int (the grid width); a table reports an Index of names. Telling
+        # the two apart keeps a GeoDataFrame whose geometry was never activated from being called a raster.
+        columns = getattr(features, "columns", None)
+        if columns is not None and not isinstance(columns, int):
             raise TypeError(
-                f"{method}() needs a vector layer with a time attribute, or a DatasetCollection for a "
-                f"raster time stack; got {type(features).__name__}. For a single raster (no time "
-                f"dimension) use add_raster()."
+                f"{method}() needs a layer with an active geometry column; got a "
+                f"{type(features).__name__} whose columns are {list(columns)}. Call set_geometry(...) on "
+                f"it first."
             )
+        raise TypeError(
+            f"{method}() needs a vector layer with a time attribute, or a DatasetCollection for a "
+            f"raster time stack; got {type(features).__name__}. For a single raster (no time "
+            f"dimension) use add_raster()."
+        )
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
         """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps between frames.
