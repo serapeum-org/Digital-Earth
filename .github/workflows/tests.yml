@@ -199,13 +199,20 @@ jobs:
           pip install --require-hashes --only-binary :all: -r resolved-requirements.txt
 
       - name: Build and install the project itself
-        # Built to a wheel first and installed from that file with --no-index, so this step resolves nothing
-        # and reaches no index — its dependencies are already in place from the locked set above. Installing
-        # the built artifact rather than the source tree also means the export below runs against the same
-        # thing a user gets from PyPI.
+        # Built to a wheel, then hashed and installed through a requirements file under --require-hashes, the
+        # same way the dependency set above is installed: this step resolves nothing, reaches no index, and
+        # verifies the artifact it installs. Using the built wheel rather than the source tree also means the
+        # export below runs against the same thing a user gets from PyPI.
         run: |
           uv build --wheel --out-dir dist
-          pip install --no-deps --no-index --only-binary :all: dist/*.whl
+          python -c "
+          import hashlib, pathlib
+          wheel = next(pathlib.Path('dist').glob('*.whl'))
+          digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+          pathlib.Path('project-requirements.txt').write_text(f'{wheel.as_uri()} --hash=sha256:{digest}')
+          "
+          cat project-requirements.txt
+          pip install --no-deps --no-index --require-hashes -r project-requirements.txt
 
       - name: Export a scene through the resolved stack
         # `export_html` is the whole point: it is the only call that needs the trame/vtk.js stack, and the one
