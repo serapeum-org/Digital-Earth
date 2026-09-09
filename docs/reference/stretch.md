@@ -20,3 +20,15 @@ channel", and `stretch_to_unit` answers it from the frame in hand instead of inv
 ::: digitalearth.base.stretch.stretch_to_unit
 
 ::: digitalearth.base.stretch.require_three_bands
+
+## `ChannelLimits`
+
+The type the bounds travel as: a sequence of one `(lo, hi)` pair per channel, in channel order. A
+non-finite pair means *no bound for this channel* — `stretch_to_unit` answers that from the frame in
+hand rather than inventing a span.
+
+## `DEFAULT_COMPOSITE_BANDS`
+
+The `(1, 2, 3)` a composite maps to its channels when the caller names none. Defined once here so the
+renderers and the animation scan cannot drift apart about what a bare composite means.
+

@@ -25,6 +25,7 @@ from digitalearth.static.animation import save_animation
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
 
+
 def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     """Return at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames of ``datasets``.
 
