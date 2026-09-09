@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4209,7 +4209,7 @@ span.linenos.special { color: #000000; background-color: #ffffc0; padding-left: 
 <span class="n">DEM</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">ROOT</span> <span class="o">/</span> <span class="s2">"examples"</span> <span class="o">/</span> <span class="s2">"data"</span> <span class="o">/</span> <span class="s2">"LisbonElevation.tif"</span><span class="p">)</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth</span><span class="w"> </span><span class="kn">import</span> <span class="n">series</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.static</span><span class="w"> </span><span class="kn">import</span> <span class="n">series</span>
 <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-1">%matplotlib inline
@@ -4222,7 +4222,7 @@ while not (ROOT / "examples" / "data" / "LisbonElevation.tif").exists() and ROOT
 DEM = str(ROOT / "examples" / "data" / "LisbonElevation.tif")
 import numpy as np
 import matplotlib.pyplot as plt
-from digitalearth import series
+from digitalearth.static import series
 rng = np.random.default_rng(0)</div>
 </div>
 </div>
