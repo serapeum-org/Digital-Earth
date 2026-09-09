@@ -93,7 +93,8 @@ class TemporalMixin:
         Args:
             features: A ``FeatureCollection`` / GeoDataFrame whose features carry ``kdim``, or a pyramids
                 ``DatasetCollection`` whose members are ordered time steps.
-            kdim: The time attribute to scrub (vector), or the slider's label (raster).
+            kdim: The time attribute to scrub (vector), or the slider's label (raster). A feature whose
+                ``kdim`` is missing is dropped from the steps — it cannot sit at any of them.
             labels: Raster only — per-member slider labels (e.g. datetimes) shown instead of the integer
                 index; must match the member count and be unique.
             band: Raster only — the 1-based band drawn for every member.
@@ -110,8 +111,8 @@ class TemporalMixin:
         Raises:
             TypeError: when ``features`` is neither a vector layer nor a ``DatasetCollection``.
             KeyError: when ``kdim`` is not a feature attribute (vector).
-            ValueError: when the series has no time steps, or when ``labels`` does not match the member
-                count or repeats a label (raster).
+            ValueError: when the series has no time step left once the missing values are dropped, or
+                when ``labels`` does not match the member count or repeats a label (raster).
 
         Examples:
             - Scrub a point series by its ``time`` attribute (needs the ``web`` extra, so this example is
