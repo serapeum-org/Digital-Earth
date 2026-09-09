@@ -36,7 +36,7 @@ class InteractiveMap(
 ):
     """Interactive 2-D web map: pan/zoom/hover Bokeh layers built from pyramids data.
 
-    The interactive sibling of the static :class:`~digitalearth.scene.map.Map`: raster/vector builders
+    The interactive sibling of the static :class:`~digitalearth.static.map.Map`: raster/vector builders
     turn pyramids objects into GeoViews elements (reprojected to the display CRS through pyramids first),
     register them as layers, and ``render()``/``save()`` compose them into one overlay. Needs the optional
     ``interactive`` extra (``pip install 'digitalearth[interactive]'``) only when a builder/render method
@@ -71,6 +71,6 @@ class InteractiveMap(
             ```
 
     See Also:
-        digitalearth.scene.map.Map: the static matplotlib sibling of this scene.
+        digitalearth.static.map.Map: the static matplotlib sibling of this scene.
         digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.
     """

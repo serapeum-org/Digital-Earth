@@ -1,4 +1,4 @@
-"""quickplot — one-call entry points that build a decorated :class:`~digitalearth.scene.map.Map`.
+"""quickplot — one-call entry points that build a decorated :class:`~digitalearth.static.map.Map`.
 
 ``quickmap`` (and its alias ``quickplot``) dispatch on the input type, auto-style the data, draw it on a
 ``Map``, optionally decorate (basemap/coastlines/domain), and add a colorbar — returning the finished
@@ -12,7 +12,7 @@ from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
 from digitalearth.base.types import PlottableData
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 __all__ = [
     "quickmap",

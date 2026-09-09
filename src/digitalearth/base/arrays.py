@@ -1,7 +1,7 @@
 """Shared array helpers — the small numpy chores duplicated across the wiring modules.
 
-Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`, :mod:`digitalearth.scene.map`,
-:mod:`digitalearth.charts`, :mod:`digitalearth.series` and :mod:`digitalearth.temporal`, with subtly different
+Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`, :mod:`digitalearth.static.map`,
+:mod:`digitalearth.static.charts`, :mod:`digitalearth.static.series` and :mod:`digitalearth.static.temporal`, with subtly different
 nodata-masking rules. They live here once so every caller masks the same way.
 
 Masking uses an **exact** comparison against the nodata sentinel (``arr == nodata``): a nodata value is a sentinel

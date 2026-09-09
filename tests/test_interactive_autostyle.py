@@ -110,7 +110,7 @@ class TestQuickplotBackend:
 
     def test_matplotlib_backend_still_returns_static_map(self, dataset):
         from digitalearth.api import quickplot
-        from digitalearth.scene import Map
+        from digitalearth.static import Map
 
         out = quickplot(dataset, crs=dataset.epsg)
         assert isinstance(out, Map), "default backend must remain the static Map"

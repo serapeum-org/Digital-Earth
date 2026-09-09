@@ -1,6 +1,6 @@
 """Tests for T2.2 — Map point/cell methods (scatter/grid_points/point_cloud/grid_cells)."""
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 def test_scatter_features(dataset):

@@ -1,4 +1,4 @@
-"""maps — the capability mixins composed into :class:`digitalearth.scene.map.Map`.
+"""maps — the capability mixins composed into :class:`digitalearth.static.map.Map`.
 
 ``Map`` is split into a protected base (:class:`base.GeoLayerBase`, the Scene subclass that owns the display
 CRS and the reproject/extract plumbing) plus five behaviour mixins grouped by data shape / concern:

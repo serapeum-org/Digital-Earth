@@ -9,13 +9,13 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
-from digitalearth.scene.scene import Scene
+from digitalearth.static.scene import Scene
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
 
 class GeoLayerBase(Scene):
-    """A :class:`~digitalearth.scene.scene.Scene` with a display CRS and reproject/extract helpers."""
+    """A :class:`~digitalearth.static.scene.Scene` with a display CRS and reproject/extract helpers."""
 
     def __init__(
         self,

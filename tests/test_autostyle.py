@@ -5,7 +5,7 @@ import pytest
 from pyramids.dataset import GeoReference
 
 from digitalearth.base.autostyle import auto_style, load_library
-from digitalearth.scene import Map
+from digitalearth.static import Map
 from digitalearth.base.sources import DimensionInfo, Source
 
 

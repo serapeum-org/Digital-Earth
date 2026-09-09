@@ -33,7 +33,7 @@ class WebMap(
 ):
     """Web map: pan/zoom (and 3-D) MapLibre + deck.gl layers built from pyramids data, shareable as HTML.
 
-    The web sibling of the static :class:`~digitalearth.scene.map.Map`, the interactive
+    The web sibling of the static :class:`~digitalearth.static.map.Map`, the interactive
     :class:`~digitalearth.interactive.map.InteractiveMap` and the true-3D
     :class:`~digitalearth.three_d.scene3d.Scene3D`: raster/vector builders turn pyramids objects into
     MapLibre/deck.gl layers (reprojected to the display CRS through pyramids first), register them as layers,
@@ -72,7 +72,7 @@ class WebMap(
             ```
 
     See Also:
-        digitalearth.scene.map.Map: the static matplotlib sibling of this scene.
+        digitalearth.static.map.Map: the static matplotlib sibling of this scene.
         digitalearth.interactive.map.InteractiveMap: the interactive-2D (HoloViz) sibling.
         digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.
     """

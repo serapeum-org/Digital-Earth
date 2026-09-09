@@ -2,7 +2,7 @@
 
 import pytest
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 from digitalearth.base.sources import get_source
 
 

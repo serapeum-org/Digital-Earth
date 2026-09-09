@@ -19,7 +19,7 @@ from cleopatra.glyphs.gridded.vector_glyph import VectorGlyph
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
-from digitalearth._render_compat import relocate_flat_style
+from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.base.symbology import MISSING_COLOR, nulls_to_none, resolve_categorical_cmap
 from digitalearth.base.sources import get_source
 
@@ -48,7 +48,7 @@ def _draw_missing_neutral(artist: Any) -> None:
 
 
 class VectorMixin:
-    """Vector-data and vector-field renders for :class:`~digitalearth.scene.map.Map`."""
+    """Vector-data and vector-field renders for :class:`~digitalearth.static.map.Map`."""
 
     def _vector_input(self, features: Any, *, geom_types: Optional[Sequence[str]] = None,
                       name: str = "layer", geom_label: Optional[str] = None) -> Any:
@@ -89,7 +89,7 @@ class VectorMixin:
         categorical fill feeds the mappable opaque integer class codes, so a colorbar over them would read
         ``0, 1, 2 …`` instead of the category labels. Passing ``add_colorbar=False`` suppresses that swatch
         legend — for a caller keying the map some other way, e.g. drawing one shared legend across several
-        layers via :meth:`~digitalearth.scene.scene.Scene.legend` (which takes explicit ``colors``/``labels``;
+        layers via :meth:`~digitalearth.static.scene.Scene.legend` (which takes explicit ``colors``/``labels``;
         read the drawn legend's swatches/texts off ``layer.category_legend`` to feed it).
 
         Args:
@@ -174,7 +174,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.dataset import Dataset
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> m = Map(crs=ds.epsg)
                 >>> _ = m.grid_points(ds)
@@ -219,7 +219,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.dataset import Dataset
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> m = Map(crs=ds.epsg)
                 >>> pc = m.grid_cells(ds)
@@ -420,7 +420,7 @@ class VectorMixin:
             - A ring with an ``inf`` vertex is dropped along with its value:
                 ```python
                 >>> import numpy as np
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> good = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
                 >>> bad = np.array([[0.0, 0.0], [np.inf, 0.0], [1.0, 1.0]])
                 >>> kept, vals = Map._finite_polygons([good, bad, good], np.array([10.0, 20.0, 30.0]))
@@ -433,7 +433,7 @@ class VectorMixin:
             - Without values, only the finite rings come back and the second slot is ``None``:
                 ```python
                 >>> import numpy as np
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> good = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
                 >>> bad = np.array([[np.nan, 0.0], [1.0, 0.0], [1.0, 1.0]])
                 >>> kept, vals = Map._finite_polygons([good, bad])
@@ -482,7 +482,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.feature import FeatureCollection
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> fc["geometry"] = fc.geometry.buffer(500.0)
                 >>> m = Map(crs=fc.epsg)
@@ -604,7 +604,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.feature import FeatureCollection
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> m = Map(crs=fc.epsg)
                 >>> pc = m.voronoi(fc, column="fid")
@@ -692,7 +692,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.feature import FeatureCollection
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> fc["geometry"] = fc.geometry.buffer(500.0)
                 >>> m = Map(crs=fc.epsg)
@@ -809,7 +809,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.feature import FeatureCollection
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> m = Map(crs=fc.epsg)
                 >>> pc = m.quadtree(fc, nmax=1)
@@ -938,7 +938,7 @@ class VectorMixin:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> from pyramids.feature import FeatureCollection
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
                 >>> m = Map(crs=fc.epsg)
                 >>> cs = m.kde(fc)
@@ -990,7 +990,7 @@ class VectorMixin:
                 >>> import geopandas as gpd
                 >>> from shapely.geometry import LineString
                 >>> from pyramids.feature import FeatureCollection
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> gdf = gpd.GeoDataFrame(
                 ...     {"flow": [1.0, 2.0]},
                 ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(0, 1), (1, 2)])],

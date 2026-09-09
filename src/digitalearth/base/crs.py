@@ -1,7 +1,7 @@
 """Tiny CRS helper — the best-effort EPSG lookup shared by the extractors and the map projection code.
 
 A leaf module (no pyramids/cleopatra/matplotlib import) so both :mod:`digitalearth.base.sources.extractors` and
-:mod:`digitalearth.scene.map` can resolve a vector layer's EPSG the same way.
+:mod:`digitalearth.static.map` can resolve a vector layer's EPSG the same way.
 """
 from typing import Any, Optional
 

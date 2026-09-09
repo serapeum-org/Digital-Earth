@@ -14,8 +14,8 @@ texture the glyph wants, and maps lon/lat back onto the rendered sphere:
   ``FeatureCollection``) through the glyph's own ``transform``, so overlays land exactly on the drawn surface
   at any ``spin`` — including the axial tilt — rather than being re-derived here.
 
-Like the cleopatra glyph it wraps (and unlike :class:`~digitalearth.scene.map.Map`), this is a standalone
-class rather than a :class:`~digitalearth.scene.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
+Like the cleopatra glyph it wraps (and unlike :class:`~digitalearth.static.map.Map`), this is a standalone
+class rather than a :class:`~digitalearth.static.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
 layer/colorbar lifecycle, none of which applies to a textured sphere.
 """
 import inspect
@@ -37,7 +37,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.base.crs import source_epsg
-from digitalearth.animation import save_animation
+from digitalearth.static.animation import save_animation
 
 #: Default shape of the global equirectangular canvas built by :meth:`TexturedGlobe.from_dataset`,
 #: as ``(rows, columns)`` — a 0.125-degree grid, comfortably finer than the glyph's default mesh.
@@ -237,7 +237,7 @@ class TexturedGlobe:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import numpy as np
-            >>> from digitalearth.scene import TexturedGlobe
+            >>> from digitalearth.static import TexturedGlobe
             >>> texture = np.zeros((90, 180, 3), dtype=np.uint8)
             >>> texture[:45] = (40, 90, 180)
             >>> texture[45:] = (180, 120, 40)
@@ -250,7 +250,7 @@ class TexturedGlobe:
         - The north pole sits on the tilted polar axis, not straight up:
             ```python
             >>> import numpy as np
-            >>> from digitalearth.scene import TexturedGlobe
+            >>> from digitalearth.static import TexturedGlobe
             >>> texture = np.zeros((8, 16, 3), dtype=np.uint8)
             >>> globe = TexturedGlobe(texture, tilt_deg=0.0, n_lon=8, n_lat=4)
             >>> np.round(globe.project(0.0, 90.0), 6)
@@ -343,7 +343,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> from pyramids.dataset import Dataset, GeoReference
                 >>> arr = np.arange(8, dtype="float32").reshape(2, 4)
                 >>> ds = Dataset.from_array(
@@ -360,7 +360,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> from pyramids.dataset import Dataset, GeoReference
                 >>> arr = np.ones((2, 2), dtype="float32")
                 >>> ds = Dataset.from_array(
@@ -479,7 +479,7 @@ class TexturedGlobe:
             - Build a photographic Earth and spin it (needs the network on first use; the texture is then
               cached on disk):
                 ```python
-                >>> from digitalearth.scene import TexturedGlobe          # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
                 >>> globe = TexturedGlobe.from_provider("Esri.WorldImagery", zoom=3)   # doctest: +SKIP
                 >>> globe.glyph.texture.shape                             # doctest: +SKIP
                 (1440, 2880, 4)
@@ -488,7 +488,7 @@ class TexturedGlobe:
                 ```
             - Size the fetched texture and the sphere mesh independently:
                 ```python
-                >>> from digitalearth.scene import TexturedGlobe          # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
                 >>> globe = TexturedGlobe.from_provider(                  # doctest: +SKIP
                 ...     "Esri.WorldImagery", zoom=2, texture_n_lon=720, texture_n_lat=360,
                 ...     n_lon=60, n_lat=30,
@@ -673,7 +673,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
                 ...                       n_lon=8, n_lat=4)
                 >>> np.round(globe.project(0.0, 0.0), 6)
@@ -689,7 +689,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> world = globe.project([0.0, 45.0], [10.0, -20.0], spin=30.0)
                 >>> world.shape
@@ -734,7 +734,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
@@ -749,7 +749,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
@@ -804,7 +804,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(spin=45.0)
                 >>> ax.name
@@ -818,7 +818,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> import matplotlib.pyplot as plt
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> fig, axes = plt.subplots(1, 3, subplot_kw={"projection": "3d"})
@@ -873,7 +873,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
@@ -887,7 +887,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
@@ -967,7 +967,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> anim = globe.animate(n_frames=4, interval=100)
                 >>> globe.ax.name
@@ -981,7 +981,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> import matplotlib.pyplot as plt
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> ax = plt.figure().add_subplot(projection="3d")
@@ -1025,7 +1025,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> import tempfile
                 >>> from pathlib import Path
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
@@ -1041,7 +1041,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> globe.save("globe.png")
                 Traceback (most recent call last):
@@ -1065,7 +1065,7 @@ class TexturedGlobe:
             path: Output path; the extension picks the format.
             fps: Frames per second. Defaults to the animation's own interval.
             gif: Optional second path to derive a GIF at. Requires ``path`` to be a video.
-            **kwargs: Forwarded to :func:`digitalearth.animation.save_animation`.
+            **kwargs: Forwarded to :func:`digitalearth.static.animation.save_animation`.
 
         Returns:
             The written path, or a ``(video, gif)`` pair when ``gif`` was requested.
@@ -1079,7 +1079,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> import tempfile
                 >>> from pathlib import Path
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
@@ -1123,7 +1123,7 @@ class TexturedGlobe:
                 >>> matplotlib.use("Agg")
                 >>> import matplotlib.pyplot as plt
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> plt.close("all")
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw()
@@ -1154,7 +1154,7 @@ class TexturedGlobe:
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
         """Close the figure on exit so a long run of globes stays memory-bounded.
 
-        Mirrors :class:`~digitalearth.scene.scene.Scene`: the figure is closed whether or not the body
+        Mirrors :class:`~digitalearth.static.scene.Scene`: the figure is closed whether or not the body
         raised, and any exception propagates (``__exit__`` returns ``False``), so ``with`` never swallows an
         error.
 
@@ -1172,7 +1172,7 @@ class TexturedGlobe:
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
         """Stamp a logo / watermark onto the globe's figure.
 
-        The same figure-level mark as :meth:`digitalearth.scene.scene.Scene.stamp`, and it carries the same
+        The same figure-level mark as :meth:`digitalearth.static.scene.Scene.stamp`, and it carries the same
         two caveats: stamp **last**, because the mark is baked from the figure's current size, and note that
         a ``bbox_inches="tight"`` save crops surrounding whitespace and so shifts the mark's margin.
 
@@ -1192,7 +1192,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw()
                 >>> mark = np.full((8, 16, 4), 255, dtype=np.uint8)
@@ -1208,7 +1208,7 @@ class TexturedGlobe:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import TexturedGlobe
+                >>> from digitalearth.static import TexturedGlobe
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> globe.stamp(np.full((8, 16, 4), 255, dtype=np.uint8))
                 Traceback (most recent call last):
@@ -1223,5 +1223,5 @@ class TexturedGlobe:
 
 
 #: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported from this module (not from
-#: ``digitalearth.scene``) so a caller adjusting ``tilt_deg`` can reach it without importing from the glyph.
+#: ``digitalearth.static``) so a caller adjusting ``tilt_deg`` can reach it without importing from the glyph.
 __all__: List[str] = ["TexturedGlobe", "DEFAULT_TEXTURE_SHAPE", "EARTH_TILT_DEG"]

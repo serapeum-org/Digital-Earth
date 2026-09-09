@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from pyramids.dataset import Dataset
 
 from digitalearth.api import quickmap
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 __all__ = ["Batch"]
 
@@ -32,7 +32,7 @@ class Batch:
     """Render many inputs to image files with one shared configuration.
 
     Args:
-        plotter: The callable that turns one input into a :class:`~digitalearth.scene.map.Map`. Defaults to
+        plotter: The callable that turns one input into a :class:`~digitalearth.static.map.Map`. Defaults to
             :func:`~digitalearth.api.quickmap`; any callable with the same ``(data, **kwargs) -> Map``
             contract works.
         ext: Image extension/format for saved figures (e.g. ``"png"``, ``"pdf"``).
@@ -72,7 +72,7 @@ class Batch:
             **overrides: Plot options for this item, merged over (and overriding) the batch ``defaults``.
 
         Returns:
-            The finished :class:`~digitalearth.scene.map.Map`.
+            The finished :class:`~digitalearth.static.map.Map`.
 
         Examples:
             - Render the bundled sample raster in its own CRS:

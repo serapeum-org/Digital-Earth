@@ -1,6 +1,6 @@
 """Scene3D — the public 3-D scene: :class:`Scene3DBase` composed with the capability mixins.
 
-``Scene3D`` is the true-3D counterpart of :class:`digitalearth.scene.map.Map`. It owns one
+``Scene3D`` is the true-3D counterpart of :class:`digitalearth.static.map.Map`. It owns one
 :class:`pyvista.Plotter` (via :class:`~digitalearth.three_d.base.Scene3DBase`) and gains its geospatial plot
 verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin, …)`` composition:
 

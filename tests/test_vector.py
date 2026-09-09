@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 @pytest.fixture

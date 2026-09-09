@@ -8,18 +8,18 @@ projection is applied to the *data* upstream, not to the axes (see plan §2.4).
 The field methods here (``imshow`` and the private ``_field`` recipe) are the foundation T1.1 extends with
 ``contourf``/``contour``/``pcolormesh``/``block``.
 """
-from digitalearth.scene.maps.animation import AnimationMixin
-from digitalearth.scene.maps.base import GeoLayerBase
-from digitalearth.scene.maps.decoration import DecorationMixin
-from digitalearth.scene.maps.projection import ProjectionMixin
-from digitalearth.scene.maps.raster import RasterMixin
-from digitalearth.scene.maps.vector import VectorMixin
+from digitalearth.static.maps.animation import AnimationMixin
+from digitalearth.static.maps.base import GeoLayerBase
+from digitalearth.static.maps.decoration import DecorationMixin
+from digitalearth.static.maps.projection import ProjectionMixin
+from digitalearth.static.maps.raster import RasterMixin
+from digitalearth.static.maps.vector import VectorMixin
 
 __all__ = ["Map"]
 
 
 class Map(RasterMixin, VectorMixin, DecorationMixin, ProjectionMixin, AnimationMixin, GeoLayerBase):
-    """A geospatial :class:`~digitalearth.scene.scene.Scene` that reprojects to a display CRS.
+    """A geospatial :class:`~digitalearth.static.scene.Scene` that reprojects to a display CRS.
 
     Args:
         crs: Display CRS as an EPSG int / string / CRS (anything ``Dataset.to_crs`` accepts). Default 3857.
@@ -37,7 +37,7 @@ class Map(RasterMixin, VectorMixin, DecorationMixin, ProjectionMixin, AnimationM
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.scene import Map
+            >>> from digitalearth.static import Map
             >>> m = Map(crs=3857)
             >>> m.crs
             3857
@@ -50,7 +50,7 @@ class Map(RasterMixin, VectorMixin, DecorationMixin, ProjectionMixin, AnimationM
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> from pyramids.dataset import Dataset
-            >>> from digitalearth.scene import Map
+            >>> from digitalearth.static import Map
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> m = Map(crs=ds.epsg)          # same CRS -> no reprojection
             >>> _ = m.imshow(ds)

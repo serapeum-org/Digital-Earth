@@ -2,8 +2,8 @@
 
 import pytest
 
-from digitalearth.scene import Map
-from digitalearth.scene.domains import DOMAINS, resolve_domain
+from digitalearth.static import Map
+from digitalearth.static.domains import DOMAINS, resolve_domain
 
 
 class TestResolveDomain:

@@ -4,7 +4,7 @@ import pytest
 from matplotlib.animation import FuncAnimation, PillowWriter
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.scene import Map, projections
+from digitalearth.static import Map, projections
 
 
 def _field(offset: float) -> Dataset:
@@ -92,7 +92,7 @@ class TestAnimate:
 
     def test_resolve_clim_caps_scan(self, mocker):
         """_resolve_animation_clim scans at most _CLIM_SCAN_CAP frames of a large stack (L2)."""
-        from digitalearth.scene.maps import animation as anim_mod
+        from digitalearth.static.maps import animation as anim_mod
 
         spy = mocker.spy(anim_mod.AnimationMixin, "_stack_clim")
         m = Map(crs=4326)

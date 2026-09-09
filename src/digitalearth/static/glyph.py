@@ -11,7 +11,7 @@ from cleopatra.styling.params import Classify
 from geopandas import GeoDataFrame
 from pyramids.dataset import Dataset
 
-from digitalearth._render_compat import group_render_kwargs
+from digitalearth.static.render_compat import group_render_kwargs
 
 #: Message emitted by every StaticGlyph entry point (PD-1 / L-2).
 _DEPRECATION_MSG = (
@@ -29,9 +29,9 @@ class StaticGlyph:
     """Legacy static raster / catchment plotter.
 
     .. deprecated::
-        ``StaticGlyph`` predates the :class:`~digitalearth.scene.map.Map` scene API and is retained only for
+        ``StaticGlyph`` predates the :class:`~digitalearth.static.map.Map` scene API and is retained only for
         backward compatibility — every entry point emits a :class:`DeprecationWarning`. Prefer
-        :func:`~digitalearth.api.quickmap` or :class:`~digitalearth.scene.map.Map`.
+        :func:`~digitalearth.api.quickmap` or :class:`~digitalearth.static.map.Map`.
     """
 
     figure_default_options = dict(

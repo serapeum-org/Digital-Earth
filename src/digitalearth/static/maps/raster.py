@@ -8,7 +8,7 @@ from typing import Any, List, Optional, Sequence
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
-from digitalearth._render_compat import relocate_flat_style
+from digitalearth.static.render_compat import relocate_flat_style
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
@@ -28,7 +28,7 @@ def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
 
 
 class RasterMixin:
-    """Raster field renders and composites for :class:`~digitalearth.scene.map.Map`."""
+    """Raster field renders and composites for :class:`~digitalearth.static.map.Map`."""
 
     def _field(
         self,
@@ -163,7 +163,7 @@ class RasterMixin:
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> ds = Dataset.read_file("examples/data/acc4000.tif")
                 >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
                 >>> rgb = Dataset.from_array(arr=np.stack([base, base, base]),

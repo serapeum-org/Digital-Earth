@@ -1,4 +1,4 @@
-"""Tests for digitalearth.scene.figures — the static backend's axes-to-figure helper.
+"""Tests for digitalearth.static.figures — the static backend's axes-to-figure helper.
 
 Split out of ``tests/test_arrays.py`` when ``digitalearth._arrays`` was divided: the numpy helpers went to
 :mod:`digitalearth.base.arrays`, and ``fig_of`` — the only part needing matplotlib — went to the static
@@ -10,7 +10,7 @@ import pytest
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from digitalearth.scene.figures import fig_of  # noqa: E402
+from digitalearth.static.figures import fig_of  # noqa: E402
 
 
 class TestFigOf:

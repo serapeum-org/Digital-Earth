@@ -47,9 +47,9 @@ class TestPackageExports:
         """The re-exported temporal classes are the ones defined in the temporal package.
 
         Test scenario:
-            ``digitalearth.TimeSeries`` is ``digitalearth.temporal.TimeSeries`` (no shadow/duplicate).
+            ``digitalearth.TimeSeries`` is ``digitalearth.static.temporal.TimeSeries`` (no shadow/duplicate).
         """
-        temporal = importlib.import_module("digitalearth.temporal")
+        temporal = importlib.import_module("digitalearth.static.temporal")
         assert digitalearth.TimeSeries is temporal.TimeSeries, "TimeSeries is not the temporal one"
         assert digitalearth.Climatology is temporal.Climatology, "Climatology is not the temporal one"
 

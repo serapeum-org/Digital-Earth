@@ -76,8 +76,8 @@ def test_plot_catchment_save(catchment, tmp_path):
 
 def test_static_uses_native_scatter_backend():
     """Regression: plotCatchment renders points via cleopatra ScatterGlyph (no external plotting backend)."""
-    import digitalearth.static as static_mod
+    from digitalearth.static import glyph as glyph_mod
 
-    text = open(static_mod.__file__, encoding="utf-8").read()
+    text = open(glyph_mod.__file__, encoding="utf-8").read()
     assert "from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph" in text
     assert "import cartopy" not in text and " as gplt" not in text

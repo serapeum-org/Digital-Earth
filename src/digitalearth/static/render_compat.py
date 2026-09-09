@@ -9,7 +9,7 @@ Entry points:
 
 - :func:`prepare_plot_kwargs` — fold the flat members a *given glyph* supports into their group objects, and
   hand back any ``alpha`` the glyph cannot take for the caller to apply to the artist. Applied centrally in
-  :meth:`~digitalearth.scene.scene.Scene._render_glyph`.
+  :meth:`~digitalearth.static.scene.Scene._render_glyph`.
 - :func:`group_render_kwargs` — the glyph-agnostic fold underneath it (idempotent; an already-built group
   object, or an unrelated kwarg, passes through untouched).
 - :func:`relocate_flat_style` — pop the flat members out of a *constructor* kwargs dict (the cleopatra glyph

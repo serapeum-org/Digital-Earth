@@ -1,4 +1,4 @@
-"""Tests for digitalearth.scene.textured_globe — the pyramids/cleopatra 3-D globe seam.
+"""Tests for digitalearth.static.textured_globe — the pyramids/cleopatra 3-D globe seam.
 
 The cleopatra glyph is already tested upstream, so these cover the half Digital-Earth owns: turning geodata
 into an equirectangular texture at the right lon/lat, and mapping lon/lat back onto the drawn sphere.
@@ -14,8 +14,8 @@ from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
-from digitalearth.scene import TexturedGlobe
-from digitalearth.scene.textured_globe import _cull_per_point, _texture_axes
+from digitalearth.static import TexturedGlobe
+from digitalearth.static.textured_globe import _cull_per_point, _texture_axes
 
 
 @pytest.fixture(scope="module")
@@ -399,7 +399,7 @@ class TestFromProvider:
             seen["provider"], seen["kwargs"] = provider, kwargs
             return np.zeros((16, 32, 3), dtype=np.uint8)
 
-        monkeypatch.setattr("digitalearth.scene.textured_globe.world_texture", _fake)
+        monkeypatch.setattr("digitalearth.static.textured_globe.world_texture", _fake)
         return seen
 
     def test_defaults_to_a_bulk_permitting_provider(self, fetched):
@@ -821,9 +821,9 @@ class TestRenderLifecycle:
             globe.save_animation(str(tmp_path / "globe.mp4"))
 
     def test_save_animation_forwards_to_the_shared_saver(self, globe, monkeypatch):
-        """The globe delegates to digitalearth.animation rather than reimplementing the encode."""
+        """The globe delegates to digitalearth.static.animation rather than reimplementing the encode."""
         seen = {}
-        monkeypatch.setattr("digitalearth.scene.textured_globe.save_animation",
+        monkeypatch.setattr("digitalearth.static.textured_globe.save_animation",
                             lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path)
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", gif="globe.gif")
@@ -834,7 +834,7 @@ class TestRenderLifecycle:
     def test_save_animation_defaults_to_the_animations_own_rate(self, globe, monkeypatch):
         """interval=125 ms is 8 fps; the saved clip should match what animate() was built for."""
         seen = {}
-        monkeypatch.setattr("digitalearth.scene.textured_globe.save_animation",
+        monkeypatch.setattr("digitalearth.static.textured_globe.save_animation",
                             lambda anim, path, **kw: seen.update(kw) or path)
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4")
@@ -842,7 +842,7 @@ class TestRenderLifecycle:
 
     def test_an_explicit_rate_overrides_the_animations(self, globe, monkeypatch):
         seen = {}
-        monkeypatch.setattr("digitalearth.scene.textured_globe.save_animation",
+        monkeypatch.setattr("digitalearth.static.textured_globe.save_animation",
                             lambda anim, path, **kw: seen.update(kw) or path)
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", fps=24)

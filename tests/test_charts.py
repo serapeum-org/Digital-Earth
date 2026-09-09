@@ -1,9 +1,9 @@
-"""Tests for digitalearth.charts — non-map x–y charts (line, bar, histogram)."""
+"""Tests for digitalearth.static.charts — non-map x–y charts (line, bar, histogram)."""
 import numpy as np
 import pytest
 from matplotlib.axes import Axes
 
-from digitalearth import charts
+from digitalearth.static import charts
 
 
 def test_top_level_exports():

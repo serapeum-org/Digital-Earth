@@ -18,7 +18,7 @@ from cleopatra.styling.watermark import stamp_mark
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-from digitalearth._render_compat import prepare_plot_kwargs
+from digitalearth.static.render_compat import prepare_plot_kwargs
 
 
 class Scene:
@@ -39,7 +39,7 @@ class Scene:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.scene import Scene
+            >>> from digitalearth.static import Scene
             >>> scene = Scene()
             >>> len(scene.fig.axes)
             1
@@ -52,7 +52,7 @@ class Scene:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.scene import Scene
+            >>> from digitalearth.static import Scene
             >>> fig, ax = plt.subplots()
             >>> scene = Scene(ax=ax, fig=fig)
             >>> scene.ax is ax
@@ -187,7 +187,7 @@ class Scene:
         The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction
         coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved
         at. Because it is figure-level rather than axes-level it sits above every layer, and works on any
-        scene — a :class:`~digitalearth.scene.map.Map`, a chart, or a bare :class:`Scene`.
+        scene — a :class:`~digitalearth.static.map.Map`, a chart, or a bare :class:`Scene`.
 
         Args:
             mark: The mark image — a file path (any format Pillow can open) or an in-memory ``(H, W, 3)`` /
@@ -216,7 +216,7 @@ class Scene:
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
                 >>> import numpy as np
-                >>> from digitalearth.scene import Scene
+                >>> from digitalearth.static import Scene
                 >>> scene = Scene(figsize=(8, 6))
                 >>> logo = np.zeros((40, 80, 4), dtype=np.uint8)
                 >>> logo[..., :3] = 255
@@ -253,7 +253,7 @@ class Scene:
 
         .. warning::
             This closes the **entire** ``self.fig``. The panels returned by
-            :func:`~digitalearth.scene.figure.grid` share **one** figure, so using ``with`` on a single panel
+            :func:`~digitalearth.static.figure.grid` share **one** figure, so using ``with`` on a single panel
             would close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap
             the whole workflow or call :meth:`save` then close the figure yourself instead.
 

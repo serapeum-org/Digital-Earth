@@ -1,4 +1,4 @@
-"""Tests for digitalearth.geostatistics — visualizing geostatista results in the map tiers.
+"""Tests for digitalearth.static.geostatistics — visualizing geostatista results in the map tiers.
 
 Wires geostatista's spatial-statistics + kriging outputs into Digital-Earth's map composition. geostatista owns
 the computation; these tests only assert the *visualization* (categorical LISA/hotspot maps with the
@@ -17,7 +17,7 @@ from geostatista import Weights, getis_ord_gi, local_morans  # noqa: E402
 from pyramids.feature import FeatureCollection  # noqa: E402
 
 from digitalearth.base.symbology import _categories  # noqa: E402
-from digitalearth.geostatistics import (  # noqa: E402
+from digitalearth.static.geostatistics import (  # noqa: E402
     HOTSPOT_COLORS,
     LISA_COLORS,
     hotspot_map,

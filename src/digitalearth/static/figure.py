@@ -1,4 +1,4 @@
-"""figure — multi-panel layout: a grid of :class:`~digitalearth.scene.map.Map` panels sharing one figure.
+"""figure — multi-panel layout: a grid of :class:`~digitalearth.static.map.Map` panels sharing one figure.
 
 earthkit-plots models a figure as ``Figure → Subplot/Map → Layer``. Digital-Earth keeps the panel itself
 (``Map``) as the unit and adds a thin :func:`grid` that creates the matplotlib figure + axes grid and binds a
@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from digitalearth.scene.map import Map
+from digitalearth.static.map import Map
 
 __all__ = ["grid", "shared_colorbar"]
 
@@ -40,7 +40,7 @@ def grid(nrows: int, ncols: int, *, crs: Any = 3857, globe: bool = False,
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.scene.figure import grid
+            >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(2, 2, crs=4326)
             >>> len(maps)
             4
@@ -52,7 +52,7 @@ def grid(nrows: int, ncols: int, *, crs: Any = 3857, globe: bool = False,
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.scene.figure import grid
+            >>> from digitalearth.static.figure import grid
             >>> fig, maps = grid(1, 2, crs=4326)
             >>> maps[0].set_title("left")
             >>> maps[1].set_title("right")

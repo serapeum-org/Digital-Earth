@@ -15,7 +15,7 @@ already know how to draw:
 * :func:`kriging_map` — a ``geostatista.KrigedSurface`` (a pyramids ``Dataset`` of the kriged estimate, with a
   ``.variance`` companion), drawn as a raster field with an optional overlay of the source sample points.
 
-Each helper composes the **static** :class:`~digitalearth.scene.Map`; the annotated ``FeatureCollection`` it
+Each helper composes the **static** :class:`~digitalearth.static.Map`; the annotated ``FeatureCollection`` it
 draws can equally be handed to the interactive/web tiers' own ``choropleth(scheme="categorical")``, which share
 Digital-Earth's categorical colouring.
 
@@ -31,7 +31,7 @@ from typing import Any
 from matplotlib.colors import ListedColormap
 
 from digitalearth.base.symbology import MISSING_COLOR, _categories
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 #: Conventional LISA (local Moran) cluster colours — GeoDa/PySAL scheme. Keyed by the ``cluster`` label
 #: ``geostatista.local_morans`` writes. High-High and Low-Low are the strong (same-sign) clusters, High-Low and
@@ -149,7 +149,7 @@ def lisa_map(features: Any, *, column: str = "cluster", **kwargs: Any) -> Map:
             >>> from shapely.geometry import box
             >>> from pyramids.feature import FeatureCollection
             >>> from geostatista import local_morans, Weights
-            >>> from digitalearth.geostatistics import lisa_map
+            >>> from digitalearth.static.geostatistics import lisa_map
             >>> polys = [box(i, j, i + 1, j + 1) for j in range(4) for i in range(4)]
             >>> vals = [0, 0, 1, 1] * 4
             >>> fc = FeatureCollection(gpd.GeoDataFrame({"v": vals}, geometry=polys, crs="EPSG:32631"))

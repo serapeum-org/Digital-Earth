@@ -5,8 +5,8 @@ import numpy as np
 from cleopatra.glyphs.primitives.line_glyph import LineGlyph
 from matplotlib.axes import Axes
 
-from digitalearth import series
-from digitalearth.temporal.timeseries import TimeSeries
+from digitalearth.static import series
+from digitalearth.static.temporal.timeseries import TimeSeries
 
 
 class Climatology:
@@ -28,7 +28,7 @@ class Climatology:
         - Group a 6-step collection by a 3-season cycle into three group means:
             ```python
             >>> from pyramids.dataset.collection import DatasetCollection
-            >>> from digitalearth.temporal import Climatology
+            >>> from digitalearth.static.temporal import Climatology
             >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 6)
             >>> clim = Climatology(dc, ["djf", "jja", "son", "djf", "jja", "son"])
             >>> groups, mean, low, high = clim.climatology()

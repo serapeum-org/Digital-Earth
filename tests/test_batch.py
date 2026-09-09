@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from digitalearth.batch import Batch, _default_namer
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 class TestDefaultNamer:

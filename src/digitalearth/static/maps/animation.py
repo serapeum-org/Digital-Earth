@@ -10,8 +10,8 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from digitalearth.base.arrays import finite, read_masked_band
-from digitalearth.animation import save_animation
-from digitalearth.scene import projections
+from digitalearth.static.animation import save_animation
+from digitalearth.static import projections
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
@@ -21,7 +21,7 @@ _ANIMATION_KINDS = ("imshow", "contourf", "contour", "pcolormesh", "block")
 
 
 class AnimationMixin:
-    """Stack animation and globe rotation for :class:`~digitalearth.scene.map.Map`."""
+    """Stack animation and globe rotation for :class:`~digitalearth.static.map.Map`."""
 
     def _animate_frames(self, draw_one: Any, n_frames: int, fps: float) -> FuncAnimation:
         """Drive ``n_frames`` of ``draw_one(i)`` on this Map's axes as a :class:`FuncAnimation`.
@@ -57,7 +57,7 @@ class AnimationMixin:
                 ``gif``).
             fps: Frames per second. Defaults to the rate the animation was built with.
             gif: Optional second path to derive a GIF at. Requires ``path`` to be a video.
-            **kwargs: Forwarded to :func:`digitalearth.animation.save_animation` (and on to cleopatra) —
+            **kwargs: Forwarded to :func:`digitalearth.static.animation.save_animation` (and on to cleopatra) —
                 ``crf``, ``bitrate``, ``codec``, ``dpi``, ``gif_options``, and the rest.
 
         Returns:
@@ -75,7 +75,7 @@ class AnimationMixin:
                 >>> from pathlib import Path
                 >>> import numpy as np
                 >>> from pyramids.dataset import Dataset, GeoReference
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> geo = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
                 >>> ref = GeoReference(geo=geo, epsg=4326)
                 >>> frames = [Dataset.from_array(arr=np.full((4, 4), v, dtype="float32"), geo_ref=ref)
@@ -97,7 +97,7 @@ class AnimationMixin:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> Map(crs=4326).save_animation("clip.gif")
                 Traceback (most recent call last):
                     ...

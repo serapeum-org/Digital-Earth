@@ -2,7 +2,7 @@
 
 Split out of the old ``digitalearth.base.arrays`` when that module was divided: everything else in it is plain
 numpy and now lives in :mod:`digitalearth.base.arrays`, while this needs :mod:`matplotlib` and so belongs to
-the static backend. Only :mod:`digitalearth.scene.charts` and :mod:`digitalearth.scene.series` use it.
+the static backend. Only :mod:`digitalearth.static.charts` and :mod:`digitalearth.static.series` use it.
 """
 from typing import Optional
 
@@ -25,7 +25,7 @@ def fig_of(ax: Optional[Axes]) -> Optional[Figure]:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import matplotlib.pyplot as plt
-            >>> from digitalearth.scene.figures import fig_of
+            >>> from digitalearth.static.figures import fig_of
             >>> fig, ax = plt.subplots()
             >>> fig_of(ax) is fig
             True
@@ -33,7 +33,7 @@ def fig_of(ax: Optional[Axes]) -> Optional[Figure]:
             ```
         - ``None`` short-circuits to ``None``:
             ```python
-            >>> from digitalearth.scene.figures import fig_of
+            >>> from digitalearth.static.figures import fig_of
             >>> fig_of(None) is None
             True
 

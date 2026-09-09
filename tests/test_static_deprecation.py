@@ -32,7 +32,7 @@ class TestStaticGlyphDeprecation:
         Test scenario:
             The shared message mentions both ``quickmap`` and ``Map`` so users know where to go.
         """
-        from digitalearth.static import _DEPRECATION_MSG
+        from digitalearth.static.glyph import _DEPRECATION_MSG
 
         assert "quickmap" in _DEPRECATION_MSG and "Map" in _DEPRECATION_MSG, (
             f"message should point to the modern API: {_DEPRECATION_MSG!r}"

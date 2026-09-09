@@ -16,7 +16,7 @@ from cleopatra.basemap.tiles import add_tiles
 from cleopatra.basemap.reference import add_features, natural_earth
 from pyramids.base.crs import reproject_coordinates
 
-from digitalearth.scene import projections
+from digitalearth.static import projections
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +56,7 @@ def _to_feature_style(kind: str, style: dict) -> dict:
 
 
 class DecorationMixin:
-    """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.scene.map.Map`."""
+    """Annotation and basemap/Natural-Earth decoration for :class:`~digitalearth.static.map.Map`."""
 
     def _reproject_point(self, lon: float, lat: float, crs: Any) -> Optional[Tuple[float, float]]:
         """Reproject one ``(lon, lat)`` in ``crs`` to the display CRS; ``None`` if it lands off the globe.

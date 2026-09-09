@@ -22,7 +22,7 @@ Run: ``pixi run -e dev --frozen --no-install python examples/globe_fill_spike.py
 """
 import numpy as np
 
-from digitalearth.scene import projections
+from digitalearth.static import projections
 
 
 def _nearest_boundary_index(boundary_open: np.ndarray, pt: np.ndarray) -> int:

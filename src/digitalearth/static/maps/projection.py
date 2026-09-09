@@ -8,12 +8,12 @@ from typing import Any, Optional, Sequence
 from cleopatra.basemap.projection import apply_projection_frame
 from pyramids.base.crs import reproject_coordinates
 
-from digitalearth.scene import projections
-from digitalearth.scene.domains import DomainLike, resolve_domain
+from digitalearth.static import projections
+from digitalearth.static.domains import DomainLike, resolve_domain
 
 
 class ProjectionMixin:
-    """Extent/domain and globe projection-frame behaviour for :class:`~digitalearth.scene.map.Map`."""
+    """Extent/domain and globe projection-frame behaviour for :class:`~digitalearth.static.map.Map`."""
 
     def set_extent(self, bbox: Sequence[float]) -> None:
         """Set the axes extent.
@@ -37,7 +37,7 @@ class ProjectionMixin:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
-                >>> from digitalearth.scene import Map
+                >>> from digitalearth.static import Map
                 >>> m = Map(crs=4326)
                 >>> m.set_domain("europe")
                 >>> [float(v) for v in m.ax.get_xlim()]
@@ -76,7 +76,7 @@ class ProjectionMixin:
 
         Returns:
             The ``(boundary_xy, (xmin, xmax), (ymin, ymax))`` tuple from
-            :func:`digitalearth.scene.projections.projection_frame` for the current display CRS — a closed
+            :func:`digitalearth.static.projections.projection_frame` for the current display CRS — a closed
             ``(N, 2)`` boundary ring plus the projected x/y limits.
         """
         if self._frame_cache is None or self._frame_cache[0] != self.crs:

@@ -28,7 +28,7 @@ class TimeSeries:
         - Reduce a 3-step collection to one spatial-mean value per step:
             ```python
             >>> from pyramids.dataset.collection import DatasetCollection
-            >>> from digitalearth.temporal import TimeSeries
+            >>> from digitalearth.static.temporal import TimeSeries
             >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
             >>> ts = TimeSeries(dc, reducer="mean")
             >>> ts.values().shape
@@ -39,7 +39,7 @@ class TimeSeries:
             ```python
             >>> import numpy as np
             >>> from pyramids.dataset.collection import DatasetCollection
-            >>> from digitalearth.temporal import TimeSeries
+            >>> from digitalearth.static.temporal import TimeSeries
             >>> dc = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 3)
             >>> vals = TimeSeries(dc).values()
             >>> bool(np.allclose(vals, vals[0]))

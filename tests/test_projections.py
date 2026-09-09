@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from digitalearth.scene import projections
+from digitalearth.static import projections
 
 
 class TestRegistry:
@@ -81,7 +81,7 @@ class TestProjectionFrame:
 
     def test_empty_domain_raises_clearly(self, mocker):
         """A CRS that projects every sample to non-finite coords raises a clear error, not min() on empty."""
-        mocker.patch("digitalearth.scene.projections.reproject_coordinates",
+        mocker.patch("digitalearth.static.projections.reproject_coordinates",
                      return_value=([float("inf")] * 4, [float("nan")] * 4))
         with pytest.raises(ValueError, match="no finite projected domain"):
             projections.projection_frame(3857, n=4)

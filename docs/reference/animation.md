@@ -9,4 +9,4 @@ detail can survive the GIF palette.
 
 Reachable as `Map.save_animation` and `TexturedGlobe.save_animation`, or directly as the function below.
 
-::: digitalearth.animation.save_animation
+::: digitalearth.static.animation.save_animation

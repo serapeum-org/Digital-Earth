@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`digitalearth._render_compat` — the flat-kwarg -> cleopatra group-object translation."""
+"""Unit tests for :mod:`digitalearth.static.render_compat` — the flat-kwarg -> cleopatra group-object translation."""
 import numpy as np
 import pytest
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, PointOverlay
@@ -6,7 +6,7 @@ from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
 from cleopatra.styling.scaling import ColorScale, ColorScaling
 
-from digitalearth._render_compat import (
+from digitalearth.static.render_compat import (
     FLAT_STYLE_KEYS,
     _coerce_color_scale,
     group_render_kwargs,
@@ -148,7 +148,7 @@ def test_scatter_alpha_applies_to_the_rendered_artist():
     from pyramids.feature import FeatureCollection
     from shapely.geometry import Point
 
-    from digitalearth.scene import Map
+    from digitalearth.static import Map
 
     fc = FeatureCollection(
         gpd.GeoDataFrame({"v": [1.0, 2.0, 3.0]}, geometry=[Point(0, 0), Point(1, 1), Point(2, 2)], crs="EPSG:4326")

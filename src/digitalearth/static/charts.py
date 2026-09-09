@@ -3,7 +3,7 @@
 These are the earthkit-plots chart primitives that are **not** maps: a line/marker series, a bar chart, and a
 histogram. The rendering lives in cleopatra (``LineGlyph``, ``HistogramGlyph``); this module only adapts
 numpy arrays (or a pyramids ``Dataset`` band, with nodata dropped) into the inputs those glyphs expect.
-Parallel to :mod:`digitalearth.series` (the ensemble/statistical series plots).
+Parallel to :mod:`digitalearth.static.series` (the ensemble/statistical series plots).
 """
 from typing import Any, Optional, Sequence
 
@@ -13,7 +13,7 @@ from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
 from cleopatra.glyphs.stats.histogram_glyph import HistogramGlyph
 from matplotlib.axes import Axes
 
-from digitalearth.scene.figures import fig_of as _fig_of
+from digitalearth.static.figures import fig_of as _fig_of
 from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.base.chartdata import as_finite_array, column_or_array, field_values, grouped_series
 
@@ -50,7 +50,7 @@ def statistics(
     Examples:
         - Summarise a plain sequence (median is ``q50``):
             ```python
-            >>> from digitalearth.charts import statistics
+            >>> from digitalearth.static.charts import statistics
             >>> s = statistics([1, 2, 3, 4])
             >>> (s["count"], s["min"], s["max"], s["mean"], s["q50"])
             (4, 1.0, 4.0, 2.5, 2.5)
@@ -60,7 +60,7 @@ def statistics(
             ```python
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.charts import statistics
+            >>> from digitalearth.static.charts import statistics
             >>> gdf = gpd.GeoDataFrame(
             ...     {"pop": [10.0, 20.0, 30.0]},
             ...     geometry=[Point(i, i) for i in range(3)],
@@ -72,7 +72,7 @@ def statistics(
             ```
         - Pick custom quantiles:
             ```python
-            >>> from digitalearth.charts import statistics
+            >>> from digitalearth.static.charts import statistics
             >>> sorted(statistics(range(101), quantiles=(0.1, 0.9)))
             ['count', 'max', 'mean', 'min', 'q10', 'q90', 'std']
 
@@ -120,7 +120,7 @@ def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.charts import line
+            >>> from digitalearth.static.charts import line
             >>> ax = line([0, 1, 2, 3], [0, 1, 4, 9], label="y = x²")
             >>> len(ax.lines)
             1
@@ -131,7 +131,7 @@ def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color:
             >>> import matplotlib
             >>> matplotlib.use("Agg")
             >>> import numpy as np
-            >>> from digitalearth.charts import line
+            >>> from digitalearth.static.charts import line
             >>> y = np.column_stack([[0, 1, 2], [0, 2, 4]])
             >>> ax = line([0, 1, 2], y)
             >>> len(ax.lines)
@@ -162,7 +162,7 @@ def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, *
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.charts import bar
+            >>> from digitalearth.static.charts import bar
             >>> ax = bar([0, 1, 2, 3], [3, 1, 4, 1])
             >>> len(ax.containers[0])
             4
@@ -172,7 +172,7 @@ def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, *
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.charts import bar
+            >>> from digitalearth.static.charts import bar
             >>> ax = bar([0, 1, 2], [2.0, 5.0, 3.0])
             >>> [round(float(rect.get_height()), 1) for rect in ax.containers[0]]
             [2.0, 5.0, 3.0]
@@ -208,7 +208,7 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.charts import histogram
+            >>> from digitalearth.static.charts import histogram
             >>> fig, ax, hist = histogram([1, 1, 2, 3, 3, 3], bins=3)
             >>> len(ax.patches)
             3
@@ -220,7 +220,7 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             >>> matplotlib.use("Agg")
             >>> import numpy as np
             >>> from pyramids.dataset import Dataset, GeoReference
-            >>> from digitalearth.charts import histogram
+            >>> from digitalearth.static.charts import histogram
             >>> arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
             >>> ds = Dataset.from_array(
             ...     arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
@@ -235,7 +235,7 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
             >>> matplotlib.use("Agg")
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.charts import histogram
+            >>> from digitalearth.static.charts import histogram
             >>> gdf = gpd.GeoDataFrame(
             ...     {"pop": [1.0, 1.0, 2.0, 3.0]},
             ...     geometry=[Point(i, i) for i in range(4)],
@@ -288,7 +288,7 @@ def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: 
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
-            >>> from digitalearth.charts import scatter
+            >>> from digitalearth.static.charts import scatter
             >>> ax = scatter([1, 2, 3], [4, 5, 6])
             >>> len(ax.collections)
             1
@@ -300,7 +300,7 @@ def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: 
             >>> matplotlib.use("Agg")
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.charts import scatter
+            >>> from digitalearth.static.charts import scatter
             >>> gdf = gpd.GeoDataFrame(
             ...     {"a": [1.0, 2.0, 3.0], "b": [3.0, 2.0, 1.0]},
             ...     geometry=[Point(i, i) for i in range(3)],
@@ -347,7 +347,7 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
             >>> matplotlib.use("Agg")
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.charts import bar_by
+            >>> from digitalearth.static.charts import bar_by
             >>> gdf = gpd.GeoDataFrame(
             ...     {"cat": ["a", "a", "b"], "v": [1.0, 2.0, 3.0]},
             ...     geometry=[Point(i, i) for i in range(3)],
@@ -364,7 +364,7 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
             >>> matplotlib.use("Agg")
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.charts import bar_by
+            >>> from digitalearth.static.charts import bar_by
             >>> gdf = gpd.GeoDataFrame(
             ...     {"cat": ["a", "a", "b"]},
             ...     geometry=[Point(i, i) for i in range(3)],
@@ -408,7 +408,7 @@ def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum
             >>> matplotlib.use("Agg")
             >>> import geopandas as gpd
             >>> from shapely.geometry import Point
-            >>> from digitalearth.charts import line_by
+            >>> from digitalearth.static.charts import line_by
             >>> gdf = gpd.GeoDataFrame(
             ...     {"year": [2000, 2000, 2010], "v": [1.0, 3.0, 5.0]},
             ...     geometry=[Point(i, i) for i in range(3)],

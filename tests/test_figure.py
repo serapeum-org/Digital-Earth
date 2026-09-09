@@ -1,8 +1,8 @@
-"""Tests for digitalearth.scene.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
+"""Tests for digitalearth.static.figure — grid() multi-panel layout + shared_colorbar (RP.8)."""
 import numpy as np
 import pytest
 
-from digitalearth.scene import Map, grid, shared_colorbar
+from digitalearth.static import Map, grid, shared_colorbar
 
 
 class TestGrid:
@@ -30,7 +30,7 @@ class TestGrid:
 
     def test_globe_panels(self):
         """globe=True makes every panel a globe Map."""
-        from digitalearth.scene import projections
+        from digitalearth.static import projections
 
         fig, maps = grid(1, 2, crs=projections.orthographic(0, 0), globe=True)
         assert all(m.globe is True for m in maps), "all panels should be globes"

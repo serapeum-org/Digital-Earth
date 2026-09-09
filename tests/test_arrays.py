@@ -194,7 +194,7 @@ class TestNanReducers:
         Test scenario:
             Every TimeSeries reducer name is in NAN_REDUCERS and maps to the same callable object.
         """
-        from digitalearth.temporal.timeseries import TimeSeries
+        from digitalearth.static.temporal.timeseries import TimeSeries
 
         for name, func in TimeSeries._REDUCERS.items():
             assert func is NAN_REDUCERS[name], f"{name} not sourced from the shared registry"
@@ -205,7 +205,7 @@ class TestNanReducers:
         Test scenario:
             Every NAN_REDUCERS entry appears (same object) in _QUADTREE_AGG, which adds only 'count'=len.
         """
-        from digitalearth.scene.maps.vector import _QUADTREE_AGG
+        from digitalearth.static.maps.vector import _QUADTREE_AGG
 
         for name, func in NAN_REDUCERS.items():
             assert _QUADTREE_AGG[name] is func, f"{name} differs from the shared registry"

@@ -38,7 +38,7 @@ digitalearth - visualization package
 from digitalearth.api import quickmap, quickplot  # noqa: E402
 from digitalearth.batch import Batch  # noqa: E402
 from digitalearth.browser import gallery  # noqa: E402
-from digitalearth.charts import (  # noqa: E402
+from digitalearth.static.charts import (  # noqa: E402
     bar,
     bar_by,
     histogram,
@@ -47,13 +47,13 @@ from digitalearth.charts import (  # noqa: E402
     scatter,
     statistics,
 )
-from digitalearth.geostatistics import (  # noqa: E402
+from digitalearth.static.geostatistics import (  # noqa: E402
     hotspot_map,
     kriging_map,
     lisa_map,
 )
 from digitalearth.plugins import load_plugins  # noqa: E402
-from digitalearth.scene import (  # noqa: E402
+from digitalearth.static import (  # noqa: E402
     Map,
     Scene,
     TexturedGlobe,
@@ -61,7 +61,7 @@ from digitalearth.scene import (  # noqa: E402
     projections,
     shared_colorbar,
 )
-from digitalearth.series import (  # noqa: E402
+from digitalearth.static.series import (  # noqa: E402
     boxplot,
     envelope,
     multiboxplot,
@@ -69,7 +69,7 @@ from digitalearth.series import (  # noqa: E402
     stripes,
 )
 from digitalearth.base.sources import DimensionInfo, Source, get_source  # noqa: E402
-from digitalearth.temporal import Climatology, TimeSeries  # noqa: E402
+from digitalearth.static.temporal import Climatology, TimeSeries  # noqa: E402
 
 __all__ = [
     # one-call API + composition

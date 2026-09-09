@@ -11,7 +11,7 @@ pv = pytest.importorskip("pyvista")
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
-from digitalearth.scene import Map
+from digitalearth.static import Map
 
 
 @pytest.fixture(autouse=True)
