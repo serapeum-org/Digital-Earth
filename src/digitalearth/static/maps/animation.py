@@ -151,8 +151,7 @@ class AnimationMixin:
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
-    @staticmethod
-    def _stack_channel_limits(datasets: Sequence[Any], bands: Sequence[int],
+    def _stack_channel_limits(self, datasets: Sequence[Any], bands: Sequence[int],
                               *, mask_nodata: bool = True) -> ChannelLimits:
         """Return one ``(lo, hi)`` stretch bound per composite channel, spanning the whole stack.
 
@@ -160,9 +159,15 @@ class AnimationMixin:
         per-channel 2-98 percentiles and the widest ``lo``/``hi`` per channel wins, so every frame is
         stretched on one fixed black and white point. Without this each frame re-derives its own and the clip
         pumps between frames even where the scene is unchanged — the artefact a viewer reads as the data
-        having changed. Frames are read as stored rather than reprojected first: the display warp resamples
-        values but does not move the percentiles enough to matter, and skipping it keeps a second warp of the
-        whole stack off the critical path. At most :data:`_CLIM_SCAN_CAP` evenly-spaced frames are scanned.
+        having changed. Each frame is reprojected to the display CRS before it is measured, exactly as the
+        composite does when it renders it — the warp resamples values, and on a strong projection it moves the
+        percentiles a long way (an orthographic warp shifts the white point by roughly a third), so measuring
+        the stored values would put the animation on a visibly different stretch from the equivalent still.
+        That costs one extra warp per scanned frame, bounded by :data:`_CLIM_SCAN_CAP` evenly-spaced frames.
+
+        :meth:`rotate` is the exception it cannot cover: it sweeps the display CRS as it renders, so its bounds
+        are frozen on whichever projection is in force when the animation is built. Its frames stay consistent
+        with **each other**, which is the point, rather than with any one still.
 
         A frame whose channel is entirely nodata contributes no bound for that channel rather than a ``nan``
         that would swallow the others (``min``/``max`` against ``nan`` is order-dependent, so a dead **first**
@@ -172,15 +177,19 @@ class AnimationMixin:
         Args:
             datasets: The animation stack.
             bands: The 1-based band indices the composite maps to its channels.
-            mask_nodata: Whether nodata cells are excluded from the percentiles (mirrors the composite's own
-                ``mask_nodata``, so the frozen limits match what an unfrozen frame would have computed).
+            mask_nodata: Whether nodata cells are excluded from the percentiles, mirroring the composite's
+                own ``mask_nodata`` so both read the same cells. The result is still not any single frame's
+                own stretch — it is the union across the scanned frames, which is the whole point.
 
         Returns:
             One ``(lo, hi)`` tuple per channel, in channel order.
         """
         seq = list(datasets)
         stride = max(1, len(seq) // _CLIM_SCAN_CAP)  # cap the scan to ~_CLIM_SCAN_CAP frames
-        scanned = [channel_limits(get_stack(ds, bands, mask=mask_nodata)) for ds in seq[::stride]]
+        # Measure what the frame will actually render: the composites stretch get_stack(self._reproject(ds)),
+        # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS (M1).
+        scanned = [channel_limits(get_stack(self._reproject(ds), bands, mask=mask_nodata))
+                   for ds in seq[::stride]]
         limits: List[Tuple[float, float]] = []
         for index in range(len(scanned[0])):
             lows = [frame[index][0] for frame in scanned if isfinite(frame[index][0])]

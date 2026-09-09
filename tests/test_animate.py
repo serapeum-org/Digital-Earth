@@ -344,6 +344,48 @@ class TestAnimateComposites:
         assert opts["limits"] is not None, "an explicit limits=None must still be filled from the stack"
         assert len(opts["limits"]) == 3, f"expected one bound per channel, got {opts['limits']!r}"
 
+    @pytest.mark.parametrize("display", ["webmercator", "orthographic"])
+    def test_frozen_limits_are_measured_on_the_display_crs(self, display):
+        """The scan measures the reprojected frame, not the stored one.
+
+        Test scenario:
+            The composites stretch `get_stack(self._reproject(dataset))`, so bounds taken from the stored
+            values freeze the wrong numbers under any non-trivial display CRS. Under both a Web Mercator and
+            an orthographic display the frozen bounds must equal the warped frame's own, and must differ from
+            the stored frame's — otherwise the animation renders on a different stretch from the still.
+        """
+        crs = projections.orthographic(0, 15) if display == "orthographic" else 3857
+        frame = _rgb_field()
+        m = Map(crs=crs)
+        frozen = [value for pair in m._stack_channel_limits([frame], (1, 2, 3)) for value in pair]
+        warped = [value for pair in channel_limits(get_stack(m._reproject(frame), (1, 2, 3))) for value in pair]
+        stored = [value for pair in channel_limits(get_stack(frame, (1, 2, 3))) for value in pair]
+        assert frozen == pytest.approx(warped), f"frozen {frozen} should match the warped frame {warped}"
+        assert frozen != pytest.approx(stored), f"frozen {frozen} must not be the stored bounds {stored}"
+
+    def test_composite_animation_matches_the_still_under_a_warp(self, tmp_path):
+        """An animated composite renders like the equivalent still, even on a strong projection.
+
+        Test scenario:
+            The orthographic warp `rotate` performs moves the 2-98 percentiles a long way. Measuring the
+            stored values instead of the warped ones left the animated frame about a third darker than the
+            same data drawn as a still; both paths must now agree to within a few percent.
+        """
+        frames = [_rgb_field(shift=0.0), _rgb_field(shift=10.0)]
+        crs = projections.orthographic(0, 15)
+        animated_map = Map(crs=crs, globe=True, figsize=(4, 4))
+        anim = animated_map.animate(frames, kind="rgb_composite", fps=2)
+        anim.save(str(tmp_path / "warp.gif"), writer=PillowWriter(fps=2))
+        animated = np.nanmean(np.asarray(animated_map.ax.images[-1].get_array(), dtype="float64"))
+
+        still_map = Map(crs=crs, globe=True, figsize=(4, 4))
+        still_map.rgb_composite(frames[-1])
+        still = np.nanmean(np.asarray(still_map.ax.images[-1].get_array(), dtype="float64"))
+
+        assert animated == pytest.approx(still, rel=0.05), (
+            f"animated frame {animated:.4f} should render like the still {still:.4f}"
+        )
+
     def test_frozen_limits_span_the_whole_stack(self):
         """The frozen limits bracket every individual frame's own limits (widest lo/hi wins)."""
         frames = [_rgb_field(exposure=1.0), _rgb_field(exposure=0.4)]
