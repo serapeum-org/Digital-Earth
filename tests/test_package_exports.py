@@ -60,3 +60,54 @@ class TestPackageExports:
             ``digitalearth.projections`` resolves a known projection factory (web_mercator -> 3857).
         """
         assert digitalearth.projections.get("web_mercator") == 3857, "projections submodule not wired"
+
+
+#: The subpackages the backend-per-package layout introduced, and a module each must contain.
+LAYOUT = [
+    ("digitalearth.base", "digitalearth.base.arrays"),
+    ("digitalearth.ops", "digitalearth.ops.batch"),
+    ("digitalearth.static", "digitalearth.static.map"),
+]
+
+
+class TestSubpackageLayout:
+    """Tests for the subpackage ``__init__`` modules the backend-per-package split added."""
+
+    @pytest.mark.parametrize("package, member", LAYOUT, ids=lambda v: v.split(".")[-1])
+    def test_subpackage_is_importable(self, package, member):
+        """Each new subpackage imports and exposes the module it is supposed to hold.
+
+        Args:
+            package: The subpackage's dotted path.
+            member: A module that must live inside it.
+
+        Test scenario:
+            ``base`` and ``ops`` are docstring-only ``__init__`` files, so the only thing that can break is
+            the package itself being unimportable or a module having failed to move into it.
+        """
+        module = importlib.import_module(package)
+        assert module.__doc__, f"{package} should carry a module docstring explaining what it holds"
+        assert importlib.import_module(member) is not None, f"{member} should live under {package}"
+
+    @pytest.mark.parametrize("package", [p for p, _ in LAYOUT])
+    def test_subpackage_is_a_real_package(self, package):
+        """Each subpackage is a package, not a module.
+
+        Test scenario:
+            ``__path__`` exists only on packages — the check that distinguishes these from
+            ``digitalearth.scene``, which the split deliberately turned into a plain shim module.
+        """
+        module = importlib.import_module(package)
+        assert hasattr(module, "__path__"), f"{package} should be a package with submodules"
+
+    def test_old_flat_module_paths_are_gone(self):
+        """The pre-split top-level module paths no longer resolve.
+
+        Test scenario:
+            ``digitalearth.batch``/``cli``/``browser``/``plugins`` moved under ``ops``; leaving a working
+            alias behind would let stale imports silently keep the flat layout alive.
+        """
+        for stale in ("digitalearth.batch", "digitalearth.cli", "digitalearth.browser",
+                      "digitalearth.plugins", "digitalearth._arrays", "digitalearth._crs"):
+            with pytest.raises(ModuleNotFoundError):
+                importlib.import_module(stale)
