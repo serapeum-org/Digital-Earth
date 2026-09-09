@@ -35,7 +35,7 @@ def _requirements(extra: str) -> list:
     return [Requirement(spec) for spec in _pyproject()["project"]["optional-dependencies"][extra]]
 
 
-def _declaration_sites() -> dict:
+def _declaration_sites(data: dict = None) -> dict:
     """Return every declared package, canonicalised, mapped to the list of tables declaring it.
 
     Covers all five places a pin can live: `[project].dependencies`, every `[project.optional-dependencies]`
@@ -43,10 +43,14 @@ def _declaration_sites() -> dict:
     pin there reaches every environment), and the pixi dependency tables including their per-feature and
     per-platform variants.
 
+    Args:
+        data: A parsed pyproject document. Defaults to this project's, which is what the guards read;
+            tests pass a synthetic one to exercise table shapes the repo does not currently use.
+
     Returns:
         Mapping of canonical package name to the tables it appears in.
     """
-    data = _pyproject()
+    data = _pyproject() if data is None else data
     sites: dict = {}
 
     def record(name: str, table: str) -> None:
@@ -108,3 +112,57 @@ def test_no_dependency_table_hand_lists_the_trame_stack():
         f"these tables restate pyvista's trame stack: {restated}. Those versions are pyvista's to pick — let "
         "`pyvista[jupyter]` supply them (#158)."
     )
+
+
+def test_declaration_sites_reads_every_table_shape():
+    """`_declaration_sites` reaches per-platform pixi tables and skips a dependency group's include entries.
+
+    Args:
+        None. A synthetic document is passed straight to the helper, covering the table shapes this repo does
+        not currently use so the scan is proven against them before one appears.
+
+    Test scenario:
+        A pin is findable from all five sites, `[tool.pixi.feature.<f>.target.<platform>]` included, and names
+        are canonicalised on the way in. A `[dependency-groups]` entry can also be a table
+        (`{include-group = ...}`) rather than a requirement string; those carry no package name and must be
+        skipped rather than crash the scan.
+    """
+    document = {
+        "project": {
+            "dependencies": ["Base_Pkg >=1"],
+            "optional-dependencies": {"extra": ["Extra.Pkg >=1"]},
+        },
+        "dependency-groups": {"dev": ["Group-Pkg >=1", {"include-group": "other"}]},
+        "tool": {
+            "pixi": {
+                "pypi-dependencies": {"Root_Pkg": "*"},
+                "feature": {"f": {"target": {"win-64": {"dependencies": {"Target-Pkg": "*"}}}}},
+            }
+        },
+    }
+    sites = _declaration_sites(document)
+    assert set(sites) == {"base-pkg", "extra-pkg", "group-pkg", "root-pkg", "target-pkg"}, (
+        f"every table must be scanned and its names canonicalised, got {sorted(sites)}"
+    )
+    assert sites["target-pkg"] == ["[tool.pixi.feature.f].target.win-64.dependencies"], (
+        f"a per-platform pin must name its own table, got {sites['target-pkg']}"
+    )
+    assert sites["group-pkg"] == ["[dependency-groups].'dev'"], (
+        f"a dependency-group pin must be recorded, got {sites['group-pkg']}"
+    )
+
+
+def test_declaration_sites_records_every_table_a_package_appears_in():
+    """A package pinned twice reports both tables, not just the last one seen.
+
+    Args:
+        None. The synthetic document pins one package in two places.
+
+    Test scenario:
+        Overwriting would hide one of the sites a maintainer has to edit to remove the pin.
+    """
+    document = {"project": {"dependencies": ["dup >=1"], "optional-dependencies": {"extra": ["dup >=1"]}}}
+    assert _declaration_sites(document)["dup"] == [
+        "[project].dependencies",
+        "[project.optional-dependencies].'extra'",
+    ], "both declaration sites must be reported"
