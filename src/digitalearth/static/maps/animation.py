@@ -165,30 +165,77 @@ class AnimationMixin:
         rate = getattr(self, "_animation_fps", None) if fps is None else fps
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
-    @staticmethod
-    def _stack_clim(datasets: Sequence[Any]) -> Tuple[float, float]:
-        """Return the ``(min, max)`` of the first band across ``datasets``, ignoring nodata/non-finite."""
+    def _stack_clim(self, datasets: Sequence[Any]) -> Tuple[float, float]:
+        """Return the ``(min, max)`` of the first band across ``datasets``, ignoring nodata/non-finite.
+
+        Each frame is reprojected to the display CRS before it is measured, for the same reason the
+        composite scan does it: the frame renders warped, so the stored values are not the ones on screen.
+        The effect is far smaller here than on a composite — the clim is shared across frames either way, so
+        nothing flickers, and only the animation-vs-still comparison moves — but the two scans measuring
+        different things is exactly the drift worth not having.
+
+        Args:
+            datasets: The frames to measure (already sampled by :func:`_scan_subset`).
+
+        Returns:
+            The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value.
+        """
         lows: List[float] = []
         highs: List[float] = []
         for ds in datasets:
-            arr = finite(read_masked_band(ds, band=1))
+            arr = finite(read_masked_band(self._reproject(ds), band=1))
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))
         return (min(lows), max(highs)) if lows else (0.0, 1.0)
 
-    def _resolve_animation_clim(self, datasets: Sequence[Any], opts: dict) -> None:
+    def _clim_across_views(self, dataset: Any, views: Sequence[Any]) -> Tuple[float, float]:
+        """Return the ``(min, max)`` of one dataset measured under each sampled display CRS.
+
+        The scalar counterpart of :meth:`_scan_across_views`: :meth:`rotate` redraws one dataset under a
+        sweep of projections, so a scale taken from the CRS in force at build time would describe a single
+        hemisphere and then be applied to all of them. The display CRS is restored afterwards.
+
+        Args:
+            dataset: The raster every frame draws.
+            views: The display CRSs the animation will sweep; sampled by :func:`_scan_subset`.
+
+        Returns:
+            The widest ``(min, max)`` across the sampled views, or ``(0, 1)`` when no view shows any of the
+            data — a full sweep passes the far side of the globe, where the warp has nothing to transform.
+        """
+        original = self.crs
+        try:
+            bounds = []
+            for view in _scan_subset(views):
+                self.crs = view
+                try:
+                    bounds.append(self._stack_clim([dataset]))
+                except Exception:  # this view shows none of the data — a sweep passes the far side
+                    continue
+            return (min(lo for lo, _ in bounds), max(hi for _, hi in bounds)) if bounds else (0.0, 1.0)
+        finally:
+            self.crs = original
+
+    def _resolve_animation_clim(self, datasets: Sequence[Any], opts: dict,
+                                *, views: Optional[Sequence[Any]] = None) -> None:
         """Ensure ``opts`` carries a shared ``vmin``/``vmax`` so every animation frame uses one colour scale.
 
         Without this, each frame's renderer auto-scales to its own data range, so the colours (and any
         colorbar) flicker between frames. Any ``vmin``/``vmax`` already in ``opts`` is kept; a missing bound
         is filled once from the stack (ignoring nodata/non-finite) and written back, so all frames — and the
         colorbar — share it. Passing both ``vmin`` and ``vmax`` skips the scan entirely. To bound the cost on
-        large stacks, at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames are scanned (L2).
+        large stacks, at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames are scanned.
+
+        ``views`` mirrors the composite scan: given the projections :meth:`rotate` is about to sweep, the
+        scale spans what all of them show rather than what the build-time CRS happens to show.
         """
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
-            lo, hi = self._stack_clim(_scan_subset(datasets))
+            if views is None:
+                lo, hi = self._stack_clim(_scan_subset(datasets))
+            else:
+                lo, hi = self._clim_across_views(list(datasets)[0], views)
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
@@ -264,14 +311,22 @@ class AnimationMixin:
             mask_nodata: Whether nodata cells are excluded from the percentiles.
 
         Returns:
-            One per-channel bound list per sampled view.
+            One per-channel bound list per sampled view that shows any of the data. A sweep passes the far
+            side of the globe, where the warp has nothing to transform; if no view shows anything at all the
+            data is measured as stored, so the caller still gets a usable stretch.
         """
         original = self.crs
         try:
             measured = []
             for view in _scan_subset(views):
                 self.crs = view
-                measured.append(channel_limits(get_stack(self._reproject(dataset), bands, mask=mask_nodata)))
+                try:
+                    stack = get_stack(self._reproject(dataset), bands, mask=mask_nodata)
+                except Exception:  # this view shows none of the data — a sweep passes the far side
+                    continue
+                measured.append(channel_limits(stack))
+            if not measured:  # no view showed anything: fall back to the data as stored
+                measured.append(channel_limits(get_stack(dataset, bands, mask=mask_nodata)))
             return measured
         finally:
             self.crs = original
@@ -328,7 +383,7 @@ Real limits already in ``opts`` are kept, so a caller can pass their own ``limit
                     datasets, bands, mask_nodata=opts.get("mask_nodata", True), views=views,
                 )
             return
-        self._resolve_animation_clim(datasets, opts)
+        self._resolve_animation_clim(datasets, opts, views=views)
         if colorbar:
             self._animation_colorbar(opts, cbar_label)
 

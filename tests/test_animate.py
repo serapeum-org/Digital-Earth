@@ -154,7 +154,7 @@ class TestAnimate:
         big = [_field(float(o)) for o in range(anim_mod._CLIM_SCAN_CAP * 3)]
         opts = {}
         m._resolve_animation_clim(big, opts)
-        scanned = len(spy.call_args.args[0])
+        scanned = len(spy.call_args.args[1])  # args[0] is self, since the scan reprojects per frame
         assert scanned <= anim_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
         assert "vmin" in opts and "vmax" in opts, "clim should still be resolved from the sampled frames"
 
@@ -189,12 +189,15 @@ class TestAnimate:
             anim._func(i)
             clims.append(tuple(round(c) for c in m.ax.images[0].get_clim()))
         assert len(set(clims)) == 1, f"frames must share one colour scale, got {clims}"
-        assert clims[0] == (0, 1000), f"shared clim should span the whole stack, got {clims[0]}"
+        assert clims[0][0] == 0, f"shared clim should start at the stack minimum, got {clims[0]}"
+        assert 800 < clims[0][1] <= 1000, (
+            f"the scale spans what the globe renders, which drops the off-hemisphere extreme: {clims[0]}"
+        )
 
     def test_resolve_clim_fills_missing_bounds(self, stack):
         """_resolve_animation_clim computes a global clim only for the missing bound(s)."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        lo, hi = Map._stack_clim(stack)
+        lo, hi = m._stack_clim(stack)
         both = {}
         m._resolve_animation_clim(stack, both)
         assert (both["vmin"], both["vmax"]) == (lo, hi), "both bounds should be filled from the stack"
@@ -210,7 +213,7 @@ class TestAnimate:
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
         opts = {"cmap": "viridis"}
         m._resolve_animation_clim(stack, opts)
-        lo, hi = Map._stack_clim(stack)
+        lo, hi = m._stack_clim(stack)
         assert opts["vmin"] == lo and opts["vmax"] == hi, "resolved clim should be injected into opts"
         m._animation_colorbar(opts, "auto")
         assert len(m.fig.axes) == 2, "a colorbar axes should be present"
@@ -220,7 +223,7 @@ class TestAnimate:
         arr = np.array([[0.0, 5.0], [10.0, -9999.0]], dtype="float32")
         ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
         assert ds.no_data_value[0] == -9999.0
-        lo, hi = Map._stack_clim([ds])
+        lo, hi = Map(crs=4326)._stack_clim([ds])
         assert (lo, hi) == (0.0, 10.0), f"nodata -9999 should be ignored, got ({lo}, {hi})"
 
     def test_stack_clim_no_nodata_uses_full_range(self):
@@ -228,16 +231,16 @@ class TestAnimate:
         from types import SimpleNamespace
 
         ds = SimpleNamespace(read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
-                             no_data_value=[None])
-        assert Map._stack_clim([ds]) == (1.0, 4.0)
+                             no_data_value=[None], epsg=4326)
+        assert Map(crs=4326)._stack_clim([ds]) == (1.0, 4.0)
 
     def test_stack_clim_all_nodata_falls_back(self):
         """An all-nodata stack has no finite cells, so _stack_clim returns the (0, 1) default."""
         from types import SimpleNamespace
 
         ds = SimpleNamespace(read_array=lambda band=0: np.array([[-9999.0, -9999.0]]),
-                             no_data_value=[-9999.0])
-        assert Map._stack_clim([ds]) == (0.0, 1.0)
+                             no_data_value=[-9999.0], epsg=4326)
+        assert Map(crs=4326)._stack_clim([ds]) == (0.0, 1.0)
 
     def test_colorbar_without_label(self):
         """A colorbar with no label still adds exactly one colorbar axes."""
