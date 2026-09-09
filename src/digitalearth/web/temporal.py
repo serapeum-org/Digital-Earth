@@ -94,7 +94,10 @@ class TemporalMixin:
             features: A ``FeatureCollection`` / GeoDataFrame whose features carry ``kdim``, or a pyramids
                 ``DatasetCollection`` whose members are ordered time steps.
             kdim: The time attribute to scrub (vector), or the slider's label (raster). A feature whose
-                ``kdim`` is missing is dropped from the steps — it cannot sit at any of them.
+                ``kdim`` is missing gets no slider step — but it is still **drawn**, so it stays hidden
+                behind the live slider (no step's filter matches it) and stays visible in a saved page
+                (which carries no slider, and so no filter at all). Drop such rows before calling if
+                that matters.
             labels: Raster only — per-member slider labels (e.g. datetimes) shown instead of the integer
                 index; must match the member count and be unique.
             band: Raster only — the 1-based band drawn for every member.
