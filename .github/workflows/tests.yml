@@ -44,14 +44,21 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
-  # The two cheap whole-tree checks: a static name-check, and the doctests. ruff's F821 analyses a
-  # notebook as a whole, across cells, so it catches an undefined name inside a cell CI cannot execute
-  # — a body guarded by
+  # The cheap whole-tree checks: ruff (names + formatter + import sorter), mypy, and the doctests.
+  #
+  # ruff's F821 analyses a notebook as a whole, across cells, so it catches an undefined name inside a cell CI
+  # cannot execute — a body guarded by
   # `if <gitignored data>.exists():`, or one of the network-heavy notebooks the `notebooks` job skips. Those cells are
   # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
-  # Scoped to F821 on src/tests/docs deliberately: the full ruleset has ~1000 pre-existing findings (mostly import
-  # ordering) and examples/ is the exploratory scratch tree, both out of scope here. Keep the version in step with
-  # the ruff-pre-commit rev in .pre-commit-config.yaml.
+  # The `lint` task is an alias for lint-names (F821 over src/tests/docs) + lint-format + lint-imports (both over
+  # src/tests), so a step edit is not needed to add a ruff gate — widen the task instead. Still scoped: the rest of
+  # the ruleset carries ~455 pre-existing E/W/UP findings (import ordering is no longer among them — it is gated to
+  # zero by lint-imports as of #171) and examples/ is the exploratory scratch tree, both out of scope here. Keep the
+  # version in step with the ruff-pre-commit rev in .pre-commit-config.yaml.
+  #
+  # mypy runs on this leg only — ubuntu, the dev env, with python_version = "3.12" (see the note in
+  # pyproject.toml on why the checker target leads requires-python). Platform- and version-conditional typing is
+  # therefore not type-checked anywhere; the py311/py312/py313 x 3-OS matrix above covers it at run time only.
   lint-and-doctests:
     runs-on: ubuntu-latest
     permissions:
@@ -68,7 +75,7 @@ jobs:
           cache: true
           version: v0.73.0
 
-      - name: Name-check modules and notebooks
+      - name: Lint (names, formatting, import order)
         # Through pixi, not a bare `pip install` into the runner's system Python: the version then comes from
         # pixi.lock rather than a second copy of it here, and a contributor can run the identical check with
         # `pixi run -e dev lint` before pushing. ruff lints .ipynb natively, no extra flag.
