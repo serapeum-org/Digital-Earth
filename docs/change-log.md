@@ -1,5 +1,11 @@
 # Change log
 
+## 0.10.0 (2026-09-09)
+
+### Refactor
+
+- **package**: split digitalearth into one subpackage per backend plus a shared base (#161)
+
 ## 0.9.0 (2026-09-06)
 
 ### Feat

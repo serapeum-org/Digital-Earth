@@ -18,6 +18,12 @@ in the tier plan's feature-parity matrix.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
+from digitalearth.base.stretch import (
+    DEFAULT_COMPOSITE_BANDS,
+    ChannelLimits,
+    require_three_bands,
+    stretch_to_unit,
+)
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -27,22 +33,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class RasterMixin(_MixinBase):
-    """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti.
-
-    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
-    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
-    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
-    supplies those.
-
-    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
-    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
-    ``InteractiveMap`` MRO exactly what it was before the annotation.
-
-    See Also:
-        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
-        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
-    """
+    """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti."""
 
     def _image_element(
         self, data: Any, *, band: int = 1, vname: Optional[str] = None
@@ -100,7 +91,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
         """
         src = self._to_display_source(data, band=band)
         arr = _masked_to_nan(src.z.values)
@@ -120,16 +111,25 @@ class RasterMixin(_MixinBase):
         )
         return self.add_element(element)
 
-    def rgb(self, data: Any, *, bands: Sequence[int] = (1, 2, 3), **opts: Any) -> Self:
+    def rgb(
+        self,
+        data: Any,
+        *,
+        bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
+        limits: Optional[ChannelLimits] = None,
+        **opts: Any,
+    ) -> Self:
         """Add a true-colour composite from three raster bands (2–98 % percentile stretch).
 
         Args:
             data: A pyramids multiband ``Dataset``; reprojected to the display CRS first.
             bands: The three 1-based band indices composing ``(R, G, B)``.
+            limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call
+                percentile scan, so a sequence of frames can share one black and white point.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
 
         Examples:
             - Compose three bands of a satellite stack into true colour:
@@ -144,15 +144,13 @@ class RasterMixin(_MixinBase):
                 ```
 
         Raises:
-            ValueError: when ``bands`` does not name exactly three bands.
+            ValueError: when ``bands`` does not name exactly three bands, or ``limits`` is given without
+                one ``(lo, hi)`` pair per channel.
         """
-        import numpy as np
-
         from digitalearth.base.sources import get_stack
 
         gv, hv = _require_holoviz()
-        if len(bands) != 3:
-            raise ValueError(f"rgb() needs exactly three bands, got {tuple(bands)!r}")
+        require_three_bands("rgb", bands)
         # Reproject once into a local handle, then feed both the coordinate extraction (get_source,
         # via _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
         # already-reprojected dataset, so a single warp here keeps them consistent (H1).
@@ -160,18 +158,10 @@ class RasterMixin(_MixinBase):
             data = data.to_crs(self.crs)
         src = self._to_display_source(data, band=bands[0])
         stack = get_stack(data, bands)
-        channels = []
-        for index in range(3):
-            channel = stack[:, :, index]
-            with np.errstate(
-                invalid="ignore"
-            ):  # an all-nodata channel -> NaN bounds (renders transparent)
-                low, high = np.nanpercentile(channel, (2.0, 98.0))
-            span = high - low
-            # Guard a zero / NaN span (constant or all-nodata channel) so the stretch never divides
-            # by zero/NaN for the finite pixels; genuinely-nodata pixels stay NaN (transparent).
-            scale = span if np.isfinite(span) and span > 0 else 1.0
-            channels.append(np.clip((channel - np.nan_to_num(low)) / scale, 0.0, 1.0))
+        # One shared stretch for every backend (base/stretch.py). Passing `limits` holds it fixed across a
+        # sequence of frames, the same way the matplotlib tier freezes an animation.
+        stretched = stretch_to_unit(stack, limits)
+        channels = [stretched[:, :, index] for index in range(3)]
         element = hv.RGB(
             (src.x.values, src.y.values, *channels),
             kdims=["x", "y"],
@@ -206,7 +196,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
         """
         gv, hv = _require_holoviz()
         src = self._to_display_source(data, band=band)
@@ -246,7 +236,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
         """
         return self._contour_layer(data, band=band, levels=levels, filled=False, **opts)
 
@@ -273,25 +263,14 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
         """
         return self._contour_layer(data, band=band, levels=levels, filled=True, **opts)
 
     def _contour_layer(
         self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
     ) -> Self:
-        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
-
-        Args:
-            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``, reprojected to the display CRS.
-            band: 1-based band the contours are traced from.
-            levels: Contour levels (a count or an explicit sequence); ``None`` uses 10 levels.
-            filled: Whether to fill between levels (``filled_contours``) or draw lines (``contours``).
-            **opts: Extra HoloViews style options applied to the element.
-
-        Returns:
-            The same map instance, so builder calls chain.
-        """
+        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer."""
         gv, hv = _require_holoviz()
         from holoviews.operation import contours as contour_op
 
@@ -342,8 +321,7 @@ class RasterMixin(_MixinBase):
                 ```
 
         Returns:
-            The same map instance, so builder calls chain — one contour layer is registered per
-            member.
+            This map (chainable) — one contour layer registered per member.
         """
         cycle_colour = "color" not in opts and "cmap" not in opts
         for index, member in enumerate(collection.datasets):
@@ -383,7 +361,7 @@ class RasterMixin(_MixinBase):
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
 
         Raises:
             AttributeError: when ``dataset`` lacks the pyramids COG/overview read surface

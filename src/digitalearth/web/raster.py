@@ -27,21 +27,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class RasterMixin(_MixinBase):
-    """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path).
-
-    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
-    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
-    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
-
-    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
-    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
-    before the annotation.
-
-    See Also:
-        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
-        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
-    """
+    """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
     def add_raster(
         self,
@@ -52,6 +38,7 @@ class RasterMixin(_MixinBase):
         opacity: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
+        visible: bool = True,
     ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -67,9 +54,12 @@ class RasterMixin(_MixinBase):
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
+            visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
+                :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
+                every frame showing at once — including in a saved page, which carries no slider.
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
         """
         import numpy as np
 
@@ -99,6 +89,7 @@ class RasterMixin(_MixinBase):
             type=LayerType.RASTER,
             source=src_id,
             paint={"raster-opacity": float(opacity)},
+            layout={"visibility": "visible" if visible else "none"},
         )
 
         def apply(widget: Any) -> None:

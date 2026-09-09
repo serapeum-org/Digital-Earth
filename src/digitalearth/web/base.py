@@ -31,6 +31,10 @@ _INSTALL_HINT = (
     "(or, in this repo, `pixi install -e web`)."
 )
 
+#: How many column names an "active geometry missing" error quotes before it elides the rest — a wide
+#: table would otherwise print hundreds of names into a traceback.
+_MAX_COLUMNS_IN_ERROR = 12
+
 #: Short style aliases → CartoCDN basemap slugs. A bare name resolves to the CartoCDN style URL; a full URL
 #: (or a MapLibre style ``dict``) is passed through untouched. CartoCDN basemaps need no API token.
 _STYLE_ALIASES = {
@@ -224,6 +228,8 @@ class WebMapBase:
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
         self.big_data_threshold = 50_000
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
+        #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
+        #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
         self._temporal: Optional[dict] = None
 
     def _uid(self, prefix: str) -> str:
@@ -249,7 +255,7 @@ class WebMapBase:
             layer: A ``maplibre`` ``Layer``/spec, or a callable ``apply(widget)``.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.add_raster(dem).basemap()``.
+            This map, so builder calls chain: ``m.add_raster(dem).basemap()``.
 
         Examples:
             - Registration appends in order and returns the map for chaining (any object stands in for a
@@ -307,10 +313,107 @@ class WebMapBase:
             data = data.to_crs(self.crs)
         return get_source(data, band=band)
 
-    def _display_gdf(self, features: Any) -> Any:
+    @staticmethod
+    def _reject_raster(data: Any, method: str) -> None:
+        """Raise ``TypeError`` when ``data`` is a pyramids raster, leaving anything else alone.
+
+        For the builders that legitimately accept something other than a vector layer — ``point_cloud``
+        takes a raw sequence of ``xyz`` triples — where :meth:`_require_vector` would be too strict. A
+        raster is recognised by reporting ``columns`` as an ``int`` (the grid width in cells); a table
+        reports an ``Index`` of names and a bare sequence has no ``columns`` at all.
+
+        Args:
+            data: The caller's input.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``data`` is a pyramids raster.
+        """
+        if isinstance(getattr(data, "columns", None), int):
+            raise TypeError(
+                f"{method}() does not take a raster; got {type(data).__name__}. For a single raster use "
+                f"add_raster(); for a raster time stack pass a DatasetCollection to timeslider()."
+            )
+
+    @staticmethod
+    def _require_vector(features: Any, method: str) -> None:
+        """Raise ``TypeError`` unless ``features`` is a vector layer.
+
+        The tier's single input guard, called from :meth:`_display_gdf` so every vector builder rejects a
+        raster the same way. Without it a pyramids raster reaches whichever expression the builder happens
+        to run first and fails obscurely there — a ``Dataset`` reports ``columns`` as an ``int`` (the grid
+        width in cells), so an attribute-membership test raises ``TypeError: argument of type 'int' is not
+        iterable``, while other builders raise ``has no len()``, an ``AttributeError``, or nothing at all.
+
+        Args:
+            features: The caller's input, expected to be a pyramids ``FeatureCollection`` / GeoDataFrame.
+            method: The calling builder name (quoted in the error).
+
+        Raises:
+            TypeError: when ``features`` exposes no ``geometry``. A table that has columns but no *active*
+                geometry (``set_geometry`` never called) gets its own message naming ``set_geometry``,
+                rather than being misreported as a raster.
+
+        Examples:
+            - A vector-like input passes the guard silently (the check returns nothing):
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> layer = type("Layer", (), {"geometry": ()})()
+                >>> print(WebMap._require_vector(layer, "points"))
+                None
+
+                ```
+            - A raster is turned away, and the message names the type that arrived:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap._require_vector(42, "points")
+                ... except TypeError as err:
+                ...     print(str(err).split("(")[0])
+                points
+
+                ```
+            - The message routes the caller to the raster builders in this same tier:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap._require_vector(42, "points")
+                ... except TypeError as err:
+                ...     print("add_raster" in str(err), "DatasetCollection" in str(err))
+                True True
+
+                ```
+
+        See Also:
+            digitalearth.web.bigdata.BigDataMixin._require_points: the narrower geometry-kind guard that
+                runs after this one for the heatmap/cluster builders.
+        """
+        if hasattr(features, "geometry"):
+            return
+        # A raster reports `columns` as an int (the grid width); a table reports an Index of names. Telling
+        # the two apart keeps a GeoDataFrame whose geometry was never activated from being called a raster.
+        WebMapBase._reject_raster(features, method)
+        columns = getattr(features, "columns", None)
+        if columns is not None:
+            names = [str(name) for name in columns]
+            shown = names[:_MAX_COLUMNS_IN_ERROR]
+            if len(names) > _MAX_COLUMNS_IN_ERROR:
+                shown.append(f"... (+{len(names) - _MAX_COLUMNS_IN_ERROR} more)")
+            raise TypeError(
+                f"{method}() needs a layer with an active geometry column; got a "
+                f"{type(features).__name__} whose columns are {shown}. Call set_geometry(...) on it first."
+            )
+        raise TypeError(
+            f"{method}() needs a vector layer (a pyramids FeatureCollection / GeoDataFrame); got "
+            f"{type(features).__name__}. For a single raster use add_raster(); for a raster time stack "
+            f"use timeslider() with a DatasetCollection."
+        )
+
+    def _display_gdf(self, features: Any, *, method: str) -> Any:
         """Reproject a vector input to the display CRS (lon/lat) and return a GeoDataFrame.
 
-        The single vector choke point the point/line/polygon builders call. A pyramids
+        The single vector choke point the point/line/polygon builders call, and so the place the tier
+        rejects non-vector input (:meth:`_require_vector`) before any reprojection is paid for. A pyramids
         ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form ``maplibre.Map.add_source`` accepts
         for vector data), so it is reprojected through pyramids (``to_crs``) when needed and returned as-is; a
         bare GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import —
@@ -318,10 +421,16 @@ class WebMapBase:
 
         Args:
             features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
+            method: The calling builder's name, quoted in the guard's error message. Required, so a
+                new builder cannot silently inherit a generic label.
 
         Returns:
             A GeoDataFrame in the display CRS (EPSG:4326 by default), ready for ``add_source``.
+
+        Raises:
+            TypeError: when ``features`` is not a vector layer.
         """
+        self._require_vector(features, method)
         if hasattr(features, "epsg") and hasattr(
             features, "to_crs"
         ):  # pyramids FeatureCollection (a GeoDataFrame)
@@ -345,7 +454,7 @@ class WebMapBase:
             layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
 
         Returns:
-            The same map instance, so builder calls chain.
+            This map (chainable).
         """
         self.layers.insert(0, layer)
         return self

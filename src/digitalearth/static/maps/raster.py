@@ -12,20 +12,13 @@ from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
+from digitalearth.base.stretch import (
+    DEFAULT_COMPOSITE_BANDS,
+    ChannelLimits,
+    require_three_bands,
+    stretch_to_unit,
+)
 from digitalearth.static.render_compat import relocate_flat_style
-
-
-def _stretch_to_unit(stack: np.ndarray) -> np.ndarray:
-    """Per-channel 2-98 percentile contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``."""
-    out = np.empty(stack.shape, dtype="float64")
-    for i in range(stack.shape[2]):
-        band = stack[..., i].astype("float64")
-        lo, hi = np.nanpercentile(band, [2, 98])
-        if hi <= lo:
-            hi = lo + 1.0
-        out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
-    return out
-
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -34,21 +27,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 
 
 class RasterMixin(_MixinBase):
-    """Raster field renders and composites for :class:`~digitalearth.static.map.Map`.
-
-    A capability mixin of :class:`~digitalearth.static.map.Map`: it is only ever composed into that map class, never
-    instantiated or subclassed on its own. Its methods reach the shared figure/axes, the layer registry and the
-    display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
-
-    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
-    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
-    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
-    it was before the annotation.
-
-    See Also:
-        digitalearth.static.map.Map: the composition that supplies the state these methods use.
-        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
-    """
+    """Raster field renders and composites for :class:`~digitalearth.static.map.Map`."""
 
     def _field(
         self,
@@ -168,9 +147,10 @@ class RasterMixin(_MixinBase):
     def rgb_composite(
         self,
         dataset: Any,
-        bands: Sequence[int] = (1, 2, 3),
+        bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
+        limits: Optional[ChannelLimits] = None,
         **opts,
     ) -> Any:
         """Render three raster bands as a true/false-colour RGB image (``ArrayGlyph`` RGB path).
@@ -181,10 +161,17 @@ class RasterMixin(_MixinBase):
             mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
                 percentile stretch (and render transparent). Pass ``False`` for the raw values (the
                 pre-mask behaviour, where the nodata sentinel participates in the stretch).
+            limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel — skips the per-call
+                percentile scan. :meth:`~digitalearth.static.maps.animation.AnimationMixin.animate` fills
+                these from the whole stack so a composite animation holds one stretch across its frames.
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
             The image mappable (registered as a Scene layer).
+
+        Raises:
+            ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
+                one ``(lo, hi)`` pair per channel.
 
         Examples:
             - Composite three bands of a multiband raster into one RGB image:
@@ -204,14 +191,37 @@ class RasterMixin(_MixinBase):
                 1
 
                 ```
+            - Frozen ``limits`` replace the per-call stretch: a white point far above the data renders it
+                black, which is what holds a sequence of frames on one scale:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> rgb = Dataset.from_array(arr=np.stack([base, base, base]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
+                >>> m = Map(crs=rgb.epsg)
+                >>> _ = m.rgb_composite(rgb, limits=[(0.0, 1e6)] * 3)
+                >>> round(float(np.nanmax(m.ax.images[-1].get_array())), 3)
+                0.0
+
+                ```
+
+        See Also:
+            hsv_composite: The same three bands read as hue/saturation/value instead.
+            digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
+        require_three_bands("rgb_composite", bands)
         ds = self._reproject(dataset)
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
         # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
-        band_first = np.moveaxis(_stretch_to_unit(stack), -1, 0)
+        band_first = np.moveaxis(stretch_to_unit(stack, limits), -1, 0)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
             band_first,
@@ -226,9 +236,10 @@ class RasterMixin(_MixinBase):
     def hsv_composite(
         self,
         dataset: Any,
-        bands: Sequence[int] = (1, 2, 3),
+        bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
         *,
         mask_nodata: bool = True,
+        limits: Optional[ChannelLimits] = None,
         **opts,
     ) -> Any:
         """Render three raster bands as an HSV composite (hue/sat/value → RGB → image).
@@ -238,18 +249,65 @@ class RasterMixin(_MixinBase):
             bands: Three 1-based band indices mapped to H, S, V. Defaults to ``(1, 2, 3)``.
             mask_nodata: When ``True`` (default) each band's nodata cells are excluded from the 2-98
                 percentile stretch (and render transparent). Pass ``False`` for the raw pre-mask behaviour.
+            limits: Optional frozen ``(lo, hi)`` stretch bounds, one pair per channel (H, S, V) — skips the
+                per-call percentile scan, so an animation can hold one stretch across its frames.
             **opts: Styling kwargs, filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
             The image mappable (registered as a Scene layer).
+
+        Raises:
+            ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
+                one ``(lo, hi)`` pair per channel.
+
+        Examples:
+            - Read three bands as hue/saturation/value and render the resulting RGB image:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> hsv = Dataset.from_array(arr=np.stack([base, base * 0.5, base * 0.25]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
+                >>> m = Map(crs=hsv.epsg)
+                >>> _ = m.hsv_composite(hsv)
+                >>> len(m.ax.images)
+                1
+
+                ```
+            - The rendered image is band-last RGB, one value per channel per cell:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+                >>> base = np.nan_to_num(ds.read_array(band=0).astype("float32"))
+                >>> hsv = Dataset.from_array(arr=np.stack([base, base * 0.5, base * 0.25]),
+                ...                          geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg))
+                >>> m = Map(crs=hsv.epsg)
+                >>> _ = m.hsv_composite(hsv)
+                >>> m.ax.images[-1].get_array().shape[-1]
+                3
+
+                ```
+
+        See Also:
+            rgb_composite: The same three bands mapped straight to red/green/blue.
+            digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         from matplotlib.colors import hsv_to_rgb
 
+        require_three_bands("hsv_composite", bands)
         ds = self._reproject(dataset)
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
-        rgb = hsv_to_rgb(_stretch_to_unit(stack))  # (rows, cols, 3) RGB
+        rgb = hsv_to_rgb(stretch_to_unit(stack, limits))  # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's RgbBands path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)
         plot_style = relocate_flat_style(opts)
