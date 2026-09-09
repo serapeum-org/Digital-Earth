@@ -68,7 +68,8 @@ def test_no_cartopy_import():
     assert len(modules) > 5, f"no modules found under {pkg} — has the package moved again?"
     for py in modules:
         text = py.read_text(encoding="utf-8")
-        assert "import cartopy" not in text and "from cartopy" not in text, f"{py.name} imports cartopy"
+        assert "import cartopy" not in text, f"{py.name} has `import cartopy`"
+        assert "from cartopy" not in text, f"{py.name} has `from cartopy`"
 
 
 @pytest.mark.parametrize("layer", ["coastlines", "borders"])

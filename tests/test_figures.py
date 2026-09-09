@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from digitalearth.static.figures import fig_of  # noqa: E402
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def closed_figures():
     """Close every figure a test leaves behind.
 

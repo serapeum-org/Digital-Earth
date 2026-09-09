@@ -27,7 +27,7 @@ SHIM = "digitalearth.scene"
 FORWARDED = ["Scene", "Map", "TexturedGlobe", "grid", "shared_colorbar"]
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def evicted_shim():
     """Evict ``digitalearth.scene`` from the module cache so the next import re-runs its body.
 
@@ -47,7 +47,7 @@ def evicted_shim():
             digitalearth.scene = cached
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def shim(evicted_shim):
     """Import the shim freshly with its deprecation warning silenced.
 
@@ -116,30 +116,29 @@ class TestSceneShimWarning:
             f"expected exactly one DeprecationWarning, got {len(deprecations)}"
         )
 
-    def test_importing_static_directly_does_not_warn(self):
+    def test_importing_static_directly_does_not_warn(self, monkeypatch):
         """The replacement module is warning-free, so the warning really is about the old path.
+
+        Args:
+            monkeypatch: Evicts the module-cache entry and the package attribute, restoring both on teardown.
 
         Test scenario:
             Re-executing ``digitalearth.static``'s body records no DeprecationWarning — proof the shim's
             warning comes from ``scene.py`` and not from something it re-exports.
         """
-        cached = sys.modules.pop("digitalearth.static", None)
-        try:
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                importlib.import_module("digitalearth.static")
-            deprecations = [
-                str(w.message)
-                for w in caught
-                if issubclass(w.category, DeprecationWarning)
-            ]
-            assert not deprecations, (
-                f"digitalearth.static must not warn on import, got: {deprecations}"
-            )
-        finally:
-            if cached is not None:
-                sys.modules["digitalearth.static"] = cached
-                digitalearth.static = cached
+        # Re-registering the current value is how monkeypatch is told to restore it after the re-import
+        # rebinds the package attribute; delitem alone would only put sys.modules back.
+        monkeypatch.setattr(digitalearth, "static", digitalearth.static, raising=False)
+        monkeypatch.delitem(sys.modules, "digitalearth.static", raising=False)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            importlib.import_module("digitalearth.static")
+        deprecations = [
+            str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+        ]
+        assert not deprecations, (
+            f"digitalearth.static must not warn on import, got: {deprecations}"
+        )
 
 
 class TestSceneShimExports:

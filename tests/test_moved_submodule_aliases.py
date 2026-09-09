@@ -32,7 +32,7 @@ from digitalearth import _MOVED_SUBMODULES
 MOVED = sorted(_MOVED_SUBMODULES)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def uncached():
     """Drop the cached aliases so each test sees a first attribute access.
 

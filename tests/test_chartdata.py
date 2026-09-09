@@ -22,7 +22,7 @@ from digitalearth.base.chartdata import (
 )
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def frame():
     """A small DataFrame with numeric, non-finite, categorical and string columns.
 
@@ -126,7 +126,8 @@ class TestColumnOrArray:
         """
         out = column_or_array(None, [3.0, np.nan, 1.0])
         assert out.shape == (3,), f"expected three elements, got shape {out.shape}"
-        assert out[0] == 3.0 and out[2] == 1.0, f"order changed: {out}"
+        assert out[0] == 3.0, f"first element reordered: {out}"
+        assert out[2] == 1.0, f"last element reordered: {out}"
         assert np.isnan(out[1]), "NaN must survive coercion"
 
 
