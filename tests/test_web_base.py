@@ -9,9 +9,12 @@ Engine-dependent tests ``importorskip`` maplibre — they run in the ``web`` pix
 (``pixi run -e web test-web``); everything else runs in the lean ``dev`` env too.
 """
 
+import datetime
 import importlib
 import pathlib
 import sys
+
+import numpy as np
 
 import pytest
 
@@ -398,8 +401,6 @@ class TestJsonSafeDatetimes:
 
     def test_timezone_aware_columns_keep_their_offset(self):
         """A tz-aware column encodes with its UTC offset, not silently as naive local time."""
-        import pandas as pd
-
         frame = self._frame()
         frame["from_date"] = frame["from_date"].dt.tz_localize("UTC")
         out = WebMap()._json_safe(frame)
@@ -436,7 +437,10 @@ class TestJsonSafeDatetimes:
 
     def test_non_date_object_columns_are_left_alone(self):
         """A plain object column (strings) must not be touched by the date encoding."""
-        frame = self._frame(label=["x", "y", "z"])
+        import pandas as pd
+
+        frame = self._frame(label=pd.Series(["x", "y", "z"], dtype=object))
+        assert frame["label"].dtype == object, "the fixture must be object dtype to enter the scan"
         out = WebMap()._json_safe(frame)
         assert list(out["label"]) == ["x", "y", "z"], "a string column was altered"
 
@@ -450,10 +454,10 @@ class TestJsonSafeDatetimes:
         """A column holding dates *and* other values must not crash on the non-dates.
 
         Test scenario:
-            The dtype checks cannot see inside an object column, so the encoder samples the first
-            non-null value to decide whether to convert. If it then called ``isoformat()`` on every
-            element, a column of ``[date, "n/a"]`` would raise ``AttributeError`` — turning a frame that
-            merely rendered oddly into one that cannot render at all.
+            The dtype checks cannot see inside an object column, so the encoder scans its values. If it
+            then called ``isoformat()`` on every element, a column of ``[date, "n/a"]`` would raise
+            ``AttributeError`` — turning a frame that merely rendered oddly into one that cannot render
+            at all.
         """
         import datetime as dt
         import json
@@ -483,8 +487,8 @@ class TestJsonSafeDatetimes:
         """Every value missing is still a datetime column, and must encode to nulls, not 'NaT'.
 
         Test scenario:
-            The sampling shortcut for object columns looks at the first non-null value; a column with
-            none at all must not slip through as raw NaT.
+            A datetime column with no value at all still matches on dtype, so it must encode to nulls
+            rather than slipping through as raw NaT.
         """
         import json
 
@@ -620,29 +624,29 @@ class TestJsonSafeDatetimes:
         json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
 
     @pytest.mark.parametrize("value, expected", [
-        ("TIME", "06:30:00"),
-        ("NPDATETIME", "2026-01-01T00:00:00"),
+        (datetime.time(6, 30), "06:30:00"),
+        (np.datetime64("2026-01-01"), "2026-01-01T00:00:00"),
+        (np.timedelta64(1, "D"), "P1DT0H0M0S"),
     ])
-    def test_time_and_numpy_datetime_are_encoded(self, value, expected):
-        """``datetime.time`` and ``numpy.datetime64`` also fail ``json.dumps`` and are covered.
+    def test_scalar_types_the_dtype_checks_miss_are_encoded(self, value, expected):
+        """Scalars that fail ``json.dumps`` but match no pandas date dtype are covered.
 
         Args:
-            value: Marker selecting which scalar type to build.
+            value: The scalar placed in an object column.
             expected: Its ISO encoding.
 
         Test scenario:
-            Neither is caught by the datetime64/timedelta64 dtype checks — ``time`` is not a ``date``
-            subclass, and a ``numpy.datetime64`` in an object column has no pandas dtype to match.
+            None of these is caught by the datetime64/timedelta64 dtype checks — ``time`` is not a
+            ``date`` subclass, and a numpy scalar in an object column has no pandas dtype to match. The
+            numpy scalars also lack ``isoformat()``, so they route through pandas' wrappers.
         """
-        import datetime as dt
         import json
 
         import geopandas as gpd
-        import numpy as np
         import pandas as pd
         from shapely.geometry import Point
 
-        scalar = dt.time(6, 30) if value == "TIME" else np.datetime64("2026-01-01")
+        scalar = value
         frame = gpd.GeoDataFrame(
             {"c": pd.Series([scalar], dtype=object)}, geometry=[Point(0, 0)], crs=4326
         )
@@ -660,9 +664,14 @@ class TestJsonSafeDatetimes:
         import geopandas as gpd
         from shapely.geometry import Point
 
+        import pandas as pd
+
         frame = gpd.GeoDataFrame(
-            {"label": ["a", "b"]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+            {"label": pd.Series(["a", "b"], dtype=object)},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
         )
+        assert frame["label"].dtype == object, "the fixture must be object dtype to enter the scan"
         assert WebMap()._json_safe(frame) is frame, "a text-only frame must not be copied"
 
     def test_a_numeric_column_with_nan_is_left_alone(self):
@@ -719,25 +728,36 @@ class TestJsonSafeDatetimes:
         series = gpd.GeoSeries([Point(0, 0), Point(1, 1)], crs=4326)
         assert WebMap()._json_safe(series) is series, "a GeoSeries must pass straight through"
 
-    def test_the_feature_collection_branch_encodes_too(self):
+    def test_the_feature_collection_branch_encodes_too(self, tmp_path):
         """A pyramids ``FeatureCollection`` takes its own branch of ``_display_gdf`` and must be encoded.
 
+        Args:
+            tmp_path: pytest's per-test directory, holding the written GeoJSON.
+
         Test scenario:
-            Three return paths reach ``add_source``; the FeatureCollection one is the branch a pyramids
-            user actually hits, and it is a GeoDataFrame subclass, so the copy must preserve the subclass.
+            ``_display_gdf`` branches on ``epsg``/``to_crs``, which a plain GeoDataFrame does not have —
+            so reaching that path needs a real ``FeatureCollection``. It is a GeoDataFrame subclass, so
+            the encoding copy has to preserve both the subclass and its pyramids surface.
         """
         gpd = pytest.importorskip("geopandas")
+        feature = pytest.importorskip("pyramids.feature")
         import pandas as pd
         from shapely.geometry import Point
 
-        frame = gpd.GeoDataFrame(
+        source = gpd.GeoDataFrame(
             {"when": pd.to_datetime(["2026-01-01", "2026-02-01"])},
             geometry=[Point(0, 0), Point(1, 1)],
             crs=4326,
         )
-        out = WebMap()._display_gdf(frame, method="points")
-        assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the display path did not encode"
-        assert out.crs is not None, "the CRS was lost by the encoding copy"
+        path = tmp_path / "events.geojson"
+        source.to_file(str(path), driver="GeoJSON")
+        collection = feature.FeatureCollection.read_file(str(path))
+        assert hasattr(collection, "epsg"), "fixture must expose .epsg or the branch is not exercised"
+
+        out = WebMap()._display_gdf(collection, method="points")
+        assert out["when"].iloc[0].startswith("2026-01-01T"), "the FeatureCollection branch did not encode"
+        assert isinstance(out, type(collection)), f"the copy lost the subclass: {type(out).__name__}"
+        assert out.epsg == 4326, f"the pyramids surface was lost: {getattr(out, 'epsg', None)}"
 
     def test_a_renamed_geometry_column_is_still_excluded(self):
         """Geometry is found by its active name, not by the literal string "geometry".
@@ -823,6 +843,64 @@ class TestDatetimeFramesReachTheMap:
             crs=4326,
         )
 
+    @pytest.fixture()
+    def dated_polygons(self):
+        """An area layer carrying a value column and a datetime column."""
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import Polygon
+
+        return gpd.GeoDataFrame(
+            {"score": [1.0, 2.0], "from_date": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1)]),
+                Polygon([(2, 2), (3, 2), (3, 3)]),
+            ],
+            crs=4326,
+        )
+
+    @pytest.mark.parametrize("method, kwargs", [
+        ("polygons", {}),
+        ("choropleth", {"column": "score"}),
+    ])
+    def test_area_builders_save_a_dated_frame(self, tmp_path, dated_polygons, method, kwargs):
+        """The polygon builders serialise a datetime column instead of raising.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+            dated_polygons: The dated area layer.
+            method: The builder under test.
+            kwargs: Extra required arguments for that builder.
+
+        Test scenario:
+            `choropleth` is the builder that reproduced issue #156's exact message before the fix.
+        """
+        out = tmp_path / f"{method}.html"
+        getattr(WebMap(), method)(dated_polygons, **kwargs).save(str(out))
+        assert out.stat().st_size > 1_000, f"{method} wrote an empty page"
+
+    def test_lines_save_a_dated_frame(self, tmp_path):
+        """The line builder serialises a datetime column too.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            `lines` needs its own fixture — a line layer is not interchangeable with points or areas.
+        """
+        gpd = pytest.importorskip("geopandas")
+        import pandas as pd
+        from shapely.geometry import LineString
+
+        frame = gpd.GeoDataFrame(
+            {"from_date": pd.to_datetime(["2026-01-01"])},
+            geometry=[LineString([(0, 0), (1, 1)])],
+            crs=4326,
+        )
+        out = tmp_path / "lines.html"
+        WebMap().lines(frame).save(str(out))
+        assert out.stat().st_size > 1_000, "lines wrote an empty page"
+
     @pytest.mark.parametrize("method, kwargs", [
         ("points", {"column": "score"}),
         ("heatmap", {}),
@@ -854,12 +932,14 @@ class TestDatetimeFramesReachTheMap:
             ISO-8601 (lexicographically sortable) is the right encoding.
         """
         m = WebMap().timeslider(dated_points, kdim="from_date")
-        steps = m._temporal_times()
-        assert steps == sorted(steps), f"slider steps lost their order: {steps}"
-        assert all(isinstance(s, str) for s in steps), f"steps should be ISO text, got {steps}"
+        assert m._temporal_times() == ["2026-01-01T00:00:00", "2026-02-01T00:00:00"], (
+            f"expected the encoded steps in chronological order, got {m._temporal_times()}"
+        )
         out = tmp_path / "slider.html"
         m.save(str(out))
-        assert out.stat().st_size > 1_000, "the saved slider page looks empty"
+        page = out.read_text(encoding="utf-8", errors="replace")
+        assert '"from_date": "2026-01-01T00:00:00"' in page, "the encoded value never reached the page"
+        assert "Timestamp(" not in page, "a raw Timestamp leaked into the page"
 
     def test_a_missing_time_value_does_not_break_the_slider(self, tmp_path):
         """A NaT in the kdim drops that step instead of raising when the steps are sorted.
