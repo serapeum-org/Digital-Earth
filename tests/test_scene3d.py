@@ -176,6 +176,21 @@ def _stub_scene(component=None, error=None):
     return scene
 
 
+def test_stub_scene_mirrors_the_real_attribute_set():
+    """`_stub_scene` builds the same attributes `Scene3DBase.__init__` does.
+
+    Test scenario:
+        The helper bypasses `__init__` to avoid opening a render window it would never close. That is only
+        safe while the two agree, so a third attribute added to `__init__` must fail here rather than silently
+        leaving the stub scenes half-built.
+    """
+    real = Scene3DBase(off_screen=True)
+    try:
+        assert set(vars(_stub_scene())) == set(vars(real)), "the stub scene must carry the real attribute set"
+    finally:
+        real.close()
+
+
 class TestHouseTheme:
     """Tests for house_theme."""
 
@@ -374,14 +389,26 @@ class TestExportHtml:
 
 
 class TestPyvistaVtkRoot:
-    """Tests for the public derivation of the VTK package pyvista is bound to."""
+    """Tests for how the VTK package pyvista is bound to gets resolved."""
 
-    def test_reads_the_root_off_a_pyvista_type(self):
-        """The root comes from the MRO of a pyvista type, giving `vtkmodules` for a stock build.
+    def test_prefers_the_value_pyvista_resolved(self, monkeypatch):
+        """`pyvista._vtk._VTK_ROOT` wins when present — it is the value pyvista itself uses.
+
+        Args:
+            monkeypatch: Pins the resolved root to a name the MRO walk could never produce.
 
         Test scenario:
-            Deriving it this way avoids `pyvista._vtk._VTK_ROOT`, which is private and moved between pyvista
-            0.48 and 0.49 — the module path does not even exist on 0.48.
+            pyvista 0.49 caches its resolved backend there, and it can be any distribution name. Reading it
+            first is what makes the comparison exact on the versions where the component branch is reachable.
+        """
+        monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
+        assert base._pyvista_vtk_root() == "cvista", "the resolved root must win over the MRO walk"
+
+    def test_reads_the_root_off_a_pyvista_type(self):
+        """Without a resolved root the MRO of a pyvista type gives the same answer for a stock build.
+
+        Test scenario:
+            pyvista 0.48 ships `pyvista._vtk` but not `_VTK_ROOT`, so the walk is the fallback there.
         """
         root = base._pyvista_vtk_root()
         ancestry = {klass.__module__.split(".")[0] for klass in pv.PolyData.__mro__}
@@ -446,23 +473,63 @@ class TestVtkBuildReconciliation:
         assert "vtk_a_different_build" in str(exc_info.value), f"The resolved build was not named: {exc_info.value}"
         assert component.calls == [], f"The export must not run on a mismatched build, got {component.calls}"
 
-    def test_the_fallback_branch_skips_the_check(self, monkeypatch, tmp_path):
-        """Without a component the check is irrelevant — pyvista runs its own inside `Plotter.export_html`.
+    def test_the_fallback_branch_is_guarded_too(self, monkeypatch, tmp_path):
+        """The check runs before either branch, so the no-component path is guarded as well.
 
         Args:
             monkeypatch: Points `VTK_MODULE_NAME` at a different build than pyvista's.
             tmp_path: Supplies the destination path.
 
         Test scenario:
-            Duplicating the guard on the fallback branch would raise before pyvista could produce its own,
-            better-placed error, so a mismatch must still reach `Plotter.export_html`.
+            pyvista 0.49 makes this check inside the deprecated `Plotter.export_html`, but 0.48 makes none
+            anywhere — so leaving the fallback to pyvista would leave it unguarded on exactly the version the
+            fallback exists for.
         """
         monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
         monkeypatch.setenv("VTK_MODULE_NAME", "vtk_a_different_build")
         scene = _stub_scene()
+        with pytest.raises(RuntimeError, match="VTK_MODULE_NAME"):
+            scene.export_html(str(tmp_path / "s.html"))
+        assert scene.plotter.calls == [], f"A mismatched build must not export, got {scene.plotter.calls}"
+
+    def test_a_non_vtk_prefixed_backend_is_compared_correctly(self, monkeypatch, tmp_path):
+        """A backend whose name is not `vtk*` — pyvista's `cvista`, or any PYVISTA_VTK_BACKEND — still compares.
+
+        Args:
+            monkeypatch: Pins pyvista's resolved root to a non-`vtk` name and points trame at the stock one.
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            pyvista resolves its VTK root to `cvista` merely because that package is importable, and
+            `PYVISTA_VTK_BACKEND` can name any fork. A check that only recognises `vtk`-prefixed names would
+            report both sides as `vtkmodules` and pass a genuinely mismatched pair.
+        """
+        monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
+        monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
+        monkeypatch.delenv("VTK_MODULE_NAME", raising=False)
+        scene = _stub_scene(component=_RecordingComponent())
+        with pytest.raises(RuntimeError, match="cvista"):
+            scene.export_html(str(tmp_path / "s.html"))
+
+    def test_a_matched_non_vtk_backend_is_not_blocked(self, monkeypatch, tmp_path):
+        """A correctly matched non-`vtk*` backend must export, not trip the guard.
+
+        Args:
+            monkeypatch: Pins both sides to the same non-`vtk` name.
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            This is the working single-build setup. Blocking it would be worse than not checking at all — the
+            error would tell the user to switch to the build they deliberately are not using.
+        """
+        monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
+        monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
+        monkeypatch.setenv("VTK_MODULE_NAME", "cvista")
+        component = _RecordingComponent()
+        scene = _stub_scene(component=component)
         out = str(tmp_path / "s.html")
         scene.export_html(out)
-        assert scene.plotter.calls == [out], f"The fallback must defer to pyvista's check, got {scene.plotter.calls}"
+        assert component.calls == [out], f"A matched cvista build must export, got {component.calls}"
 
     def test_a_loaded_vtk_module_wins_over_the_environment(self, monkeypatch, tmp_path):
         """An already-imported `vtk_module` decides trame's build, whatever the environment says.

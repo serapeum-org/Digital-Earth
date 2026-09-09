@@ -19,7 +19,7 @@ import numpy as np
 import pyvista as pv
 
 #: Anything acceptable as an output destination.
-PathLike = Union[str, "os.PathLike[str]"]
+Destination = Union[str, "os.PathLike[str]"]
 
 
 def house_theme() -> pv.themes.Theme:
@@ -66,14 +66,20 @@ def house_theme() -> pv.themes.Theme:
 def _pyvista_vtk_root() -> str:
     """Return the top-level VTK package pyvista is bound to (``vtkmodules`` for a stock build).
 
-    Read off the MRO of a pyvista type rather than from ``pyvista._vtk``, which is private and moved between
-    0.48 and 0.49.
+    pyvista resolves this itself and caches it as ``pyvista._vtk._VTK_ROOT``, which is the authoritative
+    answer: the backend can be any distribution name, not only a ``vtk``-prefixed one — ``PYVISTA_VTK_BACKEND``
+    names it outright, and ``cvista`` is selected merely by being importable. That attribute arrived in pyvista
+    0.49, exactly the versions where the trame component branch is reachable. On 0.48, where it is absent, the
+    MRO of a pyvista type gives the same answer for every stock build.
 
     Returns:
         The package name, e.g. ``"vtkmodules"``.
     """
+    resolved = getattr(getattr(pv, "_vtk", None), "_VTK_ROOT", None)
+    if resolved:
+        return str(resolved)
     for klass in pv.PolyData.__mro__:
-        root = klass.__module__.split(".")[0]
+        root: str = klass.__module__.split(".")[0]
         if root.startswith("vtk"):
             return root
     return "vtkmodules"
@@ -97,10 +103,11 @@ def _require_one_vtk_build() -> None:
     """Raise if trame and pyvista are bound to different VTK builds.
 
     A process must use one VTK build: objects cannot be shared between two, and handing a mesh from one to a
-    renderer built against the other fails deep inside trame on a wrapped-type mismatch. pyvista performs this
-    same check inside its (deprecated) ``Plotter.export_html``; going straight to the plotter component skips
-    it, so it is reproduced here — deliberately as a ``RuntimeError``, matching upstream, so a misconfiguration
-    cannot be mistaken for a missing package.
+    renderer built against the other fails deep inside trame on a wrapped-type mismatch. pyvista 0.49 makes
+    this check inside its (deprecated) ``Plotter.export_html`` and raises a ``RuntimeError`` rather than an
+    ``ImportError``, so a misconfiguration cannot be mistaken for a missing package; going straight to the
+    plotter component skips it. pyvista 0.48 makes no such check anywhere. Running it here therefore restores
+    it on the component branch and adds it on the fallback, so every export is guarded on both versions.
 
     Raises:
         RuntimeError: If the two roots differ, naming the variable to set.
@@ -109,7 +116,7 @@ def _require_one_vtk_build() -> None:
     if trame_root != pyvista_root:
         raise RuntimeError(
             f"trame is using the {trame_root!r} VTK build but PyVista is using {pyvista_root!r}. Objects "
-            f"cannot be shared between two VTK builds — set VTK_MODULE_NAME={pyvista_root!r} before importing "
+            f"cannot be shared between two VTK builds — set VTK_MODULE_NAME={pyvista_root} before importing "
             "trame, or install a single VTK."
         )
 
@@ -287,11 +294,12 @@ class Scene3DBase:
         actor = self.plotter.add_volume(volume, **kwargs)
         return self._add_actor(volume, actor)
 
-    def screenshot(self, path: Optional[str] = None, **kwargs: Any) -> np.ndarray:
+    def screenshot(self, path: Optional[Destination] = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
 
         Args:
-            path: Optional file path to save the PNG. When ``None`` the image is only returned.
+            path: Optional destination for the PNG, as a string or ``os.PathLike``. When ``None`` the
+                image is only returned.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.screenshot`.
 
         Returns:
@@ -332,7 +340,7 @@ class Scene3DBase:
         """
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
 
-    def export_html(self, path: PathLike) -> str:
+    def export_html(self, path: Destination) -> str:
         """Export the scene to a self-contained interactive HTML page (via trame/vtk.js).
 
         The page embeds the whole mesh, so it grows with the geometry rather than with the rendered image: about
@@ -348,7 +356,11 @@ class Scene3DBase:
 
         Args:
             path: Destination file. A suffix other than ``.html`` (including ``.HTML``) is replaced with
-                ``.html``; a name with no suffix gains one.
+                ``.html``; a name with no suffix gains one. Replacement is :meth:`pathlib.Path.with_suffix`,
+                matching what ``trame-pyvista`` does, so a dotted stem loses its last segment
+                (``report.v2`` becomes ``report.html``). Note :meth:`save` dispatches only on a literal
+                ``.html`` suffix, so ``save(\"x.htm\")`` writes a PNG while ``export_html(\"x.htm\")``
+                writes ``x.html``.
 
         Returns:
             The ``.html`` path written, as a string.
@@ -363,27 +375,18 @@ class Scene3DBase:
                 ``VTK_MODULE_NAME``, the variable that reconciles them.
 
         Examples:
-            - Export a small scene; the returned path is the page that was written, so it can be passed straight
-              on:
+            - Export a small scene. Asking for ``scene.HTML`` writes ``scene.html``, and the returned path is
+              the normalised one — the page that exists, on either pyvista — so it can be passed straight on:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True)
                 ...     _ = scene.add_mesh(pv.Sphere())
-                ...     out = scene.export_html(os.path.join(folder, "scene.html"))
+                ...     out = scene.export_html(os.path.join(folder, "scene.HTML"))
                 ...     scene.close()
-                ...     os.path.basename(out), os.path.getsize(out) > 0
-                ('scene.html', True)
-
-                ```
-            - Any other suffix is normalised to ``.html``, and the normalised name is what comes back — so the
-              returned path always names the file that exists, on either pyvista:
-                ```python
-                >>> from pathlib import Path
-                >>> from digitalearth.three_d.base import Scene3DBase
-                >>> Path("map.HTML").with_suffix(".html").name
-                'map.html'
+                ...     os.path.basename(out), os.path.getsize(out) > 0, sorted(os.listdir(folder))
+                ('scene.html', True, ['scene.html'])
 
                 ```
 
@@ -396,19 +399,19 @@ class Scene3DBase:
         # on a registered `trame` plotter component and `Plotter.export_html` is deprecated. This is a capability
         # switch, not a version one — 0.48 ships the same component registry, so a 0.48 user who installs
         # trame-pyvista takes the component branch too. Falling back (rather than raising here) hands the
-        # not-installed case to pyvista's own actionable ImportError. Going straight to the component also
-        # skips the VTK-build reconciliation pyvista does inside its deprecated Plotter.export_html, so
-        # _require_one_vtk_build reproduces it rather than losing the error that names VTK_MODULE_NAME.
+        # not-installed case to pyvista's own actionable ImportError. The VTK-build check runs before either
+        # branch: 0.49 makes it inside the deprecated Plotter.export_html we no longer call, and 0.48 makes
+        # it nowhere at all, so doing it here is what guards both versions rather than neither.
         destination = str(Path(path).with_suffix(".html"))
+        _require_one_vtk_build()
         component = getattr(self.plotter, "trame", None)
         if component is None:
             self.plotter.export_html(destination)
         else:
-            _require_one_vtk_build()
             component.export_html(destination)
         return destination
 
-    def save(self, path: PathLike, **kwargs: Any) -> Optional[np.ndarray]:
+    def save(self, path: Destination, **kwargs: Any) -> Optional[np.ndarray]:
         """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
 
         The HTML branch delegates to :meth:`export_html` — see there for why a heavy scene is better served by
