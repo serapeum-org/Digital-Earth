@@ -70,6 +70,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
+        id: setup
         uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
         with:
           environments: dev
@@ -90,11 +91,11 @@ jobs:
         # so it is gated here: the per-module baseline in pyproject.toml is a ratchet that may shrink and must
         # never grow, and a module with no entry there is checked in full.
         #
-        # `!cancelled()` so this reports even when the lint step above failed. The three checks are
-        # independent, and a contributor fixing one should not have to push again to discover the next.
-        # It still fails the job, so this weakens nothing — it only stops the first failure from masking
-        # the others.
-        if: ${{ !cancelled() }}
+        # Run even when the lint step above failed: the gates are independent, and a contributor fixing one
+        # should not have to push again to discover the next. It still fails the job, so this weakens nothing
+        # — it only stops the first failure from masking the others. Gated on the setup step so a broken pixi
+        # environment is reported once, as one failure, instead of three.
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: |
           pixi run -e dev mypy
 
@@ -102,7 +103,7 @@ jobs:
         # The five doctests this branch migrated by hand are the only migrated code no other job covers:
         # `main` sets testpaths = ["tests"] with no --doctest-modules, and ruff's F821 does not analyse
         # doctest bodies, so a missing import inside a `>>>` block would sail through the step above.
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: |
           pixi run -e dev doctests
 
