@@ -98,6 +98,45 @@ class TestRgb:
         with pytest.raises(ValueError, match="three bands"):
             m.rgb(dataset, bands=(1, 2))
 
+    def test_frozen_limits_hold_the_stretch(self, m, dataset):
+        """limits= replaces the per-call percentiles, so the interactive tier can hold a sequence steady.
+
+        Test scenario:
+            A white point far above the data renders it near black; the per-call stretch would push the same
+            data to the full [0, 1] range. This is what lets a caller drive several frames on one stretch,
+            the HoloViz counterpart of what Map.animate freezes for a composite.
+        """
+        m.rgb(dataset, bands=(1, 1, 1), limits=[(0.0, 1e9)] * 3)
+        red = m.layers[0].dimension_values("R", flat=False)
+        finite = red[np.isfinite(red)]
+        assert finite.max() < 0.01, f"a white point of 1e9 should render near black, got {finite.max()}"
+
+    def test_malformed_limits_are_refused(self, m, dataset):
+        """The shared length check reaches the interactive kwarg, not just the matplotlib one."""
+        with pytest.raises(ValueError, match="3 channels"):
+            m.rgb(dataset, bands=(1, 1, 1), limits=[(0.0, 1.0)])
+
+    def test_an_infinite_cell_does_not_become_the_white_point(self, m, dataset):
+        """Sharing base/stretch changed inf handling here: nanpercentile kept it, finite() drops it.
+
+        Test scenario:
+            The old inline stretch used np.nanpercentile, which ignores NaN but not inf, so a single
+            infinite cell dragged the white point to infinity and flattened the whole channel to zero.
+        """
+        import numpy as np_local
+        from pyramids.dataset import Dataset, GeoReference
+
+        values = np_local.arange(300.0, dtype="float32").reshape(3, 10, 10)
+        values[0, 0, 0] = np_local.inf
+        spiked = Dataset.from_array(
+            arr=values,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326),
+        )
+        m.rgb(spiked)
+        red = m.layers[0].dimension_values("R", flat=False)
+        finite = red[np_local.isfinite(red)]
+        assert finite.max() > 0.5, f"one inf cell must not flatten the channel, got max {finite.max()}"
+
     def test_already_display_crs_skips_reproject(self, m, dataset, monkeypatch):
         """A dataset already in 3857 must not be warped again on the rgb path."""
         mercator = dataset.to_crs(3857)
