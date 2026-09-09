@@ -86,3 +86,63 @@ __all__ = [
     # operational tier
     "Batch", "gallery", "load_plugins",
 ]
+
+# --- back-compat: submodules that moved in the backend restructure -------------------------------------------
+#
+# Before the restructure these twelve names were bound as attributes of `digitalearth` -- some because
+# `__init__` imported from them, the rest as a side effect of those imports -- so `digitalearth.charts` and
+# `from digitalearth import series` both worked. Moving them under base/, static/ and ops/ silently unbound
+# every one: attribute access raised a bare AttributeError and the `from` form an ImportError, neither
+# mentioning where the module went.
+#
+# PEP 562 module __getattr__ restores them as deprecated aliases that say where to go. It covers the attribute
+# forms only; `import digitalearth.charts` and `from digitalearth.charts import histogram` still fail, because
+# those need a real module on disk -- `digitalearth.scene` is the one such shim we ship.
+_MOVED_SUBMODULES = {
+    "animation": "digitalearth.static.animation",
+    "autostyle": "digitalearth.base.autostyle",
+    "batch": "digitalearth.ops.batch",
+    "browser": "digitalearth.ops.browser",
+    "charts": "digitalearth.static.charts",
+    "cli": "digitalearth.ops.cli",
+    "geostatistics": "digitalearth.static.geostatistics",
+    "plugins": "digitalearth.ops.plugins",
+    "scene": "digitalearth.scene",
+    "series": "digitalearth.static.series",
+    "sources": "digitalearth.base.sources",
+    "temporal": "digitalearth.static.temporal",
+}
+
+
+def __getattr__(name: str):
+    """Resolve a submodule that moved in the backend restructure, with a :class:`DeprecationWarning`.
+
+    Args:
+        name: The attribute being looked up on the ``digitalearth`` package.
+
+    Returns:
+        The module at its new location.
+
+    Raises:
+        AttributeError: for any name that is neither a real attribute nor a moved submodule.
+    """
+    target = _MOVED_SUBMODULES.get(name)
+    if target is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    import importlib
+    import warnings
+
+    warnings.warn(
+        f"digitalearth.{name} moved to {target} in the backend restructure; import it from there. "
+        "This alias will be removed in a future release.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    module = importlib.import_module(target)
+    globals()[name] = module  # cache, so the warning fires once per process
+    return module
+
+
+def __dir__() -> list:
+    """Include the moved-submodule aliases so tab-completion and ``dir()`` still find them."""
+    return sorted(set(globals()) | set(_MOVED_SUBMODULES))

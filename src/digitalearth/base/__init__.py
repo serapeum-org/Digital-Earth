@@ -4,7 +4,8 @@ Everything in this subpackage is used by two or more of the four backends (:mod:
 matplotlib, :mod:`digitalearth.interactive` / HoloViz, :mod:`digitalearth.three_d` / PyVista and
 :mod:`digitalearth.web` / MapLibre + deck.gl), so it must stay free of any renderer import: matplotlib,
 cleopatra, pyvista, geovista, holoviews, geoviews, hvplot, panel, datashader, bokeh, maplibre, lonboard. Only
-numpy/pandas, pyramids and the standard library belong here.
+numpy/pandas, PyYAML, pyramids and the standard library belong here — and never a sibling backend
+either, since importing one pulls its engine in behind it.
 
 The one carve-out is matplotlib's **colour** registry — ``matplotlib.colors`` / ``matplotlib.colormaps`` /
 ``matplotlib.cm`` return plain data (a named-colormap lookup, hex conversion), never figures, and are what let

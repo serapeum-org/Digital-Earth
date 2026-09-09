@@ -27,6 +27,8 @@ from typing import Any, List, Tuple
 import numpy as np
 import pandas as pd
 
+__all__ = ["MISSING_COLOR", "categorical_colors", "is_null", "nulls_to_none", "resolve_categorical_cmap"]
+
 #: Default qualitative colormap for categorical symbology (10 distinct hues; cycled if more categories).
 _DEFAULT_CATEGORICAL_CMAP = "tab10"
 

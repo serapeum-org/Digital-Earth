@@ -11,7 +11,7 @@ holoviews is imported lazily (the optional ``interactive`` extra): importing thi
 calling a chart builder does, and a missing extra raises an actionable :class:`ImportError`.
 """
 
-from typing import Any, Optional, Sequence
+from typing import Any, Optional
 
 import numpy as np
 

@@ -38,8 +38,6 @@ class _FakeDataset:
         return self._array
 
 
-
-
 class TestMaskNodata:
     """Tests for mask_nodata."""
 

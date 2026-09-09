@@ -19,6 +19,8 @@ from typing import Any, Callable, Dict, Optional
 
 import numpy as np
 
+__all__ = ["NAN_REDUCERS", "finite", "mask_nodata", "read_masked_band"]
+
 #: NaN-aware spatial/array reducers keyed by name — the single source consumed by the temporal time-series
 #: reducer and the quadtree per-cell aggregator (which adds its own ``"count"`` on top). Each maps a name to a
 #: callable taking a 1-D array and returning a scalar.

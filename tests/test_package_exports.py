@@ -54,7 +54,7 @@ class TestPackageExports:
         assert digitalearth.Climatology is temporal.Climatology, "Climatology is not the temporal one"
 
     def test_projections_is_the_submodule(self):
-        """The re-exported ``projections`` is the scene.projections submodule.
+        """The re-exported ``projections`` is the static.projections submodule.
 
         Test scenario:
             ``digitalearth.projections`` resolves a known projection factory (web_mercator -> 3857).

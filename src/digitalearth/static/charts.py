@@ -14,7 +14,7 @@ from cleopatra.glyphs.stats.histogram_glyph import HistogramGlyph
 from matplotlib.axes import Axes
 
 from digitalearth.static.figures import fig_of as _fig_of
-from digitalearth.base.arrays import finite, read_masked_band
+from digitalearth.base.arrays import finite
 from digitalearth.base.chartdata import as_finite_array, column_or_array, field_values, grouped_series
 
 __all__ = ["line", "bar", "bar_by", "line_by", "histogram", "scatter", "statistics"]
