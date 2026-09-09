@@ -319,7 +319,8 @@ Real limits already in ``opts`` are kept, so a caller can pass their own ``limit
                     f"colorbar=True is not supported for a {kind!r} animation: a composite renders an RGB "
                     "image, which has no single scalar mappable to key a colorbar to"
                 )
-            bands = opts.get("bands", DEFAULT_COMPOSITE_BANDS)
+            bands = opts.get("bands") or DEFAULT_COMPOSITE_BANDS  # absent or None -> the default (M2)
+            opts["bands"] = bands
             require_three_bands(kind, bands)  # before the scan, not after it (M3)
             if opts.get("limits") is None:  # absent *or* explicitly None (H1)
                 opts["limits"] = self._stack_channel_limits(

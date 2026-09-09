@@ -511,20 +511,26 @@ class TestAnimateComposites:
         """A channel the stride never samples alive still renders on its own stretch, not saturated.
 
         Test scenario:
-            50 frames means a stride of 2, so only the even indices are scanned. Channel 2 is nodata on
-            exactly those, and carries real data on the odd ones. Answering that with a fixed (0, 1) span
-            would push every real value through clip((500 - 0) / 1) = 1.0 and blow the channel out in every
-            frame that has data; falling back per frame keeps it in range.
+            The scan samples a subset of a long stack, so "dead in every scanned frame" is not "dead in
+            every frame". Channel 2 is made nodata on exactly the frames the scan will sample (derived from
+            _scan_subset rather than assumed, so a change of stride cannot quietly defuse this) and carries
+            real data on the rest. Answering that with a fixed (0, 1) span would push every real value
+            through clip((500 - 0) / 1) = 1.0 and blow the channel out in every frame that has data.
         """
+        from digitalearth.static.maps import animation as anim_mod
+
+        count = 50
+        scanned_indices = set(anim_mod._scan_subset(list(range(count))))
         stack = []
-        for index in range(50):
-            dead = index % 2 == 0
+        for index in range(count):
+            dead = index in scanned_indices
             stack.append(_rgb_field_with_dead_channel(shift=float(index), ny=12, nx=24) if dead
                          else _rgb_field(shift=float(index), ny=12, nx=24))
+        live_index = next(index for index in range(count) if index not in scanned_indices)
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
         assert np.isnan(frozen[1]).all(), f"the unscanned-alive channel should report no bound: {frozen[1]}"
 
-        live = get_stack(stack[1], (1, 2, 3))
+        live = get_stack(stack[live_index], (1, 2, 3))
         stretched = stretch_to_unit(live, frozen)
         channel = stretched[..., 1]
         assert channel.min() < channel.max(), "a live channel must keep real contrast, not clip flat"

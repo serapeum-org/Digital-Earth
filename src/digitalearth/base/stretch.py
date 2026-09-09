@@ -38,10 +38,11 @@ def require_three_bands(caller: str, bands: Sequence[int]) -> None:
 
     Args:
         caller: The method name to name in the message (e.g. ``"rgb_composite"``).
-        bands: The band indices to check.
+        bands: The band indices to check. ``None`` — what a wrapper forwarding an optional passes — is
+            rejected by name rather than as a ``TypeError`` from trying to iterate it.
 
     Raises:
-        ValueError: when ``bands`` does not hold exactly three indices.
+        ValueError: when ``bands`` is ``None`` or does not hold exactly three indices.
 
     Examples:
         - Three bands pass silently:
@@ -60,11 +61,20 @@ def require_three_bands(caller: str, bands: Sequence[int]) -> None:
             ValueError: rgb_composite() needs exactly three bands, got 2: (1, 2)
 
             ```
+        - A generator is consumed once, so it is materialised before it is counted:
+            ```python
+            >>> from digitalearth.base.stretch import require_three_bands
+            >>> bands = (index for index in (1, 2, 3))
+            >>> require_three_bands("rgb_composite", bands) is None
+            True
+
+            ```
     """
-    if len(tuple(bands)) != 3:
-        raise ValueError(
-            f"{caller}() needs exactly three bands, got {len(tuple(bands))}: {tuple(bands)!r}"
-        )
+    if bands is None:
+        raise ValueError(f"{caller}() needs exactly three bands, got None")
+    named = tuple(bands)  # materialise once: a caller may hand over a one-shot iterable
+    if len(named) != 3:
+        raise ValueError(f"{caller}() needs exactly three bands, got {len(named)}: {named!r}")
 
 
 def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
