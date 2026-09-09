@@ -16,7 +16,18 @@ imported lazily.
 
 from typing import Any, List, Optional, Sequence, Tuple
 
+from loguru import logger
+
 from digitalearth.web.base import _require_layer_api
+
+#: Members scanned when computing a stack's shared colour range. Mirrors the static tier's cap: the scan
+#: reprojects and reads each member, so an unbounded one makes `timeslider` O(stack) before it draws
+#: anything. Pass an explicit `clim` to skip the scan entirely.
+_CLIM_SCAN_CAP = 50
+
+#: Total pixels above which an inlined stack is warned against. `add_raster` warns per member, which never
+#: fires for a stack of individually-modest members that is collectively enormous.
+_LARGE_STACK_PIXELS = 8_000_000
 
 
 class TemporalMixin:
@@ -25,9 +36,10 @@ class TemporalMixin:
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
         """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps between frames.
 
-        Note: this pass is **eager** — it reprojects and reads every member once at ``timeslider``
-        construction time (each member is then warped again when its image layer is built). For a very
-        large stack, pass an explicit ``clim`` to skip this whole-stack scan.
+        Note: this pass is **eager** — it reprojects and reads each scanned member once at ``timeslider``
+        construction time (every member is then warped again when its image layer is built). At most
+        :data:`_CLIM_SCAN_CAP` members are scanned, mirroring the static tier's cap; pass an explicit
+        ``clim`` to skip the scan entirely.
 
         Args:
             collection: A pyramids ``DatasetCollection``.
@@ -37,12 +49,20 @@ class TemporalMixin:
             ``(vmin, vmax)`` finite colour limits across the whole stack, or ``(0.0, 1.0)`` when no member
             holds a finite value.
         """
+        import numpy as np
+
         from digitalearth.base.arrays import finite
 
         lows: List[float] = []
         highs: List[float] = []
-        for member in collection.datasets:
-            values = finite(self._to_display_source(member, band=band).z.values)
+        for member in collection.datasets[:_CLIM_SCAN_CAP]:
+            values = self._to_display_source(member, band=band).z.values
+            # `finite` goes through np.asarray, which drops a mask and would let the fill value (-9999)
+            # through as a real number. pyramids' extractor already NaN-fills nodata, so this only bites
+            # a caller handing us a masked array directly — fill it first and the two agree.
+            if np.ma.isMaskedArray(values):
+                values = values.filled(np.nan)
+            values = finite(values)
             if values.size:
                 lows.append(float(values.min()))
                 highs.append(float(values.max()))
@@ -207,11 +227,19 @@ class TemporalMixin:
                 raise ValueError(
                     f"labels has {len(labels)} entries but the collection has {count} members"
                 )
-            if len(set(labels)) != count:
+            try:
+                unique = len(set(labels))
+            except TypeError as err:  # an unhashable label (a list, a dict, …)
+                raise ValueError(
+                    "timeslider labels must be hashable so the slider can map a value back to its frame; "
+                    f"got {[type(label).__name__ for label in labels]}"
+                ) from err
+            if unique != count:
                 raise ValueError(
                     "timeslider labels must be unique — duplicate labels collapse the slider and make "
                     "the matching frames unreachable"
                 )
+        self._check_stack_is_drawable(members, band)
 
         vmin, vmax = clim if clim is not None else self._global_clim(collection, band)
         layer_ids: List[str] = []
@@ -231,12 +259,54 @@ class TemporalMixin:
 
         self._temporal = {
             "mode": "raster",
-            "layer_id": layer_ids[0],
             "layer_ids": layer_ids,
             "kdim": kdim,
             "times": list(labels) if labels is not None else list(range(count)),
         }
         return self
+
+    def _check_stack_is_drawable(self, members: Sequence, band: int) -> None:
+        """Fail before any layer is registered if a member cannot be drawn, and warn on a huge page.
+
+        ``add_raster`` raises for a band with no finite values — routine in EO, where a whole time step can
+        be cloud-masked away. Discovering that midway through the loop left the map holding layers for the
+        members already added, so a caught error left a half-built stack behind. Checking up front keeps
+        ``timeslider`` all-or-nothing.
+
+        The size warning is the stack-level counterpart of ``add_raster``'s per-member one: every member is
+        inlined as a base64 PNG, so a stack of individually-modest members can still produce an enormous
+        page without any single member tripping the per-member threshold.
+
+        Args:
+            members: The collection's members, in slider order.
+            band: 1-based band each member will be drawn from.
+
+        Raises:
+            ValueError: when a member holds no finite values in ``band``.
+        """
+        import numpy as np
+
+        from digitalearth.base.arrays import finite
+
+        total_pixels = 0
+        for index, member in enumerate(members):
+            values = self._to_display_source(member, band=band).z.values
+            if np.ma.isMaskedArray(values):
+                values = values.filled(np.nan)
+            total_pixels += int(getattr(values, "size", 0))
+            if not finite(values).size:
+                raise ValueError(
+                    f"timeslider() cannot draw member {index} of {len(members)}: band {band} holds no "
+                    f"finite values, so it has no colour range. Drop the empty step from the collection "
+                    f"or pass an explicit clim."
+                )
+        if total_pixels > _LARGE_STACK_PIXELS:
+            logger.warning(
+                "timeslider: inlining a {}-member stack of {} pixels as data-URI images bloats the page; "
+                "for a large stack serve COG/XYZ tiles from pyramids instead",
+                len(members),
+                total_pixels,
+            )
 
     def _wrap_temporal(self, widget: Any) -> Any:
         """Wrap the map ``widget`` in a slider composite that reveals one time step at a time.
@@ -285,11 +355,17 @@ class TemporalMixin:
         if config.get("mode") == "raster":
             layer_ids = config["layer_ids"]
             index_of = {step: index for index, step in enumerate(config["times"])}
+            showing = [0]  # the frame currently visible; layers are built with only the first shown
 
             def show_raster(value: Any) -> None:
                 active = index_of[value]
-                for index, layer_id in enumerate(layer_ids):
-                    widget.set_visibility(layer_id, index == active)
+                if active == showing[0]:
+                    return
+                # Only two layers change per step, so touching all N would send O(stack) widget messages
+                # for every slider move.
+                widget.set_visibility(layer_ids[showing[0]], False)
+                widget.set_visibility(layer_ids[active], True)
+                showing[0] = active
 
             return show_raster
 

@@ -414,6 +414,45 @@ class TestTimeSliderRasterStack:
             f"expected only the first frame visible, got {visibilities}"
         )
 
+    def test_an_undrawable_member_aborts_before_any_layer_is_registered(self, tmp_path):
+        """A member with no finite values fails the whole call, leaving the map untouched.
+
+        Args:
+            tmp_path: pytest's per-test directory, holding the two written rasters.
+
+        Test scenario:
+            ``add_raster`` raises for an all-nodata band — routine in EO, where a step can be entirely
+            cloud-masked. Discovering it midway used to leave the already-added members registered.
+        """
+        import numpy as np
+        from pyramids.base.georeference import GeoReference
+        from pyramids.dataset import Dataset
+        from pyramids.dataset.collection import DatasetCollection
+
+        geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+        good, empty = tmp_path / "good.tif", tmp_path / "allnodata.tif"
+        Dataset.from_array(
+            np.arange(500, dtype="float32").reshape(20, 25), geo_ref=geo_ref, no_data_value=-9999.0
+        ).to_file(str(good))
+        Dataset.from_array(
+            np.full((20, 25), -9999.0, dtype="float32"), geo_ref=geo_ref, no_data_value=-9999.0
+        ).to_file(str(empty))
+
+        m = WebMap()
+        with pytest.raises(ValueError, match="no finite values"):
+            m.timeslider(DatasetCollection.from_files([str(good), str(empty)]))
+        assert m.layers == [], "a failed stack must not leave half its layers registered"
+
+    def test_unhashable_labels_get_the_actionable_message(self, raster_stack):
+        """A list-valued label fails with the builder's own error, not a bare ``set()`` TypeError.
+
+        Test scenario:
+            The uniqueness check hashes the labels, so an unhashable one used to surface as
+            ``TypeError: unhashable type: 'list'`` from deep inside the validation.
+        """
+        with pytest.raises(ValueError, match="hashable"):
+            WebMap().timeslider(raster_stack, labels=[["a"], ["b"], ["c"]])
+
     def test_save_shows_exactly_one_frame(self, tmp_path, raster_stack):
         """A saved page carries no slider, so it must not show the whole stack at once.
 
@@ -638,30 +677,44 @@ class TestWrapTemporal:
             f"the slider must refilter to the selected step, got {fake_widget.filters[-1]}"
         )
 
-    def test_stack_shows_only_the_first_member_initially(self, configured_stack, fake_widget):
-        """A stack opens on its first frame with every other member hidden.
+    def test_opening_on_the_first_frame_needs_no_visibility_calls(self, configured_stack, fake_widget):
+        """The layers are built with the first frame already visible, so wiring changes nothing.
 
         Test scenario:
-            All members are registered as layers up front, so without this they would stack on top of
-            each other and only the last would be visible.
+            ``_timeslider_stack`` sets ``layout.visibility`` per layer at build time, which is what makes
+            a *saved* page (no slider) show one frame. Re-asserting it here would be redundant work on
+            every render.
         """
         configured_stack._wrap_temporal(fake_widget)
-        assert fake_widget.visibility == [("img-0", True), ("img-1", False), ("img-2", False)], (
-            f"expected only the first member visible, got {fake_widget.visibility}"
-        )
+        assert fake_widget.visibility == [], "opening on frame 0 must not re-toggle anything"
         assert fake_widget.filters == [], "the raster mode must not set MapLibre filters"
 
-    def test_moving_the_slider_swaps_the_visible_member(self, configured_stack, fake_widget):
-        """The observer reveals exactly the selected member and hides the rest.
+    def test_moving_the_slider_swaps_only_the_two_affected_layers(self, configured_stack, fake_widget):
+        """The observer hides the outgoing frame and shows the incoming one, and touches nothing else.
 
         Test scenario:
-            This is the "swaps the active source" behaviour recipe W6 specifies for a stack.
+            This is the "swaps the active source" behaviour recipe W6 specifies. Toggling all N layers
+            would send O(stack) widget messages per slider step.
         """
         slider, _ = configured_stack._wrap_temporal(fake_widget).children
         fake_widget.visibility.clear()
         slider.value = 2
-        assert fake_widget.visibility == [("img-0", False), ("img-1", False), ("img-2", True)], (
-            f"expected only the selected member visible, got {fake_widget.visibility}"
+        assert fake_widget.visibility == [("img-0", False), ("img-2", True)], (
+            f"expected only the outgoing and incoming frames to change, got {fake_widget.visibility}"
+        )
+
+    def test_stepping_again_hides_the_previously_shown_frame(self, configured_stack, fake_widget):
+        """The tracked "currently showing" frame follows the slider across successive moves.
+
+        Test scenario:
+            A stale cursor would hide the wrong layer on the second move and leave two frames visible.
+        """
+        slider, _ = configured_stack._wrap_temporal(fake_widget).children
+        slider.value = 2
+        fake_widget.visibility.clear()
+        slider.value = 1
+        assert fake_widget.visibility == [("img-2", False), ("img-1", True)], (
+            f"the outgoing frame must be the one actually showing, got {fake_widget.visibility}"
         )
 
     def test_the_fake_widget_matches_the_real_widget_api(self, fake_widget):
