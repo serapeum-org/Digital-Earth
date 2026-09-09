@@ -145,7 +145,7 @@ where = ["src"]
 include = ["digitalearth", "digitalearth.*"]
 
 [tool.setuptools.package-data]
-"digitalearth.autostyle" = ["library/*.yml"]
+"digitalearth.base.autostyle" = ["library/*.yml"]
 
 # Ruff replaces black + isort + flake8 + pyupgrade (and their nbqa notebook wrappers): one engine and one
 # line-length ruler, so the formatter and the import sorter can't disagree. Mirrors pyramids' current config.
