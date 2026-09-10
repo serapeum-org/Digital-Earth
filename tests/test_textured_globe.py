@@ -975,6 +975,250 @@ class TestOverlaysFollowTheSpin:
         globe.close()
 
 
+class TestReferenceGeography:
+    """coastlines / borders / land on the 3-D globe, matching the 2-D Map spelling (#165)."""
+
+    @pytest.fixture
+    def drawn(self, flat_texture):
+        """A globe with no tilt, drawn face-on, so the visible hemisphere is exactly |lon| < 90.
+
+        Returns:
+            TexturedGlobe: drawn at elev 0 / azim 0 with the polar axis upright.
+        """
+        globe = TexturedGlobe(flat_texture, n_lon=24, n_lat=12, tilt_deg=0.0)
+        globe.draw(elev=0.0, azim=0.0, figsize=(3, 3))
+        yield globe
+        globe.close()
+
+    @staticmethod
+    def _arc(lon_from, lon_to, lat=0.0, n=61):
+        """A lon/lat polyline along one parallel.
+
+        Args:
+            lon_from: Starting longitude in degrees.
+            lon_to: Ending longitude in degrees.
+            lat: The parallel to run along.
+            n: Vertex count.
+
+        Returns:
+            np.ndarray: an ``(n, 2)`` lon/lat array shaped like natural_earth's parts.
+        """
+        lon = np.linspace(lon_from, lon_to, n)
+        return np.column_stack([lon, np.full(n, lat)])
+
+    @staticmethod
+    def _ring(west, east, south, north):
+        """A closed lon/lat rectangle, shaped like a natural_earth polygon part.
+
+        Args:
+            west: Western longitude.
+            east: Eastern longitude.
+            south: Southern latitude.
+            north: Northern latitude.
+
+        Returns:
+            np.ndarray: an ``(N, 2)`` closed ring.
+        """
+        lon = np.r_[
+            np.linspace(west, east, 25),
+            np.full(25, east),
+            np.linspace(east, west, 25),
+            np.full(25, west),
+        ]
+        lat = np.r_[
+            np.full(25, south),
+            np.linspace(south, north, 25),
+            np.full(25, north),
+            np.linspace(north, south, 25),
+        ]
+        return np.column_stack([np.r_[lon, lon[0]], np.r_[lat, lat[0]]])
+
+    def test_the_globe_offers_the_layers_the_flat_map_does(self):
+        """TexturedGlobe answers coastlines/borders/land, as Map already did.
+
+        Test scenario:
+            The issue's own capability check: the 3-D globe reported none of the six reference layers
+            while the 2-D globe reported all six. The three line/fill layers must now be reachable.
+        """
+        missing = [
+            name
+            for name in ("coastlines", "borders", "land")
+            if not hasattr(TexturedGlobe, name)
+        ]
+        assert missing == [], (
+            f"TexturedGlobe should offer these layers, missing {missing}"
+        )
+
+    def test_a_line_crossing_the_limb_is_split_into_near_side_arcs(self, drawn, mocker):
+        """A polyline running off the visible hemisphere is broken rather than drawn through the planet.
+
+        Test scenario:
+            A parallel running east from 60 degrees all the way round to 300 leaves the visible
+            hemisphere at 90 and re-enters it at 270, so it must come back as two arcs with every drawn
+            vertex facing the camera. Drawn whole, it would cut a chord straight through the sphere.
+        """
+        part = self._arc(60.0, 300.0)
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth", return_value=[part]
+        )
+        arcs = drawn.coastlines()
+        assert len(arcs) == 2, (
+            f"a line crossing the far side should split in two, got {len(arcs)}"
+        )
+        for line in arcs:
+            xyz = np.asarray(line._verts3d, dtype=float).T
+            assert drawn.visible(xyz).all(), (
+                "every drawn vertex should be on the near side"
+            )
+
+    def test_a_layer_entirely_on_the_far_side_draws_nothing(self, drawn, mocker):
+        """Geography behind the globe contributes no artists at all.
+
+        Test scenario:
+            A short arc around the antimeridian is hidden at this camera, so there is nothing to draw
+            and no empty artist should be left on the axes either.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._arc(170.0, 190.0)],
+        )
+        assert drawn.coastlines() == [], "a hidden layer should draw no arcs"
+
+    def test_a_land_ring_is_clipped_and_reclosed_at_the_limb(self, drawn, mocker):
+        """A land ring straddling the limb is filled to the horizon, not chopped by a chord.
+
+        Test scenario:
+            A rectangle spanning 60 to 120 degrees east crosses the limb at 90. The clipped ring must
+            keep only camera-facing vertices, and sit on one shell so the fill lies on the sphere.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._ring(60.0, 120.0, -20.0, 20.0)],
+        )
+        ring = drawn._near_side_ring(self._ring(60.0, 120.0, -20.0, 20.0), 0.0, 0.001)
+        depth = ring @ np.array([1.0, 0.0, 0.0])
+        radius = np.linalg.norm(ring, axis=1)
+        assert depth.min() >= -1e-9, (
+            f"no vertex should be behind the limb, min depth {depth.min()}"
+        )
+        assert np.allclose(radius, 1.001), "the clipped ring should stay on one shell"
+        assert len(ring) > 3, "a clipped ring needs enough vertices to enclose an area"
+
+    def test_land_returns_nothing_when_none_of_it_faces_the_camera(self, drawn, mocker):
+        """land() reports None rather than an empty collection when the near side has no land.
+
+        Test scenario:
+            Every ring is behind the globe, so there is no fill to add; returning None says so.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._ring(160.0, 200.0, -10.0, 10.0)],
+        )
+        assert drawn.land() is None, "land entirely on the far side should draw nothing"
+
+    def test_the_layers_follow_the_globe_as_it_turns(self, drawn, mocker):
+        """A reference layer is registered, so an animation redraws it at each frame's spin.
+
+        Test scenario:
+            The sibling of the overlay fix — geography added to an animated globe has to turn with it
+            for the same reason markers do (#164).
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._arc(-20.0, 20.0)],
+        )
+        drawn.coastlines()
+        assert len(drawn._overlays) == 1, (
+            "a reference layer should register to follow the globe"
+        )
+        before = np.asarray(drawn._overlay_artists[0][0]._verts3d, dtype=float)
+        drawn._redraw_overlays(45.0)
+        after = np.asarray(drawn._overlay_artists[0][0]._verts3d, dtype=float)
+        assert before.shape == after.shape, (
+            "this arc stays wholly visible at 45 degrees, so it should keep its vertex count"
+        )
+        assert not np.allclose(before, after), (
+            "the layer should move when the globe turns"
+        )
+
+    def test_a_pinned_layer_stays_where_it_was_put(self, drawn, mocker):
+        """Naming a spin opts the layer out of following, exactly as it does for points().
+
+        Test scenario:
+            A caller driving the rotation by hand redraws each frame themselves, so a pinned layer must
+            not also be replayed.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._arc(-60.0, 60.0)],
+        )
+        drawn.coastlines(spin=0.0)
+        assert drawn._overlays == [], (
+            "a pinned layer should not be registered to follow"
+        )
+
+    def test_the_layers_are_drawn_above_the_sphere(self, drawn, mocker):
+        """Fill sits over the surface and lines over the fill, by explicit z-order.
+
+        Test scenario:
+            A 3-D axes normally overwrites zorder with a per-collection depth sort, under which the
+            sphere hides overlays lying on it. The globe turns that off, so the order stated here is
+            the order matplotlib uses.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._ring(-40.0, 40.0, -20.0, 20.0)],
+        )
+        fill = drawn.land()
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._arc(-60.0, 60.0)],
+        )
+        line = drawn.coastlines()[0]
+        assert drawn.ax.computed_zorder is False, (
+            "the depth sort must be off, or matplotlib overwrites these z-orders"
+        )
+        surface = drawn.glyph.surface.get_zorder()
+        assert surface < fill.get_zorder() < line.get_zorder(), (
+            f"expected surface < fill < line, got {surface}, {fill.get_zorder()}, "
+            f"{line.get_zorder()}"
+        )
+
+    def test_styling_reaches_the_artists(self, drawn, mocker):
+        """Layer styling is forwarded to matplotlib, over each layer's defaults.
+
+        Test scenario:
+            The layers exist to be restyled per figure, so an explicit colour and width must win over
+            the defaults that make them readable out of the box.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth",
+            return_value=[self._arc(-60.0, 60.0)],
+        )
+        line = drawn.borders(color="white", linewidth=1.5)[0]
+        assert line.get_color() == "white", (
+            f"colour should be forwarded, got {line.get_color()}"
+        )
+        assert line.get_linewidth() == 1.5, (
+            f"linewidth should be forwarded, got {line.get_linewidth()}"
+        )
+
+    @pytest.mark.parametrize("layer", ["coastlines", "borders", "land"])
+    def test_a_layer_needs_a_drawn_globe(self, flat_texture, layer):
+        """Asking for geography before draw() is refused, since there is no camera to clip against.
+
+        Args:
+            layer: The reference layer method under test.
+
+        Test scenario:
+            Visibility is decided by the axes' elev/azim, so the layers cannot be resolved before the
+            globe has been drawn — the same rule points() already follows.
+        """
+        globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4)
+        with pytest.raises(RuntimeError, match="draw"):
+            getattr(globe, layer)()
+
+
 class TestRenderLifecycle:
     """draw / animate / save / stamp."""
 

@@ -25,6 +25,7 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from cleopatra.basemap.reference import natural_earth
 from cleopatra.basemap.tiles import world_texture
 from cleopatra.glyphs.globe.textured_globe_glyph import (
     EARTH_TILT_DEG,
@@ -33,6 +34,7 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
 from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
 from matplotlib.animation import FuncAnimation
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.colors import Normalize
 from pyramids.dataset import Dataset, GeoReference
 
@@ -227,6 +229,111 @@ def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
             continue
         culled[key] = np.asarray(value)[keep]
     return culled
+
+
+#: Draw order for the overlays, above the sphere's own surface (a matplotlib ``Collection``, so zorder 1).
+#: Every overlay is clipped to the hemisphere facing the camera before it is drawn, so it belongs in front
+#: of the sphere unconditionally — see :meth:`TexturedGlobe._bind` for why that has to be said explicitly.
+_FILL_ZORDER = 2.0
+_LINE_ZORDER = 3.0
+_POINT_ZORDER = 4.0
+
+#: How many points to sample along a limb arc when closing a clipped land ring. The arc is at most a
+#: half-circle, so this holds the chord error under a pixel at any figure size these globes are drawn at.
+_LIMB_ARC_STEPS = 48
+
+
+def _visible_runs(near: np.ndarray) -> List[np.ndarray]:
+    """Split a boolean near-side mask into the index runs of consecutive visible vertices.
+
+    Args:
+        near: An ``(N,)`` boolean mask, ``True`` where the vertex faces the camera.
+
+    Returns:
+        One index array per contiguous run of ``True``, in order; runs shorter than two vertices are
+        kept, since a filled ring still needs its single-vertex touches closed.
+
+    Examples:
+        - A mask with two separate runs yields two index arrays:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _visible_runs
+            >>> [run.tolist() for run in _visible_runs(np.array([1, 1, 0, 0, 1], dtype=bool))]
+            [[0, 1], [4]]
+
+            ```
+        - Nothing visible yields nothing to draw:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _visible_runs
+            >>> _visible_runs(np.zeros(4, dtype=bool))
+            []
+
+            ```
+    """
+    index = np.flatnonzero(np.asarray(near, dtype=bool))
+    if index.size == 0:
+        return []
+    return np.split(index, np.flatnonzero(np.diff(index) != 1) + 1)
+
+
+def _limb_point(
+    inside: np.ndarray, outside: np.ndarray, view: np.ndarray
+) -> np.ndarray:
+    """The point on the visible limb between a near-side vertex and its far-side neighbour.
+
+    The camera-facing test is ``p @ view > 0``, which is linear along the straight chord between two
+    vertices, so the crossing is found exactly by interpolating that dot product to zero. The result is
+    pushed back out to ``inside``'s radius so a clipped ring stays on the same shell as the rest of it.
+
+    Args:
+        inside: The ``(3,)`` near-side vertex.
+        outside: Its ``(3,)`` far-side neighbour.
+        view: The unit ``(3,)`` vector pointing at the camera.
+
+    Returns:
+        np.ndarray: the ``(3,)`` crossing point, on the limb and at ``inside``'s radius.
+    """
+    depth_in, depth_out = float(inside @ view), float(outside @ view)
+    span = depth_in - depth_out
+    crossing = (
+        inside if span == 0.0 else inside + (depth_in / span) * (outside - inside)
+    )
+    tangential = crossing - (crossing @ view) * view
+    length = float(np.linalg.norm(tangential))
+    if length == 0.0:
+        return np.asarray(inside, dtype=float)
+    return tangential / length * float(np.linalg.norm(inside))
+
+
+def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarray:
+    """Points along the limb from ``start`` to ``end``, the short way round.
+
+    A land ring that runs off the near side has to be closed along the limb, or the fill cuts a chord
+    straight across the disc. The short arc is the right one for any ring spanning less than half the
+    limb, which every Natural-Earth land part does at the resolutions these globes use.
+
+    Args:
+        start: The ``(3,)`` limb point the ring left the near side at.
+        end: The ``(3,)`` limb point it comes back at.
+        view: The unit ``(3,)`` vector pointing at the camera.
+
+    Returns:
+        np.ndarray: an ``(_LIMB_ARC_STEPS, 3)`` arc, excluding both endpoints.
+    """
+    radius = float(np.linalg.norm(start))
+    first = start / radius
+    second = np.cross(view, first)
+    length = float(np.linalg.norm(second))
+    if length == 0.0:
+        return np.empty((0, 3))
+    second = second / length
+    angle = float(np.arctan2(end @ second, end @ first))
+    steps = np.linspace(0.0, angle, _LIMB_ARC_STEPS + 2)[1:-1]
+    return radius * (
+        np.cos(steps)[:, None] * first[None, :]
+        + np.sin(steps)[:, None] * second[None, :]
+    )
 
 
 def _drawn_artists(drawn: Any) -> List[Any]:
@@ -952,10 +1059,18 @@ class TexturedGlobe:
         ``close()``'s reach; rebinding to another axes on the *same* figure closes nothing, because that
         figure is still in use.
 
+        Binding also takes the axes off matplotlib's computed z-order. A 3-D axes normally *overwrites*
+        every collection's zorder with a depth sort that ranks each collection by a single representative
+        depth — and the sphere is one collection spanning the whole globe, so it wins against overlays that
+        sit right on top of it: coastlines and land fills came out almost entirely hidden behind the
+        planet, with only fragments leaking out at the limb. Every overlay here is already clipped to the
+        hemisphere facing the camera, so the order is not in question and is stated outright instead.
+
         Args:
             ax: The axes now being drawn on.
             owns: Whether the figure behind ``ax`` was created by this globe.
         """
+        ax.computed_zorder = False
         figure = ax.get_figure()
         if self._owns_fig and self.fig is not None and self.fig is not figure:
             plt.close(self.fig)
@@ -1090,16 +1205,329 @@ class TexturedGlobe:
 
         def _draw(at_spin: float) -> Any:
             world = self.project(lon_vals, lat_vals, spin=at_spin, altitude=altitude)
-            style = kwargs
+            style = dict(kwargs)
             if hide_far_side:
                 keep = self.visible(world)
                 world = world[keep]
                 style = _cull_per_point(kwargs, keep)
+            style.setdefault("zorder", _POINT_ZORDER)
             return self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **style)
 
         if spin is not None:
             return _draw(float(spin))
         return self._follow_spin(_draw)
+
+    # ------------------------------------------------------------------ reference geography
+
+    def _near_side_arcs(
+        self, part: np.ndarray, spin: float, altitude: float
+    ) -> List[np.ndarray]:
+        """Project one lon/lat part and split it into the arcs that face the camera.
+
+        Splitting is the whole job: a polyline drawn through its hidden vertices cuts a chord straight
+        through the planet, which is the mistake this saves every caller from making by hand.
+
+        Args:
+            part: An ``(N, 2)`` lon/lat array, as ``natural_earth`` returns.
+            spin: The spin, in degrees, to place it at.
+            altitude: Radial lift above the surface.
+
+        Returns:
+            One ``(M, 3)`` world-space arc per visible run, dropping runs too short to draw.
+        """
+        world = self.project(part[:, 0], part[:, 1], spin=spin, altitude=altitude)
+        return [
+            world[run] for run in _visible_runs(self.visible(world)) if run.size > 1
+        ]
+
+    def _near_side_ring(
+        self, part: np.ndarray, spin: float, altitude: float
+    ) -> Optional[np.ndarray]:
+        """Clip one closed lon/lat ring to the near side, re-closing it along the limb.
+
+        Args:
+            part: An ``(N, 2)`` lon/lat ring, as ``natural_earth`` returns for a polygon layer.
+            spin: The spin, in degrees, to place it at.
+            altitude: Radial lift above the surface.
+
+        Returns:
+            The clipped ``(M, 3)`` ring, or ``None`` when none of it faces the camera or too little is
+            left to enclose an area.
+        """
+        world = self.project(part[:, 0], part[:, 1], spin=spin, altitude=altitude)
+        near = self.visible(world)
+        if not near.any():
+            return None
+        if near.all():
+            return world
+        view = _view_vector(self.ax.elev, self.ax.azim)
+        runs = _visible_runs(near)
+        count = len(world)
+        pieces: List[np.ndarray] = []
+        for position, run in enumerate(runs):
+            before = world[(run[0] - 1) % count]
+            after = world[(run[-1] + 1) % count]
+            entry = _limb_point(world[run[0]], before, view)
+            exit_ = _limb_point(world[run[-1]], after, view)
+            following = runs[(position + 1) % len(runs)]
+            resume = _limb_point(
+                world[following[0]], world[(following[0] - 1) % count], view
+            )
+            pieces += [
+                entry[None, :],
+                world[run],
+                exit_[None, :],
+                _limb_arc(exit_, resume, view),
+            ]
+        ring = np.vstack(pieces)
+        return ring if len(ring) >= 3 else None
+
+    def _reference_layer(
+        self,
+        layer: str,
+        resolution: str,
+        defaults: dict,
+        *,
+        spin: Optional[float],
+        altitude: float,
+        fill: bool,
+        **kwargs: Any,
+    ) -> Any:
+        """Draw a Natural-Earth layer on the sphere, split (or closed) at the visible limb.
+
+        Args:
+            layer: The Natural-Earth layer name (``"coastline"``, ``"borders"``, ``"land"``).
+            resolution: Natural-Earth resolution (``"110m"`` / ``"50m"`` / ``"10m"``).
+            defaults: The layer's base style, overridden by ``kwargs``.
+            spin: Pin the layer to this spin, or ``None`` to follow the globe.
+            altitude: Radial lift above the surface.
+            fill: Whether the parts are closed rings to fill rather than lines to stroke.
+
+        Returns:
+            The artists drawn — a list of ``Line3D`` for a line layer, one ``Poly3DCollection`` for a
+            filled one, or ``None`` when nothing of it is on the near side.
+
+        Raises:
+            RuntimeError: if the globe has not been drawn yet, so there is no camera to clip against.
+        """
+        if self.ax is None:
+            raise RuntimeError(f"draw() the globe before adding {layer} to it")
+        parts = [
+            np.asarray(part, dtype=float) for part in natural_earth(layer, resolution)
+        ]
+        parts = [part for part in parts if part.ndim == 2 and len(part) >= 2]
+        style = {**defaults, **kwargs}
+
+        def _draw(at_spin: float) -> Any:
+            if fill:
+                rings = [
+                    self._near_side_ring(part, at_spin, altitude) for part in parts
+                ]
+                faces = [ring for ring in rings if ring is not None]
+                if not faces:
+                    return None
+                patch = Poly3DCollection(faces, zorder=_FILL_ZORDER, **style)
+                self.ax.add_collection3d(patch)
+                return patch
+            arcs = [
+                arc
+                for part in parts
+                for arc in self._near_side_arcs(part, at_spin, altitude)
+            ]
+            return [
+                self.ax.plot(
+                    arc[:, 0], arc[:, 1], arc[:, 2], zorder=_LINE_ZORDER, **style
+                )[0]
+                for arc in arcs
+            ]
+
+        if spin is not None:
+            return _draw(float(spin))
+        return self._follow_spin(_draw)
+
+    def coastlines(
+        self,
+        resolution: str = "110m",
+        *,
+        spin: Optional[float] = None,
+        altitude: float = 0.002,
+        **kwargs: Any,
+    ) -> Any:
+        """Draw Natural-Earth coastlines on the globe, split at the visible limb.
+
+        Named and styled to match :meth:`~digitalearth.static.Map.coastlines` on the 2-D globe, so the two
+        tiers read alike. Each coastline is projected onto the sphere at ``spin`` and broken into the arcs
+        that face the camera; without that split every line crossing the horizon would be drawn as a chord
+        through the planet.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            spin: Pin the coastlines to this spin, in degrees. Omitted, they follow the globe and are
+                redrawn at each animation frame's spin.
+            altitude: Radial lift above the surface, so the lines are not z-fought by it.
+            **kwargs: Line styling forwarded to matplotlib (``color``, ``linewidth``, ``alpha``, ...).
+
+        Returns:
+            The list of polyline artists drawn — one per visible arc.
+
+        Raises:
+            RuntimeError: if the globe has not been drawn yet.
+
+        Examples:
+            - Coastlines land on the sphere as a set of near-side arcs. The vectors are fetched (and
+              cached) by ``cleopatra``, so this needs a network on first use:
+                ```python
+                >>> import matplotlib                                      # doctest: +SKIP
+                >>> matplotlib.use("Agg")                                  # doctest: +SKIP
+                >>> import numpy as np                                     # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
+                >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
+                >>> arcs = globe.coastlines()                              # doctest: +SKIP
+                >>> len(arcs)                                              # doctest: +SKIP
+                57
+
+                ```
+            - Restyle them like any matplotlib line, and pin them to one spin so they stay put while the
+              globe turns:
+                ```python
+                >>> arcs = globe.coastlines(color="white", linewidth=1.2, spin=0.0)  # doctest: +SKIP
+                >>> arcs[0].get_color()                                              # doctest: +SKIP
+                'white'
+
+                ```
+        """
+        return self._reference_layer(
+            "coastline",
+            resolution,
+            {"color": "black", "linewidth": 0.5},
+            spin=spin,
+            altitude=altitude,
+            fill=False,
+            **kwargs,
+        )
+
+    def borders(
+        self,
+        resolution: str = "110m",
+        *,
+        spin: Optional[float] = None,
+        altitude: float = 0.002,
+        **kwargs: Any,
+    ) -> Any:
+        """Draw Natural-Earth country borders on the globe, split at the visible limb.
+
+        The counterpart of :meth:`~digitalearth.static.Map.borders`, same spelling and same default
+        styling, so a globe and a flat map can be given the same reference geography.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            spin: Pin the borders to this spin, in degrees. Omitted, they follow the globe.
+            altitude: Radial lift above the surface.
+            **kwargs: Line styling forwarded to matplotlib.
+
+        Returns:
+            The list of polyline artists drawn — one per visible arc.
+
+        Raises:
+            RuntimeError: if the globe has not been drawn yet.
+
+        Examples:
+            - Borders draw in their own default grey, thinner than the coastlines. The vectors are
+              fetched (and cached) by ``cleopatra``, so this needs a network on first use:
+                ```python
+                >>> import matplotlib                                      # doctest: +SKIP
+                >>> matplotlib.use("Agg")                                  # doctest: +SKIP
+                >>> import numpy as np                                     # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
+                >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
+                >>> globe.borders()[0].get_linewidth()                     # doctest: +SKIP
+                0.4
+
+                ```
+            - Ask for the finer cut when the globe is drawn large:
+                ```python
+                >>> fine, coarse = globe.borders("50m"), globe.borders("110m")  # doctest: +SKIP
+                >>> len(fine) > len(coarse)                                     # doctest: +SKIP
+                True
+
+                ```
+        """
+        return self._reference_layer(
+            "borders",
+            resolution,
+            {"color": "gray", "linewidth": 0.4},
+            spin=spin,
+            altitude=altitude,
+            fill=False,
+            **kwargs,
+        )
+
+    def land(
+        self,
+        resolution: str = "110m",
+        *,
+        spin: Optional[float] = None,
+        altitude: float = 0.001,
+        **kwargs: Any,
+    ) -> Any:
+        """Fill Natural-Earth land polygons on the globe.
+
+        The counterpart of :meth:`~digitalearth.static.Map.land`. Each land ring is clipped to the
+        hemisphere facing the camera and re-closed along the limb, so a continent running off the edge is
+        filled to the horizon instead of having a chord cut across the disc. This is what turns an ocean
+        product — SST, sea ice, chlorophyll — from a ball of colour with white holes into a readable map.
+
+        Interior rings (holes) are dropped, as they are on the 2-D globe. A ring spanning more than half
+        the visible limb is closed the short way round, which is the wrong half for such a ring; no
+        Natural-Earth land part does that at the resolutions offered here.
+
+        Args:
+            resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            spin: Pin the fill to this spin, in degrees. Omitted, it follows the globe.
+            altitude: Radial lift above the surface. The fill is drawn under the line layers by
+                z-order rather than by radius, so this only has to clear the sphere itself.
+            **kwargs: Patch styling forwarded to matplotlib (``color``, ``alpha``, ``edgecolor``, ...).
+
+        Returns:
+            The ``Poly3DCollection`` holding the fill, or ``None`` when no land is on the near side.
+
+        Raises:
+            RuntimeError: if the globe has not been drawn yet.
+
+        Examples:
+            - The fill arrives as one collection holding every visible land ring. The vectors are fetched
+              (and cached) by ``cleopatra``, so this needs a network on first use:
+                ```python
+                >>> import matplotlib                                      # doctest: +SKIP
+                >>> matplotlib.use("Agg")                                  # doctest: +SKIP
+                >>> import numpy as np                                     # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
+                >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
+                >>> patch = globe.land()                                   # doctest: +SKIP
+                >>> patch in globe.ax.collections                          # doctest: +SKIP
+                True
+
+                ```
+            - Colour it like any patch — a translucent fill still lets the texture read through:
+                ```python
+                >>> patch = globe.land(color="0.4", alpha=0.5)             # doctest: +SKIP
+                >>> round(float(patch.get_facecolor()[0][3]), 2)           # doctest: +SKIP
+                0.5
+
+                ```
+        """
+        return self._reference_layer(
+            "land",
+            resolution,
+            {"color": "#efefdb", "edgecolor": "none"},
+            spin=spin,
+            altitude=altitude,
+            fill=True,
+            **kwargs,
+        )
 
     @staticmethod
     def _as_lonlat(data: Any, lat: Any) -> Tuple[np.ndarray, np.ndarray]:
