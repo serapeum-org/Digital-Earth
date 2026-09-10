@@ -368,6 +368,73 @@ class DecorationMixin(_MixinBase):
 
         return self.add_layer(layer=apply)
 
+    def layer_control(
+        self,
+        *,
+        position: str = "top-right",
+        layer_ids: Optional[list] = None,
+        theme: str = "default",
+    ) -> Self:
+        """Add a switcher so a viewer can turn the data layers on and off.
+
+        A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the
+        single most common thing anyone does with a web map. The switch lists the data layers only:
+        basemaps are the ground, not something a viewer toggles.
+
+        Args:
+            position: One of the four MapLibre corners.
+            layer_ids: The layers to offer, defaulting to every data layer added so far
+                (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from
+                the switch without hiding them from the map.
+            theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners, when no data layer
+                has been added yet, or when an id was given that is not on this map.
+
+        Examples:
+            - Two layers and a switch between them:
+                ```python
+                >>> from digitalearth.web import WebMap                            # doctest: +SKIP
+                >>> (                                                              # doctest: +SKIP
+                ...     WebMap()
+                ...     .basemap()
+                ...     .choropleth(gdf, column="pop", name="Population")
+                ...     .layer_control()
+                ... )
+
+                ```
+
+        See Also:
+            digitalearth.web.base.WebMapBase.layer_ids: the ids this offers by default.
+        """
+        _require_maplibre()
+        _check_position(position)
+        available = self.layer_ids
+        if not available:
+            raise ValueError(
+                "layer_control() has nothing to switch: no data layer has been added yet. A basemap is "
+                "the ground rather than a layer a viewer toggles."
+            )
+        wanted = list(layer_ids) if layer_ids is not None else available
+        unknown = [layer_id for layer_id in wanted if layer_id not in available]
+        if unknown:
+            raise ValueError(
+                f"layer_control() was given {unknown}, which are not on this map; its layers are "
+                f"{available}"
+            )
+        from maplibre.controls import LayerSwitcherControl
+
+        control = LayerSwitcherControl(layer_ids=wanted, theme=theme)
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
     def navigation(
         self,
         *,

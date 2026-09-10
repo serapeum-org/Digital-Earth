@@ -169,6 +169,9 @@ class VectorMixin(_MixinBase):
         prefix: str,
         layer_type: Any,
         paint: dict,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Register a GeoJSON source + a typed layer with ``paint`` and record it as the last data layer.
 
@@ -177,19 +180,25 @@ class VectorMixin(_MixinBase):
             prefix: The id prefix / kind tag (``"circle"``/``"line"``/``"fill"``).
             layer_type: The ``maplibre`` ``LayerType`` member for the layer.
             paint: The MapLibre paint dict for the layer.
-
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
         Returns:
             The same map instance, so builder calls chain.
         """
         Layer, _ = _require_layer_api()
         src_id, layer_id = self._uid(f"{prefix}-src"), self._uid(prefix)
-        layer = Layer(id=layer_id, type=layer_type, source=src_id, paint=paint)
+        layout = None if visible else {"visibility": "none"}
+        layer = Layer(
+            id=layer_id, type=layer_type, source=src_id, paint=paint, layout=layout
+        )
 
         def apply(widget: Any) -> None:
             widget.add_source(src_id, features)
             widget.add_layer(layer)
 
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
+        self._index_layer(layer_id, name)
         return self.add_layer(apply)
 
     @staticmethod
@@ -211,6 +220,8 @@ class VectorMixin(_MixinBase):
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
@@ -227,6 +238,8 @@ class VectorMixin(_MixinBase):
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
 
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -249,7 +262,9 @@ class VectorMixin(_MixinBase):
             )
         else:
             paint["circle-color"] = color
-        return self._vector_layer(gdf, "circle", LayerType.CIRCLE, paint)
+        return self._vector_layer(
+            gdf, "circle", LayerType.CIRCLE, paint, name=name, visible=visible
+        )
 
     def lines(
         self,
@@ -262,6 +277,8 @@ class VectorMixin(_MixinBase):
         width: float = 2.0,
         color: str = "#3388ff",
         opacity: float = 1.0,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a line ``FeatureCollection`` as a MapLibre line layer (recipe W2).
 
@@ -275,6 +292,8 @@ class VectorMixin(_MixinBase):
             color: Fixed line colour used when ``column`` is ``None``.
             opacity: Line opacity in ``[0, 1]``.
 
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -287,7 +306,9 @@ class VectorMixin(_MixinBase):
             )
         else:
             paint["line-color"] = color
-        return self._vector_layer(gdf, "line", LayerType.LINE, paint)
+        return self._vector_layer(
+            gdf, "line", LayerType.LINE, paint, name=name, visible=visible
+        )
 
     def polygons(
         self,
@@ -301,6 +322,8 @@ class VectorMixin(_MixinBase):
         opacity: float = 0.6,
         outline_color: str = "#ffffff",
         big: Optional[bool] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
 
@@ -317,6 +340,8 @@ class VectorMixin(_MixinBase):
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
 
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -342,7 +367,9 @@ class VectorMixin(_MixinBase):
             )
         else:
             paint["fill-color"] = color
-        return self._vector_layer(gdf, "fill", LayerType.FILL, paint)
+        return self._vector_layer(
+            gdf, "fill", LayerType.FILL, paint, name=name, visible=visible
+        )
 
     def choropleth(
         self,
@@ -354,6 +381,8 @@ class VectorMixin(_MixinBase):
         cmap: str = "viridis",
         opacity: float = 0.85,
         outline_color: str = "#ffffff",
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
@@ -379,6 +408,8 @@ class VectorMixin(_MixinBase):
             opacity: Fill opacity in ``[0, 1]``.
             outline_color: Polygon outline colour.
 
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
         Returns:
             The same map instance, so builder calls chain.
 
@@ -394,4 +425,6 @@ class VectorMixin(_MixinBase):
             "fill-opacity": float(opacity),
             "fill-outline-color": outline_color,
         }
-        return self._vector_layer(gdf, "fill", LayerType.FILL, paint)
+        return self._vector_layer(
+            gdf, "fill", LayerType.FILL, paint, name=name, visible=visible
+        )

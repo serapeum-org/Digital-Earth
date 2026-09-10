@@ -350,6 +350,10 @@ class WebMapBase:
         self._id_counter = 0
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
+        #: Every data layer added, in order, as ``(id, label)``. The id addresses the layer in MapLibre;
+        #: the label is what a layer switcher shows a viewer. Controls and basemaps are not in here —
+        #: they are not things a viewer turns on and off.
+        self._layer_index: List[tuple] = []
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
@@ -481,6 +485,58 @@ class WebMapBase:
         if chose_view or self._data_bounds is None:
             return None
         return {"bounds": list(self._data_bounds), "padding": 20, "animate": False}
+
+    @property
+    def layer_ids(self) -> List[str]:
+        """The MapLibre ids of the data layers added so far, in order.
+
+        The registry used to be write-only: builders minted ids internally and nothing surfaced them, so a
+        caller could not address a layer afterwards to hide, remove or switch it.
+
+        Returns:
+            The layer ids, oldest first.
+        """
+        return [layer_id for layer_id, _ in self._layer_index]
+
+    def _index_layer(self, layer_id: str, label: Optional[str]) -> None:
+        """Record a data layer so it can be addressed later.
+
+        Args:
+            layer_id: The MapLibre layer id.
+            label: What a layer switcher should call it; ``None`` falls back to the id.
+        """
+        self._layer_index.append((layer_id, label or layer_id))
+
+    def remove_layer(self, layer_id: str) -> Self:
+        """Drop a previously added layer from the map.
+
+        Building a `WebMap` was one-way: a mistake meant starting over, which in a notebook — where these
+        maps are built — is the normal workflow.
+
+        Args:
+            layer_id: An id from :attr:`layer_ids`.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
+                look exactly like a layer that refused to go away.
+        """
+        if layer_id not in self.layer_ids:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; added layers are {self.layer_ids}"
+            )
+        index = self.layer_ids.index(layer_id)
+        self._layer_index.pop(index)
+        self.layers = [
+            layer
+            for layer in self.layers
+            if getattr(layer, "_digitalearth_layer_id", None) != layer_id
+        ]
+        if self._last_layer_id == layer_id:
+            self._last_layer_id = self.layer_ids[-1] if self.layer_ids else None
+        return self
 
     def _uid(self, prefix: str) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
