@@ -14,6 +14,7 @@ palette ever sees the frames — and ``gif_from_video`` warns when handed such a
 derived, this wrapper raises the intermediate to ``yuv444p`` unless the caller asks for something else: the
 video stays perfectly playable and the GIF gets full-chroma frames to quantise.
 """
+
 import math
 import os
 import warnings
@@ -37,7 +38,9 @@ _PILLOW_WRITTEN = frozenset({"gif", "webp"})
 #: Container suffixes a GIF can be derived from: cleopatra's own supported formats, minus the Pillow ones.
 #: Derived from ``SUPPORTED_VIDEO_FORMAT`` rather than hand-listed, so it cannot drift from what the writer
 #: actually accepts — a hand-kept list previously admitted .mkv and .m4v, which cleopatra rejects.
-VIDEO_SUFFIXES = tuple(f".{fmt}" for fmt in SUPPORTED_VIDEO_FORMAT if fmt not in _PILLOW_WRITTEN)
+VIDEO_SUFFIXES = tuple(
+    f".{fmt}" for fmt in SUPPORTED_VIDEO_FORMAT if fmt not in _PILLOW_WRITTEN
+)
 
 
 def _encoder_fps(fps: Any, *, name: str = "fps") -> int:
@@ -76,9 +79,15 @@ def _encoder_fps(fps: Any, *, name: str = "fps") -> int:
     return rounded
 
 
-def save_animation(anim: Any, path: Union[str, "os.PathLike[str]"], *, fps: Optional[float] = None,
-                   gif: Optional[Union[str, "os.PathLike[str]"]] = None,
-                   gif_options: Optional[dict] = None, **kwargs: Any) -> Union[str, Tuple[str, str]]:
+def save_animation(
+    anim: Any,
+    path: Union[str, "os.PathLike[str]"],
+    *,
+    fps: Optional[float] = None,
+    gif: Optional[Union[str, "os.PathLike[str]"]] = None,
+    gif_options: Optional[dict] = None,
+    **kwargs: Any,
+) -> Union[str, Tuple[str, str]]:
     """Save ``anim`` to ``path``, optionally deriving a GIF from the written file without re-rendering.
 
     Args:

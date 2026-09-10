@@ -17,7 +17,10 @@ def lines_fc():
     coords = list(zip(pts.geometry.x.tolist(), pts.geometry.y.tolist()))
     lines = [LineString([coords[i], coords[i + 1]]) for i in range(len(coords) - 1)]
     gdf = gpd.GeoDataFrame(
-        {"flow": np.arange(1.0, len(lines) + 1.0), "w": np.arange(1.0, len(lines) + 1.0)},
+        {
+            "flow": np.arange(1.0, len(lines) + 1.0),
+            "w": np.arange(1.0, len(lines) + 1.0),
+        },
         geometry=lines,
         crs=pts.crs,
     )
@@ -78,8 +81,12 @@ def test_sankey_multilinestring_expands_parts():
 
     multi = MultiLineString([[(0.0, 0.0), (1.0, 1.0)], [(2.0, 2.0), (3.0, 3.0)]])
     single = LineString([(4.0, 4.0), (5.0, 5.0)])
-    gdf = gpd.GeoDataFrame({"flow": [1.0, 2.0], "w": [1.0, 2.0]}, geometry=[multi, single], crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame(
+        {"flow": [1.0, 2.0], "w": [1.0, 2.0]}, geometry=[multi, single], crs="EPSG:4326"
+    )
     m = Map(crs=4326)
     lc = m.sankey(FeatureCollection(gdf), column="flow", scale="w")
     assert len(m.layers) == 1, "sankey should register one layer"
-    assert len(lc.get_paths()) == 3, f"2 multi-parts + 1 line = 3 paths, got {len(lc.get_paths())}"
+    assert len(lc.get_paths()) == 3, (
+        f"2 multi-parts + 1 line = 3 paths, got {len(lc.get_paths())}"
+    )

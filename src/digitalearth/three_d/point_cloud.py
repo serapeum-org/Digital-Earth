@@ -9,7 +9,8 @@ The GeoDataFrame is **duck-typed** (``hasattr(data, "geometry")``) and only its 
 module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competitor_imports`` guard); pyramids does
 all CRS work upstream.
 """
-from typing import Any, Optional, Tuple
+
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 import numpy as np
 import pyvista as pv
@@ -18,7 +19,9 @@ import pyvista as pv
 SCALAR = "scalar"
 
 
-def _coords_from_geodataframe(data: Any, value_column: Optional[str]) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+def _coords_from_geodataframe(
+    data: Any, value_column: Optional[str]
+) -> Tuple[np.ndarray, Optional[np.ndarray]]:
     """Read ``(N, 3)`` coordinates (and an optional value column) off a points GeoDataFrame.
 
     Args:
@@ -32,9 +35,17 @@ def _coords_from_geodataframe(data: Any, value_column: Optional[str]) -> Tuple[n
     geom = data.geometry
     x = np.asarray(geom.x.to_numpy(), dtype="float64")
     y = np.asarray(geom.y.to_numpy(), dtype="float64")
-    z = np.asarray(geom.z.to_numpy(), dtype="float64") if bool(geom.has_z.all()) else np.zeros_like(x)
+    z = (
+        np.asarray(geom.z.to_numpy(), dtype="float64")
+        if bool(geom.has_z.all())
+        else np.zeros_like(x)
+    )
     points = np.column_stack([x, y, z])
-    values = np.asarray(data[value_column].to_numpy(), dtype="float64") if value_column else None
+    values = (
+        np.asarray(data[value_column].to_numpy(), dtype="float64")
+        if value_column
+        else None
+    )
     return points, values
 
 
@@ -52,14 +63,37 @@ def _coords_from_array(data: Any) -> np.ndarray:
     """
     arr = np.asarray(data, dtype="float64")
     if arr.ndim != 2 or arr.shape[1] not in (2, 3):
-        raise ValueError(f"point_cloud expects an (N, 3) or (N, 2) table, got shape {arr.shape}")
+        raise ValueError(
+            f"point_cloud expects an (N, 3) or (N, 2) table, got shape {arr.shape}"
+        )
     if arr.shape[1] == 2:
         arr = np.column_stack([arr, np.zeros(len(arr))])
     return arr
 
 
-class PointCloudMixin:
-    """Adds :meth:`point_cloud` — render scattered 3-D points — to a :class:`Scene3D`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class PointCloudMixin(_MixinBase):
+    """Adds :meth:`point_cloud` — render scattered 3-D points — to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def point_cloud(
         self,
@@ -122,11 +156,17 @@ class PointCloudMixin:
         scalar = values if values is not None else gdf_values
         cloud = pv.PolyData(points)
 
-        add_kwargs = dict(point_size=point_size, render_points_as_spheres=render_points_as_spheres, **kwargs)
+        add_kwargs = dict(
+            point_size=point_size,
+            render_points_as_spheres=render_points_as_spheres,
+            **kwargs,
+        )
         if scalar is not None:
             scalar = np.asarray(scalar, dtype="float64")
             if scalar.shape[0] != len(points):
-                raise ValueError(f"values length {scalar.shape[0]} does not match {len(points)} points")
+                raise ValueError(
+                    f"values length {scalar.shape[0]} does not match {len(points)} points"
+                )
             cloud[SCALAR] = scalar
             add_kwargs.update(scalars=SCALAR, cmap=cmap)
 

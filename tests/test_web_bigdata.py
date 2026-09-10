@@ -16,7 +16,9 @@ def points_gdf():
     from shapely.geometry import Point
 
     geoms = [Point(x, x) for x in range(5)]
-    return gpd.GeoDataFrame({"value": [0.0, 1.0, 2.0, 3.0, 4.0]}, geometry=geoms, crs=4326)
+    return gpd.GeoDataFrame(
+        {"value": [0.0, 1.0, 2.0, 3.0, 4.0]}, geometry=geoms, crs=4326
+    )
 
 
 @pytest.fixture()
@@ -80,7 +82,9 @@ class TestBigDataBuildersNeedEngine:
 
     def test_deck_scatter_accumulates_into_one_applier(self, points_gdf):
         m = WebMap().deck_scatter(points_gdf).deck_scatter(points_gdf)
-        assert len(m.layers) == 1, "all deck layers share a single add_deck_layers applier"
+        assert len(m.layers) == 1, (
+            "all deck layers share a single add_deck_layers applier"
+        )
         assert m._deck_layers is not None and len(m._deck_layers) == 2
         assert m._deck_layers[0]["@@type"] == "GeoJsonLayer"
 
@@ -93,7 +97,9 @@ class TestBigDataBuildersNeedEngine:
         m = WebMap()
         m.big_data_threshold = 2  # 5 points > 2 → route to deck
         m.points(points_gdf)
-        assert m._deck_layers is not None, "large point sets must route to a deck.gl layer"
+        assert m._deck_layers is not None, (
+            "large point sets must route to a deck.gl layer"
+        )
 
     def test_points_big_false_keeps_circles(self, points_gdf):
         m = WebMap()
@@ -107,14 +113,20 @@ class TestBigDataBuildersNeedEngine:
         m = WebMap()
         m.big_data_threshold = 2  # 5 points > 2, but a column is set
         m.points(points_gdf, column="value")
-        assert m._deck_layers is None, "column styling must be preserved (no auto-route)"
-        assert len(m.layers) == 1  # a per-feature MapLibre circle layer, not a flat deck layer
+        assert m._deck_layers is None, (
+            "column styling must be preserved (no auto-route)"
+        )
+        assert (
+            len(m.layers) == 1
+        )  # a per-feature MapLibre circle layer, not a flat deck layer
 
     def test_points_forced_big_with_column_warns_and_routes(self, points_gdf):
         """Forcing big=True with a column routes to deck but is the explicit, logged opt-in (M1)."""
         m = WebMap()
         m.points(points_gdf, column="value", big=True)
-        assert m._deck_layers is not None, "big=True forces the deck path even with a column"
+        assert m._deck_layers is not None, (
+            "big=True forces the deck path even with a column"
+        )
 
     def test_save_writes_a_file(self, tmp_path, points_gdf):
         out = tmp_path / "heat.html"

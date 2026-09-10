@@ -19,7 +19,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 """
 
 import pathlib
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Self
 
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
@@ -89,7 +89,10 @@ def _patch_maplibre_html_encoding() -> None:
     # name and still holds the original (e.g. `maplibre.map`) so no un-shimmed reference is left behind.
     _utils.read_internal_file = read_internal_file
     for name, module in list(sys.modules.items()):
-        if name.startswith("maplibre") and getattr(module, "read_internal_file", None) is original:
+        if (
+            name.startswith("maplibre")
+            and getattr(module, "read_internal_file", None) is original
+        ):
             module.read_internal_file = read_internal_file
 
 
@@ -156,7 +159,10 @@ def _is_date_like(value: Any) -> bool:
     import pandas as pd
 
     # datetime and Timestamp subclass date; Timedelta subclasses timedelta; time is separate.
-    return isinstance(value, (dt.date, dt.time, dt.timedelta, np.datetime64, np.timedelta64, pd.Period))
+    return isinstance(
+        value,
+        (dt.date, dt.time, dt.timedelta, np.datetime64, np.timedelta64, pd.Period),
+    )
 
 
 def _iso(value: Any) -> Any:
@@ -203,7 +209,9 @@ def _iso_series(series: Any) -> Any:
     """
     import pandas as pd
 
-    return pd.Series([_iso(value) for value in series], index=series.index, dtype=object)
+    return pd.Series(
+        [_iso(value) for value in series], index=series.index, dtype=object
+    )
 
 
 def _date_encoded(series: Any) -> Any:
@@ -360,7 +368,7 @@ class WebMapBase:
         self._id_counter += 1
         return f"{prefix}-{self._id_counter}"
 
-    def add_layer(self, layer: Any) -> "WebMapBase":
+    def add_layer(self, layer: Any) -> Self:
         """Register ``layer`` and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here. A layer
@@ -629,7 +637,9 @@ class WebMapBase:
         import pandas as pd
 
         columns = getattr(gdf, "columns", None)
-        if columns is None:  # a GeoSeries satisfies the vector guard but has no columns to encode
+        if (
+            columns is None
+        ):  # a GeoSeries satisfies the vector guard but has no columns to encode
             return gdf
         geometry_name = getattr(getattr(gdf, "geometry", None), "name", None)
         changed = {}
@@ -680,16 +690,20 @@ class WebMapBase:
             digitalearth.web.base.WebMapBase._json_safe: the date encoding applied to the result.
         """
         self._require_vector(features, method)
-        if hasattr(features, "epsg") and hasattr(features, "to_crs"):  # pyramids FeatureCollection (a GeoDataFrame)
+        if hasattr(features, "epsg") and hasattr(
+            features, "to_crs"
+        ):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
             return self._json_safe(features)
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
-        if crs_epsg is not None and crs_epsg != self.crs:  # a bare GeoDataFrame in another CRS
+        if (
+            crs_epsg is not None and crs_epsg != self.crs
+        ):  # a bare GeoDataFrame in another CRS
             return self._json_safe(features.to_crs(self.crs))
         return self._json_safe(features)
 
-    def add_underlay(self, layer: Any) -> "WebMapBase":
+    def add_underlay(self, layer: Any) -> Self:
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
 
         Basemaps/tiles call this so they sit beneath the data layers regardless of when they are added —
@@ -841,7 +855,9 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
         """
-        kind = (fmt or ("png" if str(path).lower().endswith(".png") else "html")).lower()
+        kind = (
+            fmt or ("png" if str(path).lower().endswith(".png") else "html")
+        ).lower()
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)

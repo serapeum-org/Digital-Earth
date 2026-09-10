@@ -27,7 +27,9 @@ class TestDefaultNamer:
             index: The input's position in the batch.
             expected: The expected output stem.
         """
-        assert _default_namer(item, index) == expected, f"{item!r} -> {_default_namer(item, index)}"
+        assert _default_namer(item, index) == expected, (
+            f"{item!r} -> {_default_namer(item, index)}"
+        )
 
 
 class TestBatch:
@@ -37,12 +39,16 @@ class TestBatch:
         """The constructor strips a leading dot from ext and keeps the shared defaults."""
         b = Batch(crs=3857, kind="contourf", ext=".pdf")
         assert b.ext == "pdf", f"ext should be normalised, got {b.ext!r}"
-        assert b.defaults == {"crs": 3857, "kind": "contourf"}, f"unexpected defaults: {b.defaults}"
+        assert b.defaults == {"crs": 3857, "kind": "contourf"}, (
+            f"unexpected defaults: {b.defaults}"
+        )
 
     def test_render_one_from_object(self, dataset):
         """render_one passes an in-memory pyramids object straight through to the plotter."""
         m = Batch(colorbar=False).render_one(dataset, crs=dataset.epsg)
-        assert isinstance(m, Map) and len(m.layers) == 1, "expected one drawn layer on a Map"
+        assert isinstance(m, Map) and len(m.layers) == 1, (
+            "expected one drawn layer on a Map"
+        )
 
     def test_render_one_from_path(self, tmp_path, dataset):
         """render_one reads a path input via pyramids before plotting."""
@@ -57,15 +63,21 @@ class TestBatch:
         paths = Batch(crs=dataset.epsg, colorbar=False).run(
             [dataset, dataset], outdir, namer=lambda item, i: f"frame_{i}"
         )
-        assert [p.name for p in paths] == ["frame_0.png", "frame_1.png"], f"unexpected names: {paths}"
-        assert all(p.exists() and p.stat().st_size > 0 for p in paths), "images must be non-empty"
+        assert [p.name for p in paths] == ["frame_0.png", "frame_1.png"], (
+            f"unexpected names: {paths}"
+        )
+        assert all(p.exists() and p.stat().st_size > 0 for p in paths), (
+            "images must be non-empty"
+        )
 
     def test_run_creates_outdir_and_uses_default_namer(self, tmp_path, dataset):
         """run creates a missing output directory and falls back to figure_<index> names."""
         outdir = tmp_path / "nested" / "out"
         paths = Batch(crs=dataset.epsg, colorbar=False).run([dataset], outdir)
         assert outdir.is_dir(), "run should create the output directory"
-        assert paths[0].name == "figure_000.png", f"default namer expected, got {paths[0].name}"
+        assert paths[0].name == "figure_000.png", (
+            f"default namer expected, got {paths[0].name}"
+        )
 
     def test_run_overrides_take_precedence(self, tmp_path, dataset):
         """Per-run overrides win over construction-time defaults (ext from the override)."""
@@ -78,6 +90,12 @@ class TestBatch:
         paths = Batch(crs=dataset.epsg, colorbar=False).run(
             [dataset, dataset], tmp_path, namer=lambda item, i: "dup"
         )
-        assert [p.name for p in paths] == ["dup.png", "dup_1.png"], f"unexpected names: {paths}"
-        assert len({p.name for p in paths}) == 2, "the two outputs must be distinct files"
-        assert all(p.stat().st_size > 0 for p in paths), "both images must be written and non-empty"
+        assert [p.name for p in paths] == ["dup.png", "dup_1.png"], (
+            f"unexpected names: {paths}"
+        )
+        assert len({p.name for p in paths}) == 2, (
+            "the two outputs must be distinct files"
+        )
+        assert all(p.stat().st_size > 0 for p in paths), (
+            "both images must be written and non-empty"
+        )

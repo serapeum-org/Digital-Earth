@@ -1,4 +1,5 @@
 """Tests for digitalearth.static.charts — non-map x–y charts (line, bar, histogram)."""
+
 import numpy as np
 import pytest
 from matplotlib.axes import Axes
@@ -13,8 +14,12 @@ def test_top_level_exports():
     for name in ("line", "bar", "histogram", "grid", "shared_colorbar"):
         assert hasattr(digitalearth, name), f"digitalearth.{name} should be exported"
         assert name in digitalearth.__all__, f"{name} should be in digitalearth.__all__"
-    assert digitalearth.line is charts.line, "top-level line must be the charts.line function"
-    assert digitalearth.histogram is charts.histogram, "top-level histogram must be charts.histogram"
+    assert digitalearth.line is charts.line, (
+        "top-level line must be the charts.line function"
+    )
+    assert digitalearth.histogram is charts.histogram, (
+        "top-level histogram must be charts.histogram"
+    )
 
 
 class TestLine:
@@ -24,13 +29,17 @@ class TestLine:
         """A 1-D y draws exactly one Line2D and returns the Axes."""
         ax = charts.line([0, 1, 2, 3], [0, 1, 4, 9])
         assert isinstance(ax, Axes), f"expected an Axes, got {type(ax)}"
-        assert len(ax.lines) == 1, f"one series should add one line, got {len(ax.lines)}"
+        assert len(ax.lines) == 1, (
+            f"one series should add one line, got {len(ax.lines)}"
+        )
 
     def test_multi_series_one_line_per_column(self):
         """A 2-D y draws one line per column (shared x)."""
         y = np.column_stack([[0, 1, 2], [0, 2, 4], [0, 3, 6]])
         ax = charts.line([0, 1, 2], y)
-        assert len(ax.lines) == 3, f"three columns should add three lines, got {len(ax.lines)}"
+        assert len(ax.lines) == 3, (
+            f"three columns should add three lines, got {len(ax.lines)}"
+        )
 
     def test_label_appears_in_legend(self):
         """A passed label is discoverable through the axes legend handles."""
@@ -52,7 +61,9 @@ class TestLine:
         from matplotlib.colors import to_rgba
 
         ax = charts.line([0, 1, 2], [0, 1, 0], color="red")
-        assert ax.lines[0].get_color() in ("red", to_rgba("red")), f"colour not applied: {ax.lines[0].get_color()}"
+        assert ax.lines[0].get_color() in ("red", to_rgba("red")), (
+            f"colour not applied: {ax.lines[0].get_color()}"
+        )
 
 
 class TestBar:
@@ -62,7 +73,9 @@ class TestBar:
         """A bar chart adds one bar per element of x and returns the Axes."""
         ax = charts.bar([0, 1, 2, 3], [3, 1, 4, 1])
         assert isinstance(ax, Axes), f"expected an Axes, got {type(ax)}"
-        assert len(ax.containers[0]) == 4, f"expected 4 bars, got {len(ax.containers[0])}"
+        assert len(ax.containers[0]) == 4, (
+            f"expected 4 bars, got {len(ax.containers[0])}"
+        )
 
     def test_bar_heights_match_input(self):
         """The drawn bar heights equal the supplied heights, in order."""
@@ -75,7 +88,9 @@ class TestBar:
         from matplotlib.colors import to_rgba
 
         ax = charts.bar([0, 1], [1, 2], color="green")
-        assert ax.containers[0][0].get_facecolor() == to_rgba("green"), "bar colour not applied"
+        assert ax.containers[0][0].get_facecolor() == to_rgba("green"), (
+            "bar colour not applied"
+        )
 
     def test_bar_on_supplied_axes(self):
         """When an axes is supplied, the bars are drawn on it."""
@@ -97,16 +112,23 @@ class TestHistogram:
     def test_raw_array_drops_nonfinite(self):
         """A raw 1-D array with NaN/inf histograms cleanly instead of an opaque numpy range error (M1)."""
         fig, ax, hist = charts.histogram([1.0, np.nan, 3.0, np.inf, 2.0], bins=3)
-        assert len(ax.patches) == 3, f"expected 3 bins over the finite values, got {len(ax.patches)}"
+        assert len(ax.patches) == 3, (
+            f"expected 3 bins over the finite values, got {len(ax.patches)}"
+        )
 
     def test_dataset_input_drops_nodata(self):
         """A pyramids Dataset is histogrammed over its first band with nodata excluded."""
         from pyramids.dataset import Dataset, GeoReference
 
         arr = np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+        )
         finite = charts.as_finite_array(ds)
-        assert sorted(finite.tolist()) == [1.0, 2.0, 3.0], f"nodata not dropped: {finite}"
+        assert sorted(finite.tolist()) == [1.0, 2.0, 3.0], (
+            f"nodata not dropped: {finite}"
+        )
         fig, ax, hist = charts.histogram(ds, bins=3)
         assert len(ax.patches) == 3
 
@@ -134,16 +156,22 @@ class TestHistogram:
     def test_as_finite_array_passthrough_drops_nonfinite_only_for_dataset(self):
         """A raw list is returned as-is by np.asarray (no nodata/finite filtering)."""
         out = charts.as_finite_array([1.0, np.nan, 3.0])
-        assert out.shape == (3,) and np.isnan(out[1]), "raw arrays must pass through unfiltered"
+        assert out.shape == (3,) and np.isnan(out[1]), (
+            "raw arrays must pass through unfiltered"
+        )
 
     def test_as_finite_array_dataset_without_nodata(self):
         """A dataset declaring no nodata keeps every finite cell (skips the nodata filter)."""
         from types import SimpleNamespace
 
-        ds = SimpleNamespace(read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
-                             no_data_value=[None])
+        ds = SimpleNamespace(
+            read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+            no_data_value=[None],
+        )
         out = charts.as_finite_array(ds)
-        assert sorted(out.tolist()) == [1.0, 2.0, 3.0, 4.0], f"all cells should be kept, got {out}"
+        assert sorted(out.tolist()) == [1.0, 2.0, 3.0, 4.0], (
+            f"all cells should be kept, got {out}"
+        )
 
 
 class TestAggregateByCategory:
@@ -155,7 +183,11 @@ class TestAggregateByCategory:
         from shapely.geometry import Point
 
         return gpd.GeoDataFrame(
-            {"cat": ["a", "a", "b", "c"], "year": [2000, 2000, 2010, 2010], "v": [1.0, 2.0, 3.0, 4.0]},
+            {
+                "cat": ["a", "a", "b", "c"],
+                "year": [2000, 2000, 2010, 2010],
+                "v": [1.0, 2.0, 3.0, 4.0],
+            },
             geometry=[Point(i, i) for i in range(4)],
             crs=4326,
         )
@@ -200,7 +232,9 @@ class TestAggregateByCategory:
         import digitalearth
 
         assert digitalearth.bar_by is charts.bar_by and "bar_by" in digitalearth.__all__
-        assert digitalearth.line_by is charts.line_by and "line_by" in digitalearth.__all__
+        assert (
+            digitalearth.line_by is charts.line_by and "line_by" in digitalearth.__all__
+        )
 
 
 class TestScatter:
@@ -210,7 +244,9 @@ class TestScatter:
         """Two arrays draw a single scatter PathCollection and return the Axes."""
         ax = charts.scatter([1, 2, 3], [4, 5, 6])
         assert isinstance(ax, Axes), f"expected an Axes, got {type(ax)}"
-        assert len(ax.collections) == 1, f"expected one scatter collection, got {len(ax.collections)}"
+        assert len(ax.collections) == 1, (
+            f"expected one scatter collection, got {len(ax.collections)}"
+        )
 
     def test_field_vs_field_by_column(self):
         """With a GeoDataFrame, x/y resolve to column names (DC.3)."""
@@ -249,7 +285,9 @@ class TestScatter:
     def test_exported_top_level(self):
         import digitalearth
 
-        assert digitalearth.scatter is charts.scatter and "scatter" in digitalearth.__all__
+        assert (
+            digitalearth.scatter is charts.scatter and "scatter" in digitalearth.__all__
+        )
 
 
 class TestStatistics:
@@ -271,7 +309,9 @@ class TestStatistics:
     def test_fractional_quantiles_get_distinct_keys(self):
         """Near-equal quantiles map to distinct keys instead of colliding on one (N2)."""
         s = charts.statistics(range(1001), quantiles=(0.5, 0.505))
-        assert "q50" in s and "q50.5" in s, f"fractional quantiles must not collide: {sorted(s)}"
+        assert "q50" in s and "q50.5" in s, (
+            f"fractional quantiles must not collide: {sorted(s)}"
+        )
 
     def test_colliding_quantile_keys_raise(self):
         """Two quantiles that format to the same key raise instead of silently overwriting (N2)."""
@@ -300,7 +340,10 @@ class TestStatistics:
         from pyramids.dataset import Dataset, GeoReference
 
         arr = np.array([[1.0, 2.0], [3.0, -9999.0]], dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+        )
         s = charts.statistics(ds)
         assert s["count"] == 3 and s["min"] == 1.0 and s["max"] == 3.0
 

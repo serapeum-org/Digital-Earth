@@ -4,6 +4,7 @@ This is pure bounding-box bookkeeping (no GIS computation): a small registry of 
 ``(west, south, east, north)`` in EPSG:4326. Reprojecting a resolved bbox to a display CRS is delegated to
 pyramids (``pyramids.base.crs.reproject_coordinates``) by :meth:`digitalearth.static.map.Map.set_domain`.
 """
+
 from typing import Optional, Sequence, Tuple, Union
 
 #: Built-in named regions as ``(west, south, east, north)`` in EPSG:4326 (lon/lat degrees).
@@ -21,7 +22,9 @@ DOMAINS = {
 DomainLike = Union[str, Sequence[float]]
 
 
-def resolve_domain(domain: Optional[DomainLike]) -> Optional[Tuple[float, float, float, float]]:
+def resolve_domain(
+    domain: Optional[DomainLike],
+) -> Optional[Tuple[float, float, float, float]]:
     """Resolve a domain name or explicit bbox to a ``(west, south, east, north)`` tuple in EPSG:4326.
 
     Args:
@@ -69,5 +72,7 @@ def resolve_domain(domain: Optional[DomainLike]) -> Optional[Tuple[float, float,
         return DOMAINS[key]
     bbox = tuple(float(v) for v in domain)
     if len(bbox) != 4:
-        raise ValueError(f"a bbox domain must be (west, south, east, north); got {domain!r}")
+        raise ValueError(
+            f"a bbox domain must be (west, south, east, north); got {domain!r}"
+        )
     return bbox

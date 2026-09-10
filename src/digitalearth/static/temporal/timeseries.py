@@ -1,4 +1,5 @@
 """TimeSeries — reduce a DatasetCollection to a per-time-step series and plot it as a line."""
+
 from typing import Any, Optional, Sequence
 
 import numpy as np
@@ -52,7 +53,9 @@ class TimeSeries:
 
     def __init__(self, collection: Any, band: int = 1, reducer: str = "mean"):
         if reducer not in self._REDUCERS:
-            raise ValueError(f"unknown reducer {reducer!r}; choose from {sorted(self._REDUCERS)}")
+            raise ValueError(
+                f"unknown reducer {reducer!r}; choose from {sorted(self._REDUCERS)}"
+            )
         self.collection = collection
         self.band = band
         self.reducer = reducer
@@ -64,10 +67,15 @@ class TimeSeries:
             1-D array of length ``len(collection.datasets)``.
         """
         func = self._REDUCERS[self.reducer]
-        out = [func(read_masked_band(member, self.band)) for member in self.collection.datasets]
+        out = [
+            func(read_masked_band(member, self.band))
+            for member in self.collection.datasets
+        ]
         return np.asarray(out)
 
-    def plot(self, times: Optional[Sequence] = None, ax: Optional[Axes] = None, **kwargs) -> Any:
+    def plot(
+        self, times: Optional[Sequence] = None, ax: Optional[Axes] = None, **kwargs
+    ) -> Any:
         """Plot the series as a line.
 
         Args:

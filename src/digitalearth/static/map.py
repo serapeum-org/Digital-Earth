@@ -8,6 +8,7 @@ projection is applied to the *data* upstream, not to the axes (see plan §2.4).
 The field methods here (``imshow`` and the private ``_field`` recipe) are the foundation T1.1 extends with
 ``contourf``/``contour``/``pcolormesh``/``block``.
 """
+
 from digitalearth.static.maps.animation import AnimationMixin
 from digitalearth.static.maps.base import GeoLayerBase
 from digitalearth.static.maps.decoration import DecorationMixin
@@ -18,7 +19,14 @@ from digitalearth.static.maps.vector import VectorMixin
 __all__ = ["Map"]
 
 
-class Map(RasterMixin, VectorMixin, DecorationMixin, ProjectionMixin, AnimationMixin, GeoLayerBase):
+class Map(
+    RasterMixin,
+    VectorMixin,
+    DecorationMixin,
+    ProjectionMixin,
+    AnimationMixin,
+    GeoLayerBase,
+):
     """A geospatial :class:`~digitalearth.static.scene.Scene` that reprojects to a display CRS.
 
     Args:
@@ -59,4 +67,3 @@ class Map(RasterMixin, VectorMixin, DecorationMixin, ProjectionMixin, AnimationM
 
             ```
     """
-

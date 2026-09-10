@@ -22,7 +22,6 @@ from digitalearth.web.vector import VectorMixin
 
 
 class WebMap(
-    WebMapBase,
     RasterMixin,
     VectorMixin,
     BigDataMixin,
@@ -30,6 +29,7 @@ class WebMap(
     TemporalMixin,
     DecorationMixin,
     ExportMixin,
+    WebMapBase,
 ):
     """Web map: pan/zoom (and 3-D) MapLibre + deck.gl layers built from pyramids data, shareable as HTML.
 

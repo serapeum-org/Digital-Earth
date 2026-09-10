@@ -4,6 +4,7 @@ Gated on the optional ``3d`` extra (pyvista). Exercises the numpy xyz path (LiDA
 path, per-point colouring, the GeoDataFrame (``get_cell_points``-style) path read by duck-typing, and that the
 guard module imports no GIS competitor.
 """
+
 import numpy as np
 import pytest
 

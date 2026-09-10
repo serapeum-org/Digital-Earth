@@ -1,4 +1,5 @@
 """Tests for digitalearth.base.types — structural Protocols for pyramids inputs (PC-1)."""
+
 import numpy as np
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
@@ -24,7 +25,9 @@ class TestRasterLike:
         Test scenario:
             A bare object lacks read_array/to_crs/etc., so the runtime check is False.
         """
-        assert not isinstance(object(), RasterLike), "a bare object must not satisfy RasterLike"
+        assert not isinstance(object(), RasterLike), (
+            "a bare object must not satisfy RasterLike"
+        )
 
     def test_netcdf_shaped_object_lacking_xy_is_not_rasterlike(self):
         """An object with the raster methods but no x/y (NetCDF-shaped) is not RasterLike (review L3).
@@ -33,6 +36,7 @@ class TestRasterLike:
             NetCDF exposes lon/lat instead of x/y, so it does not structurally satisfy RasterLike — which is
             why PlottableData is documented as an approximation; extract() still accepts NetCDF via isinstance.
         """
+
         class _NetCDFShaped:
             epsg = 4326
             no_data_value = (None,)
@@ -44,7 +48,9 @@ class TestRasterLike:
             def read_array(self, band=0):
                 return None
 
-        assert not isinstance(_NetCDFShaped(), RasterLike), "no x/y -> must not satisfy RasterLike"
+        assert not isinstance(_NetCDFShaped(), RasterLike), (
+            "no x/y -> must not satisfy RasterLike"
+        )
 
 
 class TestVectorLike:
@@ -65,7 +71,9 @@ class TestVectorLike:
         Test scenario:
             A bare object lacks geometry/to_crs/etc., so the runtime check is False.
         """
-        assert not isinstance(object(), VectorLike), "a bare object must not satisfy VectorLike"
+        assert not isinstance(object(), VectorLike), (
+            "a bare object must not satisfy VectorLike"
+        )
 
 
 class TestPlottableData:
@@ -80,4 +88,6 @@ class TestPlottableData:
         import typing
 
         args = set(typing.get_args(PlottableData))
-        assert args == {RasterLike, VectorLike, np.ndarray}, f"unexpected union members: {args}"
+        assert args == {RasterLike, VectorLike, np.ndarray}, (
+            f"unexpected union members: {args}"
+        )

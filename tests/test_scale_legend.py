@@ -24,7 +24,9 @@ def lines_fc(points_fc):
     coords = list(zip(points_fc.geometry.x.tolist(), points_fc.geometry.y.tolist()))
     gdf = gpd.GeoDataFrame(
         {"w": np.arange(1.0, len(coords))},
-        geometry=[LineString([coords[i], coords[i + 1]]) for i in range(len(coords) - 1)],
+        geometry=[
+            LineString([coords[i], coords[i + 1]]) for i in range(len(coords) - 1)
+        ],
         crs=points_fc.crs,
     )
     return FeatureCollection(gdf)

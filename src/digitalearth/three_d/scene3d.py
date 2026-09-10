@@ -15,6 +15,7 @@ verbs from mixins — exactly mirroring the 2-D ``Map(GeoLayerBase, RasterMixin,
 Every layer is built from pyramids-sourced numpy + geometry — **never** xarray/rasterio/pyvista-xarray (enforced
 by ``tests/test_no_competitor_imports.py``); all CRS/reproject work stays in pyramids.
 """
+
 from digitalearth.three_d.animation import AnimationMixin
 from digitalearth.three_d.base import Scene3DBase, house_theme
 from digitalearth.three_d.globe import GlobeMixin
@@ -27,7 +28,13 @@ __all__ = ["Scene3D", "house_theme"]
 
 
 class Scene3D(
-    Scene3DBase, TerrainMixin, PointCloudMixin, VolumeMixin, VectorMixin, GlobeMixin, AnimationMixin
+    TerrainMixin,
+    PointCloudMixin,
+    VolumeMixin,
+    VectorMixin,
+    GlobeMixin,
+    AnimationMixin,
+    Scene3DBase,
 ):
     """A single-:class:`pyvista.Plotter` 3-D scene with geospatial plot verbs.
 

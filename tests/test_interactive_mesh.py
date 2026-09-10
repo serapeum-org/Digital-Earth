@@ -55,9 +55,9 @@ class TestTrimesh:
 
     def test_auto_rasterize_above_threshold(self, m, point_fc):
         m.trimesh(point_fc, value_column="fid", rasterize_threshold=1)
-        assert isinstance(
-            m.layers[0], hv.DynamicMap
-        ), "above the face threshold the mesh must rasterize to an image"
+        assert isinstance(m.layers[0], hv.DynamicMap), (
+            "above the face threshold the mesh must rasterize to an image"
+        )
 
     def test_forced_no_rasterize_keeps_trimesh(self, m, point_fc):
         m.trimesh(point_fc, value_column="fid", rasterize=False)
@@ -94,7 +94,9 @@ class TestHexbin:
         m.hexbin(cloud, gridsize=40, aggregator="mean", column="v")
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
         assert plot["gridsize"] == 40, f"gridsize not recorded: {plot.get('gridsize')}"
-        assert plot["aggregator"] is np.mean, "aggregator must be the numpy reducer HexTiles expects"
+        assert plot["aggregator"] is np.mean, (
+            "aggregator must be the numpy reducer HexTiles expects"
+        )
 
     def test_count_uses_np_size_reducer(self, m, cloud):
         """The default 'count' aggregator maps to ``np.size`` (what HexTiles needs for counting)."""
@@ -102,7 +104,9 @@ class TestHexbin:
 
         m.hexbin(cloud)
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
-        assert plot["aggregator"] is np.size, "count must map to np.size, not the string 'count'"
+        assert plot["aggregator"] is np.size, (
+            "count must map to np.size, not the string 'count'"
+        )
 
     def test_mpl_render_smoke(self, m, cloud, tmp_path):
         out = tmp_path / "hex.png"
@@ -115,7 +119,9 @@ class TestHexbin:
 
     def test_bokeh_render_value(self, m, cloud):
         """Value-aggregated hexbin must also render under bokeh (geometry projected from x/y arrays)."""
-        hv.renderer("bokeh").get_plot(m.hexbin(cloud, column="v", aggregator="mean").render())
+        hv.renderer("bokeh").get_plot(
+            m.hexbin(cloud, column="v", aggregator="mean").render()
+        )
 
 
 class TestKde:

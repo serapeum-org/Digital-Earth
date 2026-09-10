@@ -3,6 +3,7 @@
 ``stamp_mark`` itself is tested upstream in cleopatra; these cover that Digital-Earth wires it to the scene's
 own figure, that it is inherited by every scene type, and that its failure modes surface unchanged.
 """
+
 import numpy as np
 import pytest
 
@@ -29,7 +30,12 @@ def test_stamp_returns_the_mark_axes_positioned_in_the_corner(mark):
     """Default corner is lower-right at a 0.025 margin, so the bounds are predictable."""
     scene = Scene(figsize=(8, 6))
     mark_ax = scene.stamp(mark, frac=0.2, shadow=False)
-    assert [round(float(v), 3) for v in mark_ax.get_position().bounds] == [0.775, 0.025, 0.2, 0.133]
+    assert [round(float(v), 3) for v in mark_ax.get_position().bounds] == [
+        0.775,
+        0.025,
+        0.2,
+        0.133,
+    ]
 
 
 def test_stamp_honours_the_corner(mark):

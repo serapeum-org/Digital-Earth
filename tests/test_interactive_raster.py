@@ -27,27 +27,27 @@ class TestImage:
         out = m.image(dataset)
         assert out is m, "image() must return the map for chaining"
         assert len(m.layers) == 1
-        assert isinstance(
-            m.layers[0], hv.Image
-        ), f"expected hv.Image, got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], hv.Image), (
+            f"expected hv.Image, got {type(m.layers[0])}"
+        )
 
     def test_image_is_plain_hv_not_gv(self, m, dataset):
         """Option A: pre-reprojected coordinates must NOT carry a GeoViews CRS (no re-projection)."""
         import geoviews as gv
 
         m.image(dataset)
-        assert not isinstance(
-            m.layers[0], gv.element.geo._Element
-        ), "raster elements must be plain hv.Image — a gv element would re-project 3857 coords"
+        assert not isinstance(m.layers[0], gv.element.geo._Element), (
+            "raster elements must be plain hv.Image — a gv element would re-project 3857 coords"
+        )
 
     def test_coordinates_are_display_crs(self, m, dataset):
         """The element's x samples must be the reprojected (Web-Mercator) cell centres."""
         m.image(dataset)
         x_samples = m.layers[0].dimension_values("x", expanded=False)
         src = m._to_display_source(dataset)
-        assert np.allclose(
-            np.sort(x_samples), np.sort(src.x.values)
-        ), "element x coordinates must match the pyramids-reprojected cell centres"
+        assert np.allclose(np.sort(x_samples), np.sort(src.x.values)), (
+            "element x coordinates must match the pyramids-reprojected cell centres"
+        )
 
     def test_clim_and_cmap_are_recorded(self, m, dataset):
         m.image(dataset, cmap="magma", clim=(0.0, 50.0), alpha=0.5)
@@ -67,9 +67,9 @@ class TestImage:
         """Masked (NoData) cells must become NaN so Bokeh draws them transparent."""
         m.image(dataset)
         values = m.layers[0].dimension_values(2, flat=False)
-        assert np.isnan(
-            values
-        ).any(), "fixture nodata cells should surface as NaN in the element"
+        assert np.isnan(values).any(), (
+            "fixture nodata cells should surface as NaN in the element"
+        )
 
     def test_mpl_backend_render_smoke(self, m, dataset, tmp_path):
         out = tmp_path / "image.png"
@@ -82,17 +82,17 @@ class TestRgb:
 
     def test_registers_hv_rgb(self, m, dataset):
         m.rgb(dataset, bands=(1, 1, 1))  # single-band fixture: grey composite
-        assert isinstance(
-            m.layers[0], hv.RGB
-        ), f"expected hv.RGB, got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected hv.RGB, got {type(m.layers[0])}"
+        )
 
     def test_channels_are_stretched_to_unit_range(self, m, dataset):
         m.rgb(dataset, bands=(1, 1, 1))
         red = m.layers[0].dimension_values("R", flat=False)
         finite = red[np.isfinite(red)]
-        assert (
-            finite.min() >= 0.0 and finite.max() <= 1.0
-        ), "channels must be clipped to [0, 1]"
+        assert finite.min() >= 0.0 and finite.max() <= 1.0, (
+            "channels must be clipped to [0, 1]"
+        )
 
     def test_wrong_band_count_raises(self, m, dataset):
         with pytest.raises(ValueError, match="three bands"):
@@ -109,7 +109,9 @@ class TestRgb:
         m.rgb(dataset, bands=(1, 1, 1), limits=[(0.0, 1e9)] * 3)
         red = m.layers[0].dimension_values("R", flat=False)
         finite = red[np.isfinite(red)]
-        assert finite.max() < 0.01, f"a white point of 1e9 should render near black, got {finite.max()}"
+        assert finite.max() < 0.01, (
+            f"a white point of 1e9 should render near black, got {finite.max()}"
+        )
 
     def test_malformed_limits_are_refused(self, m, dataset):
         """The shared length check reaches the interactive kwarg, not just the matplotlib one."""
@@ -135,7 +137,9 @@ class TestRgb:
         m.rgb(spiked)
         red = m.layers[0].dimension_values("R", flat=False)
         finite = red[np_local.isfinite(red)]
-        assert finite.max() > 0.5, f"one inf cell must not flatten the channel, got max {finite.max()}"
+        assert finite.max() > 0.5, (
+            f"one inf cell must not flatten the channel, got max {finite.max()}"
+        )
 
     def test_already_display_crs_skips_reproject(self, m, dataset, monkeypatch):
         """A dataset already in 3857 must not be warped again on the rgb path."""
@@ -162,9 +166,9 @@ class TestRgb:
 
         monkeypatch.setattr(type(dataset), "to_crs", _counting_to_crs)
         m.rgb(dataset, bands=(1, 1, 1))
-        assert (
-            calls["n"] == 1
-        ), f"rgb() must warp the dataset exactly once, warped {calls['n']}x"
+        assert calls["n"] == 1, (
+            f"rgb() must warp the dataset exactly once, warped {calls['n']}x"
+        )
 
     def test_constant_channel_stretch_does_not_divide_by_zero(
         self, m, dataset, monkeypatch
@@ -182,9 +186,9 @@ class TestRgb:
         )
         m.rgb(dataset, bands=(1, 1, 1))
         red = m.layers[0].dimension_values("R", flat=False)
-        assert np.isfinite(
-            red
-        ).all(), "a constant channel must yield finite values, not NaN/inf"
+        assert np.isfinite(red).all(), (
+            "a constant channel must yield finite values, not NaN/inf"
+        )
 
 
 class TestQuadmeshAndContours:
@@ -229,9 +233,9 @@ class TestSpaghetti:
             hv.Store.lookup_options("bokeh", layer, "style").kwargs.get("color")
             for layer in m.layers
         ]
-        assert (
-            len(set(colours)) == 3
-        ), f"members must be distinct colours, got {colours}"
+        assert len(set(colours)) == 3, (
+            f"members must be distinct colours, got {colours}"
+        )
 
     def test_explicit_color_disables_cycle(self, m):
         from pyramids.dataset.collection import DatasetCollection
@@ -242,6 +246,6 @@ class TestSpaghetti:
             hv.Store.lookup_options("bokeh", layer, "style").kwargs.get("color")
             for layer in m.layers
         }
-        assert colours == {
-            "black"
-        }, f"explicit color must win over the cycle, got {colours}"
+        assert colours == {"black"}, (
+            f"explicit color must win over the cycle, got {colours}"
+        )

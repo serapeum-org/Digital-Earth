@@ -12,7 +12,7 @@ caller can build a legend out-of-band; the ``measure`` tool exposes the drawn ge
 geodesic distance/area (the GIS part).
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
@@ -63,8 +63,28 @@ def _check_position(position: str) -> None:
         )
 
 
-class DecorationMixin:
-    """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class DecorationMixin(_MixinBase):
+    """Basemap/tiles and popup/tooltip builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def tiles(
         self,
@@ -73,7 +93,7 @@ class DecorationMixin:
         attribution: str = "",
         tile_size: int = 256,
         opacity: float = 1.0,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
         Args:
@@ -83,8 +103,8 @@ class DecorationMixin:
             opacity: Raster opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable); the basemap is registered as an underlay so data drawn before or after
-            it still renders on top.
+            The same map instance, so builder calls chain; the basemap is registered as an underlay so
+            data drawn before or after it still renders on top.
         """
         Layer, LayerType = _require_layer_api()
         src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
@@ -108,7 +128,7 @@ class DecorationMixin:
 
         return self.add_underlay(apply)
 
-    def basemap(self, provider: str = "CartoDark", *, opacity: float = 1.0) -> "DecorationMixin":
+    def basemap(self, provider: str = "CartoDark", *, opacity: float = 1.0) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
         Args:
@@ -117,7 +137,7 @@ class DecorationMixin:
             opacity: Basemap opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``provider`` is not a known basemap name.
@@ -138,7 +158,7 @@ class DecorationMixin:
         show_compass: bool = True,
         show_zoom: bool = True,
         visualize_pitch: bool = False,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add MapLibre navigation controls — zoom buttons and a compass (ED.13).
 
         Args:
@@ -148,7 +168,7 @@ class DecorationMixin:
             visualize_pitch: Show the map pitch on the compass.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners.
@@ -158,7 +178,9 @@ class DecorationMixin:
         from maplibre.controls import NavigationControl
 
         control = NavigationControl(
-            show_compass=show_compass, show_zoom=show_zoom, visualize_pitch=visualize_pitch
+            show_compass=show_compass,
+            show_zoom=show_zoom,
+            visualize_pitch=visualize_pitch,
         )
 
         def apply(widget: Any) -> None:
@@ -167,8 +189,12 @@ class DecorationMixin:
         return self.add_layer(layer=apply)
 
     def scale_bar(
-        self, *, position: str = "bottom-left", unit: str = "metric", max_width: int = 100
-    ) -> "DecorationMixin":
+        self,
+        *,
+        position: str = "bottom-left",
+        unit: str = "metric",
+        max_width: int = 100,
+    ) -> Self:
         """Add a MapLibre scale bar (ED.13).
 
         Args:
@@ -177,7 +203,7 @@ class DecorationMixin:
             max_width: Maximum scale-bar width in pixels.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners.
@@ -193,14 +219,14 @@ class DecorationMixin:
 
         return self.add_layer(layer=apply)
 
-    def fullscreen(self, *, position: str = "top-right") -> "DecorationMixin":
+    def fullscreen(self, *, position: str = "top-right") -> Self:
         """Add a MapLibre fullscreen toggle control (ED.13).
 
         Args:
             position: Corner placement for the fullscreen button.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners.
@@ -218,7 +244,7 @@ class DecorationMixin:
 
     def controls(
         self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add the common navigation / scale / fullscreen controls in one call (ED.13).
 
         A convenience over :meth:`navigation`, :meth:`scale_bar` and :meth:`fullscreen`. Note: py-maplibregl
@@ -231,7 +257,7 @@ class DecorationMixin:
             fullscreen: Add a fullscreen toggle.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         if navigation:
             self.navigation()
@@ -243,7 +269,7 @@ class DecorationMixin:
 
     def measure(
         self, *, distance: bool = True, area: bool = True, position: str = "top-left"
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a draw-based measure tool — draw a line (distance) or polygon (area) to measure (ED.10).
 
         Note this adds a **drawing** control, not a live on-map readout: it does not display the distance/area
@@ -260,7 +286,7 @@ class DecorationMixin:
             position: Corner placement for the draw toolbar.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: if neither ``distance`` nor ``area`` is enabled, or if ``position`` is not one of the
@@ -271,6 +297,7 @@ class DecorationMixin:
             raise ValueError("measure() needs distance and/or area enabled")
         _check_position(position)
         from maplibre.plugins import MapboxDrawControls, MapboxDrawOptions
+
         options = MapboxDrawOptions(
             display_controls_default=False,
             controls=MapboxDrawControls(line_string=distance, polygon=area, trash=True),
@@ -301,7 +328,7 @@ class DecorationMixin:
 
     def popup(
         self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Show an attribute popup on **click** for a layer's features (recipe W2).
 
         Args:
@@ -310,7 +337,7 @@ class DecorationMixin:
             layer: Target layer id; defaults to the most recently added data layer.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
@@ -318,7 +345,9 @@ class DecorationMixin:
         _require_layer_api()
         layer_id = layer or self._last_layer_id
         if layer_id is None:
-            raise ValueError("popup() needs a layer — draw a data layer first or pass layer=...")
+            raise ValueError(
+                "popup() needs a layer — draw a data layer first or pass layer=..."
+            )
         kwargs = self._attribute_template(fields)
 
         def apply(widget: Any) -> None:
@@ -328,7 +357,7 @@ class DecorationMixin:
 
     def tooltip(
         self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Show an attribute tooltip on **hover** for a layer's features (recipe W2).
 
         Args:
@@ -337,7 +366,7 @@ class DecorationMixin:
             layer: Target layer id; defaults to the most recently added data layer.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when there is no layer to attach to (no ``layer`` and nothing drawn yet).
@@ -345,7 +374,9 @@ class DecorationMixin:
         _require_layer_api()
         layer_id = layer or self._last_layer_id
         if layer_id is None:
-            raise ValueError("tooltip() needs a layer — draw a data layer first or pass layer=...")
+            raise ValueError(
+                "tooltip() needs a layer — draw a data layer first or pass layer=..."
+            )
         kwargs = self._attribute_template(fields)
 
         def apply(widget: Any) -> None:

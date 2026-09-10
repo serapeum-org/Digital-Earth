@@ -14,7 +14,7 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 import os
 import sys
 from pathlib import Path
-from typing import Any, Union
+from typing import Any, Self, Union
 
 import numpy as np
 import pyvista as pv
@@ -536,11 +536,12 @@ class Scene3DBase:
         """
         self.plotter.close()
 
-    def __enter__(self) -> "Scene3DBase":
+    def __enter__(self) -> Self:
         """Enter the runtime context, returning the scene.
 
         Returns:
-            This scene.
+            The same scene instance, so ``with Scene3D(...) as scene:`` binds this object (and
+            :meth:`__exit__` closes its plotter).
         """
         return self
 

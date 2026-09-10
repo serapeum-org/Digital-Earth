@@ -4,6 +4,7 @@ Pins the architecture: Map is GeoLayerBase(Scene) plus five capability mixins, a
 contributed by the expected mixin. Behaviour is covered by the per-feature test modules; this only guards the
 class structure so an accidental re-flattening or mis-wiring is caught.
 """
+
 from digitalearth.static import Map, Scene
 from digitalearth.static.maps.animation import AnimationMixin
 from digitalearth.static.maps.base import GeoLayerBase
@@ -24,8 +25,15 @@ class TestMapComposition:
         """
         names = [c.__name__ for c in Map.__mro__]
         assert names[:9] == [
-            "Map", "RasterMixin", "VectorMixin", "DecorationMixin", "ProjectionMixin",
-            "AnimationMixin", "GeoLayerBase", "Scene", "object",
+            "Map",
+            "RasterMixin",
+            "VectorMixin",
+            "DecorationMixin",
+            "ProjectionMixin",
+            "AnimationMixin",
+            "GeoLayerBase",
+            "Scene",
+            "object",
         ], f"unexpected MRO: {names}"
 
     def test_geolayerbase_subclasses_scene(self):
@@ -45,14 +53,22 @@ class TestMapComposition:
             DecorationMixin, set_domain on ProjectionMixin, animate on AnimationMixin.
         """
         owner = {
-            "imshow": RasterMixin, "rgb_composite": RasterMixin,
-            "scatter": VectorMixin, "choropleth": VectorMixin, "quiver": VectorMixin,
-            "coastlines": DecorationMixin, "text": DecorationMixin,
-            "set_domain": ProjectionMixin, "set_global": ProjectionMixin,
-            "animate": AnimationMixin, "rotate": AnimationMixin,
+            "imshow": RasterMixin,
+            "rgb_composite": RasterMixin,
+            "scatter": VectorMixin,
+            "choropleth": VectorMixin,
+            "quiver": VectorMixin,
+            "coastlines": DecorationMixin,
+            "text": DecorationMixin,
+            "set_domain": ProjectionMixin,
+            "set_global": ProjectionMixin,
+            "animate": AnimationMixin,
+            "rotate": AnimationMixin,
         }
         for method, mixin in owner.items():
-            assert method in mixin.__dict__, f"{method} should be defined on {mixin.__name__}"
+            assert method in mixin.__dict__, (
+                f"{method} should be defined on {mixin.__name__}"
+            )
 
     def test_map_constructs_and_renders(self, dataset):
         """The composed Map still constructs and draws a layer end to end.

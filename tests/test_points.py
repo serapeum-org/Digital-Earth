@@ -67,5 +67,9 @@ def test_grid_cells_nulls_nodata_cells():
     m = Map(crs=4326)
     pc = m.grid_cells(ds)
     values = np.ma.filled(np.asarray(pc.get_array(), dtype="float64"), np.nan)
-    assert len(pc.get_paths()) == 4, f"all four cells should be drawn, got {len(pc.get_paths())}"
-    assert int(np.isfinite(values).sum()) == 3, f"exactly the nodata cell should be nulled, got {values}"
+    assert len(pc.get_paths()) == 4, (
+        f"all four cells should be drawn, got {len(pc.get_paths())}"
+    )
+    assert int(np.isfinite(values).sum()) == 3, (
+        f"exactly the nodata cell should be nulled, got {values}"
+    )

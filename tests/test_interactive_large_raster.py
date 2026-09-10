@@ -45,9 +45,9 @@ class TestLargeImage:
         cog = _FakeCOG()
         m.large_image(cog, dynamic=False, max_pixels=64 * 64)
         assert isinstance(m.layers[0], hv.Image), f"got {type(m.layers[0])}"
-        assert (
-            cog.preview_calls
-        ), "the static frame must come from a cheap overview preview"
+        assert cog.preview_calls, (
+            "the static frame must come from a cheap overview preview"
+        )
 
     def test_canvas_stays_under_max_pixels(self, m):
         cog = _FakeCOG()
@@ -58,9 +58,9 @@ class TestLargeImage:
     def test_dynamic_returns_dynamicmap(self, m):
         cog = _FakeCOG()
         m.large_image(cog, dynamic=True)
-        assert isinstance(
-            m.layers[0], hv.DynamicMap
-        ), "dynamic=True must wrap a RangeXY DynamicMap"
+        assert isinstance(m.layers[0], hv.DynamicMap), (
+            "dynamic=True must wrap a RangeXY DynamicMap"
+        )
 
     def test_viewport_event_issues_read_part(self, m):
         """A RangeXY event must drive a pyramids read_part whose bbox follows the window."""
@@ -74,9 +74,9 @@ class TestLargeImage:
         dmap[()]  # materialise the current frame to trigger the callback
         assert cog.read_calls, "a viewport event must trigger a pyramids read_part"
         bbox = cog.read_calls[-1][0]
-        assert bbox == pytest.approx(
-            (-5.0e5, -4.0e5, 5.0e5, 4.0e5)
-        ), f"bbox not the window: {bbox}"
+        assert bbox == pytest.approx((-5.0e5, -4.0e5, 5.0e5, 4.0e5)), (
+            f"bbox not the window: {bbox}"
+        )
 
     def test_missing_cog_surface_raises(self, m, dataset):
         """A plain Dataset without read_part/preview raises an actionable error (upstream-gated)."""
@@ -118,4 +118,6 @@ class TestLargeImage:
                 return np.random.default_rng(0).random((max_size, max_size))
 
         m.large_image(_BandCOG(), dynamic=False, max_pixels=64 * 64)
-        assert recorded["band"] == 0, f"1-based band=1 must reach pyramids as 0-based 0, got {recorded['band']}"
+        assert recorded["band"] == 0, (
+            f"1-based band=1 must reach pyramids as 0-based 0, got {recorded['band']}"
+        )

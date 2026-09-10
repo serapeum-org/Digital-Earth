@@ -9,13 +9,33 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class DecorationMixin:
-    """Decoration builders (DI.1c): tile basemaps, Natural-Earth features, legend/colorbar toggles."""
+
+class DecorationMixin(_MixinBase):
+    """Decoration builders (DI.1c): tile basemaps, Natural-Earth features, legend/colorbar toggles.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def tiles(
         self,
@@ -24,7 +44,7 @@ class DecorationMixin:
         level: str = "underlay",
         api_key: Any = None,
         **opts: Any,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
 
         Args:
@@ -38,7 +58,8 @@ class DecorationMixin:
             **opts: Extra HoloViews style options applied to the tile element.
 
         Returns:
-            This map (chainable) — the tile layer is inserted *beneath* existing layers.
+            The same map instance, so builder calls chain — the tile layer is inserted *beneath*
+            existing layers.
 
         Examples:
             - Put a light Carto basemap beneath a raster:
@@ -127,7 +148,7 @@ class DecorationMixin:
         gv, hv = _require_holoviz()
         return sorted(gv.tile_sources.tile_sources)
 
-    def coastlines(self, resolution: str = "110m", **opts: Any) -> "DecorationMixin":
+    def coastlines(self, resolution: str = "110m", **opts: Any) -> Self:
         """Add the Natural-Earth coastline on top of the data layers.
 
         Args:
@@ -135,7 +156,7 @@ class DecorationMixin:
             **opts: Extra HoloViews style options applied to the feature element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Examples:
             - Add a medium-resolution coastline on top of the data:
@@ -168,7 +189,7 @@ class DecorationMixin:
         lakes: bool = False,
         resolution: str = "110m",
         **opts: Any,
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add Natural-Earth context layers (land/ocean beneath the data, borders/rivers on top).
 
         Args:
@@ -181,7 +202,7 @@ class DecorationMixin:
             **opts: Extra HoloViews style options applied to every requested feature element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Examples:
             - Underlay land and overlay country borders around a raster:
@@ -244,9 +265,7 @@ class DecorationMixin:
 
         return reproject_coordinates(xs, ys, from_crs=crs, to_crs=self.crs)
 
-    def text(
-        self, lon: Any, lat: Any, s: str, *, crs: Any = 4326, **opts: Any
-    ) -> "DecorationMixin":
+    def text(self, lon: Any, lat: Any, s: str, *, crs: Any = 4326, **opts: Any) -> Self:
         """Add a single text annotation at ``(lon, lat)`` (reprojected to the display CRS).
 
         Args:
@@ -258,7 +277,7 @@ class DecorationMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         (x,), (y,) = self._to_display_xy(lon, lat, crs)
@@ -269,7 +288,7 @@ class DecorationMixin:
 
     def labels(
         self, features: Any, column: str, *, crs: Any = 4326, **opts: Any
-    ) -> "DecorationMixin":
+    ) -> Self:
         """Add per-feature text labels from a point ``FeatureCollection`` column.
 
         Args:
@@ -281,7 +300,7 @@ class DecorationMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             KeyError: when ``column`` is not a column of ``features``.
@@ -309,14 +328,14 @@ class DecorationMixin:
             element = element.opts(**opts)
         return self.add_element(element)
 
-    def colorbar(self, show: bool = True) -> "DecorationMixin":
+    def colorbar(self, show: bool = True) -> Self:
         """Toggle the colorbar on the most recently added layer.
 
         Args:
             show: Whether the last layer draws a colorbar.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Examples:
             - Drop the colorbar from the last raster layer:
@@ -339,14 +358,14 @@ class DecorationMixin:
         self.layers[-1] = self.layers[-1].opts(colorbar=show)
         return self
 
-    def legend(self, show: bool = True) -> "DecorationMixin":
+    def legend(self, show: bool = True) -> Self:
         """Toggle the Bokeh legend on the most recently added layer.
 
         Args:
             show: Whether the last layer contributes to the legend.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Examples:
             - Hide the legend of a contour layer:

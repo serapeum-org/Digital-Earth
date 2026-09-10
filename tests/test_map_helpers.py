@@ -1,4 +1,5 @@
 """Tests for the Map vector/polygon helpers added in PA-4: _vector_input and _polygon_layer."""
+
 import matplotlib
 import numpy as np
 import pytest
@@ -34,7 +35,10 @@ class TestPermissiveMethodValidation:
             Passing points (not polygons) raises ValueError naming the method and required geometry.
         """
         m = Map(crs=points_fc.epsg)
-        with pytest.raises(ValueError, match="choropleth requires a FeatureCollection of polygon geometries"):
+        with pytest.raises(
+            ValueError,
+            match="choropleth requires a FeatureCollection of polygon geometries",
+        ):
             m.choropleth(points_fc, column="fid")
 
     def test_shapes_rejects_non_polygon(self, points_fc):
@@ -44,7 +48,10 @@ class TestPermissiveMethodValidation:
             Passing points to the polygon-outline method raises a clear ValueError.
         """
         m = Map(crs=points_fc.epsg)
-        with pytest.raises(ValueError, match="shapes requires a FeatureCollection of polygon geometries"):
+        with pytest.raises(
+            ValueError,
+            match="shapes requires a FeatureCollection of polygon geometries",
+        ):
             m.shapes(points_fc)
 
     def test_choropleth_accepts_polygons(self, polygons_fc):
@@ -63,7 +70,9 @@ class TestPermissiveMethodValidation:
         Test scenario:
             An empty collection raises a clear ValueError naming scatter (no opaque downstream failure).
         """
-        empty = FeatureCollection(FeatureCollection.read_file("tests/data/points.geojson").iloc[0:0].copy())
+        empty = FeatureCollection(
+            FeatureCollection.read_file("tests/data/points.geojson").iloc[0:0].copy()
+        )
         m = Map(crs=empty.epsg)
         with pytest.raises(ValueError, match="scatter got an empty FeatureCollection"):
             m.scatter(empty)
@@ -110,7 +119,9 @@ class TestVectorInput:
         """
         empty = FeatureCollection(points_fc.iloc[0:0].copy())
         m = Map(crs=points_fc.epsg)
-        with pytest.raises(ValueError, match="probe got an empty FeatureCollection") as exc:
+        with pytest.raises(
+            ValueError, match="probe got an empty FeatureCollection"
+        ) as exc:
             m._vector_input(empty, name="probe")
         assert "empty" in str(exc.value), f"unexpected message: {exc.value}"
 
@@ -121,8 +132,12 @@ class TestVectorInput:
             Polygons given to a Point-only check raise '<name> requires a FeatureCollection of point geometries'.
         """
         m = Map(crs=polygons_fc.epsg)
-        with pytest.raises(ValueError, match="probe requires a FeatureCollection of point geometries"):
-            m._vector_input(polygons_fc, geom_types=("Point",), name="probe", geom_label="point")
+        with pytest.raises(
+            ValueError, match="probe requires a FeatureCollection of point geometries"
+        ):
+            m._vector_input(
+                polygons_fc, geom_types=("Point",), name="probe", geom_label="point"
+            )
 
     def test_matching_geometry_passes(self, points_fc):
         """_vector_input accepts geometry that matches geom_types.
@@ -131,8 +146,12 @@ class TestVectorInput:
             Points given to a Point-only check return the reprojected frame without raising.
         """
         m = Map(crs=points_fc.epsg)
-        gdf = m._vector_input(points_fc, geom_types=("Point",), name="probe", geom_label="point")
-        assert (gdf.geometry.geom_type == "Point").all(), "all geometries should be points"
+        gdf = m._vector_input(
+            points_fc, geom_types=("Point",), name="probe", geom_label="point"
+        )
+        assert (gdf.geometry.geom_type == "Point").all(), (
+            "all geometries should be points"
+        )
 
     def test_label_defaults_to_joined_types(self, points_fc):
         """_vector_input falls back to the joined geom_types when geom_label is omitted.
@@ -142,7 +161,9 @@ class TestVectorInput:
         """
         m = Map(crs=points_fc.epsg)
         with pytest.raises(ValueError, match="LineString / MultiLineString"):
-            m._vector_input(points_fc, geom_types=("LineString", "MultiLineString"), name="probe")
+            m._vector_input(
+                points_fc, geom_types=("LineString", "MultiLineString"), name="probe"
+            )
 
 
 class TestExtentOf:
@@ -156,7 +177,9 @@ class TestExtentOf:
         """
         x = np.array([2.0, 0.0, 1.0])
         y = np.array([5.0, 9.0, 7.0])
-        assert Map._extent_of(x, y) == [0.0, 5.0, 2.0, 9.0], "bbox order/values incorrect"
+        assert Map._extent_of(x, y) == [0.0, 5.0, 2.0, 9.0], (
+            "bbox order/values incorrect"
+        )
 
     def test_extent_delegates_to_extent_of(self):
         """_extent(ds) matches _extent_of(ds.x, ds.y).
@@ -168,7 +191,9 @@ class TestExtentOf:
 
         ds = Dataset.read_file("examples/data/acc4000.tif")
         m = Map(crs=ds.epsg)
-        assert m._extent(ds) == Map._extent_of(ds.x, ds.y), "_extent should delegate to _extent_of"
+        assert m._extent(ds) == Map._extent_of(ds.x, ds.y), (
+            "_extent should delegate to _extent_of"
+        )
 
 
 class TestPolygonLayer:
@@ -212,7 +237,9 @@ class TestPolygonLayer:
         m = Map(crs=4326)
         before = len(m.fig.axes)
         m._polygon_layer(squares, np.array([1.0, 2.0]), add_colorbar=True)
-        assert len(m.fig.axes) > before, "explicit add_colorbar=True should add a colorbar axes"
+        assert len(m.fig.axes) > before, (
+            "explicit add_colorbar=True should add a colorbar axes"
+        )
 
 
 class TestPolygonsOf:
@@ -249,10 +276,14 @@ class TestPolygonsOf:
 
         a = Polygon([(0, 0), (1, 0), (1, 1)])
         b = Polygon([(2, 2), (3, 2), (3, 3)])
-        assert len(Map._polygons_of(MultiPolygon([a, b]))) == 2, "MultiPolygon should give 2 parts"
+        assert len(Map._polygons_of(MultiPolygon([a, b]))) == 2, (
+            "MultiPolygon should give 2 parts"
+        )
         gc = GeometryCollection([a, Point(5, 5)])
         out = Map._polygons_of(gc)
-        assert len(out) == 1 and out[0].geom_type == "Polygon", "GeometryCollection should keep only polygons"
+        assert len(out) == 1 and out[0].geom_type == "Polygon", (
+            "GeometryCollection should keep only polygons"
+        )
 
     def test_non_polygon_returns_empty(self):
         """_polygons_of returns [] for non-polygonal geometry.
@@ -262,4 +293,6 @@ class TestPolygonsOf:
         """
         from shapely.geometry import LineString
 
-        assert Map._polygons_of(LineString([(0, 0), (1, 1)])) == [], "a line should give []"
+        assert Map._polygons_of(LineString([(0, 0), (1, 1)])) == [], (
+            "a line should give []"
+        )

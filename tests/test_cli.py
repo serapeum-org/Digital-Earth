@@ -33,12 +33,16 @@ class TestLoad:
         src = tmp_path / "r.tif"
         dataset.to_file(str(src))
         loaded = _load(str(src))
-        assert hasattr(loaded, "read_array"), "a raster should load as a Dataset-like object"
+        assert hasattr(loaded, "read_array"), (
+            "a raster should load as a Dataset-like object"
+        )
 
     def test_falls_back_to_vector(self):
         """A vector file that is not a raster falls back to a FeatureCollection."""
         loaded = _load("tests/data/points.geojson")
-        assert isinstance(loaded, FeatureCollection), f"expected FeatureCollection, got {type(loaded)}"
+        assert isinstance(loaded, FeatureCollection), (
+            f"expected FeatureCollection, got {type(loaded)}"
+        )
 
     def test_both_loaders_fail_chains_errors(self, tmp_path):
         """A path that is neither raster nor vector raises the vector error chained from the raster one (L4)."""
@@ -46,7 +50,9 @@ class TestLoad:
         bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
         with pytest.raises(Exception) as exc:
             _load(str(bogus))
-        assert exc.value.__cause__ is not None, "the raster cause should be chained onto the vector error"
+        assert exc.value.__cause__ is not None, (
+            "the raster cause should be chained onto the vector error"
+        )
 
 
 class TestPlotKwargs:
@@ -56,16 +62,31 @@ class TestPlotKwargs:
         """Unset cmap/levels/domain are omitted; the always-present flags remain."""
         args = build_parser().parse_args(["plot", "in.tif"])
         kwargs = _plot_kwargs(args)
-        assert "cmap" not in kwargs and "levels" not in kwargs and "domain" not in kwargs
+        assert (
+            "cmap" not in kwargs and "levels" not in kwargs and "domain" not in kwargs
+        )
         assert kwargs["crs"] == 3857 and kwargs["colorbar"] is True
 
     def test_includes_set_styling(self):
         """Provided cmap/levels/domain are forwarded."""
         args = build_parser().parse_args(
-            ["plot", "in.tif", "--cmap", "terrain", "--levels", "8", "--domain", "europe"]
+            [
+                "plot",
+                "in.tif",
+                "--cmap",
+                "terrain",
+                "--levels",
+                "8",
+                "--domain",
+                "europe",
+            ]
         )
         kwargs = _plot_kwargs(args)
-        assert kwargs["cmap"] == "terrain" and kwargs["levels"] == 8 and kwargs["domain"] == "europe"
+        assert (
+            kwargs["cmap"] == "terrain"
+            and kwargs["levels"] == 8
+            and kwargs["domain"] == "europe"
+        )
 
 
 class TestBuildParser:
@@ -85,8 +106,20 @@ class TestMain:
         src = tmp_path / "in.tif"
         dataset.to_file(str(src))
         out = tmp_path / "map.png"
-        rc = main(["plot", str(src), "-o", str(out), "--crs", str(dataset.epsg), "--no-colorbar"])
-        assert rc == 0 and out.stat().st_size > 0, "plot should write a non-empty image and exit 0"
+        rc = main(
+            [
+                "plot",
+                str(src),
+                "-o",
+                str(out),
+                "--crs",
+                str(dataset.epsg),
+                "--no-colorbar",
+            ]
+        )
+        assert rc == 0 and out.stat().st_size > 0, (
+            "plot should write a non-empty image and exit 0"
+        )
 
     def test_plot_default_output_name(self, tmp_path, dataset, monkeypatch):
         """Without -o, the output defaults to <input-stem>.png in the working directory."""
@@ -94,7 +127,9 @@ class TestMain:
         dataset.to_file(str(src))
         monkeypatch.chdir(tmp_path)
         rc = main(["plot", str(src), "--crs", str(dataset.epsg), "--no-colorbar"])
-        assert rc == 0 and (tmp_path / "scene.png").exists(), "default output should be scene.png"
+        assert rc == 0 and (tmp_path / "scene.png").exists(), (
+            "default output should be scene.png"
+        )
 
     def test_batch_with_gallery(self, tmp_path, dataset):
         """`batch ... --html` renders every input and writes a self-contained gallery page."""
@@ -103,20 +138,43 @@ class TestMain:
         outdir = tmp_path / "imgs"
         page = tmp_path / "gallery.html"
         rc = main(
-            ["batch", str(src), "-o", str(outdir), "--html", str(page),
-             "--crs", str(dataset.epsg), "--no-colorbar"]
+            [
+                "batch",
+                str(src),
+                "-o",
+                str(outdir),
+                "--html",
+                str(page),
+                "--crs",
+                str(dataset.epsg),
+                "--no-colorbar",
+            ]
         )
         assert rc == 0, "batch should exit 0"
         assert list(outdir.glob("*.png")), "batch should write at least one image"
-        assert "data:image/png;base64," in page.read_text(encoding="utf-8"), "gallery should embed images"
+        assert "data:image/png;base64," in page.read_text(encoding="utf-8"), (
+            "gallery should embed images"
+        )
 
     def test_batch_without_gallery(self, tmp_path, dataset):
         """`batch` with no --html renders images but writes no gallery page."""
         src = tmp_path / "a.tif"
         dataset.to_file(str(src))
         outdir = tmp_path / "imgs"
-        rc = main(["batch", str(src), "-o", str(outdir), "--crs", str(dataset.epsg), "--no-colorbar"])
-        assert rc == 0 and list(outdir.glob("*.png")), "batch should still write images without a gallery"
+        rc = main(
+            [
+                "batch",
+                str(src),
+                "-o",
+                str(outdir),
+                "--crs",
+                str(dataset.epsg),
+                "--no-colorbar",
+            ]
+        )
+        assert rc == 0 and list(outdir.glob("*.png")), (
+            "batch should still write images without a gallery"
+        )
 
     def test_python_m_entrypoint(self, tmp_path, dataset, monkeypatch):
         """`python -m digitalearth` runs __main__.py, exiting with main()'s return code."""
@@ -127,19 +185,33 @@ class TestMain:
         dataset.to_file(str(src))
         out = tmp_path / "m.png"
         monkeypatch.setattr(
-            sys, "argv",
-            ["digitalearth", "plot", str(src), "-o", str(out), "--crs", str(dataset.epsg), "--no-colorbar"],
+            sys,
+            "argv",
+            [
+                "digitalearth",
+                "plot",
+                str(src),
+                "-o",
+                str(out),
+                "--crs",
+                str(dataset.epsg),
+                "--no-colorbar",
+            ],
         )
         with pytest.raises(SystemExit) as exc:
             runpy.run_module("digitalearth", run_name="__main__")
-        assert exc.value.code == 0 and out.exists(), "the -m entry point should render and exit 0"
+        assert exc.value.code == 0 and out.exists(), (
+            "the -m entry point should render and exit 0"
+        )
 
     def test_dunder_main_import_is_inert(self):
         """Importing digitalearth.__main__ (not as a script) exposes main without running it."""
         import importlib
 
         mod = importlib.import_module("digitalearth.__main__")
-        assert hasattr(mod, "main"), "the module should expose main without executing the CLI on import"
+        assert hasattr(mod, "main"), (
+            "the module should expose main without executing the CLI on import"
+        )
 
 
 class TestBackend:
@@ -153,7 +225,9 @@ class TestBackend:
 
         for line in inspect.getsource(climod).splitlines():
             if "matplotlib.use(" in line:
-                assert line.startswith(" "), f"matplotlib.use must not run at import scope: {line!r}"
+                assert line.startswith(" "), (
+                    f"matplotlib.use must not run at import scope: {line!r}"
+                )
 
     def test_main_forces_agg_on_invocation(self, tmp_path, dataset, mocker):
         """main() selects the Agg backend when invoked (force=True), not merely on import."""
@@ -161,7 +235,15 @@ class TestBackend:
         src = tmp_path / "in.tif"
         dataset.to_file(str(src))
         rc = main(
-            ["plot", str(src), "-o", str(tmp_path / "m.png"), "--crs", str(dataset.epsg), "--no-colorbar"]
+            [
+                "plot",
+                str(src),
+                "-o",
+                str(tmp_path / "m.png"),
+                "--crs",
+                str(dataset.epsg),
+                "--no-colorbar",
+            ]
         )
         assert rc == 0, "the command should still succeed"
         spy.assert_any_call("Agg", force=True)

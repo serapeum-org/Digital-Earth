@@ -16,7 +16,9 @@ def uv():
     """
     ny, nx = 6, 8
     u = np.ones((ny, nx), dtype="float32")
-    v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones((1, nx), "float32")
+    v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones(
+        (1, nx), "float32"
+    )
     geo = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)  # increasing y (good for streamplot)
     u_ds = Dataset.from_array(arr=u, geo_ref=GeoReference(geo=geo, epsg=4326))
     v_ds = Dataset.from_array(arr=v, geo_ref=GeoReference(geo=geo, epsg=4326))
@@ -87,7 +89,9 @@ def uv_descending_y():
     """
     ny, nx = 6, 8
     u = np.ones((ny, nx), dtype="float32")
-    v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones((1, nx), "float32")
+    v = np.linspace(-1.0, 1.0, ny, dtype="float32")[:, None] * np.ones(
+        (1, nx), "float32"
+    )
     geo = (0.0, 1.0, 0.0, 6.0, 0.0, -1.0)  # ymax=6, negative dy -> y runs north->south
     u_ds = Dataset.from_array(arr=u, geo_ref=GeoReference(geo=geo, epsg=4326))
     v_ds = Dataset.from_array(arr=v, geo_ref=GeoReference(geo=geo, epsg=4326))
@@ -114,10 +118,13 @@ def test_streamplot_flips_descending_x(uv, mocker):
 
     ny, nx = 6, 8
     x = np.arange(nx, 0, -1, dtype="float64")  # descending x: 8..1
-    y = np.arange(ny, dtype="float64")         # ascending y: 0..5
+    y = np.arange(ny, dtype="float64")  # ascending y: 0..5
     z = np.ones((ny, nx), dtype="float32")
-    src = SimpleNamespace(x=SimpleNamespace(values=x), y=SimpleNamespace(values=y),
-                          z=SimpleNamespace(values=z))
+    src = SimpleNamespace(
+        x=SimpleNamespace(values=x),
+        y=SimpleNamespace(values=y),
+        z=SimpleNamespace(values=z),
+    )
     mocker.patch.object(Map, "_prepare", return_value=src)
     m = Map(crs=4326)
     m.streamplot(*uv)

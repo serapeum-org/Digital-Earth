@@ -9,6 +9,7 @@ the goal is clearer signatures at the boundary in place of bare ``Any``.
 Inside the plotting mixins, ``Any`` is still used deliberately for free-form ``**kwargs`` / ``opts`` forwarded
 straight to cleopatra — typing those adds noise without safety.
 """
+
 from typing import Any, Protocol, Union, runtime_checkable
 
 import numpy as np

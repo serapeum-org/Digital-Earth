@@ -3,6 +3,7 @@
 Gated on the optional ``3d`` extra (pyvista). Covers arrow glyphs from a (u, v, w) field, polygon extrusion
 into 3-D prisms (uniform + per-feature height + colour-by-attribute), and the MultiPolygon ring reader.
 """
+
 import numpy as np
 import pytest
 
@@ -39,7 +40,9 @@ def test_vectors_glyphs_render():
     ax = np.linspace(0, 1, 6)
     xx, yy = np.meshgrid(ax, ax)
     pts = np.column_stack([xx.ravel(), yy.ravel(), np.zeros(xx.size)])
-    vec = np.column_stack([np.ones(pts.shape[0]), np.zeros(pts.shape[0]), np.zeros(pts.shape[0])])
+    vec = np.column_stack(
+        [np.ones(pts.shape[0]), np.zeros(pts.shape[0]), np.zeros(pts.shape[0])]
+    )
     scene = Scene3D(off_screen=True)
     scene.vectors(pts, vec, factor=0.1)
     assert len(scene.layers) == 1

@@ -4,7 +4,8 @@ Points (scatter/grid_points/grid_cells), polygon products (choropleth/shapes/vor
 unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, flow/Sankey, and the u/v
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
-from typing import Any, List, Optional, Sequence, Tuple
+
+from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -51,11 +52,37 @@ def _draw_missing_neutral(artist: Any) -> None:
     artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
 
 
-class VectorMixin:
-    """Vector-data and vector-field renders for :class:`~digitalearth.static.map.Map`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-    def _vector_input(self, features: Any, *, geom_types: Optional[Sequence[str]] = None,
-                      name: str = "layer", geom_label: Optional[str] = None) -> Any:
+
+class VectorMixin(_MixinBase):
+    """Vector-data and vector-field renders for :class:`~digitalearth.static.map.Map`.
+
+    A capability mixin of :class:`~digitalearth.static.map.Map`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the shared figure/axes, the layer registry and the
+    display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
+    it was before the annotation.
+
+    See Also:
+        digitalearth.static.map.Map: the composition that supplies the state these methods use.
+        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
+    """
+
+    def _vector_input(
+        self,
+        features: Any,
+        *,
+        geom_types: Optional[Sequence[str]] = None,
+        name: str = "layer",
+        geom_label: Optional[str] = None,
+    ) -> Any:
         """Reproject a ``FeatureCollection`` to the display CRS, reject empty, and validate its geometry type.
 
         Consolidates the preamble shared by the validating vector methods. Reprojects ``features`` to
@@ -77,12 +104,19 @@ class VectorMixin:
         gdf = features.to_crs(self.crs)
         if len(gdf) == 0:
             raise ValueError(f"{name} got an empty FeatureCollection (nothing to draw)")
-        if geom_types is not None and not gdf.geometry.geom_type.isin(list(geom_types)).all():
+        if (
+            geom_types is not None
+            and not gdf.geometry.geom_type.isin(list(geom_types)).all()
+        ):
             label = geom_label or " / ".join(geom_types)
-            raise ValueError(f"{name} requires a FeatureCollection of {label} geometries")
+            raise ValueError(
+                f"{name} requires a FeatureCollection of {label} geometries"
+            )
         return gdf
 
-    def _polygon_layer(self, polygons: List[np.ndarray], values: Optional[np.ndarray] = None, **opts) -> Any:
+    def _polygon_layer(
+        self, polygons: List[np.ndarray], values: Optional[np.ndarray] = None, **opts
+    ) -> Any:
         """Draw polygons as a value-filled (``values`` given) or outline-only ``PolygonGlyph`` layer.
 
         Consolidates the fill-vs-outline branch shared by :meth:`grid_cells`, :meth:`choropleth`,
@@ -108,7 +142,9 @@ class VectorMixin:
         # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
         # edges as `scheme`, which must never be stringified into this comparison.
         categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
-        opts.setdefault("add_colorbar", categorical)  # the Scene owns the colorbar; the glyph owns the legend
+        opts.setdefault(
+            "add_colorbar", categorical
+        )  # the Scene owns the colorbar; the glyph owns the legend
         if categorical:
             # Normalize the spelling: cleopatra dispatches on an exact, case-sensitive `== "categorical"`, so a
             # case variant would set up a categorical render here and then fall through to the continuous path
@@ -129,7 +165,9 @@ class VectorMixin:
         # scheme/k moved onto the plot() `classify` group; pull them off the constructor kwargs.
         plot_style = relocate_flat_style(opts)
         if values is not None:
-            glyph = PolygonGlyph(polygons, values=values, ax=self.ax, fig=self.fig, **opts)
+            glyph = PolygonGlyph(
+                polygons, values=values, ax=self.ax, fig=self.fig, **opts
+            )
             artist = self._render_glyph(glyph, artist="plot", **plot_style)
             if categorical:
                 _draw_missing_neutral(artist)
@@ -151,14 +189,22 @@ class VectorMixin:
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
         """
-        fc = self._vector_input(features, name="scatter")  # empty-guard; any geometry (centroid fallback) OK
+        fc = self._vector_input(
+            features, name="scatter"
+        )  # empty-guard; any geometry (centroid fallback) OK
         src = get_source(fc)
         values = src.z.values if src.z is not None else None
         sizes = np.asarray(fc[scale], dtype=float) if scale is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         glyph = ScatterGlyph(
-            src.x.values, src.y.values, values=values, sizes=sizes, ax=self.ax, fig=self.fig, **opts,
+            src.x.values,
+            src.y.values,
+            values=values,
+            sizes=sizes,
+            ax=self.ax,
+            fig=self.fig,
+            **opts,
         )
         return self._render_glyph(glyph, artist="plot", **plot_style)
 
@@ -240,13 +286,20 @@ class VectorMixin:
             # the geotransform, so the authority code is cosmetic; give the transient reprojected copy a
             # placeholder EPSG (coordinates are untouched) so the call runs. Drop this once pyramids#979 ships.
             ds.epsg = 4326
-        polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
-        values = read_masked_band(ds, band).ravel()  # 1-based band, nodata -> NaN (shared helper)
-        polygons, values = self._finite_polygons(polygons, values)  # drop far-side cells on a globe
+        polygons = [
+            np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry
+        ]
+        values = read_masked_band(
+            ds, band
+        ).ravel()  # 1-based band, nodata -> NaN (shared helper)
+        polygons, values = self._finite_polygons(
+            polygons, values
+        )  # drop far-side cells on a globe
         return self._polygon_layer(polygons, values, **opts)
 
-
-    def _vector(self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts) -> Any:
+    def _vector(
+        self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts
+    ) -> Any:
         """Render a vector field from two rasters (u, v) on a shared grid via ``cleopatra.VectorGlyph``.
 
         Args:
@@ -273,7 +326,13 @@ class VectorMixin:
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)
         glyph = VectorGlyph(
-            x_grid, y_grid, u, v, ax=self.ax, fig=self.fig, **opts,
+            x_grid,
+            y_grid,
+            u,
+            v,
+            ax=self.ax,
+            fig=self.fig,
+            **opts,
         )
         im = self._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
         self._last_vector = (glyph, im, kind)  # remembered for quiverkey()
@@ -303,8 +362,16 @@ class VectorMixin:
         """
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
-    def quiverkey(self, value: float, text: str, *, x: float = 0.9, y: float = 0.95, labelpos: str = "E",
-                  **kwargs) -> Any:
+    def quiverkey(
+        self,
+        value: float,
+        text: str,
+        *,
+        x: float = 0.9,
+        y: float = 0.95,
+        labelpos: str = "E",
+        **kwargs,
+    ) -> Any:
         """Draw the labelled reference arrow for the most recent :meth:`quiver` layer.
 
         Places a sample arrow of known magnitude with a label (via ``Axes.quiverkey`` on the stored quiver
@@ -326,10 +393,11 @@ class VectorMixin:
             ValueError: if no :meth:`quiver` layer has been drawn yet (``barbs``/``streamplot`` have no key).
         """
         if self._last_vector is None or self._last_vector[2] != "quiver":
-            raise ValueError("quiverkey() needs a prior quiver(...) layer (barbs/streamplot have no key)")
+            raise ValueError(
+                "quiverkey() needs a prior quiver(...) layer (barbs/streamplot have no key)"
+            )
         _, artist, _ = self._last_vector
         return self.ax.quiverkey(artist, x, y, value, text, labelpos=labelpos, **kwargs)
-
 
     def _scattered(self, data: Any) -> tuple:
         """Return ``(x, y, z)`` 1-D arrays for unstructured/point input (Dataset cells or a FeatureCollection)."""
@@ -350,16 +418,25 @@ class VectorMixin:
         from matplotlib.tri import Triangulation
 
         x, y, z = self._scattered(data)
-        finite = np.isfinite(x) & np.isfinite(y)  # drop far-side points on a globe (Triangulation needs finite)
+        finite = np.isfinite(x) & np.isfinite(
+            y
+        )  # drop far-side points on a globe (Triangulation needs finite)
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
         # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
         if kind == "tripcolor":
             face_values = z[tri.triangles].mean(axis=1)
-            return self._render_glyph(glyph, face_values, location="face", colorbar=False, **opts)
+            return self._render_glyph(
+                glyph, face_values, location="face", colorbar=False, **opts
+            )
         return self._render_glyph(
-            glyph, z, location="node", filled=(kind == "tricontourf"), colorbar=False, **opts
+            glyph,
+            z,
+            location="node",
+            filled=(kind == "tricontourf"),
+            colorbar=False,
+            **opts,
         )
 
     def tricontourf(self, data: Any, **kwargs) -> Any:
@@ -403,7 +480,9 @@ class VectorMixin:
         return polygons, repeats
 
     @staticmethod
-    def _finite_polygons(polygons: List[np.ndarray], values: Optional[np.ndarray] = None) -> tuple:
+    def _finite_polygons(
+        polygons: List[np.ndarray], values: Optional[np.ndarray] = None
+    ) -> tuple:
         """Drop polygons with any non-finite vertex (and the matching values).
 
         On a projected/globe map the far hemisphere reprojects to non-finite coordinates; matplotlib's
@@ -508,11 +587,17 @@ class VectorMixin:
 
                 ```
         """
-        gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="choropleth",
-                                 geom_label="polygon")
+        gdf = self._vector_input(
+            features,
+            geom_types=("Polygon", "MultiPolygon"),
+            name="choropleth",
+            geom_label="polygon",
+        )
         polygons, repeats = self._polygon_vertices(gdf.geometry)
         values = np.repeat(gdf[column].to_numpy(), repeats)
-        polygons, values = self._finite_polygons(polygons, values)  # drop far-side polygons on a globe
+        polygons, values = self._finite_polygons(
+            polygons, values
+        )  # drop far-side polygons on a globe
         return self._polygon_layer(polygons, values, **opts)
 
     def shapes(self, features: Any, **opts) -> Any:
@@ -525,10 +610,16 @@ class VectorMixin:
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
         """
-        gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="shapes",
-                                 geom_label="polygon")
+        gdf = self._vector_input(
+            features,
+            geom_types=("Polygon", "MultiPolygon"),
+            name="shapes",
+            geom_label="polygon",
+        )
         polygons, _ = self._polygon_vertices(gdf.geometry)
-        polygons, _ = self._finite_polygons(polygons)  # drop far-side polygons on a globe
+        polygons, _ = self._finite_polygons(
+            polygons
+        )  # drop far-side polygons on a globe
         return self._polygon_layer(polygons, **opts)
 
     def _clip_geometry(self, clip: Any) -> Any:
@@ -617,7 +708,9 @@ class VectorMixin:
 
                 ```
         """
-        gdf = self._vector_input(features, geom_types=("Point",), name="voronoi", geom_label="point")
+        gdf = self._vector_input(
+            features, geom_types=("Point",), name="voronoi", geom_label="point"
+        )
         geom = gdf.geometry
         col_vals = gdf[column].to_numpy() if column is not None else None
         # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
@@ -643,7 +736,9 @@ class VectorMixin:
                 if values is not None:
                     values.append(col_vals[i])
         values_arr = np.asarray(values) if values is not None else None
-        polygons, values_arr = self._finite_polygons(polygons, values_arr)  # drop far-side cells on a globe
+        polygons, values_arr = self._finite_polygons(
+            polygons, values_arr
+        )  # drop far-side cells on a globe
         return self._polygon_layer(polygons, values_arr, **opts)
 
     @staticmethod
@@ -664,8 +759,13 @@ class VectorMixin:
         return np.full(values.shape, (lo + hi) / 2.0)
 
     def cartogram(
-        self, features: Any, scale: str, column: Optional[str] = None, *,
-        limits: Tuple[float, float] = (0.2, 1.0), **opts,
+        self,
+        features: Any,
+        scale: str,
+        column: Optional[str] = None,
+        *,
+        limits: Tuple[float, float] = (0.2, 1.0),
+        **opts,
     ) -> Any:
         """Cartogram: scale each polygon about its centroid by a value column (pyramids → ``PolygonGlyph``).
 
@@ -706,8 +806,12 @@ class VectorMixin:
 
                 ```
         """
-        gdf = self._vector_input(features, geom_types=("Polygon", "MultiPolygon"), name="cartogram",
-                                 geom_label="polygon")
+        gdf = self._vector_input(
+            features,
+            geom_types=("Polygon", "MultiPolygon"),
+            name="cartogram",
+            geom_label="polygon",
+        )
         geom = gdf.geometry
         factors = self._scale_factors(gdf[scale].to_numpy(dtype=float), limits)
         scaled = [
@@ -724,7 +828,12 @@ class VectorMixin:
 
     @staticmethod
     def _quadtree_cells(
-        xs: np.ndarray, ys: np.ndarray, agg_fn: Any, nmax: int, nmin: int, max_depth: int = 20,
+        xs: np.ndarray,
+        ys: np.ndarray,
+        agg_fn: Any,
+        nmax: int,
+        nmin: int,
+        max_depth: int = 20,
     ) -> List[Tuple[float, float, float, float, float]]:
         """Recursively split the points' bbox into quadrants until each cell holds ``<= nmax`` points.
 
@@ -769,7 +878,9 @@ class VectorMixin:
                 (xmid, ymid, xmax, ymax, idx[(cx > xmid) & (cy > ymid)]),
             ]
             nonempty = [q for q in quads if len(q[4]) > 0]
-            if len(nonempty) == 1 and len(nonempty[0][4]) == n:  # no progress (coincident points)
+            if (
+                len(nonempty) == 1 and len(nonempty[0][4]) == n
+            ):  # no progress (coincident points)
                 if n >= nmin:
                     out.append((xmin, ymin, xmax, ymax, float(agg_fn(idx))))
                 continue
@@ -778,8 +889,15 @@ class VectorMixin:
         return out
 
     def quadtree(
-        self, features: Any, column: Optional[str] = None, *, agg: Any = "mean",
-        nmax: int = 100, nmin: int = 0, clip: Any = None, **opts,
+        self,
+        features: Any,
+        column: Optional[str] = None,
+        *,
+        agg: Any = "mean",
+        nmax: int = 100,
+        nmin: int = 0,
+        clip: Any = None,
+        **opts,
     ) -> Any:
         """Quadtree choropleth: aggregate points into adaptive cells (pyramids points → ``PolygonGlyph``).
 
@@ -822,14 +940,19 @@ class VectorMixin:
 
                 ```
         """
-        gdf = self._vector_input(features, geom_types=("Point",), name="quadtree", geom_label="point")
+        gdf = self._vector_input(
+            features, geom_types=("Point",), name="quadtree", geom_label="point"
+        )
         geom = gdf.geometry
         # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
-        col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+        col_vals_full = (
+            gdf[column].to_numpy(dtype=float) if column is not None else None
+        )
         xs, ys, col_vals = self._finite_point_xy(geom, col_vals_full)
         if xs.size == 0:
             raise ValueError("quadtree: no finite points in the display CRS")
         if column is None:
+
             def agg_fn(idx):
                 return float(len(idx))
         else:
@@ -911,7 +1034,9 @@ class VectorMixin:
                 continue
             verts.extend(ring.tolist())
             codes.extend(
-                [MplPath.MOVETO] + [MplPath.LINETO] * (len(ring) - 2) + [MplPath.CLOSEPOLY]
+                [MplPath.MOVETO]
+                + [MplPath.LINETO] * (len(ring) - 2)
+                + [MplPath.CLOSEPOLY]
             )
         if not verts:
             return None
@@ -951,21 +1076,34 @@ class VectorMixin:
 
                 ```
         """
-        gdf = self._vector_input(features, geom_types=("Point",), name="kde", geom_label="point")
+        gdf = self._vector_input(
+            features, geom_types=("Point",), name="kde", geom_label="point"
+        )
         geom = gdf.geometry
         # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before the KDE.
         xs, ys, _ = self._finite_point_xy(geom)
         if xs.size == 0:
             raise ValueError("kde: no finite points in the display CRS")
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        plot_style = relocate_flat_style(opts)  # levels/… -> plot() contour/data_style groups
+        plot_style = relocate_flat_style(
+            opts
+        )  # levels/… -> plot() contour/data_style groups
         glyph = KDEGlyph(
-            xs, ys, clip_path=self._clip_path(clip), ax=self.ax, fig=self.fig, **opts,
+            xs,
+            ys,
+            clip_path=self._clip_path(clip),
+            ax=self.ax,
+            fig=self.fig,
+            **opts,
         )
         return self._render_glyph(glyph, artist="plot", **plot_style)
 
     def sankey(
-        self, features: Any, column: Optional[str] = None, scale: Optional[str] = None, **opts,
+        self,
+        features: Any,
+        column: Optional[str] = None,
+        scale: Optional[str] = None,
+        **opts,
     ) -> Any:
         """Spatial flow / Sankey map of a line ``FeatureCollection`` (pyramids lines → ``FlowGlyph``).
 
@@ -1007,8 +1145,12 @@ class VectorMixin:
 
                 ```
         """
-        gdf = self._vector_input(features, geom_types=("LineString", "MultiLineString"), name="sankey",
-                                 geom_label="line")
+        gdf = self._vector_input(
+            features,
+            geom_types=("LineString", "MultiLineString"),
+            name="sankey",
+            geom_label="line",
+        )
         geom = gdf.geometry
         paths: List[np.ndarray] = []
         repeats: List[int] = []
@@ -1022,7 +1164,11 @@ class VectorMixin:
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         glyph = FlowGlyph(
-            paths, values=values, widths=widths, ax=self.ax, fig=self.fig, **opts,
+            paths,
+            values=values,
+            widths=widths,
+            ax=self.ax,
+            fig=self.fig,
+            **opts,
         )
         return self._render_glyph(glyph, artist="plot", **plot_style)
-

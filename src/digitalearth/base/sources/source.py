@@ -7,6 +7,7 @@ the input was a pyramids raster, NetCDF variable, dataset collection, feature co
 This module is a **leaf**: it imports nothing from :mod:`digitalearth.base.sources.extractors`, so that
 ``extractors`` and the package ``__init__`` can both import ``Source`` without creating an import cycle.
 """
+
 from typing import Any, Optional
 
 from digitalearth.base.sources.dimension import DimensionInfo

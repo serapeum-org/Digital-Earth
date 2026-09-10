@@ -51,7 +51,13 @@ def rendered_colors(mappable, count):
 @pytest.mark.parametrize(
     "cmap",
     [None, "viridis", "Set2", "coolwarm", "RdBu"],
-    ids=["default", "continuous-default", "qualitative", "linseg-coolwarm", "linseg-rdbu"],
+    ids=[
+        "default",
+        "continuous-default",
+        "qualitative",
+        "linseg-coolwarm",
+        "linseg-rdbu",
+    ],
 )
 def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     """Static must resolve ``cmap`` through the same sentinel as web/interactive, else one cmap means two maps.
@@ -63,7 +69,9 @@ def test_categorical_cmap_agrees_with_the_sibling_tiers(zoned, cmap):
     LUT entries.
     """
     opts = {} if cmap is None else {"cmap": cmap}
-    pc = Map(crs=zoned.epsg).choropleth(zoned, column="zone", scheme="categorical", **opts)
+    pc = Map(crs=zoned.epsg).choropleth(
+        zoned, column="zone", scheme="categorical", **opts
+    )
     _, expected = categorical_colors(zoned["zone"], resolve_categorical_cmap(cmap))
     assert rendered_colors(pc, len(expected)) == [c.lower() for c in expected]
 
@@ -77,10 +85,16 @@ def test_categorical_cmap_cycles_in_step_with_the_sibling_tiers(polygons):
     """
     fc = polygons.copy()
     fc["zone"] = [f"c{i:02d}" for i in range(len(fc))]
-    pc = Map(crs=fc.epsg).choropleth(fc, column="zone", scheme="categorical", cmap="Accent")
+    pc = Map(crs=fc.epsg).choropleth(
+        fc, column="zone", scheme="categorical", cmap="Accent"
+    )
     categories, expected = categorical_colors(fc["zone"], "Accent")
-    assert len(categories) > 8, "the fixture must span more classes than the 8-colour palette to force a cycle"
-    assert rendered_colors(pc, len(categories)) == [c.lower() for c in expected], "static cycles in step"
+    assert len(categories) > 8, (
+        "the fixture must span more classes than the 8-colour palette to force a cycle"
+    )
+    assert rendered_colors(pc, len(categories)) == [c.lower() for c in expected], (
+        "static cycles in step"
+    )
 
 
 def test_categorical_missing_values_are_drawn_neutral(polygons):
@@ -97,12 +111,21 @@ def test_categorical_missing_values_are_drawn_neutral(polygons):
     pc = m.choropleth(fc, column="zone", scheme="categorical")
     pc.update_scalarmappable()  # resolve the value array into facecolors
     facecolors = pc.get_facecolors()
-    assert to_hex(facecolors[0]) == MISSING_COLOR, "the null-attribute polygon must be drawn neutral"
-    assert facecolors[0][3] > 0, "and must be visible at all (the default bad colour is fully transparent)"
-    assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == ["rural", "urban"]
+    assert to_hex(facecolors[0]) == MISSING_COLOR, (
+        "the null-attribute polygon must be drawn neutral"
+    )
+    assert facecolors[0][3] > 0, (
+        "and must be visible at all (the default bad colour is fully transparent)"
+    )
+    assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == [
+        "rural",
+        "urban",
+    ]
 
 
-@pytest.mark.parametrize("dtype", ["object", "string"], ids=["object-None", "nullable-pdNA"])
+@pytest.mark.parametrize(
+    "dtype", ["object", "string"], ids=["object-None", "nullable-pdNA"]
+)
 def test_categorical_nulls_never_become_a_category(polygons, dtype):
     """The same logical data must render the same whether its nulls are ``None`` or ``pd.NA`` (M5).
 
@@ -116,9 +139,13 @@ def test_categorical_nulls_never_become_a_category(polygons, dtype):
     m = Map(crs=fc.epsg)
     pc = m.choropleth(fc, column="zone", scheme="categorical")
     labels = [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()]
-    assert labels == ["rural", "urban"], "a null must not become a category, whatever its dtype spelling"
+    assert labels == ["rural", "urban"], (
+        "a null must not become a category, whatever its dtype spelling"
+    )
     pc.update_scalarmappable()
-    assert to_hex(pc.get_facecolors()[0]) == MISSING_COLOR, "the null row is missing data, not a class"
+    assert to_hex(pc.get_facecolors()[0]) == MISSING_COLOR, (
+        "the null row is missing data, not a class"
+    )
 
 
 @pytest.mark.parametrize("spelling", ["categorical", "Categorical", "CATEGORICAL"])
@@ -132,7 +159,11 @@ def test_categorical_scheme_spelling_is_case_insensitive(zoned, spelling):
     m = Map(crs=zoned.epsg)
     pc = m.choropleth(zoned, column="zone", scheme=spelling)
     assert isinstance(pc.norm, BoundaryNorm)
-    assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == ["park", "rural", "urban"]
+    assert [t.get_text() for t in m.layers[-1][0].category_legend.get_texts()] == [
+        "park",
+        "rural",
+        "urban",
+    ]
 
 
 def test_categorical_cmap_coolwarm_r_is_a_known_upstream_divergence(zoned):
@@ -141,16 +172,26 @@ def test_categorical_cmap_coolwarm_r_is_a_known_upstream_divergence(zoned):
     Pins the one divergence that cannot be resolved from this side (it needs an upstream change), so a future
     cleopatra release that changes the rule fails here loudly instead of drifting silently.
     """
-    pc = Map(crs=zoned.epsg).choropleth(zoned, column="zone", scheme="categorical", cmap="coolwarm_r")
-    _, web_colors = categorical_colors(zoned["zone"], resolve_categorical_cmap("coolwarm_r"))
+    pc = Map(crs=zoned.epsg).choropleth(
+        zoned, column="zone", scheme="categorical", cmap="coolwarm_r"
+    )
+    _, web_colors = categorical_colors(
+        zoned["zone"], resolve_categorical_cmap("coolwarm_r")
+    )
     _, tab10 = categorical_colors(zoned["zone"], "tab10")
-    assert rendered_colors(pc, 3) == [c.lower() for c in tab10], "static swaps cleopatra's own default sentinel"
-    assert [c.lower() for c in web_colors] != [c.lower() for c in tab10], "web honours it — the divergence"
+    assert rendered_colors(pc, 3) == [c.lower() for c in tab10], (
+        "static swaps cleopatra's own default sentinel"
+    )
+    assert [c.lower() for c in web_colors] != [c.lower() for c in tab10], (
+        "web honours it — the divergence"
+    )
 
 
 def test_choropleth_scheme_is_discrete(polygons):
     """A scheme bins choropleth fills into discrete classes (BoundaryNorm); default is continuous."""
-    discrete = Map(crs=polygons.epsg).choropleth(polygons, column="fid", scheme="quantiles", k=3)
+    discrete = Map(crs=polygons.epsg).choropleth(
+        polygons, column="fid", scheme="quantiles", k=3
+    )
     continuous = Map(crs=polygons.epsg).choropleth(polygons, column="fid")
     assert isinstance(discrete.norm, BoundaryNorm)
     assert not isinstance(continuous.norm, BoundaryNorm)
@@ -174,7 +215,10 @@ def test_choropleth_categorical_draws_a_swatch_legend(polygons):
     m.choropleth(fc, column="zone", scheme="categorical")
     glyph = m.layers[-1][0]
     assert glyph.cbar is None
-    assert [t.get_text() for t in glyph.category_legend.get_texts()] == ["rural", "urban"]
+    assert [t.get_text() for t in glyph.category_legend.get_texts()] == [
+        "rural",
+        "urban",
+    ]
 
 
 def test_choropleth_categorical_legend_can_be_suppressed(polygons):
@@ -197,31 +241,41 @@ def test_graduated_choropleth_still_defers_its_key_to_the_scene(polygons):
     m = Map(crs=polygons.epsg)
     m.choropleth(polygons, column="fid", scheme="quantiles", k=3)
     glyph = m.layers[-1][0]
-    assert glyph.default_options["add_colorbar"] is False, "the Scene, not the glyph, owns the graduated key"
+    assert glyph.default_options["add_colorbar"] is False, (
+        "the Scene, not the glyph, owns the graduated key"
+    )
     assert glyph.cbar is None
 
 
 def test_voronoi_scheme_is_discrete(points_fc):
     """voronoi honours a categorical scheme on its filled cells."""
-    pc = Map(crs=points_fc.epsg).voronoi(points_fc, column="fid", scheme="quantiles", k=3)
+    pc = Map(crs=points_fc.epsg).voronoi(
+        points_fc, column="fid", scheme="quantiles", k=3
+    )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
 def test_cartogram_scheme_is_discrete(polygons):
     """cartogram honours a categorical scheme on its scaled polygons."""
-    pc = Map(crs=polygons.epsg).cartogram(polygons, scale="fid", column="fid", scheme="quantiles", k=3)
+    pc = Map(crs=polygons.epsg).cartogram(
+        polygons, scale="fid", column="fid", scheme="quantiles", k=3
+    )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
 def test_quadtree_scheme_is_discrete(points_fc):
     """quadtree honours a categorical scheme on its aggregate cells."""
-    pc = Map(crs=points_fc.epsg).quadtree(points_fc, column="fid", nmax=1, scheme="quantiles", k=3)
+    pc = Map(crs=points_fc.epsg).quadtree(
+        points_fc, column="fid", nmax=1, scheme="quantiles", k=3
+    )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
 def test_scheme_fisher_jenks(polygons):
     """The native Fisher-Jenks scheme is accepted (no mapclassify dependency)."""
-    pc = Map(crs=polygons.epsg).choropleth(polygons, column="fid", scheme="fisher_jenks", k=3)
+    pc = Map(crs=polygons.epsg).choropleth(
+        polygons, column="fid", scheme="fisher_jenks", k=3
+    )
     assert isinstance(pc.norm, BoundaryNorm)
 
 
@@ -241,8 +295,16 @@ def test_categorical_scheme_on_outline_only_is_inert(polygons):
     "fixture,call",
     [
         ("points_fc", lambda m, fc: m.voronoi(fc, column="fid", scheme="categorical")),
-        ("polygons", lambda m, fc: m.cartogram(fc, scale="fid", column="fid", scheme="categorical")),
-        ("points_fc", lambda m, fc: m.quadtree(fc, column="fid", nmax=1, scheme="categorical")),
+        (
+            "polygons",
+            lambda m, fc: m.cartogram(
+                fc, scale="fid", column="fid", scheme="categorical"
+            ),
+        ),
+        (
+            "points_fc",
+            lambda m, fc: m.quadtree(fc, column="fid", nmax=1, scheme="categorical"),
+        ),
     ],
     ids=["voronoi", "cartogram", "quadtree"],
 )
@@ -258,4 +320,6 @@ def test_sibling_polygon_methods_honour_categorical(request, fixture, call):
     glyph = m.layers[-1][0]
     assert isinstance(pc.norm, BoundaryNorm)
     assert glyph.cbar is None
-    assert glyph.category_legend is not None, "a categorical sibling fill must draw its own swatch legend"
+    assert glyph.category_legend is not None, (
+        "a categorical sibling fill must draw its own swatch legend"
+    )

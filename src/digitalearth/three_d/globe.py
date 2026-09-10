@@ -9,7 +9,8 @@ only to drape the already-prepared lon/lat numpy field onto a sphere.
 geovista pulls cartopy transitively — that is *its* dependency, never imported here (the HARD RULE /
 ``test_no_competitor_imports`` guard); this module imports only ``geovista`` itself, lazily.
 """
-from typing import Any
+
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -60,8 +61,29 @@ def _require_geovista():
     return gv
 
 
-class GlobeMixin:
-    """Adds :meth:`globe` — render a global lon/lat field on a textured sphere — to a :class:`Scene3D`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class GlobeMixin(_MixinBase):
+    """Adds :meth:`globe` — render a global lon/lat field on a textured sphere — to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def globe(
         self,

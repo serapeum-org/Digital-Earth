@@ -47,7 +47,7 @@ LISA_COLORS: dict[str, str] = {
 #: Conventional Getis-Ord Gi* hot/cold-spot colours. Keyed by the ``hotspot`` label
 #: ``geostatista.getis_ord_gi`` / ``geostatista.hotspots`` writes.
 HOTSPOT_COLORS: dict[str, str] = {
-    "hot": "#d7191c",   # statistically significant high cluster
+    "hot": "#d7191c",  # statistically significant high cluster
     "cold": "#2c7bb6",  # statistically significant low cluster
     "ns": MISSING_COLOR,  # not significant
 }
@@ -85,7 +85,9 @@ def _palette(categories: list[Any], color_map: dict[str, str]) -> ListedColormap
     return ListedColormap(colors)
 
 
-def _categorical_map(features: Any, column: str, color_map: dict[str, str], **kwargs: Any) -> Map:
+def _categorical_map(
+    features: Any, column: str, color_map: dict[str, str], **kwargs: Any
+) -> Map:
     """Draw ``features`` as a categorical choropleth of ``column`` with a conventional palette.
 
     Args:
@@ -181,7 +183,12 @@ def hotspot_map(features: Any, *, column: str = "hotspot", **kwargs: Any) -> Map
 
 
 def kriging_map(
-    surface: Any, *, samples: Any = None, variance: bool = False, field: str = "imshow", **kwargs: Any
+    surface: Any,
+    *,
+    samples: Any = None,
+    variance: bool = False,
+    field: str = "imshow",
+    **kwargs: Any,
 ) -> Map:
     """Drape a ``geostatista.KrigedSurface`` as a raster field, optionally overlaying the source samples.
 
@@ -204,7 +211,9 @@ def kriging_map(
     if field not in _RASTER_FIELDS:
         raise ValueError(f"field must be one of {_RASTER_FIELDS}, got {field!r}")
     if variance and not hasattr(surface, "variance"):
-        raise AttributeError("surface has no '.variance' — pass a geostatista KrigedSurface, or variance=False")
+        raise AttributeError(
+            "surface has no '.variance' — pass a geostatista KrigedSurface, or variance=False"
+        )
     dataset = surface.variance if variance else surface
     crs = kwargs.pop("crs", getattr(dataset, "epsg", None))
     scene = Map(crs=crs) if crs is not None else Map()

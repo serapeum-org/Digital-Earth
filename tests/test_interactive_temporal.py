@@ -33,9 +33,9 @@ class TestTimecube:
     def test_is_dynamicmap_with_one_kdim_of_member_length(self, m, cube):
         m.timecube(cube)
         layer = m.layers[0]
-        assert isinstance(
-            layer, hv.DynamicMap
-        ), f"expected hv.DynamicMap, got {type(layer)}"
+        assert isinstance(layer, hv.DynamicMap), (
+            f"expected hv.DynamicMap, got {type(layer)}"
+        )
         assert [d.name for d in layer.kdims] == ["time"], "one 'time' kdim expected"
         assert len(layer.kdims[0].values) == 3, "slider must span the three members"
 
@@ -43,9 +43,9 @@ class TestTimecube:
         m.timecube(cube)
         dmap = m.layers[0]
         first = dmap[0]
-        assert isinstance(
-            first, hv.Image
-        ), f"a frame must be an hv.Image, got {type(first)}"
+        assert isinstance(first, hv.Image), (
+            f"a frame must be an hv.Image, got {type(first)}"
+        )
 
     def test_clim_is_frozen_across_frames(self, m, cube):
         """The first and last frame must carry an identical colour range (no per-frame jump)."""
@@ -53,9 +53,9 @@ class TestTimecube:
         dmap = m.layers[0]
         first_clim = hv.Store.lookup_options("bokeh", dmap[0], "plot").kwargs["clim"]
         last_clim = hv.Store.lookup_options("bokeh", dmap[2], "plot").kwargs["clim"]
-        assert (
-            first_clim == last_clim
-        ), f"clim jumped between frames: {first_clim} vs {last_clim}"
+        assert first_clim == last_clim, (
+            f"clim jumped between frames: {first_clim} vs {last_clim}"
+        )
         assert np.isfinite(first_clim).all(), f"clim must be finite, got {first_clim}"
 
     def test_explicit_clim_is_respected(self, m, cube):
@@ -69,9 +69,9 @@ class TestTimecube:
         stamps = [dt.datetime(2020, 1, day) for day in (1, 2, 3)]
         m.timecube(cube, labels=stamps)
         dmap = m.layers[0]
-        assert (
-            list(dmap.kdims[0].values) == stamps
-        ), "slider keys must be the supplied datetimes"
+        assert list(dmap.kdims[0].values) == stamps, (
+            "slider keys must be the supplied datetimes"
+        )
         frame = dmap[stamps[1]]
         assert isinstance(frame, hv.Image), "a label-keyed frame must materialise"
 

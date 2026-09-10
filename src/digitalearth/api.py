@@ -173,7 +173,12 @@ def quickmap(
             pass
     if domain is not None:
         scene.set_domain()
-    if colorbar and scene.layers and scene.layers[-1][1] is not None and not _last_layer_is_categorical(scene):
+    if (
+        colorbar
+        and scene.layers
+        and scene.layers[-1][1] is not None
+        and not _last_layer_is_categorical(scene)
+    ):
         try:
             scene.colorbar()
         except Exception:  # outline-only / unmappable layer
@@ -247,7 +252,9 @@ def _quickmap_interactive(
         getattr(scene, _raster_kind.get(kind, "image"))(data, **kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
-    if not colorbar and scene.layers:  # builders draw a colorbar by default; drop it on the data layer
+    if (
+        not colorbar and scene.layers
+    ):  # builders draw a colorbar by default; drop it on the data layer
         scene.colorbar(False)
     if basemap:
         scene.tiles()
@@ -282,7 +289,9 @@ def _quickmap_web(data: PlottableData, *, basemap: bool = False, **kwargs) -> An
     scene = WebMap()
     if isinstance(data, FeatureCollection):
         if len(data) == 0:
-            raise ValueError("quickplot got an empty FeatureCollection (nothing to draw)")
+            raise ValueError(
+                "quickplot got an empty FeatureCollection (nothing to draw)"
+            )
         if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
             column = kwargs.pop("column", None)
             if column is not None:
@@ -348,9 +357,13 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
     elif not isinstance(data, Dataset):
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
 
-    if not colorbar:  # PyVista shows a scalar bar by default when scalars exist; force it off here
+    if (
+        not colorbar
+    ):  # PyVista shows a scalar bar by default when scalars exist; force it off here
         kwargs.setdefault("show_scalar_bar", False)
-    scene = Scene3D()  # constructed only after validation — the error paths above never leak a plotter
+    scene = (
+        Scene3D()
+    )  # constructed only after validation — the error paths above never leak a plotter
     if isinstance(data, Dataset):
         scene.terrain(data, **kwargs)
     elif geom_kind == "polygons":

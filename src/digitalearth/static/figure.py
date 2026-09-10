@@ -5,6 +5,7 @@ earthkit-plots models a figure as ``Figure → Subplot/Map → Layer``. Digital-
 ``Map`` to each axes, plus :func:`shared_colorbar` for one colorbar spanning the panels. This is orchestration
 only — the rendering stays in each ``Map`` (pyramids + cleopatra).
 """
+
 from typing import Any, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
@@ -16,8 +17,15 @@ from digitalearth.static.map import Map
 __all__ = ["grid", "shared_colorbar"]
 
 
-def grid(nrows: int, ncols: int, *, crs: Any = 3857, globe: bool = False,
-         figsize: Optional[Tuple[float, float]] = None, **kwargs) -> Tuple[Figure, List[Map]]:
+def grid(
+    nrows: int,
+    ncols: int,
+    *,
+    crs: Any = 3857,
+    globe: bool = False,
+    figsize: Optional[Tuple[float, float]] = None,
+    **kwargs,
+) -> Tuple[Figure, List[Map]]:
     """Create an ``nrows`` × ``ncols`` grid of :class:`Map` panels sharing one figure.
 
     Each cell of a ``matplotlib`` subplot grid is wrapped in a ``Map`` (all the same ``crs``/``globe``), so
@@ -67,8 +75,14 @@ def grid(nrows: int, ncols: int, *, crs: Any = 3857, globe: bool = False,
     return fig, maps
 
 
-def shared_colorbar(fig: Figure, mappable: Any, maps: Optional[List[Map]] = None, *,
-                    label: Optional[str] = None, **kwargs) -> Any:
+def shared_colorbar(
+    fig: Figure,
+    mappable: Any,
+    maps: Optional[List[Map]] = None,
+    *,
+    label: Optional[str] = None,
+    **kwargs,
+) -> Any:
     """Add one colorbar to ``fig`` spanning the given panels (or every axes when ``maps`` is ``None``).
 
     Args:

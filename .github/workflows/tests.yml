@@ -44,14 +44,25 @@ jobs:
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
-  # The two cheap whole-tree checks: a static name-check, and the doctests. ruff's F821 analyses a
-  # notebook as a whole, across cells, so it catches an undefined name inside a cell CI cannot execute
-  # — a body guarded by
+  # The cheap whole-tree checks: ruff (names + formatter + import sorter), mypy, and the doctests.
+  #
+  # ruff's F821 analyses a notebook as a whole, across cells, so it catches an undefined name inside a cell CI
+  # cannot execute — a body guarded by
   # `if <gitignored data>.exists():`, or one of the network-heavy notebooks the `notebooks` job skips. Those cells are
   # dead code on a fresh clone, so no amount of notebook execution can cover them; this can, in about a second.
-  # Scoped to F821 on src/tests/docs deliberately: the full ruleset has ~1000 pre-existing findings (mostly import
-  # ordering) and examples/ is the exploratory scratch tree, both out of scope here. Keep the version in step with
-  # the ruff-pre-commit rev in .pre-commit-config.yaml.
+  # The `lint` task is an alias for lint-names (F821 over src/tests/docs) + lint-format + lint-imports (both over
+  # src/tests), so a step edit is not needed to add a ruff gate — widen the task instead. Still scoped: over
+  # src/tests the rest of the ruleset carries ~455 pre-existing findings — 425 UP, 20 E, 10 F401, and no W. Note
+  # that F is only partly gated: lint-names selects F821 alone, so the 10 F401 are backlog, not policy. Import
+  # ordering is no longer among any of it — lint-imports holds I at zero as of #171. examples/ is the exploratory
+  # scratch tree and is out of scope here. Keep the version in step with the ruff-pre-commit rev in
+  # .pre-commit-config.yaml.
+  #
+  # mypy runs on this leg only — ubuntu, the dev env, with python_version = "3.12" (see the note in
+  # pyproject.toml on why the checker target leads requires-python). src/ currently has no sys.version_info,
+  # sys.platform or platform.system() branch, so nothing is being missed today; the caveat is that if one is ever
+  # added, only its 3.12/Linux side is type-checked. The py311/py312/py313 x 3-OS matrix above covers the rest at
+  # run time only.
   lint-and-doctests:
     runs-on: ubuntu-latest
     permissions:
@@ -61,6 +72,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
+        id: setup
         uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
         with:
           environments: dev
@@ -68,17 +80,48 @@ jobs:
           cache: true
           version: v0.73.0
 
-      - name: Name-check modules and notebooks
+      # The three ruff gates run as separate steps rather than through the aggregate `lint` task, because
+      # pixi's `depends-on` stops at the first failing subtask: a formatting slip would hide the import-order
+      # result until the next push. `pixi run -e dev lint` still runs all three locally in one command — that
+      # is what the aggregate exists for. Each is gated on the setup step so a broken pixi environment is
+      # reported once instead of three times.
+      - name: Lint - names (F821, incl. notebooks)
         # Through pixi, not a bare `pip install` into the runner's system Python: the version then comes from
-        # pixi.lock rather than a second copy of it here, and a contributor can run the identical check with
-        # `pixi run -e dev lint` before pushing. ruff lints .ipynb natively, no extra flag.
+        # pixi.lock rather than a second copy of it here, so a contributor runs the identical check locally.
+        # ruff lints .ipynb natively, no extra flag.
         run: |
-          pixi run -e dev lint
+          pixi run -e dev lint-names
+
+      - name: Lint - formatting
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          pixi run -e dev lint-format
+
+      - name: Lint - import order
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          pixi run -e dev lint-imports
+
+      - name: Type-check
+        # mypy was configured and wired into pre-commit long before it could pass — 403 errors meant the hook
+        # was routinely skipped, which trains contributors to reach for --no-verify. It is clean as of #172,
+        # so it is gated here: the per-module baseline in pyproject.toml is a ratchet that may shrink and must
+        # never grow, and a module with no entry there is checked in full.
+        #
+        # Run even when the lint step above failed: the gates are independent, and a contributor fixing one
+        # should not have to push again to discover the next. It still fails the job, so this weakens nothing
+        # — it only stops the first failure from masking the others. Gated on the setup step so a broken pixi
+        # environment is reported once, as one failure, instead of three.
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: |
+          pixi run -e dev mypy
 
       - name: Run the doctests
-        # The five doctests this branch migrated by hand are the only migrated code no other job covers:
-        # `main` sets testpaths = ["tests"] with no --doctest-modules, and ruff's F821 does not analyse
-        # doctest bodies, so a missing import inside a `>>>` block would sail through the step above.
+        # The doctests in src/ are the only code no other job covers: `main` sets testpaths = ["tests"] with
+        # no --doctest-modules, and ruff's F821 does not analyse doctest bodies, so a missing import inside a
+        # `>>>` block would sail through the step above. The task currently collects 82 (21 more are skipped in
+        # this env; three_d's need viz3d and run via `doctests-3d`).
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: |
           pixi run -e dev doctests
 

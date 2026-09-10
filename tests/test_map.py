@@ -1,4 +1,5 @@
 """Tests for digitalearth.static.Map — display-CRS reprojection + decoration (no Cartopy)."""
+
 from pathlib import Path
 
 import pytest
@@ -64,7 +65,9 @@ def test_no_cartopy_import():
     """
     pkg = Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "static"
     modules = sorted(pkg.rglob("*.py"))
-    assert len(modules) > 5, f"no modules found under {pkg} — has the package moved again?"
+    assert len(modules) > 5, (
+        f"no modules found under {pkg} — has the package moved again?"
+    )
     for py in modules:
         text = py.read_text(encoding="utf-8")
         assert "import cartopy" not in text, f"{py.name} has `import cartopy`"
@@ -91,13 +94,21 @@ def test_coastlines_preserve_data_extent(dataset, mocker):
     import numpy as np
     from matplotlib.collections import LineCollection
 
-    def fake_add_features(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
+    def fake_add_features(
+        ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style
+    ):
         xlim, ylim = ax.get_xlim(), ax.get_ylim()
-        ax.add_collection(LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)]))
-        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        ax.add_collection(
+            LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)])
+        )
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         return ax
 
-    mocker.patch("digitalearth.static.maps.decoration.add_features", side_effect=fake_add_features)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.add_features",
+        side_effect=fake_add_features,
+    )
 
     m = Map(crs=3857)
     m.imshow(dataset)
@@ -119,17 +130,26 @@ def test_coastlines_preserve_extent_of_plain_line(mocker):
     import numpy as np
     from matplotlib.collections import LineCollection
 
-    def fake_add_features(ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style):
+    def fake_add_features(
+        ax, layer="coastline", resolution="110m", *, crs=None, zorder=0, **style
+    ):
         xlim, ylim = ax.get_xlim(), ax.get_ylim()
-        ax.add_collection(LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)]))
-        ax.set_xlim(xlim); ax.set_ylim(ylim)
+        ax.add_collection(
+            LineCollection([np.array([(-179, -89), (179, 89)], dtype=float)])
+        )
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
         return ax
 
-    mocker.patch("digitalearth.static.maps.decoration.add_features", side_effect=fake_add_features)
+    mocker.patch(
+        "digitalearth.static.maps.decoration.add_features",
+        side_effect=fake_add_features,
+    )
 
     m = Map(crs=3857)
     m.ax.plot([0, 1], [0, 1])  # a raw line artist, not a registered data layer
-    m.ax.set_xlim(0, 1); m.ax.set_ylim(0, 1)
+    m.ax.set_xlim(0, 1)
+    m.ax.set_ylim(0, 1)
     m.coastlines()
     assert m.ax.get_xlim() == (0, 1), "coastlines blew out the x extent of a plain line"
     assert m.ax.get_ylim() == (0, 1), "coastlines blew out the y extent of a plain line"
@@ -139,11 +159,20 @@ def test_to_feature_style_routes_color_and_drops_line_fill():
     """_to_feature_style maps singular keys to plural collection keys and ignores fill/edge on line layers."""
     from digitalearth.static.maps.decoration import _to_feature_style
 
-    poly = _to_feature_style("polygon", {"color": "red", "edgecolor": "k", "linewidth": 2, "alpha": 0.5})
-    assert poly == {"facecolors": "red", "edgecolors": "k", "linewidths": 2, "alpha": 0.5}
+    poly = _to_feature_style(
+        "polygon", {"color": "red", "edgecolor": "k", "linewidth": 2, "alpha": 0.5}
+    )
+    assert poly == {
+        "facecolors": "red",
+        "edgecolors": "k",
+        "linewidths": 2,
+        "alpha": 0.5,
+    }
 
     # On a line layer, a bare color becomes `colors` and fill/edge colours are dropped (no face on a line).
-    line = _to_feature_style("line", {"color": "blue", "facecolor": "red", "edgecolor": "k", "linewidth": 1})
+    line = _to_feature_style(
+        "line", {"color": "blue", "facecolor": "red", "edgecolor": "k", "linewidth": 1}
+    )
     assert line == {"colors": "blue", "linewidths": 1}
 
 
@@ -169,7 +198,9 @@ def test_basemap_tiles(dataset, mocker):
         assert crs == 3857  # basemap must forward the display CRS to the tile fetch
         return ax.imshow(np.zeros((2, 2, 3)))
 
-    spy = mocker.patch("digitalearth.static.maps.decoration.add_tiles", side_effect=fake_add_tiles)
+    spy = mocker.patch(
+        "digitalearth.static.maps.decoration.add_tiles", side_effect=fake_add_tiles
+    )
 
     m = Map(crs=3857)
     m.imshow(dataset)
@@ -183,7 +214,12 @@ def test_text_at_lonlat(dataset):
     """text() places a Text at the reprojected lon/lat on a flat map."""
     m = Map(crs=dataset.epsg)
     m.imshow(dataset)
-    txt = m.text(float(dataset.x.mean()) if hasattr(dataset, "x") else 0.0, 0.0, "x", crs=dataset.epsg)
+    txt = m.text(
+        float(dataset.x.mean()) if hasattr(dataset, "x") else 0.0,
+        0.0,
+        "x",
+        crs=dataset.epsg,
+    )
     # on a matching CRS the point is finite -> a Text is added
     assert txt is not None and txt in m.ax.texts
 
@@ -203,8 +239,15 @@ def test_annotate_with_arrow(dataset):
 
     m = Map(crs=dataset.epsg)
     m.imshow(dataset)
-    ann = m.annotate(0.0, 0.0, "here", xytext=(20, 20), textcoords="offset points",
-                     arrowprops={"arrowstyle": "->"}, crs=dataset.epsg)
+    ann = m.annotate(
+        0.0,
+        0.0,
+        "here",
+        xytext=(20, 20),
+        textcoords="offset points",
+        arrowprops={"arrowstyle": "->"},
+        crs=dataset.epsg,
+    )
     assert isinstance(ann, Annotation) and ann in m.ax.texts
 
 
@@ -224,7 +267,9 @@ def test_stock_img_dataset_backdrop(dataset):
     back = m.stock_img(dataset)
     assert back is not None and back in m.ax.images
     assert back.get_zorder() < data_im.get_zorder(), "backdrop must sit below the data"
-    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, "stock_img blew out the extent"
+    assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, (
+        "stock_img blew out the extent"
+    )
 
 
 def test_stock_img_on_empty_map(dataset):
@@ -243,8 +288,9 @@ def test_stock_img_tiles_graceful_offline(mocker, caplog):
     m = Map(crs=3857)
     with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.decoration"):
         assert m.stock_img() is None
-    assert any("tile basemap unavailable" in r.message for r in caplog.records), \
+    assert any("tile basemap unavailable" in r.message for r in caplog.records), (
         "the swallowed exception should be logged at DEBUG so failures are diagnosable"
+    )
 
 
 def test_stock_img_tiles_path(mocker):

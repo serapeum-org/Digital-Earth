@@ -1,4 +1,5 @@
 """Tests for DC.1-DC.3 — named projections, projection_frame, graticule."""
+
 import numpy as np
 import pytest
 
@@ -63,11 +64,13 @@ class TestProjectionFrame:
 
     def test_orthographic_is_circular(self):
         """The orthographic boundary is ~circular: x/y spans are about equal and centred near 0."""
-        ring, xlim, ylim = projections.projection_frame(projections.orthographic(0, 0), n=180)
+        ring, xlim, ylim = projections.projection_frame(
+            projections.orthographic(0, 0), n=180
+        )
         assert ring.ndim == 2 and ring.shape[1] == 2
         xspan, yspan = xlim[1] - xlim[0], ylim[1] - ylim[0]
         assert abs(xspan - yspan) / max(xspan, yspan) < 0.05  # near-equal => disc
-        assert abs(xlim[0] + xlim[1]) < 0.02 * xspan          # centred on 0
+        assert abs(xlim[0] + xlim[1]) < 0.02 * xspan  # centred on 0
 
     def test_mercator_is_rectangular(self):
         """A cylindrical CRS boundary is a rectangle (corners near the limit box)."""
@@ -76,13 +79,17 @@ class TestProjectionFrame:
 
     def test_ring_is_closed(self):
         """The boundary ring is closed (first vertex repeated at the end)."""
-        ring, _, _ = projections.projection_frame(projections.orthographic(-9, 39), n=120)
+        ring, _, _ = projections.projection_frame(
+            projections.orthographic(-9, 39), n=120
+        )
         np.testing.assert_allclose(ring[0], ring[-1])
 
     def test_empty_domain_raises_clearly(self, mocker):
         """A CRS that projects every sample to non-finite coords raises a clear error, not min() on empty."""
-        mocker.patch("digitalearth.static.projections.reproject_coordinates",
-                     return_value=([float("inf")] * 4, [float("nan")] * 4))
+        mocker.patch(
+            "digitalearth.static.projections.reproject_coordinates",
+            return_value=([float("inf")] * 4, [float("nan")] * 4),
+        )
         with pytest.raises(ValueError, match="no finite projected domain"):
             projections.projection_frame(3857, n=4)
 
@@ -117,15 +124,21 @@ class TestDensifyLonlat:
 
     def test_inserts_intermediate_vertices(self):
         """A long edge is split so no sub-segment exceeds step_deg, preserving the endpoints."""
-        out = projections.densify_lonlat(np.array([[0.0, 0.0], [3.0, 0.0]]), step_deg=1.0)
-        assert out[:, 0].tolist() == [0.0, 1.0, 2.0, 3.0], f"unexpected densified xs: {out[:, 0]}"
+        out = projections.densify_lonlat(
+            np.array([[0.0, 0.0], [3.0, 0.0]]), step_deg=1.0
+        )
+        assert out[:, 0].tolist() == [0.0, 1.0, 2.0, 3.0], (
+            f"unexpected densified xs: {out[:, 0]}"
+        )
 
     def test_preserves_original_vertices(self):
         """Each original vertex survives densification (the polyline shape is unchanged)."""
         ring = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]])
         out = projections.densify_lonlat(ring, step_deg=0.5)
         for v in ring:
-            assert np.any(np.all(np.isclose(out, v), axis=1)), f"vertex {v} lost in densification"
+            assert np.any(np.all(np.isclose(out, v), axis=1)), (
+                f"vertex {v} lost in densification"
+            )
 
     @pytest.mark.parametrize("pts", [np.empty((0, 2)), np.array([[1.0, 2.0]])])
     def test_short_input_returned_unchanged(self, pts):
@@ -135,7 +148,9 @@ class TestDensifyLonlat:
             pts: A 0- or 1-vertex array.
         """
         out = projections.densify_lonlat(pts, step_deg=1.0)
-        assert out.shape == pts.shape, f"short input changed shape: {out.shape} != {pts.shape}"
+        assert out.shape == pts.shape, (
+            f"short input changed shape: {out.shape} != {pts.shape}"
+        )
 
 
 class TestBoundaryArcHelpers:
@@ -163,8 +178,12 @@ class TestBoundaryArcHelpers:
     def test_arc_takes_backward_when_shorter(self):
         """When the backward hop count is shorter, the wrap-around arc is returned instead."""
         ring = self._octagon()
-        arc = projections._boundary_arc(ring, 0, 6)  # fwd=6, bwd=2 -> backward [0, 7, 6]
-        assert len(arc) == 3, f"backward arc 0->6 should have 3 vertices, got {len(arc)}"
+        arc = projections._boundary_arc(
+            ring, 0, 6
+        )  # fwd=6, bwd=2 -> backward [0, 7, 6]
+        assert len(arc) == 3, (
+            f"backward arc 0->6 should have 3 vertices, got {len(arc)}"
+        )
         np.testing.assert_allclose(arc[-1], ring[6])
 
 
@@ -179,11 +198,15 @@ class TestCloseVisibleRuns:
         rings = projections.close_visible_runs(x, y, boundary)
         assert len(rings) == 1, f"expected one ring, got {len(rings)}"
         np.testing.assert_allclose(rings[0][0], rings[0][-1])
-        assert len(rings[0]) == 5, f"closed quad should have 5 vertices, got {len(rings[0])}"
+        assert len(rings[0]) == 5, (
+            f"closed quad should have 5 vertices, got {len(rings[0])}"
+        )
 
     def test_all_far_side_returns_empty(self):
         """A ring with no finite vertices (all far-side) yields no fill rings."""
-        boundary, _, _ = projections.projection_frame(projections.orthographic(0, 0), n=120)
+        boundary, _, _ = projections.projection_frame(
+            projections.orthographic(0, 0), n=120
+        )
         x = np.full(6, np.inf)
         y = np.full(6, np.inf)
         assert projections.close_visible_runs(x, y, boundary) == []
@@ -193,16 +216,23 @@ class TestCloseVisibleRuns:
         crs = projections.orthographic(0, 0)
         boundary, xlim, ylim = projections.projection_frame(crs, n=360)
         lons = np.linspace(60, 120, 40)
-        ring = np.vstack([
-            np.column_stack([lons, np.full_like(lons, -30.0)]),
-            np.column_stack([lons[::-1], np.full_like(lons, 30.0)]),
-        ])
-        x, y = projections.reproject_coordinates(ring[:, 0].tolist(), ring[:, 1].tolist(),
-                                                 from_crs=4326, to_crs=crs)
-        rings = projections.close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary)
+        ring = np.vstack(
+            [
+                np.column_stack([lons, np.full_like(lons, -30.0)]),
+                np.column_stack([lons[::-1], np.full_like(lons, 30.0)]),
+            ]
+        )
+        x, y = projections.reproject_coordinates(
+            ring[:, 0].tolist(), ring[:, 1].tolist(), from_crs=4326, to_crs=crs
+        )
+        rings = projections.close_visible_runs(
+            np.asarray(x, float), np.asarray(y, float), boundary
+        )
         allv = np.vstack(rings)
         assert rings, "expected at least one closed visible ring"
         assert np.isfinite(allv).all(), "closure emitted inf/nan"
         assert all(np.allclose(r[0], r[-1]) for r in rings), "rings not closed"
         radius = max(xlim[1], ylim[1])
-        assert (np.hypot(allv[:, 0], allv[:, 1]) <= radius * 1.001).all(), "ring left the disc"
+        assert (np.hypot(allv[:, 0], allv[:, 1]) <= radius * 1.001).all(), (
+            "ring left the disc"
+        )

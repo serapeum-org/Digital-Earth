@@ -1,4 +1,5 @@
 """Tests for digitalearth.base.symbology — categorical (distinct-value → colour) mapping (DC.8)."""
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -27,7 +28,9 @@ class TestIsNull:
     @pytest.mark.parametrize("value", [[1, 2], np.array([1, 2])])
     def test_non_scalar_is_not_null(self, value):
         """A list-like value whose `pd.isna` is elementwise flows on as a (non-null) value, not a null."""
-        assert is_null(value) is False, f"non-scalar {value!r} should flow on as a value"
+        assert is_null(value) is False, (
+            f"non-scalar {value!r} should flow on as a value"
+        )
 
 
 class TestNullsToNone:
@@ -36,22 +39,30 @@ class TestNullsToNone:
     def test_pd_na_becomes_none(self):
         """A pandas nullable-dtype null is rewritten to None so cleopatra drops it."""
         out = nulls_to_none(pd.array(["urban", pd.NA, "rural"], dtype="string"))
-        assert out.tolist() == ["urban", None, "rural"], f"pd.NA must normalize to None, got {out.tolist()}"
+        assert out.tolist() == ["urban", None, "rural"], (
+            f"pd.NA must normalize to None, got {out.tolist()}"
+        )
 
     def test_no_nulls_is_unchanged(self):
         """A column with no nulls comes back with its values intact."""
         out = nulls_to_none(np.array(["a", "b"], dtype=object))
-        assert out.tolist() == ["a", "b"], f"non-null values must survive untouched, got {out.tolist()}"
+        assert out.tolist() == ["a", "b"], (
+            f"non-null values must survive untouched, got {out.tolist()}"
+        )
 
     def test_two_dimensional_input(self):
         """A 2-D array normalizes nulls elementwise and keeps its shape."""
         out = nulls_to_none(np.array([["a", None], ["b", "c"]], dtype=object))
-        assert out.tolist() == [["a", None], ["b", "c"]], f"2-D nulls must normalize in place, got {out.tolist()}"
+        assert out.tolist() == [["a", None], ["b", "c"]], (
+            f"2-D nulls must normalize in place, got {out.tolist()}"
+        )
 
     def test_list_cell_is_kept_as_a_value(self):
         """A list-like cell reads as a non-null value (vectorized `pd.isna` stays elementwise), only None drops."""
         out = nulls_to_none(np.array(["a", [1, 2], None], dtype=object))
-        assert out[0] == "a" and out[1] == [1, 2] and out[2] is None, f"list cell must survive, got {out.tolist()}"
+        assert out[0] == "a" and out[1] == [1, 2] and out[2] is None, (
+            f"list cell must survive, got {out.tolist()}"
+        )
 
 
 def test_distinct_categories_get_distinct_colors():
@@ -88,25 +99,40 @@ def test_empty_raises():
 
 def test_resolve_categorical_cmap_swaps_continuous_default():
     """The continuous default is swapped for a qualitative map; an explicit cmap is honoured (N1)."""
-    assert resolve_categorical_cmap("viridis") == "tab10", "continuous default → qualitative default"
-    assert resolve_categorical_cmap("Set2") == "Set2", "an explicit cmap must be honoured"
+    assert resolve_categorical_cmap("viridis") == "tab10", (
+        "continuous default → qualitative default"
+    )
+    assert resolve_categorical_cmap("Set2") == "Set2", (
+        "an explicit cmap must be honoured"
+    )
 
 
 def test_drops_pandas_nullable_na():
     """`pd.NA`/`pd.NaT` are nulls, not categories — a nullable dtype must classify like an object one (M5)."""
     import pandas as pd
 
-    cats, colors = categorical_colors(pd.array(["urban", pd.NA, "rural"], dtype="string"))
+    cats, colors = categorical_colors(
+        pd.array(["urban", pd.NA, "rural"], dtype="string")
+    )
     assert cats == ["rural", "urban"], f"pd.NA must not become a category, got {cats}"
     assert len(colors) == 2
     object_cats, _ = categorical_colors(["urban", None, "rural"])
-    assert cats == object_cats, "the same logical data must classify identically across dtypes"
+    assert cats == object_cats, (
+        "the same logical data must classify identically across dtypes"
+    )
 
 
 @pytest.mark.parametrize(
     "cmap",
     ["tab10", "Set2", "coolwarm", "RdBu", "jet", "viridis"],
-    ids=["listed-tab10", "listed-set2", "linseg-coolwarm", "linseg-rdbu", "linseg-jet", "listed-viridis"],
+    ids=[
+        "listed-tab10",
+        "listed-set2",
+        "linseg-coolwarm",
+        "linseg-rdbu",
+        "linseg-jet",
+        "listed-viridis",
+    ],
 )
 def test_matches_cleopatra_categorize_across_colormap_kinds(cmap):
     """Colours match cleopatra for both colormap kinds — a LinearSegmentedColormap must sample evenly, not
@@ -116,7 +142,9 @@ def test_matches_cleopatra_categorize_across_colormap_kinds(cmap):
     values = ["a", "b", "c"]
     _, ours = categorical_colors(values, cmap)
     _, upstream = categorize(np.asarray(values, dtype=object), cmap)
-    assert [c.lower() for c in ours] == [c.lower() for c in upstream], f"colours must match cleopatra for {cmap}"
+    assert [c.lower() for c in ours] == [c.lower() for c in upstream], (
+        f"colours must match cleopatra for {cmap}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -138,5 +166,9 @@ def test_matches_cleopatra_categorize(values):
 
     ours_cats, ours_colors = categorical_colors(values)
     upstream_cats, upstream_colors = categorize(np.asarray(values, dtype=object))
-    assert list(ours_cats) == list(upstream_cats), "categories must match cleopatra's (order and content)"
-    assert [c.lower() for c in ours_colors] == [c.lower() for c in upstream_colors], "colours must match"
+    assert list(ours_cats) == list(upstream_cats), (
+        "categories must match cleopatra's (order and content)"
+    )
+    assert [c.lower() for c in ours_colors] == [c.lower() for c in upstream_colors], (
+        "colours must match"
+    )

@@ -8,6 +8,7 @@ Band convention: the Digital-Earth API is **1-based** (``band=1`` is the first b
 and GDAL), while pyramids' ``read_array(band=)`` and the per-band metadata tuples are **0-based** — so we
 read ``band - 1`` internally.
 """
+
 from typing import Any, Optional
 
 import numpy as np
@@ -37,7 +38,9 @@ def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
         np.ndarray: a ``float64`` array of shape ``(rows, cols, len(bands))``.
     """
     layers = [
-        read_masked_band(data, b) if mask else np.asarray(data.read_array(band=b - 1), dtype="float64")
+        read_masked_band(data, b)
+        if mask
+        else np.asarray(data.read_array(band=b - 1), dtype="float64")
         for b in bands
     ]
     return np.dstack(layers)

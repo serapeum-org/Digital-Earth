@@ -33,9 +33,9 @@ class TestDashboard:
 
     def test_is_panel_viewable(self, m):
         app = m.dashboard()
-        assert isinstance(
-            app, pn.viewable.Viewable
-        ), f"not a Panel Viewable: {type(app)}"
+        assert isinstance(app, pn.viewable.Viewable), (
+            f"not a Panel Viewable: {type(app)}"
+        )
 
     def test_requested_widgets_present(self, m):
         app = m.dashboard(widgets=("cmap", "alpha", "basemap"))
@@ -61,15 +61,15 @@ class TestDashboard:
         """The bound render function restyles the map from widget values."""
         out = m._render_with_overrides({"cmap": "magma", "alpha": 0.3})
         style = hv.Store.lookup_options("bokeh", out, "style").kwargs
-        assert (
-            style.get("cmap") == "magma"
-        ), f"cmap override not applied: {style.get('cmap')}"
+        assert style.get("cmap") == "magma", (
+            f"cmap override not applied: {style.get('cmap')}"
+        )
 
     def test_override_with_no_values_returns_map_unchanged(self, m):
         out = m._render_with_overrides({})
-        assert isinstance(
-            out, hv.core.Dimensioned
-        ), "no-override path must return the rendered map"
+        assert isinstance(out, hv.core.Dimensioned), (
+            "no-override path must return the rendered map"
+        )
 
     def test_override_on_vector_only_map_does_not_raise(self, point_fc):
         """cmap/alpha on a vector-only map must not raise — HoloViews applies them where they match,
@@ -89,9 +89,9 @@ class TestServeAndExport:
     def test_save_app_writes_standalone_file(self, m, tmp_path):
         out = tmp_path / "app.html"
         assert m.save_app(str(out), widgets=("cmap",)) == str(out)
-        assert (
-            out.stat().st_size > 1_000
-        ), "exported app should be a non-trivial HTML page"
+        assert out.stat().st_size > 1_000, (
+            "exported app should be a non-trivial HTML page"
+        )
 
 
 class TestCrossTierPane:
@@ -131,9 +131,9 @@ class TestCrossTierPane:
             plotter = _FakePlotter()
 
         assert m.cross_tier_pane(_FakeScene()) == "vtk-pane"
-        assert (
-            captured["window"] is sentinel
-        ), "the plotter render window must be forwarded"
+        assert captured["window"] is sentinel, (
+            "the plotter render window must be forwarded"
+        )
 
 
 class TestLayerControlAndTable:
@@ -180,9 +180,9 @@ class TestLayerControlAndTable:
         fc = FeatureCollection.read_file("tests/data/points.geojson")
         table = InteractiveMap().attribute_table(fc)
         assert isinstance(table, pn.widgets.Tabulator)
-        assert "geometry" not in list(
-            table.value.columns
-        ), "geometry column must be dropped"
+        assert "geometry" not in list(table.value.columns), (
+            "geometry column must be dropped"
+        )
         assert "fid" in list(table.value.columns)
 
     def test_share_off_server_returns_params(self, multi):

@@ -14,17 +14,25 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.
 """
 
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.web.base import _require_layer_api
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
 #: needs a served ``raster-dem`` tile source, so the default is hosted tiles; to use your own DEM, encode it to
 #: terrain-RGB tiles with pyramids ``Dataset.to_terrain_rgb``, serve them, and pass the tile-URL template as ``dem``.
-_DEFAULT_TERRAIN_TILES = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+_DEFAULT_TERRAIN_TILES = (
+    "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+)
 
 
-class ThreeDMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class ThreeDMixin(_MixinBase):
     """3-D builders for :class:`~digitalearth.web.map.WebMap` (fill-extrusion + deck.gl + terrain/globe)."""
 
     def extrusion(
@@ -38,7 +46,7 @@ class ThreeDMixin:
         cmap: str = "viridis",
         color: str = "#3388ff",
         opacity: float = 0.9,
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Draw a 3-D choropleth: polygons extruded by ``height`` and coloured by ``column`` (recipe W5).
 
         Args:
@@ -59,7 +67,9 @@ class ThreeDMixin:
         gdf = self._display_gdf(features, method="extrusion")
         paint: dict = {
             "fill-extrusion-opacity": float(opacity),
-            "fill-extrusion-height": ["get", height] if isinstance(height, str) else float(height),
+            "fill-extrusion-height": ["get", height]
+            if isinstance(height, str)
+            else float(height),
         }
         if column is not None:
             paint["fill-extrusion-color"] = self._color_expr(
@@ -69,7 +79,9 @@ class ThreeDMixin:
             paint["fill-extrusion-color"] = color
 
         src_id, layer_id = self._uid("ext-src"), self._uid("extrusion")
-        layer = Layer(id=layer_id, type=LayerType.FILL_EXTRUSION, source=src_id, paint=paint)
+        layer = Layer(
+            id=layer_id, type=LayerType.FILL_EXTRUSION, source=src_id, paint=paint
+        )
 
         def apply(widget: Any) -> None:
             widget.add_source(src_id, gdf)
@@ -84,7 +96,7 @@ class ThreeDMixin:
         *,
         exaggeration: float = 1.0,
         encoding: str = "terrarium",
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Drape the map over 3-D terrain from a raster-DEM source (recipe W5).
 
         Args:
@@ -111,7 +123,7 @@ class ThreeDMixin:
 
         return self.add_layer(layer=apply)
 
-    def globe(self, enabled: bool = True) -> "ThreeDMixin":
+    def globe(self, enabled: bool = True) -> Self:
         """Switch the map to the spherical globe projection (or back to Web Mercator).
 
         Args:
@@ -150,10 +162,19 @@ class ThreeDMixin:
                 if z_column is not None
                 else np.zeros(len(points))
             )
-            return [{"position": [float(x), float(y), float(z)]} for x, y, z in zip(xs, ys, zs)]
+            return [
+                {"position": [float(x), float(y), float(z)]}
+                for x, y, z in zip(xs, ys, zs)
+            ]
         rows = np.asarray(points, dtype=float)
         return [
-            {"position": [float(r[0]), float(r[1]), float(r[2]) if r.shape[0] > 2 else 0.0]}
+            {
+                "position": [
+                    float(r[0]),
+                    float(r[1]),
+                    float(r[2]) if r.shape[0] > 2 else 0.0,
+                ]
+            }
             for r in rows
         ]
 
@@ -164,7 +185,7 @@ class ThreeDMixin:
         z_column: Optional[str] = None,
         color: Sequence[int] = (255, 140, 0),
         point_size: float = 2.0,
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
 
         Args:
@@ -182,7 +203,9 @@ class ThreeDMixin:
         # strict here; reject only a raster, which would otherwise die inside `_point_cloud_data`.
         self._reject_raster(points, "point_cloud")
         data = self._point_cloud_data(
-            self._display_gdf(points, method="point_cloud") if hasattr(points, "geometry") else points,
+            self._display_gdf(points, method="point_cloud")
+            if hasattr(points, "geometry")
+            else points,
             z_column,
         )
         layer = {
@@ -195,7 +218,7 @@ class ThreeDMixin:
         }
         return self._add_deck_layer(layer)
 
-    def tiles_3d(self, url: str, *, opacity: float = 1.0) -> "ThreeDMixin":
+    def tiles_3d(self, url: str, *, opacity: float = 1.0) -> Self:
         """Render an OGC 3D Tiles / Cesium tileset as a deck.gl ``Tile3DLayer`` (recipe W5).
 
         **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not
@@ -225,7 +248,7 @@ class ThreeDMixin:
         lat: float,
         *,
         size: float = 1.0,
-    ) -> "ThreeDMixin":
+    ) -> Self:
         """Place a glTF/GLB 3-D model at ``(lng, lat)`` as a deck.gl ``ScenegraphLayer`` (recipe W5).
 
         **Not browser-verified:** the layer spec is built and serialised, but its in-browser render is not

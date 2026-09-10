@@ -4,6 +4,7 @@ Orchestration only: per-time-step reduction of a pyramids ``DatasetCollection`` 
 through cleopatra ``LineGlyph`` (and :mod:`digitalearth.static.series` for climatology plumes). The heavy GIS/time
 work stays in pyramids; the numeric reduction here is plain array aggregation for plotting.
 """
+
 from digitalearth.static.temporal.climatology import Climatology
 from digitalearth.static.temporal.timeseries import TimeSeries
 

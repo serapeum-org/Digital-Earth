@@ -2,6 +2,7 @@
 
 Run from the repository root (data paths are repo-root-relative); ``MPLBACKEND=Agg`` is set in pytest config.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -183,8 +184,23 @@ def test_feature_source_polygon_uses_centroid():
 
 def test_no_competitor_imports():
     """The sources package must not import xarray/rasterio/fiona/etc. (CLAUDE.md: pyramids is the only GIS dep)."""
-    forbidden = ("xarray", "rasterio", "rioxarray", "fiona", "netCDF4", "cfgrib", "osgeo", "cartopy")
-    pkg = Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "base" / "sources"
+    forbidden = (
+        "xarray",
+        "rasterio",
+        "rioxarray",
+        "fiona",
+        "netCDF4",
+        "cfgrib",
+        "osgeo",
+        "cartopy",
+    )
+    pkg = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "digitalearth"
+        / "base"
+        / "sources"
+    )
     modules = sorted(pkg.rglob("*.py"))
     assert modules, f"no modules found under {pkg} — has the package moved again?"
     offenders = []
@@ -214,5 +230,7 @@ def test_raster_source_nodata_is_exact_not_tolerant():
     )
     z = get_source(ds).z.values
     assert np.isnan(z[0, 1]), "exact nodata cell should be masked"
-    assert not np.isnan(z[1, 0]), "a value near (but != ) nodata must be kept under exact-compare"
+    assert not np.isnan(z[1, 0]), (
+        "a value near (but != ) nodata must be kept under exact-compare"
+    )
     assert z[0, 0] == 1.0 and z[1, 1] == 4.0, f"real values changed: {z}"

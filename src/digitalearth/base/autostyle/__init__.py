@@ -9,6 +9,7 @@ Magics' operational identity matching — name → CF ``standard_name`` → unit
 colormap *and* contour levels for common meteorological fields; :func:`auto_style` consults it first and
 falls back to the lighter substring library (``variables.yml``) for everything else.
 """
+
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict

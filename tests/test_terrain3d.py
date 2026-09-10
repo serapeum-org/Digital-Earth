@@ -3,6 +3,7 @@
 Gated on the optional ``3d`` extra (pyvista). Includes the orientation guard the plan calls for: a DEM with a
 known high corner must render with its peak at the geographically-correct location (not mirrored/upside-down).
 """
+
 import numpy as np
 import pytest
 
@@ -75,7 +76,9 @@ def test_terrain_handles_nan_nodata():
 
 def test_vertical_unit_scale_geographic_vs_projected():
     """A geographic CRS rescales metre elevation into degrees; a projected CRS leaves it alone."""
-    assert _vertical_unit_scale(4326) == pytest.approx(1.0 / _METRES_PER_DEGREE)  # WGS84 lon/lat
+    assert _vertical_unit_scale(4326) == pytest.approx(
+        1.0 / _METRES_PER_DEGREE
+    )  # WGS84 lon/lat
     assert _vertical_unit_scale(3857) == 1.0  # Web Mercator (metres)
     assert _vertical_unit_scale(None) == 1.0  # unknown CRS → no rescaling
 

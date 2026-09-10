@@ -66,15 +66,21 @@ def test_quickmap_categorical_has_no_spurious_colorbar():
     """
     fc = _zoned_polygons()
     m = qp.quickmap(fc, crs=fc.epsg, column="zone", scheme="categorical")
-    assert len(m.fig.axes) == 1, "categorical map must not gain a colorbar axes on top of its swatch legend"
-    assert m.layers[-1][0].category_legend is not None, "the swatch legend is still the key"
+    assert len(m.fig.axes) == 1, (
+        "categorical map must not gain a colorbar axes on top of its swatch legend"
+    )
+    assert m.layers[-1][0].category_legend is not None, (
+        "the swatch legend is still the key"
+    )
 
 
 def test_module_choropleth_categorical_has_no_spurious_colorbar():
     """The module-level choropleth() helper (the _finish path) also skips the colorbar for a categorical fill."""
     fc = _zoned_polygons()
     m = qp.choropleth(fc, crs=fc.epsg, column="zone", scheme="categorical")
-    assert len(m.fig.axes) == 1, "the _finish path must skip the colorbar for a categorical fill too"
+    assert len(m.fig.axes) == 1, (
+        "the _finish path must skip the colorbar for a categorical fill too"
+    )
 
 
 def test_quickmap_graduated_still_gets_its_colorbar():
@@ -86,7 +92,9 @@ def test_quickmap_graduated_still_gets_its_colorbar():
 
 def test_last_layer_is_categorical_on_empty_scene():
     """The categorical predicate is False on a scene with no layers (self-safe when called directly)."""
-    assert qp._last_layer_is_categorical(Map(crs=4326)) is False, "an empty scene has no categorical layer"
+    assert qp._last_layer_is_categorical(Map(crs=4326)) is False, (
+        "an empty scene has no categorical layer"
+    )
 
 
 def test_quickmap_rejects_unsupported_type():
@@ -168,7 +176,9 @@ def test_quickmap_swallows_decoration_failures(dataset, mocker):
     mocker.patch.object(Map, "coastlines", side_effect=RuntimeError("no net"))
     mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
     mocker.patch.object(Map, "colorbar", side_effect=RuntimeError("bad mappable"))
-    m = qp.quickmap(dataset, crs=dataset.epsg, coastlines=True, basemap=True, colorbar=True)
+    m = qp.quickmap(
+        dataset, crs=dataset.epsg, coastlines=True, basemap=True, colorbar=True
+    )
     assert m.layers
 
 
@@ -205,7 +215,9 @@ class TestFinish:
         """
         scene = _FakeScene(layers=["layer"])
         out = qp._finish(scene, colorbar=True)
-        assert scene.colorbar_calls == 1, f"expected one colorbar call, got {scene.colorbar_calls}"
+        assert scene.colorbar_calls == 1, (
+            f"expected one colorbar call, got {scene.colorbar_calls}"
+        )
         assert out is scene, "the same scene must be returned"
 
     def test_skips_colorbar_when_disabled(self):

@@ -141,7 +141,9 @@ class TestRenderGlyph:
         glyph = _FakeGlyph(im="THE_IMAGE")
         out = scene._render_glyph(glyph)
         assert out == "THE_IMAGE", f"expected glyph.im returned, got {out}"
-        assert scene.layers[-1] == (glyph, "THE_IMAGE"), f"layer not registered correctly: {scene.layers[-1]}"
+        assert scene.layers[-1] == (glyph, "THE_IMAGE"), (
+            f"layer not registered correctly: {scene.layers[-1]}"
+        )
 
     def test_plot_convention_registers_third_element(self):
         """artist='plot' registers and returns the third element of plot()'s return.
@@ -153,7 +155,9 @@ class TestRenderGlyph:
         glyph = _FakeGlyph(tuple_artist="THE_COLLECTION")
         out = scene._render_glyph(glyph, artist="plot")
         assert out == "THE_COLLECTION", f"expected plot()[2] returned, got {out}"
-        assert scene.layers[-1] == (glyph, "THE_COLLECTION"), f"layer wrong: {scene.layers[-1]}"
+        assert scene.layers[-1] == (glyph, "THE_COLLECTION"), (
+            f"layer wrong: {scene.layers[-1]}"
+        )
 
     def test_forwards_positional_and_keyword_args(self):
         """_render_glyph forwards *plot_args and **plot_kwargs to glyph.plot.
@@ -164,8 +168,12 @@ class TestRenderGlyph:
         """
         scene = Scene()
         glyph = _FakeGlyph()
-        scene._render_glyph(glyph, [1, 2, 3], artist="im", kind="contourf", outline_only=True)
-        assert glyph.plot_args == ([1, 2, 3],), f"positional args not forwarded: {glyph.plot_args}"
+        scene._render_glyph(
+            glyph, [1, 2, 3], artist="im", kind="contourf", outline_only=True
+        )
+        assert glyph.plot_args == ([1, 2, 3],), (
+            f"positional args not forwarded: {glyph.plot_args}"
+        )
         assert glyph.plot_kwargs == {"kind": "contourf", "outline_only": True}, (
             f"kwargs not forwarded cleanly: {glyph.plot_kwargs}"
         )
@@ -222,7 +230,9 @@ class TestContextManager:
         with pytest.raises(ValueError, match="boom"):
             with scene:
                 raise ValueError("boom")
-        assert not plt.fignum_exists(num), "figure should be closed even when the body raised"
+        assert not plt.fignum_exists(num), (
+            "figure should be closed even when the body raised"
+        )
 
 
 class TestPreserveView:
@@ -241,8 +251,12 @@ class TestPreserveView:
         scene.ax.set_ylim(0, 5)
         with scene._preserve_view():
             scene.ax.plot([100, 200], [100, 200])
-        assert scene.ax.get_xlim() == pytest.approx((0.0, 10.0)), f"xlim moved: {scene.ax.get_xlim()}"
-        assert scene.ax.get_ylim() == pytest.approx((0.0, 5.0)), f"ylim moved: {scene.ax.get_ylim()}"
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 10.0)), (
+            f"xlim moved: {scene.ax.get_xlim()}"
+        )
+        assert scene.ax.get_ylim() == pytest.approx((0.0, 5.0)), (
+            f"ylim moved: {scene.ax.get_ylim()}"
+        )
 
     def test_restores_limits_when_image_present(self):
         """An axes image (no registered layer) still counts as data.
@@ -256,7 +270,9 @@ class TestPreserveView:
         scene.ax.set_ylim(0, 3)
         with scene._preserve_view():
             scene.ax.plot([100, 200], [100, 200])
-        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), f"xlim moved: {scene.ax.get_xlim()}"
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), (
+            f"xlim moved: {scene.ax.get_xlim()}"
+        )
 
     def test_restores_limits_when_collection_present(self):
         """An axes collection (no registered layer) counts as data.
@@ -270,7 +286,9 @@ class TestPreserveView:
         scene.ax.set_ylim(0, 3)
         with scene._preserve_view():
             scene.ax.plot([100, 200], [100, 200])
-        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), f"xlim moved: {scene.ax.get_xlim()}"
+        assert scene.ax.get_xlim() == pytest.approx((0.0, 3.0)), (
+            f"xlim moved: {scene.ax.get_xlim()}"
+        )
 
     def test_empty_axes_keeps_new_extent(self):
         """On an empty axes the block is free to set the initial extent.
@@ -282,5 +300,9 @@ class TestPreserveView:
         with scene._preserve_view():
             scene.ax.set_xlim(50, 60)
             scene.ax.set_ylim(70, 80)
-        assert scene.ax.get_xlim() == pytest.approx((50.0, 60.0)), f"xlim not kept: {scene.ax.get_xlim()}"
-        assert scene.ax.get_ylim() == pytest.approx((70.0, 80.0)), f"ylim not kept: {scene.ax.get_ylim()}"
+        assert scene.ax.get_xlim() == pytest.approx((50.0, 60.0)), (
+            f"xlim not kept: {scene.ax.get_xlim()}"
+        )
+        assert scene.ax.get_ylim() == pytest.approx((70.0, 80.0)), (
+            f"ylim not kept: {scene.ax.get_ylim()}"
+        )

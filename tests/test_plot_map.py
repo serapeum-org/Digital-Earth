@@ -3,6 +3,7 @@ import pytest
 from geopandas.geodataframe import GeoDataFrame
 from matplotlib.figure import Figure
 from pyramids.dataset import Dataset
+
 from digitalearth.static import StaticGlyph
 
 

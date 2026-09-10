@@ -14,7 +14,8 @@ uniform grid in Fortran order). Without this, the first cube axis would land on 
 Volume rendering uses ``cell_data`` on a grid sized ``shape[::-1] + 1`` (one more point than cells per axis);
 isosurfacing uses ``point_data`` on a grid sized ``shape[::-1]``.
 """
-from typing import Any, Optional, Sequence
+
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 import numpy as np
 import pyvista as pv
@@ -64,8 +65,29 @@ def _point_grid(cube: np.ndarray) -> pv.ImageData:
     return grid
 
 
-class VolumeMixin:
-    """Adds :meth:`volume` and :meth:`isosurface` — render a 3-D scalar field — to a :class:`Scene3D`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class VolumeMixin(_MixinBase):
+    """Adds :meth:`volume` and :meth:`isosurface` — render a 3-D scalar field — to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def volume(
         self,
@@ -107,7 +129,9 @@ class VolumeMixin:
         # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
         # on other scenes — this only affects a plotter that's actually showing a volume).
         self.plotter.disable_anti_aliasing()
-        actor = self.add_volume(_volume_grid(_cube(data)), cmap=cmap, opacity=opacity, **kwargs)
+        actor = self.add_volume(
+            _volume_grid(_cube(data)), cmap=cmap, opacity=opacity, **kwargs
+        )
         return actor
 
     def isosurface(
@@ -146,6 +170,8 @@ class VolumeMixin:
                 ```
         """
         grid = _point_grid(_cube(data))
-        contour_kwargs = {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+        contour_kwargs = (
+            {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+        )
         mesh = grid.contour(scalars=FIELD, **contour_kwargs)
         return self.add_mesh(mesh, scalars=FIELD, cmap=cmap, **kwargs)

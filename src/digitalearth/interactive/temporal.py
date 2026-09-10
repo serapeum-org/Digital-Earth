@@ -10,13 +10,33 @@ colormap and colorbar do not jump as the slider moves.
 materialise a frame (``dmap[0]``) to assert on it.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class TemporalMixin:
-    """Time-slider datacube builder (DI.3)."""
+
+class TemporalMixin(_MixinBase):
+    """Time-slider datacube builder (DI.3).
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
         """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps.
@@ -53,7 +73,7 @@ class TemporalMixin:
         clim: Optional[Tuple[float, float]] = None,
         colorbar: bool = True,
         **opts: Any,
-    ) -> "TemporalMixin":
+    ) -> Self:
         """Render a ``DatasetCollection`` as an interactive time-slider map.
 
         Builds an ``hv.DynamicMap`` whose ``frame(t)`` constructs an I1 ``hv.Image`` from the *t*-th
@@ -73,7 +93,7 @@ class TemporalMixin:
             **opts: Extra HoloViews style options applied to every frame.
 
         Returns:
-            This map (chainable) — one ``DynamicMap`` layer is registered.
+            The same map instance, so builder calls chain — one ``DynamicMap`` layer is registered.
 
         Raises:
             ValueError: when ``labels`` is given but its length differs from the member count.

@@ -9,6 +9,7 @@ Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can sup
 (``add_colorbar=False`` on ``ArrayGlyph``), the Scene can stack any number of layers on one axes and draw a
 single colorbar for the layer of interest.
 """
+
 from contextlib import contextmanager
 from typing import Any, Iterator, List, Optional, Sequence, Tuple
 
@@ -86,7 +87,9 @@ class Scene:
         self.layers.append((glyph, mappable))
         return mappable
 
-    def _render_glyph(self, glyph: Any, *plot_args: Any, artist: str = "im", **plot_kwargs: Any) -> Any:
+    def _render_glyph(
+        self, glyph: Any, *plot_args: Any, artist: str = "im", **plot_kwargs: Any
+    ) -> Any:
         """Plot ``glyph`` on the shared axes, register the produced mappable, and return it.
 
         Consolidates the recipe every plot method shared — call ``glyph.plot(...)``, find the mappable it
@@ -125,7 +128,9 @@ class Scene:
         Yields:
             None — run the drawing code inside the ``with`` block.
         """
-        has_data = bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        has_data = (
+            bool(self.layers) or bool(self.ax.images) or bool(self.ax.collections)
+        )
         xlim, ylim = self.ax.get_xlim(), self.ax.get_ylim()
         yield
         if has_data:
