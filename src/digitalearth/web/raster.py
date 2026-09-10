@@ -81,6 +81,10 @@ class RasterMixin(_MixinBase):
             values = values[::-1]
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
         coordinates = self._image_coordinates(source.x.values, source.y.values)
+        # [TL, TR, BR, BL] -> (west, south, east, north), so a raster frames the map like a vector layer.
+        self._note_bounds(
+            (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
+        )
 
         src_id, layer_id = self._uid("raster-src"), self._uid("raster")
         spec = {"type": "image", "url": url, "coordinates": coordinates}

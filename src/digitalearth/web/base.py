@@ -18,8 +18,13 @@ The engine import is **lazy**: ``import digitalearth.web`` works without the ``w
 calling a builder/render method raises an actionable ``ImportError`` (``pip install 'digitalearth[web]'``).
 """
 
+import math
 import pathlib
 from typing import Any, List, Optional, Self
+
+#: The constructor's zoom when the caller expresses no preference. A map still on it is taken to have no
+#: chosen view, so the data's own extent may frame it.
+_DEFAULT_ZOOM = 2
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources import get_source
@@ -330,7 +335,7 @@ class WebMapBase:
         self,
         *,
         center: Optional[Any] = None,
-        zoom: int = 2,
+        zoom: int = _DEFAULT_ZOOM,
         style: Any = "dark",
         crs: int = 4326,
         height: Optional[int] = 500,
@@ -351,10 +356,126 @@ class WebMapBase:
         self._deck_layers: Optional[List[dict]] = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
         self.big_data_threshold = 50_000
+        #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
+        #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
+        self._data_bounds: Optional[List[float]] = None
+        #: An explicit :meth:`fit_bounds` request, which always wins over the accumulated extent.
+        self._fit: Optional[dict] = None
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
         #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
         #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
         self._temporal: Optional[dict] = None
+
+    def _noted(self, gdf: Any) -> Any:
+        """Record a display-CRS frame's extent, then return the frame unchanged.
+
+        Wraps the returns of :meth:`_display_gdf` so every vector builder contributes to the map's framing
+        without knowing that it does.
+
+        Args:
+            gdf: A GeoDataFrame already in the display CRS.
+
+        Returns:
+            The same object, so this can wrap a return expression.
+        """
+        self._note_bounds(getattr(gdf, "total_bounds", None))
+        return gdf
+
+    def _note_bounds(self, bounds: Any) -> None:
+        """Union a layer's lon/lat extent into the running data extent.
+
+        Called by the builders' shared choke points — :meth:`_display_gdf` for vector data and
+        ``add_raster`` for rasters — so a new builder inherits framing without doing anything.
+
+        Args:
+            bounds: ``(west, south, east, north)`` in lon/lat, or ``None``/a degenerate extent, which is
+                ignored. A non-finite value is ignored too: an empty frame reports ``inf`` bounds, and one
+                unusable layer must not decide where the map looks.
+        """
+        if bounds is None:
+            return
+        try:
+            west, south, east, north = (float(value) for value in bounds)
+        except (TypeError, ValueError):
+            return
+        if not all(math.isfinite(value) for value in (west, south, east, north)):
+            return
+        if self._data_bounds is None:
+            self._data_bounds = [west, south, east, north]
+            return
+        current = self._data_bounds
+        self._data_bounds = [
+            min(current[0], west),
+            min(current[1], south),
+            max(current[2], east),
+            max(current[3], north),
+        ]
+
+    def fit_bounds(
+        self,
+        bounds: Optional[Any] = None,
+        *,
+        padding: int = 20,
+        animate: bool = False,
+    ) -> Self:
+        """Frame the map on ``bounds``, or on everything added so far.
+
+        Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of
+        one country opened on the whole world unless the caller worked out a centre themselves.
+
+        Args:
+            bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added
+                so far, which is what most callers want and is applied automatically anyway (see
+                :meth:`_map_view`).
+            padding: Pixels of breathing room left around the extent.
+            animate: Whether the browser eases into the new view rather than jumping.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there
+                is nothing to frame on, and silently doing nothing would look like the call was ignored.
+
+        Examples:
+            - Frame on an explicit box:
+                ```python
+                >>> from digitalearth.web import WebMap                     # doctest: +SKIP
+                >>> WebMap().basemap().fit_bounds((4.0, 51.0, 7.0, 54.0))   # doctest: +SKIP
+
+                ```
+        """
+        if bounds is None:
+            if self._data_bounds is None:
+                raise ValueError(
+                    "fit_bounds() has nothing to frame on: no layer with an extent has been added yet. "
+                    "Add the data first, or pass bounds=(west, south, east, north)."
+                )
+            bounds = list(self._data_bounds)
+        west, south, east, north = (float(value) for value in bounds)
+        self._fit = {
+            "bounds": [west, south, east, north],
+            "padding": int(padding),
+            "animate": bool(animate),
+        }
+        return self
+
+    def _map_view(self) -> Optional[dict]:
+        """Return the framing to apply to the built widget, or ``None`` to leave the view alone.
+
+        An explicit :meth:`fit_bounds` always wins. Otherwise the accumulated data extent is used, but only
+        when the caller expressed no view of their own — passing ``center`` or a non-default ``zoom`` is
+        taken as "I have chosen the view", and it is not overridden.
+
+        Returns:
+            The ``fit_bounds`` keyword arguments, or ``None``.
+        """
+        if self._fit is not None:
+            return self._fit
+        chose_view = self.center is not None or self.zoom != _DEFAULT_ZOOM
+        if chose_view or self._data_bounds is None:
+            return None
+        return {"bounds": list(self._data_bounds), "padding": 20, "animate": False}
 
     def _uid(self, prefix: str) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
@@ -696,13 +817,13 @@ class WebMapBase:
         ):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
-            return self._json_safe(features)
+            return self._noted(self._json_safe(features))
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if (
             crs_epsg is not None and crs_epsg != self.crs
         ):  # a bare GeoDataFrame in another CRS
-            return self._json_safe(features.to_crs(self.crs))
-        return self._json_safe(features)
+            return self._noted(self._json_safe(features.to_crs(self.crs)))
+        return self._noted(self._json_safe(features))
 
     def add_underlay(self, layer: Any) -> Self:
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
@@ -804,6 +925,12 @@ class WebMapBase:
         widget = MapWidget(**kwargs)
         for layer in self.layers:
             self._apply_layer(widget, layer)
+        view = self._map_view()
+        if view is not None:
+            # After the layers, so a builder that adds to the extent while applying is included.
+            widget.fit_bounds(
+                view["bounds"], padding=view["padding"], animate=view["animate"]
+            )
         return widget
 
     def render(self) -> Any:
