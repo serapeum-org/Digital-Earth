@@ -43,7 +43,6 @@ dependencies = [
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
     "pyramids-gis >=0.59.0",
-    "pyramids-eo >=0.8.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -90,6 +89,11 @@ web = [
     "maplibre >=0.3",
     "lonboard >=0.10",
 ]
+# Every optional backend in one install: `pip install digitalearth[all]`. Written as a self-reference so the
+# three lists above stay the single source of truth — adding a package to `web` reaches `all` automatically,
+# and the two can never drift. Note this pulls three rendering stacks (VTK, the HoloViz stack, MapLibre) into
+# one environment; the per-backend extras exist because most users want exactly one of them.
+all = ["digitalearth[3d,interactive,web]"]
 
 [project.scripts]
 digitalearth = "digitalearth.ops.cli:main"
