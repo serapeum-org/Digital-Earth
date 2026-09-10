@@ -27,10 +27,19 @@ later is then a one-line deletion here.
 
 from digitalearth.static.figure import grid, shared_colorbar
 from digitalearth.static.map import Map
+from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.scene import Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 
-__all__ = ["Scene", "Map", "TexturedGlobe", "StaticGlyph", "grid", "shared_colorbar"]
+__all__ = [
+    "Scene",
+    "Map",
+    "TexturedGlobe",
+    "StaticGlyph",
+    "OffLimbError",
+    "grid",
+    "shared_colorbar",
+]
 
 
 def __getattr__(name: str):

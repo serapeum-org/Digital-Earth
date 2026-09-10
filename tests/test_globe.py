@@ -682,6 +682,23 @@ class TestOffLimbEveryLayerKind:
             "the log line should name the layer that drew nothing"
         )
 
+    @pytest.mark.parametrize(
+        "method", ["imshow", "contourf", "pcolormesh", "grid_points", "grid_cells"]
+    )
+    def test_the_same_layers_still_draw_when_visible(self, regional, method):
+        """The positive control: every layer asserted to return None above must draw when it can see.
+
+        Test scenario:
+            Without this, a regression that made these methods return None unconditionally would satisfy
+            the whole off-limb suite while silently drawing nothing anywhere.
+        """
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None

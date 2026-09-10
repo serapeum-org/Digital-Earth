@@ -53,6 +53,9 @@ def _as_frames(stack: Any) -> List[Any]:
     **numpy arrays** rather than the ``Dataset`` objects themselves, so everything downstream that reads a
     frame's CRS or bands broke on it. The collection exposes its members under ``.datasets``, which is how
     the rest of the package reads one; anything else (a list, a tuple) is already a sequence of frames.
+    The check is by attribute rather than by type so a collection-like object works too — nothing in
+    the package exposes a non-sequence ``.datasets``, and a caller that did would be handing over
+    something that is not a stack in the first place.
 
     Args:
         stack: A ``DatasetCollection``, or any ordered collection of ``Dataset`` frames.
@@ -549,7 +552,7 @@ class AnimationMixin(_MixinBase):
         what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.
 
         Args:
-            stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
+            stack: An ordered collection of pyramids ``Dataset`` frames (e.g. a list, or a
                 ``DatasetCollection`` datacube) — one raster per animation frame.
             kind: The method used to draw each frame — a scalar field (``"imshow"`` / ``"contourf"`` /
                 ``"contour"`` / ``"pcolormesh"`` / ``"block"``) or a true/false-colour composite

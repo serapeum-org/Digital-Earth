@@ -326,6 +326,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The vector mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         try:
             su = self._prepare(u_dataset, band)

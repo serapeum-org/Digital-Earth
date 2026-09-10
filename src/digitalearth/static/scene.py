@@ -141,7 +141,10 @@ class Scene:
         """Draw one colorbar for a registered layer (delegates to ``cleopatra.styling.styles.colorbar_legend``).
 
         Args:
-            layer: Index into :attr:`layers` (default ``-1``, the most recent layer).
+            layer: Index into :attr:`layers` (default ``-1``, the most recent layer). Only *drawn* layers
+                are registered — a layer whose data lies outside the display CRS draws nothing and takes
+                no slot — so count positions from what was actually rendered, not from the calls made.
+                The ``-1`` default is unaffected, and is the safer choice when a layer might be skipped.
             label: Optional text label drawn alongside the colorbar.
             **kwargs: Forwarded to ``colorbar_legend`` / ``matplotlib`` colorbar.
 
