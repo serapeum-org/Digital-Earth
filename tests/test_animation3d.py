@@ -264,7 +264,7 @@ def test_orbit_finalizes_writer_when_an_unknown_kwarg_raises(tmp_path):
     out = tmp_path / "boom.gif"
     with pytest.raises(TypeError, match="not_a_real_orbit_argument"):
         scene.orbit(str(out), n_frames=4, not_a_real_orbit_argument=1.0)
-    assert getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed, (
-        "the frame writer must be closed even when orbit_on_path rejects a keyword"
-    )
+    assert (
+        getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
+    ), "the frame writer must be closed even when orbit_on_path rejects a keyword"
     scene.close()
