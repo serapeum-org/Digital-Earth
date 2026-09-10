@@ -22,6 +22,7 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
+from digitalearth.static.maps.base import OffLimbError
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
@@ -230,7 +231,11 @@ class AnimationMixin(_MixinBase):
         lows: List[float] = []
         highs: List[float] = []
         for ds in datasets:
-            arr = finite(read_masked_band(self._reproject(ds), band=1))
+            try:
+                warped = self._reproject(ds)
+            except OffLimbError:
+                continue  # this frame draws nothing, so it contributes no colour range
+            arr = finite(read_masked_band(warped, band=1))
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))
@@ -260,9 +265,7 @@ class AnimationMixin(_MixinBase):
                 self.crs = view
                 try:
                     bounds.append(self._stack_clim([dataset]))
-                except (
-                    Exception
-                ):  # this view shows none of the data — a sweep passes the far side
+                except OffLimbError:  # this view shows none of the data
                     continue
             return (
                 (min(lo for lo, _ in bounds), max(hi for _, hi in bounds))
@@ -354,10 +357,19 @@ class AnimationMixin(_MixinBase):
         # Measure what the frame will actually render: the composites stretch get_stack(self._reproject(ds)),
         # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS.
         if views is None:
-            scanned = [
-                channel_limits(get_stack(self._reproject(ds), bands, mask=mask_nodata))
-                for ds in _scan_subset(seq)
-            ]
+            scanned = []
+            for ds in _scan_subset(seq):
+                try:
+                    warped = self._reproject(ds)
+                except OffLimbError:
+                    continue  # this frame draws nothing, so it contributes no stretch bound
+                scanned.append(
+                    channel_limits(get_stack(warped, bands, mask=mask_nodata))
+                )
+            if not scanned:  # no frame is on the view at all
+                scanned.append(
+                    channel_limits(get_stack(seq[0], bands, mask=mask_nodata))
+                )
         else:
             scanned = self._scan_across_views(
                 seq[0], bands, views, mask_nodata=mask_nodata
@@ -397,9 +409,7 @@ class AnimationMixin(_MixinBase):
                 self.crs = view
                 try:
                     stack = get_stack(self._reproject(dataset), bands, mask=mask_nodata)
-                except (
-                    Exception
-                ):  # this view shows none of the data — a sweep passes the far side
+                except OffLimbError:  # this view shows none of the data
                     continue
                 measured.append(channel_limits(stack))
             if not measured:  # no view showed anything: fall back to the data as stored

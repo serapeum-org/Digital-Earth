@@ -101,6 +101,89 @@ def rgb_stack():
     return [_rgb_field(shift=s) for s in (0.0, 10.0, 20.0)]
 
 
+class TestAnimateOffLimb:
+    """A stack no frame of which is on the view still animates (issue #151, via the colour scan)."""
+
+    @pytest.fixture
+    def regional_stack(self):
+        """Two frames of a small AOI that any far-side orthographic view hides.
+
+        Returns:
+            list[Dataset]: two single-band regional rasters.
+        """
+        frames = []
+        for index in range(2):
+            _, xx = np.mgrid[0:20, 0:24]
+            values = (25 + 8 * np.sin((xx + index * 10) / 14.0)).astype("float32")
+            frames.append(
+                Dataset.from_array(
+                    values,
+                    geo_ref=GeoReference(
+                        geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326
+                    ),
+                    no_data_value=-9999.0,
+                )
+            )
+        return frames
+
+    def test_a_scalar_stack_animates_on_a_hiding_globe(self, regional_stack, tmp_path):
+        """The colour-scale scan reprojects every frame, so it needed the guard too.
+
+        Test scenario:
+            The per-frame guard is unreachable for animate: _stack_clim warps each frame to derive one
+            shared clim *before* any frame is drawn, so an entirely hidden stack raised out of the scan
+            and never reached the draw. A frame that cannot be drawn contributes no colour range.
+        """
+        from matplotlib.animation import PillowWriter
+
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        anim = m.animate(regional_stack, fps=2)
+        out = tmp_path / "hidden.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, (
+            "a fully hidden stack should still render empty frames"
+        )
+
+    def test_a_composite_stack_animates_on_a_hiding_globe(
+        self, regional_stack, tmp_path
+    ):
+        """The composite stretch scan warps each frame as well, and needed the same guard."""
+        from matplotlib.animation import PillowWriter
+
+        stack = []
+        for frame in regional_stack:
+            band = np.nan_to_num(frame.read_array(band=0)).astype("float32")
+            stack.append(
+                Dataset.from_array(
+                    np.stack([band, band * 0.5, band * 0.25]),
+                    geo_ref=GeoReference(
+                        geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326
+                    ),
+                    no_data_value=-9999.0,
+                )
+            )
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        anim = m.animate(stack, kind="rgb_composite", fps=2)
+        out = tmp_path / "hidden_rgb.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, (
+            "a hidden composite stack should still render empty frames"
+        )
+
+    def test_a_visible_stack_still_gets_a_real_clim(self, regional_stack):
+        """Skipping hidden frames must not skip visible ones: an on-limb stack keeps its colour range."""
+        m = Map(crs=4326, figsize=(4, 4))
+        opts = {}
+        m._resolve_animation_clim(regional_stack, opts)
+        assert opts["vmin"] < opts["vmax"], (
+            f"a visible stack must still resolve a real clim, got {opts}"
+        )
+
+
 class TestAnimateDatasetCollection:
     """animate accepts the DatasetCollection its docstring promises (issue #154)."""
 
