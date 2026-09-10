@@ -12,6 +12,7 @@ read ``band - 1`` internally.
 from typing import Any, Optional
 
 import numpy as np
+from pandas.api.types import is_bool_dtype, is_numeric_dtype
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import mask_nodata, read_masked_band
@@ -190,10 +191,14 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
         cent = geom.centroid
         xs, ys = cent.x.to_numpy(), cent.y.to_numpy()
 
+    # Classified with pandas, not np.issubdtype: the latter understands only numpy dtypes and *raises*
+    # on a pandas extension dtype rather than answering False, so one nullable or string column anywhere
+    # in the frame took down every vector render. Bools are excluded to match what numpy did — they are
+    # numeric to pandas but were never picked as a value column here.
     value_cols = [
         c
         for c in fc.columns
-        if c != geom_name and np.issubdtype(fc[c].dtype, np.number)
+        if c != geom_name and is_numeric_dtype(fc[c]) and not is_bool_dtype(fc[c])
     ]
     column = value_cols[0] if value_cols else None
     z = _axis(fc[column].to_numpy(), "z") if column is not None else None

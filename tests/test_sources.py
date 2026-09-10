@@ -170,6 +170,69 @@ class TestExtractorHelpers:
             _from_netcdf(_StubNetCDF(), None, None)
 
 
+@pytest.mark.parametrize("dtype", ["string", "boolean"])
+def test_feature_source_survives_pandas_extension_dtypes(dtype):
+    """A pandas extension dtype anywhere in the frame must not take the whole render down.
+
+    Test scenario:
+        The value-column scan asked numpy to classify the dtype, and np.issubdtype *raises* on a pandas
+        extension dtype instead of answering False. One nullable or string column — even one nobody is
+        plotting — therefore killed every path through get_source. Under pandas 3 a plain list of strings
+        is already a StringDtype, so this is the common case, not an exotic one. Both dtypes here are
+        non-numeric, so the float column beside them stays the z (a nullable *integer* column is numeric
+        and is a legitimate z — covered separately).
+    """
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {
+            "other": pd.array(["a", "b"] if dtype == "string" else [1, 0], dtype=dtype),
+            "score": [1.5, 2.5],
+        },
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert src.z is not None, f"a numeric column should still be found alongside a {dtype} column"
+    assert list(src.z.values) == [1.5, 2.5], f"the {dtype} column must not be chosen as z"
+
+
+def test_feature_source_reads_a_nullable_numeric_column():
+    """A nullable integer column is a legitimate z, and its NA becomes NaN rather than an object array."""
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"score": pd.array([1, None, 3], dtype="Int64")},
+        geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert src.z is not None, "a nullable Int64 column should be usable as z"
+    assert np.isnan(src.z.values[1]), f"the missing value should read as NaN, got {src.z.values[1]!r}"
+
+
+def test_feature_source_still_ignores_booleans():
+    """Bools are numeric to pandas but were never a value column here; that must not change."""
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"flag": pd.array([True, False], dtype="boolean")},
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert src.z is None, f"a boolean-only frame should yield no z, got {src.z}"
+
+
 def test_feature_source_polygon_uses_centroid():
     """A non-point FeatureCollection falls back to geometry centroids for x/y."""
     from pyramids.feature import FeatureCollection
