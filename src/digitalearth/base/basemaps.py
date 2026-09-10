@@ -39,10 +39,11 @@ non-commercial use under NICFI terms. Two things about it are worth knowing befo
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Callable, Dict, Optional, Tuple
+from types import MappingProxyType
+from typing import Callable, Mapping
 
 #: ``(west, south, east, north)`` in lon/lat — the shape every bounding box here uses.
-Extent = Tuple[float, float, float, float]
+Extent = tuple[float, float, float, float]
 
 #: NICFI publishes the tropics only, roughly 30°N–30°S. Outside this band the tiles 404, and cleopatra
 #: raises ``ConnectionError`` after its retries — an opaque way to learn the basemap does not cover you.
@@ -62,6 +63,10 @@ _NICFI_FLAVOURS = {
 
 #: A ``YYYY-MM`` month, the granularity NICFI mosaics are published at.
 _MONTH = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
+
+#: The first monthly NICFI mosaic. Earlier periods are biannual and named differently, so the derived
+#: id would be wrong for them — those need an explicit ``mosaic=``.
+_NICFI_FIRST_MONTH = "2020-09"
 
 
 @dataclass(frozen=True)
@@ -114,10 +119,18 @@ class KeyedTileSource:
     attribution: str
     credential_env: str
     max_zoom: int = 20
-    bounds: Optional[Extent] = None
-    params: Dict[str, str] = field(default_factory=dict)
+    bounds: Extent | None = None
+    params: Mapping[str, str] = field(default_factory=dict)
 
-    def resolve_key(self, api_key: Optional[str] = None) -> str:
+    def __post_init__(self) -> None:
+        """Wrap :attr:`params` so the frozen dataclass is actually immutable.
+
+        ``frozen=True`` stops the *field* being reassigned but says nothing about the dict it points at,
+        so ``source.params["mosaic"] = ...`` would otherwise edit a preset in place.
+        """
+        object.__setattr__(self, "params", MappingProxyType(dict(self.params)))
+
+    def resolve_key(self, api_key: str | None = None) -> str:
         """Return the credential to use, preferring an explicit one over the environment.
 
         Args:
@@ -173,7 +186,7 @@ class KeyedTileSource:
             )
         return from_env
 
-    def tile_url(self, api_key: Optional[str] = None) -> str:
+    def tile_url(self, api_key: str | None = None) -> str:
         """Return the tile URL with the credential and any preset placeholders filled in.
 
         ``{z}``/``{x}``/``{y}`` are deliberately left in place: MapLibre, GeoViews and ``xyzservices`` each
@@ -232,7 +245,7 @@ class KeyedTileSource:
             )
         return url.replace("{api_key}", self.resolve_key(api_key))
 
-    def check_bounds(self, extent: Optional[Extent]) -> None:
+    def check_bounds(self, extent: Extent | None) -> None:
         """Raise when ``extent`` lies entirely outside the service's coverage.
 
         A partial overlap passes: a map spanning the tropics and beyond still shows tiles where they exist.
@@ -358,7 +371,7 @@ def planet_nicfi(
     date: str,
     *,
     flavour: str = "analytic",
-    mosaic: Optional[str] = None,
+    mosaic: str | None = None,
 ) -> KeyedTileSource:
     """Build the Planet NICFI basemap for one monthly mosaic.
 
@@ -412,6 +425,11 @@ def planet_nicfi(
     """
     if not _MONTH.match(date):
         raise ValueError(f"date must be a 'YYYY-MM' month, got {date!r}")
+    if mosaic is None and date < _NICFI_FIRST_MONTH:
+        raise ValueError(
+            f"NICFI monthly mosaics start at {_NICFI_FIRST_MONTH}; {date!r} predates them, and the "
+            f"earlier biannual mosaics use a different id — pass mosaic=... for those."
+        )
     if flavour not in _NICFI_FLAVOURS:
         raise ValueError(
             f"flavour must be one of {sorted(_NICFI_FLAVOURS)}, got {flavour!r} — 'analytic' is surface "
@@ -430,8 +448,13 @@ def planet_nicfi(
 
 
 #: Keyed basemaps a ``basemap()`` call can name, lower-cased. Each value takes the preset's own keywords.
-KEYED_BASEMAPS: Dict[str, Callable[..., KeyedTileSource]] = {
+KEYED_BASEMAPS: dict[str, Callable[..., KeyedTileSource]] = {
     "planet.nicfi": planet_nicfi,
+}
+
+#: How each preset name is spelled back to the user, since the lookup key is lower-cased.
+KEYED_BASEMAP_NAMES: dict[str, str] = {
+    "planet.nicfi": "Planet.NICFI",
 }
 
 
@@ -498,10 +521,19 @@ def get_keyed_basemap(name: str, **kwargs: object) -> KeyedTileSource:
     factory = KEYED_BASEMAPS.get(name.lower())
     if factory is None:
         available = ", ".join(
-            sorted(k.title().replace("Nicfi", "NICFI") for k in KEYED_BASEMAPS)
+            sorted(KEYED_BASEMAP_NAMES.get(k, k) for k in KEYED_BASEMAPS)
         )
         raise ValueError(f"unknown keyed basemap {name!r}; available: {available}")
-    return factory(**kwargs)
+    try:
+        return factory(**kwargs)
+    except TypeError as err:
+        # The factory is an implementation detail; report the preset the caller actually named.
+        import inspect
+
+        accepted = sorted(inspect.signature(factory).parameters)
+        raise TypeError(
+            f"{KEYED_BASEMAP_NAMES.get(name.lower(), name)}: {err} Its keywords are {accepted}."
+        ) from err
 
 
 def upper_placeholders(url: str) -> str:

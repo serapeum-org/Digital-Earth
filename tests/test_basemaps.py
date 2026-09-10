@@ -274,8 +274,16 @@ class TestRegistry:
         Test scenario:
             Guards the registry against an entry that is registered but not wired up.
         """
-        for name in KEYED_BASEMAPS:
-            source = get_keyed_basemap(name, date="2024-01")
+        import inspect
+
+        for name, factory in KEYED_BASEMAPS.items():
+            required = [
+                p.name
+                for p in inspect.signature(factory).parameters.values()
+                if p.default is inspect.Parameter.empty
+            ]
+            # Every preset so far is keyed on a date; a future one without it must not break this test.
+            source = get_keyed_basemap(name, **{key: "2024-01" for key in required})
             assert source.credential_env, f"{name} declares no credential variable"
             assert source.attribution, f"{name} declares no attribution"
 
@@ -653,6 +661,24 @@ class TestUrlSafety:
         assert "planet_medres_normalized_analytic_2024-01_mosaic" in url
 
 
+class TestNicfiDateRange:
+    """The derived mosaic id is only correct for the months Planet publishes monthly."""
+
+    def test_a_month_before_the_monthly_series_is_refused(self):
+        """Pre-2020-09 periods are biannual and named differently, so the derived id cannot exist.
+
+        Test scenario:
+            Building it anyway produces a 404 from Planet, which says nothing about the real problem.
+        """
+        with pytest.raises(ValueError, match="2020-09"):
+            planet_nicfi("2019-06")
+
+    def test_an_explicit_mosaic_reaches_the_older_periods(self):
+        """``mosaic=`` is the escape hatch for the biannual ids, so the range check must not block it."""
+        source = planet_nicfi(
+            "2019-06", mosaic="planet_medres_normalized_analytic_2019-06_2019-11_mosaic"
+        )
+        assert source.params["mosaic"].endswith("2019-06_2019-11_mosaic")
 
 
 class TestLongitudeConventions:
