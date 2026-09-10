@@ -266,10 +266,9 @@ class AnimationMixin(_MixinBase):
             bounds = []
             for view in _scan_subset(views):
                 self.crs = view
-                try:
-                    bounds.append(self._stack_clim([dataset]))
-                except OffLimbError:  # this view shows none of the data
-                    continue
+                # _stack_clim skips its own off-limb frames, so a view showing none of the data comes
+                # back as the (0, 1) fallback rather than raising — there is nothing to catch here.
+                bounds.append(self._stack_clim([dataset]))
             return (
                 (min(lo for lo, _ in bounds), max(hi for _, hi in bounds))
                 if bounds
