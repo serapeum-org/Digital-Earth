@@ -512,7 +512,7 @@ class TestUrlSafety:
         with pytest.raises(ValueError, match="non-http"):
             source.tile_url(api_key="K")
 
-    @pytest.mark.parametrize("bad", ["a#b", "a?b", "a&b", "a b"])
+    @pytest.mark.parametrize("bad", ["a#b", "a?b", "a&b", "a/b", "a b"])
     def test_a_placeholder_value_cannot_rewrite_the_request(self, bad):
         """A URL delimiter in a substituted value would change what is requested, not fill a slot.
 
@@ -876,3 +876,67 @@ class TestWhereTheStaticExtentComesFrom:
         assert self.calls, (
             "an unreprojectable extent was treated as being outside the coverage"
         )
+
+
+class TestTheCredentialIsGuardedToo:
+    """The credential is the substitution most likely to arrive malformed, and was the one not checked."""
+
+    @pytest.mark.parametrize(
+        "bad", ["abc#frag", "abc&extra=1", "abc?x", "abc/d", "a b"]
+    )
+    def test_a_delimiter_in_the_key_is_refused(self, bad):
+        """A `#` in the key truncates the query string, so the request goes out unauthenticated.
+
+        Args:
+            bad: A credential containing a URL delimiter.
+
+        Test scenario:
+            The service answers that with a 401 that says nothing about the key being malformed, which is
+            exactly the confusion the guard exists to prevent for preset values.
+        """
+        with pytest.raises(ValueError, match="rewrite the tile request"):
+            planet_nicfi("2024-01").tile_url(api_key=bad)
+
+    def test_the_error_does_not_echo_the_credential(self):
+        """The message may be logged or shown, so it names the placeholder and not the value."""
+        with pytest.raises(ValueError) as err:
+            planet_nicfi("2024-01").tile_url(api_key="secret#frag")
+        assert "secret" not in str(err.value), (
+            f"the credential leaked into the message: {err.value}"
+        )
+        assert "the resolved credential" in str(err.value), str(err.value)
+
+    def test_surrounding_whitespace_is_stripped(self, monkeypatch):
+        """``KEY=$(cat key.txt)`` leaves a trailing newline, which is not part of the key.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+
+        Test scenario:
+            Without the strip this reaches the delimiter guard as a space and is refused, which would be a
+            confusing answer to a key that is otherwise correct.
+        """
+        monkeypatch.setenv("PLANET_API_KEY", "  abc123\n")
+        assert planet_nicfi("2024-01").tile_url().endswith("api_key=abc123")
+
+    def test_a_key_passed_explicitly_is_stripped_as_well(self):
+        """The same key read from a file and passed through ``api_key=`` must behave the same way."""
+        assert (
+            planet_nicfi("2024-01")
+            .tile_url(api_key="  abc123\t")
+            .endswith("api_key=abc123")
+        )
+
+
+class TestPathSeparatorsAreDelimitersToo:
+    """L9: `/` rewrites the path exactly as `?` and `&` rewrite the query."""
+
+    def test_a_mosaic_id_cannot_add_a_path_segment(self):
+        """A value with a slash requests a different endpoint, carrying the credential to it.
+
+        Test scenario:
+            ``mosaic="../../etc"`` walks up out of the mosaic path entirely; the guard's own wording —
+            "rewrite the tile request rather than fill a placeholder" — is exactly what that does.
+        """
+        with pytest.raises(ValueError, match="rewrite the tile request"):
+            planet_nicfi("2024-01", mosaic="../../etc").tile_url(api_key="K")

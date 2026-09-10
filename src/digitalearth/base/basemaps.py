@@ -61,6 +61,12 @@ _NICFI_FLAVOURS = {
     "visual": "planet_medres_visual",
 }
 
+#: Characters that would end the placeholder they were substituted into and start something else —
+#: a new query parameter, a fragment, or another path segment. ``#`` is the dangerous one: it truncates
+#: the query string, so the ``api_key`` after it is never sent and the request goes out anonymous.
+_URL_DELIMITERS = ("#", "?", "&", "/", " ")
+
+
 #: A ``YYYY-MM`` month, the granularity NICFI mosaics are published at.
 _MONTH = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
 
@@ -137,7 +143,9 @@ class KeyedTileSource:
             api_key: A key supplied by the caller; ``None`` reads :attr:`credential_env`.
 
         Returns:
-            The credential. Never logged or echoed by this module.
+            The credential, stripped of surrounding whitespace — a trailing newline from
+            ``KEY=$(cat key.txt)`` is the usual way this arrives malformed. Never logged or echoed by this
+            module.
 
         Raises:
             ValueError: when no key was passed and the environment variable is unset or empty, naming the
@@ -177,8 +185,8 @@ class KeyedTileSource:
                 ```
         """
         if api_key:
-            return api_key
-        from_env = os.environ.get(self.credential_env, "")
+            return api_key.strip()
+        from_env = os.environ.get(self.credential_env, "").strip()
         if not from_env:
             raise ValueError(
                 f"{self.name} needs a credential: set the {self.credential_env} environment variable, "
@@ -200,8 +208,8 @@ class KeyedTileSource:
 
         Raises:
             ValueError: when no credential is available (see :meth:`resolve_key`), when a substituted
-                placeholder contains a URL delimiter that would rewrite the request, or when the template
-                is not ``http(s)``.
+                value — a preset placeholder or the credential itself — contains a URL delimiter that
+                would rewrite the request, or when the template is not ``http(s)``.
 
         Examples:
             - The credential is filled in and the tile coordinates are left for the engine:
@@ -227,14 +235,7 @@ class KeyedTileSource:
         """
         url = self.url_template
         for placeholder, value in self.params.items():
-            for delimiter in ("#", "?", "&", " "):
-                if delimiter in value:
-                    # `#` is the dangerous one: it would truncate the query string and silently drop the
-                    # api_key, producing an unauthenticated request rather than an error.
-                    raise ValueError(
-                        f"{self.name}: the {placeholder!r} value {value!r} contains {delimiter!r}, which "
-                        f"would rewrite the tile request rather than fill a placeholder."
-                    )
+            self._check_substitution(placeholder, value)
             url = url.replace("{" + placeholder + "}", value)
         if not url.lower().startswith(("http://", "https://")):
             # Refuse here rather than let a tile engine complain: cleopatra reports this by raising with
@@ -243,7 +244,34 @@ class KeyedTileSource:
                 f"{self.name} has a non-http(s) tile URL, which is refused because the error a tile "
                 f"engine would raise for it quotes the URL — and the URL carries the credential."
             )
-        return url.replace("{api_key}", self.resolve_key(api_key))
+        key = self.resolve_key(api_key)
+        # The credential is a substitution like any other, and the one most likely to arrive malformed:
+        # it comes from an environment variable, often populated from a file.
+        self._check_substitution("api_key", key, quote=False)
+        return url.replace("{api_key}", key)
+
+    def _check_substitution(
+        self, placeholder: str, value: str, *, quote: bool = True
+    ) -> None:
+        """Refuse a value that would rewrite the request rather than fill the placeholder it replaces.
+
+        Args:
+            placeholder: The placeholder being filled, named in the error so the caller knows which value
+                to look at.
+            value: The value about to be substituted.
+            quote: Whether the value may be echoed in the error. ``False`` for the credential, whose whole
+                point is not to appear in a message that may be logged or displayed.
+
+        Raises:
+            ValueError: when the value contains one of :data:`_URL_DELIMITERS`.
+        """
+        for delimiter in _URL_DELIMITERS:
+            if delimiter in value:
+                shown = repr(value) if quote else "the resolved credential"
+                raise ValueError(
+                    f"{self.name}: the {placeholder!r} value ({shown}) contains {delimiter!r}, which "
+                    f"would rewrite the tile request rather than fill a placeholder."
+                )
 
     def check_bounds(self, extent: Extent | None) -> None:
         """Raise when ``extent`` lies entirely outside the service's coverage.
