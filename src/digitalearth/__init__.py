@@ -37,7 +37,7 @@ if missing_dependencies:
 
 # Assigned rather than written as a module docstring at the top of the file: the imports above have to run
 # first (the version lookup and the dependency check), and a docstring is only a docstring in first position.
-__doc__ = """digitalearth — geospatial visualization built on pyramids, cleopatra and geostatista.
+__doc__ = """digitalearth — geospatial visualization built on pyramids and cleopatra.
 
 Reads data through pyramids and renders it through one subpackage per backend: `static` (matplotlib, the
 default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre + deck.gl), over the
@@ -65,11 +65,6 @@ from digitalearth.static.charts import (  # noqa: E402
     line_by,
     scatter,
     statistics,
-)
-from digitalearth.static.geostatistics import (  # noqa: E402
-    hotspot_map,
-    kriging_map,
-    lisa_map,
 )
 from digitalearth.static.series import (  # noqa: E402
     boxplot,
@@ -110,10 +105,6 @@ __all__ = [
     # temporal products
     "TimeSeries",
     "Climatology",
-    # geostatistics visualization (composes geostatista outputs)
-    "lisa_map",
-    "hotspot_map",
-    "kriging_map",
     # operational tier
     "Batch",
     "gallery",
@@ -138,7 +129,6 @@ _MOVED_SUBMODULES = {
     "browser": "digitalearth.ops.browser",
     "charts": "digitalearth.static.charts",
     "cli": "digitalearth.ops.cli",
-    "geostatistics": "digitalearth.static.geostatistics",
     "plugins": "digitalearth.ops.plugins",
     "scene": "digitalearth.scene",
     "series": "digitalearth.static.series",
