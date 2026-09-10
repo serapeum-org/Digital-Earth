@@ -120,3 +120,32 @@ class TestPresetKeywordErrors:
 
         with pytest.raises(ValueError, match="no preset keywords"):
             WebMap().basemap("CartoDark", date="2024-01")
+
+
+class TestSavedOutputCarriesTheKey:
+    """H1: the exposure the module docstring warns about is pinned here, not left to be discovered."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the web extra, and supply a fake credential.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("maplibre")
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_the_html_contains_the_credential(self):
+        """A saved web map is a secret, because the browser needs the key to fetch the tiles.
+
+        Test scenario:
+            This is how an XYZ service authenticates and cannot be avoided, so it is asserted rather
+            than guarded — if a future change ever strips the key, the basemap silently stops loading
+            and this test says why. The module docstring documents the same thing in prose.
+        """
+        from digitalearth.web import WebMap
+
+        html = WebMap().basemap("Planet.NICFI", date="2024-01").to_html()
+        assert FAKE_KEY in html, (
+            "the key is gone from the saved page, so its tiles cannot load"
+        )
