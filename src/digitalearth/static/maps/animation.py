@@ -216,8 +216,10 @@ class AnimationMixin(_MixinBase):
         rate = getattr(self, "_animation_fps", None) if fps is None else fps
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
-    def _stack_clim(self, datasets: Sequence[Any]) -> Tuple[float, float]:
-        """Return the ``(min, max)`` of the first band across ``datasets``, ignoring nodata/non-finite.
+    def _stack_clim(
+        self, datasets: Sequence[Any], band: int = 1
+    ) -> Tuple[float, float]:
+        """Return the ``(min, max)`` of ``band`` across ``datasets``, ignoring nodata/non-finite.
 
         Each frame is reprojected to the display CRS before it is measured, for the same reason the
         composite scan does it: the frame renders warped, so the stored values are not the ones on screen.
@@ -227,16 +229,19 @@ class AnimationMixin(_MixinBase):
 
         Args:
             datasets: The frames to measure (already sampled by :func:`_scan_subset`).
+            band: 1-based index of the band being animated — the one whose range must set the scale.
 
         Returns:
             The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value —
             which includes the case where no frame is on the view at all, since a frame that
             cannot be warped draws nothing and so contributes no colour range.
         """
-        measured = self._measured_clim(datasets)
+        measured = self._measured_clim(datasets, band=band)
         return measured if measured is not None else (0.0, 1.0)
 
-    def _measured_clim(self, datasets: Sequence[Any]) -> Optional[Tuple[float, float]]:
+    def _measured_clim(
+        self, datasets: Sequence[Any], band: int = 1
+    ) -> Optional[Tuple[float, float]]:
         """Return the ``(min, max)`` actually measured across ``datasets``, or ``None`` if nothing was.
 
         The difference from :meth:`_stack_clim` matters to :meth:`_clim_across_views`, which unions one
@@ -246,6 +251,7 @@ class AnimationMixin(_MixinBase):
 
         Args:
             datasets: The frames to measure.
+            band: 1-based index of the band to read from each frame.
 
         Returns:
             The ``(min, max)`` across every frame that could be warped and held a finite value, or
@@ -258,14 +264,14 @@ class AnimationMixin(_MixinBase):
                 warped = self._reproject(ds)
             except OffLimbError:
                 continue  # this frame draws nothing, so it contributes no colour range
-            arr = finite(read_masked_band(warped, band=1))
+            arr = finite(read_masked_band(warped, band=band))
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))
         return (min(lows), max(highs)) if lows else None
 
     def _clim_across_views(
-        self, dataset: Any, views: Sequence[Any]
+        self, dataset: Any, views: Sequence[Any], band: int = 1
     ) -> Tuple[float, float]:
         """Return the ``(min, max)`` of one dataset measured under each sampled display CRS.
 
@@ -276,6 +282,7 @@ class AnimationMixin(_MixinBase):
         Args:
             dataset: The raster every frame draws.
             views: The display CRSs the animation will sweep; sampled by :func:`_scan_subset`.
+            band: 1-based index of the band being animated.
 
         Returns:
             The widest ``(min, max)`` across the sampled views, or ``(0, 1)`` when no view shows any of the
@@ -286,7 +293,7 @@ class AnimationMixin(_MixinBase):
             bounds = []
             for view in _scan_subset(views):
                 self.crs = view
-                measured = self._measured_clim([dataset])
+                measured = self._measured_clim([dataset], band=band)
                 if measured is None:
                     continue  # this view shows none of the data, so it bounds nothing
                 bounds.append(measured)
@@ -315,13 +322,18 @@ class AnimationMixin(_MixinBase):
 
         ``views`` mirrors the composite scan: given the projections :meth:`rotate` is about to sweep, the
         scale spans what all of them show rather than what the build-time CRS happens to show.
+
+        The scan reads the band the frames will be **drawn** from. ``band`` rides in ``opts`` on its way to
+        the renderer, so scanning band 1 regardless would scale every other band against the wrong range —
+        usually a fully saturated clip under a colorbar labelled with band 1's numbers.
         """
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
+            band = int(opts.get("band", 1))
             if views is None:
-                lo, hi = self._stack_clim(_scan_subset(datasets))
+                lo, hi = self._stack_clim(_scan_subset(datasets), band=band)
             else:
-                lo, hi = self._clim_across_views(next(iter(datasets)), views)
+                lo, hi = self._clim_across_views(next(iter(datasets)), views, band=band)
             opts["vmin"] = lo if vmin is None else vmin
             opts["vmax"] = hi if vmax is None else vmax
 
