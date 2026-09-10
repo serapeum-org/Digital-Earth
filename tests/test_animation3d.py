@@ -4,8 +4,6 @@ Gated on the optional ``3d`` extra (pyvista + imageio). Covers orbit fly-through
 ``animate`` driver, the movie-vs-gif writer dispatch, and the trame jupyter-backend switch.
 """
 
-import inspect
-
 import numpy as np
 import pytest
 
@@ -236,10 +234,26 @@ def test_orbit_kwargs_still_reach_orbit_on_path(monkeypatch, tmp_path):
     scene.close()
 
 
-def _orbit_geometry(scene, **shape):
-    """Return the mean horizontal radius and height of the path orbit() would fly for `shape`."""
-    path = scene.plotter.generate_orbital_path(n_points=8, **shape)
-    points = np.asarray(path.points)
+def _orbit_path_points(scene, monkeypatch, tmp_path, **shape):
+    """Return the points of the path `orbit()` hands the camera for `shape`, captured from orbit_on_path.
+
+    Going through `orbit()` is the whole point: measuring `generate_orbital_path` directly would assert
+    pyvista's own geometry and stay green even with the forwarding deleted.
+    """
+    captured = {}
+
+    def capture(orbital_path, **kwargs):
+        captured["path"] = orbital_path
+
+    monkeypatch.setattr(animation, "_open_writer", lambda *a, **k: None)
+    monkeypatch.setattr(animation, "_finalize_frames", lambda *a, **k: None)
+    monkeypatch.setattr(scene.plotter, "orbit_on_path", capture)
+    scene.orbit(str(tmp_path / "measure.gif"), n_frames=8, **shape)
+    return np.asarray(captured["path"].points)
+
+
+def _radius_and_height(points):
+    """Return the mean horizontal radius and mean height of a captured orbital path."""
     radius = float(
         np.hypot(
             points[:, 0] - points[:, 0].mean(), points[:, 1] - points[:, 1].mean()
@@ -269,17 +283,26 @@ def test_orbit_writes_a_gif_with_a_shaped_path(tmp_path):
     scene.close()
 
 
-def test_factor_and_shift_actually_move_the_orbit():
-    """factor scales the orbit's radius and shift raises it — the geometry, not just the argument passing.
+def test_factor_and_shift_actually_move_the_orbit(monkeypatch, tmp_path):
+    """factor scales the orbit's radius and shift raises it, measured on the path orbit() hands the camera.
 
     Asserting only that a shaped orbit writes a non-empty file would pass with the feature removed, since the
-    unshaped orbit writes one too. These are the numbers the arguments exist to change.
+    unshaped orbit writes one too — and so would measuring `generate_orbital_path` directly. The path is
+    captured from `orbit_on_path`, so deleting the forwarding fails this test.
     """
     scene = _terrain_scene()
-    base_radius, base_height = _orbit_geometry(scene)
-    closer_radius, _ = _orbit_geometry(scene, factor=0.9)
-    wider_radius, _ = _orbit_geometry(scene, factor=6.0)
-    _, lifted_height = _orbit_geometry(scene, shift=8.0)
+    base_radius, base_height = _radius_and_height(
+        _orbit_path_points(scene, monkeypatch, tmp_path)
+    )
+    closer_radius, _ = _radius_and_height(
+        _orbit_path_points(scene, monkeypatch, tmp_path, factor=0.9)
+    )
+    wider_radius, _ = _radius_and_height(
+        _orbit_path_points(scene, monkeypatch, tmp_path, factor=6.0)
+    )
+    _, lifted_height = _radius_and_height(
+        _orbit_path_points(scene, monkeypatch, tmp_path, shift=8.0)
+    )
     assert closer_radius < base_radius, (
         f"factor below the default must close the orbit in: {closer_radius} !< {base_radius}"
     )
@@ -292,22 +315,20 @@ def test_factor_and_shift_actually_move_the_orbit():
     scene.close()
 
 
-def test_shift_moves_along_viewup_not_along_z():
+def test_shift_moves_along_viewup_not_along_z(monkeypatch, tmp_path):
     """shift offsets the orbit along `viewup`, which is only the z axis while viewup is z-aligned.
 
-    pyvista computes `center += np.array(viewup) * shift`, so the two new arguments interact. The docstring
-    says so; this pins it, because a y-up scene shifted "upwards" moves along y.
+    pyvista computes `center += np.array(viewup) * shift`, so the two arguments interact. The docstring says
+    so; this pins it through `orbit()`, because a y-up scene shifted "upwards" moves along y.
     """
     scene = _terrain_scene()
-    path = scene.plotter.generate_orbital_path(
-        n_points=8, viewup=(0.0, 1.0, 0.0), shift=2.0
+    shifted = _orbit_path_points(
+        scene, monkeypatch, tmp_path, viewup=(0.0, 1.0, 0.0), shift=2.0
     )
-    unshifted = scene.plotter.generate_orbital_path(
-        n_points=8, viewup=(0.0, 1.0, 0.0), shift=0.0
+    unshifted = _orbit_path_points(
+        scene, monkeypatch, tmp_path, viewup=(0.0, 1.0, 0.0), shift=0.0
     )
-    moved = np.asarray(path.points).mean(axis=0) - np.asarray(unshifted.points).mean(
-        axis=0
-    )
+    moved = shifted.mean(axis=0) - unshifted.mean(axis=0)
     assert moved[1] == pytest.approx(2.0), (
         f"a y-up shift must move along y, got {moved}"
     )
@@ -335,12 +356,27 @@ def test_orbit_refuses_threaded_rather_than_writing_nothing(tmp_path):
 @pytest.mark.parametrize(
     "kwargs, message",
     [
-        ({"factor": 0.0}, "positive factor"),
-        ({"factor": -2.0}, "positive factor"),
+        ({"factor": 0.0}, "positive, finite factor"),
+        ({"factor": -2.0}, "positive, finite factor"),
+        ({"factor": float("nan")}, "positive, finite factor"),
+        ({"factor": float("inf")}, "positive, finite factor"),
+        ({"shift": float("nan")}, "finite shift"),
         ({"n_frames": 1}, "at least 3 frames"),
         ({"viewup": (0.0, 1.0)}, "3-component viewup"),
+        ({"viewup": (0.0, 0.0, 0.0)}, "zero viewup"),
+        ({"viewup": (0.0, 0.0, float("nan"))}, "finite viewup"),
     ],
-    ids=["zero-factor", "negative-factor", "too-few-frames", "short-viewup"],
+    ids=[
+        "zero-factor",
+        "negative-factor",
+        "nan-factor",
+        "inf-factor",
+        "nan-shift",
+        "too-few-frames",
+        "short-viewup",
+        "zero-viewup",
+        "nan-viewup",
+    ],
 )
 def test_orbit_rejects_degenerate_shapes(tmp_path, kwargs, message):
     """Degenerate path arguments raise ValueError naming the argument, instead of rendering nonsense.
@@ -396,8 +432,9 @@ def test_jupyter_round_trips_the_process_global_backend():
             f"jupyter() must set the backend, got {pv.global_theme.jupyter_backend!r}"
         )
     finally:
-        pv.set_jupyter_backend(previous)
+        # close first: a raising restore would otherwise leak the window as well as the backend
         scene.close()
+        pv.set_jupyter_backend(previous)
     assert pv.global_theme.jupyter_backend == previous, (
         f"the backend must round-trip, got {pv.global_theme.jupyter_backend!r} not {previous!r}"
     )
@@ -419,3 +456,17 @@ def test_orbit_accepts_a_numpy_viewup(monkeypatch, tmp_path):
     assert np.array_equal(passed, np.array([0.0, 0.0, 1.0])), (
         f"a numpy viewup must reach the generator unchanged, got {passed!r}"
     )
+
+
+def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path):
+    """A numpy viewup of the wrong shape is caught here, not deep inside pyvista.
+
+    Widening the annotation to accept arrays admits shapes a length check cannot judge: `(3, 1)` has `len` 3
+    and then dies in pyvista with a broadcast error naming neither viewup nor orbit, and a 0-d array has no
+    `len` at all.
+    """
+    scene = _terrain_scene()
+    for bad in (np.zeros((3, 1)), np.float64(1.0)):
+        with pytest.raises(ValueError, match="3-component viewup"):
+            scene.orbit(str(tmp_path / "bad.gif"), n_frames=4, viewup=bad)
+    scene.close()
