@@ -136,6 +136,17 @@ _MOVED_SUBMODULES = {
     "temporal": "digitalearth.static.temporal",
 }
 
+# --- removed: the geostatistics presets, which move upstream --------------------------------------------
+#
+# `lisa_map`/`hotspot_map`/`kriging_map` and `digitalearth.static.geostatistics` drew another package's
+# output and nothing else, so the drawing moves to the package that produces the labels
+# (serapeum-org/geostatista#61). They are removed outright rather than deprecated: a forwarding shim would
+# keep the wrong dependency direction documented as supported. But a bare "module 'digitalearth' has no
+# attribute 'lisa_map'" is the diagnostic `_MOVED_SUBMODULES` above exists to avoid, so the removed names
+# still fail with a message naming the replacement. The standard prefix is kept, so `hasattr` is still
+# False and code matching on the usual wording still matches.
+_REMOVED_GEOSTATISTICS = ("geostatistics", "hotspot_map", "kriging_map", "lisa_map")
+
 
 def __getattr__(name: str):
     """Resolve a submodule that moved in the backend restructure, with a :class:`DeprecationWarning`.
@@ -147,8 +158,16 @@ def __getattr__(name: str):
         The module at its new location.
 
     Raises:
-        AttributeError: for any name that is neither a real attribute nor a moved submodule.
+        AttributeError: for a removed geostatistics preset, naming its replacement; and for any name that is
+            neither a real attribute nor a moved submodule.
     """
+    if name in _REMOVED_GEOSTATISTICS:
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r}: the geostatistics presets were removed and "
+            "move to geostatista, which produces the labels they colour (see "
+            "serapeum-org/geostatista#61). Until it ships them, draw the result directly with "
+            "digitalearth.Map().choropleth(..., scheme='categorical') and your own colour mapping."
+        )
     target = _MOVED_SUBMODULES.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

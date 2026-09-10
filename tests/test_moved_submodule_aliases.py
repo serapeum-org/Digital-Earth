@@ -148,6 +148,59 @@ class TestMovedSubmoduleAliases:
             )
 
 
+class TestRemovedGeostatisticsNames:
+    """The geostatistics presets are gone, but still say where they went.
+
+    ``lisa_map``/``hotspot_map``/``kriging_map`` and ``digitalearth.static.geostatistics`` were removed rather
+    than aliased -- their replacement lives in another package, so there is nothing here to forward to. They
+    keep the one property :data:`_MOVED_SUBMODULES` established: a name that used to work does not fail with a
+    bare "no attribute", it names the replacement.
+    """
+
+    @pytest.mark.parametrize("name", digitalearth._REMOVED_GEOSTATISTICS)
+    def test_removed_name_raises_attribute_error(self, name):
+        """Each removed name is really gone -- no alias, no lazy import, no shim.
+
+        Args:
+            name: A removed geostatistics preset or the removed submodule.
+        """
+        assert not hasattr(digitalearth, name), (
+            f"digitalearth.{name} should be removed, not merely deprecated"
+        )
+
+    @pytest.mark.parametrize("name", digitalearth._REMOVED_GEOSTATISTICS)
+    def test_removed_name_points_at_the_replacement(self, name):
+        """The failure names the upstream destination and a workaround, not just the missing attribute.
+
+        Args:
+            name: A removed geostatistics preset or the removed submodule.
+        """
+        with pytest.raises(AttributeError) as excinfo:
+            getattr(digitalearth, name)
+        message = str(excinfo.value)
+        assert f"no attribute {name!r}" in message, (
+            f"the standard prefix should survive, got: {message}"
+        )
+        assert "geostatista" in message, (
+            f"should name the replacement package, got: {message}"
+        )
+        assert "choropleth" in message, f"should name the workaround, got: {message}"
+
+    @pytest.mark.parametrize("name", digitalearth._REMOVED_GEOSTATISTICS)
+    def test_removed_name_is_not_a_moved_alias(self, name):
+        """A removed name must not sit in the alias table, which only forwards modules that exist.
+
+        Args:
+            name: A removed geostatistics preset or the removed submodule.
+        """
+        assert name not in _MOVED_SUBMODULES, (
+            f"{name} was removed; it cannot forward to a module that no longer exists"
+        )
+        assert name not in digitalearth.__all__, (
+            f"{name} must not be in the supported facade"
+        )
+
+
 def _fresh_interpreter(code: str) -> str:
     """Run ``code`` in a new interpreter with ``src/`` importable and return its stdout.
 
