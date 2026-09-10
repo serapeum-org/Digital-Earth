@@ -21,6 +21,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 import pathlib
 from typing import Any, List, Optional, Self
 
+from digitalearth.base.crs import reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
@@ -433,7 +434,7 @@ class WebMapBase:
             and hasattr(data, "to_crs")
             and self._needs_reproject(data)
         ):
-            data = data.to_crs(self.crs)
+            data = reproject(data, self.crs)
         return get_source(data, band=band)
 
     @staticmethod

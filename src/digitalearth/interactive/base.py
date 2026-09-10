@@ -20,6 +20,7 @@ from functools import reduce
 from operator import mul
 from typing import Any, List, Optional, Self
 
+from digitalearth.base.crs import reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
@@ -240,7 +241,7 @@ class InteractiveMapBase:
             and hasattr(data, "to_crs")
             and self._needs_reproject(data)
         ):
-            data = data.to_crs(self.crs)
+            data = reproject(data, self.crs)
         return get_source(data, band=band)
 
     def _auto_cmap(self, source: Source, cmap: Optional[str]) -> str:

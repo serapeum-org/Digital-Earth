@@ -13,6 +13,7 @@ All CRS work (crop, the un-projection of drawn geometry) goes through pyramids.
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
+from digitalearth.base.crs import reproject
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -135,7 +136,9 @@ class InteractionMixin(_MixinBase):
             series = []
             for member in members:
                 ds = (
-                    member.to_crs(self.crs) if self._needs_reproject(member) else member
+                    reproject(member, self.crs)
+                    if self._needs_reproject(member)
+                    else member
                 )
                 row, col = np.asarray(ds.map_to_array_coordinates(point))[0]
                 arr = np.asarray(

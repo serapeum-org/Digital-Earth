@@ -358,3 +358,35 @@ def test_a_timedelta_column_is_skipped_for_a_renderable_one():
     assert list(src.z.values) == [1.5, 2.5], (
         f"the renderable column should win over the timedelta, got {src.z.values}"
     )
+
+
+def test_reproject_reports_an_empty_view_as_off_limb():
+    """The shared reprojection turns GDAL's wording into the typed signal every backend reads."""
+    import numpy as np
+    from pyramids.dataset import Dataset, GeoReference
+
+    from digitalearth.base.crs import OffLimbError, reproject
+    from digitalearth.static import projections
+
+    ds = Dataset.from_array(
+        np.ones((20, 20), "float32"),
+        geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+        no_data_value=-9999.0,
+    )
+    with pytest.raises(OffLimbError, match="too few sample points"):
+        reproject(ds, projections.orthographic(lon=-175, lat=15))
+
+
+def test_reproject_passes_other_failures_through():
+    """Only the "too few points survived" message becomes OffLimbError; the rest stay as they came."""
+    from digitalearth.base.crs import OffLimbError, reproject
+
+    class Broken:
+        def to_crs(self, crs):
+            raise RuntimeError("PROJ: proj_create: unrecognized format / unknown name")
+
+    with pytest.raises(RuntimeError) as caught:
+        reproject(Broken(), 3857)
+    assert not isinstance(caught.value, OffLimbError), (
+        "a real projection failure must not be reported as an empty view"
+    )

@@ -6,74 +6,17 @@ Source-extraction helpers the plotting mixins consume via ``self``.
 """
 
 import logging
-import re
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
+from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
-
-#: GDAL's complaint when a warp cannot place the data in the target CRS. It fires as soon as too few sample
-#: points survive to bound an output — its own threshold is ``failed > total - 10``, not all of them — and by
-#: then it has already refused to compute those bounds. So *any* occurrence means there is no output raster,
-#: whatever the counts say; a warp that does produce output never raises it, which is why the counts are not
-#: read here.
-_POINTS_FAILED = re.compile(r"Too many points \(\d+ out of \d+\) failed to transform")
-
-
-class OffLimbError(RuntimeError):
-    """The data lies entirely outside the area the display CRS can represent.
-
-    Raised in place of GDAL's opaque "Too many points ... failed to transform", which on an orthographic
-    globe means the data sits behind the visible limb. Layer methods
-    treat it as "there is nothing to draw here" and render an empty frame; it is a distinct type so that a
-    caller can tell it apart from a real projection failure.
-
-    Examples:
-        - The reprojection reports a hidden dataset as such, rather than as a GDAL failure:
-            ```python
-            >>> import matplotlib
-            >>> matplotlib.use("Agg")
-            >>> import numpy as np
-            >>> from pyramids.dataset import Dataset, GeoReference
-            >>> from digitalearth.static import Map, projections
-            >>> from digitalearth.static.maps.base import OffLimbError
-            >>> ds = Dataset.from_array(
-            ...     np.ones((20, 20), "float32"),
-            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
-            ... )
-            >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
-            >>> try:
-            ...     hidden._reproject(ds)
-            ... except OffLimbError as error:
-            ...     print(str(error).split(':')[-1].strip())
-            too few sample points survive the warp for it to produce any output
-
-            ```
-        - Callers rarely see it: the layer methods answer it by drawing nothing:
-            ```python
-            >>> import matplotlib
-            >>> matplotlib.use("Agg")
-            >>> import numpy as np
-            >>> from pyramids.dataset import Dataset, GeoReference
-            >>> from digitalearth.static import Map, projections
-            >>> ds = Dataset.from_array(
-            ...     np.ones((20, 20), "float32"),
-            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
-            ... )
-            >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
-            >>> hidden.imshow(ds) is None
-            True
-            >>> len(hidden.ax.images)
-            0
-
-            ```
-    """
 
 
 class GeoLayerBase(Scene):
@@ -176,12 +119,4 @@ class GeoLayerBase(Scene):
         """
         if not self._needs_reproject(dataset):
             return dataset
-        try:
-            return dataset.to_crs(self.crs)
-        except RuntimeError as error:
-            if _POINTS_FAILED.search(str(error)):
-                raise OffLimbError(
-                    f"the data lies outside what {self.crs!r} can show: too few sample points survive the "
-                    f"warp for it to produce any output"
-                ) from error
-            raise
+        return reproject(dataset, self.crs)

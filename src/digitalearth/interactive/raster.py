@@ -18,6 +18,7 @@ in the tier plan's feature-parity matrix.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
+from digitalearth.base.crs import reproject
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -155,7 +156,7 @@ class RasterMixin(_MixinBase):
         # via _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
         # already-reprojected dataset, so a single warp here keeps them consistent (H1).
         if hasattr(data, "to_crs") and self._needs_reproject(data):
-            data = data.to_crs(self.crs)
+            data = reproject(data, self.crs)
         src = self._to_display_source(data, band=bands[0])
         stack = get_stack(data, bands)
         # One shared stretch for every backend (base/stretch.py). Passing `limits` holds it fixed across a
@@ -377,7 +378,7 @@ class RasterMixin(_MixinBase):
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
                 ".preview); upgrade pyramids or use image() for a small raster"
             )
-        ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
+        ds = reproject(dataset, self.crs) if self._needs_reproject(dataset) else dataset
         side = max(64, int(np.sqrt(max_pixels)))
         read_band = (
             band - 1
