@@ -77,7 +77,7 @@ class TestWebTierDispatch:
         """
         from digitalearth.web import WebMap
 
-        with pytest.raises(ValueError, match="planet.nicfi"):
+        with pytest.raises(ValueError, match=r"Planet\.NICFI"):
             WebMap().basemap("NotARealBasemap")
 
     def test_ordinary_providers_still_work(self):

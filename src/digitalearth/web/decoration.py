@@ -15,7 +15,7 @@ geodesic distance/area (the GIS part).
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.basemaps import (
-    KEYED_BASEMAPS,
+    KEYED_BASEMAP_NAMES,
     PRESET_KEYWORDS,
     get_keyed_basemap,
     is_keyed_basemap,
@@ -209,7 +209,7 @@ class DecorationMixin(_MixinBase):
             raise ValueError(
                 f"unknown basemap provider {provider!r}; choose one of "
                 f"{sorted(_BASEMAP_DISPLAY_NAMES.values())}, a keyed preset "
-                f"({', '.join(sorted(KEYED_BASEMAPS))}), or pass a tile URL to tiles()"
+                f"({', '.join(sorted(KEYED_BASEMAP_NAMES.values()))}), or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)
