@@ -9,7 +9,7 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self
+from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
 from digitalearth.base.basemaps import get_keyed_basemap, is_keyed_basemap
 from digitalearth.interactive.base import _require_holoviz
@@ -18,6 +18,38 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _attribution_hook(attribution: str) -> Callable[[Any, Any], None]:
+    """Build a Bokeh plot hook that writes ``attribution`` onto the rendered tile source.
+
+    The element's ``label`` is not an attribution slot — it is the element's display name, which Bokeh
+    renders as the **plot title**. That is wrong twice over: on a bare tile map it silently replaces the
+    caller's title (and changes the ``(group, label)`` key that ``.opts``/``.select`` match on), and the
+    moment the tiles are overlaid with data the title comes from the overlay instead, so the attribution
+    is displayed nowhere at all — which is the only way these tiles are ever actually used.
+
+    Args:
+        attribution: The text the licence requires the map to display.
+
+    Returns:
+        A hook that assigns the attribution to every tile source in the rendered figure, leaving the
+        title untouched.
+    """
+
+    def hook(plot: Any, element: Any) -> None:
+        """Assign the attribution to the Bokeh tile renderers of one rendered plot.
+
+        Args:
+            plot: The Bokeh plot HoloViews is building.
+            element: The element being rendered; unused, but part of the hook signature.
+        """
+        for renderer in plot.handles["plot"].renderers:
+            tile_source = getattr(renderer, "tile_source", None)
+            if tile_source is not None:
+                tile_source.attribution = attribution
+
+    return hook
 
 
 def _upper_placeholders(url: str) -> str:
@@ -168,11 +200,11 @@ class DecorationMixin(_MixinBase):
             # A keyed preset resolves to a URL with the credential already substituted; GeoViews wants the
             # tile placeholders upper-cased.
             keyed = get_keyed_basemap(str(provider), **preset)
-            return gv.WMTS(
-                _upper_placeholders(keyed.tile_url(api_key)),
-                # NICFI is non-commercial-only, so the attribution is a licence obligation the other
-                # two tiers already carry; GeoViews surfaces it in the element's metadata.
-                label=keyed.attribution,
+            # NICFI is non-commercial-only, so the attribution is a licence obligation the other two
+            # tiers already carry. Bokeh's slot for it is the tile source's own `attribution`, which is
+            # what its attribution control renders; reaching it needs a plot hook.
+            return gv.WMTS(_upper_placeholders(keyed.tile_url(api_key))).opts(
+                hooks=[_attribution_hook(keyed.attribution)]
             )
         if preset:
             raise ValueError(

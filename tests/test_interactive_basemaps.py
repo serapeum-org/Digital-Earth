@@ -89,7 +89,7 @@ class TestUpperPlaceholders:
 
 
 class TestAttributionIsCarried:
-    """M7: NICFI is non-commercial-only, so its attribution is a licence obligation."""
+    """NICFI is non-commercial-only, so its attribution is a licence obligation, not decoration."""
 
     @pytest.fixture(autouse=True)
     def _need_engine(self, monkeypatch):
@@ -101,16 +101,73 @@ class TestAttributionIsCarried:
         pytest.importorskip("geoviews")
         monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
-    def test_the_element_carries_the_attribution(self):
-        """The other two tiers pass it to their engine; this one dropped it entirely.
+    @staticmethod
+    def _rendered(element):
+        """Render an element and return its figure title and every tile attribution in it.
+
+        Args:
+            element: A HoloViews/GeoViews element or overlay.
+
+        Returns:
+            ``(title, attributions)`` as Bokeh built them — what a viewer actually gets.
+        """
+        import holoviews as hv
+
+        figure = hv.render(element)
+        attributions = [
+            renderer.tile_source.attribution
+            for renderer in figure.renderers
+            if getattr(renderer, "tile_source", None) is not None
+        ]
+        return figure.title.text, attributions
+
+    def test_the_rendered_tiles_carry_the_attribution(self):
+        """Bokeh's slot for this is the tile source, which is what its attribution control shows.
 
         Test scenario:
-            GeoViews surfaces the element label, which is where the attribution can be seen.
+            Setting the element ``label`` instead put the text in the plot *title*, which is not an
+            attribution and is not where anyone looks for one.
         """
         from digitalearth.interactive import InteractiveMap
 
         m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
-        assert "Planet Labs" in m.layers[0].label, (
-            f"attribution missing: {m.layers[0].label!r}"
+        _, attributions = self._rendered(m.layers[0])
+        assert attributions, "the rendered tiles carry no attribution at all"
+        assert "Planet Labs" in attributions[0], attributions[0]
+        assert "non-commercial" in attributions[0], "the licence note was dropped"
+
+    def test_it_survives_an_overlay_with_data(self):
+        """Tiles are only ever useful underneath data, so that is the case that has to work.
+
+        Test scenario:
+            An element label reaches the title only when the element *is* the plot; overlay it and the
+            title comes from the Overlay, so the attribution was displayed nowhere at all.
+        """
+        import holoviews as hv
+
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        _, attributions = self._rendered(m.layers[0] * hv.Points([(0.0, 0.0)]))
+        assert any("Planet Labs" in text for text in attributions), attributions
+
+    def test_the_plot_title_is_left_alone(self):
+        """The title belongs to the caller; writing the attribution there silently overrode it."""
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        title, _ = self._rendered(m.layers[0])
+        assert title == "", f"the attribution hijacked the title: {title!r}"
+        assert m.layers[0].label == "", (
+            "the element key was changed, so .opts/.select stop matching"
         )
-        assert "non-commercial" in m.layers[0].label, "the licence note was dropped"
+
+    def test_the_credential_is_not_in_the_attribution(self):
+        """The attribution is displayed to every viewer; the key must not travel with it."""
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        _, attributions = self._rendered(m.layers[0])
+        assert FAKE_KEY not in "".join(attributions), (
+            "the credential leaked into the attribution"
+        )
