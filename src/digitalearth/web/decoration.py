@@ -16,13 +16,11 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.basemaps import (
     KEYED_BASEMAPS,
+    PRESET_KEYWORDS,
     get_keyed_basemap,
     is_keyed_basemap,
 )
 from digitalearth.web.base import _require_layer_api, _require_maplibre
-
-#: Keywords that belong to a keyed preset; anything else passed as one is a typo, not a preset.
-_PRESET_KEYWORDS = frozenset({"date", "flavour", "mosaic"})
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
 _BASEMAP_PROVIDERS = {
@@ -189,7 +187,7 @@ class DecorationMixin(_MixinBase):
                 opacity=opacity,
             )
         if preset:
-            stray = sorted(set(preset) - _PRESET_KEYWORDS)
+            stray = sorted(set(preset) - PRESET_KEYWORDS)
             if stray:
                 # Not a preset keyword at all — almost certainly a typo, so say that rather than blame
                 # the preset machinery the caller never invoked.

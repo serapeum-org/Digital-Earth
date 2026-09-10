@@ -1063,3 +1063,34 @@ class TestOnlyKeywordProblemsAreRenamed:
         with pytest.raises(TypeError) as err:
             get_keyed_basemap("Planet.NICFI", dat="2024-01")
         assert ". Its keywords are" in str(err.value), str(err.value)
+
+
+class TestThePresetKeywordSetIsDerived:
+    """M3: the backends tell a preset keyword from one of their own; that set must follow the registry."""
+
+    def test_it_matches_what_the_registered_presets_accept(self):
+        """A literal repeated in two backends drifts the moment a second preset is added.
+
+        Test scenario:
+            The set is built from the factory signatures, so a preset with a new keyword is understood by
+            every backend without either of them being edited.
+        """
+        import inspect
+
+        from digitalearth.base.basemaps import PRESET_KEYWORDS
+
+        expected = {
+            keyword
+            for factory in KEYED_BASEMAPS.values()
+            for keyword in inspect.signature(factory).parameters
+        }
+        assert PRESET_KEYWORDS == expected, f"{PRESET_KEYWORDS} != {expected}"
+
+    def test_both_backends_use_the_shared_set(self):
+        """Importing it is what makes the guarantee hold; a local copy would not."""
+        from digitalearth.base.basemaps import PRESET_KEYWORDS
+        from digitalearth.static.maps import decoration as static_decoration
+        from digitalearth.web import decoration as web_decoration
+
+        assert static_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS
+        assert web_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS

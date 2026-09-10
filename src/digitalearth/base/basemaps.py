@@ -576,6 +576,15 @@ KEYED_BASEMAP_NAMES: dict[str, str] = {
     "planet.nicfi": "Planet.NICFI",
 }
 
+#: Every keyword any registered preset accepts. A backend uses this to tell a preset keyword apart from
+#: one of its own, so it is derived from the registry rather than written out — a preset added with a new
+#: keyword is understood by all three backends without touching them.
+PRESET_KEYWORDS: frozenset[str] = frozenset(
+    keyword
+    for factory in KEYED_BASEMAPS.values()
+    for keyword in inspect.signature(factory).parameters
+)
+
 
 def is_keyed_basemap(name: object) -> bool:
     """Whether ``name`` names a keyed basemap preset.

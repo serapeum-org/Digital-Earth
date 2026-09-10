@@ -19,6 +19,7 @@ from matplotlib.collections import PolyCollection
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.base.basemaps import (
+    PRESET_KEYWORDS,
     KeyedTileSource,
     get_keyed_basemap,
     is_keyed_basemap,
@@ -76,10 +77,6 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: cleopatra logs the built tile URL at DEBUG when a fetch fails. For a keyed service that URL carries the
 #: credential, so the static backend silences exactly this logger while a keyed basemap is being fetched.
 _CLEOPATRA_TILES_LOGGER = "cleopatra.basemap.tiles"
-
-#: Keywords `basemap()` routes to a keyed preset rather than to `add_tiles`. Derived from the presets so a
-#: new one cannot be forgotten here.
-_PRESET_KEYWORDS = frozenset({"date", "flavour", "mosaic"})
 
 
 @contextlib.contextmanager
@@ -555,7 +552,7 @@ class DecorationMixin(_MixinBase):
             digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
         if not is_keyed_basemap(source):
-            stray = sorted(set(kwargs) & _PRESET_KEYWORDS)
+            stray = sorted(set(kwargs) & PRESET_KEYWORDS)
             if stray:
                 raise ValueError(
                     f"basemap({source!r}) takes no preset keywords; {stray} apply only to a keyed preset "
@@ -564,7 +561,7 @@ class DecorationMixin(_MixinBase):
             return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
 
         preset_kwargs = {
-            key: kwargs.pop(key) for key in list(kwargs) if key in _PRESET_KEYWORDS
+            key: kwargs.pop(key) for key in list(kwargs) if key in PRESET_KEYWORDS
         }
         keyed = get_keyed_basemap(str(source), **preset_kwargs)
         keyed.check_bounds(self._lonlat_domain())
