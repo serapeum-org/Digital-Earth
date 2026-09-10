@@ -7,7 +7,7 @@ default (no ``scheme``) stays a continuous norm.
 
 import pandas as pd
 import pytest
-from matplotlib.colors import BoundaryNorm, to_hex
+from matplotlib.colors import BoundaryNorm, ListedColormap, to_hex
 
 from digitalearth.base.symbology import (
     MISSING_COLOR,
@@ -322,4 +322,34 @@ def test_sibling_polygon_methods_honour_categorical(request, fixture, call):
     assert glyph.cbar is None
     assert glyph.category_legend is not None, (
         "a categorical sibling fill must draw its own swatch legend"
+    )
+
+
+def test_categorical_cmap_accepts_a_colormap_object(zoned):
+    """A ``ListedColormap`` *object* passed as ``cmap`` reaches the render with its colours intact.
+
+    :func:`resolve_categorical_cmap`'s own docstring tells callers to do this -- "to spread a perceptual map
+    across the categories, sample it into a shorter ``ListedColormap`` yourself" -- so a non-string ``cmap`` is
+    a documented contract, not an accident. The whole path has to cooperate: the resolver's
+    ``cmap == _CONTINUOUS_DEFAULT_CMAP`` test compares a ``Colormap`` against a ``str`` and must not raise,
+    and ``_draw_missing_neutral``'s ``get_cmap().with_extremes(...)`` must preserve the given colours.
+    """
+    palette = ListedColormap(["#d7191c", "#2c7bb6", "#fdae61"])
+    m = Map(crs=zoned.epsg)
+    pc = m.choropleth(zoned, column="zone", scheme="categorical", cmap=palette)
+    assert rendered_colors(pc, 3) == ["#d7191c", "#2c7bb6", "#fdae61"], (
+        "the colormap object's own colours must survive to the artist"
+    )
+
+
+def test_resolve_categorical_cmap_passes_a_colormap_object_through(zoned):
+    """The resolver leaves a ``Colormap`` object alone rather than swapping in the qualitative default.
+
+    It decides with ``cmap is None or cmap == _CONTINUOUS_DEFAULT_CMAP``, which relies on matplotlib's
+    ``Colormap.__eq__`` returning ``NotImplemented`` for a ``str`` instead of raising. Pinning it here means a
+    matplotlib change to that comparison shows up as a failing test rather than a silently ignored palette.
+    """
+    palette = ListedColormap(["#d7191c", "#2c7bb6"])
+    assert resolve_categorical_cmap(palette) is palette, (
+        "an explicitly chosen colormap object must be honoured, not replaced by 'tab10'"
     )

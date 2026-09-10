@@ -44,7 +44,6 @@ dependencies = [
     "xyzservices >=2023.10.0",
     "pyramids-gis >=0.59.0",
     "pyramids-eo >=0.8.0",
-    "geostatista >=0.3.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -347,10 +346,6 @@ disable_error_code = ["no-any-return"]
 [[tool.mypy.overrides]]
 module = "digitalearth.static.figures"  # 1 error at baseline
 disable_error_code = ["return-value"]
-
-[[tool.mypy.overrides]]
-module = "digitalearth.static.geostatistics"  # 1 error at baseline
-disable_error_code = ["attr-defined"]
 
 [[tool.mypy.overrides]]
 module = "digitalearth.static.maps.projection"  # 1 error at baseline

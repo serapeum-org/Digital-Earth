@@ -37,7 +37,7 @@ if missing_dependencies:
 
 # Assigned rather than written as a module docstring at the top of the file: the imports above have to run
 # first (the version lookup and the dependency check), and a docstring is only a docstring in first position.
-__doc__ = """digitalearth — geospatial visualization built on pyramids, cleopatra and geostatista.
+__doc__ = """digitalearth — geospatial visualization built on pyramids and cleopatra.
 
 Reads data through pyramids and renders it through one subpackage per backend: `static` (matplotlib, the
 default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre + deck.gl), over the
@@ -65,11 +65,6 @@ from digitalearth.static.charts import (  # noqa: E402
     line_by,
     scatter,
     statistics,
-)
-from digitalearth.static.geostatistics import (  # noqa: E402
-    hotspot_map,
-    kriging_map,
-    lisa_map,
 )
 from digitalearth.static.series import (  # noqa: E402
     boxplot,
@@ -110,10 +105,6 @@ __all__ = [
     # temporal products
     "TimeSeries",
     "Climatology",
-    # geostatistics visualization (composes geostatista outputs)
-    "lisa_map",
-    "hotspot_map",
-    "kriging_map",
     # operational tier
     "Batch",
     "gallery",
@@ -122,7 +113,7 @@ __all__ = [
 
 # --- back-compat: submodules that moved in the backend restructure -------------------------------------------
 #
-# Before the restructure these twelve names were bound as attributes of `digitalearth` -- some because
+# Before the restructure these eleven names were bound as attributes of `digitalearth` -- some because
 # `__init__` imported from them, the rest as a side effect of those imports -- so `digitalearth.charts` and
 # `from digitalearth import series` both worked. Moving them under base/, static/ and ops/ silently unbound
 # every one: attribute access raised a bare AttributeError and the `from` form an ImportError, neither
@@ -138,7 +129,6 @@ _MOVED_SUBMODULES = {
     "browser": "digitalearth.ops.browser",
     "charts": "digitalearth.static.charts",
     "cli": "digitalearth.ops.cli",
-    "geostatistics": "digitalearth.static.geostatistics",
     "plugins": "digitalearth.ops.plugins",
     "scene": "digitalearth.scene",
     "series": "digitalearth.static.series",
@@ -146,19 +136,44 @@ _MOVED_SUBMODULES = {
     "temporal": "digitalearth.static.temporal",
 }
 
+# --- removed: the geostatistics presets, which move upstream --------------------------------------------
+#
+# `lisa_map`/`hotspot_map`/`kriging_map` and `digitalearth.static.geostatistics` drew another package's
+# output and nothing else, so the drawing moves to the package that produces the labels
+# (serapeum-org/geostatista#61). They are removed outright rather than deprecated: a forwarding shim would
+# keep the wrong dependency direction documented as supported. But a bare "module 'digitalearth' has no
+# attribute 'lisa_map'" is the diagnostic `_MOVED_SUBMODULES` above exists to avoid, so the removed names
+# still fail with a message naming the replacement. The standard prefix is kept, so `hasattr` is still
+# False and code matching on the usual wording still matches.
+_REMOVED_GEOSTATISTICS = ("geostatistics", "hotspot_map", "kriging_map", "lisa_map")
+
 
 def __getattr__(name: str):
-    """Resolve a submodule that moved in the backend restructure, with a :class:`DeprecationWarning`.
+    """Resolve an attribute the package does not bind: a moved submodule, or a removed geostatistics name.
+
+    The removed names are tested first and always raise: the ``geostatistics`` submodule and the ``lisa_map``/
+    ``hotspot_map``/``kriging_map`` presets went upstream to geostatista, so there is nothing here to forward
+    them to and the error says where they went. A name listed in ``_MOVED_SUBMODULES`` is imported from its new
+    location, cached in the module globals so the :class:`DeprecationWarning` fires once per process, and
+    returned.
 
     Args:
         name: The attribute being looked up on the ``digitalearth`` package.
 
     Returns:
-        The module at its new location.
+        The moved submodule, imported from its new location. The removed names never reach this path.
 
     Raises:
-        AttributeError: for any name that is neither a real attribute nor a moved submodule.
+        AttributeError: for one of the removed geostatistics names, with a message naming its replacement; and
+            for any other name that is neither a real attribute nor a moved submodule.
     """
+    if name in _REMOVED_GEOSTATISTICS:
+        raise AttributeError(
+            f"module {__name__!r} has no attribute {name!r}: the geostatistics presets were removed and "
+            "move to geostatista, which produces the labels they colour (see "
+            "serapeum-org/geostatista#61). Until it ships them, draw the result directly with "
+            "digitalearth.Map().choropleth(..., scheme='categorical') and your own colour mapping."
+        )
     target = _MOVED_SUBMODULES.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
