@@ -3,6 +3,7 @@
 The cleopatra glyph is already tested upstream, so these cover the half Digital-Earth owns: turning geodata
 into an equirectangular texture at the right lon/lat, and mapping lon/lat back onto the drawn sphere.
 """
+
 import warnings
 
 import matplotlib.pyplot as plt
@@ -84,12 +85,23 @@ class TestFromDataset:
         lon, lat = lon_axis[cols], lat_axis[rows]
 
         lonlat = dataset.to_crs(4326)
-        src_lon, src_lat = np.asarray(lonlat.x, dtype=float), np.asarray(lonlat.y, dtype=float)
+        src_lon, src_lat = (
+            np.asarray(lonlat.x, dtype=float),
+            np.asarray(lonlat.y, dtype=float),
+        )
         tol = 0.25  # a canvas cell (0.125 deg) plus the source's own half-cell
-        assert src_lon.min() - tol <= lon.min(), f"drape starts west of the source: {lon.min()}"
-        assert lon.max() <= src_lon.max() + tol, f"drape ends east of the source: {lon.max()}"
-        assert src_lat.min() - tol <= lat.min(), f"drape starts south of the source: {lat.min()}"
-        assert lat.max() <= src_lat.max() + tol, f"drape ends north of the source: {lat.max()}"
+        assert src_lon.min() - tol <= lon.min(), (
+            f"drape starts west of the source: {lon.min()}"
+        )
+        assert lon.max() <= src_lon.max() + tol, (
+            f"drape ends east of the source: {lon.max()}"
+        )
+        assert src_lat.min() - tol <= lat.min(), (
+            f"drape starts south of the source: {lat.min()}"
+        )
+        assert lat.max() <= src_lat.max() + tol, (
+            f"drape ends north of the source: {lat.max()}"
+        )
 
     def test_a_0_360_longitude_axis_drapes_the_whole_world(self):
         """0-360 is the usual climate/NWP convention; treating it as -180..180 loses half the globe.
@@ -99,10 +111,17 @@ class TestFromDataset:
         """
         lon = np.linspace(0.0, 359.0, 360, dtype="float32")
         arr = np.repeat(lon[None, :], 180, axis=0)
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326))
-        globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=0.0, vmax=359.0, shape=(180, 360))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326),
+        )
+        globe = TexturedGlobe.from_dataset(
+            ds, cmap="viridis", vmin=0.0, vmax=359.0, shape=(180, 360)
+        )
         texture = globe.glyph.texture
-        assert (texture[..., 3] > 0).mean() == pytest.approx(1.0), "should cover the whole globe"
+        assert (texture[..., 3] > 0).mean() == pytest.approx(1.0), (
+            "should cover the whole globe"
+        )
 
         # Each canvas longitude must carry the source value for that same place on Earth. The source is
         # stored on 0-360, so the equivalent source longitude is the canvas longitude modulo a full turn,
@@ -119,14 +138,20 @@ class TestFromDataset:
     def test_a_minus180_longitude_axis_still_drapes_the_whole_world(self):
         """The conventional frame must be unaffected by the 0-360 handling."""
         arr = np.ones((180, 360), dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326),
+        )
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         assert (globe.glyph.texture[..., 3] > 0).mean() == pytest.approx(1.0)
 
     def test_a_raster_beyond_the_antimeridian_lands_west(self):
         """Longitudes 200-210 in the 0-360 frame are -160..-150 on the canvas, not off the edge."""
         arr = np.ones((10, 10), dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(200.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(200.0, 1.0, 0.0, 10.0, 0.0, -1.0), epsg=4326),
+        )
         globe = TexturedGlobe.from_dataset(ds, shape=(720, 1440))
         opaque = globe.glyph.texture[..., 3] > 0
         assert opaque.any(), "a raster stored beyond the antimeridian must still drape"
@@ -138,26 +163,44 @@ class TestFromDataset:
     def test_a_single_row_raster_drapes(self):
         """One row has no latitude spacing of its own; borrowing the column spacing keeps it visible."""
         arr = np.ones((1, 8), dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 5.0, 0.0, 10.0, 0.0, -5.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 5.0, 0.0, 10.0, 0.0, -5.0), epsg=4326),
+        )
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
-        assert (globe.glyph.texture[..., 3] > 0).any(), "a single-row raster should still drape"
+        assert (globe.glyph.texture[..., 3] > 0).any(), (
+            "a single-row raster should still drape"
+        )
 
     def test_a_single_column_raster_drapes(self):
         arr = np.ones((8, 1), dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 5.0, 0.0, 40.0, 0.0, -5.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 5.0, 0.0, 40.0, 0.0, -5.0), epsg=4326),
+        )
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
-        assert (globe.glyph.texture[..., 3] > 0).any(), "a single-column raster should still drape"
-
+        assert (globe.glyph.texture[..., 3] > 0).any(), (
+            "a single-column raster should still drape"
+        )
 
     def test_the_poles_and_the_antimeridian_are_not_left_empty(self):
         """Outer centres on the source's boundary returned nothing: a pole hole and an antimeridian seam."""
         arr = np.ones((180, 360), dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326))
-        opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326),
+        )
+        opaque = (
+            TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
+        )
         assert opaque[0].all(), "the north-pole row should be filled"
-        assert opaque[-1].all(), "the south-pole row should be filled, not left as a hole"
+        assert opaque[-1].all(), (
+            "the south-pole row should be filled, not left as a hole"
+        )
         assert opaque[:, 0].all(), "the -180 column should be filled"
-        assert opaque[:, -1].all(), "the +180 column should be filled, not left as a seam"
+        assert opaque[:, -1].all(), (
+            "the +180 column should be filled, not left as a seam"
+        )
 
     def test_a_genuine_nodata_edge_stays_transparent(self):
         """The earlier edge-clamp filled this in, fabricating data that is not in the raster."""
@@ -168,19 +211,32 @@ class TestFromDataset:
             geo_ref=GeoReference(geo=(-180.0, 1.0, 0.0, 90.0, 0.0, -1.0), epsg=4326),
             no_data_value=-9999.0,
         )
-        opaque = TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
-        assert not opaque[-1].any(), "a nodata southern row must stay transparent, not be filled from above"
+        opaque = (
+            TexturedGlobe.from_dataset(ds, shape=(180, 360)).glyph.texture[..., 3] > 0
+        )
+        assert not opaque[-1].any(), (
+            "a nodata southern row must stay transparent, not be filled from above"
+        )
         assert opaque[-2].any(), "the row above it is real data and should still drape"
 
     def test_a_regional_raster_keeps_its_transparent_margin(self, dataset):
         """Nothing may spread a regional raster to the poles."""
-        opaque = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3] > 0
-        assert opaque.mean() < 0.01, f"a small raster should stay small, covered {opaque.mean():.4f}"
-        assert not opaque[-1].any(), "the south-pole row should stay empty for a regional raster"
+        opaque = (
+            TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3]
+            > 0
+        )
+        assert opaque.mean() < 0.01, (
+            f"a small raster should stay small, covered {opaque.mean():.4f}"
+        )
+        assert not opaque[-1].any(), (
+            "the south-pole row should stay empty for a regional raster"
+        )
 
     def test_uncovered_cells_stay_transparent(self, dataset):
         """A regional raster leaves the rest of the globe see-through rather than filling it."""
-        alpha = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[..., 3]
+        alpha = TexturedGlobe.from_dataset(dataset, shape=(360, 720)).glyph.texture[
+            ..., 3
+        ]
         assert (alpha == 0).sum() > alpha.size * 0.9
 
     def test_nodata_cells_are_transparent(self):
@@ -196,10 +252,17 @@ class TestFromDataset:
         lat_axis, lon_axis = _texture_axes(*alpha.shape)
 
         def alpha_at(lon: float, lat: float) -> float:
-            return float(alpha[int(np.abs(lat_axis - lat).argmin()), int(np.abs(lon_axis - lon).argmin())])
+            return float(
+                alpha[
+                    int(np.abs(lat_axis - lat).argmin()),
+                    int(np.abs(lon_axis - lon).argmin()),
+                ]
+            )
 
         assert alpha_at(5.0, 15.0) > 0, "the top-left valid cell should be opaque"
-        assert alpha_at(15.0, 15.0) == 0, "the top-right cell is nodata and must be transparent"
+        assert alpha_at(15.0, 15.0) == 0, (
+            "the top-right cell is nodata and must be transparent"
+        )
         assert alpha_at(5.0, 5.0) > 0, "the bottom-left valid cell should be opaque"
         assert alpha_at(15.0, 5.0) > 0, "the bottom-right valid cell should be opaque"
 
@@ -219,13 +282,20 @@ class TestFromDataset:
         lat_axis, lon_axis = _texture_axes(*alpha.shape)
         r = int(np.abs(lat_axis - 15.0).argmin())
         c = int(np.abs(lon_axis - 15.0).argmin())
-        assert alpha[r, c] == 0, "the nodata cell must be transparent whatever the colormap's bad colour is"
+        assert alpha[r, c] == 0, (
+            "the nodata cell must be transparent whatever the colormap's bad colour is"
+        )
 
     def test_the_drape_is_not_transposed_or_shifted(self):
         """Pin the orientation: a distinctive value must land at its own lon/lat, not a mirrored one."""
         arr = np.array([[1.0, 2.0], [3.0, 4.0]], dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326))
-        globe = TexturedGlobe.from_dataset(ds, cmap="viridis", vmin=1.0, vmax=4.0, shape=(720, 1440))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 10.0, 0.0, 20.0, 0.0, -10.0), epsg=4326),
+        )
+        globe = TexturedGlobe.from_dataset(
+            ds, cmap="viridis", vmin=1.0, vmax=4.0, shape=(720, 1440)
+        )
         texture = globe.glyph.texture
         lat_axis, lon_axis = _texture_axes(*texture.shape[:2])
         expected = resolve_colormap("viridis")(Normalize(vmin=1.0, vmax=4.0)(arr))
@@ -235,9 +305,9 @@ class TestFromDataset:
                 r = int(np.abs(lat_axis - lat).argmin())
                 c = int(np.abs(lon_axis - lon).argmin())
                 # The texture is 8-bit, so one colour step (1/255) is the tightest meaningful tolerance.
-                assert np.allclose(texture[r, c, :3], expected[row, col, :3], atol=1.0 / 255), (
-                    f"cell ({row}, {col}) should appear at lon {lon}, lat {lat}"
-                )
+                assert np.allclose(
+                    texture[r, c, :3], expected[row, col, :3], atol=1.0 / 255
+                ), f"cell ({row}, {col}) should appear at lon {lon}, lat {lat}"
 
     def test_a_dataset_without_a_crs_is_refused(self, dataset, monkeypatch):
         """Without a CRS there is no way to place the raster, so fail loudly instead of guessing 4326."""
@@ -246,16 +316,22 @@ class TestFromDataset:
         with pytest.raises(ValueError, match="has none"):
             TexturedGlobe.from_dataset(dataset)
 
-    def test_a_dataset_whose_crs_has_no_epsg_code_is_accepted(self, dataset, monkeypatch):
+    def test_a_dataset_whose_crs_has_no_epsg_code_is_accepted(
+        self, dataset, monkeypatch
+    ):
         """`.epsg` is None for geostationary/Mollweide too; those reproject fine and must not be rejected."""
         monkeypatch.setattr(type(dataset), "epsg", property(lambda self: None))
         globe = TexturedGlobe.from_dataset(dataset, n_lon=2880, n_lat=1440)
-        assert (globe.glyph.texture[..., 3] > 0).any(), "a CRS without an EPSG code should still drape"
+        assert (globe.glyph.texture[..., 3] > 0).any(), (
+            "a CRS without an EPSG code should still drape"
+        )
 
     def test_a_none_colormap_falls_back_to_viridis(self, dataset):
         """resolve_colormap returns None only for cmap=None, which must still produce a texture."""
         globe = TexturedGlobe.from_dataset(dataset, cmap=None, n_lon=2880, n_lat=1440)
-        fallback = TexturedGlobe.from_dataset(dataset, cmap="viridis", n_lon=2880, n_lat=1440)
+        fallback = TexturedGlobe.from_dataset(
+            dataset, cmap="viridis", n_lon=2880, n_lat=1440
+        )
         assert np.array_equal(globe.glyph.texture, fallback.glyph.texture), (
             "cmap=None should fall back to viridis, not to some other colormap"
         )
@@ -275,9 +351,13 @@ class TestFromDataset:
     def test_the_requested_band_is_the_one_drawn(self, band, value):
         """Selecting a band before the warp must not change which band ends up on the globe."""
         arr = np.stack([np.full((40, 40), v, dtype="float32") for v in (1.0, 2.0, 3.0)])
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 0.25, 0.0, 10.0, 0.0, -0.25), epsg=4326))
-        globe = TexturedGlobe.from_dataset(ds, band=band, cmap="viridis", vmin=1.0, vmax=3.0,
-                                           n_lon=2880, n_lat=1440)
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 0.25, 0.0, 10.0, 0.0, -0.25), epsg=4326),
+        )
+        globe = TexturedGlobe.from_dataset(
+            ds, band=band, cmap="viridis", vmin=1.0, vmax=3.0, n_lon=2880, n_lat=1440
+        )
         texture = globe.glyph.texture
         opaque = texture[..., 3] > 0
         assert opaque.any(), f"band {band} should drape"
@@ -296,7 +376,10 @@ class TestFromDataset:
     def test_a_lone_bound_that_inverts_the_range_is_refused(self, kwargs):
         """One bound on the wrong side of the data leaves no range, just as passing both reversed does."""
         arr = np.arange(16, dtype="float32").reshape(4, 4)
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+        )
         with pytest.raises(ValueError, match="no range to colour"):
             TexturedGlobe.from_dataset(ds, **kwargs)
 
@@ -338,7 +421,9 @@ class TestFromDataset:
             _warnings.simplefilter("always")
             TexturedGlobe.from_dataset(dataset, n_lon=2880, n_lat=1440)
         mesh_warnings = [w for w in caught if "sphere mesh" in str(w.message)]
-        assert not mesh_warnings, f"a mesh that resolves the data should not warn: {mesh_warnings}"
+        assert not mesh_warnings, (
+            f"a mesh that resolves the data should not warn: {mesh_warnings}"
+        )
 
     def test_the_mesh_warning_predicts_what_actually_paints(self, dataset):
         """Tie the warning to reality: when it fires, the drawn sphere really does carry no opaque face."""
@@ -346,7 +431,9 @@ class TestFromDataset:
             globe = TexturedGlobe.from_dataset(dataset, n_lon=180, n_lat=90)
         globe.draw()
         painted = np.asarray(globe.glyph._facecolors)
-        assert int((painted[..., 3] > 0).sum()) == 0, "the warning fired but the data did paint"
+        assert int((painted[..., 3] > 0).sum()) == 0, (
+            "the warning fired but the data did paint"
+        )
 
     def test_the_mesh_warning_matches_the_render_for_many_placements(self):
         """One fixture can agree by luck. Sweep placements and sizes and require exact agreement.
@@ -363,7 +450,9 @@ class TestFromDataset:
             size = float(rng.uniform(0.2, 4.0))
             ds = Dataset.from_array(
                 arr=np.ones((4, 4), dtype="float32"),
-                geo_ref=GeoReference(geo=(lon0, size / 4, 0.0, lat0, 0.0, -size / 4), epsg=4326),
+                geo_ref=GeoReference(
+                    geo=(lon0, size / 4, 0.0, lat0, 0.0, -size / 4), epsg=4326
+                ),
             )
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
@@ -372,19 +461,28 @@ class TestFromDataset:
             globe.draw()
             paints = bool((np.asarray(globe.glyph._facecolors)[..., 3] > 0).any())
             if warned == paints:  # warned yet painted, or silent yet blank
-                disagreements.append((round(lon0, 2), round(lat0, 2), round(size, 2), warned, paints))
+                disagreements.append(
+                    (round(lon0, 2), round(lat0, 2), round(size, 2), warned, paints)
+                )
             globe.close()
-        assert not disagreements, f"the warning disagreed with the render at {disagreements[:5]}"
+        assert not disagreements, (
+            f"the warning disagreed with the render at {disagreements[:5]}"
+        )
 
     def test_a_constant_band_does_not_divide_by_zero(self):
         """vmin == vmax has no range to normalise against; it must still produce a texture."""
         arr = np.full((4, 4), 5.0, dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 4.0, 0.0, -1.0), epsg=4326),
+        )
         globe = TexturedGlobe.from_dataset(ds, shape=(180, 360))
         opaque = globe.glyph.texture[..., 3] > 0
         assert opaque.any(), "a constant band should still drape"
         rgb = globe.glyph.texture[opaque][:, :3]
-        assert np.allclose(rgb, rgb[0]), "a constant band should map to one colour, not a gradient"
+        assert np.allclose(rgb, rgb[0]), (
+            "a constant band should map to one colour, not a gradient"
+        )
 
 
 class TestFromProvider:
@@ -408,9 +506,19 @@ class TestFromProvider:
         assert fetched["provider"] == "Esri.WorldImagery"
 
     def test_texture_options_go_to_the_fetcher(self, fetched):
-        TexturedGlobe.from_provider("Esri.WorldImagery", zoom=3, texture_n_lon=720, texture_n_lat=360,
-                                    cache=False)
-        assert fetched["kwargs"] == {"zoom": 3, "n_lon": 720, "n_lat": 360, "cache": False}
+        TexturedGlobe.from_provider(
+            "Esri.WorldImagery",
+            zoom=3,
+            texture_n_lon=720,
+            texture_n_lat=360,
+            cache=False,
+        )
+        assert fetched["kwargs"] == {
+            "zoom": 3,
+            "n_lon": 720,
+            "n_lat": 360,
+            "cache": False,
+        }
 
     def test_glyph_options_do_not_leak_into_the_fetcher(self, fetched):
         TexturedGlobe.from_provider(zoom=2, tilt_deg=0.0)
@@ -419,14 +527,20 @@ class TestFromProvider:
     def test_n_lon_means_the_mesh_here_as_everywhere_else(self, fetched):
         """The same keyword must not mean the mesh in one constructor and the texture in another."""
         globe = TexturedGlobe.from_provider(texture_n_lon=720, n_lon=48, n_lat=24)
-        assert fetched["kwargs"]["n_lon"] == 720, "texture_n_lon should size the fetched grid"
+        assert fetched["kwargs"]["n_lon"] == 720, (
+            "texture_n_lon should size the fetched grid"
+        )
         assert globe.glyph.n_lon == 48, "n_lon should size the sphere mesh"
         assert globe.glyph.n_lat == 24, "n_lat should size the sphere mesh"
 
     def test_mesh_size_is_not_leaked_to_the_fetcher(self, fetched):
         TexturedGlobe.from_provider(n_lon=48, n_lat=24)
-        assert "n_lon" not in fetched["kwargs"], "the mesh size must not reach the fetcher"
-        assert "n_lat" not in fetched["kwargs"], "the mesh size must not reach the fetcher"
+        assert "n_lon" not in fetched["kwargs"], (
+            "the mesh size must not reach the fetcher"
+        )
+        assert "n_lat" not in fetched["kwargs"], (
+            "the mesh size must not reach the fetcher"
+        )
 
 
 class TestProject:
@@ -451,28 +565,39 @@ class TestProject:
         """The overlay must use the glyph's transform, not a re-derived one, or it drifts from the surface."""
         lon, lat = 33.0, -12.0
         expected = globe.glyph.transform(
-            np.array([[np.cos(np.deg2rad(lat)) * np.cos(np.deg2rad(lon)),
-                       np.cos(np.deg2rad(lat)) * np.sin(np.deg2rad(lon)),
-                       np.sin(np.deg2rad(lat))]]),
+            np.array(
+                [
+                    [
+                        np.cos(np.deg2rad(lat)) * np.cos(np.deg2rad(lon)),
+                        np.cos(np.deg2rad(lat)) * np.sin(np.deg2rad(lon)),
+                        np.sin(np.deg2rad(lat)),
+                    ]
+                ]
+            ),
             spin=40.0,
         )
         assert np.allclose(globe.project(lon, lat, spin=40.0), expected)
 
     def test_spin_moves_the_point(self, globe):
-        assert not np.allclose(globe.project(0.0, 0.0, spin=0.0), globe.project(0.0, 0.0, spin=90.0))
+        assert not np.allclose(
+            globe.project(0.0, 0.0, spin=0.0), globe.project(0.0, 0.0, spin=90.0)
+        )
 
     def test_projection_defaults_to_the_drawn_spin(self, globe):
         """spin=0 by default silently placed overlays on a face the reader could not see."""
         globe.draw(spin=90.0)
-        assert np.allclose(globe.project(10.0, 20.0), globe.project(10.0, 20.0, spin=90.0)), (
-            "project() should default to the spin the globe was drawn at"
-        )
+        assert np.allclose(
+            globe.project(10.0, 20.0), globe.project(10.0, 20.0, spin=90.0)
+        ), "project() should default to the spin the globe was drawn at"
 
     def test_an_explicit_spin_still_wins(self, globe):
         globe.draw(spin=90.0)
-        assert np.allclose(globe.project(10.0, 20.0, spin=0.0),
-                           TexturedGlobe(globe.glyph.texture, tilt_deg=globe.glyph.tilt_deg,
-                                         n_lon=8, n_lat=4).project(10.0, 20.0, spin=0.0))
+        assert np.allclose(
+            globe.project(10.0, 20.0, spin=0.0),
+            TexturedGlobe(
+                globe.glyph.texture, tilt_deg=globe.glyph.tilt_deg, n_lon=8, n_lat=4
+            ).project(10.0, 20.0, spin=0.0),
+        )
 
     def test_mismatched_lon_lat_shapes_are_refused(self, globe):
         with pytest.raises(ValueError, match="same shape"):
@@ -518,20 +643,28 @@ class TestPoints:
     def test_per_point_colours_are_culled_with_their_points(self, globe):
         """Dropping a far-side point must drop its colour too, or the arrays desynchronise."""
         globe.draw(elev=0.0, azim=0.0)
-        collection = globe.points([0.0, 180.0], lat=[0.0, 0.0], c=[1.0, 2.0], hide_far_side=True)
+        collection = globe.points(
+            [0.0, 180.0], lat=[0.0, 0.0], c=[1.0, 2.0], hide_far_side=True
+        )
         assert len(collection.get_offsets()) == 1
 
     @pytest.mark.parametrize(
         "key, values, expected",
         [
             pytest.param("s", [10, 20, 30, 40], [10, 30, 40], id="s"),
-            pytest.param("linewidths", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="linewidths"),
+            pytest.param(
+                "linewidths", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="linewidths"
+            ),
             pytest.param("alpha", [0.1, 0.2, 0.3, 0.4], [0.1, 0.3, 0.4], id="alpha"),
             pytest.param("c", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="c"),
-            pytest.param("linestyles", ["-", "--", ":", "-."], ["-", ":", "-."], id="linestyles"),
+            pytest.param(
+                "linestyles", ["-", "--", ":", "-."], ["-", ":", "-."], id="linestyles"
+            ),
         ],
     )
-    def test_per_point_values_are_culled_to_the_kept_points(self, globe, key, values, expected):
+    def test_per_point_values_are_culled_to_the_kept_points(
+        self, globe, key, values, expected
+    ):
         """Assert the surviving values, not the point count: a count passes even with the cull removed."""
         globe.draw(elev=0.0, azim=0.0)
         culled = _cull_per_point({key: values}, np.array([True, False, True, True]))
@@ -542,15 +675,19 @@ class TestPoints:
     def test_a_far_side_point_does_not_shift_the_linewidths(self, globe):
         """End to end: the second point is hidden, so its width must not land on the third."""
         globe.draw(elev=0.0, azim=0.0)
-        collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4,
-                                  linewidths=[1.0, 2.0, 3.0, 4.0])
+        collection = globe.points(
+            [0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, linewidths=[1.0, 2.0, 3.0, 4.0]
+        )
         assert list(np.atleast_1d(collection.get_linewidths())) == [1.0, 3.0, 4.0]
 
     @pytest.mark.parametrize(
-        "colour", [[1.0, 0.0, 0.0, 1.0], (1.0, 0.0, 0.0, 1.0), np.array([1.0, 0.0, 0.0, 1.0])],
+        "colour",
+        [[1.0, 0.0, 0.0, 1.0], (1.0, 0.0, 0.0, 1.0), np.array([1.0, 0.0, 0.0, 1.0])],
         ids=["list", "tuple", "ndarray"],
     )
-    def test_a_single_rgba_colour_survives_the_cull_whatever_its_container(self, globe, colour):
+    def test_a_single_rgba_colour_survives_the_cull_whatever_its_container(
+        self, globe, colour
+    ):
         """Culling a 4-element red to 3 elements renders magenta, silently and in any container type."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, color=colour)
@@ -560,12 +697,16 @@ class TestPoints:
 
     def test_c_is_culled_even_as_a_four_element_sequence(self, globe):
         """matplotlib value-maps a length-matching `c`, so it is per-point data, not one RGBA colour."""
-        culled = _cull_per_point({"c": (0.1, 0.2, 0.3, 0.4)}, np.array([True, False, True, True]))
+        culled = _cull_per_point(
+            {"c": (0.1, 0.2, 0.3, 0.4)}, np.array([True, False, True, True])
+        )
         assert list(np.asarray(culled["c"])) == [0.1, 0.3, 0.4]
 
     def test_a_sized_but_unindexable_value_is_left_alone(self, globe):
         """A set has a length but cannot be sliced; it must be passed through, not crash the cull."""
-        culled = _cull_per_point({"s": {1, 2, 3, 4}}, np.array([True, False, True, True]))
+        culled = _cull_per_point(
+            {"s": {1, 2, 3, 4}}, np.array([True, False, True, True])
+        )
         assert culled["s"] == {1, 2, 3, 4}
 
     def test_a_value_with_no_length_is_left_alone(self, globe):
@@ -577,7 +718,9 @@ class TestPoints:
     def test_a_pandas_series_is_culled(self, globe):
         """Colours often come straight from a dataframe column."""
         pd = pytest.importorskip("pandas")
-        culled = _cull_per_point({"c": pd.Series([1.0, 2.0, 3.0, 4.0])}, np.array([True, False, True, True]))
+        culled = _cull_per_point(
+            {"c": pd.Series([1.0, 2.0, 3.0, 4.0])}, np.array([True, False, True, True])
+        )
         assert list(np.asarray(culled["c"])) == [1.0, 3.0, 4.0]
 
     @pytest.mark.parametrize(
@@ -591,7 +734,9 @@ class TestPoints:
         """A single colour or size applies to every point; slicing it would change what was asked for."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, **kwargs)
-        assert len(collection.get_offsets()) == 3, f"{kwargs} should still draw the 3 near-side points"
+        assert len(collection.get_offsets()) == 3, (
+            f"{kwargs} should still draw the 3 near-side points"
+        )
 
     def test_a_feature_collection_is_accepted(self, globe, points_fc):
         globe.draw()
@@ -599,17 +744,27 @@ class TestPoints:
 
     def test_a_projected_feature_collection_is_reprojected(self, globe, points_fc):
         """The fixture is UTM 18N; its coordinates must become lon/lat before they reach the sphere."""
-        assert points_fc.epsg == 32618, "fixture precondition: the points are in a projected CRS"
+        assert points_fc.epsg == 32618, (
+            "fixture precondition: the points are in a projected CRS"
+        )
         lon, lat = TexturedGlobe._as_lonlat(points_fc, None)
-        assert np.all(np.abs(lon) <= 180), f"longitudes are still projected: {lon.min()}..{lon.max()}"
-        assert np.all(np.abs(lat) <= 90), f"latitudes are still projected: {lat.min()}..{lat.max()}"
+        assert np.all(np.abs(lon) <= 180), (
+            f"longitudes are still projected: {lon.min()}..{lon.max()}"
+        )
+        assert np.all(np.abs(lat) <= 90), (
+            f"latitudes are still projected: {lat.min()}..{lat.max()}"
+        )
 
     def test_a_lonlat_feature_collection_passes_through(self, points_fc):
         """Already in 4326, so the reprojection branch must be skipped rather than re-warping."""
         lonlat = points_fc.to_crs(4326)
         lon, lat = TexturedGlobe._as_lonlat(lonlat, None)
-        assert np.allclose(lon, lonlat.geometry.x.to_numpy()), "lon should be untouched for a 4326 collection"
-        assert np.allclose(lat, lonlat.geometry.y.to_numpy()), "lat should be untouched for a 4326 collection"
+        assert np.allclose(lon, lonlat.geometry.x.to_numpy()), (
+            "lon should be untouched for a 4326 collection"
+        )
+        assert np.allclose(lat, lonlat.geometry.y.to_numpy()), (
+            "lat should be untouched for a 4326 collection"
+        )
 
     def test_non_point_geometry_falls_back_to_centroids(self):
         """Polygons have no .x/.y, so they must be reduced to centroids rather than raising."""
@@ -623,13 +778,17 @@ class TestPoints:
         """A centroid taken on lon/lat degrees is not the centroid on the ground, and geopandas warns."""
         import warnings as _warnings
 
-        square = Polygon([(500000.0, 0.0), (501000.0, 0.0), (501000.0, 1000.0), (500000.0, 1000.0)])
+        square = Polygon(
+            [(500000.0, 0.0), (501000.0, 0.0), (501000.0, 1000.0), (500000.0, 1000.0)]
+        )
         frame = FeatureCollection(geometry=[square], crs="EPSG:32618")
         with _warnings.catch_warnings(record=True) as caught:
             _warnings.simplefilter("always")
             lon, lat = TexturedGlobe._as_lonlat(frame, None)
         geographic = [w for w in caught if "geographic CRS" in str(w.message)]
-        assert not geographic, f"centroids should be taken in the projected CRS: {geographic}"
+        assert not geographic, (
+            f"centroids should be taken in the projected CRS: {geographic}"
+        )
         assert -180.0 <= lon[0] <= 180.0, f"longitude out of range: {lon[0]}"
         assert -90.0 <= lat[0] <= 90.0, f"latitude out of range: {lat[0]}"
 
@@ -687,7 +846,9 @@ class TestRenderLifecycle:
         ax = fig.add_subplot(projection="3d")
         globe.draw(ax=ax)
         globe.close()
-        assert plt.fignum_exists(fig.number), "a caller-supplied figure must survive close()"
+        assert plt.fignum_exists(fig.number), (
+            "a caller-supplied figure must survive close()"
+        )
 
     @pytest.mark.parametrize("via", ["ax", "fig"])
     def test_close_leaves_a_constructor_supplied_figure_alone(self, flat_texture, via):
@@ -698,10 +859,14 @@ class TestRenderLifecycle:
         kwargs = {"ax": ax, "fig": fig} if via == "ax" else {"fig": fig}
         owned = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, **kwargs)
         owned.draw()
-        assert owned.fig is fig, "the globe should have drawn on the constructor's figure"
+        assert owned.fig is fig, (
+            "the globe should have drawn on the constructor's figure"
+        )
         assert not owned._owns_fig, "a constructor-supplied figure is the caller's"
         owned.close()
-        assert plt.fignum_exists(fig.number), "a constructor-supplied figure must survive close()"
+        assert plt.fignum_exists(fig.number), (
+            "a constructor-supplied figure must survive close()"
+        )
 
     def test_switching_to_a_caller_axes_does_not_orphan_our_figure(self, globe):
         """Our own figure must be released when draw() rebinds, or close() can never reach it."""
@@ -721,7 +886,9 @@ class TestRenderLifecycle:
         fig = plt.figure()
         ax = fig.add_subplot(projection="3d")
         globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4, fig=fig, ax=ax)
-        assert globe.animate(n_frames=2, interval=100) is not None, "animate() should return the animation"
+        assert globe.animate(n_frames=2, interval=100) is not None, (
+            "animate() should return the animation"
+        )
         assert globe.ax is ax, "animate() should have used the constructor's axes"
 
     def test_redrawing_onto_the_same_figure_does_not_close_it(self, globe):
@@ -750,7 +917,9 @@ class TestRenderLifecycle:
         ax = fig.add_subplot(projection="3d")
         globe.animate(ax, n_frames=2, interval=100)
         globe.close()
-        assert plt.fignum_exists(fig.number), "a caller-supplied figure must survive close()"
+        assert plt.fignum_exists(fig.number), (
+            "a caller-supplied figure must survive close()"
+        )
 
     def test_redrawing_does_not_leak_the_previous_figure(self, globe):
         """draw() rebinds fig/ax, so the one it replaces would otherwise be held by pyplot forever."""
@@ -758,7 +927,9 @@ class TestRenderLifecycle:
         globe.draw()
         globe.draw()
         globe.draw()
-        assert len(plt.get_fignums()) == 1, f"expected 1 open figure, got {len(plt.get_fignums())}"
+        assert len(plt.get_fignums()) == 1, (
+            f"expected 1 open figure, got {len(plt.get_fignums())}"
+        )
 
     def test_close_is_safe_before_drawing_and_twice(self, globe):
         globe.close()
@@ -786,14 +957,18 @@ class TestRenderLifecycle:
 
         with pytest.raises(RuntimeError, match="boom"):
             raise_inside()
-        assert plt.get_fignums() == [], "the figure should be closed even when the block raised"
+        assert plt.get_fignums() == [], (
+            "the figure should be closed even when the block raised"
+        )
 
     def test_animating_twice_does_not_leak_the_first_figure(self, globe):
         """animate() creates its own figure when given no axes, so the previous one must be released."""
         plt.close("all")
         globe.animate(n_frames=2, interval=100)
         globe.animate(n_frames=2, interval=100)
-        assert len(plt.get_fignums()) == 1, f"expected 1 open figure, got {len(plt.get_fignums())}"
+        assert len(plt.get_fignums()) == 1, (
+            f"expected 1 open figure, got {len(plt.get_fignums())}"
+        )
 
     def test_animate_records_its_starting_spin(self, globe):
         """Otherwise an overlay added after animate() is placed at whatever spin draw() last used."""
@@ -823,27 +998,39 @@ class TestRenderLifecycle:
     def test_save_animation_forwards_to_the_shared_saver(self, globe, monkeypatch):
         """The globe delegates to digitalearth.static.animation rather than reimplementing the encode."""
         seen = {}
-        monkeypatch.setattr("digitalearth.static.textured_globe.save_animation",
-                            lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path)
+        monkeypatch.setattr(
+            "digitalearth.static.textured_globe.save_animation",
+            lambda anim, path, **kw: seen.update(anim=anim, path=path, **kw) or path,
+        )
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", gif="globe.gif")
         assert seen["path"] == "globe.mp4", "the video path should be forwarded"
         assert seen["gif"] == "globe.gif", "the gif path should be forwarded"
-        assert seen["anim"] is globe._animation, "the saver must receive this globe's animation"
+        assert seen["anim"] is globe._animation, (
+            "the saver must receive this globe's animation"
+        )
 
-    def test_save_animation_defaults_to_the_animations_own_rate(self, globe, monkeypatch):
+    def test_save_animation_defaults_to_the_animations_own_rate(
+        self, globe, monkeypatch
+    ):
         """interval=125 ms is 8 fps; the saved clip should match what animate() was built for."""
         seen = {}
-        monkeypatch.setattr("digitalearth.static.textured_globe.save_animation",
-                            lambda anim, path, **kw: seen.update(kw) or path)
+        monkeypatch.setattr(
+            "digitalearth.static.textured_globe.save_animation",
+            lambda anim, path, **kw: seen.update(kw) or path,
+        )
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4")
-        assert seen["fps"] == pytest.approx(8.0), f"expected 8 fps from a 125 ms interval, got {seen['fps']}"
+        assert seen["fps"] == pytest.approx(8.0), (
+            f"expected 8 fps from a 125 ms interval, got {seen['fps']}"
+        )
 
     def test_an_explicit_rate_overrides_the_animations(self, globe, monkeypatch):
         seen = {}
-        monkeypatch.setattr("digitalearth.static.textured_globe.save_animation",
-                            lambda anim, path, **kw: seen.update(kw) or path)
+        monkeypatch.setattr(
+            "digitalearth.static.textured_globe.save_animation",
+            lambda anim, path, **kw: seen.update(kw) or path,
+        )
         globe.animate(n_frames=2, interval=125)
         globe.save_animation("globe.mp4", fps=24)
         assert seen["fps"] == 24, f"an explicit fps must win, got {seen['fps']}"

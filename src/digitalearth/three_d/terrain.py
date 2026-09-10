@@ -9,7 +9,8 @@ Using a ``StructuredGrid`` from pyramids' real x/y cell-centre coordinates (rath
 non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in **Fortran order**
 (``ravel(order="F")``) to line up with the structured point ordering — C-order silently mirrors the terrain.
 """
-from typing import Any, Optional
+
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pyvista as pv
@@ -49,7 +50,9 @@ def _vertical_unit_scale(crs: Any) -> float:
     return 1.0
 
 
-def _terrain_mesh(z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: float) -> pv.StructuredGrid:
+def _terrain_mesh(
+    z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: float
+) -> pv.StructuredGrid:
     """Build a ``StructuredGrid`` surface from a 2-D elevation array and 1-D coordinate vectors.
 
     Args:
@@ -63,15 +66,39 @@ def _terrain_mesh(z: np.ndarray, x: np.ndarray, y: np.ndarray, z_exaggeration: f
     """
     z = np.asarray(z, dtype="float64")
     xx, yy = np.meshgrid(np.asarray(x, dtype="float64"), np.asarray(y, dtype="float64"))
-    zz = np.nan_to_num(z, nan=float(np.nanmin(z)) if np.isfinite(z).any() else 0.0) * z_exaggeration
+    zz = (
+        np.nan_to_num(z, nan=float(np.nanmin(z)) if np.isfinite(z).any() else 0.0)
+        * z_exaggeration
+    )
     grid = pv.StructuredGrid(xx, yy, zz)
     # VTK structured points are Fortran-ordered: ravel(order="F") keeps the terrain right-side up (see module docs).
     grid.point_data[ELEVATION] = z.ravel(order="F")
     return grid
 
 
-class TerrainMixin:
-    """Adds :meth:`terrain` — render a DEM/raster as 3-D relief — to a :class:`Scene3D`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class TerrainMixin(_MixinBase):
+    """Adds :meth:`terrain` — render a DEM/raster as 3-D relief — to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def terrain(
         self,

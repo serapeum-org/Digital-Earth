@@ -4,6 +4,7 @@ Mirrors ``tests/test_interactive_autostyle.py::TestQuickplotBackend`` for the Py
 3-D ``terrain``, a point ``FeatureCollection`` a ``point_cloud``, a polygon one ``extruded_polygons``; lines and
 unknown backends raise. Gated on the ``3d`` extra (pyvista).
 """
+
 import pytest
 
 pv = pytest.importorskip("pyvista")
@@ -109,7 +110,9 @@ class TestQuickplot3DBackend:
     def test_empty_featurecollection_raises_valueerror(self):
         from digitalearth.api import quickplot
 
-        empty = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[:0]
+        empty = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[
+            :0
+        ]
         with pytest.raises(ValueError, match="empty FeatureCollection"):
             quickplot(empty, backend="3d")
 

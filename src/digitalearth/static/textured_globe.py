@@ -18,6 +18,7 @@ Like the cleopatra glyph it wraps (and unlike :class:`~digitalearth.static.map.M
 class rather than a :class:`~digitalearth.static.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
 layer/colorbar lifecycle, none of which applies to a textured sphere.
 """
+
 import inspect
 import warnings
 from typing import Any, List, Optional, Tuple
@@ -52,7 +53,9 @@ _EDGE_INSET = 1e-6
 
 #: The glyph's own default inter-frame interval, in milliseconds, read from its signature rather than
 #: mirrored as a literal: a hand-copied default drifts silently, and the saved frame rate is derived from it.
-_DEFAULT_INTERVAL_MS = inspect.signature(TexturedGlobeGlyph.animate).parameters["interval"].default
+_DEFAULT_INTERVAL_MS = (
+    inspect.signature(TexturedGlobeGlyph.animate).parameters["interval"].default
+)
 
 
 def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -71,8 +74,9 @@ def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
     return np.linspace(90.0, -90.0, n_lat), np.linspace(-180.0, 180.0, n_lon)
 
 
-def _mesh_sample_indices(texture_shape: Tuple[int, int], n_lon: int,
-                        n_lat: int) -> Tuple[np.ndarray, np.ndarray]:
+def _mesh_sample_indices(
+    texture_shape: Tuple[int, int], n_lon: int, n_lat: int
+) -> Tuple[np.ndarray, np.ndarray]:
     """Return the texture rows and columns the glyph will actually sample for its face colours.
 
     This mirrors ``TexturedGlobeGlyph``'s own sampling, and mirroring it exactly is the whole point: the glyph
@@ -94,8 +98,12 @@ def _mesh_sample_indices(texture_shape: Tuple[int, int], n_lon: int,
     lon_edges = np.linspace(-180.0, 180.0, n_lon)
     lat_centres = 0.5 * (lat_edges[:-1] + lat_edges[1:])
     lon_centres = 0.5 * (lon_edges[:-1] + lon_edges[1:])
-    rows = np.clip(np.round((90.0 - lat_centres) / 180.0 * (height - 1)).astype(int), 0, height - 1)
-    cols = np.clip(np.round((lon_centres + 180.0) / 360.0 * (width - 1)).astype(int), 0, width - 1)
+    rows = np.clip(
+        np.round((90.0 - lat_centres) / 180.0 * (height - 1)).astype(int), 0, height - 1
+    )
+    cols = np.clip(
+        np.round((lon_centres + 180.0) / 360.0 * (width - 1)).astype(int), 0, width - 1
+    )
     return rows, cols
 
 
@@ -128,9 +136,16 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
     Returns:
         An ``(N, 3)`` array of unit-sphere coordinates in the glyph's body frame (``+z`` at the north pole).
     """
-    lon_rad, lat_rad = np.deg2rad(np.asarray(lon, dtype=float)), np.deg2rad(np.asarray(lat, dtype=float))
+    lon_rad, lat_rad = (
+        np.deg2rad(np.asarray(lon, dtype=float)),
+        np.deg2rad(np.asarray(lat, dtype=float)),
+    )
     return np.stack(
-        [np.cos(lat_rad) * np.cos(lon_rad), np.cos(lat_rad) * np.sin(lon_rad), np.sin(lat_rad)],
+        [
+            np.cos(lat_rad) * np.cos(lon_rad),
+            np.cos(lat_rad) * np.sin(lon_rad),
+            np.sin(lat_rad),
+        ],
         axis=-1,
     )
 
@@ -140,14 +155,26 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
 #: points (``linewidths``) or make matplotlib reject the call outright (``color``, ``c``). ``marker`` and
 #: ``hatch`` are deliberately absent: ``scatter`` takes a single value for each.
 _PER_POINT_SCATTER_KEYS = (
-    "c", "s", "color", "facecolor", "facecolors", "edgecolor", "edgecolors",
-    "linewidth", "linewidths", "linestyle", "linestyles", "alpha",
+    "c",
+    "s",
+    "color",
+    "facecolor",
+    "facecolors",
+    "edgecolor",
+    "edgecolors",
+    "linewidth",
+    "linewidths",
+    "linestyle",
+    "linestyles",
+    "alpha",
 )
 
 #: Colour arguments where a bare 3- or 4-element sequence of numbers is one RGB(A) value rather than one
 #: value per point. ``c`` is deliberately excluded: matplotlib gives value-mapping precedence for a sequence
 #: whose length matches the point count, so a length-matching ``c`` is per-point data and must be culled.
-_RGBA_EXEMPT_KEYS = frozenset({"color", "facecolor", "facecolors", "edgecolor", "edgecolors"})
+_RGBA_EXEMPT_KEYS = frozenset(
+    {"color", "facecolor", "facecolors", "edgecolor", "edgecolors"}
+)
 
 
 def _is_rgba_literal(key: str, value: Any) -> bool:
@@ -166,7 +193,10 @@ def _is_rgba_literal(key: str, value: Any) -> bool:
     """
     if key not in _RGBA_EXEMPT_KEYS or len(value) not in (3, 4):
         return False
-    return all(isinstance(v, (int, float, np.floating, np.integer)) and not isinstance(v, bool) for v in value)
+    return all(
+        isinstance(v, (int, float, np.floating, np.integer)) and not isinstance(v, bool)
+        for v in value
+    )
 
 
 def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
@@ -281,7 +311,9 @@ class TexturedGlobe:
         self._animation_fps: Optional[float] = None
         #: A fig/ax handed to the constructor is the caller's too — the glyph stores it and draws on it even
         #: when no later call passes one, so ownership has to be settled here, not only at draw time.
-        self._caller_supplied_axes: bool = kwargs.get("ax") is not None or kwargs.get("fig") is not None
+        self._caller_supplied_axes: bool = (
+            kwargs.get("ax") is not None or kwargs.get("fig") is not None
+        )
         #: The spin the globe was last drawn at, so an overlay defaults to the surface it can see.
         self._spin: float = 0.0
         #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
@@ -375,7 +407,9 @@ class TexturedGlobe:
         try:
             rows, cols = (int(v) for v in shape)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"shape must be a (rows, columns) pair of integers, got {shape!r}") from exc
+            raise ValueError(
+                f"shape must be a (rows, columns) pair of integers, got {shape!r}"
+            ) from exc
         if rows < 2 or cols < 2:
             raise ValueError(f"shape must be at least (2, 2), got {shape!r}")
 
@@ -438,7 +472,9 @@ class TexturedGlobe:
         opaque = texture[..., 3] > 0
         if not opaque.any():
             return  # from_dataset has already warned that nothing was draped at all
-        rows, cols = _mesh_sample_indices(texture.shape[:2], self.glyph.n_lon, self.glyph.n_lat)
+        rows, cols = _mesh_sample_indices(
+            texture.shape[:2], self.glyph.n_lon, self.glyph.n_lat
+        )
         if not opaque[np.ix_(rows, cols)].any():
             warnings.warn(
                 f"the draped data is finer than the {self.glyph.n_lon}x{self.glyph.n_lat} sphere mesh, so it "
@@ -449,7 +485,9 @@ class TexturedGlobe:
             )
 
     @classmethod
-    def from_provider(cls, provider: Any = "Esri.WorldImagery", **kwargs: Any) -> "TexturedGlobe":
+    def from_provider(
+        cls, provider: Any = "Esri.WorldImagery", **kwargs: Any
+    ) -> "TexturedGlobe":
         """Build a globe from a whole-world XYZ tile basemap (delegates to ``cleopatra``'s ``world_texture``).
 
         Args:
@@ -498,9 +536,19 @@ class TexturedGlobe:
 
                 ```
         """
-        texture_keys = ("zoom", "cache", "max_workers", "timeout", "retries", "user_agent")
+        texture_keys = (
+            "zoom",
+            "cache",
+            "max_workers",
+            "timeout",
+            "retries",
+            "user_agent",
+        )
         texture_kwargs = {k: kwargs.pop(k) for k in texture_keys if k in kwargs}
-        for shape_key, fetch_key in (("texture_n_lon", "n_lon"), ("texture_n_lat", "n_lat")):
+        for shape_key, fetch_key in (
+            ("texture_n_lon", "n_lon"),
+            ("texture_n_lat", "n_lat"),
+        ):
             if shape_key in kwargs:
                 texture_kwargs[fetch_key] = kwargs.pop(shape_key)
         return cls(world_texture(provider, **texture_kwargs), **kwargs)
@@ -508,7 +556,9 @@ class TexturedGlobe:
     # ------------------------------------------------------------------ texture building
 
     @staticmethod
-    def _validate_colour_bounds(good: np.ndarray, vmin: Optional[float], vmax: Optional[float]) -> None:
+    def _validate_colour_bounds(
+        good: np.ndarray, vmin: Optional[float], vmax: Optional[float]
+    ) -> None:
         """Reject bound combinations that leave nothing to colour.
 
         Separated from resolving the bounds because it answers a different question: not "what scale do we
@@ -528,7 +578,9 @@ class TexturedGlobe:
             if bound is not None and not np.isfinite(float(bound)):
                 raise ValueError(f"{name} must be a finite number, got {bound!r}")
         if vmin is not None and vmax is not None and float(vmax) <= float(vmin):
-            raise ValueError(f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}")
+            raise ValueError(
+                f"vmax must be greater than vmin, got vmin={vmin!r}, vmax={vmax!r}"
+            )
         if not good.size:
             return
         if vmax is None and vmin is not None and float(vmin) >= float(good.max()):
@@ -543,8 +595,9 @@ class TexturedGlobe:
             )
 
     @classmethod
-    def _resolve_colour_bounds(cls, good: np.ndarray, vmin: Optional[float],
-                               vmax: Optional[float]) -> Tuple[float, float]:
+    def _resolve_colour_bounds(
+        cls, good: np.ndarray, vmin: Optional[float], vmax: Optional[float]
+    ) -> Tuple[float, float]:
         """Settle the colour scale's ``(lo, hi)`` from the caller's bounds and the band's finite values.
 
         A bound the caller gives always wins; a bound they leave out comes from the data, or from a unit
@@ -563,7 +616,9 @@ class TexturedGlobe:
         """
         cls._validate_colour_bounds(good, vmin, vmax)
         # A unit range is the fallback when the band has no finite value to take a bound from.
-        data_lo, data_hi = (float(good.min()), float(good.max())) if good.size else (0.0, 1.0)
+        data_lo, data_hi = (
+            (float(good.min()), float(good.max())) if good.size else (0.0, 1.0)
+        )
         lo = data_lo if vmin is None else float(vmin)
         hi = data_hi if vmax is None else float(vmax)
         if hi <= lo:  # a constant band has no range to normalise against
@@ -571,8 +626,14 @@ class TexturedGlobe:
         return lo, hi
 
     @classmethod
-    def _colorize(cls, values: np.ndarray, *, cmap: Any, vmin: Optional[float],
-                  vmax: Optional[float]) -> np.ndarray:
+    def _colorize(
+        cls,
+        values: np.ndarray,
+        *,
+        cmap: Any,
+        vmin: Optional[float],
+        vmax: Optional[float],
+    ) -> np.ndarray:
         """Colour-map a NaN-masked 2-D band to an ``(H, W, 4)`` float RGBA array, NaN cells transparent.
 
         Args:
@@ -602,8 +663,10 @@ class TexturedGlobe:
         colormap = resolve_colormap(cmap)
         if colormap is None:  # resolve_colormap returns None only for cmap=None
             colormap = resolve_colormap("viridis")
-        rgba = np.asarray(colormap(Normalize(vmin=lo, vmax=hi)(np.asarray(values, dtype=float))),
-                          dtype=float).copy()
+        rgba = np.asarray(
+            colormap(Normalize(vmin=lo, vmax=hi)(np.asarray(values, dtype=float))),
+            dtype=float,
+        ).copy()
         rgba[..., 3] = np.where(np.isfinite(values), rgba[..., 3], 0.0)
         return rgba
 
@@ -646,8 +709,9 @@ class TexturedGlobe:
 
     # ------------------------------------------------------------------ geometry
 
-    def project(self, lon: Any, lat: Any, *, spin: Optional[float] = None,
-                altitude: float = 0.0) -> np.ndarray:
+    def project(
+        self, lon: Any, lat: Any, *, spin: Optional[float] = None, altitude: float = 0.0
+    ) -> np.ndarray:
         """Map lon/lat degrees onto the drawn sphere, returning world-space ``(N, 3)`` coordinates.
 
         Pushes the points through the glyph's own ``transform``, so they carry the same spin **and axial
@@ -702,11 +766,17 @@ class TexturedGlobe:
                 ```
         """
         spin = self._spin if spin is None else spin
-        lon_arr, lat_arr = np.atleast_1d(np.asarray(lon, dtype=float)), np.atleast_1d(
-            np.asarray(lat, dtype=float))
+        lon_arr, lat_arr = (
+            np.atleast_1d(np.asarray(lon, dtype=float)),
+            np.atleast_1d(np.asarray(lat, dtype=float)),
+        )
         if lon_arr.shape != lat_arr.shape:
-            raise ValueError(f"lon and lat must have the same shape, got {lon_arr.shape} and {lat_arr.shape}")
-        body = _lonlat_to_body(lon_arr.ravel(), lat_arr.ravel()) * (1.0 + float(altitude))
+            raise ValueError(
+                f"lon and lat must have the same shape, got {lon_arr.shape} and {lat_arr.shape}"
+            )
+        body = _lonlat_to_body(lon_arr.ravel(), lat_arr.ravel()) * (
+            1.0 + float(altitude)
+        )
         return np.atleast_2d(self.glyph.transform(body, spin=spin))
 
     def visible(self, world_xyz: np.ndarray) -> np.ndarray:
@@ -760,7 +830,9 @@ class TexturedGlobe:
                 ```
         """
         if self.ax is None:
-            raise RuntimeError("draw() the globe before asking which points are visible")
+            raise RuntimeError(
+                "draw() the globe before asking which points are visible"
+            )
         view = _view_vector(self.ax.elev, self.ax.azim)
         points = np.atleast_2d(np.asarray(world_xyz, dtype=float))
         return np.asarray(points @ view > 0.0, dtype=bool).ravel()
@@ -785,7 +857,9 @@ class TexturedGlobe:
         self.ax, self.fig = ax, figure
         self._owns_fig = owns
 
-    def draw(self, ax: Any = None, *, spin: float = 0.0, **kwargs: Any) -> Tuple[Any, Any]:
+    def draw(
+        self, ax: Any = None, *, spin: float = 0.0, **kwargs: Any
+    ) -> Tuple[Any, Any]:
         """Draw the globe, returning the matplotlib ``(fig, ax)`` and recording them on the instance.
 
         Args:
@@ -837,9 +911,16 @@ class TexturedGlobe:
         self._spin = float(spin)
         return self.fig, self.ax
 
-    def points(self, data: Any, *, lat: Any = None, spin: Optional[float] = None,
-               altitude: float = 0.01,
-               hide_far_side: bool = True, **kwargs: Any) -> Any:
+    def points(
+        self,
+        data: Any,
+        *,
+        lat: Any = None,
+        spin: Optional[float] = None,
+        altitude: float = 0.01,
+        hide_far_side: bool = True,
+        **kwargs: Any,
+    ) -> Any:
         """Scatter lon/lat points onto the globe's surface.
 
         Accepts either a pyramids ``FeatureCollection`` / geopandas ``GeoDataFrame`` of points (its geometry
@@ -923,15 +1004,21 @@ class TexturedGlobe:
                 carries no CRS (its coordinates then cannot be placed on the sphere).
         """
         if lat is not None:
-            return np.atleast_1d(np.asarray(data, dtype=float)), np.atleast_1d(np.asarray(lat, dtype=float))
+            return np.atleast_1d(np.asarray(data, dtype=float)), np.atleast_1d(
+                np.asarray(lat, dtype=float)
+            )
         geometry = getattr(data, "geometry", None)
         if geometry is None:
-            raise ValueError("points needs a FeatureCollection/GeoDataFrame, or both lon and lat")
+            raise ValueError(
+                "points needs a FeatureCollection/GeoDataFrame, or both lon and lat"
+            )
         # As on the raster path, a missing EPSG code is not the same as a missing CRS: a projection with no
         # authority code still reprojects, so test the CRS itself.
         epsg = source_epsg(data)
         if epsg is None and getattr(data, "crs", None) is None:
-            raise ValueError("the feature collection has no CRS, so its points cannot be placed on the globe")
+            raise ValueError(
+                "the feature collection has no CRS, so its points cannot be placed on the globe"
+            )
         # Reduce to centroids *before* reprojecting: a centroid taken on lon/lat degrees is not the centroid
         # of the shape on the ground, and geopandas warns about exactly that.
         if not (geometry.geom_type == "Point").all():
@@ -993,19 +1080,27 @@ class TexturedGlobe:
         """
         interval = float(kwargs.get("interval", _DEFAULT_INTERVAL_MS))
         if interval <= 0:
-            raise ValueError(f"interval must be a positive number of milliseconds, got {interval!r}")
+            raise ValueError(
+                f"interval must be a positive number of milliseconds, got {interval!r}"
+            )
         supplied = ax is not None or self._caller_supplied_axes
         if ax is None:
-            ax = self._ctor_ax  # a globe built around the caller's axes keeps animating there
+            ax = (
+                self._ctor_ax
+            )  # a globe built around the caller's axes keeps animating there
         if ax is None:
-            figsize = kwargs.pop("figsize", self.glyph.default_options.get("figsize", (6, 6)))
+            figsize = kwargs.pop(
+                "figsize", self.glyph.default_options.get("figsize", (6, 6))
+            )
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
         self._bind(ax, owns=not supplied)
         # Record the spin the animation *starts* at. An overlay added afterwards then sits on the first
         # frame rather than on whatever draw() last used; it does not track the animation as it turns.
         self._spin = float(kwargs.get("start_spin", 0.0))
-        self._animation = anim  # keep a strong reference so it survives until save/display
+        self._animation = (
+            anim  # keep a strong reference so it survives until save/display
+        )
         self._animation_fps = 1000.0 / interval
         return anim
 
@@ -1054,8 +1149,14 @@ class TexturedGlobe:
             raise RuntimeError("draw() the globe before saving it")
         self.fig.savefig(path, **kwargs)
 
-    def save_animation(self, path: str, *, fps: Optional[float] = None, gif: Optional[str] = None,
-                       **kwargs: Any) -> Any:
+    def save_animation(
+        self,
+        path: str,
+        *,
+        fps: Optional[float] = None,
+        gif: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Save the rotation built by :meth:`animate`, optionally also deriving a GIF from it.
 
         A textured globe is exactly the case the derive-a-GIF path exists for: every frame is a full 3-D

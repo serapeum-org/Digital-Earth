@@ -14,7 +14,7 @@ The slider is wired at :meth:`render` time via :meth:`_wrap_temporal` (returning
 imported lazily.
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
@@ -30,7 +30,13 @@ _CLIM_SCAN_CAP = 50
 _LARGE_STACK_PIXELS = 8_000_000
 
 
-class TemporalMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class TemporalMixin(_MixinBase):
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
@@ -81,7 +87,7 @@ class TemporalMixin:
         cmap: str = "viridis",
         opacity: float = 0.85,
         clim: Optional[Tuple[float, float]] = None,
-    ) -> "TemporalMixin":
+    ) -> Self:
         """Render a time-stepped layer with a slider over its time steps (recipe W6).
 
         Accepts either form the recipe specifies. A **vector** layer (a ``FeatureCollection`` /
@@ -154,9 +160,17 @@ class TemporalMixin:
         import pandas as pd
 
         _require_layer_api()
-        if hasattr(features, "datasets"):  # a pyramids DatasetCollection — the raster stack path
+        if hasattr(
+            features, "datasets"
+        ):  # a pyramids DatasetCollection — the raster stack path
             return self._timeslider_stack(
-                features, kdim=kdim, labels=labels, band=band, cmap=cmap, opacity=opacity, clim=clim
+                features,
+                kdim=kdim,
+                labels=labels,
+                band=band,
+                cmap=cmap,
+                opacity=opacity,
+                clim=clim,
             )
 
         gdf = self._display_gdf(features, method="timeslider")
@@ -166,7 +180,9 @@ class TemporalMixin:
         # Features with no time value cannot sit at any step, and a None among the values would make the
         # sort raise once `_display_gdf` has encoded a NaT to None ("'<' not supported between instances
         # of 'NoneType' and 'str'"). Drop them; the empty check below still catches a series with none.
-        times = sorted(value for value in gdf[kdim].unique().tolist() if not pd.isna(value))
+        times = sorted(
+            value for value in gdf[kdim].unique().tolist() if not pd.isna(value)
+        )
         if not times:
             raise ValueError(
                 f"timeslider() needs at least one time step, but no feature carries a {kdim!r} value"
@@ -177,7 +193,9 @@ class TemporalMixin:
         # big=False on every path: the slider filters a per-feature MapLibre layer, so the data must not
         # auto-route to a deck.gl layer (which has no per-feature layer id to filter) (M3).
         if is_polygon and column is not None:
-            self.choropleth(gdf, column=column, scheme=scheme, k=k, cmap=cmap, opacity=opacity)
+            self.choropleth(
+                gdf, column=column, scheme=scheme, k=k, cmap=cmap, opacity=opacity
+            )
         elif is_polygon:
             self.polygons(gdf, opacity=opacity, big=False)
         else:
@@ -201,7 +219,7 @@ class TemporalMixin:
         cmap: str,
         opacity: float,
         clim: Optional[Tuple[float, float]],
-    ) -> "TemporalMixin":
+    ) -> Self:
         """Build the raster half of :meth:`timeslider`: one image layer per member, swapped by the slider.
 
         Every member is drawn with the same ``(vmin, vmax)`` so the colour scale is identical on the first
@@ -229,7 +247,9 @@ class TemporalMixin:
         members = collection.datasets
         count = len(members)
         if count == 0:
-            raise ValueError("timeslider() needs at least one time step, but the collection is empty")
+            raise ValueError(
+                "timeslider() needs at least one time step, but the collection is empty"
+            )
         if labels is not None:
             if len(labels) != count:
                 raise ValueError(
@@ -363,7 +383,9 @@ class TemporalMixin:
         if config.get("mode") == "raster":
             layer_ids = config["layer_ids"]
             index_of = {step: index for index, step in enumerate(config["times"])}
-            showing = [0]  # the frame currently visible; layers are built with only the first shown
+            showing = [
+                0
+            ]  # the frame currently visible; layers are built with only the first shown
 
             def show_raster(value: Any) -> None:
                 active = index_of[value]

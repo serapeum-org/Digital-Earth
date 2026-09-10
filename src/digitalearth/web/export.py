@@ -16,16 +16,40 @@ these are hooks it calls, not overrides). urllib / browser libs are imported laz
 import pathlib
 import re
 import tempfile
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
-_ASSET_RE = re.compile(r'<(script|link)[^>]*?(?:src|href)="(?P<url>https?://[^"]+?\.(?:js|css))"[^>]*?>(?:</script>)?')
+_ASSET_RE = re.compile(
+    r'<(script|link)[^>]*?(?:src|href)="(?P<url>https?://[^"]+?\.(?:js|css))"[^>]*?>(?:</script>)?'
+)
 
 
-class ExportMixin:
-    """Export builders (HTML / offline HTML / PNG) for :class:`~digitalearth.web.map.WebMap`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-    def to_html(self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any) -> str:
+
+class ExportMixin(_MixinBase):
+    """Export builders (HTML / offline HTML / PNG) for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
+
+    def to_html(
+        self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any
+    ) -> str:
         """Return the map as a standalone HTML string.
 
         Args:
@@ -83,7 +107,9 @@ class ExportMixin:
             )
         return new_html
 
-    def _render_png(self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any) -> str:
+    def _render_png(
+        self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any
+    ) -> str:
         """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
 
         Tries Playwright, then Selenium; both render the standalone HTML offscreen and screenshot it. Neither

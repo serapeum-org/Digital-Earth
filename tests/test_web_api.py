@@ -6,9 +6,9 @@ A raster becomes ``add_raster``, a point ``FeatureCollection`` ``points``, a pol
 """
 
 import pytest
+from pyramids.feature import FeatureCollection
 
 from digitalearth.api import quickplot
-from pyramids.feature import FeatureCollection
 
 
 @pytest.fixture()
@@ -32,7 +32,9 @@ class TestWebBackendDispatch:
             quickplot(dataset, backend="nope")
 
     def test_empty_featurecollection_raises(self):
-        empty = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[:0]
+        empty = FeatureCollection.read_file("examples/data/rhine_gauges.geojson").iloc[
+            :0
+        ]
         with pytest.raises(ValueError, match="empty FeatureCollection"):
             quickplot(empty, backend="web")
 
@@ -64,7 +66,9 @@ class TestWebBackendDraw:
 
     def test_polygons_choropleth_by_column(self, polys_fc):
         out = quickplot(polys_fc, backend="web", column="pop", k=4)
-        assert out.last_breaks is not None, "a column choropleth must classify the values"
+        assert out.last_breaks is not None, (
+            "a column choropleth must classify the values"
+        )
 
     def test_polygons_default_no_column(self, polys_fc):
         from digitalearth.web import WebMap
@@ -74,4 +78,6 @@ class TestWebBackendDraw:
 
     def test_basemap_adds_underlay(self, polys_fc):
         out = quickplot(polys_fc, backend="web", column="pop", k=4, basemap=True)
-        assert len(out.layers) >= 2, "basemap=True should add a tile underlay beneath the data"
+        assert len(out.layers) >= 2, (
+            "basemap=True should add a tile underlay beneath the data"
+        )

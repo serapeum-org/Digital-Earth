@@ -5,6 +5,7 @@ histogram. The rendering lives in cleopatra (``LineGlyph``, ``HistogramGlyph``);
 numpy arrays (or a pyramids ``Dataset`` band, with nodata dropped) into the inputs those glyphs expect.
 Parallel to :mod:`digitalearth.static.series` (the ensemble/statistical series plots).
 """
+
 from typing import Any, Optional, Sequence
 
 import numpy as np
@@ -100,13 +101,22 @@ def statistics(
         if key in summary:
             # Two quantiles that format to the same key (differing only below ~1e-6) would silently
             # overwrite each other — surface it instead.
-            raise ValueError(f"quantiles collide on key {key!r}; use quantiles that differ by more than ~1e-6")
+            raise ValueError(
+                f"quantiles collide on key {key!r}; use quantiles that differ by more than ~1e-6"
+            )
         summary[key] = float(np.quantile(arr, q))
     return summary
 
 
-def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color: Any = None,
-         **kwargs) -> Axes:
+def line(
+    x: Any,
+    y: Any,
+    *,
+    ax: Optional[Axes] = None,
+    label: Any = None,
+    color: Any = None,
+    **kwargs,
+) -> Axes:
     """Draw an x–y line/marker series (cleopatra ``LineGlyph.line``); returns the Axes.
 
     Args:
@@ -149,7 +159,9 @@ def line(x: Any, y: Any, *, ax: Optional[Axes] = None, label: Any = None, color:
     return ax
 
 
-def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, **kwargs) -> Axes:
+def bar(
+    x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, **kwargs
+) -> Axes:
     """Draw a bar chart of a single series (cleopatra ``LineGlyph.bar``); returns the Axes.
 
     Args:
@@ -189,8 +201,14 @@ def bar(x: Any, heights: Any, *, ax: Optional[Axes] = None, color: Any = None, *
     return ax
 
 
-def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
-              ax: Optional[Axes] = None, **kwargs):
+def histogram(
+    values: Any,
+    *,
+    column: Optional[str] = None,
+    bins: int = 15,
+    ax: Optional[Axes] = None,
+    **kwargs,
+):
     """Draw a histogram of array, raster, or field values (cleopatra ``HistogramGlyph.histogram``).
 
     Args:
@@ -264,8 +282,16 @@ def histogram(values: Any, *, column: Optional[str] = None, bins: int = 15,
     return glyph.histogram(bins=bins, **kwargs)
 
 
-def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: Any = None,
-            ax: Optional[Axes] = None, **kwargs) -> Axes:
+def scatter(
+    x: Any,
+    y: Any,
+    *,
+    data: Any = None,
+    color_by: Any = None,
+    size_by: Any = None,
+    ax: Optional[Axes] = None,
+    **kwargs,
+) -> Axes:
     """Draw a field-vs-field scatter (cleopatra ``ScatterGlyph``); returns the Axes (DC.3).
 
     Plots ``y`` against ``x`` as a point cloud, optionally colouring points by ``color_by`` and sizing them by
@@ -321,13 +347,22 @@ def scatter(x: Any, y: Any, *, data: Any = None, color_by: Any = None, size_by: 
     ys = column_or_array(data, y)
     values = column_or_array(data, color_by)
     sizes = column_or_array(data, size_by)
-    glyph = ScatterGlyph(xs, ys, values=values, sizes=sizes, ax=ax, fig=_fig_of(ax), **kwargs)
+    glyph = ScatterGlyph(
+        xs, ys, values=values, sizes=sizes, ax=ax, fig=_fig_of(ax), **kwargs
+    )
     _, ax, _ = glyph.plot(ax=ax)
     return ax
 
 
-def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",
-           ax: Optional[Axes] = None, **kwargs) -> Axes:
+def bar_by(
+    data: Any,
+    by: str,
+    column: Optional[str] = None,
+    *,
+    agg: str = "sum",
+    ax: Optional[Axes] = None,
+    **kwargs,
+) -> Axes:
     """Bar chart of an aggregate per category (DC.4).
 
     Groups ``data`` by the ``by`` column and draws one bar per group of ``column`` aggregated with ``agg``
@@ -388,8 +423,15 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
     return ax
 
 
-def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum",
-            ax: Optional[Axes] = None, **kwargs) -> Axes:
+def line_by(
+    data: Any,
+    by: str,
+    column: Optional[str] = None,
+    *,
+    agg: str = "sum",
+    ax: Optional[Axes] = None,
+    **kwargs,
+) -> Axes:
     """Line chart of an aggregate per ordered key — e.g. a value summed by year (DC.4).
 
     Groups ``data`` by the ``by`` column (typically a time/ordered field), aggregates ``column`` with ``agg``

@@ -15,15 +15,34 @@ GeoArrow) renderer would be a separate widget and is left as a future enhancemen
 Builders that colour by value reuse the base ``_color_expr`` helpers; numpy/maplibre are imported lazily.
 """
 
-from typing import Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from loguru import logger
 
 from digitalearth.web.base import _require_layer_api
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class BigDataMixin:
-    """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`."""
+
+class BigDataMixin(_MixinBase):
+    """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     @staticmethod
     def _require_points(gdf: Any, method: str) -> None:
@@ -51,7 +70,7 @@ class BigDataMixin:
         radius: float = 30.0,
         intensity: float = 1.0,
         opacity: float = 0.8,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render a point ``FeatureCollection`` as a MapLibre heatmap (recipe W4).
 
         Args:
@@ -63,7 +82,7 @@ class BigDataMixin:
             opacity: Heatmap layer opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         import numpy as np
 
@@ -78,10 +97,22 @@ class BigDataMixin:
         if weight is not None:
             values = np.asarray(self._require_column(gdf, weight), dtype=float)
             finite = values[np.isfinite(values)]
-            lo, hi = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
+            lo, hi = (
+                (float(finite.min()), float(finite.max()))
+                if finite.size
+                else (0.0, 1.0)
+            )
             if hi <= lo:
                 hi = lo + 1.0
-            paint["heatmap-weight"] = ["interpolate", ["linear"], ["get", weight], lo, 0.0, hi, 1.0]
+            paint["heatmap-weight"] = [
+                "interpolate",
+                ["linear"],
+                ["get", weight],
+                lo,
+                0.0,
+                hi,
+                1.0,
+            ]
 
         src_id, layer_id = self._uid("heat-src"), self._uid("heatmap")
         layer = Layer(id=layer_id, type=LayerType.HEATMAP, source=src_id, paint=paint)
@@ -101,7 +132,7 @@ class BigDataMixin:
         max_zoom: int = 14,
         color: str = "#51bbd6",
         text_color: str = "#ffffff",
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render a point ``FeatureCollection`` as MapLibre clustered circles + count labels (recipe W4).
 
         Builds a clustered GeoJSON source and three layers: cluster bubbles (sized by point count), the count
@@ -115,7 +146,7 @@ class BigDataMixin:
             text_color: Colour of the cluster count label.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
@@ -164,7 +195,7 @@ class BigDataMixin:
         self._last_layer_id = unclustered.id
         return self.add_layer(layer=apply)
 
-    def _add_deck_layer(self, layer: dict) -> "BigDataMixin":
+    def _add_deck_layer(self, layer: dict) -> Self:
         """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.
 
         All deck layers are applied together (deck.gl owns one overlay), so the first deck builder registers
@@ -174,7 +205,7 @@ class BigDataMixin:
             layer: A deck.gl JSON layer dict (``{"@@type": ..., ...}``).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         if self._deck_layers is None:
             self._deck_layers = []
@@ -193,7 +224,7 @@ class BigDataMixin:
         *,
         fill_color: Sequence[int] = (51, 136, 255, 200),
         radius: float = 5.0,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Args:
@@ -202,7 +233,7 @@ class BigDataMixin:
             radius: Point radius in pixels.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from maplibre.sources import geopandas_to_geojson
 
@@ -227,7 +258,7 @@ class BigDataMixin:
         *,
         fill_color: Sequence[int] = (51, 136, 255, 180),
         line_color: Sequence[int] = (255, 255, 255, 255),
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Render polygons as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Args:
@@ -236,7 +267,7 @@ class BigDataMixin:
             line_color: RGBA outline colour (0-255 per channel).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from maplibre.sources import geopandas_to_geojson
 

@@ -41,33 +41,33 @@ class TestPoints:
     def test_registers_gv_points_and_chains(self, m, point_fc):
         out = m.points(point_fc)
         assert out is m, "points() must return the map for chaining"
-        assert isinstance(
-            m.layers[0], gv.Points
-        ), f"expected gv.Points, got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], gv.Points), (
+            f"expected gv.Points, got {type(m.layers[0])}"
+        )
 
     def test_crs_is_declared_as_display_crs(self, m, point_fc):
         """The element's crs must be the display CRS GeoViews built internally (no re-projection)."""
         m.points(point_fc)
         crs = m.layers[0].crs
-        assert (
-            "3857" in str(crs) or "Mercator" in type(crs).__name__
-        ), f"element CRS should declare the 3857 display CRS, got {crs!r}"
+        assert "3857" in str(crs) or "Mercator" in type(crs).__name__, (
+            f"element CRS should declare the 3857 display CRS, got {crs!r}"
+        )
 
     def test_coordinates_are_reprojected_via_pyramids(self, m, point_fc):
         """Geometry must be in Web-Mercator metres (pyramids to_crs), not the source UTM range."""
         m.points(point_fc)
         x_values = m.layers[0].dimension_values(0)
         expected = point_fc.to_crs(3857).geometry.x.to_numpy()
-        assert np.allclose(
-            np.sort(x_values), np.sort(expected)
-        ), "point x coordinates must equal the pyramids-reprojected geometry"
+        assert np.allclose(np.sort(x_values), np.sort(expected)), (
+            "point x coordinates must equal the pyramids-reprojected geometry"
+        )
 
     def test_value_column_drives_colour_and_hover(self, m, point_fc):
         m.points(point_fc, value_column="fid", cmap="magma")
         element = m.layers[0]
-        assert "fid" in [
-            d.name for d in element.vdims
-        ], "value column must be a vdim for hover"
+        assert "fid" in [d.name for d in element.vdims], (
+            "value column must be a vdim for hover"
+        )
         style = hv.Store.lookup_options("bokeh", element, "style").kwargs
         assert style["color"] == "fid" and style["cmap"] == "magma"
 
@@ -104,9 +104,9 @@ class TestPath:
             point_fc.geometry.shift(1).fillna(point_fc.geometry.iloc[0])
         )
         m.path(lines)
-        assert isinstance(
-            m.layers[0], gv.Path
-        ), f"expected gv.Path, got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], gv.Path), (
+            f"expected gv.Path, got {type(m.layers[0])}"
+        )
 
 
 class TestPolygonsAndChoropleth:
@@ -125,9 +125,9 @@ class TestPolygonsAndChoropleth:
         m.choropleth(polygon_fc, "fid", cmap="plasma", clim=(0.0, 10.0))
         element = m.layers[0]
         assert isinstance(element, gv.Polygons)
-        assert "fid" in [
-            d.name for d in element.vdims
-        ], "choropleth column must be a vdim"
+        assert "fid" in [d.name for d in element.vdims], (
+            "choropleth column must be a vdim"
+        )
         style = hv.Store.lookup_options("bokeh", element, "style").kwargs
         assert style["color"] == "fid" and style["cmap"] == "plasma"
         plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
@@ -145,15 +145,23 @@ class TestPolygonsAndChoropleth:
         style = hv.Store.lookup_options("bokeh", element, "style").kwargs
         assert style["color"] == "fid"
         cmap = style["cmap"]
-        assert isinstance(cmap, dict), f"categorical cmap should be a label->colour dict, got {cmap!r}"
-        assert all(isinstance(c, str) and c.startswith("#") for c in cmap.values()), f"hex colours: {cmap}"
+        assert isinstance(cmap, dict), (
+            f"categorical cmap should be a label->colour dict, got {cmap!r}"
+        )
+        assert all(isinstance(c, str) and c.startswith("#") for c in cmap.values()), (
+            f"hex colours: {cmap}"
+        )
         # one discrete colour per distinct value, and the labels are the (stringified) categories
         n = len(m.last_breaks)
         assert n >= 1, "categories should be recorded"
         assert len(cmap) == n, f"expected {n} discrete colours, got {len(cmap)}"
-        assert set(cmap) == {str(c) for c in m.last_breaks}, "cmap keys must be the category labels"
+        assert set(cmap) == {str(c) for c in m.last_breaks}, (
+            "cmap keys must be the category labels"
+        )
         # the rendered colour column is discrete (string), not the original numeric dtype
-        assert element.dimension_values("fid").dtype.kind in ("U", "O"), "colour column must be string-typed"
+        assert element.dimension_values("fid").dtype.kind in ("U", "O"), (
+            "colour column must be string-typed"
+        )
 
     def test_choropleth_categorical_missing_values_get_fallback(self, m, polygon_fc):
         """A NaN/None category gets the neutral '#cccccc' fallback in the dict cmap (web parity, L1)."""
@@ -164,8 +172,12 @@ class TestPolygonsAndChoropleth:
         fc["kind"] = kinds
         m.choropleth(fc, "kind", scheme="categorical")
         cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
-        assert cmap.get("n/a") == "#cccccc", f"missing values must map to the neutral fallback: {cmap}"
-        assert {"a", "b"} <= set(cmap), f"real categories must still be coloured: {cmap}"
+        assert cmap.get("n/a") == "#cccccc", (
+            f"missing values must map to the neutral fallback: {cmap}"
+        )
+        assert {"a", "b"} <= set(cmap), (
+            f"real categories must still be coloured: {cmap}"
+        )
 
     def test_choropleth_categorical_real_na_not_clobbered(self, m, polygon_fc):
         """A genuine 'n/a' category keeps its colour; missing rows use a collision-free sentinel (L3)."""
@@ -176,8 +188,12 @@ class TestPolygonsAndChoropleth:
         fc["kind"] = kinds
         m.choropleth(fc, "kind", scheme="categorical")
         cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
-        assert cmap.get("n/a") not in (None, "#cccccc"), f"the real 'n/a' category must keep its colour: {cmap}"
-        assert cmap.get("n/a_") == "#cccccc", f"missing rows must use a distinct sentinel: {cmap}"
+        assert cmap.get("n/a") not in (None, "#cccccc"), (
+            f"the real 'n/a' category must keep its colour: {cmap}"
+        )
+        assert cmap.get("n/a_") == "#cccccc", (
+            f"missing rows must use a distinct sentinel: {cmap}"
+        )
 
     def test_choropleth_graduated_scheme_not_implemented(self, m, polygon_fc):
         """A graduated scheme is rejected, not silently degraded to a continuous ramp (L1)."""
@@ -201,6 +217,6 @@ class TestRasterVectorCompose:
         m.image(dataset).choropleth(polygon_fc, "fid")
         overlay = m.render()
         assert isinstance(overlay, hv.Overlay)
-        assert (
-            len(overlay) == 2
-        ), f"expected 2 layers in the overlay, got {len(overlay)}"
+        assert len(overlay) == 2, (
+            f"expected 2 layers in the overlay, got {len(overlay)}"
+        )

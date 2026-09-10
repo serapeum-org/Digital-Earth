@@ -1,0 +1,31 @@
+# Revisions to skip when running `git blame`.
+#
+# Only whole-tree mechanical reformats belong here — commits that changed how the code is written without
+# changing what it does. Listing one keeps `git blame` pointing at the commit that last altered a line's
+# meaning instead of the one that re-wrapped it.
+#
+# Enable it locally with:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub applies this file automatically in its blame view.
+#
+# ---------------------------------------------------------------------------------------------------------
+# ACTION REQUIRED AFTER MERGING #178
+#
+# This repo squash-merges, so the branch commit that carried the ruff reformat does not survive onto `main` —
+# its SHA is rewritten into the single squash commit. A branch SHA listed here would therefore name an object
+# that `main` does not contain, and git skips an unresolvable entry **silently**, so the file would look
+# correct while doing nothing.
+#
+# The reformat is part of #178's squash commit. Once it is merged, append that commit's full 40-character SHA
+# below:
+#
+#     git log --oneline -1 main        # the squash commit for #178
+#
+# and add it as:
+#
+#     # chore(lint,types): enforce the formatter and make mypy pass (#178)
+#     <40-char sha>
+#
+# One full SHA per line, newest last, each with a comment naming what the commit did.

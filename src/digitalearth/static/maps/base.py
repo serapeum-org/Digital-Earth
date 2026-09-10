@@ -4,6 +4,7 @@ The protected base every Map capability mixin builds on: it owns the display-CRS
 ``globe`` and the projection-frame caches set up in ``__init__``) and the reproject-to-display-CRS and
 Source-extraction helpers the plotting mixins consume via ``self``.
 """
+
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
@@ -31,8 +32,12 @@ class GeoLayerBase(Scene):
         self.domain = domain
         self.globe = globe
         self._graticule_lines: Optional[List[np.ndarray]] = None  # set by graticule()
-        self._last_vector: Optional[tuple] = None  # (glyph, artist, kind) of the most recent vector layer
-        self._animation: Optional[FuncAnimation] = None  # last animate()/rotate() result (kept alive, L3)
+        self._last_vector: Optional[tuple] = (
+            None  # (glyph, artist, kind) of the most recent vector layer
+        )
+        self._animation: Optional[FuncAnimation] = (
+            None  # last animate()/rotate() result (kept alive, L3)
+        )
         self._framed = False
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
@@ -58,8 +63,6 @@ class GeoLayerBase(Scene):
         ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
         return get_source(ds, band=band)
 
-
     def _reproject(self, dataset: Any) -> Any:
         """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
         return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
-

@@ -15,13 +15,33 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
 
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class VectorMixin:
-    """Vector builders (DI.1b): point, line and polygon layers with hover tooltips."""
+
+class VectorMixin(_MixinBase):
+    """Vector builders (DI.1b): point, line and polygon layers with hover tooltips.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def _display_gdf(self, features: Any) -> Any:
         """Reproject ``features`` to the display CRS through pyramids and return the GeoDataFrame.
@@ -80,7 +100,7 @@ class VectorMixin:
         rasterize: Any = "auto",
         rasterize_threshold: int = 50_000,
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a point layer, optionally coloured by an attribute column.
 
         Args:
@@ -107,7 +127,7 @@ class VectorMixin:
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
@@ -129,7 +149,7 @@ class VectorMixin:
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
-    def path(self, features: Any, **opts: Any) -> "VectorMixin":
+    def path(self, features: Any, **opts: Any) -> Self:
         """Add a line layer (LineString / MultiLineString features).
 
         Args:
@@ -149,7 +169,7 @@ class VectorMixin:
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gdf = self._display_gdf(features)
         element = self._vector_element("Path", gdf)
@@ -165,7 +185,7 @@ class VectorMixin:
         rasterize: Any = "auto",
         rasterize_threshold: int = 50_000,
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a polygon layer — outlines only, or filled by an attribute column.
 
         Args:
@@ -192,7 +212,7 @@ class VectorMixin:
                 ```
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
@@ -233,8 +253,9 @@ class VectorMixin:
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
-    def _categorical_polygons(self, features: Any, column: str, *, cmap: str = "viridis",
-                              **opts: Any) -> "VectorMixin":
+    def _categorical_polygons(
+        self, features: Any, column: str, *, cmap: str = "viridis", **opts: Any
+    ) -> Self:
         """Fill polygons by a distinct-value attribute, one colour per category (DC.8).
 
         The categorical counterpart of the continuous :meth:`polygons` path: each distinct value of ``column``
@@ -258,7 +279,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from digitalearth.base.symbology import (
             MISSING_COLOR,
@@ -267,8 +288,12 @@ class VectorMixin:
         )
 
         gdf = self._display_gdf(features)
-        categories, colors = categorical_colors(gdf[column], resolve_categorical_cmap(cmap))
-        cmap_by_label = {str(category): color for category, color in zip(categories, colors)}
+        categories, colors = categorical_colors(
+            gdf[column], resolve_categorical_cmap(cmap)
+        )
+        cmap_by_label = {
+            str(category): color for category, color in zip(categories, colors)
+        }
         # Render the column as discrete labels and map each label to its colour, so Bokeh colours it
         # categorically (a numeric column would map continuously and interpolate the palette).
         gdf = gdf.copy()
@@ -297,7 +322,7 @@ class VectorMixin:
         cmap: str = "viridis",
         clim: Optional[Tuple[float, float]] = None,
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a choropleth — polygons filled and coloured by ``column`` (hover shows the value).
 
         A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``. Pass
@@ -322,7 +347,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Examples:
             - Fill polygons by a population column with fixed colour limits:
@@ -396,7 +421,7 @@ class VectorMixin:
         color_by: Optional[str] = "magnitude",
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a u/v vector field as interactive arrows (parity with ``Map.quiver``, recipe I6).
 
         Args:
@@ -409,7 +434,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         x, y, u_arr, v_arr = self._uv_arrays(u, v, band=band, density=density)
@@ -424,7 +449,7 @@ class VectorMixin:
 
     def streamlines(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add streamlines of a u/v field via the matplotlib backend (parity with ``Map.streamplot``).
 
         Bokeh has no streamline integrator, so streamlines render through HoloViews' matplotlib
@@ -440,7 +465,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         from loguru import logger
 
@@ -459,7 +484,7 @@ class VectorMixin:
 
     def barbs(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add wind barbs of a u/v field — **matplotlib backend only** (parity with ``Map.barbs``).
 
         ``gv.WindBarbs`` has no Bokeh renderer, so barbs are a static matplotlib layer; this logs
@@ -474,7 +499,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ImportError: when the installed GeoViews has no ``WindBarbs`` element.
@@ -508,7 +533,7 @@ class VectorMixin:
         rasterize_threshold: int = 50_000,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add an unstructured triangular mesh (parity with ``Map.tricontour``/``tripcolor``, recipe I7).
 
         Connectivity comes from one of two sources, both pyramids-fed:
@@ -530,7 +555,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         nodes, simplices, vdims = self._mesh_inputs(data, value_column)
@@ -597,7 +622,7 @@ class VectorMixin:
         column: Optional[str] = None,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add an equal-area hex-bin density layer (honest no-overplot density, recipe I7).
 
         Args:
@@ -610,7 +635,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         import numpy as np
 
@@ -632,7 +657,12 @@ class VectorMixin:
         crs = gv.util.process_crs(self.crs)
         if column:
             reducer = reducers.get(aggregator, np.mean)
-            element = gv.HexTiles((x, y, gdf[column].to_numpy()), kdims=["x", "y"], vdims=[column], crs=crs)
+            element = gv.HexTiles(
+                (x, y, gdf[column].to_numpy()),
+                kdims=["x", "y"],
+                vdims=[column],
+                crs=crs,
+            )
         else:  # no value column -> count points per hex (np.size), no value dimension
             reducer = np.size
             element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)
@@ -650,7 +680,7 @@ class VectorMixin:
         filled: bool = True,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a 2-D kernel-density layer of point positions (parity with ``Map.kde``, recipe I7).
 
         Args:
@@ -660,7 +690,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         gdf = self._display_gdf(features)
@@ -684,7 +714,7 @@ class VectorMixin:
         node_id: str = "id",
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Add a network / origin-destination flow map (parity-plus for ``Map.sankey``, recipe I9).
 
         Args:
@@ -701,7 +731,7 @@ class VectorMixin:
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         import numpy as np
         import pandas as pd
@@ -753,7 +783,7 @@ class VectorMixin:
 
     def flow(
         self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any
-    ) -> "VectorMixin":
+    ) -> Self:
         """Spatial-flow alias of :meth:`graph` mirroring ``Map.sankey``'s framing (DI.15).
 
         Args:
@@ -763,6 +793,6 @@ class VectorMixin:
             **opts: Forwarded to :meth:`graph`.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         return self.graph(nodes, edges, weight=weight, **opts)

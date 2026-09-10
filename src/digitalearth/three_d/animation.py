@@ -11,7 +11,8 @@ GIF/MP4 writing uses PyVista's ``open_gif``/``open_movie`` (which need ``imageio
 the ``3d`` extra). No GIS is touched here: animation is pure rendering of already-built meshes; data still comes
 from pyramids upstream.
 """
-from typing import Any, Callable, Iterable
+
+from typing import TYPE_CHECKING, Any, Callable, Iterable
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
@@ -28,7 +29,9 @@ def _open_writer(plotter: Any, path: str, framerate: int) -> None:
         plotter.open_movie(path, framerate=framerate)
     else:
         plotter.open_gif(path, fps=framerate)
-    if not hasattr(plotter, "mwriter"):  # pragma: no cover - defensive against an upstream API change
+    if not hasattr(
+        plotter, "mwriter"
+    ):  # pragma: no cover - defensive against an upstream API change
         raise AttributeError(
             "PyVista did not expose a frame writer ('mwriter') after open_gif/open_movie; "
             "the installed pyvista version may be incompatible with digitalearth's animation helpers."
@@ -42,8 +45,29 @@ def _finalize_frames(plotter: Any) -> None:
         writer.close()
 
 
-class AnimationMixin:
-    """Adds :meth:`orbit`, :meth:`animate`, and :meth:`jupyter` to a :class:`Scene3D`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class AnimationMixin(_MixinBase):
+    """Adds :meth:`orbit`, :meth:`animate`, and :meth:`jupyter` to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def orbit(
         self,
@@ -85,7 +109,9 @@ class AnimationMixin:
             orbital_path = self.plotter.generate_orbital_path(n_points=n_frames)
             self.plotter.orbit_on_path(orbital_path, write_frames=True, **orbit_kwargs)
         finally:
-            _finalize_frames(self.plotter)  # always flush/close the writer, even if rendering raised
+            _finalize_frames(
+                self.plotter
+            )  # always flush/close the writer, even if rendering raised
         return path
 
     def animate(
@@ -134,7 +160,9 @@ class AnimationMixin:
                 update(self, frame)
                 self.plotter.write_frame()
         finally:
-            _finalize_frames(self.plotter)  # always flush/close the writer, even if a frame raised
+            _finalize_frames(
+                self.plotter
+            )  # always flush/close the writer, even if a frame raised
         return path
 
     def jupyter(self, backend: str = "trame") -> None:

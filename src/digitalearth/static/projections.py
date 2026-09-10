@@ -11,13 +11,26 @@ The boundary/graticule geometry is assembled here from pyramids' existing coordi
 (``pyramids.base.crs.reproject_coordinates``, which accepts arbitrary CRS) plus numpy — no shapely in
 digitalearth, no new pyramids code. cleopatra then *draws* this geometry via ``apply_projection_frame``.
 """
+
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 import numpy as np
 from pyramids.base.crs import reproject_coordinates
 
-__all__ = ["PROJECTIONS", "get", "projection_frame", "graticule", "densify_lonlat", "close_visible_runs",
-           "orthographic", "robinson", "mollweide", "polar_north", "polar_south", "web_mercator"]
+__all__ = [
+    "PROJECTIONS",
+    "get",
+    "projection_frame",
+    "graticule",
+    "densify_lonlat",
+    "close_visible_runs",
+    "orthographic",
+    "robinson",
+    "mollweide",
+    "polar_north",
+    "polar_south",
+    "web_mercator",
+]
 
 
 # ---------------------------------------------------------------- named projections
@@ -83,14 +96,14 @@ def get(name: str, **kwargs) -> Any:
             >>> from digitalearth.static import projections
             >>> projections.get("web_mercator")
             3857
-            
+
             ```
         - Resolve a parametrised proj4 projection:
             ```python
             >>> from digitalearth.static import projections
             >>> projections.get("orthographic", lon=-9, lat=39)
             '+proj=ortho +lat_0=39 +lon_0=-9 +datum=WGS84 +units=m +no_defs'
-            
+
             ```
     """
     key = name.strip().lower()
@@ -251,7 +264,9 @@ def densify_lonlat(xy: np.ndarray, step_deg: float = 1.0) -> np.ndarray:
 
 def _nearest_boundary_index(boundary_open: np.ndarray, pt: np.ndarray) -> int:
     """Index of the boundary vertex nearest ``pt`` (in projected coordinates)."""
-    return int(np.argmin(np.hypot(boundary_open[:, 0] - pt[0], boundary_open[:, 1] - pt[1])))
+    return int(
+        np.argmin(np.hypot(boundary_open[:, 0] - pt[0], boundary_open[:, 1] - pt[1]))
+    )
 
 
 def _boundary_arc(boundary_open: np.ndarray, i: int, j: int) -> np.ndarray:
@@ -265,7 +280,9 @@ def _boundary_arc(boundary_open: np.ndarray, i: int, j: int) -> np.ndarray:
     return boundary_open[idx]
 
 
-def close_visible_runs(x: np.ndarray, y: np.ndarray, boundary: np.ndarray) -> List[np.ndarray]:
+def close_visible_runs(
+    x: np.ndarray, y: np.ndarray, boundary: np.ndarray
+) -> List[np.ndarray]:
     """Turn a reprojected polygon ring into finite, closed, limb-clipped fill rings.
 
     The far hemisphere of a global polygon reprojects to ``inf``/``nan``; the visible part is one or more
@@ -308,14 +325,19 @@ def close_visible_runs(x: np.ndarray, y: np.ndarray, boundary: np.ndarray) -> Li
         if fully:
             ring = np.vstack([run, run[:1]])
         else:
-            arc = _boundary_arc(boundary_open, _nearest_boundary_index(boundary_open, run[-1]),
-                                _nearest_boundary_index(boundary_open, run[0]))
+            arc = _boundary_arc(
+                boundary_open,
+                _nearest_boundary_index(boundary_open, run[-1]),
+                _nearest_boundary_index(boundary_open, run[0]),
+            )
             ring = np.vstack([run, arc, run[:1]])
         out.append(ring)
     return out
 
 
-def projection_frame(crs: Any, n: int = 720) -> Tuple[np.ndarray, Tuple[float, float], Tuple[float, float]]:
+def projection_frame(
+    crs: Any, n: int = 720
+) -> Tuple[np.ndarray, Tuple[float, float], Tuple[float, float]]:
     """Return the boundary polygon and projected limits of a CRS's valid domain.
 
     Samples the whole sphere on a lon/lat grid, projects it via pyramids, keeps the finite points, and takes
@@ -342,24 +364,31 @@ def projection_frame(crs: Any, n: int = 720) -> Tuple[np.ndarray, Tuple[float, f
             2
             >>> bool(xlim[0] < 0 < xlim[1])
             True
-            
+
             ```
     """
     lon = np.linspace(-180, 180, n)
     lat = np.linspace(-90, 90, max(n // 2, 2))
     grid_lon, grid_lat = np.meshgrid(lon, lat)
-    px, py = reproject_coordinates(grid_lon.ravel().tolist(), grid_lat.ravel().tolist(),
-                                   from_crs=4326, to_crs=crs)
+    px, py = reproject_coordinates(
+        grid_lon.ravel().tolist(), grid_lat.ravel().tolist(), from_crs=4326, to_crs=crs
+    )
     px, py = np.asarray(px, dtype=float), np.asarray(py, dtype=float)
     mask = np.isfinite(px) & np.isfinite(py)
     if not mask.any():
         raise ValueError(f"CRS {crs!r} has no finite projected domain over the sphere")
     pts = np.column_stack([px[mask], py[mask]])
     ring = _convex_hull(pts)
-    return ring, (float(pts[:, 0].min()), float(pts[:, 0].max())), (float(pts[:, 1].min()), float(pts[:, 1].max()))
+    return (
+        ring,
+        (float(pts[:, 0].min()), float(pts[:, 0].max())),
+        (float(pts[:, 1].min()), float(pts[:, 1].max())),
+    )
 
 
-def graticule(crs: Any, lon_step: float = 30.0, lat_step: float = 30.0, dens: int = 200) -> List[np.ndarray]:
+def graticule(
+    crs: Any, lon_step: float = 30.0, lat_step: float = 30.0, dens: int = 200
+) -> List[np.ndarray]:
     """Return projected lon/lat grid polylines (meridians + parallels) for a CRS.
 
     Each meridian/parallel is densified in lon/lat, projected via pyramids, and split at non-finite points
@@ -383,16 +412,20 @@ def graticule(crs: Any, lon_step: float = 30.0, lat_step: float = 30.0, dens: in
             True
             >>> lines[0].shape[1]
             2
-            
+
             ```
     """
     lines: List[np.ndarray] = []
     for lon in np.arange(-180, 180 + lon_step, lon_step):
         lat = np.linspace(-89.5, 89.5, dens)
-        x, y = reproject_coordinates(np.full_like(lat, lon).tolist(), lat.tolist(), from_crs=4326, to_crs=crs)
+        x, y = reproject_coordinates(
+            np.full_like(lat, lon).tolist(), lat.tolist(), from_crs=4326, to_crs=crs
+        )
         lines += _split_finite(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
     for lat in np.arange(-90 + lat_step, 90, lat_step):
         lon = np.linspace(-180, 180, dens)
-        x, y = reproject_coordinates(lon.tolist(), np.full_like(lon, lat).tolist(), from_crs=4326, to_crs=crs)
+        x, y = reproject_coordinates(
+            lon.tolist(), np.full_like(lon, lat).tolist(), from_crs=4326, to_crs=crs
+        )
         lines += _split_finite(np.asarray(x, dtype=float), np.asarray(y, dtype=float))
     return lines

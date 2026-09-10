@@ -26,9 +26,7 @@ from tests.test_no_competitor_imports import (
     test_tiers_import_no_gis_competitor,
 )
 
-_WEB_ROOT = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "web"
-)
+_WEB_ROOT = pathlib.Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "web"
 
 
 class TestLazyImport:
@@ -47,10 +45,14 @@ class TestLazyImport:
         for mod in _WEB_ROOT.rglob("*.py"):
             tree = ast.parse(mod.read_text(encoding="utf-8"))
             top_level = set()
-            for node in tree.body:  # module body only — function-local imports stay lazy
+            for (
+                node
+            ) in tree.body:  # module body only — function-local imports stay lazy
                 if isinstance(node, ast.Import):
                     top_level.update(alias.name.split(".")[0] for alias in node.names)
-                elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                elif (
+                    isinstance(node, ast.ImportFrom) and node.module and node.level == 0
+                ):
                     top_level.add(node.module.split(".")[0])
             assert not top_level & engine, (
                 f"{mod.name} imports the MapLibre engine at module top — the tier promises a lazy "
@@ -70,7 +72,9 @@ class TestLazyImport:
 
     def test_missing_engine_raises_actionable_error(self, monkeypatch):
         """With maplibre unimportable, the lazy import points at the install command."""
-        monkeypatch.setitem(sys.modules, "maplibre", None)  # makes `import maplibre` raise
+        monkeypatch.setitem(
+            sys.modules, "maplibre", None
+        )  # makes `import maplibre` raise
         with pytest.raises(ImportError, match=r"digitalearth\[web\]"):
             _require_maplibre()
 
@@ -113,7 +117,9 @@ class TestDisplaySource:
 
     def test_reprojects_to_display_crs(self, dataset):
         m = WebMap(crs=3857)
-        assert dataset.epsg != 3857, "fixture must start in a non-display CRS for this test"
+        assert dataset.epsg != 3857, (
+            "fixture must start in a non-display CRS for this test"
+        )
         src = m._to_display_source(dataset)
         assert src.crs == 3857
 
@@ -187,13 +193,17 @@ class TestRegistryAndRender:
         monkeypatch.setattr(IPython.display, "display", shown.append)
         widget = WebMap().show()
         assert isinstance(widget, MapWidget)
-        assert shown == [widget], "show() must push the widget through IPython display once"
+        assert shown == [widget], (
+            "show() must push the widget through IPython display once"
+        )
 
     def test_repr_mimebundle_delegates_to_widget(self):
         bundle = WebMap()._repr_mimebundle_()
         # ipywidgets returns the (data, metadata) tuple form of the protocol; older hooks return a bare dict.
         data = bundle[0] if isinstance(bundle, tuple) else bundle
-        assert isinstance(data, dict) and data, "expected the widget's non-empty mimebundle"
+        assert isinstance(data, dict) and data, (
+            "expected the widget's non-empty mimebundle"
+        )
         assert "application/vnd.jupyter.widget-view+json" in data
 
 
@@ -220,7 +230,9 @@ class TestUtf8Shim:
 
         real_open = builtins.open
 
-        def _sentinel(*args, **kwargs):  # a fresh, un-shimmed reader (no _digitalearth_utf8 flag)
+        def _sentinel(
+            *args, **kwargs
+        ):  # a fresh, un-shimmed reader (no _digitalearth_utf8 flag)
             raise AssertionError("this reader should have been rebound by the shim")
 
         fake = types.ModuleType("maplibre._fake_reader_holder")
@@ -229,7 +241,9 @@ class TestUtf8Shim:
         # start from an un-patched reader (monkeypatch auto-restores after the test)
         monkeypatch.setattr(_utils, "read_internal_file", _sentinel)
 
-        def _fake_open(file, *args, **kwargs):  # fail the probe like Windows cp1252 does
+        def _fake_open(
+            file, *args, **kwargs
+        ):  # fail the probe like Windows cp1252 does
             if "pywidget.js" in str(file) and not kwargs.get("encoding"):
                 raise UnicodeDecodeError("charmap", b"\x9d", 0, 1, "simulated cp1252")
             return real_open(file, *args, **kwargs)
@@ -239,14 +253,20 @@ class TestUtf8Shim:
         base._patch_maplibre_html_encoding()
 
         shim = _utils.read_internal_file
-        assert getattr(shim, "_digitalearth_utf8", False), "the canonical _utils reader must be shimmed"
-        assert fake.read_internal_file is shim, "a submodule holding the reader by name must be rebound too"
+        assert getattr(shim, "_digitalearth_utf8", False), (
+            "the canonical _utils reader must be shimmed"
+        )
+        assert fake.read_internal_file is shim, (
+            "a submodule holding the reader by name must be rebound too"
+        )
 
     def test_save_writes_utf8_non_ascii_title(self, tmp_path):
         """`save` writes the HTML as UTF-8 so a non-ASCII title round-trips (the write-side cp1252 fix)."""
         out = tmp_path / "u.html"
         WebMap(center=(0.0, 0.0), zoom=2).save(str(out), title="façade ′ café —")
-        assert "façade ′ café —" in out.read_text(encoding="utf-8"), "unicode title must survive the write"
+        assert "façade ′ café —" in out.read_text(encoding="utf-8"), (
+            "unicode title must survive the write"
+        )
 
 
 class TestStyleResolution:
@@ -273,7 +293,13 @@ class TestConstructionDefaults:
     def test_default_configuration(self):
         """A bare ``WebMap()`` defaults to EPSG:4326 (MapLibre lon/lat), zoom 2, dark style, height 500."""
         m = WebMap()
-        assert (m.center, m.zoom, m.style, m.crs, m.height) == (None, 2, "dark", 4326, 500)
+        assert (m.center, m.zoom, m.style, m.crs, m.height) == (
+            None,
+            2,
+            "dark",
+            4326,
+            500,
+        )
         assert m.layers == []
 
     @pytest.mark.parametrize(
@@ -355,7 +381,9 @@ class TestJsonSafeDatetimes:
 
         out = WebMap()._json_safe(self._frame())
         assert out["from_date"].iloc[0].startswith("2026-01-01T06:00:00")
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
     def test_nat_becomes_null_not_the_string(self):
         """A missing timestamp serialises as null rather than the text 'NaT'."""
@@ -374,10 +402,16 @@ class TestJsonSafeDatetimes:
         import json
 
         out = WebMap()._json_safe(self._frame())
-        assert out["from_date"].dtype == object, f"encoded column must stay object, got {out['from_date'].dtype}"
+        assert out["from_date"].dtype == object, (
+            f"encoded column must stay object, got {out['from_date'].dtype}"
+        )
         payload = json.dumps(out.drop(columns="geometry").to_dict(orient="records"))
-        assert "null" in payload, f"the missing timestamp did not become null: {payload}"
-        assert "NaN" not in payload, f"invalid JSON NaN leaked into the payload: {payload}"
+        assert "null" in payload, (
+            f"the missing timestamp did not become null: {payload}"
+        )
+        assert "NaN" not in payload, (
+            f"invalid JSON NaN leaked into the payload: {payload}"
+        )
 
     def test_iso_text_still_sorts_chronologically(self):
         """The encoding keeps timeslider's ordering valid — lexicographic == chronological."""
@@ -418,9 +452,13 @@ class TestJsonSafeDatetimes:
 
         frame = self._frame(day=[dt.date(2026, 1, 1), dt.date(2026, 2, 1), None])
         out = WebMap()._json_safe(frame)
-        assert out["day"].iloc[0] == "2026-01-01", f"date not ISO-encoded: {out['day'].iloc[0]!r}"
+        assert out["day"].iloc[0] == "2026-01-01", (
+            f"date not ISO-encoded: {out['day'].iloc[0]!r}"
+        )
         assert out["day"].iloc[2] is None, "a missing date must become null"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
     def test_timedelta_columns_become_iso_durations(self):
         """``timedelta64`` also fails json.dumps; it encodes as an ISO-8601 duration."""
@@ -430,16 +468,22 @@ class TestJsonSafeDatetimes:
 
         frame = self._frame(age=pd.to_timedelta([1, 2, None], unit="D"))
         out = WebMap()._json_safe(frame)
-        assert out["age"].iloc[0] == "P1DT0H0M0S", f"unexpected duration: {out['age'].iloc[0]!r}"
+        assert out["age"].iloc[0] == "P1DT0H0M0S", (
+            f"unexpected duration: {out['age'].iloc[0]!r}"
+        )
         assert out["age"].iloc[2] is None, "a missing duration must become null"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
     def test_non_date_object_columns_are_left_alone(self):
         """A plain object column (strings) must not be touched by the date encoding."""
         import pandas as pd
 
         frame = self._frame(label=pd.Series(["x", "y", "z"], dtype=object))
-        assert frame["label"].dtype == object, "the fixture must be object dtype to enter the scan"
+        assert frame["label"].dtype == object, (
+            "the fixture must be object dtype to enter the scan"
+        )
         out = WebMap()._json_safe(frame)
         assert list(out["label"]) == ["x", "y", "z"], "a string column was altered"
 
@@ -447,7 +491,9 @@ class TestJsonSafeDatetimes:
         """Geometry is what MapLibre actually needs; it must survive untouched."""
         frame = self._frame()
         out = WebMap()._json_safe(frame)
-        assert out.geometry.equals(frame.geometry), "geometry was altered by the encoding"
+        assert out.geometry.equals(frame.geometry), (
+            "geometry was altered by the encoding"
+        )
 
     def test_a_mixed_object_column_encodes_only_its_dates(self):
         """A column holding dates *and* other values must not crash on the non-dates.
@@ -463,8 +509,12 @@ class TestJsonSafeDatetimes:
 
         frame = self._frame(mixed=[dt.date(2026, 1, 1), "n/a", 5])
         out = WebMap()._json_safe(frame)
-        assert list(out["mixed"]) == ["2026-01-01", "n/a", 5], f"mixed column mangled: {list(out['mixed'])}"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        assert list(out["mixed"]) == ["2026-01-01", "n/a", 5], (
+            f"mixed column mangled: {list(out['mixed'])}"
+        )
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
     def test_period_columns_are_encoded(self):
         """``period`` is date-like and fails json.dumps just like the rest.
@@ -479,8 +529,12 @@ class TestJsonSafeDatetimes:
 
         frame = self._frame(month=pd.period_range("2026-01", periods=3, freq="M"))
         out = WebMap()._json_safe(frame)
-        assert list(out["month"]) == ["2026-01", "2026-02", "2026-03"], f"periods mangled: {list(out['month'])}"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        assert list(out["month"]) == ["2026-01", "2026-02", "2026-03"], (
+            f"periods mangled: {list(out['month'])}"
+        )
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
     def test_an_all_null_datetime_column_becomes_all_null(self):
         """Every value missing is still a datetime column, and must encode to nulls, not 'NaT'.
@@ -496,7 +550,9 @@ class TestJsonSafeDatetimes:
         frame = self._frame()
         frame["from_date"] = pd.to_datetime([None, None, None])
         out = WebMap()._json_safe(frame)
-        assert list(out["from_date"]) == [None, None, None], f"expected all null, got {list(out['from_date'])}"
+        assert list(out["from_date"]) == [None, None, None], (
+            f"expected all null, got {list(out['from_date'])}"
+        )
         payload = json.dumps(out.drop(columns="geometry").to_dict(orient="records"))
         assert "NaN" not in payload, f"a NaN leaked into the payload: {payload}"
         assert "NaT" not in payload, f"a NaT leaked into the payload: {payload}"
@@ -510,7 +566,9 @@ class TestJsonSafeDatetimes:
         import geopandas as gpd
         import pandas as pd
 
-        empty = gpd.GeoDataFrame({"from_date": pd.to_datetime([])}, geometry=[], crs=4326)
+        empty = gpd.GeoDataFrame(
+            {"from_date": pd.to_datetime([])}, geometry=[], crs=4326
+        )
         out = WebMap()._json_safe(empty)
         assert len(out) == 0, "an empty frame must stay empty"
 
@@ -525,13 +583,19 @@ class TestJsonSafeDatetimes:
 
         frame = self._frame()
         frame["from_date"] = pd.to_datetime(
-            ["2026-01-01 00:00:00.123456", "2026-01-01 00:00:00.654321", "2026-01-01 00:00:01.000000"]
+            [
+                "2026-01-01 00:00:00.123456",
+                "2026-01-01 00:00:00.654321",
+                "2026-01-01 00:00:01.000000",
+            ]
         )
         out = WebMap()._json_safe(frame)
         assert out["from_date"].iloc[0] == "2026-01-01T00:00:00.123456", (
             f"sub-second precision lost: {out['from_date'].iloc[0]!r}"
         )
-        assert len(set(out["from_date"])) == 3, "distinct instants collapsed to the same string"
+        assert len(set(out["from_date"])) == 3, (
+            "distinct instants collapsed to the same string"
+        )
 
     def test_encoding_is_idempotent(self):
         """Encoding an already-encoded frame is a no-op, so a double pass cannot corrupt it.
@@ -562,15 +626,22 @@ class TestJsonSafeDatetimes:
         out = WebMap()._json_safe(frame)
         for column in ("from_date", "to_date", "day"):
             assert out[column].dtype == object, f"{column} was not encoded"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
-    @pytest.mark.parametrize("values, expected", [
-        (["n/a", "DATE"], ["n/a", "2026-01-01"]),
-        ([None, "n/a", "DATE"], [None, "n/a", "2026-01-01"]),
-        ([1, "DATE"], [1, "2026-01-01"]),
-        (["DATE", "n/a"], ["2026-01-01", "n/a"]),
-    ])
-    def test_a_date_anywhere_in_an_object_column_triggers_encoding(self, values, expected):
+    @pytest.mark.parametrize(
+        "values, expected",
+        [
+            (["n/a", "DATE"], ["n/a", "2026-01-01"]),
+            ([None, "n/a", "DATE"], [None, "n/a", "2026-01-01"]),
+            ([1, "DATE"], [1, "2026-01-01"]),
+            (["DATE", "n/a"], ["2026-01-01", "n/a"]),
+        ],
+    )
+    def test_a_date_anywhere_in_an_object_column_triggers_encoding(
+        self, values, expected
+    ):
         """Encoding must not depend on which row the first date happens to sit in.
 
         Args:
@@ -597,7 +668,9 @@ class TestJsonSafeDatetimes:
         )
         out = WebMap()._json_safe(frame)
         assert list(out["c"]) == expected, f"expected {expected}, got {list(out['c'])}"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
     def test_a_plain_timedelta_is_encoded(self):
         """``datetime.timedelta`` has no ``isoformat()`` — only pandas' subclass does.
@@ -620,14 +693,21 @@ class TestJsonSafeDatetimes:
             crs=4326,
         )
         out = WebMap()._json_safe(frame)
-        assert list(out["gap"]) == ["P1DT0H0M0S", "x"], f"unexpected encoding: {list(out['gap'])}"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        assert list(out["gap"]) == ["P1DT0H0M0S", "x"], (
+            f"unexpected encoding: {list(out['gap'])}"
+        )
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
-    @pytest.mark.parametrize("value, expected", [
-        (datetime.time(6, 30), "06:30:00"),
-        (np.datetime64("2026-01-01"), "2026-01-01T00:00:00"),
-        (np.timedelta64(1, "D"), "P1DT0H0M0S"),
-    ])
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            (datetime.time(6, 30), "06:30:00"),
+            (np.datetime64("2026-01-01"), "2026-01-01T00:00:00"),
+            (np.timedelta64(1, "D"), "P1DT0H0M0S"),
+        ],
+    )
     def test_scalar_types_the_dtype_checks_miss_are_encoded(self, value, expected):
         """Scalars that fail ``json.dumps`` but match no pandas date dtype are covered.
 
@@ -651,14 +731,23 @@ class TestJsonSafeDatetimes:
             {"c": pd.Series([scalar], dtype=object)}, geometry=[Point(0, 0)], crs=4326
         )
         out = WebMap()._json_safe(frame)
-        assert out["c"].iloc[0] == expected, f"expected {expected!r}, got {out['c'].iloc[0]!r}"
-        json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+        assert out["c"].iloc[0] == expected, (
+            f"expected {expected!r}, got {out['c'].iloc[0]!r}"
+        )
+        json.dumps(
+            out.drop(columns="geometry").to_dict(orient="records")
+        )  # must not raise
 
-    @pytest.mark.parametrize("categories, encoded", [
-        (["2026-01-01", "2026-01-01", "2026-02-01"], True),
-        (["a", "b", "a"], False),
-    ])
-    def test_a_categorical_column_is_unwrapped_before_the_dtype_checks(self, categories, encoded):
+    @pytest.mark.parametrize(
+        "categories, encoded",
+        [
+            (["2026-01-01", "2026-01-01", "2026-02-01"], True),
+            (["a", "b", "a"], False),
+        ],
+    )
+    def test_a_categorical_column_is_unwrapped_before_the_dtype_checks(
+        self, categories, encoded
+    ):
         """A categorical wraps its real dtype in ``.categories`` and matched none of the dtype tests.
 
         Args:
@@ -682,11 +771,17 @@ class TestJsonSafeDatetimes:
             geometry=[Point(i, i) for i in range(len(categories))],
             crs=4326,
         )
-        assert isinstance(frame["c"].dtype, pd.CategoricalDtype), "the fixture must be categorical"
+        assert isinstance(frame["c"].dtype, pd.CategoricalDtype), (
+            "the fixture must be categorical"
+        )
         out = WebMap()._json_safe(frame)
         if encoded:
-            assert out["c"].iloc[0] == "2026-01-01T00:00:00", f"not encoded: {out['c'].iloc[0]!r}"
-            json.dumps(out.drop(columns="geometry").to_dict(orient="records"))  # must not raise
+            assert out["c"].iloc[0] == "2026-01-01T00:00:00", (
+                f"not encoded: {out['c'].iloc[0]!r}"
+            )
+            json.dumps(
+                out.drop(columns="geometry").to_dict(orient="records")
+            )  # must not raise
         else:
             assert out is frame, "a categorical of text must not be copied"
 
@@ -703,13 +798,21 @@ class TestJsonSafeDatetimes:
         from shapely.geometry import Point
 
         frame = gpd.GeoDataFrame(
-            {"c": pd.Series([np.array([np.nan]), pd.Timestamp("2026-01-01")], dtype=object)},
+            {
+                "c": pd.Series(
+                    [np.array([np.nan]), pd.Timestamp("2026-01-01")], dtype=object
+                )
+            },
             geometry=[Point(0, 0), Point(1, 1)],
             crs=4326,
         )
         out = WebMap()._json_safe(frame)
-        assert isinstance(out["c"].iloc[0], np.ndarray), f"the array was replaced: {out['c'].iloc[0]!r}"
-        assert out["c"].iloc[1] == "2026-01-01T00:00:00", "the date alongside it was not encoded"
+        assert isinstance(out["c"].iloc[0], np.ndarray), (
+            f"the array was replaced: {out['c'].iloc[0]!r}"
+        )
+        assert out["c"].iloc[1] == "2026-01-01T00:00:00", (
+            "the date alongside it was not encoded"
+        )
 
     def test_a_text_column_is_returned_without_a_copy(self):
         """Scanning an object column for dates must not convert one that holds none.
@@ -727,8 +830,12 @@ class TestJsonSafeDatetimes:
             geometry=[Point(0, 0), Point(1, 1)],
             crs=4326,
         )
-        assert frame["label"].dtype == object, "the fixture must be object dtype to enter the scan"
-        assert WebMap()._json_safe(frame) is frame, "a text-only frame must not be copied"
+        assert frame["label"].dtype == object, (
+            "the fixture must be object dtype to enter the scan"
+        )
+        assert WebMap()._json_safe(frame) is frame, (
+            "a text-only frame must not be copied"
+        )
 
     def test_a_numeric_column_with_nan_is_left_alone(self):
         """Only date-like columns are touched; a float column keeps its dtype and its NaN.
@@ -742,7 +849,9 @@ class TestJsonSafeDatetimes:
         from shapely.geometry import Point
 
         frame = gpd.GeoDataFrame(
-            {"score": [1.0, float("nan")]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+            {"score": [1.0, float("nan")]},
+            geometry=[Point(0, 0), Point(1, 1)],
+            crs=4326,
         )
         out = WebMap()._json_safe(frame)
         assert out is frame, "a numeric column must not be encoded"
@@ -768,8 +877,12 @@ class TestJsonSafeDatetimes:
             crs=4326,
         )
         out = WebMap()._json_safe(frame)
-        assert out["c"].iloc[0] == [1, 2], f"the list value was altered: {out['c'].iloc[0]!r}"
-        assert out["c"].iloc[1] == "2026-01-01", f"the date was not encoded: {out['c'].iloc[1]!r}"
+        assert out["c"].iloc[0] == [1, 2], (
+            f"the list value was altered: {out['c'].iloc[0]!r}"
+        )
+        assert out["c"].iloc[1] == "2026-01-01", (
+            f"the date was not encoded: {out['c'].iloc[1]!r}"
+        )
 
     def test_a_geoseries_is_returned_untouched(self):
         """A GeoSeries passes the vector guard but has no columns to encode.
@@ -782,7 +895,9 @@ class TestJsonSafeDatetimes:
         from shapely.geometry import Point
 
         series = gpd.GeoSeries([Point(0, 0), Point(1, 1)], crs=4326)
-        assert WebMap()._json_safe(series) is series, "a GeoSeries must pass straight through"
+        assert WebMap()._json_safe(series) is series, (
+            "a GeoSeries must pass straight through"
+        )
 
     def test_the_feature_collection_branch_encodes_too(self, tmp_path):
         """A pyramids ``FeatureCollection`` takes its own branch of ``_display_gdf`` and must be encoded.
@@ -808,12 +923,20 @@ class TestJsonSafeDatetimes:
         path = tmp_path / "events.geojson"
         source.to_file(str(path), driver="GeoJSON")
         collection = feature.FeatureCollection.read_file(str(path))
-        assert hasattr(collection, "epsg"), "fixture must expose .epsg or the branch is not exercised"
+        assert hasattr(collection, "epsg"), (
+            "fixture must expose .epsg or the branch is not exercised"
+        )
 
         out = WebMap()._display_gdf(collection, method="points")
-        assert out["when"].iloc[0].startswith("2026-01-01T"), "the FeatureCollection branch did not encode"
-        assert isinstance(out, type(collection)), f"the copy lost the subclass: {type(out).__name__}"
-        assert out.epsg == 4326, f"the pyramids surface was lost: {getattr(out, 'epsg', None)}"
+        assert out["when"].iloc[0].startswith("2026-01-01T"), (
+            "the FeatureCollection branch did not encode"
+        )
+        assert isinstance(out, type(collection)), (
+            f"the copy lost the subclass: {type(out).__name__}"
+        )
+        assert out.epsg == 4326, (
+            f"the pyramids surface was lost: {getattr(out, 'epsg', None)}"
+        )
 
     def test_a_renamed_geometry_column_is_still_excluded(self):
         """Geometry is found by its active name, not by the literal string "geometry".
@@ -832,8 +955,12 @@ class TestJsonSafeDatetimes:
             crs=4326,
         ).rename_geometry("shape")
         out = WebMap()._json_safe(frame)
-        assert out.geometry.equals(frame.geometry), "the renamed geometry column was altered"
-        assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the date column was not encoded"
+        assert out.geometry.equals(frame.geometry), (
+            "the renamed geometry column was altered"
+        )
+        assert out["when"].iloc[0] == "2026-01-01T00:00:00", (
+            "the date column was not encoded"
+        )
 
     def test_a_non_default_index_is_preserved(self):
         """The encoded column keeps the frame's index, so it aligns on assignment.
@@ -875,8 +1002,12 @@ class TestJsonSafeDatetimes:
             crs=3857,
         )
         out = WebMap()._display_gdf(frame, method="points")
-        assert out["when"].iloc[0] == "2026-01-01T00:00:00", "the reprojected frame was not encoded"
-        assert out.crs.to_epsg() == 4326, f"expected the display CRS, got {out.crs.to_epsg()}"
+        assert out["when"].iloc[0] == "2026-01-01T00:00:00", (
+            "the reprojected frame was not encoded"
+        )
+        assert out.crs.to_epsg() == 4326, (
+            f"expected the display CRS, got {out.crs.to_epsg()}"
+        )
 
 
 class TestDatetimeFramesReachTheMap:
@@ -894,7 +1025,10 @@ class TestDatetimeFramesReachTheMap:
         from shapely.geometry import Point
 
         return gpd.GeoDataFrame(
-            {"score": [1.0, 2.0], "from_date": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            {
+                "score": [1.0, 2.0],
+                "from_date": pd.to_datetime(["2026-01-01", "2026-02-01"]),
+            },
             geometry=[Point(0, 0), Point(1, 1)],
             crs=4326,
         )
@@ -907,7 +1041,10 @@ class TestDatetimeFramesReachTheMap:
         from shapely.geometry import Polygon
 
         return gpd.GeoDataFrame(
-            {"score": [1.0, 2.0], "from_date": pd.to_datetime(["2026-01-01", "2026-02-01"])},
+            {
+                "score": [1.0, 2.0],
+                "from_date": pd.to_datetime(["2026-01-01", "2026-02-01"]),
+            },
             geometry=[
                 Polygon([(0, 0), (1, 0), (1, 1)]),
                 Polygon([(2, 2), (3, 2), (3, 3)]),
@@ -915,11 +1052,16 @@ class TestDatetimeFramesReachTheMap:
             crs=4326,
         )
 
-    @pytest.mark.parametrize("method, kwargs", [
-        ("polygons", {}),
-        ("choropleth", {"column": "score"}),
-    ])
-    def test_area_builders_save_a_dated_frame(self, tmp_path, dated_polygons, method, kwargs):
+    @pytest.mark.parametrize(
+        "method, kwargs",
+        [
+            ("polygons", {}),
+            ("choropleth", {"column": "score"}),
+        ],
+    )
+    def test_area_builders_save_a_dated_frame(
+        self, tmp_path, dated_polygons, method, kwargs
+    ):
         """The polygon builders serialise a datetime column instead of raising.
 
         Args:
@@ -957,12 +1099,17 @@ class TestDatetimeFramesReachTheMap:
         WebMap().lines(frame).save(str(out))
         assert out.stat().st_size > 1_000, "lines wrote an empty page"
 
-    @pytest.mark.parametrize("method, kwargs", [
-        ("points", {"column": "score"}),
-        ("heatmap", {}),
-        ("cluster", {}),
-    ])
-    def test_point_builders_save_a_dated_frame(self, tmp_path, dated_points, method, kwargs):
+    @pytest.mark.parametrize(
+        "method, kwargs",
+        [
+            ("points", {"column": "score"}),
+            ("heatmap", {}),
+            ("cluster", {}),
+        ],
+    )
+    def test_point_builders_save_a_dated_frame(
+        self, tmp_path, dated_points, method, kwargs
+    ):
         """Each point builder serialises a datetime column instead of raising.
 
         Args:
@@ -979,7 +1126,9 @@ class TestDatetimeFramesReachTheMap:
         getattr(WebMap(), method)(dated_points, **kwargs).save(str(out))
         assert out.stat().st_size > 1_000, f"{method} wrote an empty page"
 
-    def test_timeslider_scrubs_the_datetime_column_it_encoded(self, tmp_path, dated_points):
+    def test_timeslider_scrubs_the_datetime_column_it_encoded(
+        self, tmp_path, dated_points
+    ):
         """The slider still orders its steps after the column becomes ISO text.
 
         Test scenario:
@@ -994,7 +1143,9 @@ class TestDatetimeFramesReachTheMap:
         out = tmp_path / "slider.html"
         m.save(str(out))
         page = out.read_text(encoding="utf-8", errors="replace")
-        assert '"from_date": "2026-01-01T00:00:00"' in page, "the encoded value never reached the page"
+        assert '"from_date": "2026-01-01T00:00:00"' in page, (
+            "the encoded value never reached the page"
+        )
         assert "Timestamp(" not in page, "a raw Timestamp leaked into the page"
 
     def test_a_missing_time_value_does_not_break_the_slider(self, tmp_path):

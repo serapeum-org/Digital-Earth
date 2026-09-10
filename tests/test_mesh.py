@@ -39,7 +39,9 @@ def test_tricontour_labels(dataset):
     """tricontour(labels=True) draws inline isoline labels (cleopatra 0.15.0 / cleopatra#151)."""
     m = Map(crs=dataset.epsg)
     m.tricontour(dataset, labels=True)
-    assert len(m.ax.texts) > 0, "labels=True should add inline tricontour-label Text artists"
+    assert len(m.ax.texts) > 0, (
+        "labels=True should add inline tricontour-label Text artists"
+    )
 
 
 def test_tricontour_no_labels_by_default(dataset):
@@ -53,4 +55,6 @@ def test_tricontourf_labels_is_noop(dataset):
     """tricontourf(labels=True) is a no-op — filled tri-contours are not line-labelled."""
     m = Map(crs=dataset.epsg)
     m.tricontourf(dataset, labels=True)
-    assert len(m.ax.texts) == 0, "filled tricontourf must ignore labels= (no label artists)"
+    assert len(m.ax.texts) == 0, (
+        "filled tricontourf must ignore labels= (no label artists)"
+    )

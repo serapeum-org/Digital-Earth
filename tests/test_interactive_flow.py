@@ -42,9 +42,9 @@ class TestVectorField:
         m.vectorfield(u, v, density=0.25)
         dense = len(m.layers[0])
         sparse = len(m.layers[1])
-        assert (
-            sparse < dense
-        ), f"lower density must mean fewer arrows: {sparse} !< {dense}"
+        assert sparse < dense, (
+            f"lower density must mean fewer arrows: {sparse} !< {dense}"
+        )
 
     def test_invalid_density_raises(self, m, uv):
         u, v = uv
@@ -77,9 +77,9 @@ class TestStreamlinesAndBarbs:
         u, v = uv
         m.streamlines(u, v, density=1.0)
         m.streamlines(u, v, density=0.25)
-        assert len(m.layers[1]) < len(
-            m.layers[0]
-        ), "lower density must mean fewer streamline seeds"
+        assert len(m.layers[1]) < len(m.layers[0]), (
+            "lower density must mean fewer streamline seeds"
+        )
 
     def test_barbs_register_or_clear_error(self, m, uv):
         u, v = uv
@@ -93,18 +93,22 @@ class TestStreamlinesAndBarbs:
     def test_barbs_density_subsamples(self, m, uv):
         """barbs exposes density for parity with vectorfield/streamlines (N1)."""
         u, v = uv
-        if not hasattr(gv, "WindBarbs"):  # pragma: no cover - GeoViews without WindBarbs
+        if not hasattr(
+            gv, "WindBarbs"
+        ):  # pragma: no cover - GeoViews without WindBarbs
             pytest.skip("GeoViews build without WindBarbs")
         m.barbs(u, v, density=1.0)
         m.barbs(u, v, density=0.25)
-        assert len(m.layers[1]) < len(
-            m.layers[0]
-        ), "lower density must mean fewer barbs"
+        assert len(m.layers[1]) < len(m.layers[0]), (
+            "lower density must mean fewer barbs"
+        )
 
     def test_barbs_density_out_of_range_raises(self, m, uv):
         """density outside (0, 1] is rejected before building the element."""
         u, v = uv
-        if not hasattr(gv, "WindBarbs"):  # pragma: no cover - GeoViews without WindBarbs
+        if not hasattr(
+            gv, "WindBarbs"
+        ):  # pragma: no cover - GeoViews without WindBarbs
             pytest.skip("GeoViews build without WindBarbs")
         with pytest.raises(ValueError, match="density must be in"):
             m.barbs(u, v, density=0.0)
@@ -188,9 +192,9 @@ class TestGraph:
 
     def test_bundled_graph_datashades(self, m, nodes):
         m.graph(nodes, [(0, 1), (1, 2)], bundle=True)
-        assert isinstance(
-            m.layers[0], (hv.RGB, hv.DynamicMap)
-        ), f"got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], (hv.RGB, hv.DynamicMap)), (
+            f"got {type(m.layers[0])}"
+        )
 
     def test_weight_on_weightless_edges_draws_unweighted(self, m, nodes):
         """weight= on 2-tuple edges draws unweighted (logged, not a crash) — L2."""

@@ -30,9 +30,9 @@ class TestRgbaPngDataUri:
 
         Decoded via matplotlib's PNG reader (a core dep) so the test needs no extra image library.
         """
-        from matplotlib import image as mpimage
-
         import io
+
+        from matplotlib import image as mpimage
 
         arr = np.ma.masked_array(
             np.arange(12.0).reshape(3, 4), mask=np.zeros((3, 4), dtype=bool)

@@ -1,4 +1,5 @@
 """Tests for digitalearth.base.crs.source_epsg — best-effort EPSG resolution (PA-8)."""
+
 from digitalearth.base.crs import source_epsg
 
 
@@ -49,7 +50,9 @@ class TestSourceEpsg:
             .epsg None and .crs.to_epsg() None -> the (default None) is returned.
         """
         feats = _FakeFeatures(epsg=None, crs=_FakeCRS(None))
-        assert source_epsg(feats) is None, "unresolved CRS should give the default (None)"
+        assert source_epsg(feats) is None, (
+            "unresolved CRS should give the default (None)"
+        )
 
     def test_custom_default(self):
         """source_epsg returns a custom default when nothing resolves.

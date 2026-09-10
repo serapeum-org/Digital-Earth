@@ -10,12 +10,12 @@ Engine-neutral by construction: pure numpy, no renderer import (enforced by
 once over a whole animation stack and hand the same pair to every frame — which is how a composite
 time-lapse holds one stretch instead of pumping as each frame re-derives its own.
 """
+
 from typing import List, Optional, Sequence, Tuple
 
 import numpy as np
 
 from digitalearth.base.arrays import finite
-
 
 #: Percentiles clipped off each channel by the default composite contrast stretch.
 _STRETCH_PERCENTILES = (2, 98)
@@ -74,7 +74,9 @@ def require_three_bands(caller: str, bands: Sequence[int]) -> None:
         raise ValueError(f"{caller}() needs exactly three bands, got None")
     named = tuple(bands)  # materialise once: a caller may hand over a one-shot iterable
     if len(named) != 3:
-        raise ValueError(f"{caller}() needs exactly three bands, got {len(named)}: {named!r}")
+        raise ValueError(
+            f"{caller}() needs exactly three bands, got {len(named)}: {named!r}"
+        )
 
 
 def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
@@ -137,7 +139,9 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
         )
     bounds: List[Tuple[float, float]] = []
     for index in range(stack.shape[2]):
-        values = finite(stack[..., index])  # drops NaN *and* inf, which nanpercentile would keep
+        values = finite(
+            stack[..., index]
+        )  # drops NaN *and* inf, which nanpercentile would keep
         if values.size == 0:
             bounds.append((float("nan"), float("nan")))
             continue
@@ -185,7 +189,9 @@ def _check_limits(limits: Optional[ChannelLimits], channels: int) -> None:
             raise ValueError(f"limits[{index}] must be a (lo, hi) pair, got {pair!r}")
 
 
-def stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) -> np.ndarray:
+def stretch_to_unit(
+    stack: np.ndarray, limits: Optional[ChannelLimits] = None
+) -> np.ndarray:
     """Per-channel contrast stretch of an ``(rows, cols, n)`` stack into ``[0, 1]``.
 
     Args:
@@ -261,7 +267,10 @@ def stretch_to_unit(stack: np.ndarray, limits: Optional[ChannelLimits] = None) -
             # fixed span, which would clip a live channel flat if the freeze simply never saw it (M2).
             lo, hi = channel_limits(band[..., None])[0]
         if not (np.isfinite(lo) and np.isfinite(hi)):
-            lo, hi = 0.0, 1.0  # this frame's channel is nodata too: any span, its cells stay NaN
+            lo, hi = (
+                0.0,
+                1.0,
+            )  # this frame's channel is nodata too: any span, its cells stay NaN
         elif hi <= lo:
             hi = lo + 1.0  # a constant channel: widen rather than divide by zero
         out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)

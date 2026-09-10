@@ -63,7 +63,9 @@ class TestExportNeedsEngine:
         WebMap().choropleth(polygons_gdf, column="pop").save(str(out))
         assert out.stat().st_size > 1_000
 
-    def test_save_png_without_browser_raises_actionable(self, tmp_path, polygons_gdf, monkeypatch):
+    def test_save_png_without_browser_raises_actionable(
+        self, tmp_path, polygons_gdf, monkeypatch
+    ):
         """With no headless browser available, ``save(*.png)`` raises a clear, actionable ImportError."""
 
         def _no_browser(url, path):

@@ -49,9 +49,9 @@ class TestAutostyleDefaults:
         expected = auto_style(src)["cmap"]
         m.image(src)
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
-        assert (
-            style["cmap"] == expected
-        ), f"autostyle cmap not applied: {style.get('cmap')} != {expected}"
+        assert style["cmap"] == expected, (
+            f"autostyle cmap not applied: {style.get('cmap')} != {expected}"
+        )
 
     def test_unknown_variable_falls_back_to_viridis(self, m):
         m.image(_source("totally-unknown-field"))
@@ -72,9 +72,9 @@ class TestSourceIngestion:
         m.image(src)
         assert isinstance(m.layers[0], hv.Image)
         x_samples = m.layers[0].dimension_values("x", expanded=False)
-        assert np.allclose(
-            np.sort(x_samples), src.x.values
-        ), "Source coords must pass through"
+        assert np.allclose(np.sort(x_samples), src.x.values), (
+            "Source coords must pass through"
+        )
 
     def test_source_input_matches_dataset_input(self, m, dataset):
         """A Source extracted from the dataset renders the same element type as the dataset."""
@@ -93,9 +93,9 @@ class TestQuickplotBackend:
         from digitalearth.api import quickplot
 
         out = quickplot(dataset, crs=dataset.epsg, backend="interactive")
-        assert isinstance(
-            out, InteractiveMap
-        ), f"expected InteractiveMap, got {type(out)}"
+        assert isinstance(out, InteractiveMap), (
+            f"expected InteractiveMap, got {type(out)}"
+        )
         assert isinstance(out.layers[0], hv.Image)
 
     def test_vector_returns_interactive_points(self):
@@ -155,7 +155,9 @@ class TestQuickplotBackend:
         out = quickplot(fc, backend="interactive", column="fid")
         element = out.layers[0]
         assert isinstance(element, gv.Polygons), f"got {type(element)}"
-        assert [d.name for d in element.vdims] == ["fid"], "choropleth must bind the column"
+        assert [d.name for d in element.vdims] == ["fid"], (
+            "choropleth must bind the column"
+        )
 
     def test_empty_featurecollection_raises(self):
         """An empty FeatureCollection has nothing to draw → ValueError."""

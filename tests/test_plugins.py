@@ -67,7 +67,9 @@ class TestLoadPlugins:
         """Each supplied entry point is loaded and keyed by its name."""
         eps = [_FakeEP("extra", {"cmap": "magma"}), _FakeEP("more", [1, 2])]
         loaded = load_plugins("digitalearth.styles", eps=eps)
-        assert loaded == {"extra": {"cmap": "magma"}, "more": [1, 2]}, f"unexpected: {loaded}"
+        assert loaded == {"extra": {"cmap": "magma"}, "more": [1, 2]}, (
+            f"unexpected: {loaded}"
+        )
 
     def test_broken_plugin_is_skipped(self, caplog):
         """A plugin whose load() raises is skipped (logged) while healthy plugins still load (L3)."""
@@ -82,5 +84,9 @@ class TestLoadPlugins:
         eps = [_BrokenEP(), _FakeEP("good", {"ok": True})]
         with caplog.at_level(logging.WARNING, logger="digitalearth.ops.plugins"):
             loaded = load_plugins("digitalearth.styles", eps=eps)
-        assert loaded == {"good": {"ok": True}}, f"only the healthy plugin should load, got {loaded}"
-        assert any("broken" in r.message for r in caplog.records), "the skipped plugin should be logged"
+        assert loaded == {"good": {"ok": True}}, (
+            f"only the healthy plugin should load, got {loaded}"
+        )
+        assert any("broken" in r.message for r in caplog.records), (
+            "the skipped plugin should be logged"
+        )

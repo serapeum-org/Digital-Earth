@@ -16,6 +16,7 @@ The one matplotlib chore that used to sit alongside these (``fig_of``) is not he
 ``digitalearth._arrays`` was split it went to :mod:`digitalearth.static.figures`, since a figure lookup belongs to
 the matplotlib backend rather than to the engine-neutral shared layer.
 """
+
 from typing import Any, Callable, Dict, Optional
 
 import numpy as np

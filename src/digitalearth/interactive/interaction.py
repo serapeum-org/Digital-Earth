@@ -11,13 +11,33 @@ plain hover. Each method documents this rather than implying full interactivity 
 All CRS work (crop, the un-projection of drawn geometry) goes through pyramids.
 """
 
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class InteractionMixin:
-    """Interactivity builders (DI.7 + DI.8): tap-to-inspect, rich hover, draw-AOI, linked selection."""
+
+class InteractionMixin(_MixinBase):
+    """Interactivity builders (DI.7 + DI.8): tap-to-inspect, rich hover, draw-AOI, linked selection.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def hover(
         self,
@@ -25,7 +45,7 @@ class InteractionMixin:
         tooltips: Optional[list] = None,
         formatters: Optional[dict] = None,
         layer: int = -1,
-    ) -> "InteractionMixin":
+    ) -> Self:
         """Configure the Bokeh hover tooltips on a registered layer (DI.7).
 
         Args:
@@ -35,7 +55,7 @@ class InteractionMixin:
             layer: Index of the layer to configure (default the most recent).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when there is no layer to configure.
@@ -128,9 +148,7 @@ class InteractionMixin:
 
         return self.on_tap(_profile, source=source)
 
-    def draw(
-        self, kind: str = "box", *, num_objects: Optional[int] = None
-    ) -> "InteractionMixin":
+    def draw(self, kind: str = "box", *, num_objects: Optional[int] = None) -> Self:
         """Add a draw/edit tool so the user can sketch an area-of-interest (DI.8).
 
         Wraps a HoloViews draw stream around a fresh annotation layer: ``"box"`` → ``BoxEdit``,
@@ -143,7 +161,7 @@ class InteractionMixin:
             num_objects: Max number of shapes (``None`` = unlimited).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: for an unknown ``kind``.

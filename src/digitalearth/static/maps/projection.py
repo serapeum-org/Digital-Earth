@@ -3,7 +3,8 @@
 Sets the axes extent from a bbox or named domain, builds and caches the projection boundary/graticule for a
 globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
-from typing import Any, Optional, Sequence
+
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from cleopatra.basemap.projection import apply_projection_frame
 from pyramids.base.crs import reproject_coordinates
@@ -11,9 +12,28 @@ from pyramids.base.crs import reproject_coordinates
 from digitalearth.static import projections
 from digitalearth.static.domains import DomainLike, resolve_domain
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class ProjectionMixin:
-    """Extent/domain and globe projection-frame behaviour for :class:`~digitalearth.static.map.Map`."""
+
+class ProjectionMixin(_MixinBase):
+    """Extent/domain and globe projection-frame behaviour for :class:`~digitalearth.static.map.Map`.
+
+    A capability mixin of :class:`~digitalearth.static.map.Map`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the shared figure/axes, the layer registry and the
+    display CRS — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.static.maps.base.GeoLayerBase`, the state ``Map``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Map`` MRO exactly what
+    it was before the annotation.
+
+    See Also:
+        digitalearth.static.map.Map: the composition that supplies the state these methods use.
+        digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
+    """
 
     def set_extent(self, bbox: Sequence[float]) -> None:
         """Set the axes extent.
@@ -52,7 +72,10 @@ class ProjectionMixin:
             return
         west, south, east, north = bbox
         xs, ys = reproject_coordinates(
-            [west, east, west, east], [south, south, north, north], from_crs=4326, to_crs=self.crs
+            [west, east, west, east],
+            [south, south, north, north],
+            from_crs=4326,
+            to_crs=self.crs,
         )
         self.set_extent([min(xs), max(xs), min(ys), max(ys)])
 
@@ -65,7 +88,9 @@ class ProjectionMixin:
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
         """
-        self._graticule_lines = projections.graticule(self.crs, lon_step=lon_step, lat_step=lat_step)
+        self._graticule_lines = projections.graticule(
+            self.crs, lon_step=lon_step, lat_step=lat_step
+        )
 
     def _frame(self) -> tuple:
         """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).
@@ -94,7 +119,10 @@ class ProjectionMixin:
             return None
         boundary, xlim, ylim = self._frame()
         patch = apply_projection_frame(
-            self.ax, boundary_xy=boundary, xlim=xlim, ylim=ylim,
+            self.ax,
+            boundary_xy=boundary,
+            xlim=xlim,
+            ylim=ylim,
             graticule_lines=self._graticule_lines,
         )
         self._framed = True
@@ -113,4 +141,3 @@ class ProjectionMixin:
         """Apply the projection frame (for a globe map) then show the figure."""
         self._apply_frame()
         super().show()
-

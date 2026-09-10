@@ -12,7 +12,8 @@ Polygons come from the GeoDataFrame pyramids returns (a ``FeatureCollection``, w
 this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_competitor_imports`` guard). CRS work
 stays in pyramids.
 """
-from typing import Any, Iterator, List, Optional, Union
+
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Union
 
 import numpy as np
 import pyvista as pv
@@ -41,7 +42,9 @@ def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
     """
     geom_type = geom.geom_type
     if geom_type not in ("Polygon", "MultiPolygon"):
-        raise TypeError(f"extruded_polygons expects Polygon/MultiPolygon geometries, got {geom_type}")
+        raise TypeError(
+            f"extruded_polygons expects Polygon/MultiPolygon geometries, got {geom_type}"
+        )
     parts = geom.geoms if geom_type == "MultiPolygon" else [geom]
     for part in parts:
         yield np.asarray(part.exterior.coords, dtype="float64")
@@ -62,8 +65,29 @@ def _extrude_ring(ring: np.ndarray, height: float) -> pv.PolyData:
     return face.triangulate().extrude((0.0, 0.0, float(height)), capping=True)
 
 
-class VectorMixin:
-    """Adds :meth:`vectors` and :meth:`extruded_polygons` to a :class:`Scene3D`."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.three_d.base import Scene3DBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class VectorMixin(_MixinBase):
+    """Adds :meth:`vectors` and :meth:`extruded_polygons` to a :class:`Scene3D`.
+
+    A capability mixin of :class:`~digitalearth.three_d.scene3d.Scene3D`: it is only ever composed into that scene
+    class, never instantiated or subclassed on its own. Its methods reach the wrapped ``pyvista.Plotter``, the layer
+    registry and the render/export lifecycle — and the sibling mixins' methods — through ``self``, and only the
+    composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.three_d.base.Scene3DBase`, the state ``Scene3D``
+    inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
+    what it was before the annotation.
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
+        digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
+    """
 
     def vectors(
         self,
@@ -106,7 +130,9 @@ class VectorMixin:
         pts = np.asarray(points, dtype="float64")
         vec = np.asarray(vectors, dtype="float64")
         if pts.shape != vec.shape:
-            raise ValueError(f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}")
+            raise ValueError(
+                f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}"
+            )
         cloud = pv.PolyData(pts)
         cloud[VECTORS] = vec
         cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
@@ -171,7 +197,9 @@ class VectorMixin:
                 prisms.append(prism)
 
         if not prisms:
-            raise ValueError("extruded_polygons received no polygon geometries to extrude")
+            raise ValueError(
+                "extruded_polygons received no polygon geometries to extrude"
+            )
         merged = pv.MultiBlock(prisms).combine()
         scalars = VALUE if colours is not None else None
         return self.add_mesh(merged, scalars=scalars, cmap=cmap, **kwargs)

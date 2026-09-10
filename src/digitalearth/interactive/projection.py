@@ -10,15 +10,35 @@ The trade is deliberate and documented: the matplotlib path is **static** (no li
 basemaps auto-disable under a non-Mercator projection (a tile call raises via the Web-Mercator guard).
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Self
 
 from digitalearth.interactive.base import _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class ProjectionMixin:
-    """Projection builders (DI.9): arbitrary display projections via the matplotlib backend."""
 
-    def projection(self, name: Any, **opts: Any) -> "ProjectionMixin":
+class ProjectionMixin(_MixinBase):
+    """Projection builders (DI.9): arbitrary display projections via the matplotlib backend.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
+
+    def projection(self, name: Any, **opts: Any) -> Self:
         """Set the display projection, rendering through the matplotlib backend.
 
         Args:
@@ -28,7 +48,7 @@ class ProjectionMixin:
             **opts: Reserved for future projection options (currently unused).
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             ValueError: when a tile basemap was already requested (tiles are Web-Mercator only and
@@ -85,14 +105,14 @@ class ProjectionMixin:
             )
         return factory()
 
-    def graticule(self, **opts: Any) -> "ProjectionMixin":
+    def graticule(self, **opts: Any) -> Self:
         """Add a longitude/latitude graticule (parity with ``Map.graticule``).
 
         Args:
             **opts: Extra HoloViews style options applied to the grid feature.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         element = gv.feature.grid.clone()

@@ -1,12 +1,13 @@
 """Tests for Map.animate / Map.rotate — globe animations over a raster stack and over composites."""
+
 import numpy as np
 import pytest
 from matplotlib.animation import FuncAnimation, PillowWriter
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.sources import get_stack
-from digitalearth.static import Map, projections
 from digitalearth.base.stretch import channel_limits, stretch_to_unit
+from digitalearth.static import Map, projections
 
 
 def _field(offset: float) -> Dataset:
@@ -37,7 +38,9 @@ def stack():
     return [_field(o) for o in (0.0, 15.0, 30.0)]
 
 
-def _rgb_field(shift: float = 0.0, exposure: float = 1.0, ny: int = 60, nx: int = 120) -> Dataset:
+def _rgb_field(
+    shift: float = 0.0, exposure: float = 1.0, ny: int = 60, nx: int = 120
+) -> Dataset:
     """A small 3-band global raster whose scene shifts and whose overall brightness scales.
 
     Args:
@@ -52,14 +55,20 @@ def _rgb_field(shift: float = 0.0, exposure: float = 1.0, ny: int = 60, nx: int 
     """
     yy, xx = np.mgrid[0:ny, 0:nx]
     base = 0.4 + 0.3 * np.sin((xx + shift) / 13.0) + 0.2 * np.cos(yy / 9.0)
-    bands = np.stack([base * 3000.0 * exposure, base * 2600.0 * exposure, base * 2200.0 * exposure])
+    bands = np.stack(
+        [base * 3000.0 * exposure, base * 2600.0 * exposure, base * 2200.0 * exposure]
+    )
     return Dataset.from_array(
         arr=bands.astype("float32"),
-        geo_ref=GeoReference(geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326),
+        geo_ref=GeoReference(
+            geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326
+        ),
     )
 
 
-def _rgb_field_with_dead_channel(shift: float = 0.0, ny: int = 60, nx: int = 120) -> Dataset:
+def _rgb_field_with_dead_channel(
+    shift: float = 0.0, ny: int = 60, nx: int = 120
+) -> Dataset:
     """A 3-band raster whose **second** channel is entirely nodata.
 
     Args:
@@ -75,7 +84,9 @@ def _rgb_field_with_dead_channel(shift: float = 0.0, ny: int = 60, nx: int = 120
     bands = np.stack([base * 3000.0, np.full_like(base, -9999.0), base * 2200.0])
     return Dataset.from_array(
         arr=bands.astype("float32"),
-        geo_ref=GeoReference(geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326),
+        geo_ref=GeoReference(
+            geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326
+        ),
         no_data_value=-9999.0,
     )
 
@@ -97,8 +108,12 @@ class TestAnimate:
         """animate returns a FuncAnimation whose frame count matches the stack length (lazy, no render)."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
         anim = m.animate(stack, fps=2, vmin=-40, vmax=70)
-        assert isinstance(anim, FuncAnimation), f"expected FuncAnimation, got {type(anim)}"
-        assert len(list(anim.new_frame_seq())) == len(stack), "frame count must match the stack length"
+        assert isinstance(anim, FuncAnimation), (
+            f"expected FuncAnimation, got {type(anim)}"
+        )
+        assert len(list(anim.new_frame_seq())) == len(stack), (
+            "frame count must match the stack length"
+        )
 
     def test_renders_gif_with_titles_and_ocean(self, stack, tmp_path):
         """Rendering writes a non-empty GIF; the last frame shows its title and the ocean disc.
@@ -109,12 +124,20 @@ class TestAnimate:
         """
         m = Map(crs=projections.orthographic(10, 15), globe=True, figsize=(4, 4))
         titles = ["Jan", "Feb", "Mar"]
-        anim = m.animate(stack, fps=2, titles=titles, ocean=True, cmap="RdYlBu_r", vmin=-40, vmax=70)
+        anim = m.animate(
+            stack, fps=2, titles=titles, ocean=True, cmap="RdYlBu_r", vmin=-40, vmax=70
+        )
         out = tmp_path / "anim.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
-        assert out.exists() and out.stat().st_size > 0, "animation GIF should be non-empty"
-        assert m.ax.get_title() == titles[-1], f"last title not applied: {m.ax.get_title()!r}"
-        assert m.ax.collections, "ocean disc PolyCollection should be present on the last frame"
+        assert out.exists() and out.stat().st_size > 0, (
+            "animation GIF should be non-empty"
+        )
+        assert m.ax.get_title() == titles[-1], (
+            f"last title not applied: {m.ax.get_title()!r}"
+        )
+        assert m.ax.collections, (
+            "ocean disc PolyCollection should be present on the last frame"
+        )
         assert m.ax.images, "the raster frame should be drawn"
 
     def test_flat_map_animation(self, stack, tmp_path):
@@ -143,7 +166,9 @@ class TestAnimate:
         """The returned FuncAnimation is also held on self._animation so it is not GC'd (L3)."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
         anim = m.animate(stack, fps=2, vmin=-40, vmax=70)
-        assert m._animation is anim, "animate must keep a strong reference to the animation"
+        assert m._animation is anim, (
+            "animate must keep a strong reference to the animation"
+        )
 
     def test_resolve_clim_caps_scan(self, mocker):
         """_resolve_animation_clim scans at most _CLIM_SCAN_CAP frames of a large stack (L2)."""
@@ -154,9 +179,15 @@ class TestAnimate:
         big = [_field(float(o)) for o in range(anim_mod._CLIM_SCAN_CAP * 3)]
         opts = {}
         m._resolve_animation_clim(big, opts)
-        scanned = len(spy.call_args.args[1])  # args[0] is self, since the scan reprojects per frame
-        assert scanned <= anim_mod._CLIM_SCAN_CAP, f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
-        assert "vmin" in opts and "vmax" in opts, "clim should still be resolved from the sampled frames"
+        scanned = len(
+            spy.call_args.args[1]
+        )  # args[0] is self, since the scan reprojects per frame
+        assert scanned <= anim_mod._CLIM_SCAN_CAP, (
+            f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
+        )
+        assert "vmin" in opts and "vmax" in opts, (
+            "clim should still be resolved from the sampled frames"
+        )
 
     def test_titles_length_mismatch_raises(self, stack):
         """A titles list of the wrong length raises ValueError."""
@@ -167,7 +198,15 @@ class TestAnimate:
     def test_colorbar_adds_single_static_axes(self, stack, tmp_path):
         """colorbar=True adds exactly one colorbar axes that persists (not re-added) across all frames."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        anim = m.animate(stack, fps=2, colorbar=True, cbar_label="T", cmap="RdYlBu_r", vmin=-40, vmax=70)
+        anim = m.animate(
+            stack,
+            fps=2,
+            colorbar=True,
+            cbar_label="T",
+            cmap="RdYlBu_r",
+            vmin=-40,
+            vmax=70,
+        )
         assert len(m.fig.axes) == 2, "colorbar should add one axes (data + colorbar)"
         out = tmp_path / "cbar.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
@@ -176,24 +215,38 @@ class TestAnimate:
 
     def test_shares_clim_across_frames(self):
         """Every frame uses one global colour scale — even with no colorbar and no vmin/vmax (the fix)."""
+
         def fld(lo, hi):
             ny, nx = 30, 60
             z = np.linspace(lo, hi, ny * nx).reshape(ny, nx).astype("float32")
-            return Dataset.from_array(arr=z, geo_ref=GeoReference(geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326))
+            return Dataset.from_array(
+                arr=z,
+                geo_ref=GeoReference(
+                    geo=(-180.0, 6.0, 0.0, 90.0, 0.0, -6.0), epsg=4326
+                ),
+            )
 
-        frames = [fld(0, 10), fld(0, 100), fld(0, 1000)]   # wildly different per-frame ranges
+        frames = [
+            fld(0, 10),
+            fld(0, 100),
+            fld(0, 1000),
+        ]  # wildly different per-frame ranges
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        anim = m.animate(frames, fps=2, cmap="viridis")    # no colorbar, no vmin/vmax
+        anim = m.animate(frames, fps=2, cmap="viridis")  # no colorbar, no vmin/vmax
         clims = []
         for i in range(len(frames)):
             anim._func(i)
             clims.append(tuple(round(c) for c in m.ax.images[0].get_clim()))
         assert len(set(clims)) == 1, f"frames must share one colour scale, got {clims}"
-        assert clims[0][0] == 0, f"shared clim should start at the stack minimum, got {clims[0]}"
+        assert clims[0][0] == 0, (
+            f"shared clim should start at the stack minimum, got {clims[0]}"
+        )
         assert clims[0][1] > 800, (
             f"the scale spans what the globe renders, which drops the off-hemisphere extreme: {clims[0]}"
         )
-        assert clims[0][1] <= 1000, f"the scale cannot exceed the stack maximum: {clims[0]}"
+        assert clims[0][1] <= 1000, (
+            f"the scale cannot exceed the stack maximum: {clims[0]}"
+        )
 
     def test_resolve_clim_fills_missing_bounds(self, stack):
         """_resolve_animation_clim computes a global clim only for the missing bound(s)."""
@@ -201,13 +254,19 @@ class TestAnimate:
         lo, hi = m._stack_clim(stack)
         both = {}
         m._resolve_animation_clim(stack, both)
-        assert (both["vmin"], both["vmax"]) == (lo, hi), "both bounds should be filled from the stack"
+        assert (both["vmin"], both["vmax"]) == (lo, hi), (
+            "both bounds should be filled from the stack"
+        )
         one = {"vmin": -100.0}
         m._resolve_animation_clim(stack, one)
-        assert one["vmin"] == -100.0 and one["vmax"] == hi, "only the missing bound should be filled"
+        assert one["vmin"] == -100.0 and one["vmax"] == hi, (
+            "only the missing bound should be filled"
+        )
         explicit = {"vmin": -5.0, "vmax": 5.0}
         m._resolve_animation_clim(stack, explicit)
-        assert (explicit["vmin"], explicit["vmax"]) == (-5.0, 5.0), "explicit bounds must be left untouched"
+        assert (explicit["vmin"], explicit["vmax"]) == (-5.0, 5.0), (
+            "explicit bounds must be left untouched"
+        )
 
     def test_colorbar_computes_clim_from_stack(self, stack):
         """colorbar=True draws one bar over the resolved clim and adds a single colorbar axes."""
@@ -215,39 +274,54 @@ class TestAnimate:
         opts = {"cmap": "viridis"}
         m._resolve_animation_clim(stack, opts)
         lo, hi = m._stack_clim(stack)
-        assert opts["vmin"] == lo and opts["vmax"] == hi, "resolved clim should be injected into opts"
+        assert opts["vmin"] == lo and opts["vmax"] == hi, (
+            "resolved clim should be injected into opts"
+        )
         m._animation_colorbar(opts, "auto")
         assert len(m.fig.axes) == 2, "a colorbar axes should be present"
 
     def test_stack_clim_ignores_nodata(self):
         """_stack_clim excludes nodata cells when computing the range (from_array defaults to -9999)."""
         arr = np.array([[0.0, 5.0], [10.0, -9999.0]], dtype="float32")
-        ds = Dataset.from_array(arr=arr, geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326))
+        ds = Dataset.from_array(
+            arr=arr,
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
+        )
         assert ds.no_data_value[0] == -9999.0
         lo, hi = Map(crs=4326)._stack_clim([ds])
-        assert (lo, hi) == (0.0, 10.0), f"nodata -9999 should be ignored, got ({lo}, {hi})"
+        assert (lo, hi) == (0.0, 10.0), (
+            f"nodata -9999 should be ignored, got ({lo}, {hi})"
+        )
 
     def test_stack_clim_no_nodata_uses_full_range(self):
         """When a dataset declares no nodata, every finite cell counts toward the range."""
         from types import SimpleNamespace
 
-        ds = SimpleNamespace(read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
-                             no_data_value=[None], epsg=4326)
+        ds = SimpleNamespace(
+            read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+            no_data_value=[None],
+            epsg=4326,
+        )
         assert Map(crs=4326)._stack_clim([ds]) == (1.0, 4.0)
 
     def test_stack_clim_all_nodata_falls_back(self):
         """An all-nodata stack has no finite cells, so _stack_clim returns the (0, 1) default."""
         from types import SimpleNamespace
 
-        ds = SimpleNamespace(read_array=lambda band=0: np.array([[-9999.0, -9999.0]]),
-                             no_data_value=[-9999.0], epsg=4326)
+        ds = SimpleNamespace(
+            read_array=lambda band=0: np.array([[-9999.0, -9999.0]]),
+            no_data_value=[-9999.0],
+            epsg=4326,
+        )
         assert Map(crs=4326)._stack_clim([ds]) == (0.0, 1.0)
 
     def test_colorbar_without_label(self):
         """A colorbar with no label still adds exactly one colorbar axes."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
         m._animation_colorbar({"cmap": "viridis", "vmin": 0, "vmax": 60}, None)
-        assert len(m.fig.axes) == 2, "colorbar axes should be added even without a label"
+        assert len(m.fig.axes) == 2, (
+            "colorbar axes should be added even without a label"
+        )
 
     def test_coastlines_best_effort_swallows_failure(self, stack, tmp_path, mocker):
         """coastlines=True still renders when the (network) coastline fetch raises — the error is swallowed."""
@@ -256,7 +330,9 @@ class TestAnimate:
         anim = m.animate(stack, fps=2, coastlines=True, vmin=-40, vmax=70)
         out = tmp_path / "coast.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
-        assert out.stat().st_size > 0, "animation should still render when coastlines fail"
+        assert out.stat().st_size > 0, (
+            "animation should still render when coastlines fail"
+        )
         assert Map.coastlines.called, "coastlines should have been attempted"
 
 
@@ -268,8 +344,12 @@ class TestAnimateComposites:
         """Both composite kinds are accepted and animate over the whole stack."""
         m = Map(crs=4326, figsize=(4, 4))
         anim = m.animate(rgb_stack, kind=kind, fps=2)
-        assert isinstance(anim, FuncAnimation), f"expected FuncAnimation, got {type(anim)}"
-        assert len(list(anim.new_frame_seq())) == len(rgb_stack), "frame count must match the stack length"
+        assert isinstance(anim, FuncAnimation), (
+            f"expected FuncAnimation, got {type(anim)}"
+        )
+        assert len(list(anim.new_frame_seq())) == len(rgb_stack), (
+            "frame count must match the stack length"
+        )
 
     def test_composite_animation_renders_gif(self, rgb_stack, tmp_path):
         """A composite animation renders every frame to a non-empty GIF, titles included.
@@ -284,7 +364,9 @@ class TestAnimateComposites:
         out = tmp_path / "rgb.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
         assert out.stat().st_size > 0, "composite animation GIF should be non-empty"
-        assert m.ax.get_title() == titles[-1], f"last title not applied: {m.ax.get_title()!r}"
+        assert m.ax.get_title() == titles[-1], (
+            f"last title not applied: {m.ax.get_title()!r}"
+        )
         assert m.ax.images, "each frame should draw the composite image"
 
     def test_composite_honours_band_order(self, tmp_path):
@@ -297,21 +379,29 @@ class TestAnimateComposites:
             each bound to the wrong channel. The magnitudes make the order observable.
         """
         ny, nx = 20, 40
-        geo = GeoReference(geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326)
+        geo = GeoReference(
+            geo=(-180.0, 360.0 / nx, 0.0, 90.0, 0.0, -180.0 / ny), epsg=4326
+        )
         graded = Dataset.from_array(
-            arr=np.stack([np.full((ny, nx), scale, "float32") for scale in (10.0, 100.0, 1000.0)]),
+            arr=np.stack(
+                [np.full((ny, nx), scale, "float32") for scale in (10.0, 100.0, 1000.0)]
+            ),
             geo_ref=geo,
         )
         m = Map(crs=4326, figsize=(4, 4))
         opts = {"bands": (3, 2, 1)}
-        m._prime_animation([graded], opts, kind="rgb_composite", colorbar=False, cbar_label=None)
+        m._prime_animation(
+            [graded], opts, kind="rgb_composite", colorbar=False, cbar_label=None
+        )
         assert [round(lo) for lo, _ in opts["limits"]] == [1000, 100, 10], (
             f"frozen bounds should follow the requested band order, got {opts['limits']!r}"
         )
 
         anim = m.animate([graded], kind="rgb_composite", fps=2, bands=(3, 2, 1))
         anim.save(str(tmp_path / "bands.gif"), writer=PillowWriter(fps=2))
-        assert m.ax.images[-1].get_array().shape[-1] == 3, "a custom band order should still render RGB"
+        assert m.ax.images[-1].get_array().shape[-1] == 3, (
+            "a custom band order should still render RGB"
+        )
 
     def test_rotate_accepts_composite(self, tmp_path):
         """rotate takes a composite kind too — it shares animate's kind validation."""
@@ -326,16 +416,22 @@ class TestAnimateComposites:
         m = Map(crs=4326)
         with pytest.raises(ValueError, match="colorbar=True is not supported"):
             m.animate(rgb_stack, kind="rgb_composite", colorbar=True)
-        assert len(m.fig.axes) == 1, "no colorbar axes should have been added before the refusal"
+        assert len(m.fig.axes) == 1, (
+            "no colorbar axes should have been added before the refusal"
+        )
 
     def test_priming_a_composite_skips_the_clim(self, rgb_stack):
         """Composite priming fills frozen limits and injects no clim (an RGB image ignores vmin/vmax)."""
         m = Map(crs=4326)
         opts = {}
-        m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
+        m._prime_animation(
+            rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None
+        )
         assert "vmin" not in opts, f"composite priming injected a vmin: {opts}"
         assert "vmax" not in opts, f"composite priming injected a vmax: {opts}"
-        assert len(opts["limits"]) == 3, f"expected one (lo, hi) per channel, got {opts['limits']!r}"
+        assert len(opts["limits"]) == 3, (
+            f"expected one (lo, hi) per channel, got {opts['limits']!r}"
+        )
 
     def test_priming_a_field_still_resolves_the_clim(self, stack):
         """The scalar path is untouched — priming a field kind still fills one shared vmin/vmax."""
@@ -351,8 +447,12 @@ class TestAnimateComposites:
         m = Map(crs=4326)
         mine = [(0.0, 10.0), (0.0, 10.0), (0.0, 10.0)]
         opts = {"limits": mine}
-        m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
-        assert opts["limits"] == mine, "caller-supplied limits must not be overwritten by the scan"
+        m._prime_animation(
+            rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None
+        )
+        assert opts["limits"] == mine, (
+            "caller-supplied limits must not be overwritten by the scan"
+        )
 
     def test_explicit_none_limits_are_still_frozen(self, rgb_stack):
         """An explicit ``limits=None`` is filled, not treated as "the caller already chose".
@@ -364,9 +464,15 @@ class TestAnimateComposites:
         """
         m = Map(crs=4326)
         opts = {"limits": None}
-        m._prime_animation(rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None)
-        assert opts["limits"] is not None, "an explicit limits=None must still be filled from the stack"
-        assert len(opts["limits"]) == 3, f"expected one bound per channel, got {opts['limits']!r}"
+        m._prime_animation(
+            rgb_stack, opts, kind="rgb_composite", colorbar=False, cbar_label=None
+        )
+        assert opts["limits"] is not None, (
+            "an explicit limits=None must still be filled from the stack"
+        )
+        assert len(opts["limits"]) == 3, (
+            f"expected one bound per channel, got {opts['limits']!r}"
+        )
 
     @pytest.mark.parametrize("display", ["webmercator", "orthographic"])
     def test_frozen_limits_are_measured_on_the_display_crs(self, display):
@@ -381,11 +487,27 @@ class TestAnimateComposites:
         crs = projections.orthographic(0, 15) if display == "orthographic" else 3857
         frame = _rgb_field()
         m = Map(crs=crs)
-        frozen = [value for pair in m._stack_channel_limits([frame], (1, 2, 3)) for value in pair]
-        warped = [value for pair in channel_limits(get_stack(m._reproject(frame), (1, 2, 3))) for value in pair]
-        stored = [value for pair in channel_limits(get_stack(frame, (1, 2, 3))) for value in pair]
-        assert frozen == pytest.approx(warped), f"frozen {frozen} should match the warped frame {warped}"
-        assert frozen != pytest.approx(stored), f"frozen {frozen} must not be the stored bounds {stored}"
+        frozen = [
+            value
+            for pair in m._stack_channel_limits([frame], (1, 2, 3))
+            for value in pair
+        ]
+        warped = [
+            value
+            for pair in channel_limits(get_stack(m._reproject(frame), (1, 2, 3)))
+            for value in pair
+        ]
+        stored = [
+            value
+            for pair in channel_limits(get_stack(frame, (1, 2, 3)))
+            for value in pair
+        ]
+        assert frozen == pytest.approx(warped), (
+            f"frozen {frozen} should match the warped frame {warped}"
+        )
+        assert frozen != pytest.approx(stored), (
+            f"frozen {frozen} must not be the stored bounds {stored}"
+        )
 
     def test_composite_animation_matches_the_still_under_a_warp(self, tmp_path):
         """An animated composite renders like the equivalent still, even on a strong projection.
@@ -400,11 +522,15 @@ class TestAnimateComposites:
         animated_map = Map(crs=crs, globe=True, figsize=(4, 4))
         anim = animated_map.animate(frames, kind="rgb_composite", fps=2)
         anim.save(str(tmp_path / "warp.gif"), writer=PillowWriter(fps=2))
-        animated = np.nanmean(np.asarray(animated_map.ax.images[-1].get_array(), dtype="float64"))
+        animated = np.nanmean(
+            np.asarray(animated_map.ax.images[-1].get_array(), dtype="float64")
+        )
 
         still_map = Map(crs=crs, globe=True, figsize=(4, 4))
         still_map.rgb_composite(frames[-1])
-        still = np.nanmean(np.asarray(still_map.ax.images[-1].get_array(), dtype="float64"))
+        still = np.nanmean(
+            np.asarray(still_map.ax.images[-1].get_array(), dtype="float64")
+        )
 
         assert animated == pytest.approx(still, rel=0.05), (
             f"animated frame {animated:.4f} should render like the still {still:.4f}"
@@ -427,7 +553,9 @@ class TestAnimateComposites:
 
         still = Map(crs=m.crs, globe=True, figsize=(4, 4))
         still.rgb_composite(frame)
-        expected = np.nanmean(np.asarray(still.ax.images[-1].get_array(), dtype="float64"))
+        expected = np.nanmean(
+            np.asarray(still.ax.images[-1].get_array(), dtype="float64")
+        )
         assert rendered == pytest.approx(expected, rel=0.05), (
             f"the swept frame {rendered:.4f} should render like the still at that view {expected:.4f}"
         )
@@ -435,20 +563,36 @@ class TestAnimateComposites:
     def test_the_view_scan_restores_the_display_crs(self):
         """Priming borrows the display CRS to measure each view and must hand it back untouched."""
         frame = _rgb_field()
-        views = [projections.orthographic(lon=-180.0 + k * 90.0, lat=15.0) for k in range(4)]
+        views = [
+            projections.orthographic(lon=-180.0 + k * 90.0, lat=15.0) for k in range(4)
+        ]
         spun = Map(crs=4326, figsize=(4, 4))
         primed = {}
-        spun._prime_animation([frame], primed, kind="rgb_composite", colorbar=False, cbar_label=None,
-                              views=views)
-        assert spun.crs == 4326, f"the scan must restore the display CRS it borrowed, left {spun.crs!r}"
+        spun._prime_animation(
+            [frame],
+            primed,
+            kind="rgb_composite",
+            colorbar=False,
+            cbar_label=None,
+            views=views,
+        )
+        assert spun.crs == 4326, (
+            f"the scan must restore the display CRS it borrowed, left {spun.crs!r}"
+        )
 
         per_view = []
         for view in views:
             probe = Map(crs=view, figsize=(4, 4))
-            per_view.append(channel_limits(get_stack(probe._reproject(frame), (1, 2, 3))))
+            per_view.append(
+                channel_limits(get_stack(probe._reproject(frame), (1, 2, 3)))
+            )
         for channel, (lo, hi) in enumerate(primed["limits"]):
-            assert lo <= min(v[channel][0] for v in per_view) + 1e-6, f"channel {channel} lo too high"
-            assert hi >= max(v[channel][1] for v in per_view) - 1e-6, f"channel {channel} hi too low"
+            assert lo <= min(v[channel][0] for v in per_view) + 1e-6, (
+                f"channel {channel} lo too high"
+            )
+            assert hi >= max(v[channel][1] for v in per_view) - 1e-6, (
+                f"channel {channel} hi too low"
+            )
 
     def test_a_sweep_that_never_shows_the_data_still_freezes(self):
         """Every sampled view failing to warp falls back to the data as stored, rather than raising.
@@ -460,10 +604,15 @@ class TestAnimateComposites:
         """
         ny, nx = 6, 6
         local = Dataset.from_array(
-            arr=np.stack([np.full((ny, nx), value, "float32") for value in (10.0, 20.0, 30.0)]),
+            arr=np.stack(
+                [np.full((ny, nx), value, "float32") for value in (10.0, 20.0, 30.0)]
+            ),
             geo_ref=GeoReference(geo=(100.0, 0.1, 0.0, 10.0, 0.0, -0.1), epsg=4326),
         )
-        away = [projections.orthographic(lon=-80.0 + offset, lat=-60.0) for offset in (0.0, 5.0)]
+        away = [
+            projections.orthographic(lon=-80.0 + offset, lat=-60.0)
+            for offset in (0.0, 5.0)
+        ]
         frozen = Map(crs=4326)._stack_channel_limits([local], (1, 2, 3), views=away)
         assert len(frozen) == 3, f"a stretch must still come back, got {frozen!r}"
         assert all(np.isfinite(value) for pair in frozen for value in pair), (
@@ -476,8 +625,12 @@ class TestAnimateComposites:
         frozen = Map(crs=4326)._stack_channel_limits(frames, (1, 2, 3))
         per_frame = [channel_limits(get_stack(f, (1, 2, 3))) for f in frames]
         for channel, (lo, hi) in enumerate(frozen):
-            assert lo <= min(p[channel][0] for p in per_frame), f"channel {channel} lo is not the widest"
-            assert hi >= max(p[channel][1] for p in per_frame), f"channel {channel} hi is not the widest"
+            assert lo <= min(p[channel][0] for p in per_frame), (
+                f"channel {channel} lo is not the widest"
+            )
+            assert hi >= max(p[channel][1] for p in per_frame), (
+                f"channel {channel} hi is not the widest"
+            )
 
     @pytest.mark.parametrize("frames", [25, 47, 72])
     def test_stack_channel_limits_caps_scan(self, mocker, frames):
@@ -494,9 +647,12 @@ class TestAnimateComposites:
         big = [_rgb_field(shift=float(s), ny=12, nx=24) for s in range(frames)]
         limits = Map(crs=4326)._stack_channel_limits(big, (1, 2, 3))
         cap = anim_mod._CLIM_SCAN_CAP
-        assert spy.call_count <= cap, f"scanned {spy.call_count} of {frames} frames, cap is {cap}"
-        assert len(limits) == 3, "the capped scan must still yield one (lo, hi) per channel"
-
+        assert spy.call_count <= cap, (
+            f"scanned {spy.call_count} of {frames} frames, cap is {cap}"
+        )
+        assert len(limits) == 3, (
+            "the capped scan must still yield one (lo, hi) per channel"
+        )
 
     @pytest.mark.parametrize("kind", ["rgb_composite", "hsv_composite"])
     def test_colorbar_refused_for_either_composite(self, rgb_stack, kind):
@@ -521,8 +677,12 @@ class TestAnimateComposites:
         stack = [dead, live] if position == "first" else [live, dead]
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
         lo, hi = frozen[1]
-        assert np.isfinite(lo), f"a dead frame poisoned channel 2's low bound: {frozen[1]}"
-        assert np.isfinite(hi), f"a dead frame poisoned channel 2's high bound: {frozen[1]}"
+        assert np.isfinite(lo), (
+            f"a dead frame poisoned channel 2's low bound: {frozen[1]}"
+        )
+        assert np.isfinite(hi), (
+            f"a dead frame poisoned channel 2's high bound: {frozen[1]}"
+        )
         frozen_bounds = frozen[1]
         surviving = channel_limits(get_stack(live, (1, 2, 3)))[1]
         assert frozen_bounds == pytest.approx(surviving), (
@@ -533,8 +693,12 @@ class TestAnimateComposites:
         """A channel the scan never saw alive reports (nan, nan) — "no frozen bound", not a span."""
         stack = [_rgb_field_with_dead_channel(shift=s) for s in (0.0, 10.0)]
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
-        assert np.isnan(frozen[1]).all(), f"an unmeasurable channel should report (nan, nan): {frozen[1]}"
-        assert all(np.isfinite(v) for v in frozen[0] + frozen[2]), f"live channels keep real bounds: {frozen}"
+        assert np.isnan(frozen[1]).all(), (
+            f"an unmeasurable channel should report (nan, nan): {frozen[1]}"
+        )
+        assert all(np.isfinite(v) for v in frozen[0] + frozen[2]), (
+            f"live channels keep real bounds: {frozen}"
+        )
 
     def test_strided_scan_does_not_clip_a_live_channel_flat(self):
         """A channel the stride never samples alive still renders on its own stretch, not saturated.
@@ -553,17 +717,28 @@ class TestAnimateComposites:
         stack = []
         for index in range(count):
             dead = index in scanned_indices
-            stack.append(_rgb_field_with_dead_channel(shift=float(index), ny=12, nx=24) if dead
-                         else _rgb_field(shift=float(index), ny=12, nx=24))
-        live_index = next(index for index in range(count) if index not in scanned_indices)
+            stack.append(
+                _rgb_field_with_dead_channel(shift=float(index), ny=12, nx=24)
+                if dead
+                else _rgb_field(shift=float(index), ny=12, nx=24)
+            )
+        live_index = next(
+            index for index in range(count) if index not in scanned_indices
+        )
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2, 3))
-        assert np.isnan(frozen[1]).all(), f"the unscanned-alive channel should report no bound: {frozen[1]}"
+        assert np.isnan(frozen[1]).all(), (
+            f"the unscanned-alive channel should report no bound: {frozen[1]}"
+        )
 
         live = get_stack(stack[live_index], (1, 2, 3))
         stretched = stretch_to_unit(live, frozen)
         channel = stretched[..., 1]
-        assert channel.min() < channel.max(), "a live channel must keep real contrast, not clip flat"
-        assert channel.mean() < 0.9, f"the channel reads as blown out: mean {channel.mean():.3f}"
+        assert channel.min() < channel.max(), (
+            "a live channel must keep real contrast, not clip flat"
+        )
+        assert channel.mean() < 0.9, (
+            f"the channel reads as blown out: mean {channel.mean():.3f}"
+        )
 
     def test_dead_channel_still_renders(self, tmp_path):
         """A stack with one dead channel still animates instead of failing or blanking every frame."""
@@ -572,9 +747,13 @@ class TestAnimateComposites:
         anim = m.animate(stack, kind="rgb_composite", fps=2)
         out = tmp_path / "dead.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
-        assert out.stat().st_size > 0, "an animation with a dead channel should still render"
+        assert out.stat().st_size > 0, (
+            "an animation with a dead channel should still render"
+        )
         rendered = np.asarray(m.ax.images[-1].get_array(), dtype="float64")
-        assert np.isfinite(rendered[..., 0]).any(), "the live channels must not be blanked by the dead one"
+        assert np.isfinite(rendered[..., 0]).any(), (
+            "the live channels must not be blanked by the dead one"
+        )
 
     def test_mask_nodata_is_threaded_into_the_frozen_limits(self):
         """mask_nodata=False reaches the stack scan, so the nodata sentinel widens the frozen limits.
@@ -586,14 +765,20 @@ class TestAnimateComposites:
         """
         stack = [_rgb_field_with_dead_channel(shift=0.0), _rgb_field(shift=10.0)]
         masked, unmasked = {}, {"mask_nodata": False}
-        Map(crs=4326)._prime_animation(stack, masked, kind="rgb_composite", colorbar=False, cbar_label=None)
-        Map(crs=4326)._prime_animation(stack, unmasked, kind="rgb_composite", colorbar=False, cbar_label=None)
+        Map(crs=4326)._prime_animation(
+            stack, masked, kind="rgb_composite", colorbar=False, cbar_label=None
+        )
+        Map(crs=4326)._prime_animation(
+            stack, unmasked, kind="rgb_composite", colorbar=False, cbar_label=None
+        )
         assert unmasked["limits"][1][0] < masked["limits"][1][0], (
             f"mask_nodata=False should widen the low bound: {unmasked['limits'][1]} vs {masked['limits'][1]}"
         )
 
     @pytest.mark.parametrize("bands", [(1, 2), (1, 2, 3, 4)])
-    def test_wrong_band_count_is_refused_before_the_scan(self, rgb_stack, bands, mocker):
+    def test_wrong_band_count_is_refused_before_the_scan(
+        self, rgb_stack, bands, mocker
+    ):
         """A wrong band count fails up front, naming the caller — not mid-render as a bare IndexError.
 
         Test scenario:
@@ -605,7 +790,9 @@ class TestAnimateComposites:
         m = Map(crs=4326)
         with pytest.raises(ValueError, match="needs exactly three bands"):
             m.animate(rgb_stack, kind="rgb_composite", bands=bands)
-        assert spy.call_count == 0, "the stack must not be scanned before the band count is checked"
+        assert spy.call_count == 0, (
+            "the stack must not be scanned before the band count is checked"
+        )
 
     def test_a_refused_rotate_leaves_the_map_alone(self):
         """rotate validates before it mutates: a refused call must not switch the Map into globe mode.
@@ -619,7 +806,9 @@ class TestAnimateComposites:
         frame = _rgb_field()
         with pytest.raises(ValueError, match="colorbar=True is not supported"):
             m.rotate(frame, kind="rgb_composite", n_frames=3, colorbar=True)
-        assert m.globe is False, "a rotate that raised must not have switched the Map into globe mode"
+        assert m.globe is False, (
+            "a rotate that raised must not have switched the Map into globe mode"
+        )
 
     def test_empty_stack_has_no_limits_to_derive(self):
         """The helper says so rather than raising IndexError off an empty scan (reachable directly)."""
@@ -631,7 +820,9 @@ class TestAnimateComposites:
         """The scan follows the bands it is given — two bands yield two channel bounds, not three."""
         stack = [_rgb_field(shift=s) for s in (0.0, 10.0)]
         frozen = Map(crs=4326)._stack_channel_limits(stack, (1, 2))
-        assert len(frozen) == 2, f"expected one bound per requested band, got {frozen!r}"
+        assert len(frozen) == 2, (
+            f"expected one bound per requested band, got {frozen!r}"
+        )
 
     def test_frozen_stretch_keeps_a_real_brightness_change(self, tmp_path):
         """One frozen stretch preserves a genuine brightness drop that a per-frame stretch would erase.
@@ -645,15 +836,21 @@ class TestAnimateComposites:
         m = Map(crs=4326, figsize=(4, 4))
         anim = m.animate(frames, kind="rgb_composite", fps=2)
         anim.save(str(tmp_path / "dim.gif"), writer=PillowWriter(fps=2))
-        animated_dim = np.nanmean(np.asarray(m.ax.images[-1].get_array(), dtype="float64"))
+        animated_dim = np.nanmean(
+            np.asarray(m.ax.images[-1].get_array(), dtype="float64")
+        )
 
         stills = []
         for frame in frames:
             still = Map(crs=4326, figsize=(4, 4))
             still.rgb_composite(frame)
-            stills.append(np.nanmean(np.asarray(still.ax.images[-1].get_array(), dtype="float64")))
+            stills.append(
+                np.nanmean(np.asarray(still.ax.images[-1].get_array(), dtype="float64"))
+            )
 
-        assert stills[1] == pytest.approx(stills[0], abs=1e-6), "per-frame stretch should erase the drop"
+        assert stills[1] == pytest.approx(stills[0], abs=1e-6), (
+            "per-frame stretch should erase the drop"
+        )
         assert animated_dim < stills[0] * 0.75, (
             f"the dim frame must stay dim under a frozen stretch: {animated_dim:.3f} vs {stills[0]:.3f}"
         )
@@ -666,8 +863,12 @@ class TestRotate:
         """rotate returns the requested frame count and forces the map into globe mode."""
         m = Map(crs=projections.orthographic(0, 15), figsize=(4, 4))  # starts non-globe
         anim = m.rotate(_field(5.0), n_frames=6, fps=4, vmin=-40, vmax=70)
-        assert isinstance(anim, FuncAnimation), f"expected FuncAnimation, got {type(anim)}"
-        assert len(list(anim.new_frame_seq())) == 6, "rotate frame count must equal n_frames"
+        assert isinstance(anim, FuncAnimation), (
+            f"expected FuncAnimation, got {type(anim)}"
+        )
+        assert len(list(anim.new_frame_seq())) == 6, (
+            "rotate frame count must equal n_frames"
+        )
         assert m.globe is True, "rotate must force globe mode"
 
     def test_renders_gif_and_sweeps_longitude(self, tmp_path):
@@ -678,12 +879,22 @@ class TestRotate:
             rendering, the display CRS holds the final centre longitude (+lon_0=90).
         """
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        anim = m.rotate(_field(5.0), n_frames=4, fps=4, lon0=-180.0, ocean=True, cmap="terrain",
-                        vmin=-40, vmax=70)
+        anim = m.rotate(
+            _field(5.0),
+            n_frames=4,
+            fps=4,
+            lon0=-180.0,
+            ocean=True,
+            cmap="terrain",
+            vmin=-40,
+            vmax=70,
+        )
         out = tmp_path / "rot.gif"
         anim.save(str(out), writer=PillowWriter(fps=4))
         assert out.stat().st_size > 0, "rotation GIF should be non-empty"
-        assert "+lon_0=90" in m.crs, f"final centre longitude not swept to 90: {m.crs!r}"
+        assert "+lon_0=90" in m.crs, (
+            f"final centre longitude not swept to 90: {m.crs!r}"
+        )
         assert m.ax.images, "the rotated field should be drawn"
 
     def test_invalid_n_frames_raises(self):
@@ -701,21 +912,37 @@ class TestRotate:
     def test_colorbar_static(self, tmp_path):
         """rotate(colorbar=True) adds one persistent colorbar axes across the rotation frames."""
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        anim = m.rotate(_field(5.0), n_frames=3, fps=4, colorbar=True, cbar_label="elev",
-                        cmap="terrain", vmin=-40, vmax=70)
+        anim = m.rotate(
+            _field(5.0),
+            n_frames=3,
+            fps=4,
+            colorbar=True,
+            cbar_label="elev",
+            cmap="terrain",
+            vmin=-40,
+            vmax=70,
+        )
         assert len(m.fig.axes) == 2, "rotate colorbar should add one axes"
         out = tmp_path / "rotcbar.gif"
         anim.save(str(out), writer=PillowWriter(fps=4))
-        assert len(m.fig.axes) == 2 and out.stat().st_size > 0, "colorbar must stay single after rendering"
+        assert len(m.fig.axes) == 2 and out.stat().st_size > 0, (
+            "colorbar must stay single after rendering"
+        )
 
     def test_rotate_coastlines_best_effort(self, tmp_path, mocker):
         """rotate(coastlines=True) attempts coastlines each frame and still renders when they fail offline."""
-        coast = mocker.patch.object(Map, "coastlines", side_effect=RuntimeError("offline"))
+        coast = mocker.patch.object(
+            Map, "coastlines", side_effect=RuntimeError("offline")
+        )
         m = Map(crs=projections.orthographic(0, 15), globe=True, figsize=(4, 4))
-        anim = m.rotate(_field(5.0), n_frames=2, fps=4, coastlines=True, vmin=-40, vmax=70)
+        anim = m.rotate(
+            _field(5.0), n_frames=2, fps=4, coastlines=True, vmin=-40, vmax=70
+        )
         out = tmp_path / "rotcoast.gif"
         anim.save(str(out), writer=PillowWriter(fps=4))
-        assert out.stat().st_size > 0, "rotation should still render when coastlines fail"
+        assert out.stat().st_size > 0, (
+            "rotation should still render when coastlines fail"
+        )
         assert coast.call_count >= 2, "coastlines should be attempted on each frame"
 
 
@@ -730,9 +957,13 @@ class TestDrawAnimationFrame:
             ocean is skipped because it is globe-only.
         """
         m = Map(crs=4326)
-        m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=True, coastlines=False, title="frame-0")
+        m._draw_animation_frame(
+            _field(0.0), "imshow", {}, ocean=True, coastlines=False, title="frame-0"
+        )
         assert m.ax.get_title() == "frame-0", f"title not set, got {m.ax.get_title()!r}"
-        assert len(m.layers) == 1, f"expected one drawn field layer, got {len(m.layers)}"
+        assert len(m.layers) == 1, (
+            f"expected one drawn field layer, got {len(m.layers)}"
+        )
 
     def test_no_title_leaves_title_empty(self):
         """_draw_animation_frame leaves the title untouched when none is given.
@@ -741,5 +972,9 @@ class TestDrawAnimationFrame:
             Omitting title draws the field without setting any axes title.
         """
         m = Map(crs=4326)
-        m._draw_animation_frame(_field(0.0), "imshow", {}, ocean=False, coastlines=False)
-        assert m.ax.get_title() == "", f"title should be empty, got {m.ax.get_title()!r}"
+        m._draw_animation_frame(
+            _field(0.0), "imshow", {}, ocean=False, coastlines=False
+        )
+        assert m.ax.get_title() == "", (
+            f"title should be empty, got {m.ax.get_title()!r}"
+        )

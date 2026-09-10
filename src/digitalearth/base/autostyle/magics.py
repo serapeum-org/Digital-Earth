@@ -12,6 +12,7 @@ The split mirrors the rest of the package. Applying a colormap / contour levels 
 lives in cleopatra; the *domain knowledge* — "``msl`` is mean-sea-level pressure, drawn every 4 hPa between
 960 and 1052 hPa" — is geospatial and lives here, as data in the YAML library rather than as code.
 """
+
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -163,12 +164,17 @@ def magics_style(
     # 1) by name — each entry's aliases, case-insensitive and anchored at a token start (the primary key).
     if name_l:
         for params in lib.values():
-            if any(_alias_in(str(pat).lower(), name_l) for pat in _as_list(params.get("match"))):
+            if any(
+                _alias_in(str(pat).lower(), name_l)
+                for pat in _as_list(params.get("match"))
+            ):
                 return _style_of(params)
     # 2) by CF standard_name — exact, case-insensitive.
     if sname_l:
         for params in lib.values():
-            if sname_l in [str(s).lower() for s in _as_list(params.get("standard_name"))]:
+            if sname_l in [
+                str(s).lower() for s in _as_list(params.get("standard_name"))
+            ]:
                 return _style_of(params)
     # 3) by units — exact, case-insensitive; narrow last-resort fallback.
     if units_l:

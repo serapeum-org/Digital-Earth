@@ -16,18 +16,23 @@ is intentional (this tier reads as HoloViews to its users); the static↔interac
 in the tier plan's feature-parity matrix.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.stretch import (
-    ChannelLimits,
     DEFAULT_COMPOSITE_BANDS,
+    ChannelLimits,
     require_three_bands,
     stretch_to_unit,
 )
 from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class RasterMixin:
+
+class RasterMixin(_MixinBase):
     """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti."""
 
     def _image_element(
@@ -59,7 +64,7 @@ class RasterMixin:
         alpha: float = 1.0,
         colorbar: bool = True,
         **opts: Any,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a colour-mapped raster layer with hover readout (interactive ``imshow``).
 
         Args:
@@ -113,7 +118,7 @@ class RasterMixin:
         bands: Sequence[int] = DEFAULT_COMPOSITE_BANDS,
         limits: Optional[ChannelLimits] = None,
         **opts: Any,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a true-colour composite from three raster bands (2–98 % percentile stretch).
 
         Args:
@@ -166,7 +171,7 @@ class RasterMixin:
 
     def quadmesh(
         self, data: Any, *, band: int = 1, cmap: Optional[str] = None, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).
 
         Unlike :meth:`image` (regular grid), a ``QuadMesh`` draws each cell from its coordinate
@@ -209,7 +214,7 @@ class RasterMixin:
 
     def contours(
         self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add line contours of a raster band.
 
         Args:
@@ -237,7 +242,7 @@ class RasterMixin:
 
     def filled_contours(
         self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add filled contour bands of a raster band.
 
         Args:
@@ -264,7 +269,7 @@ class RasterMixin:
 
     def _contour_layer(
         self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
-    ) -> "RasterMixin":
+    ) -> Self:
         """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer."""
         gv, hv = _require_holoviz()
         from holoviews.operation import contours as contour_op
@@ -291,9 +296,7 @@ class RasterMixin:
         "#17becf",
     )
 
-    def spaghetti(
-        self, collection: Any, *, band: int = 1, **opts: Any
-    ) -> "RasterMixin":
+    def spaghetti(self, collection: Any, *, band: int = 1, **opts: Any) -> Self:
         """Overlay each member of a ``DatasetCollection`` as line contours (ensemble spaghetti).
 
         Each member gets a distinct colour from a cycling palette so the strands are
@@ -339,7 +342,7 @@ class RasterMixin:
         dynamic: bool = True,
         cmap: Optional[str] = None,
         **opts: Any,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Add a large raster / COG by loading only the viewport at a decimated overview (DI.14).
 
         The raster analogue of the vector Datashader path: instead of materialising a multi-GB raster,
@@ -376,7 +379,9 @@ class RasterMixin:
             )
         ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
         side = max(64, int(np.sqrt(max_pixels)))
-        read_band = band - 1  # pyramids preview/read_part are 0-based (like Dataset.read_array)
+        read_band = (
+            band - 1
+        )  # pyramids preview/read_part are 0-based (like Dataset.read_array)
 
         def _frame(x_range: Any = None, y_range: Any = None) -> Any:
             if (

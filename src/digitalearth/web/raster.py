@@ -10,7 +10,7 @@ matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazil
 the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
@@ -20,7 +20,13 @@ from digitalearth.web.base import _require_layer_api
 _LARGE_RASTER_PIXELS = 4_000_000
 
 
-class RasterMixin:
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class RasterMixin(_MixinBase):
     """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
     def add_raster(
@@ -33,7 +39,7 @@ class RasterMixin:
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         visible: bool = True,
-    ) -> "RasterMixin":
+    ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
         The band is reprojected to the display CRS (lon/lat) through pyramids, normalised over its finite
@@ -69,7 +75,9 @@ class RasterMixin:
                 getattr(values, "size", 0),
             )
         y = np.asarray(source.y.values, dtype=float)
-        if y.size > 1 and y[0] < y[-1]:  # ascending y → flip so PNG row 0 is the northern edge
+        if (
+            y.size > 1 and y[0] < y[-1]
+        ):  # ascending y → flip so PNG row 0 is the northern edge
             values = values[::-1]
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
         coordinates = self._image_coordinates(source.x.values, source.y.values)
@@ -145,7 +153,11 @@ class RasterMixin:
         from matplotlib.colors import Normalize
 
         array = np.ma.asarray(values).astype(float)
-        data = array.filled(np.nan) if np.ma.isMaskedArray(array) else np.asarray(array, dtype=float)
+        data = (
+            array.filled(np.nan)
+            if np.ma.isMaskedArray(array)
+            else np.asarray(array, dtype=float)
+        )
         valid = np.isfinite(data)
         if not valid.any():
             raise ValueError("add_raster got a band with no finite values to colour")

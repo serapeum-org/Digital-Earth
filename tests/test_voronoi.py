@@ -105,6 +105,8 @@ def test_voronoi_empty_raises():
     import geopandas as gpd
     from pyramids.feature import FeatureCollection
 
-    empty = FeatureCollection(gpd.GeoDataFrame({"fid": []}, geometry=[], crs="EPSG:4326"))
+    empty = FeatureCollection(
+        gpd.GeoDataFrame({"fid": []}, geometry=[], crs="EPSG:4326")
+    )
     with pytest.raises(ValueError):
         Map(crs=4326).voronoi(empty)

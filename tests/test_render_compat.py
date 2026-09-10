@@ -1,4 +1,5 @@
 """Unit tests for :mod:`digitalearth.static.render_compat` — the flat-kwarg -> cleopatra group-object translation."""
+
 import numpy as np
 import pytest
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, PointOverlay
@@ -46,8 +47,16 @@ def test_coerce_color_scale_rejects_unknown(value):
 def test_group_render_kwargs_folds_each_group():
     """Each family of flat kwargs folds into its typed cleopatra group object."""
     out = group_render_kwargs(
-        {"levels": 5, "scheme": "quantiles", "k": 4, "style": "terrain", "display_cell_value": True,
-         "color_scale": "power", "gamma": 0.3, "cmap": "viridis"}
+        {
+            "levels": 5,
+            "scheme": "quantiles",
+            "k": 4,
+            "style": "terrain",
+            "display_cell_value": True,
+            "color_scale": "power",
+            "gamma": 0.3,
+            "cmap": "viridis",
+        }
     )
     assert isinstance(out["contour"], Contour)
     assert out["contour"].levels == 5
@@ -81,7 +90,9 @@ def test_group_render_kwargs_wraps_points_overlay():
 
 def test_group_render_kwargs_respects_accepted_groups():
     """With an ``accepted`` set, groups the glyph lacks are not folded — their flat members are left alone."""
-    out = group_render_kwargs({"scheme": "quantiles", "alpha": 0.5}, accepted={"color", "contour", "classify"})
+    out = group_render_kwargs(
+        {"scheme": "quantiles", "alpha": 0.5}, accepted={"color", "contour", "classify"}
+    )
     assert isinstance(out["classify"], Classify)  # accepted -> folded
     assert out["alpha"] == 0.5
     assert "data_style" not in out  # data_style not accepted -> left flat
@@ -89,7 +100,9 @@ def test_group_render_kwargs_respects_accepted_groups():
 
 def test_prepare_plot_kwargs_defers_alpha_for_vector_glyph():
     """A vector glyph (no data_style parameter) hands alpha back for post-hoc application instead of folding it."""
-    glyph = ScatterGlyph(np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2]))
+    glyph = ScatterGlyph(
+        np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2])
+    )
     kwargs, alpha = prepare_plot_kwargs(glyph, {"scheme": "quantiles", "alpha": 0.5})
     assert alpha == 0.5
     assert isinstance(kwargs["classify"], Classify)
@@ -108,15 +121,23 @@ def test_prepare_plot_kwargs_folds_alpha_for_array_glyph():
 
 def test_prepare_plot_kwargs_rejects_unsupported_styling():
     """A raster-only styling kwarg on a vector glyph raises a clear ValueError naming it."""
-    glyph = ScatterGlyph(np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2]))
-    with pytest.raises(ValueError, match=r"does not support the styling option\(s\) \['style'\]"):
+    glyph = ScatterGlyph(
+        np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2])
+    )
+    with pytest.raises(
+        ValueError, match=r"does not support the styling option\(s\) \['style'\]"
+    ):
         prepare_plot_kwargs(glyph, {"style": "terrain"})
 
 
 def test_prepare_plot_kwargs_rejects_points_overlay_on_unsupported_glyph():
     """A points overlay on a glyph with no ``points`` parameter raises a clear ValueError, not a TypeError."""
-    glyph = ScatterGlyph(np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2]))
-    with pytest.raises(ValueError, match=r"does not support the styling option\(s\).*points"):
+    glyph = ScatterGlyph(
+        np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2])
+    )
+    with pytest.raises(
+        ValueError, match=r"does not support the styling option\(s\).*points"
+    ):
         prepare_plot_kwargs(glyph, {"points": np.zeros((2, 3))})
 
 
@@ -130,7 +151,13 @@ def test_group_render_kwargs_keeps_flat_member_when_group_object_present():
 
 def test_relocate_flat_style_pops_styling_leaves_constructor_options():
     """relocate_flat_style removes the flat members and group params, leaving constructor-safe options."""
-    opts = {"scheme": "quantiles", "levels": 5, "color": ColorScaling(), "cmap": "viridis", "add_colorbar": False}
+    opts = {
+        "scheme": "quantiles",
+        "levels": 5,
+        "color": ColorScaling(),
+        "cmap": "viridis",
+        "add_colorbar": False,
+    }
     moved = relocate_flat_style(opts)
     assert set(moved) == {"scheme", "levels", "color"}
     assert opts == {"cmap": "viridis", "add_colorbar": False}
@@ -138,7 +165,16 @@ def test_relocate_flat_style_pops_styling_leaves_constructor_options():
 
 def test_flat_style_keys_covers_group_members_and_params():
     """FLAT_STYLE_KEYS spans every flat member, the point_* aliases, and the typed group parameter names."""
-    for key in ("levels", "scheme", "style", "color_scale", "points", "point_color", "color", "contour"):
+    for key in (
+        "levels",
+        "scheme",
+        "style",
+        "color_scale",
+        "points",
+        "point_color",
+        "color",
+        "contour",
+    ):
         assert key in FLAT_STYLE_KEYS
 
 
@@ -151,7 +187,11 @@ def test_scatter_alpha_applies_to_the_rendered_artist():
     from digitalearth.static import Map
 
     fc = FeatureCollection(
-        gpd.GeoDataFrame({"v": [1.0, 2.0, 3.0]}, geometry=[Point(0, 0), Point(1, 1), Point(2, 2)], crs="EPSG:4326")
+        gpd.GeoDataFrame(
+            {"v": [1.0, 2.0, 3.0]},
+            geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
+            crs="EPSG:4326",
+        )
     )
     artist = Map(crs=4326).scatter(fc, alpha=0.5)
     assert artist.get_alpha() == 0.5

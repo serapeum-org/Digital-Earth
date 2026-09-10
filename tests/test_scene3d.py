@@ -3,6 +3,7 @@
 Gated on the optional ``3d`` extra: when pyvista is not installed these are skipped, so the default suite stays
 green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise them for real.
 """
+
 import numpy as np
 import pytest
 

@@ -3,6 +3,7 @@
 The lazy-import contract runs without the engine; the chart builders ``importorskip`` holoviews and run in the
 ``interactive`` pixi env.
 """
+
 import sys
 
 import numpy as np
@@ -19,7 +20,9 @@ class TestLazyImport:
             assert hasattr(icharts, name), f"interactive.charts.{name} should exist"
 
     def test_missing_engine_raises_actionable_error(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "holoviews", None)  # makes `import holoviews` raise
+        monkeypatch.setitem(
+            sys.modules, "holoviews", None
+        )  # makes `import holoviews` raise
         with pytest.raises(ImportError, match=r"digitalearth\[interactive\]"):
             icharts.histogram([1, 2, 3])
 
@@ -37,7 +40,12 @@ class TestInteractiveCharts:
         from shapely.geometry import Point
 
         return gpd.GeoDataFrame(
-            {"cat": ["a", "a", "b"], "year": [2000, 2000, 2010], "a_val": [1.0, 2.0, 3.0], "b_val": [3.0, 2.0, 1.0]},
+            {
+                "cat": ["a", "a", "b"],
+                "year": [2000, 2000, 2010],
+                "a_val": [1.0, 2.0, 3.0],
+                "b_val": [3.0, 2.0, 1.0],
+            },
             geometry=[Point(i, i) for i in range(3)],
             crs=4326,
         )
@@ -56,7 +64,9 @@ class TestInteractiveCharts:
         """A raw array with NaN/inf histograms cleanly instead of raising an opaque numpy range error (L2)."""
         import holoviews as hv
 
-        assert isinstance(icharts.histogram([1.0, np.nan, 3.0, np.inf, 2.0], bins=3), hv.Histogram)
+        assert isinstance(
+            icharts.histogram([1.0, np.nan, 3.0, np.inf, 2.0], bins=3), hv.Histogram
+        )
 
     def test_scatter_arrays(self):
         import holoviews as hv

@@ -14,6 +14,7 @@ work stays in pyramids.
 
 Requires the optional ``3d`` extra (``pip install digitalearth[3d]`` → pyvista + trame; geovista for the globe).
 """
+
 from digitalearth.three_d.scene3d import Scene3D
 
 __all__ = ["Scene3D"]

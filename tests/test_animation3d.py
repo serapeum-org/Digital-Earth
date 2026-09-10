@@ -3,6 +3,7 @@
 Gated on the optional ``3d`` extra (pyvista + imageio). Covers orbit fly-throughs to GIF/MP4, the frame-by-frame
 ``animate`` driver, the movie-vs-gif writer dispatch, and the trame jupyter-backend switch.
 """
+
 import numpy as np
 import pytest
 
@@ -89,7 +90,9 @@ def test_writer_dispatch_movie_vs_gif():
 def test_jupyter_switches_backend(monkeypatch):
     """jupyter() calls pyvista.set_jupyter_backend with the requested backend."""
     captured = {}
-    monkeypatch.setattr(pv, "set_jupyter_backend", lambda b: captured.setdefault("backend", b))
+    monkeypatch.setattr(
+        pv, "set_jupyter_backend", lambda b: captured.setdefault("backend", b)
+    )
     scene = Scene3D(off_screen=True)
     scene.jupyter("static")
     assert captured["backend"] == "static"
@@ -117,5 +120,7 @@ def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
     with pytest.raises(RuntimeError, match="blew up"):
         scene.animate([1, 2], str(out), boom)
     # finally-block ran: the writer was flushed/closed (no lingering open mwriter)
-    assert getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
+    assert (
+        getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
+    )
     scene.close()

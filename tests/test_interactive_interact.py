@@ -25,9 +25,9 @@ class TestHoverAndTap:
     def test_hover_sets_custom_tooltips(self, m):
         m.hover(tooltips=[("value", "@value")])
         plot = hv.Store.lookup_options("bokeh", m.layers[-1], "plot").kwargs
-        assert any(
-            getattr(t, "tooltips", None) for t in plot.get("tools", [])
-        ), "custom HoverTool missing"
+        assert any(getattr(t, "tooltips", None) for t in plot.get("tools", [])), (
+            "custom HoverTool missing"
+        )
 
     def test_hover_without_layers_raises(self):
         with pytest.raises(ValueError, match="at least one layer"):
@@ -113,7 +113,9 @@ class TestDrawAOI:
     def test_drawn_geometry_none_without_any_draw_call(self, m):
         """_draw_stream is initialized in __init__ (L1), so drawn_geometry is None pre-draw()."""
         assert m._draw_stream is None, "_draw_stream must be initialized in __init__"
-        assert m.drawn_geometry is None, "no draw tool added yet → None (no AttributeError)"
+        assert m.drawn_geometry is None, (
+            "no draw tool added yet → None (no AttributeError)"
+        )
 
     def test_box_event_yields_display_crs_bbox(self, m):
         m.draw("box")

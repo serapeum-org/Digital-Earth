@@ -38,7 +38,9 @@ class TestPointCloudData:
     """``_point_cloud_data`` builds deck position rows (no engine)."""
 
     def test_from_xyz_array(self):
-        rows = WebMap()._point_cloud_data(np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), None)
+        rows = WebMap()._point_cloud_data(
+            np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]), None
+        )
         assert rows[0]["position"] == [1.0, 2.0, 3.0]
         assert rows[1]["position"] == [4.0, 5.0, 6.0]
 
@@ -73,7 +75,12 @@ class TestThreeDNeedEngine:
     def test_terrain_and_globe_chain_and_render(self, polygons_gdf):
         from maplibre.ipywidget import MapWidget
 
-        m = WebMap().extrusion(polygons_gdf, height="pop").terrain(exaggeration=1.5).globe(True)
+        m = (
+            WebMap()
+            .extrusion(polygons_gdf, height="pop")
+            .terrain(exaggeration=1.5)
+            .globe(True)
+        )
         assert len(m.layers) == 3
         assert isinstance(m.render(), MapWidget)
 

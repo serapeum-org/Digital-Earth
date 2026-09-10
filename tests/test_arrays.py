@@ -5,6 +5,7 @@ Covers every public/private helper in the module: ``mask_nodata``, ``finite``, `
 ``tests/test_figures.py``. The dataset-reading helpers are exercised against a small in-memory fake so no
 real raster or filesystem access is needed.
 """
+
 from types import SimpleNamespace
 
 import numpy as np
@@ -69,7 +70,9 @@ class TestMaskNodata:
         """
         near = -9999.0 * (1 + 1e-4)
         out = mask_nodata(np.array([near, -9999.0]), -9999.0)
-        assert not np.isnan(out[0]), "value near the sentinel must be preserved (exact compare)"
+        assert not np.isnan(out[0]), (
+            "value near the sentinel must be preserved (exact compare)"
+        )
         assert np.isnan(out[1]), "exact sentinel must be masked"
 
     def test_2d_shape_preserved(self):
@@ -91,7 +94,9 @@ class TestMaskNodata:
         """
         out = mask_nodata([1, 2, 3], 2)
         assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-        assert np.isnan(out[1]), "the integer sentinel should be masked after the float cast"
+        assert np.isnan(out[1]), (
+            "the integer sentinel should be masked after the float cast"
+        )
         assert out[0] == 1.0, f"leading non-sentinel cell changed: {out}"
         assert out[2] == 3.0, f"trailing non-sentinel cell changed: {out}"
 
@@ -104,7 +109,9 @@ class TestMaskNodata:
         """
         out = mask_nodata(np.array([1.0, np.nan, 3.0]), np.nan)
         assert out[0] == 1.0, f"leading finite value must survive a NaN sentinel: {out}"
-        assert out[2] == 3.0, f"trailing finite value must survive a NaN sentinel: {out}"
+        assert out[2] == 3.0, (
+            f"trailing finite value must survive a NaN sentinel: {out}"
+        )
         assert np.isnan(out[1]), "an already-NaN cell stays NaN"
 
     def test_empty_input_stays_empty(self):
@@ -239,7 +246,9 @@ class TestBandNodata:
             A duck-typed dataset that never declares nodata must not raise AttributeError — the getattr
             default is what makes the helper safe for the loose duck-typing the callers use.
         """
-        assert _band_nodata(SimpleNamespace(), 0) is None, "a missing attribute should give None"
+        assert _band_nodata(SimpleNamespace(), 0) is None, (
+            "a missing attribute should give None"
+        )
 
     def test_none_attribute_returns_none(self):
         """_band_nodata returns None when no_data_value itself is None.
@@ -247,7 +256,9 @@ class TestBandNodata:
         Test scenario:
             ``no_data_value=None`` is falsey, so the helper short-circuits before subscripting.
         """
-        assert _band_nodata(SimpleNamespace(no_data_value=None), 0) is None, "None nodata should give None"
+        assert _band_nodata(SimpleNamespace(no_data_value=None), 0) is None, (
+            "None nodata should give None"
+        )
 
     def test_unsubscriptable_nodata_returns_none(self):
         """_band_nodata swallows the TypeError from a non-subscriptable nodata value.
@@ -256,7 +267,9 @@ class TestBandNodata:
             A dataset exposing a bare number instead of a per-band sequence would raise TypeError on
             ``ndv[index]``; the helper degrades to None rather than propagating it.
         """
-        assert _band_nodata(SimpleNamespace(no_data_value=5), 0) is None, "a scalar nodata should give None"
+        assert _band_nodata(SimpleNamespace(no_data_value=5), 0) is None, (
+            "a scalar nodata should give None"
+        )
 
     def test_mapping_nodata_missing_key_returns_none(self):
         """_band_nodata swallows the KeyError from a mapping without the requested band.
@@ -299,14 +312,17 @@ class TestNanReducers:
             f"unexpected reducer keys: {sorted(NAN_REDUCERS)}"
         )
 
-    @pytest.mark.parametrize("name, expected", [
-        ("mean", 2.0),
-        ("sum", 4.0),
-        ("median", 2.0),
-        ("min", 1.0),
-        ("max", 3.0),
-        ("std", 1.0),
-    ])
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("mean", 2.0),
+            ("sum", 4.0),
+            ("median", 2.0),
+            ("min", 1.0),
+            ("max", 3.0),
+            ("std", 1.0),
+        ],
+    )
     def test_reducers_are_nan_aware(self, name, expected):
         """Each reducer ignores NaN values.
 
@@ -318,7 +334,9 @@ class TestNanReducers:
             Reducing [1, nan, 3] yields the same value as reducing [1, 3], proving NaN is skipped.
         """
         result = float(NAN_REDUCERS[name](np.array([1.0, np.nan, 3.0])))
-        assert result == pytest.approx(expected), f"{name} on [1, nan, 3] gave {result}, expected {expected}"
+        assert result == pytest.approx(expected), (
+            f"{name} on [1, nan, 3] gave {result}, expected {expected}"
+        )
 
     def test_timeseries_reducers_are_a_subset(self):
         """TimeSeries._REDUCERS draws its functions from NAN_REDUCERS.
@@ -329,7 +347,9 @@ class TestNanReducers:
         from digitalearth.static.temporal.timeseries import TimeSeries
 
         for name, func in TimeSeries._REDUCERS.items():
-            assert func is NAN_REDUCERS[name], f"{name} not sourced from the shared registry"
+            assert func is NAN_REDUCERS[name], (
+                f"{name} not sourced from the shared registry"
+            )
 
     def test_quadtree_agg_is_superset_with_count(self):
         """map._QUADTREE_AGG is NAN_REDUCERS plus a special 'count'.
@@ -340,8 +360,12 @@ class TestNanReducers:
         from digitalearth.static.maps.vector import _QUADTREE_AGG
 
         for name, func in NAN_REDUCERS.items():
-            assert _QUADTREE_AGG[name] is func, f"{name} differs from the shared registry"
-        assert set(_QUADTREE_AGG) - set(NAN_REDUCERS) == {"count"}, "quadtree should add only 'count'"
+            assert _QUADTREE_AGG[name] is func, (
+                f"{name} differs from the shared registry"
+            )
+        assert set(_QUADTREE_AGG) - set(NAN_REDUCERS) == {"count"}, (
+            "quadtree should add only 'count'"
+        )
         assert _QUADTREE_AGG["count"] is len, "'count' should be the builtin len"
 
 
@@ -356,7 +380,9 @@ class TestReadMaskedBand:
         """
         ds = _FakeDataset([[1.0, 2.0]], no_data_value=(None,))
         read_masked_band(ds, band=1)
-        assert ds.requested_band == 0, f"band=1 should read index 0, read {ds.requested_band}"
+        assert ds.requested_band == 0, (
+            f"band=1 should read index 0, read {ds.requested_band}"
+        )
 
     def test_masks_band_nodata(self):
         """read_masked_band nulls the band's nodata cells.
@@ -367,7 +393,9 @@ class TestReadMaskedBand:
         ds = _FakeDataset([[5.0, -1.0], [-1.0, 8.0]], no_data_value=(-1.0,))
         out = read_masked_band(ds, band=1)
         assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-        assert np.isnan(out[0, 1]) and np.isnan(out[1, 0]), "sentinel cells should be NaN"
+        assert np.isnan(out[0, 1]) and np.isnan(out[1, 0]), (
+            "sentinel cells should be NaN"
+        )
         assert out[0, 0] == 5.0 and out[1, 1] == 8.0, f"real values changed: {out}"
 
     def test_no_nodata_leaves_values(self):
@@ -389,7 +417,9 @@ class TestReadMaskedBand:
         """
         ds = _FakeDataset([[1.0, 2.0]], no_data_value=(None,))
         read_masked_band(ds)
-        assert ds.requested_band == 0, f"the default band should read index 0, read {ds.requested_band}"
+        assert ds.requested_band == 0, (
+            f"the default band should read index 0, read {ds.requested_band}"
+        )
 
     def test_second_band_uses_its_own_sentinel(self):
         """read_masked_band picks the sentinel matching the requested band.
@@ -400,8 +430,12 @@ class TestReadMaskedBand:
         """
         ds = _FakeDataset([[-1.0, -2.0]], no_data_value=(-1.0, -2.0))
         out = read_masked_band(ds, band=2)
-        assert ds.requested_band == 1, f"band=2 should read index 1, read {ds.requested_band}"
-        assert out[0, 0] == -1.0, f"band 1's sentinel must not be applied to band 2: {out}"
+        assert ds.requested_band == 1, (
+            f"band=2 should read index 1, read {ds.requested_band}"
+        )
+        assert out[0, 0] == -1.0, (
+            f"band 1's sentinel must not be applied to band 2: {out}"
+        )
         assert np.isnan(out[0, 1]), "band 2's own sentinel should be masked"
 
     def test_preserves_stored_shape(self):
@@ -410,6 +444,8 @@ class TestReadMaskedBand:
         Test scenario:
             No flattening happens here — that is ``finite``'s job — so a 2x3 band comes back 2x3.
         """
-        ds = _FakeDataset(np.arange(6, dtype="float64").reshape(2, 3), no_data_value=(None,))
+        ds = _FakeDataset(
+            np.arange(6, dtype="float64").reshape(2, 3), no_data_value=(None,)
+        )
         out = read_masked_band(ds, band=1)
         assert out.shape == (2, 3), f"shape changed: {out.shape}"

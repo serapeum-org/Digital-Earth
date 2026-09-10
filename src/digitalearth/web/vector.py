@@ -12,15 +12,34 @@ polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expres
 cleopatra / matplotlib / numpy are imported lazily inside the methods; importing the tier needs none of them.
 """
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
 from digitalearth.web.base import _require_layer_api
 
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.web.base import WebMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
 
-class VectorMixin:
-    """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`."""
+
+class VectorMixin(_MixinBase):
+    """Point / line / polygon / choropleth builders for :class:`~digitalearth.web.map.WebMap`.
+
+    A capability mixin of :class:`~digitalearth.web.map.WebMap`: it is only ever composed into that map class, never
+    instantiated or subclassed on its own. Its methods reach the layer registry, the display CRS and the render/save
+    lifecycle — and the sibling mixins' methods — through ``self``, and only the composition supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.web.base.WebMapBase`, the state ``WebMap`` inherits.
+    At runtime that base is plain ``object``, so composing this mixin leaves the ``WebMap`` MRO exactly what it was
+    before the annotation.
+
+    See Also:
+        digitalearth.web.map.WebMap: the composition that supplies the state these methods use.
+        digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
+    """
 
     def _color_expr(
         self,
@@ -79,11 +98,15 @@ class VectorMixin:
                 resolve_categorical_cmap,
             )
 
-            categories, colors = categorical_colors(values, resolve_categorical_cmap(cmap))
+            categories, colors = categorical_colors(
+                values, resolve_categorical_cmap(cmap)
+            )
             expr = ["match", ["get", column]]
             for category, color in zip(categories, colors):
                 expr.extend([_native(category), color])
-            expr.append(MISSING_COLOR)  # fallback for values outside the known categories (shared by all tiers)
+            expr.append(
+                MISSING_COLOR
+            )  # fallback for values outside the known categories (shared by all tiers)
             self.last_breaks = [_native(c) for c in categories]
             return expr
 
@@ -92,7 +115,9 @@ class VectorMixin:
 
             try:
                 edges, _ = classify(values, scheme, k)
-            except ValueError as err:  # constant / single-feature column, unknown scheme, k<1, …
+            except (
+                ValueError
+            ) as err:  # constant / single-feature column, unknown scheme, k<1, …
                 raise ValueError(
                     f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
                 ) from err
@@ -124,7 +149,7 @@ class VectorMixin:
         prefix: str,
         layer_type: Any,
         paint: dict,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Register a GeoJSON source + a typed layer with ``paint`` and record it as the last data layer.
 
         Args:
@@ -134,7 +159,7 @@ class VectorMixin:
             paint: The MapLibre paint dict for the layer.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, _ = _require_layer_api()
         src_id, layer_id = self._uid(f"{prefix}-src"), self._uid(prefix)
@@ -166,7 +191,7 @@ class VectorMixin:
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
         Args:
@@ -183,7 +208,7 @@ class VectorMixin:
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="points")
@@ -217,7 +242,7 @@ class VectorMixin:
         width: float = 2.0,
         color: str = "#3388ff",
         opacity: float = 1.0,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a line ``FeatureCollection`` as a MapLibre line layer (recipe W2).
 
         Args:
@@ -231,7 +256,7 @@ class VectorMixin:
             opacity: Line opacity in ``[0, 1]``.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="lines")
@@ -256,7 +281,7 @@ class VectorMixin:
         opacity: float = 0.6,
         outline_color: str = "#ffffff",
         big: Optional[bool] = None,
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
 
         Args:
@@ -273,7 +298,7 @@ class VectorMixin:
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="polygons")
@@ -287,7 +312,10 @@ class VectorMixin:
                     column,
                 )
             return self.deck_polygons(gdf)
-        paint: dict = {"fill-opacity": float(opacity), "fill-outline-color": outline_color}
+        paint: dict = {
+            "fill-opacity": float(opacity),
+            "fill-outline-color": outline_color,
+        }
         if column is not None:
             paint["fill-color"] = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -306,7 +334,7 @@ class VectorMixin:
         cmap: str = "viridis",
         opacity: float = 0.85,
         outline_color: str = "#ffffff",
-    ) -> "VectorMixin":
+    ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
         Graduated by default (``scheme="quantiles"``): the class breaks come from
@@ -332,7 +360,7 @@ class VectorMixin:
             outline_color: Polygon outline colour.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
 
         Raises:
             KeyError: when ``column`` is not a feature attribute.

@@ -10,7 +10,7 @@ deterministic arrays. Reprojection still happens upstream in pyramids; Datashade
 projected planar coordinates.
 """
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Self
 
 from loguru import logger
 
@@ -50,8 +50,29 @@ def _resolve_aggregator(aggregator: Any, column: Optional[str]) -> Any:
     return getattr(ds, aggregator)(column)
 
 
-class BigDataMixin:
-    """Datashader builders (DI.2): viewport-rasterized density layers for huge vector data."""
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
+else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
+    _MixinBase = object
+
+
+class BigDataMixin(_MixinBase):
+    """Datashader builders (DI.2): viewport-rasterized density layers for huge vector data.
+
+    A capability mixin of :class:`~digitalearth.interactive.map.InteractiveMap`: it is only ever composed into that
+    map class, never instantiated or subclassed on its own. Its methods reach the element registry, the display CRS
+    and the render/save lifecycle — and the sibling mixins' methods — through ``self``, and only the composition
+    supplies those.
+
+    The ``if TYPE_CHECKING`` base declared above the class is what records that contract for a type checker: it
+    resolves each ``self.<attr>`` against :class:`~digitalearth.interactive.base.InteractiveMapBase`, the state
+    ``InteractiveMap`` inherits. At runtime that base is plain ``object``, so composing this mixin leaves the
+    ``InteractiveMap`` MRO exactly what it was before the annotation.
+
+    See Also:
+        digitalearth.interactive.map.InteractiveMap: the composition that supplies the state these methods use.
+        digitalearth.interactive.base.InteractiveMapBase: the typing-only base declared above the class.
+    """
 
     def _as_element(self, layer: Any, *, vdims: Optional[list] = None) -> Any:
         """Return ``layer`` as a HoloViews element (GeoDataFrames become point layers).
@@ -79,7 +100,7 @@ class BigDataMixin:
         dynamic: bool = True,
         cmap: str = "viridis",
         **opts: Any,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Add a server-rasterized density layer that re-aggregates on zoom.
 
         Produces a numeric image (Bokeh keeps colorbar + hover + live recolor), aggregating all
@@ -96,7 +117,7 @@ class BigDataMixin:
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         from holoviews.operation.datashader import rasterize as _rasterize
@@ -126,7 +147,7 @@ class BigDataMixin:
         column: Optional[str] = None,
         dynamic: bool = True,
         **opts: Any,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Add a fully shaded (RGB) density layer — categorical blends via ``color_key`` (DI.2a).
 
         Unlike :meth:`rasterize` the colour-mapping happens server-side too (no Bokeh colorbar /
@@ -145,7 +166,7 @@ class BigDataMixin:
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
         from holoviews.operation.datashader import datashade as _datashade
@@ -181,7 +202,7 @@ class BigDataMixin:
         color_key: Optional[dict] = None,
         dynamic: bool = True,
         **opts: Any,
-    ) -> "BigDataMixin":
+    ) -> Self:
         """Datashade millions of ordered track points as line density (GPS/AIS, DI.2b).
 
         Point rows are connected into per-track paths (NaN-separated, the ``Canvas.line`` recipe)
@@ -200,7 +221,7 @@ class BigDataMixin:
             **opts: ``width``/``height`` pin the canvas; everything else styles the result.
 
         Returns:
-            This map (chainable).
+            The same map instance, so builder calls chain.
         """
         import numpy as np
         import pandas as pd

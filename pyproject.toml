@@ -194,7 +194,11 @@ mypy_path = "src"
 packages = ["digitalearth"]
 explicit_package_bases = true
 warn_return_any = true
-warn_unused_configs = false
+# On, because the baseline below is a ratchet: an entry naming a module that was renamed or deleted would
+# otherwise be accepted in silence, and this repo has just renamed `scene/` -> `static/`. With this on, mypy
+# names the dead entry (`note: unused section(s)`) so draining the list stays honest. It is a diagnostic, not
+# a gate — it does not change the exit code — so it reports the rot without turning a rename into a red CI.
+warn_unused_configs = true
 disallow_untyped_defs = false
 check_untyped_defs = true
 ignore_missing_imports = true
@@ -205,6 +209,166 @@ exclude = [
     "scripts/",
     "planning/",
 ]
+
+
+# --- mypy baseline (#172) -------------------------------------------------------------------------------
+#
+# Recorded 2026-09-09 against 109 remaining errors, down from 403. The 294 already closed were closed by
+# TYPING them, not by listing them here: the backend mixins now declare the composed-class contract their
+# methods reach through `self`, and the fluent builders return PEP 673 `Self`.
+#
+# What is left is genuinely per-module, so it is listed per-module rather than globally disabled: a blanket
+# `disable_error_code` would also silence these codes in code written tomorrow, which is the failure mode
+# this baseline exists to avoid. New modules are checked in full from the moment they are added, because a
+# module with no entry here inherits the strict settings above.
+#
+# THIS LIST IS A RATCHET. It may shrink; it must never grow. Draining an entry is a normal, small piece of
+# work: delete it, run `pixi run -e dev mypy`, fix what surfaces. The counts below are what each module owed
+# on the day the baseline was taken.
+#
+# The dominant causes, so the entries are not mysterious:
+#   * attr-defined  — the base classes call methods their mixins provide (the inverse of the coupling now
+#                     typed on the mixin side); plus untyped third-party surface (pyramids, cleopatra).
+#   * no-any-return — a function annotated with a real return type forwards an untyped third-party call.
+#   * union-attr    — an Optional attribute used without a narrowing guard; these are worth real fixes.
+#   * arg-type      — numpy arrays passed where a Sequence[float] is declared.
+
+[[tool.mypy.overrides]]
+module = "digitalearth.api"  # 19 errors at baseline
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.vector"  # 9 errors at baseline
+disable_error_code = ["attr-defined", "list-item", "no-any-return", "no-redef"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.vector"  # 8 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.threed"  # 8 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.base"  # 5 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return"]
+
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.animation"  # 4 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.bigdata"  # 4 errors at baseline
+disable_error_code = ["attr-defined", "misc", "type-var"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.base"  # 3 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.bigdata"  # 3 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.raster"  # 3 errors at baseline
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.decoration"  # 3 errors at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.vector"  # 3 errors at baseline
+disable_error_code = ["arg-type", "no-any-return", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.render_compat"  # 3 errors at baseline
+disable_error_code = ["arg-type", "attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.temporal.climatology"  # 3 errors at baseline
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+# 3 at baseline (attr-defined). union-attr and arg-type arrived with the time-slider feature merged
+# from main (#163) while this branch was open -- `.z` is `DimensionInfo | None` and is dereferenced
+# without a narrowing guard in two places, and a `str | None` is appended to a `list[str]`. Latent
+# Optional-narrowing gaps in that feature, not this branch's work, so they are recorded rather than
+# fixed here; worth a real fix by whoever owns the time-slider.
+module = "digitalearth.web.temporal"  # 6 errors
+disable_error_code = ["arg-type", "attr-defined", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.base.crs"  # 2 errors at baseline
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.decoration"  # 2 errors at baseline
+disable_error_code = ["attr-defined", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.interactive.temporal"  # 2 errors at baseline
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.glyph"  # 2 errors at baseline
+disable_error_code = ["arg-type", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.raster"  # 2 errors at baseline
+disable_error_code = ["dict-item", "union-attr"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.scene"  # 2 errors at baseline
+disable_error_code = ["assignment", "exit-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.series"  # 2 errors at baseline
+disable_error_code = ["arg-type", "assignment"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.base"  # 2 errors at baseline
+disable_error_code = ["exit-return", "no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.base.arrays"  # 1 error at baseline
+disable_error_code = ["no-any-return"]
+
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.figures"  # 1 error at baseline
+disable_error_code = ["return-value"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.geostatistics"  # 1 error at baseline
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.maps.projection"  # 1 error at baseline
+disable_error_code = ["no-any-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.projections"  # 1 error at baseline
+disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.static.textured_globe"  # 1 error at baseline
+disable_error_code = ["exit-return"]
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.globe"  # 1 error at baseline
+disable_error_code = ["union-attr"]
+
+
+[[tool.mypy.overrides]]
+module = "digitalearth.three_d.terrain"  # 1 error at baseline
+disable_error_code = ["union-attr"]
+
+
+[[tool.mypy.overrides]]
+module = "digitalearth.web.raster"  # 1 error at baseline
+disable_error_code = ["union-attr"]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
@@ -264,7 +428,10 @@ docs-build = { cmd = "mkdocs build", description = "Build the documentation site
 cz-changelog = { cmd = "cz changelog", description = "Generate changelog using Commitizen" }
 cz-bump = { cmd = "cz bump", description = "Bump version using Commitizen" }
 mypy = { cmd = "mypy", description = "Run mypy type checking" }
-lint = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821) — catches an undefined name in a cell CI cannot execute. Scoped to F821, and to src/tests/docs, because the full ruleset and examples/ carry pre-existing findings" }
+lint = { depends-on = ["lint-names", "lint-format", "lint-imports"], description = "the CI lint gate: name-check (F821) across src/tests/docs, plus the formatter and import sorter over src/tests" }
+lint-names = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821) — catches an undefined name in a cell CI cannot execute. Scoped to F821, and to src/tests/docs, because the full ruleset and examples/ carry pre-existing findings" }
+lint-format = { cmd = "ruff format --check src tests", description = "the formatter the repo configures and pre-commit runs. Gated here so the tree cannot drift from its own config again (#171); scoped to src/tests because docs/ notebooks and examples/ are not formatted" }
+lint-imports = { cmd = "ruff check --select I src tests", description = "import sorting (isort). Split from lint-names because the rest of the ruleset (E/F/W/UP) still carries a pre-existing backlog and cannot be gated yet" }
 doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/three_d -p no:cacheprovider", description = "run the doctests in src. three_d is ignored (it imports pyvista, which only viz3d has); run those via `doctests-3d`" }
 doctests-3d = { cmd = "pytest --doctest-modules src/digitalearth/three_d -p no:cacheprovider", description = "run the three_d doctests, which the `doctests` task ignores because they import pyvista. Needs the viz3d env" }
 

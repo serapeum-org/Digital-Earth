@@ -36,7 +36,9 @@ def _require_holoviews():
     return hv
 
 
-def histogram(data: Any, *, column: Optional[str] = None, bins: int = 15, **opts: Any) -> Any:
+def histogram(
+    data: Any, *, column: Optional[str] = None, bins: int = 15, **opts: Any
+) -> Any:
     """Interactive histogram of a field (``hv.Histogram``) — the HoloViz DC.1 (DC.6).
 
     Args:
@@ -120,7 +122,9 @@ def line(x: Any, y: Any, **opts: Any) -> Any:
     return element.opts(**opts) if opts else element
 
 
-def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum", **opts: Any) -> Any:
+def bar_by(
+    data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum", **opts: Any
+) -> Any:
     """Interactive bar chart of an aggregate per category (``hv.Bars``) — the HoloViz DC.4 (DC.6).
 
     Args:
@@ -142,7 +146,9 @@ def bar_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum"
     return element.opts(**opts) if opts else element
 
 
-def line_by(data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum", **opts: Any) -> Any:
+def line_by(
+    data: Any, by: str, column: Optional[str] = None, *, agg: str = "sum", **opts: Any
+) -> Any:
     """Interactive line of an aggregate per ordered/time key (``hv.Curve``) — the HoloViz DC.4 (DC.6).
 
     Args:

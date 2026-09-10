@@ -30,7 +30,10 @@ def timed_points():
 
     geoms = [Point(i, i) for i in range(6)]
     return gpd.GeoDataFrame(
-        {"time": [2000, 2000, 2010, 2010, 2020, 2020], "pop": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0]},
+        {
+            "time": [2000, 2000, 2010, 2010, 2020, 2020],
+            "pop": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        },
         geometry=geoms,
         crs=4326,
     )
@@ -51,7 +54,9 @@ def raster_stack(tmp_path):
         _, xx = np.mgrid[0:20, 0:25]
         values = (10.0 * step + xx / 10.0).astype("float32")
         path = tmp_path / f"step{step}.tif"
-        Dataset.from_array(values, geo_ref=geo_ref, no_data_value=-9999.0).to_file(str(path))
+        Dataset.from_array(values, geo_ref=geo_ref, no_data_value=-9999.0).to_file(
+            str(path)
+        )
         paths.append(str(path))
     return DatasetCollection.from_files(paths)
 
@@ -111,7 +116,9 @@ class TestTimeSliderNeedsEngine:
     def test_render_returns_slider_plus_map(self, timed_polygons):
         import ipywidgets
 
-        composite = WebMap().timeslider(timed_polygons, kdim="time", column="pop").render()
+        composite = (
+            WebMap().timeslider(timed_polygons, kdim="time", column="pop").render()
+        )
         assert isinstance(composite, ipywidgets.VBox)
         slider, _map = composite.children
         assert isinstance(slider, ipywidgets.SelectionSlider)
@@ -120,16 +127,22 @@ class TestTimeSliderNeedsEngine:
     def test_large_polygon_series_stays_filterable(self, timed_polygons):
         """A large temporal polygon set must keep a per-feature layer id for the filter (M3)."""
         m = WebMap()
-        m.big_data_threshold = 2  # 6 polygons > 2; must NOT auto-route to deck (no layer id to filter)
+        m.big_data_threshold = (
+            2  # 6 polygons > 2; must NOT auto-route to deck (no layer id to filter)
+        )
         m.timeslider(timed_polygons, kdim="time")
         assert m._deck_layers is None, "temporal layers must not auto-route to deck.gl"
-        assert m._temporal["layer_id"] is not None, "the slider needs a filterable layer id"
+        assert m._temporal["layer_id"] is not None, (
+            "the slider needs a filterable layer id"
+        )
 
     def test_render_without_slider_is_bare_map(self, timed_polygons):
         from maplibre.ipywidget import MapWidget
 
         m = WebMap().choropleth(timed_polygons, column="pop")
-        assert isinstance(m.render(), MapWidget), "no timeslider → bare map, not a composite"
+        assert isinstance(m.render(), MapWidget), (
+            "no timeslider → bare map, not a composite"
+        )
 
     def test_save_writes_a_file(self, tmp_path, timed_polygons):
         out = tmp_path / "temporal.html"
@@ -166,9 +179,13 @@ class TestTimeSliderRejectsUnsupportedInput:
 
     def test_guard_runs_before_the_reprojection(self, dataset, monkeypatch):
         """A raster in another CRS must not be warped on its way to being rejected."""
-        assert dataset.epsg != 4326, "fixture must not already be in the display CRS for this to bite"
+        assert dataset.epsg != 4326, (
+            "fixture must not already be in the display CRS for this to bite"
+        )
         warps = []
-        monkeypatch.setattr(type(dataset), "to_crs", lambda self, *a, **k: warps.append(a))
+        monkeypatch.setattr(
+            type(dataset), "to_crs", lambda self, *a, **k: warps.append(a)
+        )
         with pytest.raises(TypeError):
             WebMap().timeslider(dataset)
         assert warps == [], "the raster was reprojected before being rejected"
@@ -249,8 +266,12 @@ class TestRequireVector:
         with pytest.raises(TypeError) as excinfo:
             WebMap._require_vector(table, "timeslider")
         message = str(excinfo.value)
-        assert "set_geometry" in message, f"the fix for a geometry-less table is not named: {message}"
-        assert "add_raster" not in message, f"a table must not be given raster advice: {message}"
+        assert "set_geometry" in message, (
+            f"the fix for a geometry-less table is not named: {message}"
+        )
+        assert "add_raster" not in message, (
+            f"a table must not be given raster advice: {message}"
+        )
 
     def test_a_raster_still_gets_the_raster_message(self, dataset):
         """The int-``columns`` branch must not swallow the raster case it was added beside.
@@ -265,7 +286,9 @@ class TestRequireVector:
             WebMap._require_vector(dataset, "timeslider")
         message = str(excinfo.value)
         assert "add_raster" in message, f"the raster branch lost its advice: {message}"
-        assert "set_geometry" not in message, f"a raster must not be told to set_geometry: {message}"
+        assert "set_geometry" not in message, (
+            f"a raster must not be told to set_geometry: {message}"
+        )
 
     def test_names_both_accepted_forms(self):
         """The message documents the two inputs recipe W6 supports.
@@ -298,7 +321,9 @@ class TestTimeSliderRasterStack:
         ids = m._temporal["layer_ids"]
         assert len(ids) == 3, f"expected one layer per member, got {len(ids)}"
         assert len(set(ids)) == 3, f"layer ids must be unique, got {ids}"
-        assert len(m.layers) == 3, f"expected 3 registered map layers, got {len(m.layers)}"
+        assert len(m.layers) == 3, (
+            f"expected 3 registered map layers, got {len(m.layers)}"
+        )
 
     def test_records_raster_mode_and_integer_steps(self, raster_stack):
         """Without labels the slider steps are the member indices, and the mode is recorded as raster.
@@ -308,7 +333,9 @@ class TestTimeSliderRasterStack:
         """
         m = WebMap().timeslider(raster_stack)
         assert m._temporal["mode"] == "raster", "the stack path must record raster mode"
-        assert m._temporal_times() == [0, 1, 2], "unlabelled steps are the member indices"
+        assert m._temporal_times() == [0, 1, 2], (
+            "unlabelled steps are the member indices"
+        )
 
     def test_labels_replace_the_indices(self, raster_stack):
         """Caller-supplied labels drive the slider instead of the integer index.
@@ -316,8 +343,12 @@ class TestTimeSliderRasterStack:
         Test scenario:
             The plan calls for real datetimes on the slider; any unique sequence works.
         """
-        m = WebMap().timeslider(raster_stack, labels=["Jan", "Feb", "Mar"], kdim="month")
-        assert m._temporal_times() == ["Jan", "Feb", "Mar"], "labels must become the slider stops"
+        m = WebMap().timeslider(
+            raster_stack, labels=["Jan", "Feb", "Mar"], kdim="month"
+        )
+        assert m._temporal_times() == ["Jan", "Feb", "Mar"], (
+            "labels must become the slider stops"
+        )
         assert m._temporal["kdim"] == "month", "the slider label must be recorded"
 
     def test_colour_range_is_frozen_across_the_whole_stack(self, raster_stack, mocker):
@@ -329,11 +360,17 @@ class TestTimeSliderRasterStack:
         """
         add_raster = mocker.spy(WebMap, "add_raster")
         WebMap().timeslider(raster_stack)
-        limits = {(c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list}
-        assert len(limits) == 1, f"every frame must share one colour range, got {limits}"
+        limits = {
+            (c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list
+        }
+        assert len(limits) == 1, (
+            f"every frame must share one colour range, got {limits}"
+        )
         vmin, vmax = limits.pop()
         assert vmin == pytest.approx(0.0), f"stack minimum should be 0.0, got {vmin}"
-        assert vmax == pytest.approx(22.4, abs=0.05), f"stack maximum should be ~22.4, got {vmax}"
+        assert vmax == pytest.approx(22.4, abs=0.05), (
+            f"stack maximum should be ~22.4, got {vmax}"
+        )
 
     def test_explicit_clim_skips_the_whole_stack_scan(self, raster_stack, mocker):
         """An explicit ``clim`` is used verbatim and the eager global scan is not run.
@@ -345,7 +382,9 @@ class TestTimeSliderRasterStack:
         add_raster = mocker.spy(WebMap, "add_raster")
         WebMap().timeslider(raster_stack, clim=(-5.0, 5.0))
         assert scan.call_count == 0, "an explicit clim must skip the global scan"
-        assert {(c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list} == {(-5.0, 5.0)}
+        assert {
+            (c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list
+        } == {(-5.0, 5.0)}
 
     def test_band_and_cmap_reach_every_member(self, raster_stack, mocker):
         """The styling arguments are forwarded to each member's image layer.
@@ -355,9 +394,15 @@ class TestTimeSliderRasterStack:
         """
         add_raster = mocker.spy(WebMap, "add_raster")
         WebMap().timeslider(raster_stack, band=1, cmap="magma", opacity=0.5)
-        assert all(c.kwargs["cmap"] == "magma" for c in add_raster.call_args_list), "cmap not forwarded"
-        assert all(c.kwargs["band"] == 1 for c in add_raster.call_args_list), "band not forwarded"
-        assert all(c.kwargs["opacity"] == 0.5 for c in add_raster.call_args_list), "opacity not forwarded"
+        assert all(c.kwargs["cmap"] == "magma" for c in add_raster.call_args_list), (
+            "cmap not forwarded"
+        )
+        assert all(c.kwargs["band"] == 1 for c in add_raster.call_args_list), (
+            "band not forwarded"
+        )
+        assert all(c.kwargs["opacity"] == 0.5 for c in add_raster.call_args_list), (
+            "opacity not forwarded"
+        )
 
     def test_returns_self_for_chaining(self, raster_stack):
         """The stack path is chainable like every other builder.
@@ -432,16 +477,22 @@ class TestTimeSliderRasterStack:
         geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
         good, empty = tmp_path / "good.tif", tmp_path / "allnodata.tif"
         Dataset.from_array(
-            np.arange(500, dtype="float32").reshape(20, 25), geo_ref=geo_ref, no_data_value=-9999.0
+            np.arange(500, dtype="float32").reshape(20, 25),
+            geo_ref=geo_ref,
+            no_data_value=-9999.0,
         ).to_file(str(good))
         Dataset.from_array(
-            np.full((20, 25), -9999.0, dtype="float32"), geo_ref=geo_ref, no_data_value=-9999.0
+            np.full((20, 25), -9999.0, dtype="float32"),
+            geo_ref=geo_ref,
+            no_data_value=-9999.0,
         ).to_file(str(empty))
 
         m = WebMap()
         with pytest.raises(ValueError, match="no finite values"):
             m.timeslider(DatasetCollection.from_files([str(good), str(empty)]))
-        assert m.layers == [], "a failed stack must not leave half its layers registered"
+        assert m.layers == [], (
+            "a failed stack must not leave half its layers registered"
+        )
 
     def test_unhashable_labels_get_the_actionable_message(self, raster_stack):
         """A list-valued label fails with the builder's own error, not a bare ``set()`` TypeError.
@@ -464,8 +515,12 @@ class TestTimeSliderRasterStack:
         WebMap().timeslider(raster_stack).save(str(out))
         html = out.read_text(encoding="utf-8", errors="replace")
         assert out.stat().st_size > 1_000, "the saved stack map looks empty"
-        assert html.count('"visibility": "visible"') == 1, "a saved stack must show exactly one frame"
-        assert html.count('"visibility": "none"') == 2, "the other frames must be serialised hidden"
+        assert html.count('"visibility": "visible"') == 1, (
+            "a saved stack must show exactly one frame"
+        )
+        assert html.count('"visibility": "none"') == 2, (
+            "the other frames must be serialised hidden"
+        )
 
     @staticmethod
     def _raster_layers(m):
@@ -501,7 +556,9 @@ class TestTimeSliderGeometryRouting:
     def _need_engine(self):
         pytest.importorskip("maplibre")
 
-    def test_polygons_without_column_take_the_plain_fill_path(self, timed_polygons, mocker):
+    def test_polygons_without_column_take_the_plain_fill_path(
+        self, timed_polygons, mocker
+    ):
         """Polygon input and no ``column`` renders plain fills, not a choropleth.
 
         Test scenario:
@@ -511,22 +568,38 @@ class TestTimeSliderGeometryRouting:
         polygons = mocker.spy(WebMap, "polygons")
         choropleth = mocker.spy(WebMap, "choropleth")
         WebMap().timeslider(timed_polygons, kdim="time")
-        assert polygons.call_count == 1, "polygon input without a column must render plain fills"
+        assert polygons.call_count == 1, (
+            "polygon input without a column must render plain fills"
+        )
         assert choropleth.call_count == 0, "no column means no choropleth"
-        assert polygons.call_args.kwargs["big"] is False, "the temporal layer must stay filterable"
+        assert polygons.call_args.kwargs["big"] is False, (
+            "the temporal layer must stay filterable"
+        )
 
-    def test_polygons_with_column_take_the_choropleth_path(self, timed_polygons, mocker):
+    def test_polygons_with_column_take_the_choropleth_path(
+        self, timed_polygons, mocker
+    ):
         """Polygon input plus a ``column`` renders a graduated choropleth.
 
         Test scenario:
             The ``is_polygon and column is not None`` branch, with the classification kwargs forwarded.
         """
         choropleth = mocker.spy(WebMap, "choropleth")
-        WebMap().timeslider(timed_polygons, kdim="time", column="pop", k=3, cmap="magma")
-        assert choropleth.call_count == 1, "a column on polygons must render a choropleth"
-        assert choropleth.call_args.kwargs["column"] == "pop", "the value column must be forwarded"
-        assert choropleth.call_args.kwargs["k"] == 3, "the class count must be forwarded"
-        assert choropleth.call_args.kwargs["cmap"] == "magma", "the colormap must be forwarded"
+        WebMap().timeslider(
+            timed_polygons, kdim="time", column="pop", k=3, cmap="magma"
+        )
+        assert choropleth.call_count == 1, (
+            "a column on polygons must render a choropleth"
+        )
+        assert choropleth.call_args.kwargs["column"] == "pop", (
+            "the value column must be forwarded"
+        )
+        assert choropleth.call_args.kwargs["k"] == 3, (
+            "the class count must be forwarded"
+        )
+        assert choropleth.call_args.kwargs["cmap"] == "magma", (
+            "the colormap must be forwarded"
+        )
 
     def test_point_input_takes_the_circle_path(self, timed_points, mocker):
         """Non-polygon input renders circles via ``points``.
@@ -537,9 +610,13 @@ class TestTimeSliderGeometryRouting:
         points = mocker.spy(WebMap, "points")
         WebMap().timeslider(timed_points, kdim="time", column="pop")
         assert points.call_count == 1, "point input must render circles"
-        assert points.call_args.kwargs["big"] is False, "the temporal layer must stay filterable"
+        assert points.call_args.kwargs["big"] is False, (
+            "the temporal layer must stay filterable"
+        )
 
-    def test_mixed_geometry_currently_falls_through_to_circles(self, timed_polygons, timed_points, mocker):
+    def test_mixed_geometry_currently_falls_through_to_circles(
+        self, timed_polygons, timed_points, mocker
+    ):
         """Documents current routing for a mixed-geometry layer: it is drawn as circles, not fills.
 
         Test scenario:
@@ -565,7 +642,9 @@ class TestTimeSliderGeometryRouting:
             The documented contract — the return value is the same object, not a copy.
         """
         m = WebMap()
-        assert m.timeslider(timed_polygons, kdim="time") is m, "timeslider must return the same map"
+        assert m.timeslider(timed_polygons, kdim="time") is m, (
+            "timeslider must return the same map"
+        )
 
     def test_records_the_vector_config_shape(self, timed_polygons):
         """The recorded config carries the mode, the scrubbed field and the layer the slider filters.
@@ -574,9 +653,13 @@ class TestTimeSliderGeometryRouting:
             Complements ``test_records_distinct_time_steps``, which covers the step values themselves.
         """
         m = WebMap().timeslider(timed_polygons, kdim="time")
-        assert m._temporal["mode"] == "vector", "the vector path must record vector mode"
+        assert m._temporal["mode"] == "vector", (
+            "the vector path must record vector mode"
+        )
         assert m._temporal["kdim"] == "time", "the scrubbed field must be recorded"
-        assert m._temporal["layer_id"] == m._last_layer_id, "the slider must target the layer just built"
+        assert m._temporal["layer_id"] == m._last_layer_id, (
+            "the slider must target the layer just built"
+        )
 
     def test_a_non_default_kdim_is_honoured(self, timed_polygons):
         """A caller-supplied ``kdim`` other than ``"time"`` drives the slider.
@@ -587,7 +670,9 @@ class TestTimeSliderGeometryRouting:
         renamed = timed_polygons.rename(columns={"time": "year"})
         m = WebMap().timeslider(renamed, kdim="year")
         assert m._temporal["kdim"] == "year", "the caller's time field must be used"
-        assert m._temporal_times() == [2000, 2010, 2020], "slider stops come from the renamed field"
+        assert m._temporal_times() == [2000, 2010, 2020], (
+            "slider stops come from the renamed field"
+        )
 
     def test_a_series_with_no_time_steps_is_rejected(self, timed_polygons):
         """An empty series fails at build time rather than inside ipywidgets at render time.
@@ -636,9 +721,13 @@ class TestWrapTemporal:
         """
         ipywidgets = pytest.importorskip("ipywidgets")
         composite = configured._wrap_temporal(fake_widget)
-        assert isinstance(composite, ipywidgets.VBox), f"expected a VBox, got {type(composite).__name__}"
+        assert isinstance(composite, ipywidgets.VBox), (
+            f"expected a VBox, got {type(composite).__name__}"
+        )
         slider, mapped = composite.children
-        assert isinstance(slider, ipywidgets.SelectionSlider), "the first child must be the slider"
+        assert isinstance(slider, ipywidgets.SelectionSlider), (
+            "the first child must be the slider"
+        )
         assert mapped is fake_widget, "the second child must be the map widget itself"
 
     def test_slider_is_labelled_with_the_time_field(self, configured, fake_widget):
@@ -648,10 +737,14 @@ class TestWrapTemporal:
             A reader of the notebook has to know which attribute the slider scrubs.
         """
         slider, _ = configured._wrap_temporal(fake_widget).children
-        assert slider.description == "time", f"expected the kdim as label, got {slider.description!r}"
-        assert [label for label, _value in slider.options] == ["2000", "2010", "2020"], (
-            "one slider stop per distinct time step, labelled by its value"
+        assert slider.description == "time", (
+            f"expected the kdim as label, got {slider.description!r}"
         )
+        assert [label for label, _value in slider.options] == [
+            "2000",
+            "2010",
+            "2020",
+        ], "one slider stop per distinct time step, labelled by its value"
 
     def test_first_time_step_is_filtered_in_immediately(self, configured, fake_widget):
         """Building the composite applies the filter for the first time step.
@@ -677,7 +770,9 @@ class TestWrapTemporal:
             f"the slider must refilter to the selected step, got {fake_widget.filters[-1]}"
         )
 
-    def test_opening_on_the_first_frame_needs_no_visibility_calls(self, configured_stack, fake_widget):
+    def test_opening_on_the_first_frame_needs_no_visibility_calls(
+        self, configured_stack, fake_widget
+    ):
         """The layers are built with the first frame already visible, so wiring changes nothing.
 
         Test scenario:
@@ -686,10 +781,16 @@ class TestWrapTemporal:
             every render.
         """
         configured_stack._wrap_temporal(fake_widget)
-        assert fake_widget.visibility == [], "opening on frame 0 must not re-toggle anything"
-        assert fake_widget.filters == [], "the raster mode must not set MapLibre filters"
+        assert fake_widget.visibility == [], (
+            "opening on frame 0 must not re-toggle anything"
+        )
+        assert fake_widget.filters == [], (
+            "the raster mode must not set MapLibre filters"
+        )
 
-    def test_moving_the_slider_swaps_only_the_two_affected_layers(self, configured_stack, fake_widget):
+    def test_moving_the_slider_swaps_only_the_two_affected_layers(
+        self, configured_stack, fake_widget
+    ):
         """The observer hides the outgoing frame and shows the incoming one, and touches nothing else.
 
         Test scenario:
@@ -703,7 +804,9 @@ class TestWrapTemporal:
             f"expected only the outgoing and incoming frames to change, got {fake_widget.visibility}"
         )
 
-    def test_stepping_again_hides_the_previously_shown_frame(self, configured_stack, fake_widget):
+    def test_stepping_again_hides_the_previously_shown_frame(
+        self, configured_stack, fake_widget
+    ):
         """The tracked "currently showing" frame follows the slider across successive moves.
 
         Test scenario:
@@ -735,9 +838,13 @@ class TestWrapTemporal:
         }
         for name, params in expected.items():
             real = list(inspect.signature(getattr(MapWidget, name)).parameters)
-            assert real == params, f"{name} signature drifted: expected {params}, got {real}"
+            assert real == params, (
+                f"{name} signature drifted: expected {params}, got {real}"
+            )
             fake = list(inspect.signature(getattr(fake_widget, name)).parameters)
-            assert fake == params[1:], f"the recording widget's {name} no longer matches: {fake}"
+            assert fake == params[1:], (
+                f"the recording widget's {name} no longer matches: {fake}"
+            )
 
 
 class TestTemporalTimes:
@@ -751,7 +858,9 @@ class TestTemporalTimes:
         """
         m = WebMap()
         m._temporal = {"layer_id": "layer-1", "kdim": "time", "times": [1, 2, 3]}
-        assert m._temporal_times() == [1, 2, 3], "the recorded steps must be returned as-is"
+        assert m._temporal_times() == [1, 2, 3], (
+            "the recorded steps must be returned as-is"
+        )
 
     def test_returns_a_copy_not_the_internal_list(self):
         """Mutating the returned list must not corrupt the slider config.
@@ -763,4 +872,6 @@ class TestTemporalTimes:
         m._temporal = {"layer_id": "layer-1", "kdim": "time", "times": [1, 2, 3]}
         returned = m._temporal_times()
         returned.append(999)
-        assert m._temporal["times"] == [1, 2, 3], f"internal state was mutated: {m._temporal['times']}"
+        assert m._temporal["times"] == [1, 2, 3], (
+            f"internal state was mutated: {m._temporal['times']}"
+        )

@@ -18,7 +18,7 @@ Unlike the 3-D tier, the engine import is **lazy**: ``import digitalearth.intera
 
 from functools import reduce
 from operator import mul
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Self
 
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
@@ -169,7 +169,7 @@ class InteractiveMapBase:
             crs=gv.util.process_crs(self.crs),
         )
 
-    def add_element(self, element: Any) -> "InteractiveMapBase":
+    def add_element(self, element: Any) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here.
@@ -178,7 +178,7 @@ class InteractiveMapBase:
             element: Any HoloViews/GeoViews element (or overlay-able object).
 
         Returns:
-            This map, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
+            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
 
         Examples:
             - Registration appends in order and returns the map for chaining (any object can

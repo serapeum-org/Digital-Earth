@@ -49,12 +49,12 @@ class TestRasterize:
     def test_static_rasterize_is_image_not_glyphs(self, m, big_points):
         m.rasterize(big_points, dynamic=False, width=120, height=80)
         layer = m.layers[0]
-        assert isinstance(
-            layer, hv.Image
-        ), f"expected a rasterized hv.Image, got {type(layer)}"
-        assert not isinstance(
-            layer, gv.Points
-        ), "no raw point glyphs above the threshold"
+        assert isinstance(layer, hv.Image), (
+            f"expected a rasterized hv.Image, got {type(layer)}"
+        )
+        assert not isinstance(layer, gv.Points), (
+            "no raw point glyphs above the threshold"
+        )
 
     def test_canvas_shape_is_pinned(self, m, big_points):
         m.rasterize(big_points, dynamic=False, width=120, height=80)
@@ -63,9 +63,9 @@ class TestRasterize:
 
     def test_dynamic_default_returns_dynamicmap(self, m, big_points):
         m.rasterize(big_points)
-        assert isinstance(
-            m.layers[0], hv.DynamicMap
-        ), "dynamic=True must wrap a DynamicMap"
+        assert isinstance(m.layers[0], hv.DynamicMap), (
+            "dynamic=True must wrap a DynamicMap"
+        )
 
     def test_aggregators_change_the_output(self, m, big_points):
         m.rasterize(big_points, aggregator="count", dynamic=False, width=60, height=40)
@@ -79,9 +79,9 @@ class TestRasterize:
         )
         count_grid = m.layers[0].dimension_values(2, flat=False)
         mean_grid = m.layers[1].dimension_values(2, flat=False)
-        assert not np.allclose(
-            np.nan_to_num(count_grid), np.nan_to_num(mean_grid)
-        ), "count and mean aggregations must differ on the same data"
+        assert not np.allclose(np.nan_to_num(count_grid), np.nan_to_num(mean_grid)), (
+            "count and mean aggregations must differ on the same data"
+        )
 
     def test_column_requiring_aggregator_without_column_raises(self, m, big_points):
         with pytest.raises(ValueError, match="needs a column"):
@@ -116,24 +116,24 @@ class TestDatashade:
 
     def test_static_datashade_is_rgb(self, m, big_points):
         m.datashade(big_points, dynamic=False, width=60, height=40)
-        assert isinstance(
-            m.layers[0], hv.RGB
-        ), f"expected shaded hv.RGB, got {type(m.layers[0])}"
+        assert isinstance(m.layers[0], hv.RGB), (
+            f"expected shaded hv.RGB, got {type(m.layers[0])}"
+        )
 
     def test_categorical_color_key_blend(self, m, big_points):
         key = {"a": "#ff0000", "b": "#00ff00", "c": "#0000ff"}
         m.datashade(
             big_points, color_key=key, column="cls", dynamic=False, width=60, height=40
         )
-        assert isinstance(
-            m.layers[0], hv.RGB
-        ), "categorical shade must produce an RGB blend"
+        assert isinstance(m.layers[0], hv.RGB), (
+            "categorical shade must produce an RGB blend"
+        )
 
     def test_non_categorical_column_is_cast_and_logged(self, m, big_points):
         """A plain object class column is cast to category (logged, not silent)."""
-        assert (
-            str(big_points["cls"].dtype) != "category"
-        ), "fixture must start non-categorical"
+        assert str(big_points["cls"].dtype) != "category", (
+            "fixture must start non-categorical"
+        )
         m.datashade(
             big_points,
             color_key={"a": "#ff0000", "b": "#00ff00", "c": "#0000ff"},
@@ -164,27 +164,27 @@ class TestAutoRouting:
 
     def test_points_above_threshold_auto_rasterize(self, m, big_points):
         m.points(big_points, rasterize_threshold=1_000)
-        assert isinstance(
-            m.layers[0], hv.DynamicMap
-        ), "above-threshold points must become a rasterized layer, not glyphs"
+        assert isinstance(m.layers[0], hv.DynamicMap), (
+            "above-threshold points must become a rasterized layer, not glyphs"
+        )
 
     def test_points_below_threshold_stay_glyphs(self, m, big_points):
         m.points(big_points.head(100), rasterize_threshold=1_000)
-        assert isinstance(
-            m.layers[0], gv.Points
-        ), "below-threshold points must stay raw glyphs"
+        assert isinstance(m.layers[0], gv.Points), (
+            "below-threshold points must stay raw glyphs"
+        )
 
     def test_points_forced_off_stays_glyphs_even_when_big(self, m, big_points):
         m.points(big_points.head(5_000), rasterize=False, rasterize_threshold=1_000)
-        assert isinstance(
-            m.layers[0], gv.Points
-        ), "rasterize=False must force raw glyphs"
+        assert isinstance(m.layers[0], gv.Points), (
+            "rasterize=False must force raw glyphs"
+        )
 
     def test_points_forced_on_rasterizes_even_when_small(self, m, big_points):
         m.points(big_points.head(100), rasterize=True)
-        assert isinstance(
-            m.layers[0], hv.DynamicMap
-        ), "rasterize=True must force Datashader"
+        assert isinstance(m.layers[0], hv.DynamicMap), (
+            "rasterize=True must force Datashader"
+        )
 
     def test_polygons_route_needs_spatialpandas(self, m, big_points):
         """Forced polygon rasterize raises the actionable spatialpandas error when absent."""
