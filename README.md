@@ -80,6 +80,12 @@ The `web` tier renders pyramids rasters/vectors as MapLibre GL JS / deck.gl laye
 self-contained HTML page — `WebMap().choropleth(gdf, column="pop").basemap().save("map.html")`, or
 `quickplot(data, backend="web")`. See `docs/examples/web/` for a runnable gallery.
 
+**What the web tier is for.** Thematic maps (choropleths, points, lines, heatmaps, clustering), 3-D
+(extrusions, point clouds, 3D tiles, glTF, terrain, globe), and sharing the result as one HTML file. It is
+*not* a peer of the static tier for scientific field rendering: contours are supported, but vector/flow
+fields (`quiver`, `barbs`, `streamplot`), unstructured meshes (`tripcolor`, `trimesh`, `quadmesh`) and KDE
+have no native MapLibre primitive and live in the static and interactive tiers instead.
+
 Quick start
 ===========
 

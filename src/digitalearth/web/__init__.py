@@ -7,6 +7,12 @@ Public surface::
     m.render()                                     # builders lazy-import maplibre
     m.save("map.html")                             # standalone HTML page
 
+**Scope.** This tier draws thematic maps (choropleth/points/lines, heatmap, clustering), 3-D layers
+(extrusion, point cloud, 3D tiles, glTF, terrain, globe) and contours, and exports the result as one
+self-contained HTML page. It is deliberately *not* a peer of the static tier for scientific field
+rendering: vector/flow fields, unstructured meshes and KDE have no native MapLibre primitive, and belong to
+:mod:`digitalearth.static` and :mod:`digitalearth.interactive`.
+
 MapLibre GL JS + deck.gl (via the ``maplibre`` py-maplibregl anywidget, which drives deck.gl JSON layers
 for the big-data path) are a **renderer, not a GIS engine**: every layer is built from
 pyramids-sourced numpy / GeoDataFrames — **never** ``xarray``/``rasterio``/``cartopy`` or any GIS competitor
