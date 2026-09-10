@@ -148,8 +148,15 @@ class GeoLayerBase(Scene):
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
         """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
 
+        Args:
+            dataset: The pyramids ``Dataset`` to place in the display CRS and read.
+            band: 1-based band to extract.
+
+        Returns:
+            The dataset as a uniform :class:`Source` view.
+
         Raises:
-            OffLimbError: when the data lies entirely outside what the display CRS can show.
+            OffLimbError: when the data lies outside what the display CRS can show.
         """
         return get_source(self._reproject(dataset), band=band)
 

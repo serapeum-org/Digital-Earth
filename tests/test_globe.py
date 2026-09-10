@@ -758,6 +758,53 @@ class TestOffLimbEveryLayerKind:
         with pytest.raises(ValueError, match="at least three points"):
             getattr(Map(crs=4326, figsize=(4, 4)), method)(two)
 
+    @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
+    def test_composites_still_draw_when_visible(self, regional_rgb, method):
+        """Positive control for the composites asserted to return None above."""
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional_rgb) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
+    def test_vector_fields_still_draw_when_visible(self, regional, method):
+        """Positive control for the u/v vector fields."""
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional, regional) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_triangulated_renders_still_draw_when_visible(self, regional, method):
+        """Positive control for the triangulated renders."""
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    def test_stock_img_and_spaghetti_still_draw_when_visible(self, regional, tmp_path):
+        """Positive control for the two remaining layers asserted to return None above."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert visible.stock_img(regional) is not None, "a visible backdrop must draw"
+
+        paths = []
+        for index in range(2):
+            path = tmp_path / f"visible{index}.tif"
+            regional.to_file(str(path))
+            paths.append(str(path))
+        artists = visible.spaghetti(DatasetCollection.from_files(paths))
+        assert len(artists) == 2, f"both visible members should draw, got {artists}"
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None

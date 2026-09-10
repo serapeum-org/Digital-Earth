@@ -196,9 +196,8 @@ class DecorationMixin(_MixinBase):
                 return None
         with self._preserve_view():
             im = self.imshow(dataset, cmap=cmap, **kwargs)
-            if (
-                im is None
-            ):  # the backdrop is off-limb: there is nothing to push behind the data
+            # the backdrop is off-limb: there is nothing to push behind the data
+            if im is None:
                 return None
             im.set_zorder(zorder)
         return im

@@ -362,7 +362,9 @@ class RasterMixin(_MixinBase):
         Returns:
             The list of per-member contour mappables (each also registered as a Scene layer). Members
             lying outside what the display CRS shows draw nothing and are absent from the list, so it
-            stays one entry per *drawn* member and never contains ``None``.
+            stays one entry per *drawn* member and never contains ``None``. That means the list cannot be
+            zipped against ``collection.datasets`` when some members are hidden — pair by drawing members
+            individually if a per-member legend needs to know which is which.
         """
         drawn = [
             self._field(member, kind="contour", band=band, add_colorbar=False, **opts)
