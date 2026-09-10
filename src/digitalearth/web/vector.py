@@ -63,7 +63,9 @@ class VectorMixin(_MixinBase):
 
         Returns:
             A MapLibre expression list (``["step", …]``, ``["match", …]`` or ``["interpolate", …]``). Also
-            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops.
+            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops,
+            and ``self.last_legend`` to those values *plus the colours they were drawn with*, which is what
+            :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
 
         Raises:
             ValueError: propagated from ``cleopatra.styling.styles.classify`` (unknown scheme, no spread, …) or from
@@ -108,6 +110,12 @@ class VectorMixin(_MixinBase):
                 MISSING_COLOR
             )  # fallback for values outside the known categories (shared by all tiers)
             self.last_breaks = [_native(c) for c in categories]
+            self.last_legend = {
+                "kind": "categorical",
+                "column": column,
+                "values": [_native(c) for c in categories],
+                "colors": list(colors),
+            }
             return expr
 
         if scheme is not None:
@@ -126,6 +134,12 @@ class VectorMixin(_MixinBase):
             for edge, color in zip(edges[1:-1], colors[1:]):
                 expr.extend([float(edge), color])
             self.last_breaks = [float(e) for e in edges]
+            self.last_legend = {
+                "kind": "graduated",
+                "column": column,
+                "values": [float(e) for e in edges],
+                "colors": list(colors),
+            }
             return expr
 
         finite = np.asarray(values, dtype=float)
@@ -141,6 +155,12 @@ class VectorMixin(_MixinBase):
         for stop, color in zip(stops, colors):
             expr.extend([float(stop), color])
         self.last_breaks = [float(s) for s in stops]
+        self.last_legend = {
+            "kind": "continuous",
+            "column": column,
+            "values": [float(s) for s in stops],
+            "colors": list(colors),
+        }
         return expr
 
     def _vector_layer(

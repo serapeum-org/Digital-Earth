@@ -352,6 +352,11 @@ class WebMapBase:
         self._last_layer_id: Optional[str] = None
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
+        #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
+        #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
+        #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
+        #: :attr:`last_breaks`, which stays the raw-numbers accessor it has always been.
+        self.last_legend: Optional[dict] = None
         #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
         self._deck_layers: Optional[List[dict]] = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).

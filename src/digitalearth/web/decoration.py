@@ -5,11 +5,14 @@ Adds raster XYZ basemaps beneath the data (``basemap``/``tiles``, DW.1a), hover/
 ED.13) and a draw-based ``measure`` tool (ED.10). Each builder registers a callable on the map's layer
 registry (basemaps as an underlay; popups/tooltips/controls as post-render ``add_*`` calls).
 
+``legend`` draws the key for the most recent classified layer, built from the colours that classification
+actually rendered (``WebMap.last_legend``); ``WebMap.last_breaks`` remains for a caller who would rather build
+their own out of band.
+
 Out of scope here (deferred): ``pmtiles`` (needs the optional ``pmtiles`` reader, intentionally not in the
-``[web]`` extra); an on-map ``legend`` control and a **minimap** (py-maplibregl has neither built in — both
-need a custom HTML/JS control). ``choropleth`` still exposes its class breaks via ``WebMap.last_breaks`` so a
-caller can build a legend out-of-band; the ``measure`` tool exposes the drawn geometry for pyramids to compute
-geodesic distance/area (the GIS part).
+``[web]`` extra); a **minimap** (py-maplibregl ships no such control, and it would need a custom HTML/JS one).
+The ``measure`` tool exposes the drawn geometry for pyramids to compute geodesic distance/area (the GIS
+part).
 """
 
 from typing import TYPE_CHECKING, Any, List, Optional, Self
@@ -51,6 +54,80 @@ _BASEMAP_DISPLAY_NAMES = {
 
 #: The four legal MapLibre control corners.
 _CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
+
+#: The legend's own styling, kept with the markup that uses it rather than left to the host page.
+_LEGEND_CSS = (
+    "background: rgba(255, 255, 255, 0.92); color: #222; padding: 8px 10px; border-radius: 4px; "
+    "font: 12px/1.4 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); max-width: 220px;"
+)
+
+
+def _swatch(color: str) -> str:
+    """Return the markup for one colour chip.
+
+    Args:
+        color: A CSS colour, as rendered on the map.
+
+    Returns:
+        An inline-block span, sized to line up with a row of text.
+    """
+    return (
+        f'<span style="display:inline-block;width:14px;height:14px;margin-right:6px;'
+        f'vertical-align:-2px;background:{color};border:1px solid rgba(0,0,0,.25)"></span>'
+    )
+
+
+def _format_number(value: Any) -> str:
+    """Render a class edge compactly, without the float noise a raw repr would show.
+
+    Args:
+        value: A break edge, a category, or a ramp stop.
+
+    Returns:
+        A short string: integers keep no decimal point, floats get three significant decimals, and a
+        non-numeric category is passed through as text.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return str(value)
+    if float(value).is_integer():
+        return str(int(value))
+    return f"{value:.3f}".rstrip("0").rstrip(".")
+
+
+def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) -> str:
+    """Build the body of a legend for one classification.
+
+    Args:
+        kind: ``"categorical"``, ``"graduated"`` or ``"continuous"``.
+        values: The categories, class edges, or ramp stops.
+        colors: The colours those values were drawn with.
+        labels: Explicit row labels overriding the derived ones, or ``None``.
+
+    Returns:
+        The rows as HTML — swatch-and-label lines for a discrete classification, a gradient bar with end
+        labels for a continuous one.
+    """
+    if kind == "continuous":
+        ramp = ", ".join(colors)
+        return (
+            f'<div style="height:10px;border-radius:2px;background:linear-gradient(to right,{ramp})"></div>'
+            f'<div style="display:flex;justify-content:space-between;margin-top:2px">'
+            f"<span>{_format_number(values[0])}</span>"
+            f"<span>{_format_number(values[-1])}</span></div>"
+        )
+    if kind == "graduated":
+        derived = [
+            f"{_format_number(values[i])} – {_format_number(values[i + 1])}"
+            for i in range(len(values) - 1)
+        ]
+    else:
+        derived = [_format_number(v) for v in values]
+    text = labels if labels is not None else derived
+    return "".join(
+        f'<div style="white-space:nowrap">{_swatch(color)}{label}</div>'
+        for color, label in zip(colors, text)
+    )
 
 
 def _check_position(position: str) -> None:
@@ -215,6 +292,81 @@ class DecorationMixin(_MixinBase):
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)
+
+    def legend(
+        self,
+        *,
+        title: Optional[str] = None,
+        position: str = "bottom-right",
+        labels: Optional[list] = None,
+    ) -> Self:
+        """Add a key for the most recent classified layer (recipe W2).
+
+        A thematic map is unreadable without one, and until this the tier drew the classes and left the
+        caller to build a key out of band from ``last_breaks``. The classification records what it actually
+        coloured with (:attr:`~digitalearth.web.base.WebMapBase.last_legend`), so the key shows the rendered
+        colours rather than a second guess at them.
+
+        The three shapes a classification can take are all handled: a **categorical** one gets a swatch per
+        category, a **graduated** one a swatch per class with its range, and a **continuous** ramp a
+        gradient bar with its end values.
+
+        Args:
+            title: Heading above the key. ``None`` uses the classified column's name.
+            position: One of the four MapLibre corners.
+            labels: Explicit row labels, replacing the derived ones — for units, or for renaming
+                categories. Ignored for a continuous ramp, which has no rows.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners, or when no
+                classified layer has been added — there is nothing to build a key from, and an empty box
+                would be worse than an error.
+
+        Examples:
+            - A choropleth and its key:
+                ```python
+                >>> from digitalearth.web import WebMap                        # doctest: +SKIP
+                >>> (                                                          # doctest: +SKIP
+                ...     WebMap().basemap().choropleth(gdf, column="pop").legend()
+                ... )
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
+        """
+        _require_maplibre()
+        _check_position(position)
+        spec = self.last_legend
+        if not spec:
+            raise ValueError(
+                "legend() has nothing to describe: no classified layer has been added yet. Add a "
+                "choropleth (or any builder given column=...) first."
+            )
+        from maplibre.controls import InfoBoxControl
+
+        heading = title if title is not None else spec.get("column") or ""
+        head = (
+            f'<div style="font-weight:600;margin-bottom:4px">{heading}</div>'
+            if heading
+            else ""
+        )
+        rows = _legend_rows(
+            spec["kind"], list(spec["values"]), list(spec["colors"]), labels
+        )
+        control = InfoBoxControl(
+            content=f"<div>{head}{rows}</div>",
+            css_text=_LEGEND_CSS,
+            position=position,
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
 
     def navigation(
         self,
