@@ -81,6 +81,14 @@ class DecorationMixin(_MixinBase):
                 'WMTS'
 
                 ```
+            - Use a keyed preset, whose credential comes from the environment:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().tiles(                                # doctest: +SKIP
+                ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
+                ... )
+
+                ```
             - Use a custom XYZ URL template:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP

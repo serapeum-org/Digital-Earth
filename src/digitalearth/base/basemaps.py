@@ -66,6 +66,35 @@ class KeyedTileSource:
         max_zoom: The deepest zoom level the service serves.
         bounds: Optional lon/lat ``(west, south, east, north)`` the service covers; ``None`` means global.
         params: Extra template placeholders to substitute, e.g. the resolved mosaic id.
+
+    Examples:
+        - Describe a keyed service of your own and build its URL:
+            ```python
+            >>> from digitalearth.base.basemaps import KeyedTileSource
+            >>> source = KeyedTileSource(
+            ...     name="Example.Imagery",
+            ...     url_template="https://tiles.example/{z}/{x}/{y}.png?key={api_key}",
+            ...     attribution="© Example",
+            ...     credential_env="EXAMPLE_TILE_KEY",
+            ... )
+            >>> source.tile_url(api_key="abc123")
+            'https://tiles.example/{z}/{x}/{y}.png?key=abc123'
+
+            ```
+        - Extra placeholders come from ``params``, so a dataset id can vary per call:
+            ```python
+            >>> from digitalearth.base.basemaps import KeyedTileSource
+            >>> source = KeyedTileSource(
+            ...     name="Example.Dated",
+            ...     url_template="https://tiles.example/{layer}/{z}/{x}/{y}.png?key={api_key}",
+            ...     attribution="© Example",
+            ...     credential_env="EXAMPLE_TILE_KEY",
+            ...     params={"layer": "2024-01"},
+            ... )
+            >>> source.tile_url(api_key="abc123").split("?")[0]
+            'https://tiles.example/2024-01/{z}/{x}/{y}.png'
+
+            ```
     """
 
     name: str
@@ -88,6 +117,39 @@ class KeyedTileSource:
         Raises:
             ValueError: when no key was passed and the environment variable is unset or empty, naming the
                 variable so the caller knows what to set.
+
+        Examples:
+            - An explicit key is returned as given:
+                ```python
+                >>> from digitalearth.base.basemaps import KeyedTileSource
+                >>> source = KeyedTileSource(
+                ...     name="Example",
+                ...     url_template="https://t/{z}/{x}/{y}.png?key={api_key}",
+                ...     attribution="© Example",
+                ...     credential_env="EXAMPLE_TILE_KEY",
+                ... )
+                >>> source.resolve_key("abc123")
+                'abc123'
+
+                ```
+            - With nothing to read, the error names the variable to set:
+                ```python
+                >>> import os
+                >>> from digitalearth.base.basemaps import KeyedTileSource
+                >>> source = KeyedTileSource(
+                ...     name="Example",
+                ...     url_template="https://t/{z}/{x}/{y}.png?key={api_key}",
+                ...     attribution="© Example",
+                ...     credential_env="EXAMPLE_TILE_KEY_UNSET",
+                ... )
+                >>> os.environ.pop("EXAMPLE_TILE_KEY_UNSET", None) and None
+                >>> try:
+                ...     source.resolve_key()
+                ... except ValueError as err:
+                ...     print(str(err).split(",")[0])
+                Example needs a credential: set the EXAMPLE_TILE_KEY_UNSET environment variable
+
+                ```
         """
         if api_key:
             return api_key
@@ -113,6 +175,28 @@ class KeyedTileSource:
 
         Raises:
             ValueError: when no credential is available (see :meth:`resolve_key`).
+
+        Examples:
+            - The credential is filled in and the tile coordinates are left for the engine:
+                ```python
+                >>> from digitalearth.base.basemaps import planet_nicfi
+                >>> url = planet_nicfi("2024-01").tile_url(api_key="abc123")
+                >>> "{z}/{x}/{y}" in url
+                True
+                >>> url.endswith("?api_key=abc123")
+                True
+
+                ```
+            - The preset's own placeholders are resolved too, so nothing is left templated but the tiles:
+                ```python
+                >>> from digitalearth.base.basemaps import planet_nicfi
+                >>> url = planet_nicfi("2024-01", flavour="visual").tile_url(api_key="abc123")
+                >>> "planet_medres_visual_2024-01_mosaic" in url
+                True
+                >>> "{mosaic}" in url or "{api_key}" in url
+                False
+
+                ```
         """
         url = self.url_template
         for placeholder, value in self.params.items():
@@ -132,6 +216,26 @@ class KeyedTileSource:
 
         Raises:
             ValueError: when the two boxes do not overlap, quoting both so the mismatch is obvious.
+
+        Examples:
+            - A tropical extent passes, and so does one that merely straddles the edge:
+                ```python
+                >>> from digitalearth.base.basemaps import planet_nicfi
+                >>> source = planet_nicfi("2024-01")
+                >>> source.check_bounds((-60.0, -5.0, -55.0, 0.0))
+                >>> source.check_bounds((-60.0, -40.0, -55.0, -25.0))
+
+                ```
+            - An extent with no overlap at all is refused before anything is fetched:
+                ```python
+                >>> from digitalearth.base.basemaps import planet_nicfi
+                >>> try:
+                ...     planet_nicfi("2024-01").check_bounds((5.0, 52.0, 6.0, 53.0))
+                ... except ValueError as err:
+                ...     print(str(err).split(",")[0])
+                Planet.NICFI.analytic.2024-01 covers only (-180.0
+
+                ```
         """
         if extent is None or self.bounds is None:
             return
