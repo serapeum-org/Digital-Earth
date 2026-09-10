@@ -9,8 +9,13 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Optional, Self
 
+from digitalearth.base.basemaps import (
+    get_keyed_basemap,
+    is_keyed_basemap,
+    upper_placeholders,
+)
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -43,6 +48,7 @@ class DecorationMixin(_MixinBase):
         *,
         level: str = "underlay",
         api_key: Any = None,
+        preset: Optional[dict] = None,
         **opts: Any,
     ) -> Self:
         """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
@@ -53,8 +59,11 @@ class DecorationMixin(_MixinBase):
                 or an ``xyzservices.TileProvider``.
             level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
                 them on top (rare — e.g. a labels overlay).
-            api_key: API key for a keyed provider (e.g. Stadia); a keyed provider used without a key
-                raises rather than rendering blank tiles.
+            api_key: Credential for a keyed provider. For a keyed **preset** (``"Planet.NICFI"``) it is the
+                service's API key and ``None`` reads the preset's environment variable; for a catalog
+                provider that needs one (Stadia) it is only checked for presence.
+            preset: A keyed preset's own keywords, e.g. ``{"date": "2024-01", "flavour": "visual"}``. A
+                dict rather than ``**kwargs`` so it cannot collide with a HoloViews style option.
             **opts: Extra HoloViews style options applied to the tile element.
 
         Returns:
@@ -92,7 +101,7 @@ class DecorationMixin(_MixinBase):
                 "tiles() cannot compose with a non-Mercator projection() — Bokeh tiles render in "
                 "Web-Mercator only. Drop the projection to use a tile basemap."
             )
-        element = self._build_tiles(provider, api_key)
+        element = self._build_tiles(provider, api_key, **(preset or {}))
         if opts:
             element = element.opts(**opts)
         element = element.opts(level=level)
@@ -105,7 +114,7 @@ class DecorationMixin(_MixinBase):
             self.layers.insert(0, element)
         return self
 
-    def _build_tiles(self, provider: Any, api_key: Any) -> Any:
+    def _build_tiles(self, provider: Any, api_key: Any, **preset: Any) -> Any:
         """Resolve ``provider`` to a ``gv.WMTS``/``gv.Tiles`` element (name, URL, or xyzservices).
 
         Args:
@@ -120,6 +129,16 @@ class DecorationMixin(_MixinBase):
             ImportError: when a keyed provider needs an ``api_key`` that was not supplied.
         """
         gv, hv = _require_holoviz()
+        if is_keyed_basemap(provider):
+            # A keyed preset resolves to a URL with the credential already substituted; GeoViews wants the
+            # tile placeholders upper-cased.
+            keyed = get_keyed_basemap(str(provider), **preset)
+            return gv.WMTS(upper_placeholders(keyed.tile_url(api_key)))
+        if preset:
+            raise ValueError(
+                f"tiles({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
+                f"preset such as 'Planet.NICFI'"
+            )
         if isinstance(provider, str) and "://" in provider:  # raw XYZ/WMTS URL template
             return gv.WMTS(provider)
         if isinstance(provider, str):

@@ -14,6 +14,11 @@ geodesic distance/area (the GIS part).
 
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
+from digitalearth.base.basemaps import (
+    KEYED_BASEMAPS,
+    get_keyed_basemap,
+    is_keyed_basemap,
+)
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
@@ -128,25 +133,60 @@ class DecorationMixin(_MixinBase):
 
         return self.add_underlay(apply)
 
-    def basemap(self, provider: str = "CartoDark", *, opacity: float = 1.0) -> Self:
+    def basemap(
+        self,
+        provider: str = "CartoDark",
+        *,
+        opacity: float = 1.0,
+        api_key: Optional[str] = None,
+        **preset: Any,
+    ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
         Args:
-            provider: A basemap name — ``"CartoDark"``, ``"CartoLight"``, ``"CartoVoyager"`` or ``"OSM"``
-                (case-insensitive). All are token-free public tile services.
+            provider: A token-free basemap name — ``"CartoDark"``, ``"CartoLight"``, ``"CartoVoyager"`` or
+                ``"OSM"`` (case-insensitive) — or a **keyed** preset name such as ``"Planet.NICFI"`` (see
+                :mod:`digitalearth.base.basemaps`), whose credential is read from the environment.
             opacity: Basemap opacity in ``[0, 1]``.
+            api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
+            **preset: The keyed preset's own keywords (for NICFI: ``date``, ``flavour``, ``mosaic``).
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``provider`` is not a known basemap name.
+            ValueError: when ``provider`` is neither a known basemap name nor a keyed preset, when preset
+                keywords are passed to a non-keyed provider, or when a keyed credential is unavailable.
+
+        Examples:
+            - A keyed preset resolves its own tile URL and attribution:
+                ```python
+                >>> from digitalearth.web import WebMap                 # doctest: +SKIP
+                >>> WebMap().basemap("Planet.NICFI", date="2024-01")   # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
+        if is_keyed_basemap(provider):
+            keyed = get_keyed_basemap(provider, **preset)
+            return self.tiles(
+                keyed.tile_url(api_key),
+                attribution=keyed.attribution,
+                opacity=opacity,
+            )
+        if preset:
+            raise ValueError(
+                f"basemap({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
+                f"preset such as 'Planet.NICFI'"
+            )
         key = provider.replace(" ", "").lower()
         if key not in _BASEMAP_PROVIDERS:
             raise ValueError(
                 f"unknown basemap provider {provider!r}; choose one of "
-                f"{sorted(_BASEMAP_DISPLAY_NAMES.values())} or pass a tile URL to tiles()"
+                f"{sorted(_BASEMAP_DISPLAY_NAMES.values())}, a keyed preset "
+                f"({', '.join(sorted(KEYED_BASEMAPS))}), or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)

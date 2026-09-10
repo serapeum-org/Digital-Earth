@@ -8,8 +8,9 @@ the globe limb-splitting; ``add_features`` for the flat, hole-aware reprojected 
 moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 """
 
+import contextlib
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
@@ -17,7 +18,13 @@ from cleopatra.basemap.tiles import add_tiles
 from matplotlib.collections import PolyCollection
 from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.basemaps import (
+    KeyedTileSource,
+    get_keyed_basemap,
+    is_keyed_basemap,
+)
 from digitalearth.static import projections
+from digitalearth.static.domains import resolve_domain
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +71,56 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+#: cleopatra logs the built tile URL at DEBUG when a fetch fails. For a keyed service that URL carries the
+#: credential, so the static backend silences exactly this logger while a keyed basemap is being fetched.
+_CLEOPATRA_TILES_LOGGER = "cleopatra.basemap.tiles"
+
+
+@contextlib.contextmanager
+def _quiet_tile_urls() -> Iterator[None]:
+    """Raise the cleopatra tile logger above DEBUG so a keyed URL cannot reach the logs.
+
+    The credential is part of the tile URL — that is how the service authenticates — and cleopatra logs
+    that URL on a failed fetch. Errors still surface: the ``ConnectionError`` cleopatra raises carries the
+    tile coordinates, not the URL, so nothing diagnostic is lost.
+
+    Yields:
+        ``None``, with the logger's level restored on the way out even if the fetch raises.
+    """
+    logger_obj = logging.getLogger(_CLEOPATRA_TILES_LOGGER)
+    previous = logger_obj.level
+    if previous == logging.NOTSET or previous <= logging.DEBUG:
+        logger_obj.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        logger_obj.setLevel(previous)
+
+
+def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> Any:
+    """Build the ``xyzservices.TileProvider`` cleopatra renders from a keyed source definition.
+
+    This is the one place a tile-library object is constructed: :mod:`digitalearth.base.basemaps` stays
+    engine-neutral and hands out a URL, and only the static backend needs the provider type that
+    ``add_tiles`` resolves.
+
+    Args:
+        keyed: The resolved keyed basemap.
+        api_key: Credential for it, or ``None`` to read the environment.
+
+    Returns:
+        An ``xyzservices.TileProvider`` whose URL already carries the credential.
+    """
+    from xyzservices import TileProvider
+
+    return TileProvider(
+        name=keyed.name,
+        url=keyed.tile_url(api_key),
+        attribution=keyed.attribution,
+        max_zoom=keyed.max_zoom,
+    )
 
 
 class DecorationMixin(_MixinBase):
@@ -447,10 +504,78 @@ class DecorationMixin(_MixinBase):
             **kwargs,
         )
 
-    def basemap(self, source: Any = None, **kwargs) -> Any:
+    def basemap(
+        self,
+        source: Any = None,
+        *,
+        api_key: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
+
+        ``source`` is passed through to cleopatra unchanged — a provider name, an
+        ``xyzservices.TileProvider``, or ``None`` for its default — with one addition: the name of a
+        **keyed** basemap preset (see :mod:`digitalearth.base.basemaps`) is resolved here into a configured
+        provider, with its credential read from the environment and its coverage checked against the map's
+        domain first.
+
+        Args:
+            source: A cleopatra provider name, an ``xyzservices.TileProvider``, ``None``, or a keyed preset
+                name such as ``"Planet.NICFI"``.
+            api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
+            **kwargs: Forwarded to ``add_tiles`` — plus the preset's own keywords when ``source`` names one
+                (for NICFI: ``date``, ``flavour``, ``mosaic``).
 
         Returns:
             The tile artist ``add_tiles`` added to the axes.
+
+        Raises:
+            ValueError: when a keyed preset is unknown, its credential is unavailable, or the map's domain
+                lies entirely outside the service's coverage.
+
+        Examples:
+            - A keyed preset resolves its own provider and credential:
+                ```python
+                >>> from digitalearth import Map                       # doctest: +SKIP
+                >>> Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP
+                ...     "Planet.NICFI", date="2024-01", flavour="visual"
+                ... )                                                  # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
-        return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
+        if not is_keyed_basemap(source):
+            return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
+
+        preset_keys = ("date", "flavour", "mosaic")
+        preset_kwargs = {key: kwargs.pop(key) for key in preset_keys if key in kwargs}
+        keyed = get_keyed_basemap(str(source), **preset_kwargs)
+        keyed.check_bounds(self._lonlat_domain())
+        provider = _keyed_tile_provider(keyed, api_key)
+        kwargs.setdefault("attribution", keyed.attribution)
+        with _quiet_tile_urls():
+            return add_tiles(self.ax, source=provider, crs=self.crs, **kwargs)
+
+    def _lonlat_domain(self) -> Optional[Tuple[float, float, float, float]]:
+        """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.
+
+        Only a declared ``domain`` is used, not the current axes limits: the limits are in the display CRS
+        and may not be lon/lat, and before anything is drawn they are matplotlib's default unit square —
+        which would refuse every keyed basemap on Earth.
+
+        Returns:
+            The domain box in lon/lat, or ``None`` when the map has no domain to check against.
+        """
+        domain = getattr(self, "domain", None)
+        if domain is None:
+            return None
+        try:
+            resolved = resolve_domain(domain)
+        except (KeyError, TypeError, ValueError):
+            return None  # an unrecognised domain — leave the coverage question to the service
+        if resolved is None:
+            return None
+        west, south, east, north = (float(value) for value in resolved)
+        return west, south, east, north
