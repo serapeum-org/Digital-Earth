@@ -12,7 +12,7 @@ the ``3d`` extra). No GIS is touched here: animation is pure rendering of alread
 from pyramids upstream.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, Iterable
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
@@ -75,15 +75,31 @@ class AnimationMixin(_MixinBase):
         *,
         n_frames: int = 36,
         framerate: int = 12,
+        factor: float = 3.0,
+        shift: float = 0.0,
+        viewup: Sequence[float] | None = None,
         **orbit_kwargs: Any,
     ) -> str:
         """Sweep the camera around the scene and write the fly-through to a GIF/MP4.
+
+        ``factor``, ``shift`` and ``viewup`` shape the path the camera travels; the rest of ``orbit_kwargs``
+        tunes how it is flown along that path. They belong to two different pyvista calls, which is why they
+        are separate arguments rather than one pass-through bag.
 
         Args:
             path: Output file. A video suffix (``.mp4``/``.mov``/``.avi``) writes a movie; anything else a GIF.
             n_frames: Number of frames (camera positions) along the orbit.
             framerate: Frames per second of the output.
-            **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path` (``factor``, ``viewup`` …).
+            factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
+            shift: How far to lift the orbit above the data's mid-plane, as an **absolute offset in the
+                scene's z units** — so the useful value depends on the data's own vertical extent and on any
+                ``z_exaggeration`` applied to it, and has to be picked per scene. The default ``0.0`` circles
+                level with the middle of the data, which for near-flat terrain is an edge-on view of a sheet.
+            viewup: Up vector for both the path and the camera. ``None`` leaves pyvista's default.
+            **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path` — ``step``, ``focus``,
+                ``threaded``, ``progress_bar``. Note that method takes no ``**kwargs``, so anything it does not
+                name (``factor`` and ``shift`` among them) raises :class:`TypeError`; those two are the named
+                arguments above.
 
         Returns:
             The ``path`` written.
@@ -103,11 +119,35 @@ class AnimationMixin(_MixinBase):
                 >>> scene.close()
 
                 ```
+            - Close in and lift the orbit, so near-flat terrain is seen from above rather than edge-on:
+                ```python
+                >>> import numpy as np, os, tempfile
+                >>> from digitalearth.three_d import Scene3D
+                >>> from digitalearth.base.sources import get_source
+                >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3D(off_screen=True)
+                ...     _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
+                ...     out = scene.orbit(
+                ...         os.path.join(folder, "spin.gif"), n_frames=6, factor=0.9, shift=1.6
+                ...     )
+                ...     size = os.path.getsize(out)
+                ...     scene.close()
+                >>> size > 0
+                True
+
+                ```
         """
         _open_writer(self.plotter, path, framerate)
         try:
-            orbital_path = self.plotter.generate_orbital_path(n_points=n_frames)
-            self.plotter.orbit_on_path(orbital_path, write_frames=True, **orbit_kwargs)
+            orbital_path = self.plotter.generate_orbital_path(
+                factor=factor, n_points=n_frames, viewup=viewup, shift=shift
+            )
+            # The path and the camera take the same up vector: generating the path around one while the camera
+            # holds another rolls the horizon through the turn.
+            self.plotter.orbit_on_path(
+                orbital_path, write_frames=True, viewup=viewup, **orbit_kwargs
+            )
         finally:
             _finalize_frames(
                 self.plotter

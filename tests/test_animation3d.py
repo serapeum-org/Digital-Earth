@@ -4,6 +4,8 @@ Gated on the optional ``3d`` extra (pyvista + imageio). Covers orbit fly-through
 ``animate`` driver, the movie-vs-gif writer dispatch, and the trame jupyter-backend switch.
 """
 
+import inspect
+
 import numpy as np
 import pytest
 
@@ -11,7 +13,7 @@ pv = pytest.importorskip("pyvista")
 pytest.importorskip("imageio")
 
 from digitalearth.base.sources import get_source
-from digitalearth.three_d import Scene3D
+from digitalearth.three_d import Scene3D, animation
 from digitalearth.three_d.animation import _MOVIE_SUFFIXES, _open_writer
 
 
@@ -123,4 +125,126 @@ def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
     assert (
         getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
     )
+    scene.close()
+
+
+def _record_pyvista_calls(monkeypatch, scene):
+    """Record what orbit() hands to each pyvista call, rendering nothing.
+
+    The frame writer is stubbed out too: with `orbit_on_path` replaced, no frame is ever appended, and closing
+    an empty GIF writer is an error rather than the point of these tests.
+    """
+    seen = {}
+
+    def fake_generate(**kwargs):
+        seen["generate_orbital_path"] = kwargs
+        return pv.PolyData()
+
+    def fake_orbit(orbital_path, **kwargs):
+        seen["orbit_on_path"] = kwargs
+
+    monkeypatch.setattr(animation, "_open_writer", lambda *a, **k: None)
+    monkeypatch.setattr(animation, "_finalize_frames", lambda *a, **k: None)
+    monkeypatch.setattr(scene.plotter, "generate_orbital_path", fake_generate)
+    monkeypatch.setattr(scene.plotter, "orbit_on_path", fake_orbit)
+    return seen
+
+
+def test_orbit_forwards_the_path_shape_to_the_generator(monkeypatch, tmp_path):
+    """factor, shift and viewup reach generate_orbital_path, which is the call that shapes the orbit."""
+    scene = _terrain_scene()
+    seen = _record_pyvista_calls(monkeypatch, scene)
+    scene.orbit(
+        str(tmp_path / "spin.gif"),
+        n_frames=6,
+        factor=0.7,
+        shift=2.4,
+        viewup=(0.0, 0.0, 1.0),
+    )
+    generated = seen["generate_orbital_path"]
+    assert generated["factor"] == 0.7, (
+        f"factor must reach the generator, got {generated}"
+    )
+    assert generated["shift"] == 2.4, f"shift must reach the generator, got {generated}"
+    assert generated["viewup"] == (0.0, 0.0, 1.0), (
+        f"viewup must reach the generator, got {generated}"
+    )
+    assert generated["n_points"] == 6, (
+        f"n_frames is the generator's n_points, got {generated}"
+    )
+    scene.close()
+
+
+def test_orbit_path_defaults_match_pyvistas_own(monkeypatch, tmp_path):
+    """Calling orbit() with no shaping arguments reproduces pyvista's defaults, so old clips are unchanged.
+
+    The defaults are asserted against `generate_orbital_path`'s own signature rather than hard-coded, so this
+    fails if pyvista changes them out from under us instead of silently drifting.
+    """
+    scene = _terrain_scene()
+    seen = _record_pyvista_calls(monkeypatch, scene)
+    scene.orbit(str(tmp_path / "spin.gif"), n_frames=6)
+    generated = seen["generate_orbital_path"]
+    upstream = inspect.signature(pv.Plotter.generate_orbital_path).parameters
+    for name in ("factor", "shift", "viewup"):
+        assert generated[name] == upstream[name].default, (
+            f"orbit()'s {name} default ({generated[name]!r}) must match pyvista's "
+            f"({upstream[name].default!r}) so existing fly-throughs render identically"
+        )
+    scene.close()
+
+
+def test_orbit_gives_the_camera_the_paths_up_vector(monkeypatch, tmp_path):
+    """viewup reaches both calls: a path built around one up vector and flown with another rolls the horizon."""
+    scene = _terrain_scene()
+    seen = _record_pyvista_calls(monkeypatch, scene)
+    scene.orbit(str(tmp_path / "spin.gif"), n_frames=6, viewup=(0.0, 1.0, 0.0))
+    assert seen["generate_orbital_path"]["viewup"] == (0.0, 1.0, 0.0), (
+        "the path needs the up vector"
+    )
+    assert seen["orbit_on_path"]["viewup"] == (0.0, 1.0, 0.0), (
+        "the camera needs the same up vector"
+    )
+    scene.close()
+
+
+def test_orbit_kwargs_still_reach_orbit_on_path(monkeypatch, tmp_path):
+    """Everything else still passes through to orbit_on_path, and does not leak into the generator.
+
+    The two calls take different arguments — `step` is orbit_on_path's, `factor` is the generator's — so
+    sending one bag to both is what made `factor` unreachable in the first place.
+    """
+    scene = _terrain_scene()
+    seen = _record_pyvista_calls(monkeypatch, scene)
+    scene.orbit(str(tmp_path / "spin.gif"), n_frames=6, step=0.25)
+    assert seen["orbit_on_path"]["step"] == 0.25, (
+        f"step belongs to orbit_on_path, got {seen['orbit_on_path']}"
+    )
+    assert "step" not in seen["generate_orbital_path"], (
+        "step must not leak into the generator"
+    )
+    assert "factor" not in seen["orbit_on_path"], (
+        "factor must not leak into orbit_on_path, which rejects it"
+    )
+    scene.close()
+
+
+def test_orbit_writes_a_gif_with_a_shaped_path(tmp_path):
+    """A shaped orbit renders for real, not just in the argument plumbing.
+
+    The stubbed tests above prove the arguments arrive; this proves pyvista accepts them together and still
+    writes frames, which is what the stubs cannot show.
+    """
+    scene = _terrain_scene()
+    out = scene.orbit(
+        str(tmp_path / "close.gif"),
+        n_frames=6,
+        factor=0.9,
+        shift=1.6,
+        viewup=(0.0, 0.0, 1.0),
+    )
+    assert (tmp_path / "close.gif").stat().st_size > 0, (
+        "a shaped orbit must still write frames"
+    )
+    assert out.endswith("close.gif")
     scene.close()
