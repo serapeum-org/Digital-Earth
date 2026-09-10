@@ -10,6 +10,7 @@ moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 
 import contextlib
 import logging
+import math
 from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
 
 import numpy as np
@@ -77,6 +78,33 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: cleopatra logs the built tile URL at DEBUG when a fetch fails. For a keyed service that URL carries the
 #: credential, so the static backend silences exactly this logger while a keyed basemap is being fetched.
 _CLEOPATRA_TILES_LOGGER = "cleopatra.basemap.tiles"
+
+
+def _edge_samples(
+    west: float, south: float, east: float, north: float, count: int = 21
+) -> Tuple[list, list]:
+    """Return points along all four edges of a box, for reprojecting it as a shape rather than a corner.
+
+    Args:
+        west: Western edge, in the box's own CRS.
+        south: Southern edge.
+        east: Eastern edge.
+        north: Northern edge.
+        count: Samples per edge. 21 is what cleopatra uses for the same job a moment later, so the
+            envelope this produces and the one it tiles against agree.
+
+    Returns:
+        ``(xs, ys)``, the sampled coordinates as two parallel lists.
+    """
+    steps = [index / (count - 1) for index in range(count)]
+    xs: list = []
+    ys: list = []
+    for step in steps:
+        x = west + (east - west) * step
+        y = south + (north - south) * step
+        xs.extend([x, x, west, east])
+        ys.extend([south, north, y, y])
+    return xs, ys
 
 
 @contextlib.contextmanager
@@ -597,10 +625,16 @@ class DecorationMixin(_MixinBase):
     def _axes_lonlat_extent(self) -> Optional[Tuple[float, float, float, float]]:
         """Return the current axes limits as lon/lat, reprojecting from the display CRS when needed.
 
+        The edges are sampled rather than just the two corners: outside the cylindrical projections a
+        projected rectangle's lon/lat envelope is not the envelope of its corners, and taking the corners
+        gave a zero-height box at the wrong latitude for a polar stereographic map. The sampling follows
+        the edges only, so a pole enclosed *inside* the box is not represented — the envelope is a good
+        approximation of what the axes show, not a proof about their interior.
+
         Returns:
             ``(west, south, east, north)`` in lon/lat, or ``None`` when the limits are matplotlib's
-            untouched default or the reprojection fails — in which case the coverage question is left to
-            the service.
+            untouched default, the reprojection fails, or any sampled point lands outside the
+            projection's domain — in which case the coverage question is left to the service.
         """
         west, east = (float(v) for v in self.ax.get_xlim())
         south, north = (float(v) for v in self.ax.get_ylim())
@@ -608,12 +642,16 @@ class DecorationMixin(_MixinBase):
             return None  # matplotlib's default unit square — nothing has been drawn yet
         if self.crs in (4326, "EPSG:4326", None):
             return west, south, east, north
+        xs, ys = _edge_samples(west, south, east, north)
         try:
-            xs, ys = reproject_coordinates(
-                [west, east], [south, north], from_crs=self.crs, to_crs=4326
-            )
+            lons, lats = reproject_coordinates(xs, ys, from_crs=self.crs, to_crs=4326)
         except (ValueError, RuntimeError):
             # A CRS pyproj cannot resolve: leave the coverage question to the service rather than fail
             # the plot. A TypeError here would be a bug in this call, so it is deliberately not caught.
             return None
-        return float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))
+        if not all(math.isfinite(value) for value in (*lons, *lats)):
+            # pyproj answers `inf` for a point outside the projection's domain rather than raising —
+            # an orthographic globe's corners are off the visible hemisphere, for instance. That is an
+            # unknown extent, which takes the same fail-open path as an unresolvable CRS.
+            return None
+        return float(min(lons)), float(min(lats)), float(max(lons)), float(max(lats))

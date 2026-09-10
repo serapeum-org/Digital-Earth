@@ -1094,3 +1094,64 @@ class TestThePresetKeywordSetIsDerived:
 
         assert static_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS
         assert web_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS
+
+
+class TestTheEnvelopeIsReprojectedAsAShape:
+    """M1/M2: outside the cylindrical projections, two corners do not describe a projected rectangle."""
+
+    @pytest.fixture(autouse=True)
+    def _need_matplotlib(self):
+        """Skip when matplotlib is absent."""
+        pytest.importorskip("matplotlib")
+
+    def test_a_polar_box_yields_a_real_envelope(self):
+        """A pole-centred box has no meaningful "SW corner", so the corner pair described nothing.
+
+        Test scenario:
+            Arctic Polar Stereographic over a 2000 km box gave (-45, 77.04, 135, 77.04) — a zero-height
+            box at one latitude. Sampling the edges gives a span in both axes.
+        """
+        from digitalearth import Map
+
+        m = Map(crs=3995)
+        m.ax.set_xlim(-1_000_000, 1_000_000)
+        m.ax.set_ylim(-1_000_000, 1_000_000)
+        west, south, east, north = m._axes_lonlat_extent()
+        assert north > south, (
+            f"the envelope is still flat: {(west, south, east, north)}"
+        )
+        assert east - west > 180.0, (
+            f"a polar box spans most meridians, got {west}..{east}"
+        )
+        assert south > 60.0, f"an Arctic box cannot reach {south}"
+
+    def test_a_web_mercator_box_is_unchanged(self):
+        """Sampling must not move the answer for the cylindrical case, where corners were already right."""
+        from digitalearth import Map
+
+        m = Map(crs=3857)
+        m.ax.set_xlim(556597.0, 668219.0)
+        m.ax.set_ylim(6800125.0, 6982997.0)
+        west, south, east, north = m._axes_lonlat_extent()
+        assert (round(west), round(south), round(north)) == (5, 52, 53), (
+            west,
+            south,
+            north,
+        )
+
+    def test_a_projection_whose_corners_have_no_lon_lat_fails_open(self):
+        """pyproj answers `inf` instead of raising, and an unknown extent must not become a refusal.
+
+        Test scenario:
+            An orthographic globe's box corners are off the visible hemisphere. The guard used to pass
+            (inf, inf, inf, inf) to check_bounds, which reported it as "not lon/lat" — blaming the caller
+            for an extent they never supplied.
+        """
+        from digitalearth import Map
+
+        m = Map(crs="+proj=ortho +lat_0=0 +lon_0=0")
+        m.ax.set_xlim(-6.4e6, 6.4e6)
+        m.ax.set_ylim(-6.4e6, 6.4e6)
+        assert m._axes_lonlat_extent() is None, (
+            "a non-finite reprojection was treated as an extent"
+        )
