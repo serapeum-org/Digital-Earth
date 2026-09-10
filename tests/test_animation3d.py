@@ -470,3 +470,25 @@ def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path):
         with pytest.raises(ValueError, match="3-component viewup"):
             scene.orbit(str(tmp_path / "bad.gif"), n_frames=4, viewup=bad)
     scene.close()
+
+
+@pytest.mark.parametrize("falsy", [False, 0], ids=["false", "zero"])
+def test_orbit_allows_a_falsy_threaded(tmp_path, falsy):
+    """Only a truthy `threaded` is refused, which is the same test pyvista itself applies.
+
+    Args:
+        tmp_path: Destination for the GIF.
+        falsy: A `threaded` value that means "render synchronously".
+
+    Test scenario:
+        The guard reads `orbit_kwargs.get("threaded")` for its truthiness rather than comparing identity,
+        because `orbit_on_path` does `if threaded:` too. Passing the argument explicitly off must therefore
+        behave exactly like not passing it, not trip the guard.
+    """
+    scene = _terrain_scene()
+    out = scene.orbit(str(tmp_path / "sync.gif"), n_frames=4, threaded=falsy)
+    assert (tmp_path / "sync.gif").stat().st_size > 0, (
+        f"threaded={falsy!r} means synchronous, so the file must still be written"
+    )
+    assert out.endswith("sync.gif")
+    scene.close()
