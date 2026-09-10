@@ -15,7 +15,6 @@ from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
 
-
 #: GDAL's complaint when a warp cannot place the data in the target CRS. It carries the counts, and only an
 #: all-of-them failure means the data is genuinely outside what the projection can show — a partial failure
 #: still has visible pixels, so it is left to propagate rather than silently dropping them.
