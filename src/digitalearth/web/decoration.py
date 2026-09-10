@@ -435,6 +435,129 @@ class DecorationMixin(_MixinBase):
 
         return self.add_layer(layer=apply)
 
+    def text(
+        self,
+        lon: float,
+        lat: float,
+        string: str,
+        *,
+        size: float = 14.0,
+        color: str = "#ffffff",
+        halo_color: str = "#000000",
+        halo_width: float = 1.0,
+        name: Optional[str] = None,
+    ) -> Self:
+        """Place a single line of text at a coordinate.
+
+        The "label this spot" case, which needed a whole GeoDataFrame before —
+        :meth:`~digitalearth.web.vector.VectorMixin.labels` is the data-driven counterpart.
+
+        Args:
+            lon: Longitude in the display CRS' lon/lat.
+            lat: Latitude.
+            string: The text to draw.
+            size: Text size in pixels.
+            color: Text colour.
+            halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
+            halo_width: Halo width in pixels; ``0`` disables it.
+            name: What a layer switcher calls this annotation; ``None`` uses its generated id.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Examples:
+            - Mark a place:
+                ```python
+                >>> from digitalearth.web import WebMap                     # doctest: +SKIP
+                >>> WebMap().basemap().text(4.9, 52.4, "Amsterdam")         # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.labels: label many features from a column.
+        """
+        Layer, LayerType = _require_layer_api()
+        src_id, layer_id = self._uid("text-src"), self._uid("text")
+        source = {
+            "type": "geojson",
+            "data": {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
+                "properties": {"text": string},
+            },
+        }
+        layer = Layer(
+            id=layer_id,
+            type=LayerType.SYMBOL,
+            source=src_id,
+            layout={
+                "text-field": ["get", "text"],
+                "text-size": float(size),
+                "text-allow-overlap": True,
+            },
+            paint={
+                "text-color": color,
+                "text-halo-color": halo_color,
+                "text-halo-width": float(halo_width),
+            },
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_source(src_id, source)
+            widget.add_layer(layer)
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._note_bounds((float(lon), float(lat), float(lon), float(lat)))
+        self._index_layer(layer_id, name)
+        return self.add_layer(layer=apply)
+
+    def title(
+        self,
+        heading: str,
+        *,
+        position: str = "top-left",
+        subtitle: Optional[str] = None,
+    ) -> Self:
+        """Put a title on the map itself, so a saved page carries its own heading.
+
+        An exported page travels alone: whatever context the notebook around it had is gone. The title is
+        a control rather than a layer, so it sits above the map and moves with the corner it is pinned to.
+
+        Args:
+            heading: The title text.
+            position: One of the four MapLibre corners.
+            subtitle: A smaller second line — a date, a source, a unit.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``position`` is not one of the four legal MapLibre corners.
+
+        Examples:
+            - Title a saved map:
+                ```python
+                >>> from digitalearth.web import WebMap                            # doctest: +SKIP
+                >>> WebMap().basemap().title("Population, 2024")                   # doctest: +SKIP
+
+                ```
+        """
+        _require_maplibre()
+        _check_position(position)
+        from maplibre.controls import InfoBoxControl
+
+        body = f'<div style="font-weight:600;font-size:15px">{heading}</div>'
+        if subtitle:
+            body += f'<div style="opacity:.75;margin-top:2px">{subtitle}</div>'
+        control = InfoBoxControl(
+            content=f"<div>{body}</div>", css_text=_LEGEND_CSS, position=position
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_control(control, position)
+
+        return self.add_layer(layer=apply)
+
     def navigation(
         self,
         *,

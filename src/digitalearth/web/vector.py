@@ -163,6 +163,89 @@ class VectorMixin(_MixinBase):
         }
         return expr
 
+    def labels(
+        self,
+        features: Any,
+        column: str,
+        *,
+        size: float = 12.0,
+        color: str = "#ffffff",
+        halo_color: str = "#000000",
+        halo_width: float = 1.0,
+        offset: Optional[Any] = None,
+        allow_overlap: bool = False,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Label features with the text in ``column`` (recipe W2).
+
+        Labels are how a map says what is on it, and MapLibre's symbol layer does the work — data-driven
+        text, collision detection, halos and placement. None of it was reachable: the only symbol layer the
+        tier built was the count inside ``cluster``.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` or GeoDataFrame; points label at the point, lines
+                and polygons at a placement MapLibre picks.
+            column: The property to read the text from.
+            size: Text size in pixels.
+            color: Text colour.
+            halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
+                over imagery.
+            halo_width: Halo width in pixels; ``0`` disables it.
+            offset: ``(x, y)`` offset in ems, e.g. ``(0, -1.2)`` to lift a label off its point.
+            allow_overlap: Whether labels may overlap. ``False`` (the default) lets MapLibre drop labels
+                that collide, which is what keeps a dense layer readable.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is not a vector layer.
+            KeyError: when ``column`` is not one of its properties — a MapLibre expression reading a
+                missing property renders nothing at all, with no error to explain the empty map.
+
+        Examples:
+            - Name each feature:
+                ```python
+                >>> from digitalearth.web import WebMap                          # doctest: +SKIP
+                >>> WebMap().basemap().polygons(gdf).labels(gdf, "name")         # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
+        """
+        _, LayerType = _require_layer_api()
+        gdf = self._display_gdf(features, method="labels")
+        if column not in getattr(gdf, "columns", []):
+            raise KeyError(
+                f"labels(column={column!r}) is not a property of these features; available: "
+                f"{sorted(c for c in getattr(gdf, 'columns', []) if c != 'geometry')}"
+            )
+        layout: dict = {
+            "text-field": ["get", column],
+            "text-size": float(size),
+            "text-allow-overlap": bool(allow_overlap),
+        }
+        if offset is not None:
+            layout["text-offset"] = [float(value) for value in offset]
+        paint = {
+            "text-color": color,
+            "text-halo-color": halo_color,
+            "text-halo-width": float(halo_width),
+        }
+        return self._vector_layer(
+            gdf,
+            "label",
+            LayerType.SYMBOL,
+            paint,
+            name=name,
+            visible=visible,
+            layout=layout,
+        )
+
     def _vector_layer(
         self,
         features: Any,
@@ -172,6 +255,7 @@ class VectorMixin(_MixinBase):
         *,
         name: Optional[str] = None,
         visible: bool = True,
+        layout: Optional[dict] = None,
     ) -> Self:
         """Register a GeoJSON source + a typed layer with ``paint`` and record it as the last data layer.
 
@@ -182,14 +266,23 @@ class VectorMixin(_MixinBase):
             paint: The MapLibre paint dict for the layer.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            layout: MapLibre layout properties for the layer (a symbol layer's ``text-field`` and its
+                placement live here rather than in ``paint``). Merged with the visibility flag.
+
         Returns:
             The same map instance, so builder calls chain.
         """
         Layer, _ = _require_layer_api()
         src_id, layer_id = self._uid(f"{prefix}-src"), self._uid(prefix)
-        layout = None if visible else {"visibility": "none"}
+        spec_layout = dict(layout) if layout else {}
+        if not visible:
+            spec_layout["visibility"] = "none"
         layer = Layer(
-            id=layer_id, type=layer_type, source=src_id, paint=paint, layout=layout
+            id=layer_id,
+            type=layer_type,
+            source=src_id,
+            paint=paint,
+            layout=spec_layout or None,
         )
 
         def apply(widget: Any) -> None:
@@ -240,6 +333,7 @@ class VectorMixin(_MixinBase):
 
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -294,6 +388,7 @@ class VectorMixin(_MixinBase):
 
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -342,6 +437,7 @@ class VectorMixin(_MixinBase):
 
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -410,6 +506,7 @@ class VectorMixin(_MixinBase):
 
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
         Returns:
             The same map instance, so builder calls chain.
 
