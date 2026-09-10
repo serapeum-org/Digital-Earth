@@ -64,29 +64,6 @@ def test_animate_drives_frames_via_callback(tmp_path):
     scene.close()
 
 
-def test_writer_dispatch_movie_vs_gif():
-    """_open_writer routes video suffixes to open_movie and everything else to open_gif."""
-    assert ".mp4" in _MOVIE_SUFFIXES
-
-    class _Spy:
-        mwriter = object()  # satisfy the post-open writer guard added in _open_writer
-
-        def __init__(self):
-            self.opened = None
-
-        def open_movie(self, path, framerate):
-            self.opened = ("movie", path)
-
-        def open_gif(self, path, fps):
-            self.opened = ("gif", path)
-
-    movie, gif = _Spy(), _Spy()
-    _open_writer(movie, "x.mp4", 10)
-    _open_writer(gif, "x.gif", 10)
-    assert movie.opened[0] == "movie"
-    assert gif.opened[0] == "gif"
-
-
 def test_jupyter_switches_backend(monkeypatch):
     """jupyter() calls pyvista.set_jupyter_backend with the requested backend."""
     captured = {}
@@ -165,7 +142,7 @@ def test_orbit_forwards_the_path_shape_to_the_generator(monkeypatch, tmp_path):
         f"factor must reach the generator, got {generated}"
     )
     assert generated["shift"] == 2.4, f"shift must reach the generator, got {generated}"
-    assert generated["viewup"] == (0.0, 0.0, 1.0), (
+    assert np.array_equal(generated["viewup"], (0.0, 0.0, 1.0)), (
         f"viewup must reach the generator, got {generated}"
     )
     assert generated["n_points"] == 6, (
@@ -204,10 +181,10 @@ def test_orbit_gives_the_camera_the_paths_up_vector(monkeypatch, tmp_path):
     scene = _terrain_scene()
     seen = _record_pyvista_calls(monkeypatch, scene)
     scene.orbit(str(tmp_path / "spin.gif"), n_frames=6, viewup=(0.0, 1.0, 0.0))
-    assert seen["generate_orbital_path"]["viewup"] == (0.0, 1.0, 0.0), (
+    assert np.array_equal(seen["generate_orbital_path"]["viewup"], (0.0, 1.0, 0.0)), (
         "the path needs the up vector"
     )
-    assert seen["orbit_on_path"]["viewup"] == (0.0, 1.0, 0.0), (
+    assert np.array_equal(seen["orbit_on_path"]["viewup"], (0.0, 1.0, 0.0)), (
         "the camera needs the same up vector"
     )
     scene.close()
@@ -358,10 +335,14 @@ def test_orbit_refuses_threaded_rather_than_writing_nothing(tmp_path):
     [
         ({"factor": 0.0}, "positive, finite factor"),
         ({"factor": -2.0}, "positive, finite factor"),
-        ({"factor": float("nan")}, "positive, finite factor"),
-        ({"factor": float("inf")}, "positive, finite factor"),
+        ({"factor": float("nan")}, "finite factor"),
+        ({"factor": float("inf")}, "finite factor"),
+        ({"factor": 1 + 2j}, "numeric factor"),
         ({"shift": float("nan")}, "finite shift"),
-        ({"n_frames": 1}, "at least 3 frames"),
+        ({"shift": "up"}, "numeric shift"),
+        ({"n_frames": 1}, "at least 3"),
+        ({"n_frames": 3.5}, "whole number of frames"),
+        ({"viewup": ["a", "b", "c"]}, "numeric viewup"),
         ({"viewup": (0.0, 1.0)}, "3-component viewup"),
         ({"viewup": (0.0, 0.0, 0.0)}, "zero viewup"),
         ({"viewup": (0.0, 0.0, float("nan"))}, "finite viewup"),
@@ -371,8 +352,12 @@ def test_orbit_refuses_threaded_rather_than_writing_nothing(tmp_path):
         "negative-factor",
         "nan-factor",
         "inf-factor",
+        "complex-factor",
         "nan-shift",
+        "string-shift",
         "too-few-frames",
+        "fractional-frames",
+        "string-viewup",
         "short-viewup",
         "zero-viewup",
         "nan-viewup",
@@ -456,6 +441,7 @@ def test_orbit_accepts_a_numpy_viewup(monkeypatch, tmp_path):
     assert np.array_equal(passed, np.array([0.0, 0.0, 1.0])), (
         f"a numpy viewup must reach the generator unchanged, got {passed!r}"
     )
+    scene.close()
 
 
 def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path):
@@ -558,14 +544,16 @@ def test_writer_dispatch_covers_every_movie_suffix(name, expected):
 
 
 @pytest.mark.parametrize(
-    "name, keyword_position", [("clip.mp4", "framerate"), ("clip.gif", "fps")]
+    "name, keyword",
+    [("clip.mp4", "framerate"), ("clip.gif", "fps")],
+    ids=["movie-framerate", "gif-fps"],
 )
-def test_writer_dispatch_forwards_the_frame_rate(name, keyword_position):
+def test_writer_dispatch_forwards_the_frame_rate(name, keyword):
     """The frame rate reaches the writer, under whichever keyword that writer names it.
 
     Args:
         name: File name selecting the movie or GIF writer.
-        keyword_position: The keyword pyvista uses for it, named here only for the failure message.
+        keyword: The keyword pyvista names it with, used only in the failure message.
 
     Test scenario:
         `open_movie` takes `framerate` and `open_gif` takes `fps`. Only the dispatch was asserted before, so
@@ -574,5 +562,42 @@ def test_writer_dispatch_forwards_the_frame_rate(name, keyword_position):
     plotter = _RecordingWriterPlotter()
     _open_writer(plotter, name, 24)
     assert plotter.opened[2] == 24, (
-        f"{name!r} must forward 24 as {keyword_position}, got {plotter.opened[2]!r}"
+        f"{name!r} must forward 24 as {keyword}, got {plotter.opened[2]!r}"
     )
+
+
+@pytest.mark.parametrize(
+    "given",
+    [["0", "0", "1"], np.ma.array([0.0, 0.0, 1.0], mask=[True, False, False])],
+    ids=["numeric-strings", "masked-array"],
+)
+def test_orbit_forwards_the_validated_vector_not_the_original(
+    monkeypatch, tmp_path, given
+):
+    """pyvista receives the float array the guard checked, never the caller's original object.
+
+    Args:
+        monkeypatch: Installs the recording stubs.
+        tmp_path: Destination for the notional GIF.
+        given: A viewup that converts cleanly but misbehaves if forwarded as-is.
+
+    Test scenario:
+        pyvista does `np.array(viewup) * shift` on whatever it is handed. Validating a converted copy and
+        passing the original lets numeric strings die inside pyvista with a ufunc error naming neither viewup
+        nor orbit, and lets a masked array clear the finiteness check on its fill data and then render from a
+        masked value. Both are caught only by checking what actually reaches the call.
+    """
+    scene = _terrain_scene()
+    seen = _record_pyvista_calls(monkeypatch, scene)
+    scene.orbit(str(tmp_path / "spin.gif"), n_frames=4, viewup=given)
+    passed = seen["generate_orbital_path"]["viewup"]
+    assert passed.dtype == np.dtype(float), (
+        f"the forwarded viewup must be the validated float array, got {passed!r}"
+    )
+    assert np.array_equal(passed, np.array([0.0, 0.0, 1.0])), (
+        f"the forwarded viewup must equal the converted vector, got {passed!r}"
+    )
+    assert seen["orbit_on_path"]["viewup"] is passed, (
+        "the camera must get the same validated object as the path"
+    )
+    scene.close()
