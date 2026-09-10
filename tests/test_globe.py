@@ -468,26 +468,55 @@ class TestOffLimbDraw:
             "a regional AOI should spin, with the hidden frames left empty"
         )
 
-    def test_a_partial_transform_failure_is_not_swallowed(self, regional, monkeypatch):
-        """Only an all-points failure means 'nothing visible'; a partial one still has pixels to draw.
+    def test_a_partial_count_is_still_off_limb(self, regional, monkeypatch):
+        """GDAL's threshold is `failed > total - 10`, not all of them — the guard must match it.
 
         Test scenario:
-            GDAL reports the counts. Treating any transform failure as off-limb would silently drop a
-            frame that does have visible data, which is worse than the crash being fixed here — so a
-            partial failure must propagate untouched.
+            Keying the guard on N == M left a nine-count window (436/441 … 440/441) in which the raw
+            RuntimeError escaped and the reported crash was still reachable. By the time GDAL emits this
+            message it has already refused to compute output bounds, so there is no raster either way and
+            every count means the same thing: nothing to draw.
         """
-        m = Map(
-            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
-        )
 
         def _partial(*_args, **_kwargs):
             raise RuntimeError(
-                "Too many points (100 out of 441) failed to transform, unable to compute output bounds."
+                "Too many points (438 out of 441) failed to transform, unable to compute output bounds."
             )
 
         monkeypatch.setattr(type(regional), "to_crs", _partial)
-        with pytest.raises(RuntimeError, match="100 out of 441"):
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        assert m.imshow(regional) is None, (
+            "a partial count must be treated as off-limb too"
+        )
+
+    def test_an_unrelated_projection_failure_still_propagates(
+        self, regional, monkeypatch
+    ):
+        """A real projection failure must not be mistaken for an empty view.
+
+        Test scenario:
+            The guard keys on GDAL's specific "too few points survived" message. Anything else — a bad
+            datum, an unparseable CRS — is a genuine error the caller needs to see, not a blank map.
+        """
+        from digitalearth.static.maps.base import OffLimbError
+
+        def _broken(*_args, **_kwargs):
+            raise RuntimeError("PROJ: proj_create: unrecognized format / unknown name")
+
+        monkeypatch.setattr(type(regional), "to_crs", _broken)
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        with pytest.raises(RuntimeError) as caught:
             m.imshow(regional)
+        assert not isinstance(caught.value, OffLimbError), (
+            "an unrelated failure must stay a plain RuntimeError, not become OffLimbError"
+        )
+        assert "proj_create" in str(caught.value), (
+            f"the original message should survive, got {caught.value}"
+        )
 
     def test_the_off_limb_error_names_the_cause(self, regional):
         """The typed error explains itself, rather than surfacing GDAL's wording."""
@@ -496,7 +525,7 @@ class TestOffLimbDraw:
         m = Map(
             crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
         )
-        with pytest.raises(OffLimbError, match="entirely outside"):
+        with pytest.raises(OffLimbError, match="too few sample points"):
             m._reproject(regional)
 
 

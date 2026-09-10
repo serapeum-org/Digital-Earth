@@ -15,19 +15,19 @@ from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
 
-#: GDAL's complaint when a warp cannot place the data in the target CRS. It carries the counts, and only an
-#: all-of-them failure means the data is genuinely outside what the projection can show — a partial failure
-#: still has visible pixels, so it is left to propagate rather than silently dropping them.
-_POINTS_FAILED = re.compile(
-    r"Too many points \((\d+) out of (\d+)\) failed to transform"
-)
+#: GDAL's complaint when a warp cannot place the data in the target CRS. It fires as soon as too few sample
+#: points survive to bound an output — its own threshold is ``failed > total - 10``, not all of them — and by
+#: then it has already refused to compute those bounds. So *any* occurrence means there is no output raster,
+#: whatever the counts say; a warp that does produce output never raises it, which is why the counts are not
+#: read here.
+_POINTS_FAILED = re.compile(r"Too many points \(\d+ out of \d+\) failed to transform")
 
 
 class OffLimbError(RuntimeError):
     """The data lies entirely outside the area the display CRS can represent.
 
-    Raised in place of GDAL's opaque "Too many points ... failed to transform" when *every* sample point
-    fails, which on an orthographic globe means the data sits wholly behind the visible limb. Layer methods
+    Raised in place of GDAL's opaque "Too many points ... failed to transform", which on an orthographic
+    globe means the data sits behind the visible limb. Layer methods
     treat it as "there is nothing to draw here" and render an empty frame; it is a distinct type so that a
     caller can tell it apart from a real projection failure.
 
@@ -48,8 +48,8 @@ class OffLimbError(RuntimeError):
             >>> try:
             ...     hidden._reproject(ds)
             ... except OffLimbError as error:
-            ...     print(str(error)[:41])
-            the data lies entirely outside what '+pro
+            ...     print(str(error).split(':')[-1].strip())
+            too few sample points survive the warp for it to produce any output
 
             ```
         - Callers rarely see it: the layer methods answer it by drawing nothing:
@@ -134,19 +134,18 @@ class GeoLayerBase(Scene):
             The reprojected dataset, or ``dataset`` itself when it is already in the display CRS.
 
         Raises:
-            OffLimbError: when *every* sample point fails to transform, i.e. the data is wholly outside the
-                projection's visible area. A partial failure is re-raised as it came: some of the data does
-                land on the view, and swallowing that would drop pixels that should have been drawn.
+            OffLimbError: when the warp reports too few surviving sample points to bound an output, i.e. the
+                data is outside the projection's visible area. Any *other* ``RuntimeError`` is re-raised as
+                it came — a real projection failure must not be mistaken for an empty view.
         """
         if not self._needs_reproject(dataset):
             return dataset
         try:
             return dataset.to_crs(self.crs)
         except RuntimeError as error:
-            failed = _POINTS_FAILED.search(str(error))
-            if failed and failed.group(1) == failed.group(2):
+            if _POINTS_FAILED.search(str(error)):
                 raise OffLimbError(
-                    f"the data lies entirely outside what {self.crs!r} can show "
-                    f"({failed.group(1)} of {failed.group(2)} sample points failed to transform)"
+                    f"the data lies outside what {self.crs!r} can show: too few sample points survive the "
+                    f"warp for it to produce any output"
                 ) from error
             raise
