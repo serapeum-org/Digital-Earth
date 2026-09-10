@@ -21,6 +21,11 @@ _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
 def _open_writer(plotter: Any, path: str, framerate: int) -> None:
     """Open the right PyVista frame writer for ``path`` (movie for video suffixes, else GIF).
 
+    Args:
+        plotter: The :class:`pyvista.Plotter` to attach the writer to.
+        path: Destination file. A suffix in :data:`_MOVIE_SUFFIXES` opens a movie writer, anything else a GIF.
+        framerate: Frames per second, passed as ``framerate`` to ``open_movie`` and ``fps`` to ``open_gif``.
+
     Raises:
         AttributeError: if PyVista did not attach its frame writer (``mwriter``) after opening — a fail-fast
             guard against a future PyVista renaming the attribute :func:`_finalize_frames` relies on.
@@ -39,7 +44,14 @@ def _open_writer(plotter: Any, path: str, framerate: int) -> None:
 
 
 def _finalize_frames(plotter: Any) -> None:
-    """Flush and close the frame writer so the GIF/MP4 is fully written, leaving the plotter usable."""
+    """Flush and close the frame writer so the GIF/MP4 is fully written, leaving the plotter usable.
+
+    A no-op when no writer was opened, so it is safe to call from a ``finally`` that may run before
+    :func:`_open_writer` ever succeeded.
+
+    Args:
+        plotter: The :class:`pyvista.Plotter` whose ``mwriter`` should be flushed and closed.
+    """
     writer = getattr(plotter, "mwriter", None)
     if writer is not None:
         writer.close()
@@ -208,9 +220,43 @@ class AnimationMixin(_MixinBase):
     def jupyter(self, backend: str = "trame") -> None:
         """Switch PyVista's rendering backend so the scene displays interactively in a notebook.
 
+        The backend is PyVista's, set process-wide rather than per scene, so it stays in force for every
+        plotter until something changes it back.
+
         Args:
             backend: A PyVista Jupyter backend — ``"trame"`` (default, server/remote), ``"client"`` (vtk.js),
                 ``"static"`` (screenshot), or ``"html"``.
+
+        Examples:
+            - Switch to the static (screenshot) backend and read the change back:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d import Scene3D
+                >>> previous = pv.global_theme.jupyter_backend
+                >>> scene = Scene3D(off_screen=True)
+                >>> scene.jupyter("static")
+                >>> pv.global_theme.jupyter_backend
+                'static'
+                >>> pv.set_jupyter_backend(previous)
+                >>> scene.close()
+
+                ```
+            - The default is trame, the server-backed interactive renderer:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d import Scene3D
+                >>> previous = pv.global_theme.jupyter_backend
+                >>> scene = Scene3D(off_screen=True)
+                >>> scene.jupyter()
+                >>> pv.global_theme.jupyter_backend
+                'trame'
+                >>> pv.set_jupyter_backend(previous)
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            orbit: writes a fly-through to a file instead, for when a notebook is not the destination.
         """
         import pyvista as pv
 
