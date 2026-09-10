@@ -45,6 +45,23 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     return seq[:: -(-len(seq) // _CLIM_SCAN_CAP) if seq else 1]
 
 
+def _as_frames(stack: Any) -> List[Any]:
+    """Return an animation stack as a list of pyramids ``Dataset`` frames.
+
+    A ``DatasetCollection`` is documented as an accepted stack, but iterating one yields the members'
+    **numpy arrays** rather than the ``Dataset`` objects themselves, so everything downstream that reads a
+    frame's CRS or bands broke on it. The collection exposes its members under ``.datasets``, which is how
+    the rest of the package reads one; anything else (a list, a tuple) is already a sequence of frames.
+
+    Args:
+        stack: A ``DatasetCollection``, or any ordered collection of ``Dataset`` frames.
+
+    Returns:
+        The frames as a list.
+    """
+    return list(getattr(stack, "datasets", stack))
+
+
 def _union_channel_limits(
     scanned: Sequence[Sequence[Tuple[float, float]]],
 ) -> List[Tuple[float, float]]:
@@ -608,7 +625,7 @@ class AnimationMixin(_MixinBase):
             raise ValueError(
                 f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}"
             )
-        frames = list(stack)
+        frames = _as_frames(stack)  # a DatasetCollection iterates to arrays, not Datasets
         if not frames:
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):

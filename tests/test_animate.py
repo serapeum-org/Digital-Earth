@@ -101,6 +101,60 @@ def rgb_stack():
     return [_rgb_field(shift=s) for s in (0.0, 10.0, 20.0)]
 
 
+class TestAnimateDatasetCollection:
+    """animate accepts the DatasetCollection its docstring promises (issue #154)."""
+
+    @pytest.fixture
+    def cube(self, tmp_path):
+        """A 3-member DatasetCollection written to disk.
+
+        Returns:
+            DatasetCollection: three single-band rasters read back from files.
+        """
+        from pyramids.dataset.collection import DatasetCollection
+
+        paths = []
+        for index in range(3):
+            _, xx = np.mgrid[0:20, 0:24]
+            values = (25 + 8 * np.sin((xx + index * 10) / 13.0)).astype("float32")
+            path = tmp_path / f"f{index}.tif"
+            Dataset.from_array(
+                values,
+                geo_ref=GeoReference(geo=(58.2, 0.05, 0.0, 46.8, 0.0, -0.05), epsg=4326),
+                no_data_value=-9999.0,
+            ).to_file(str(path))
+            paths.append(str(path))
+        return DatasetCollection.from_files(paths)
+
+    def test_a_collection_iterates_to_arrays_not_datasets(self, cube):
+        """The premise of the bug: plain iteration hands back numpy, so animate must not rely on it."""
+        assert isinstance(next(iter(cube)), np.ndarray), (
+            "if a collection ever iterates to Datasets, the unwrap in animate can go"
+        )
+
+    def test_animate_renders_a_collection(self, cube, tmp_path):
+        """A DatasetCollection animates and renders, not just builds.
+
+        Test scenario:
+            animate did `list(stack)`, which on a collection yields the members' arrays rather than the
+            Datasets, so the first thing to ask a frame for its CRS died with an AttributeError. Rendering
+            (not merely constructing the lazy FuncAnimation) is what proves the frames are real Datasets.
+        """
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(cube, fps=2)
+        assert len(list(anim.new_frame_seq())) == 3, "one frame per collection member"
+        out = tmp_path / "cube.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, "the collection animation should render a non-empty GIF"
+        assert m.ax.images, "each frame should draw its raster"
+
+    def test_a_collection_and_its_members_animate_alike(self, cube):
+        """Passing the collection and passing `.datasets` must produce the same animation."""
+        by_collection = Map(crs=4326, figsize=(4, 4)).animate(cube, fps=2)
+        by_members = Map(crs=4326, figsize=(4, 4)).animate(cube.datasets, fps=2)
+        assert len(list(by_collection.new_frame_seq())) == len(list(by_members.new_frame_seq()))
+
+
 class TestAnimate:
     """Tests for Map.animate."""
 
