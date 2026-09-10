@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from cleopatra.styling.colors import resolve_colormap
+from matplotlib.animation import PillowWriter
 from matplotlib.colors import Normalize
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
@@ -811,6 +812,167 @@ class TestPoints:
         globe.draw()
         with pytest.raises(ValueError, match="FeatureCollection"):
             globe.points(object())
+
+
+class TestOverlaysFollowTheSpin:
+    """Overlays must turn with the sphere instead of hanging in front of it (#164)."""
+
+    @staticmethod
+    def _offsets(scatter):
+        """The scatter's world-space coordinates as an ``(N, 3)`` array.
+
+        Args:
+            scatter: The 3-D ``PathCollection`` an overlay returned.
+
+        Returns:
+            np.ndarray: its ``(N, 3)`` offsets.
+        """
+        return np.asarray(scatter._offsets3d, dtype=float).T
+
+    def test_points_added_after_animate_are_redrawn_at_each_frames_spin(
+        self, globe, mocker, tmp_path
+    ):
+        """Every rendered frame redraws the overlay at the spin the glyph drew the sphere at.
+
+        Test scenario:
+            The defect was that animate() recorded only the start spin, so markers added afterwards
+            stayed frozen while the sphere turned. Four frames over one revolution must redraw the
+            overlay at 0, 90, 180 and 270 degrees. Consecutive repeats are collapsed first: matplotlib
+            primes the first frame before the save loop, so spin 0 legitimately renders twice.
+        """
+        globe.animate(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
+        globe.points([120.0, 130.0], lat=[10.0, -10.0], s=20, c="red")
+        spy = mocker.spy(TexturedGlobe, "_redraw_overlays")
+        globe._animation.save(str(tmp_path / "spin.gif"), writer=PillowWriter(fps=2))
+        spins = [call.args[1] for call in spy.call_args_list]
+        stepped = [s for i, s in enumerate(spins) if i == 0 or s != spins[i - 1]]
+        assert stepped == [0.0, 90.0, 180.0, 270.0], (
+            f"the overlay should be redrawn at each frame's spin, got {spins}"
+        )
+        globe.close()
+
+    def test_points_added_after_animate_actually_move(self, globe, tmp_path):
+        """The overlay's world coordinates differ once the sphere has turned.
+
+        Test scenario:
+            The end-to-end check behind the spin bookkeeping above: after rendering a half turn the
+            marker must sit somewhere else in world space. Frozen markers were the reported symptom.
+        """
+        globe.animate(n_frames=2, interval=100, figsize=(3, 3), start_spin=0.0)
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        start = self._offsets(scatter)
+        globe._animation.save(str(tmp_path / "half.gif"), writer=PillowWriter(fps=2))
+        moved = self._offsets(globe._overlay_artists[0])
+        assert not np.allclose(start, moved), (
+            f"a half turn should move the marker, but it stayed at {start.tolist()}"
+        )
+        globe.close()
+
+    def test_overlay_artists_do_not_accumulate(self, globe, tmp_path):
+        """Each frame replaces the overlay rather than stacking another copy on the axes.
+
+        Test scenario:
+            The redraw removes the previous frame's artists first; without that, an eight-frame
+            animation would leave eight scatters layered on the axes.
+        """
+        globe.animate(n_frames=8, interval=100, figsize=(3, 3))
+        globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        globe._animation.save(str(tmp_path / "stack.gif"), writer=PillowWriter(fps=2))
+        live = [c for c in globe.ax.collections if c in globe._overlay_artists]
+        assert len(globe._overlay_artists) == 1, (
+            f"one registered overlay should leave one artist, got {len(globe._overlay_artists)}"
+        )
+        assert len(live) == 1, f"expected a single live scatter, got {len(live)}"
+        globe.close()
+
+    def test_an_explicit_spin_pins_the_overlay(self, globe, tmp_path):
+        """points(spin=...) opts out of following the globe.
+
+        Test scenario:
+            Driving the rotation by hand is the documented escape hatch, so a caller who names a spin
+            must keep the markers exactly there while the sphere turns beneath them.
+        """
+        globe.animate(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
+        scatter = globe.points(
+            [120.0], lat=[0.0], spin=0.0, s=20, c="red", hide_far_side=False
+        )
+        pinned = self._offsets(scatter)
+        globe._animation.save(str(tmp_path / "pinned.gif"), writer=PillowWriter(fps=2))
+        assert globe._overlays == [], (
+            "a pinned overlay should not be registered to follow the globe"
+        )
+        assert np.allclose(self._offsets(scatter), pinned), (
+            "a pinned overlay should not move when the globe turns"
+        )
+        globe.close()
+
+    def test_points_added_before_animate_follow_too(self, globe, tmp_path):
+        """Registration does not depend on the overlay being added after animate().
+
+        Test scenario:
+            draw() then points() then animate() is the other natural order; the markers must track the
+            rotation in that order as well.
+        """
+        globe.draw(figsize=(3, 3))
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        start = self._offsets(scatter)
+        globe.animate(n_frames=2, interval=100, start_spin=0.0)
+        globe._animation.save(str(tmp_path / "before.gif"), writer=PillowWriter(fps=2))
+        assert not np.allclose(self._offsets(globe._overlay_artists[0]), start), (
+            "an overlay added before animate() should follow the rotation too"
+        )
+        globe.close()
+
+    def test_redrawing_at_a_new_spin_carries_the_overlay(self, globe):
+        """A draw() at another spin on the same axes moves the overlay with the surface.
+
+        Test scenario:
+            draw() turns the sphere for the same reason animate() does, so an overlay already on it has
+            to come along rather than stay behind at the old spin. The axes is supplied, because a bare
+            draw() builds a fresh figure each time and closes the one the overlay was on.
+        """
+        ax = plt.figure(figsize=(3, 3)).add_subplot(projection="3d")
+        globe.draw(ax, spin=0.0)
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        start = self._offsets(scatter)
+        globe.draw(ax, spin=90.0)
+        assert not np.allclose(self._offsets(globe._overlay_artists[0]), start), (
+            "redrawing at a new spin should move the overlay with the sphere"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_bare_redraw_onto_a_new_figure_leaves_the_overlay_behind(self, globe):
+        """A bare draw() rebinds to a new figure, so the overlay is not replayed onto it.
+
+        Test scenario:
+            The glyph resolves a fresh axes whenever none is supplied, and binding to it closes the
+            figure the overlay was drawn on. Replaying there would put the markers on the axes being
+            abandoned, so the redraw is skipped and the registration is all that survives.
+        """
+        globe.draw(figsize=(3, 3), spin=0.0)
+        globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        first_ax = globe.ax
+        globe.draw(figsize=(3, 3), spin=90.0)
+        assert globe.ax is not first_ax, (
+            "a bare draw() should resolve a new axes, which is what this case is about"
+        )
+        assert globe._overlay_artists[0] not in globe.ax.collections, (
+            "the overlay belongs to the abandoned figure, not the new one"
+        )
+        globe.close()
+
+    def test_a_globe_with_no_overlays_is_untouched(self, globe, tmp_path):
+        """The redraw is a no-op when nothing has been registered.
+
+        Test scenario:
+            The common case is a bare globe; it must animate exactly as before, adding no artists.
+        """
+        globe.animate(n_frames=3, interval=100, figsize=(3, 3))
+        globe._animation.save(str(tmp_path / "bare.gif"), writer=PillowWriter(fps=2))
+        assert globe._overlay_artists == [], (
+            f"no overlay should be recorded, got {globe._overlay_artists}"
+        )
+        globe.close()
 
 
 class TestRenderLifecycle:

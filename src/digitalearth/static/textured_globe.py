@@ -21,7 +21,7 @@ layer/colorbar lifecycle, none of which applies to a textured sphere.
 
 import inspect
 import warnings
-from typing import Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -229,6 +229,44 @@ def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
     return culled
 
 
+def _drawn_artists(drawn: Any) -> List[Any]:
+    """Flatten whatever an overlay's draw returned into the artists that undo it.
+
+    An overlay hands back one artist (``points`` returns a single ``PathCollection``) or a list of them
+    (a polyline layer returns one ``Line3D`` per visible arc). Both have to be removable, so this
+    normalises them into a flat list, skipping a ``None`` from an overlay that drew nothing.
+
+    Args:
+        drawn: Whatever an overlay's draw callable returned.
+
+    Returns:
+        The artists to remove, in a flat list.
+
+    Examples:
+        - A single artist becomes a one-element list, and nothing drawn becomes an empty one:
+            ```python
+            >>> from digitalearth.static.textured_globe import _drawn_artists
+            >>> _drawn_artists("artist")
+            ['artist']
+            >>> _drawn_artists(None)
+            []
+
+            ```
+        - Nested lists are flattened, so a layer of arcs removes in one pass:
+            ```python
+            >>> from digitalearth.static.textured_globe import _drawn_artists
+            >>> _drawn_artists(["a", ["b", "c"], None])
+            ['a', 'b', 'c']
+
+            ```
+    """
+    if drawn is None:
+        return []
+    if isinstance(drawn, (list, tuple)):
+        return [artist for item in drawn for artist in _drawn_artists(item)]
+    return [drawn]
+
+
 def _view_vector(elev: float, azim: float) -> np.ndarray:
     """Unit vector pointing from the sphere's centre toward the camera at ``elev``/``azim`` degrees.
 
@@ -316,11 +354,78 @@ class TexturedGlobe:
         )
         #: The spin the globe was last drawn at, so an overlay defaults to the surface it can see.
         self._spin: float = 0.0
+        #: Overlays that follow the globe: each redraws itself at the spin it is handed. Registered by the
+        #: overlay methods and replayed by :meth:`_redraw_overlays` on every frame the glyph draws.
+        self._overlays: List[Callable[[float], Any]] = []
+        #: What those overlays drew last, kept so the previous frame's artists can be removed before the
+        #: next one is drawn — the glyph clears only its own surface, never a foreign artist.
+        self._overlay_artists: List[Any] = []
+        self._track_spin()
         #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
         self._owns_fig: bool = False
         #: The axes the constructor was given, if any. animate() falls back to it so a globe built around a
         #: caller's axes keeps drawing there instead of opening a figure of its own.
         self._ctor_ax: Any = kwargs.get("ax")
+
+    def _track_spin(self) -> None:
+        """Wrap the glyph's ``draw`` so registered overlays are redrawn at whatever spin it renders.
+
+        The glyph is the only thing that knows a frame's spin: :meth:`animate` hands the whole rotation to
+        ``glyph.animate``, which computes its own angle sequence and calls ``glyph.draw(spin=...)`` per
+        frame. Wrapping ``draw`` reads that angle instead of re-deriving it here, so an overlay cannot
+        drift out of step with the sphere however the glyph chooses to sweep.
+
+        It also covers a plain :meth:`draw` at a new spin, which turns the sphere for the same reason and
+        so has to carry its overlays along too — but only onto the axes the overlays are already on. A
+        ``draw(ax=...)`` onto a *different* axes rebinds afterwards, so redrawing there would put the
+        overlay on the axes being left behind; those stay where they were drawn, as they always have.
+        """
+        original = self.glyph.draw
+
+        def _draw(*args: Any, **kwargs: Any) -> Any:
+            result = original(*args, **kwargs)
+            self._spin = float(kwargs.get("spin", 0.0))
+            target = (
+                result[1] if isinstance(result, tuple) and len(result) == 2 else None
+            )
+            if target is self.ax:
+                self._redraw_overlays(self._spin)
+            return result
+
+        self.glyph.draw = _draw  # type: ignore[method-assign]
+
+    def _follow_spin(self, draw: Callable[[float], Any]) -> Any:
+        """Draw an overlay at the current spin and register it to be redrawn as the globe turns.
+
+        Args:
+            draw: Draws the overlay at the spin it is given and returns the artist(s) it made.
+
+        Returns:
+            Whatever ``draw`` returned for the current spin — the artist the caller gets back.
+        """
+        drawn = draw(self._spin)
+        self._overlays.append(draw)
+        self._overlay_artists.append(drawn)
+        return drawn
+
+    def _redraw_overlays(self, spin: float) -> None:
+        """Replace every registered overlay with one drawn at ``spin``.
+
+        The previous frame's artists are removed first: the glyph clears only the artists it marked as its
+        own, so an overlay left in place would accumulate a copy per frame instead of moving.
+
+        Args:
+            spin: The spin, in degrees, the globe has just been drawn at.
+        """
+        if not self._overlays:
+            return
+        for drawn in self._overlay_artists:
+            for artist in _drawn_artists(drawn):
+                try:
+                    artist.remove()
+                except (ValueError, NotImplementedError):
+                    pass  # already gone with its axes; there is nothing left to undo
+        self._overlay_artists = [draw(spin) for draw in self._overlays]
 
     # ------------------------------------------------------------------ constructors
 
@@ -929,8 +1034,9 @@ class TexturedGlobe:
         Args:
             data: A point ``FeatureCollection``/``GeoDataFrame``, or the longitudes when ``lat`` is given.
             lat: Latitudes, when ``data`` holds longitudes.
-            spin: The spin, in degrees, to place the points at. Defaults to the spin the globe was last
-                drawn at.
+            spin: Pin the points to this spin, in degrees. Omitted (the default), they follow the globe:
+                they are drawn at the spin it was last drawn at, and redrawn at each animation frame's
+                spin so they turn with the surface. Giving a value opts out of that and fixes them there.
             altitude: Radial lift above the surface, to avoid z-fighting with it.
             hide_far_side: When True (default), drop the points on the hemisphere facing away from the
                 camera, which matplotlib would otherwise draw straight through the sphere.
@@ -981,12 +1087,19 @@ class TexturedGlobe:
         if self.ax is None:
             raise RuntimeError("draw() the globe before adding points to it")
         lon_vals, lat_vals = self._as_lonlat(data, lat)
-        world = self.project(lon_vals, lat_vals, spin=spin, altitude=altitude)
-        if hide_far_side:
-            keep = self.visible(world)
-            world = world[keep]
-            kwargs = _cull_per_point(kwargs, keep)
-        return self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **kwargs)
+
+        def _draw(at_spin: float) -> Any:
+            world = self.project(lon_vals, lat_vals, spin=at_spin, altitude=altitude)
+            style = kwargs
+            if hide_far_side:
+                keep = self.visible(world)
+                world = world[keep]
+                style = _cull_per_point(kwargs, keep)
+            return self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **style)
+
+        if spin is not None:
+            return _draw(float(spin))
+        return self._follow_spin(_draw)
 
     @staticmethod
     def _as_lonlat(data: Any, lat: Any) -> Tuple[np.ndarray, np.ndarray]:
@@ -1095,8 +1208,9 @@ class TexturedGlobe:
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
         anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
         self._bind(ax, owns=not supplied)
-        # Record the spin the animation *starts* at. An overlay added afterwards then sits on the first
-        # frame rather than on whatever draw() last used; it does not track the animation as it turns.
+        # Record the spin the animation *starts* at, so an overlay added between here and the first
+        # rendered frame lands on the frame the reader will see first. From there each frame redraws the
+        # registered overlays at its own spin (see _track_spin), so they turn with the sphere.
         self._spin = float(kwargs.get("start_spin", 0.0))
         self._animation = (
             anim  # keep a strong reference so it survives until save/display
