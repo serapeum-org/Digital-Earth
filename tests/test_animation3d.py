@@ -492,3 +492,87 @@ def test_orbit_allows_a_falsy_threaded(tmp_path, falsy):
     )
     assert out.endswith("sync.gif")
     scene.close()
+
+
+class _RecordingWriterPlotter:
+    """Plotter stand-in that records which writer was opened and with what frame rate."""
+
+    mwriter = object()  # satisfies the post-open guard in _open_writer
+
+    def __init__(self):
+        self.opened = None
+
+    def open_movie(self, path, framerate):
+        """Record a movie writer opening, as `pyvista.Plotter.open_movie` would."""
+        self.opened = ("movie", path, framerate)
+
+    def open_gif(self, path, fps):
+        """Record a GIF writer opening, as `pyvista.Plotter.open_gif` would."""
+        self.opened = ("gif", path, fps)
+
+
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("clip.mp4", "movie"),
+        ("clip.mov", "movie"),
+        ("clip.avi", "movie"),
+        ("clip.m4v", "movie"),
+        ("clip.MP4", "movie"),
+        ("clip.Mov", "movie"),
+        ("clip.gif", "gif"),
+        ("clip.GIF", "gif"),
+        ("clip", "gif"),
+        ("clip.mp4.gif", "gif"),
+    ],
+    ids=[
+        "mp4",
+        "mov",
+        "avi",
+        "m4v",
+        "upper-mp4",
+        "mixed-mov",
+        "gif",
+        "upper-gif",
+        "no-suffix",
+        "movie-suffix-in-stem",
+    ],
+)
+def test_writer_dispatch_covers_every_movie_suffix(name, expected):
+    """Every suffix in `_MOVIE_SUFFIXES` routes to open_movie, in any case; everything else opens a GIF.
+
+    Args:
+        name: File name whose suffix decides the writer.
+        expected: The writer `_open_writer` should open.
+
+    Test scenario:
+        The pre-existing dispatch test covered `.mp4` and `.gif` only, so dropping `.m4v` from the tuple, or
+        the `.lower()` that makes `clip.MP4` a movie, would both have gone unnoticed. `clip.mp4.gif` pins that
+        the decision is made on the real suffix rather than a substring.
+    """
+    plotter = _RecordingWriterPlotter()
+    _open_writer(plotter, name, 10)
+    assert plotter.opened[0] == expected, (
+        f"{name!r} should open a {expected} writer, got {plotter.opened[0]!r}"
+    )
+
+
+@pytest.mark.parametrize(
+    "name, keyword_position", [("clip.mp4", "framerate"), ("clip.gif", "fps")]
+)
+def test_writer_dispatch_forwards_the_frame_rate(name, keyword_position):
+    """The frame rate reaches the writer, under whichever keyword that writer names it.
+
+    Args:
+        name: File name selecting the movie or GIF writer.
+        keyword_position: The keyword pyvista uses for it, named here only for the failure message.
+
+    Test scenario:
+        `open_movie` takes `framerate` and `open_gif` takes `fps`. Only the dispatch was asserted before, so
+        passing the wrong value — or the default — to either would not have failed a test.
+    """
+    plotter = _RecordingWriterPlotter()
+    _open_writer(plotter, name, 24)
+    assert plotter.opened[2] == 24, (
+        f"{name!r} must forward 24 as {keyword_position}, got {plotter.opened[2]!r}"
+    )
