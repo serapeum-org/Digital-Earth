@@ -229,7 +229,9 @@ class AnimationMixin(_MixinBase):
             datasets: The frames to measure (already sampled by :func:`_scan_subset`).
 
         Returns:
-            The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value.
+            The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value —
+            which includes the case where no frame is on the view at all, since a frame that
+            cannot be warped draws nothing and so contributes no colour range.
         """
         lows: List[float] = []
         highs: List[float] = []

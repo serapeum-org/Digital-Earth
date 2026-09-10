@@ -441,7 +441,20 @@ class VectorMixin(_MixinBase):
         return src.x.values, src.y.values, src.z.values
 
     def _tri(self, data: Any, *, kind: str, **opts) -> Any:
-        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``."""
+        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``.
+
+        Args:
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
+                ``tripcolor``).
+            **opts: Styling kwargs forwarded to the glyph.
+
+        Returns:
+            The mappable (registered as a Scene layer), or ``None`` when fewer than three points
+            survive the reprojection — a vector warp sends off-view points to infinity rather than
+            raising, and too few left to triangulate means the same as an off-limb raster: nothing
+            on the view to draw.
+        """
         from matplotlib.tri import Triangulation
 
         try:
