@@ -149,17 +149,23 @@ _REMOVED_GEOSTATISTICS = ("geostatistics", "hotspot_map", "kriging_map", "lisa_m
 
 
 def __getattr__(name: str):
-    """Resolve a submodule that moved in the backend restructure, with a :class:`DeprecationWarning`.
+    """Resolve an attribute the package does not bind: a moved submodule, or a removed geostatistics name.
+
+    The removed names are tested first and always raise: the ``geostatistics`` submodule and the ``lisa_map``/
+    ``hotspot_map``/``kriging_map`` presets went upstream to geostatista, so there is nothing here to forward
+    them to and the error says where they went. A name listed in ``_MOVED_SUBMODULES`` is imported from its new
+    location, cached in the module globals so the :class:`DeprecationWarning` fires once per process, and
+    returned.
 
     Args:
         name: The attribute being looked up on the ``digitalearth`` package.
 
     Returns:
-        The module at its new location.
+        The moved submodule, imported from its new location. The removed names never reach this path.
 
     Raises:
-        AttributeError: for a removed geostatistics preset, naming its replacement; and for any name that is
-            neither a real attribute nor a moved submodule.
+        AttributeError: for one of the removed geostatistics names, with a message naming its replacement; and
+            for any other name that is neither a real attribute nor a moved submodule.
     """
     if name in _REMOVED_GEOSTATISTICS:
         raise AttributeError(
