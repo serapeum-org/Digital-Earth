@@ -623,6 +623,96 @@ class TestLongitudeConventions:
         """South above north is a caller error, not an absence of coverage."""
         with pytest.raises(ValueError, match="inverted"):
             planet_nicfi("2024-01").check_bounds((-60.0, 10.0, -55.0, -10.0))
+
+
+class TestStaticCoverageGuardSources:
+    """Where the static tier gets the extent it checks coverage against (M2), and the preset guard (M5)."""
+
+    @pytest.fixture(autouse=True)
+    def _spy(self, monkeypatch):
+        """Capture what ``add_tiles`` was handed, without reaching cleopatra.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        pytest.importorskip("matplotlib")
+        from digitalearth.static.maps import decoration as static_decoration
+
+        self.calls = []
+        monkeypatch.setattr(
+            static_decoration,
+            "add_tiles",
+            lambda ax, source=None, crs=None, **kw: (
+                self.calls.append(source) or "artist"
+            ),
+        )
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    #: The two AOIs in the display CRS (EPSG:3857 metres), which is what real axes limits hold.
+    MERCATOR = {
+        "temperate": (556597.0, 6800125.0, 668219.0, 6982997.0),  # the Netherlands
+        "tropical": (-6679169.0, -557305.0, -6121300.0, 0.0),  # the Amazon
+    }
+
+    @classmethod
+    def _map_with_limits(cls, where, domain=None):
+        """A map whose axes limits are the named AOI in the display CRS.
+
+        Args:
+            where: ``"temperate"`` or ``"tropical"``.
+            domain: An optional declared domain, which takes precedence over the limits.
+
+        Returns:
+            The configured map.
+        """
+        from digitalearth import Map
+
+        west, south, east, north = cls.MERCATOR[where]
+        m = Map(domain=domain)
+        m.ax.set_xlim(west, east)
+        m.ax.set_ylim(south, north)
+        return m
+
+    def test_the_axes_extent_guards_when_no_domain_was_declared(self):
+        """Plot-then-basemap is the common flow, and it declares no domain.
+
+        Test scenario:
+            Reading only ``domain`` left the guard inert for it — a Netherlands map happily requested
+            NICFI tiles that do not exist there.
+        """
+        with pytest.raises(ValueError, match="lies entirely outside"):
+            self._map_with_limits("temperate").basemap("Planet.NICFI", date="2024-01")
+        assert not self.calls, "a fetch was set up despite the guard"
+
+    def test_a_tropical_axes_extent_still_passes(self):
+        """The fallback must not refuse a map that is inside the coverage."""
+        self._map_with_limits("tropical").basemap("Planet.NICFI", date="2024-01")
+        assert self.calls, "a tropical map was refused"
+
+    def test_an_untouched_axes_is_not_mistaken_for_an_extent(self):
+        """Matplotlib's default unit square is not a real extent, and must not decide coverage.
+
+        Test scenario:
+            (0, 0, 1, 1) sits inside the NICFI band by coordinates, so this cannot be caught by the
+            guard passing — it is checked by the basemap being allowed through rather than refused on a
+            meaningless box.
+        """
+        from digitalearth import Map
+
+        Map().basemap("Planet.NICFI", date="2024-01")
+        assert self.calls, "an undrawn map was refused on its default limits"
+
+    def test_preset_keywords_on_an_ordinary_source_are_refused(self):
+        """``date=`` means nothing to cleopatra's default provider, so it is an error (M5).
+
+        Test scenario:
+            The web and interactive tiers already refused this; the static tier passed it straight to
+            add_tiles, which would have raised something far less clear.
+        """
+        with pytest.raises(ValueError, match="no preset keywords"):
+            self._map_with_limits("tropical").basemap(date="2024-01")
+
+
 class TestKeyStaysOutOfTheLog:
     """M3: assert no record escapes, not merely that the logger level was raised."""
 

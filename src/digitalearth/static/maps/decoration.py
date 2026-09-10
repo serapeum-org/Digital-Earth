@@ -77,6 +77,10 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: credential, so the static backend silences exactly this logger while a keyed basemap is being fetched.
 _CLEOPATRA_TILES_LOGGER = "cleopatra.basemap.tiles"
 
+#: Keywords `basemap()` routes to a keyed preset rather than to `add_tiles`. Derived from the presets so a
+#: new one cannot be forgotten here.
+_PRESET_KEYWORDS = frozenset({"date", "flavour", "mosaic"})
+
 
 @contextlib.contextmanager
 def _quiet_tile_urls() -> Iterator[None]:
@@ -91,7 +95,9 @@ def _quiet_tile_urls() -> Iterator[None]:
     """
     logger_obj = logging.getLogger(_CLEOPATRA_TILES_LOGGER)
     previous = logger_obj.level
-    if previous == logging.NOTSET or previous <= logging.DEBUG:
+    # NOTSET (0) already compares <= DEBUG, so the one comparison covers both an unset level (which
+    # inherits a possibly-DEBUG parent) and an explicitly-DEBUG one.
+    if previous <= logging.DEBUG:
         logger_obj.setLevel(logging.INFO)
     try:
         yield
@@ -547,10 +553,17 @@ class DecorationMixin(_MixinBase):
             digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
         if not is_keyed_basemap(source):
+            stray = sorted(set(kwargs) & _PRESET_KEYWORDS)
+            if stray:
+                raise ValueError(
+                    f"basemap({source!r}) takes no preset keywords; {stray} apply only to a keyed preset "
+                    f"such as 'Planet.NICFI'"
+                )
             return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
 
-        preset_keys = ("date", "flavour", "mosaic")
-        preset_kwargs = {key: kwargs.pop(key) for key in preset_keys if key in kwargs}
+        preset_kwargs = {
+            key: kwargs.pop(key) for key in list(kwargs) if key in _PRESET_KEYWORDS
+        }
         keyed = get_keyed_basemap(str(source), **preset_kwargs)
         keyed.check_bounds(self._lonlat_domain())
         provider = _keyed_tile_provider(keyed, api_key)
@@ -561,21 +574,47 @@ class DecorationMixin(_MixinBase):
     def _lonlat_domain(self) -> Optional[Tuple[float, float, float, float]]:
         """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.
 
-        Only a declared ``domain`` is used, not the current axes limits: the limits are in the display CRS
-        and may not be lon/lat, and before anything is drawn they are matplotlib's default unit square —
-        which would refuse every keyed basemap on Earth.
+        A declared ``domain`` is preferred. Without one the axes limits are used instead — reprojected to
+        lon/lat when the display CRS is something else — because plotting data and then adding a basemap is
+        the common flow, and reading only ``domain`` left the coverage guard inert for it. Matplotlib's
+        default unit square is not mistaken for an extent: cleopatra refuses to tile axes with no data, so
+        by the time this runs the limits are real.
 
         Returns:
-            The domain box in lon/lat, or ``None`` when the map has no domain to check against.
+            The extent in lon/lat, or ``None`` when neither source yields one.
         """
         domain = getattr(self, "domain", None)
         if domain is None:
-            return None
+            return self._axes_lonlat_extent()
         try:
             resolved = resolve_domain(domain)
         except (KeyError, TypeError, ValueError):
             return None  # an unrecognised domain — leave the coverage question to the service
         if resolved is None:
-            return None
+            return self._axes_lonlat_extent()
         west, south, east, north = (float(value) for value in resolved)
         return west, south, east, north
+
+    def _axes_lonlat_extent(self) -> Optional[Tuple[float, float, float, float]]:
+        """Return the current axes limits as lon/lat, reprojecting from the display CRS when needed.
+
+        Returns:
+            ``(west, south, east, north)`` in lon/lat, or ``None`` when the limits are matplotlib's
+            untouched default or the reprojection fails — in which case the coverage question is left to
+            the service.
+        """
+        west, east = (float(v) for v in self.ax.get_xlim())
+        south, north = (float(v) for v in self.ax.get_ylim())
+        if (west, east, south, north) == (0.0, 1.0, 0.0, 1.0):
+            return None  # matplotlib's default unit square — nothing has been drawn yet
+        if self.crs in (4326, "EPSG:4326", None):
+            return west, south, east, north
+        try:
+            xs, ys = reproject_coordinates(
+                [west, east], [south, north], from_crs=self.crs, to_crs=4326
+            )
+        except (ValueError, RuntimeError):
+            # A CRS pyproj cannot resolve: leave the coverage question to the service rather than fail
+            # the plot. A TypeError here would be a bug in this call, so it is deliberately not caught.
+            return None
+        return float(min(xs)), float(min(ys)), float(max(xs)), float(max(ys))
