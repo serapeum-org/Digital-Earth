@@ -103,6 +103,146 @@ class RasterMixin(_MixinBase):
         self._last_layer_id = layer_id
         return self.add_layer(apply)
 
+    def rgb_composite(
+        self,
+        dataset: Any,
+        bands: Any = (1, 2, 3),
+        *,
+        mask_nodata: bool = True,
+        limits: Optional[Any] = None,
+        opacity: float = 1.0,
+        visible: bool = True,
+        name: Optional[str] = None,
+    ) -> Self:
+        """Overlay three bands as a true- or false-colour image (recipe W1).
+
+        Satellite imagery is a headline use of a web map, and the tier could only draw one band through a
+        colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code
+        the static tier's ``rgb_composite`` uses — so the same three bands look the same on both tiers.
+
+        Args:
+            dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).
+            bands: The three 1-based band numbers, in red-green-blue order.
+            mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.
+            limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this
+                image; pass a fixed set to keep a series comparable across frames.
+            opacity: Raster layer opacity in ``[0, 1]``.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when
+                the composite has no finite pixels to draw.
+
+        Examples:
+            - A true-colour composite from a Landsat-ordered dataset:
+                ```python
+                >>> from digitalearth.web import WebMap                       # doctest: +SKIP
+                >>> WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
+            digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.
+        """
+        import numpy as np
+
+        from digitalearth.base.sources import get_stack
+        from digitalearth.base.stretch import require_three_bands, stretch_to_unit
+
+        Layer, LayerType = _require_layer_api()
+        require_three_bands("rgb_composite", bands)
+        data = self._to_display_raster(dataset)
+        stack = get_stack(data, bands, mask=mask_nodata)
+        if stack.size > _LARGE_RASTER_PIXELS * 3:
+            logger.warning(
+                "rgb_composite: inlining a {}-pixel composite as a data-URI image source bloats the page; "
+                "for large rasters serve COG/XYZ tiles from pyramids instead",
+                stack.size,
+            )
+        source = self._to_display_source(dataset, band=int(bands[0]))
+        y = np.asarray(source.y.values, dtype=float)
+        if (
+            y.size > 1 and y[0] < y[-1]
+        ):  # ascending y → flip so PNG row 0 is the north edge
+            stack = stack[::-1]
+        url = self._composite_png_datauri(stretch_to_unit(stack, limits))
+        coordinates = self._image_coordinates(source.x.values, source.y.values)
+        self._note_bounds(
+            (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
+        )
+        src_id, layer_id = self._uid("rgb-src"), self._uid("rgb")
+        spec = {"type": "image", "url": url, "coordinates": coordinates}
+        layer = Layer(
+            id=layer_id,
+            type=LayerType.RASTER,
+            source=src_id,
+            paint={"raster-opacity": float(opacity)},
+            layout={"visibility": "visible" if visible else "none"},
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_source(src_id, spec)
+            widget.add_layer(layer)
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._last_layer_id = layer_id
+        self._index_layer(layer_id, name)
+        return self.add_layer(apply)
+
+    def _to_display_raster(self, dataset: Any) -> Any:
+        """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
+
+        ``_to_display_source`` gives one band; a composite needs the dataset itself so ``get_stack`` can
+        read three from it.
+
+        Args:
+            dataset: A pyramids ``Dataset``.
+
+        Returns:
+            The dataset in the display CRS.
+        """
+        if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
+            return dataset.to_crs(self.crs)
+        return dataset
+
+    @staticmethod
+    def _composite_png_datauri(unit_stack: Any) -> str:
+        """Encode a stretched ``(rows, cols, 3)`` stack as a ``data:image/png;base64,`` URI.
+
+        Args:
+            unit_stack: Channel values already stretched to ``[0, 1]``; NaN marks NoData.
+
+        Returns:
+            The PNG data-URI string.
+
+        Raises:
+            ValueError: when no pixel is finite in all three channels — there is nothing to draw, and an
+                empty image would look like a rendering failure instead of an empty input.
+        """
+        import base64
+        import io
+
+        import numpy as np
+        from matplotlib import image as mpimage
+
+        stack = np.asarray(unit_stack, dtype=float)
+        valid = np.isfinite(stack).all(axis=-1)
+        if not valid.any():
+            raise ValueError(
+                "rgb_composite got a stack with no pixel finite in all three bands"
+            )
+        rgba = np.zeros(stack.shape[:2] + (4,), dtype=float)
+        rgba[..., :3] = np.clip(np.where(np.isfinite(stack), stack, 0.0), 0.0, 1.0)
+        rgba[..., 3] = valid.astype(float)  # NoData in any channel → transparent
+        buffer = io.BytesIO()
+        mpimage.imsave(buffer, (rgba * 255).astype("uint8"), format="png")
+        return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+
     @staticmethod
     def _image_coordinates(x: Any, y: Any) -> List[List[float]]:
         """Return the image-source corner coordinates ``[TL, TR, BR, BL]`` in ``[lng, lat]``.
