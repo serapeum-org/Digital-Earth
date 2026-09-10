@@ -130,6 +130,64 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
     )
 
 
+def _graticule_features(spacing: float) -> dict:
+    """Build the meridians and parallels of a graticule as a GeoJSON FeatureCollection.
+
+    Generated rather than fetched: a lat/lon grid is arithmetic, not data, so it needs no source and works
+    offline. Meridians are drawn as straight segments sampled every 5° of latitude, which is dense enough
+    that a projection curves them smoothly.
+
+    Args:
+        spacing: Degrees between lines.
+
+    Returns:
+        A GeoJSON ``FeatureCollection`` whose features each carry a ``label`` property, e.g. ``"10°E"``.
+    """
+
+    def steps(start: float, stop: float, step: float) -> list:
+        """Inclusive range over floats, avoiding the drift a repeated addition would accumulate."""
+        count = int(round((stop - start) / step))
+        return [start + index * step for index in range(count + 1)]
+
+    def anchored(limit: float, step: float) -> list:
+        """Lines at 0, ±step, ±2·step … within ``±limit``.
+
+        Anchored on zero rather than on the edge of the range, so the equator and the prime meridian are
+        always drawn — stepping from -80 upwards misses the equator at any spacing that does not divide 80.
+        """
+        count = int(limit // step)
+        return [index * step for index in range(-count, count + 1)]
+
+    features = []
+    for lon in anchored(180.0, spacing):
+        if lon == 180.0:
+            continue  # the antimeridian is the same line as -180
+        suffix = "" if lon == 0 else ("E" if lon > 0 else "W")
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {"label": f"{abs(lon):g}°{suffix}"},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[lon, lat] for lat in steps(-85.0, 85.0, 5.0)],
+                },
+            }
+        )
+    for lat in anchored(80.0, spacing):
+        suffix = "" if lat == 0 else ("N" if lat > 0 else "S")
+        features.append(
+            {
+                "type": "Feature",
+                "properties": {"label": f"{abs(lat):g}°{suffix}"},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[lon, lat] for lon in steps(-180.0, 180.0, 5.0)],
+                },
+            }
+        )
+    return {"type": "FeatureCollection", "features": features}
+
+
 def _check_position(position: str) -> None:
     """Validate a control corner, raising ``ValueError`` for anything but the four legal MapLibre corners.
 
@@ -557,6 +615,96 @@ class DecorationMixin(_MixinBase):
             widget.add_control(control, position)
 
         return self.add_layer(layer=apply)
+
+    def graticule(
+        self,
+        *,
+        spacing: float = 10.0,
+        color: str = "#888888",
+        width: float = 0.5,
+        opacity: float = 0.6,
+        labels: bool = True,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Draw a lat/lon grid over the map.
+
+        A graticule is a property of the map, not of a tile service — no basemap provides one, so this tier
+        had no way to show one at all. The lines are ordinary GeoJSON, so they embed in the page and a map
+        saved with ``offline=True`` keeps its grid with no network.
+
+        Args:
+            spacing: Degrees between lines. ``10`` gives a readable global grid; ``1`` suits a city.
+            color: Line colour.
+            width: Line width in pixels.
+            opacity: Line opacity in ``[0, 1]``; a graticule is reference, so it should sit under the data
+                visually as well as in the stack.
+            labels: Whether to label each line with its degree value at the map's edge.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``spacing`` is not positive, or is wider than the 180° of latitude there is
+                to divide — either produces a grid with no lines and no hint as to why.
+
+        Examples:
+            - A 10° grid under the data:
+                ```python
+                >>> from digitalearth.web import WebMap        # doctest: +SKIP
+                >>> WebMap().basemap().graticule()             # doctest: +SKIP
+
+                ```
+        """
+        Layer, LayerType = _require_layer_api()
+        if spacing <= 0 or spacing > 180:
+            raise ValueError(
+                f"graticule(spacing={spacing!r}) must be greater than 0 and at most 180 degrees"
+            )
+        features = _graticule_features(float(spacing))
+        src_id, layer_id = self._uid("graticule-src"), self._uid("graticule")
+        source = {"type": "geojson", "data": features}
+        line = Layer(
+            id=layer_id,
+            type=LayerType.LINE,
+            source=src_id,
+            paint={
+                "line-color": color,
+                "line-width": float(width),
+                "line-opacity": float(opacity),
+            },
+            layout=None if visible else {"visibility": "none"},
+        )
+        text = None
+        if labels:
+            text = Layer(
+                id=self._uid("graticule-label"),
+                type=LayerType.SYMBOL,
+                source=src_id,
+                layout={
+                    "text-field": ["get", "label"],
+                    "text-size": 10.0,
+                    "symbol-placement": "line",
+                },
+                paint={
+                    "text-color": color,
+                    "text-halo-color": "#000000",
+                    "text-halo-width": 1.0,
+                },
+            )
+
+        def apply(widget: Any) -> None:
+            widget.add_source(src_id, source)
+            widget.add_layer(line)
+            if text is not None:
+                widget.add_layer(text)
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._index_layer(layer_id, name or "Graticule")
+        # Reference geography says nothing about where to look, so it does not frame the map.
+        return self.add_underlay(apply)
 
     def navigation(
         self,
