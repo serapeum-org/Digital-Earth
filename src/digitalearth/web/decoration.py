@@ -19,10 +19,10 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Keywords that belong to a keyed preset; anything else passed as one is a typo, not a preset.
 _PRESET_KEYWORDS = frozenset({"date", "flavour", "mosaic"})
-from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
 _BASEMAP_PROVIDERS = {
