@@ -12,10 +12,9 @@ adds geospatial behaviour (display CRS, reprojection, basemap/coastlines). ``Tex
 cleopatra's textured sphere on a matplotlib ``Axes3D``.
 
 Alongside the scene hosts this backend owns its charts (:mod:`~digitalearth.static.charts`), statistical
-series (:mod:`~digitalearth.static.series`), time-series products (:mod:`~digitalearth.static.temporal`),
-geostatistical maps (:mod:`~digitalearth.static.geostatistics`) and animation
-(:mod:`~digitalearth.static.animation`) — the matplotlib-rendering counterparts of what the other backends
-provide for themselves.
+series (:mod:`~digitalearth.static.series`), time-series products (:mod:`~digitalearth.static.temporal`) and
+animation (:mod:`~digitalearth.static.animation`) — the matplotlib-rendering counterparts of what the other
+backends provide for themselves.
 
 ``StaticGlyph`` (:mod:`digitalearth.static.glyph`) is the package's original entry point and is
 **deprecated** — prefer ``Map``/``quickmap``. It stays importable as ``from digitalearth.static import
