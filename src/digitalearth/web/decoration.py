@@ -172,7 +172,8 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when ``provider`` is neither a known basemap name nor a keyed preset, when a
-                ``preset`` is passed to a non-keyed provider, or when a keyed credential is unavailable.
+                ``preset`` or an ``api_key`` is passed to a provider that takes neither, or when a keyed
+                preset's credential is unavailable.
             TypeError: for any other keyword, which Python reports as the unexpected argument it is.
 
         Examples:

@@ -586,9 +586,9 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``
-                is passed to an ordinary source, when a preset keyword is passed loose instead of in
-                ``preset``, or when the extent being drawn — the declared ``domain`` if there is one, else
-                the current axes limits — lies entirely outside the coverage.
+                or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose
+                instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there
+                is one, else the current axes limits — lies entirely outside the coverage.
             TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.
 
         Examples:
@@ -596,7 +596,7 @@ class DecorationMixin(_MixinBase):
                 ```python
                 >>> from digitalearth import Map                       # doctest: +SKIP
                 >>> Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP
-                ...     "Planet.NICFI", date="2024-01", flavour="visual"
+                ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
                 ... )                                                  # doctest: +SKIP
 
                 ```

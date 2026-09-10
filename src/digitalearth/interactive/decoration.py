@@ -111,8 +111,10 @@ class DecorationMixin(_MixinBase):
 
         Args:
             provider: A ``geoviews.tile_sources`` provider name (``"CartoLight"``/``"OSM"``/
-                ``"EsriImagery"``/…); a raw XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``);
-                or an ``xyzservices.TileProvider``.
+                ``"EsriImagery"``/…); a **keyed** preset name such as ``"Planet.NICFI"`` (see
+                :mod:`digitalearth.base.basemaps`), whose credential is read from the environment; a raw
+                XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``); or an
+                ``xyzservices.TileProvider``.
             level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
                 them on top (rare — e.g. a labels overlay).
             api_key: Credential for a keyed provider. For a keyed **preset** (``"Planet.NICFI"``) it is the

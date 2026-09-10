@@ -12,6 +12,16 @@ attribution to display, and an optional lon/lat bounding box. It hands out a res
 ``{z}/{x}/{y}`` left intact for whichever engine substitutes them, so nothing here imports a tile library —
 the static backend is the only place an ``xyzservices.TileProvider`` is constructed.
 
+Every backend names a preset the same way, and passes its keywords as a ``preset`` dict — loose keywords would
+collide with cleopatra's on the static tier and with HoloViews' style options on the interactive one::
+
+    Map(domain=(-60, -5, -55, 0)).basemap("Planet.NICFI", preset={"date": "2024-01"})
+    WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
+    InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+
+:func:`get_keyed_basemap` — the resolver the backends call — takes those keywords loose, since it has no
+engine keywords of its own to collide with.
+
 **Planet NICFI** is the first preset (:func:`planet_nicfi`): ~4.77 m monthly mosaics of the tropics, free for
 non-commercial use under NICFI terms. Two things about it are worth knowing before you rely on it:
 
