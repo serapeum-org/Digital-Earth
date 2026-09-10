@@ -62,3 +62,47 @@ class TestInteractiveTierDispatch:
         assert InteractiveMap().tiles("CartoLight").layers, (
             "the ordinary tile path stopped working"
         )
+
+
+class TestUpperPlaceholders:
+    """The Bokeh placeholder casing, which lives in this backend rather than in ``base/``."""
+
+    def test_only_the_tile_coordinates_are_upper_cased(self):
+        """GeoViews substitutes ``{Z}/{X}/{Y}`` case-sensitively; nothing else in the URL may change.
+
+        Test scenario:
+            A substituted credential and any other query parameter must survive untouched — only the
+            three tile-coordinate placeholders are Bokeh's convention.
+        """
+        from digitalearth.interactive.decoration import _upper_placeholders
+
+        out = _upper_placeholders("https://a/{z}/{x}/{y}.png?api_key=abc&m={z}x")
+        assert out == "https://a/{Z}/{X}/{Y}.png?api_key=abc&m={Z}x", out
+
+
+class TestAttributionIsCarried:
+    """M7: NICFI is non-commercial-only, so its attribution is a licence obligation."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the interactive extra, and supply a fake credential.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("geoviews")
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_the_element_carries_the_attribution(self):
+        """The other two tiers pass it to their engine; this one dropped it entirely.
+
+        Test scenario:
+            GeoViews surfaces the element label, which is where the attribution can be seen.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        assert "Planet Labs" in m.layers[0].label, (
+            f"attribution missing: {m.layers[0].label!r}"
+        )
+        assert "non-commercial" in m.layers[0].label, "the licence note was dropped"

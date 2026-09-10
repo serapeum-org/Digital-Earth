@@ -534,27 +534,3 @@ def get_keyed_basemap(name: str, **kwargs: object) -> KeyedTileSource:
         raise TypeError(
             f"{KEYED_BASEMAP_NAMES.get(name.lower(), name)}: {err} Its keywords are {accepted}."
         ) from err
-
-
-def upper_placeholders(url: str) -> str:
-    """Return ``url`` with ``{z}``/``{x}``/``{y}`` upper-cased, the spelling GeoViews' ``WMTS`` expects.
-
-    Args:
-        url: A tile URL template using the lower-case placeholders.
-
-    Returns:
-        The same template with the three tile-coordinate placeholders upper-cased; every other placeholder
-        and the rest of the URL are untouched.
-
-    Examples:
-        - Only the tile coordinates change — a substituted key is left alone:
-            ```python
-            >>> from digitalearth.base.basemaps import upper_placeholders
-            >>> upper_placeholders("https://a/{z}/{x}/{y}.png?api_key=abc")
-            'https://a/{Z}/{X}/{Y}.png?api_key=abc'
-
-            ```
-    """
-    for lower, upper in (("{z}", "{Z}"), ("{x}", "{X}"), ("{y}", "{Y}")):
-        url = url.replace(lower, upper)
-    return url

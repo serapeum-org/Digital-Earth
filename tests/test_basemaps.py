@@ -18,7 +18,6 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
     planet_nicfi,
-    upper_placeholders,
 )
 
 FAKE_KEY = "FAKE-KEY-NOT-REAL"
@@ -186,11 +185,6 @@ class TestTileUrl:
         url = planet_nicfi("2024-01").tile_url()
         for leftover in ("{mosaic}", "{api_key}"):
             assert leftover not in url, f"{leftover} was never substituted: {url}"
-
-    def test_upper_placeholders_touches_only_the_tile_coordinates(self):
-        """GeoViews wants ``{Z}/{X}/{Y}``; nothing else in the URL may change."""
-        out = upper_placeholders("https://a/{z}/{x}/{y}.png?api_key=abc&m={z}x")
-        assert out == "https://a/{Z}/{X}/{Y}.png?api_key=abc&m={Z}x", out
 
 
 class TestCheckBounds:

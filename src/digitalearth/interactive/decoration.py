@@ -11,17 +11,32 @@ elements touches no network; tiles/coastline geometry is fetched by the renderer
 
 from typing import TYPE_CHECKING, Any, Optional, Self
 
-from digitalearth.base.basemaps import (
-    get_keyed_basemap,
-    is_keyed_basemap,
-    upper_placeholders,
-)
+from digitalearth.base.basemaps import get_keyed_basemap, is_keyed_basemap
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _upper_placeholders(url: str) -> str:
+    """Return ``url`` with ``{z}``/``{x}``/``{y}`` upper-cased, the spelling GeoViews' ``WMTS`` expects.
+
+    This lives in the interactive backend rather than in :mod:`digitalearth.base.basemaps` because the
+    casing is Bokeh's convention, not a property of the tile service — the web and static tiers use the
+    lower-case template unchanged.
+
+    Args:
+        url: A tile URL template using the lower-case placeholders.
+
+    Returns:
+        The same template with the three tile-coordinate placeholders upper-cased. Only those three are
+        touched, and only where they appear as placeholders.
+    """
+    for lower, upper in (("{z}", "{Z}"), ("{x}", "{X}"), ("{y}", "{Y}")):
+        url = url.replace(lower, upper)
+    return url
 
 
 class DecorationMixin(_MixinBase):
@@ -126,14 +141,17 @@ class DecorationMixin(_MixinBase):
         """Resolve ``provider`` to a ``gv.WMTS``/``gv.Tiles`` element (name, URL, or xyzservices).
 
         Args:
-            provider: A catalog name, a raw ``{Z}/{X}/{Y}`` URL, or an ``xyzservices.TileProvider``.
-            api_key: API key for keyed providers.
+            provider: A catalog name, a keyed preset name, a raw ``{Z}/{X}/{Y}`` URL, or an
+                ``xyzservices.TileProvider``.
+            api_key: Credential for a keyed provider or preset.
+            **preset: A keyed preset's own keywords, e.g. ``date`` / ``flavour``.
 
         Returns:
             The tile element (a fresh clone for catalog names — the shared instance is never mutated).
 
         Raises:
-            ValueError: for an unknown provider name.
+            ValueError: for an unknown provider name, or when preset keywords are passed with a provider
+                that is not a keyed preset.
             ImportError: when a keyed provider needs an ``api_key`` that was not supplied.
         """
         gv, hv = _require_holoviz()
@@ -141,7 +159,12 @@ class DecorationMixin(_MixinBase):
             # A keyed preset resolves to a URL with the credential already substituted; GeoViews wants the
             # tile placeholders upper-cased.
             keyed = get_keyed_basemap(str(provider), **preset)
-            return gv.WMTS(upper_placeholders(keyed.tile_url(api_key)))
+            return gv.WMTS(
+                _upper_placeholders(keyed.tile_url(api_key)),
+                # NICFI is non-commercial-only, so the attribution is a licence obligation the other
+                # two tiers already carry; GeoViews surfaces it in the element's metadata.
+                label=keyed.attribution,
+            )
         if preset:
             raise ValueError(
                 f"tiles({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
