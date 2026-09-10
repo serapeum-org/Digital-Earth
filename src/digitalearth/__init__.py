@@ -113,7 +113,7 @@ __all__ = [
 
 # --- back-compat: submodules that moved in the backend restructure -------------------------------------------
 #
-# Before the restructure these twelve names were bound as attributes of `digitalearth` -- some because
+# Before the restructure these eleven names were bound as attributes of `digitalearth` -- some because
 # `__init__` imported from them, the rest as a side effect of those imports -- so `digitalearth.charts` and
 # `from digitalearth import series` both worked. Moving them under base/, static/ and ops/ silently unbound
 # every one: attribute access raised a bare AttributeError and the `from` form an ImportError, neither

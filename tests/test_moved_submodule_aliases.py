@@ -1,9 +1,9 @@
-"""The twelve submodules that moved in the backend restructure stay reachable, with a deprecation notice.
+"""The eleven submodules that moved in the backend restructure stay reachable, with a deprecation notice.
 
 Before the restructure ``digitalearth.__init__`` imported from ``charts``, ``series``, ``scene``, ``batch`` and
 the rest, which bound each of them — and everything they in turn imported — as an attribute of the package. So
 ``digitalearth.charts`` and ``from digitalearth import series`` both worked, whether or not anyone intended
-them as API. Moving those modules under ``base/``, ``static/`` and ``ops/`` unbound all twelve at once:
+them as API. Moving those modules under ``base/``, ``static/`` and ``ops/`` unbound all eleven at once:
 attribute access raised a bare ``AttributeError`` and the ``from`` form an ``ImportError``, neither saying
 where the module had gone.
 
