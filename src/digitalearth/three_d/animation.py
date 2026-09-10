@@ -66,6 +66,68 @@ def _finalize_frames(plotter: Any) -> None:
         writer.close()
 
 
+def _finite_number(value: Any, name: str) -> float:
+    """Return ``value`` as a finite float, naming it in the error when it is not one.
+
+    Args:
+        value: The argument to check.
+        name: How to describe it in the message.
+
+    Returns:
+        The value as a float.
+
+    Raises:
+        ValueError: If it is not numeric or not finite. numpy's own message for a wrong type
+            (``ufunc 'isfinite' not supported for the input types``) names neither the argument nor the
+            caller, which is the reason this wraps it.
+    """
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"orbit() needs a numeric {name}, got {value!r}") from exc
+    if not np.isfinite(number):
+        raise ValueError(f"orbit() needs a finite {name}, got {value!r}")
+    return number
+
+
+def _up_vector(viewup: "UpVector | None") -> "np.ndarray | None":
+    """Return ``viewup`` as a validated ``(3,)`` float array, or ``None``.
+
+    The array returned is the one that must be forwarded to pyvista. Validating a converted copy and passing
+    the caller's original lets a masked array clear the finiteness check on its fill data while pyvista then
+    multiplies the masked value, and lets a list of numeric strings reach ``np.array(viewup) * shift`` and die
+    there naming neither ``viewup`` nor ``orbit``.
+
+    Args:
+        viewup: The caller's up vector, or ``None`` to leave pyvista's default.
+
+    Returns:
+        The validated vector, or ``None``.
+
+    Raises:
+        ValueError: If it is not three finite numbers with a direction — a zero vector names none.
+    """
+    if viewup is None:
+        return None
+    try:
+        vector = np.asarray(viewup, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"orbit() needs a 3-component numeric viewup, got {viewup!r}"
+        ) from exc
+    if vector.shape != (3,):
+        raise ValueError(
+            f"orbit() needs a 3-component viewup, got shape {vector.shape} from {viewup!r}"
+        )
+    if not np.isfinite(vector).all():
+        raise ValueError(f"orbit() needs a finite viewup, got {viewup!r}")
+    if not vector.any():
+        raise ValueError(
+            "orbit() cannot use a zero viewup: it names no up direction for the orbit to lie against"
+        )
+    return vector
+
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
@@ -98,8 +160,11 @@ class AnimationMixin(_MixinBase):
         - They are reached through the composed scene, never on the mixin itself, which owns no state:
             ```python
             >>> from digitalearth.three_d import Scene3D
-            >>> [name for name in ("orbit", "animate", "jupyter") if hasattr(Scene3D, name)]
-            ['orbit', 'animate', 'jupyter']
+            >>> from digitalearth.three_d.animation import AnimationMixin
+            >>> AnimationMixin in Scene3D.__mro__
+            True
+            >>> vars(AnimationMixin).get("__init__") is None
+            True
 
             ```
 
@@ -131,7 +196,7 @@ class AnimationMixin(_MixinBase):
         is now a behaviour change for such a caller, and a deliberate one: the two cannot sensibly disagree.
 
         Args:
-            path: Output file. A video suffix (``.mp4``/``.mov``/``.avi``) writes a movie; anything else a GIF.
+            path: Output file. A suffix in :data:`_MOVIE_SUFFIXES` writes a movie; anything else a GIF.
             n_frames: Number of frames (camera positions) along the orbit. At least 3. pyvista silently
                 clamps a smaller value to 3, so fewer used to "work" and produce a three-frame clip; this
                 rejects it instead, which is a narrowing of what the argument accepted before.
@@ -156,9 +221,11 @@ class AnimationMixin(_MixinBase):
             The ``path`` written.
 
         Raises:
-            ValueError: If ``factor`` is not positive and finite, ``shift`` is not finite, ``n_frames`` is
-                below 3, or ``viewup`` is not three finite components with a direction (a zero vector gives
-                none). Also if ``threaded=True`` is passed: :meth:`pyvista.Plotter.orbit_on_path` returns
+            ValueError: If ``factor`` is not a positive finite number, ``shift`` is not a finite number,
+                ``n_frames`` is not a whole number of at least 3, or ``viewup`` is not three finite numbers
+                with a direction (a zero vector gives none). Non-numeric values are rejected here too, by
+                name — numpy's own message for them names neither the argument nor this method. Also if
+                ``threaded=True`` is passed: :meth:`pyvista.Plotter.orbit_on_path` returns
                 before its render thread has written a frame, so the writer here would already be closed and
                 no file would be produced — drive that method yourself for a background render.
             TypeError: If ``orbit_kwargs`` carries a keyword ``orbit_on_path`` does not name; it takes no
@@ -203,31 +270,17 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
-        if not np.isfinite(factor) or factor <= 0:
+        factor = _finite_number(factor, "factor (orbit radius)")
+        if factor <= 0:
             raise ValueError(
                 f"orbit() needs a positive, finite factor (orbit radius), got {factor!r}"
             )
-        if not np.isfinite(shift):
-            raise ValueError(f"orbit() needs a finite shift, got {shift!r}")
-        if n_frames < 3:
+        shift = _finite_number(shift, "shift")
+        if not isinstance(n_frames, (int, np.integer)) or n_frames < 3:
             raise ValueError(
-                f"orbit() needs at least 3 frames to describe a circle, got {n_frames!r}"
+                f"orbit() needs a whole number of frames, at least 3, got {n_frames!r}"
             )
-        if viewup is not None:
-            # Checked as a vector rather than by len(): the annotation admits a numpy array, and a (3, 1) or
-            # 0-d one either passes a length check and then dies inside pyvista naming neither viewup nor
-            # orbit, or raises TypeError from the check itself.
-            vector = np.asarray(viewup, dtype=float)
-            if vector.shape != (3,):
-                raise ValueError(
-                    f"orbit() needs a 3-component viewup, got shape {vector.shape} from {viewup!r}"
-                )
-            if not np.isfinite(vector).all():
-                raise ValueError(f"orbit() needs a finite viewup, got {viewup!r}")
-            if not vector.any():
-                raise ValueError(
-                    "orbit() cannot use a zero viewup: it names no up direction for the orbit to lie against"
-                )
+        viewup = _up_vector(viewup)
         if orbit_kwargs.get("threaded"):
             # orbit_on_path(threaded=True) returns before the render thread has written a frame, so the
             # finally below closes the writer first and the file is never created — silently, with a path
@@ -329,8 +382,8 @@ class AnimationMixin(_MixinBase):
                 ...     scene.jupyter("static")
                 ...     pv.global_theme.jupyter_backend
                 ... finally:
-                ...     pv.set_jupyter_backend(previous)
                 ...     scene.close()
+                ...     pv.set_jupyter_backend(previous)
                 'static'
 
                 ```
