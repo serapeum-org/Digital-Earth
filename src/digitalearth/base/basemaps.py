@@ -36,6 +36,7 @@ non-commercial use under NICFI terms. Two things about it are worth knowing befo
   any date you depend on; ``mosaic=`` overrides the derived id when they differ.
 """
 
+import inspect
 import os
 import re
 from dataclasses import dataclass, field
@@ -135,6 +136,28 @@ class KeyedTileSource:
         so ``source.params["mosaic"] = ...`` would otherwise edit a preset in place.
         """
         object.__setattr__(self, "params", MappingProxyType(dict(self.params)))
+
+    def __hash__(self) -> int:
+        """Hash on the same values :meth:`__eq__` compares, with :attr:`params` as a sorted tuple.
+
+        The hash a frozen dataclass generates hashes the field tuple, and :attr:`params` is a
+        ``mappingproxy``, which delegates to the dict underneath and is therefore unhashable. Without
+        this, a source could be compared but not put in a set, used as a dict key, or memoised.
+
+        Returns:
+            A hash consistent with equality.
+        """
+        return hash(
+            (
+                self.name,
+                self.url_template,
+                self.attribution,
+                self.credential_env,
+                self.max_zoom,
+                self.bounds,
+                tuple(sorted(self.params.items())),
+            )
+        )
 
     def resolve_key(self, api_key: str | None = None) -> str:
         """Return the credential to use, preferring an explicit one over the environment.
@@ -432,7 +455,7 @@ def _spans_longitude(west: float, east: float, low: float, high: float) -> bool:
     if east - west >= 360.0 or high - low >= 360.0:
         return True  # one of them is global in longitude
 
-    def segments(start: float, end: float) -> list:
+    def segments(start: float, end: float) -> list[tuple[float, float]]:
         """Split a possibly-wrapping range into non-wrapping ``(start, end)`` pieces."""
         a, b = _wrap_longitude(start), _wrap_longitude(end)
         if a <= b:
@@ -622,12 +645,13 @@ def get_keyed_basemap(name: str, **kwargs: object) -> KeyedTileSource:
         )
         raise ValueError(f"unknown keyed basemap {name!r}; available: {available}")
     try:
-        return factory(**kwargs)
+        # Bind first and call outside the handler: only a *binding* failure is a keyword problem, and
+        # renaming every TypeError the factory body raises would bury the real one.
+        inspect.signature(factory).bind(**kwargs)
     except TypeError as err:
         # The factory is an implementation detail; report the preset the caller actually named.
-        import inspect
-
         accepted = sorted(inspect.signature(factory).parameters)
         raise TypeError(
-            f"{KEYED_BASEMAP_NAMES.get(name.lower(), name)}: {err} Its keywords are {accepted}."
+            f"{KEYED_BASEMAP_NAMES.get(name.lower(), name)}: {err}. Its keywords are {accepted}."
         ) from err
+    return factory(**kwargs)

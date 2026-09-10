@@ -1009,3 +1009,57 @@ class TestTheLongitudeAsymmetryIsDeliberate:
         """The latitude half of a swapped tuple is what makes the mistake visible."""
         with pytest.raises(ValueError, match="inverted"):
             planet_nicfi("2024-01").check_bounds((10.0, 5.0, -10.0, -5.0))
+
+
+class TestASourceCanBeUsedAsAValue:
+    """L1: `frozen=True` promises a value type, and a value type that compares equal has to hash."""
+
+    def test_two_identical_sources_are_equal_and_hash_alike(self):
+        """Equality without hashing rules out a set, a dict key, and any memoisation.
+
+        Test scenario:
+            The generated hash hashes the field tuple, and ``params`` is a ``mappingproxy`` that
+            delegates to the dict underneath — so it raised ``TypeError: unhashable type: 'dict'``.
+        """
+        first, second = planet_nicfi("2024-01"), planet_nicfi("2024-01")
+        assert first == second, "two sources built from the same preset differ"
+        assert hash(first) == hash(second), "equal sources hash differently"
+        assert len({first, second}) == 1, "equal sources did not collapse in a set"
+
+    def test_sources_that_differ_in_a_preset_value_do_not_collide(self):
+        """The mosaic is part of what a source *is*, so it has to reach the hash."""
+        assert planet_nicfi("2024-01") != planet_nicfi("2024-02")
+        assert len({planet_nicfi("2024-01"), planet_nicfi("2024-02")}) == 2
+
+    def test_a_source_works_as_a_dict_key(self):
+        """The point of hashing is being usable as a key, so use one."""
+        cache = {planet_nicfi("2024-01"): "tiles"}
+        assert cache[planet_nicfi("2024-01")] == "tiles"
+
+
+class TestOnlyKeywordProblemsAreRenamed:
+    """L2: the preset-keyword wrapper must not swallow a TypeError raised by the factory body."""
+
+    def test_a_type_error_from_inside_the_factory_is_not_relabelled(self):
+        """``date=5`` is a wrong *type*, not a wrong keyword, and the message has to say so.
+
+        Test scenario:
+            The blanket handler reported "expected string or bytes-like object, got 'int'" followed by a
+            keyword list that was already correct, burying the real problem behind a wrong suggestion.
+        """
+        with pytest.raises(TypeError) as err:
+            get_keyed_basemap("Planet.NICFI", date=5)
+        assert "Its keywords are" not in str(err.value), (
+            f"a type error was renamed: {err.value}"
+        )
+
+    def test_a_keyword_problem_is_still_renamed(self):
+        """The rename is right for the case it was written for, and must survive the narrowing."""
+        with pytest.raises(TypeError, match="Its keywords are"):
+            get_keyed_basemap("Planet.NICFI", dat="2024-01")
+
+    def test_the_renamed_message_reads_as_two_sentences(self):
+        """The preset name, the binding error and the keyword list ran together without punctuation."""
+        with pytest.raises(TypeError) as err:
+            get_keyed_basemap("Planet.NICFI", dat="2024-01")
+        assert ". Its keywords are" in str(err.value), str(err.value)
