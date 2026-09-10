@@ -336,6 +336,36 @@ class TemporalMixin(_MixinBase):
                 total_pixels,
             )
 
+    def _add_temporal_export_control(self) -> None:
+        """Give a saved page a way to reach every time step.
+
+        ``render`` wraps the map in an ``ipywidgets`` slider, which exists only in a live kernel:
+        ``to_html`` serialises the map alone, so a shared page showed one frozen frame and no way to move.
+        Every step is already in the page as its own layer, so a layer switcher over those makes them all
+        reachable — a step picker rather than a scrubber, but the difference between a usable artifact and
+        a screenshot.
+
+        Only the raster (layer-stack) mode is covered. The vector mode draws one layer and moves a MapLibre
+        filter across it, so its steps are not separately addressable, and a true in-page slider cannot be
+        built at all: py-maplibregl's standalone template keeps the map object local to its own closure
+        (``window._maplibreWidget`` is set on the Shiny path only), so injected markup has nothing to drive.
+        """
+        config = self._temporal
+        if not config or config.get("mode") != "raster":
+            return
+        if config.get("export_control_added"):
+            return  # render() and save() both build the widget; the control is added once, not per build
+        layer_ids = list(config.get("layer_ids") or [])
+        if len(layer_ids) < 2:
+            return  # one step is not a series; a switcher over it would be noise
+        times = [str(value) for value in config.get("times") or []]
+        for layer_id, label in zip(layer_ids, times):
+            for index, (existing, _) in enumerate(self._layer_index):
+                if existing == layer_id:
+                    self._layer_index[index] = (existing, label)
+        self.layer_control(layer_ids=layer_ids)
+        config["export_control_added"] = True
+
     def _wrap_temporal(self, widget: Any) -> Any:
         """Wrap the map ``widget`` in a slider composite that reveals one time step at a time.
 

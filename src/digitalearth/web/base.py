@@ -996,6 +996,9 @@ class WebMapBase:
             ImportError: when the ``web`` extra is not installed.
         """
         MapOptions, MapWidget = _require_maplibre()
+        add_temporal_control = getattr(self, "_add_temporal_export_control", None)
+        if add_temporal_control is not None:
+            add_temporal_control()
         kwargs: dict = {"map_options": MapOptions(**self._map_options())}
         if self.height is not None:
             kwargs["height"] = int(self.height)

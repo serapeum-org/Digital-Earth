@@ -39,6 +39,7 @@ class RasterMixin(_MixinBase):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         visible: bool = True,
+        name: Optional[str] = None,
     ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -54,6 +55,7 @@ class RasterMixin(_MixinBase):
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
                 :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
                 every frame showing at once — including in a saved page, which carries no slider.
@@ -100,7 +102,9 @@ class RasterMixin(_MixinBase):
             widget.add_source(src_id, spec)
             widget.add_layer(layer)
 
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
+        self._index_layer(layer_id, name)
         return self.add_layer(apply)
 
     def rgb_composite(
