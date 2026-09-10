@@ -85,6 +85,24 @@ class AnimationMixin(_MixinBase):
     inherits. At runtime that base is plain ``object``, so composing this mixin leaves the ``Scene3D`` MRO exactly
     what it was before the annotation.
 
+    Examples:
+        - The three methods this mixin contributes, and the runtime base that keeps the composition inert:
+            ```python
+            >>> from digitalearth.three_d.animation import AnimationMixin
+            >>> sorted(name for name in vars(AnimationMixin) if not name.startswith("_"))
+            ['animate', 'jupyter', 'orbit']
+            >>> AnimationMixin.__bases__
+            (<class 'object'>,)
+
+            ```
+        - They are reached through the composed scene, never on the mixin itself, which owns no state:
+            ```python
+            >>> from digitalearth.three_d import Scene3D
+            >>> [name for name in ("orbit", "animate", "jupyter") if hasattr(Scene3D, name)]
+            ['orbit', 'animate', 'jupyter']
+
+            ```
+
     See Also:
         digitalearth.three_d.scene3d.Scene3D: the composition that supplies the state these methods use.
         digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
