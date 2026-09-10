@@ -357,9 +357,12 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs forwarded to the per-member contour call.
 
         Returns:
-            The list of per-member contour mappables (each also registered as a Scene layer).
+            The list of per-member contour mappables (each also registered as a Scene layer). Members
+            lying outside what the display CRS shows draw nothing and are absent from the list, so it
+            stays one entry per *drawn* member and never contains ``None``.
         """
-        return [
+        drawn = [
             self._field(member, kind="contour", band=band, add_colorbar=False, **opts)
             for member in collection.datasets
         ]
+        return [artist for artist in drawn if artist is not None]

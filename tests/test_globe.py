@@ -614,6 +614,32 @@ class TestOffLimbEveryLayerKind:
             "an off-limb backdrop should be absent, not an AttributeError"
         )
 
+    def test_spaghetti_keeps_one_entry_per_drawn_member(
+        self, hidden, regional, tmp_path
+    ):
+        """spaghetti returns drawn artists, so hidden members drop out rather than becoming None.
+
+        Test scenario:
+            It returned one entry per member regardless, so an off-limb collection produced [None, None]
+            — breaking both its own Returns contract and the len(artists) == len(m.layers) invariant its
+            callers rely on to pair artists with registered layers.
+        """
+        from pyramids.dataset.collection import DatasetCollection
+
+        paths = []
+        for index in range(2):
+            path = tmp_path / f"member{index}.tif"
+            regional.to_file(str(path))
+            paths.append(str(path))
+        collection = DatasetCollection.from_files(paths)
+        artists = hidden.spaghetti(collection)
+        assert artists == [], (
+            f"no member is on the view, so nothing is returned: {artists}"
+        )
+        assert len(artists) == len(hidden.layers), (
+            f"artists ({len(artists)}) must match registered layers ({len(hidden.layers)})"
+        )
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None
