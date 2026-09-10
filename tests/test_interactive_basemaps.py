@@ -49,8 +49,9 @@ class TestInteractiveTierDispatch:
         """
         from digitalearth.interactive import InteractiveMap
 
+        interactive_map = InteractiveMap()
         with pytest.raises(ValueError, match="no preset keywords"):
-            InteractiveMap().tiles("CartoLight", preset={"date": "2024-01"})
+            interactive_map.tiles("CartoLight", preset={"date": "2024-01"})
 
     def test_ordinary_providers_are_unaffected(self):
         """A catalog name still resolves through the GeoViews tile sources as before."""

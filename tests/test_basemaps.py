@@ -143,8 +143,9 @@ class TestCredential:
             monkeypatch.delenv("PLANET_API_KEY", raising=False)
         else:
             monkeypatch.setenv("PLANET_API_KEY", value)
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="PLANET_API_KEY"):
-            planet_nicfi("2024-01").tile_url()
+            source.tile_url()
 
     def test_the_key_is_not_in_the_repr_of_the_source(self, monkeypatch):
         """The source is a dataclass; its repr must not carry a credential.
@@ -335,8 +336,9 @@ class TestStaticTierDispatch:
             The whole point of the feature: a caller names the preset and the credential arrives from the
             environment without appearing in their code.
         """
+        figure_map = self._tropical_map()
         with pytest.raises(ConnectionError):
-            self._tropical_map().basemap(
+            figure_map.basemap(
                 "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
             )
         assert self.requested, "no tile fetch was attempted"
@@ -355,8 +357,9 @@ class TestStaticTierDispatch:
         logger = logging.getLogger("cleopatra.basemap.tiles")
         logger.setLevel(logging.DEBUG)
         try:
+            figure_map = self._tropical_map()
             with pytest.raises(ConnectionError):
-                self._tropical_map().basemap("Planet.NICFI", preset={"date": "2024-01"})
+                figure_map.basemap("Planet.NICFI", preset={"date": "2024-01"})
             assert self.requested, "no fetch was attempted"
             assert not self.escaped, (
                 f"a DEBUG record escaped during the fetch: {self.escaped}"
@@ -388,8 +391,9 @@ class TestStaticTierDispatch:
         Test scenario:
             The dispatch must be additive — every existing basemap() call keeps working.
         """
+        figure_map = self._tropical_map()
         with pytest.raises(ConnectionError):
-            self._tropical_map().basemap()
+            figure_map.basemap()
         assert self.requested, "the ordinary path no longer reaches the engine"
         assert FAKE_KEY not in self.requested[0], (
             "a credential leaked into a non-keyed basemap"
@@ -538,8 +542,9 @@ class TestUrlSafety:
             ``#`` is the dangerous one — it truncates the query string and silently drops ``api_key``,
             turning an authenticated request into an anonymous one that fails confusingly.
         """
+        source = planet_nicfi("2024-01", mosaic=bad)
         with pytest.raises(ValueError, match="rewrite the tile request"):
-            planet_nicfi("2024-01", mosaic=bad).tile_url(api_key="K")
+            source.tile_url(api_key="K")
 
     def test_a_normal_mosaic_id_is_unaffected(self):
         """The delimiter guard must not reject the ids Planet actually publishes."""
@@ -629,15 +634,15 @@ class TestLongitudeConventions:
         Test scenario:
             A Web-Mercator extent has latitudes in the millions, which cannot be a lon/lat box.
         """
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="not lon/lat"):
-            planet_nicfi("2024-01").check_bounds(
-                (500000.0, 5800000.0, 510000.0, 5810000.0)
-            )
+            source.check_bounds((500000.0, 5800000.0, 510000.0, 5810000.0))
 
     def test_an_inverted_extent_is_reported_as_inverted(self):
         """South above north is a caller error, not an absence of coverage."""
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="inverted"):
-            planet_nicfi("2024-01").check_bounds((-60.0, 10.0, -55.0, -10.0))
+            source.check_bounds((-60.0, 10.0, -55.0, -10.0))
 
 
 class TestStaticCoverageGuardSources:
@@ -695,10 +700,9 @@ class TestStaticCoverageGuardSources:
             Reading only ``domain`` left the guard inert for it — a Netherlands map happily requested
             NICFI tiles that do not exist there.
         """
+        figure_map = self._map_with_limits("temperate")
         with pytest.raises(ValueError, match="lies entirely outside"):
-            self._map_with_limits("temperate").basemap(
-                "Planet.NICFI", preset={"date": "2024-01"}
-            )
+            figure_map.basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert not self.calls, "a fetch was set up despite the guard"
 
     def test_a_tropical_axes_extent_still_passes(self):
@@ -728,8 +732,9 @@ class TestStaticCoverageGuardSources:
             The static tier passed these straight to add_tiles, which would have raised something far
             less clear.
         """
+        figure_map = self._map_with_limits("tropical")
         with pytest.raises(ValueError, match="no preset keywords"):
-            self._map_with_limits("tropical").basemap(preset={"date": "2024-01"})
+            figure_map.basemap(preset={"date": "2024-01"})
 
     def test_a_preset_keyword_written_loose_says_where_it_belongs(self):
         """``**kwargs`` here goes to add_tiles, so a loose ``date=`` would vanish into cleopatra.
@@ -738,8 +743,9 @@ class TestStaticCoverageGuardSources:
             All three tiers take a preset as a dict. A caller who writes the keyword loose gets the
             call they meant, not a cleopatra error about an argument it has never heard of.
         """
+        figure_map = self._map_with_limits("tropical")
         with pytest.raises(ValueError, match="not loose"):
-            self._map_with_limits("tropical").basemap("Planet.NICFI", date="2024-01")
+            figure_map.basemap("Planet.NICFI", date="2024-01")
 
 
 class TestKeyStaysOutOfTheLog:
@@ -923,13 +929,15 @@ class TestTheCredentialIsGuardedToo:
             The service answers that with a 401 that says nothing about the key being malformed, which is
             exactly the confusion the guard exists to prevent for preset values.
         """
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="rewrite the tile request"):
-            planet_nicfi("2024-01").tile_url(api_key=bad)
+            source.tile_url(api_key=bad)
 
     def test_the_error_does_not_echo_the_credential(self):
         """The message may be logged or shown, so it names the placeholder and not the value."""
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError) as err:
-            planet_nicfi("2024-01").tile_url(api_key="secret#frag")
+            source.tile_url(api_key="secret#frag")
         assert "secret" not in str(err.value), (
             f"the credential leaked into the message: {err.value}"
         )
@@ -967,8 +975,9 @@ class TestPathSeparatorsAreDelimitersToo:
             ``mosaic="../../etc"`` walks up out of the mosaic path entirely; the guard's own wording —
             "rewrite the tile request rather than fill a placeholder" — is exactly what that does.
         """
+        source = planet_nicfi("2024-01", mosaic="../../etc")
         with pytest.raises(ValueError, match="rewrite the tile request"):
-            planet_nicfi("2024-01", mosaic="../../etc").tile_url(api_key="K")
+            source.tile_url(api_key="K")
 
 
 class TestTheExtentIsValidatedOnItsOwn:
@@ -996,10 +1005,9 @@ class TestTheExtentIsValidatedOnItsOwn:
             passed silently for any global source — and the answer would then be wrong the moment a
             preset with real bounds was added.
         """
+        source = self._global_source()
         with pytest.raises(ValueError, match="not lon/lat"):
-            self._global_source().check_bounds(
-                (500000.0, 5800000.0, 510000.0, 5810000.0)
-            )
+            source.check_bounds((500000.0, 5800000.0, 510000.0, 5810000.0))
 
     def test_a_projected_extent_whose_northings_look_like_latitudes_is_caught(self):
         """Latitude alone does not settle it — an equatorial Web-Mercator box has small northings.
@@ -1009,13 +1017,15 @@ class TestTheExtentIsValidatedOnItsOwn:
             10 km longitude span, which ``_spans_longitude`` would call "global in longitude". The
             longitude magnitude is what catches it.
         """
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="cannot be degrees"):
-            planet_nicfi("2024-01").check_bounds((500000.0, -50.0, 510000.0, 50.0))
+            source.check_bounds((500000.0, -50.0, 510000.0, 50.0))
 
     def test_an_extent_wider_than_the_planet_is_not_lon_lat(self):
         """No lon/lat box spans more than 360 degrees, whatever convention it is written in."""
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="cannot be degrees"):
-            planet_nicfi("2024-01").check_bounds((-200.0, -5.0, 200.0, 5.0))
+            source.check_bounds((-200.0, -5.0, 200.0, 5.0))
 
     def test_a_0_360_extent_at_the_top_of_the_range_still_passes(self):
         """The magnitude check must not refuse the 0-360 convention it was written to allow."""
@@ -1036,8 +1046,9 @@ class TestTheLongitudeAsymmetryIsDeliberate:
 
     def test_a_fully_swapped_tuple_is_still_caught_by_its_latitudes(self):
         """The latitude half of a swapped tuple is what makes the mistake visible."""
+        source = planet_nicfi("2024-01")
         with pytest.raises(ValueError, match="inverted"):
-            planet_nicfi("2024-01").check_bounds((10.0, 5.0, -10.0, -5.0))
+            source.check_bounds((10.0, 5.0, -10.0, -5.0))
 
 
 class TestASourceCanBeUsedAsAValue:
@@ -1219,8 +1230,9 @@ class TestACredentialWithNothingToAuthenticate:
         """
         from digitalearth import Map
 
+        figure_map = Map(domain=TROPICAL)
         with pytest.raises(ValueError, match="takes no api_key"):
-            Map(domain=TROPICAL).basemap(api_key="x")
+            figure_map.basemap(api_key="x")
 
     def test_a_keyed_preset_still_takes_one(self):
         """The guard must not reach the case the parameter exists for."""

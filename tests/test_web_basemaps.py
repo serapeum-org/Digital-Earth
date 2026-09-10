@@ -90,8 +90,9 @@ class TestWebTierDispatch:
         """
         from digitalearth.web import WebMap
 
+        web_map = WebMap()
         with pytest.raises(ValueError, match="no preset keywords"):
-            WebMap().basemap("CartoDark", preset={"date": "2024-01"})
+            web_map.basemap("CartoDark", preset={"date": "2024-01"})
 
     def test_the_unknown_provider_error_lists_the_presets(self):
         """A caller who mistypes a preset should see the presets among the options.
@@ -101,8 +102,9 @@ class TestWebTierDispatch:
         """
         from digitalearth.web import WebMap
 
+        web_map = WebMap()
         with pytest.raises(ValueError, match=r"Planet\.NICFI"):
-            WebMap().basemap("NotARealBasemap")
+            web_map.basemap("NotARealBasemap")
 
     def test_ordinary_providers_still_work(self):
         """The four token-free basemaps are unaffected by the dispatch."""
@@ -125,8 +127,9 @@ class TestPresetKeywordErrors:
         """
         from digitalearth.web import WebMap
 
+        web_map = WebMap()
         with pytest.raises(TypeError, match="opacty"):
-            WebMap().basemap("CartoDark", opacty=0.5)
+            web_map.basemap("CartoDark", opacty=0.5)
 
     def test_a_preset_keyword_written_loose_is_an_unexpected_argument(self):
         """With `preset` an explicit parameter, there is no ``**preset`` left to swallow anything.
@@ -137,8 +140,9 @@ class TestPresetKeywordErrors:
         """
         from digitalearth.web import WebMap
 
+        web_map = WebMap()
         with pytest.raises(TypeError, match="date"):
-            WebMap().basemap("CartoDark", date="2024-01")
+            web_map.basemap("CartoDark", date="2024-01")
 
 
 class TestSavedOutputCarriesTheKey:
@@ -167,8 +171,9 @@ class TestACredentialWithNothingToAuthenticate:
         """CartoDark needs no credential, so passing one is a misunderstanding worth reporting."""
         from digitalearth.web import WebMap
 
+        web_map = WebMap()
         with pytest.raises(ValueError, match="takes no api_key"):
-            WebMap().basemap("CartoDark", api_key="x")
+            web_map.basemap("CartoDark", api_key="x")
 
     def test_a_keyed_preset_still_takes_one(self):
         """The guard sits after the keyed branch returns, and must stay there."""
