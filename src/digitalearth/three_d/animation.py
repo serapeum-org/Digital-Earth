@@ -12,7 +12,13 @@ the ``3d`` extra). No GIS is touched here: animation is pure rendering of alread
 from pyramids upstream.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence, Union
+
+import numpy as np
+
+#: An up vector: three floats, as a sequence or a numpy array. numpy is the natural way to spell one and
+#: is not a ``typing.Sequence``, so both are accepted rather than adding to the mypy arg-type baseline.
+UpVector = Union[Sequence[float], np.ndarray]
 
 #: File suffixes routed to ``open_movie`` (everything else → ``open_gif``).
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
@@ -89,7 +95,7 @@ class AnimationMixin(_MixinBase):
         framerate: int = 12,
         factor: float = 3.0,
         shift: float = 0.0,
-        viewup: Sequence[float] | None = None,
+        viewup: UpVector | None = None,
         **orbit_kwargs: Any,
     ) -> str:
         """Sweep the camera around the scene and write the fly-through to a GIF/MP4.
@@ -98,23 +104,37 @@ class AnimationMixin(_MixinBase):
         tunes how it is flown along that path. They belong to two different pyvista calls, which is why they
         are separate arguments rather than one pass-through bag.
 
+        ``viewup`` shapes **both** — the circle the camera flies and the camera's own up vector. Before these
+        arguments existed it reached only the camera, so a caller who passed it got a path built around the
+        theme's up vector and a camera holding a different one, which rolls the horizon through the turn. That
+        is now a behaviour change for such a caller, and a deliberate one: the two cannot sensibly disagree.
+
         Args:
             path: Output file. A video suffix (``.mp4``/``.mov``/``.avi``) writes a movie; anything else a GIF.
-            n_frames: Number of frames (camera positions) along the orbit.
+            n_frames: Number of frames (camera positions) along the orbit. At least 3 — fewer is not a circle.
             framerate: Frames per second of the output.
             factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
-            shift: How far to lift the orbit above the data's mid-plane, as an **absolute offset in the
-                scene's z units** — so the useful value depends on the data's own vertical extent and on any
-                ``z_exaggeration`` applied to it, and has to be picked per scene. The default ``0.0`` circles
-                level with the middle of the data, which for near-flat terrain is an edge-on view of a sheet.
-            viewup: Up vector for both the path and the camera. ``None`` leaves pyvista's default.
-            **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path` — ``step``, ``focus``,
-                ``threaded``, ``progress_bar``. Note that method takes no ``**kwargs``, so anything it does not
-                name (``factor`` and ``shift`` among them) raises :class:`TypeError`; those two are the named
-                arguments above.
+                Must be positive.
+            shift: How far to lift the orbit off the data's mid-plane, as an absolute offset **along**
+                ``viewup`` (so along z while ``viewup`` is z-aligned, which is the default). It is in scene
+                units, not a fraction, so the useful value depends on the data's own extent along that vector
+                and on any ``z_exaggeration`` applied to it — it has to be picked per scene. The default
+                ``0.0`` circles level with the middle of the data, which for near-flat terrain is an edge-on
+                view of a sheet.
+            viewup: Up vector for the path and the camera alike, as three floats. ``None`` leaves pyvista's
+                default.
+            **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path`, whose signature names what it
+                accepts — ``step`` and ``focus`` are the useful ones here. It takes no ``**kwargs``, so a
+                keyword it does not name raises :class:`TypeError`; ``factor`` and ``shift`` are not among
+                them, which is why they are named arguments above. ``progress_bar=True`` additionally needs
+                ``tqdm``, which the ``3d`` extra does not install.
 
         Returns:
             The ``path`` written.
+
+        Raises:
+            ValueError: If ``factor`` is not positive, ``n_frames`` is below 3, ``viewup`` is not three
+                components, or ``threaded=True`` is passed — see the note on it below.
 
         Examples:
             - Orbit a terrain scene to a GIF (needs the ``3d`` extra for imageio):
@@ -123,15 +143,19 @@ class AnimationMixin(_MixinBase):
                 >>> from digitalearth.three_d import Scene3D
                 >>> from digitalearth.base.sources import get_source
                 >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
-                >>> scene = Scene3D(off_screen=True)
-                >>> _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
-                >>> out = scene.orbit(os.path.join(tempfile.mkdtemp(), "spin.gif"), n_frames=6)
-                >>> os.path.getsize(out) > 0
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3D(off_screen=True)
+                ...     _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
+                ...     out = scene.orbit(os.path.join(folder, "spin.gif"), n_frames=6)
+                ...     size = os.path.getsize(out)
+                ...     scene.close()
+                >>> size > 0
                 True
-                >>> scene.close()
 
                 ```
-            - Close in and lift the orbit, so near-flat terrain is seen from above rather than edge-on:
+            - Close the orbit in and lift it clear of the terrain, so a near-flat sheet is looked down on
+              rather than seen edge-on. This scene's z runs 0..6, so a shift above that clears it; pick the
+              value from your own data's extent, not from this example:
                 ```python
                 >>> import numpy as np, os, tempfile
                 >>> from digitalearth.three_d import Scene3D
@@ -141,7 +165,7 @@ class AnimationMixin(_MixinBase):
                 ...     scene = Scene3D(off_screen=True)
                 ...     _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
                 ...     out = scene.orbit(
-                ...         os.path.join(folder, "spin.gif"), n_frames=6, factor=0.9, shift=1.6
+                ...         os.path.join(folder, "spin.gif"), n_frames=6, factor=0.9, shift=8.0
                 ...     )
                 ...     size = os.path.getsize(out)
                 ...     scene.close()
@@ -150,6 +174,27 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
+        if factor <= 0:
+            raise ValueError(
+                f"orbit() needs a positive factor (orbit radius), got {factor!r}"
+            )
+        if n_frames < 3:
+            raise ValueError(
+                f"orbit() needs at least 3 frames to describe a circle, got {n_frames!r}"
+            )
+        if viewup is not None and len(viewup) != 3:
+            raise ValueError(
+                f"orbit() needs a 3-component viewup, got {len(viewup)} components: {viewup!r}"
+            )
+        if orbit_kwargs.get("threaded"):
+            # orbit_on_path(threaded=True) returns before the render thread has written a frame, so the
+            # finally below closes the writer first and the file is never created — silently, with a path
+            # returned as if it had been. Refuse rather than hand back a filename for nothing.
+            raise ValueError(
+                "orbit() writes frames synchronously and closes the writer as it returns, so threaded=True "
+                "would finish after the file was closed and produce nothing. Drive plotter.orbit_on_path "
+                "directly if you need a background render."
+            )
         _open_writer(self.plotter, path, framerate)
         try:
             orbital_path = self.plotter.generate_orbital_path(
@@ -228,30 +273,21 @@ class AnimationMixin(_MixinBase):
                 ``"static"`` (screenshot), or ``"html"``.
 
         Examples:
-            - Switch to the static (screenshot) backend and read the change back:
+            - Switch to the static (screenshot) backend and read the change back. The restore is in a
+              ``finally`` because the backend is process-wide: doctests share one interpreter, and a failure
+              between the switch and the restore would leave every later one on a renderer nobody chose:
                 ```python
                 >>> import pyvista as pv
                 >>> from digitalearth.three_d import Scene3D
-                >>> previous = pv.global_theme.jupyter_backend
                 >>> scene = Scene3D(off_screen=True)
-                >>> scene.jupyter("static")
-                >>> pv.global_theme.jupyter_backend
+                >>> previous = pv.global_theme.jupyter_backend
+                >>> try:
+                ...     scene.jupyter("static")
+                ...     pv.global_theme.jupyter_backend
+                ... finally:
+                ...     pv.set_jupyter_backend(previous)
+                ...     scene.close()
                 'static'
-                >>> pv.set_jupyter_backend(previous)
-                >>> scene.close()
-
-                ```
-            - The default is trame, the server-backed interactive renderer:
-                ```python
-                >>> import pyvista as pv
-                >>> from digitalearth.three_d import Scene3D
-                >>> previous = pv.global_theme.jupyter_backend
-                >>> scene = Scene3D(off_screen=True)
-                >>> scene.jupyter()
-                >>> pv.global_theme.jupyter_backend
-                'trame'
-                >>> pv.set_jupyter_backend(previous)
-                >>> scene.close()
 
                 ```
 
