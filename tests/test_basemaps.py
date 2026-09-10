@@ -766,3 +766,113 @@ class TestKeyStaysOutOfTheLog:
             root.setLevel(previous_root)
         leaked = [msg for msg in records if FAKE_KEY in msg]
         assert not leaked, f"the credential reached a log handler: {leaked}"
+
+
+class TestPresetKeywordErrorsAreNamed:
+    """The keyword error names the preset the caller asked for, not the factory behind it (N6)."""
+
+    def test_a_missing_required_keyword_names_the_preset(self):
+        """``date`` is required, and the message has to say which preset requires it.
+
+        Test scenario:
+            The raw ``TypeError`` reads "planet_nicfi() missing 1 required positional argument", naming a
+            function the caller never wrote.
+        """
+        with pytest.raises(TypeError, match="Planet.NICFI") as err:
+            get_keyed_basemap("Planet.NICFI")
+        assert "'date'" in str(err.value), (
+            f"the keywords it takes are missing: {err.value}"
+        )
+
+    def test_a_misspelled_keyword_lists_the_ones_that_exist(self):
+        """``dat=`` is a typo, and the answer to a typo is the list of real keywords."""
+        with pytest.raises(
+            TypeError, match=r"Its keywords are \['date', 'flavour', 'mosaic'\]"
+        ):
+            get_keyed_basemap("Planet.NICFI", dat="2024-01")
+
+    def test_the_display_name_is_used_even_when_the_caller_lower_cased_it(self):
+        """The lookup is case-insensitive, so the message must not echo the caller's spelling back."""
+        with pytest.raises(TypeError, match="Planet.NICFI"):
+            get_keyed_basemap("planet.nicfi", dat="2024-01")
+
+
+class TestWhereTheStaticExtentComesFrom:
+    """The three ways `_lonlat_domain` can end up with nothing to check, and the lon/lat shortcut."""
+
+    @pytest.fixture(autouse=True)
+    def _spy(self, monkeypatch):
+        """Capture what ``add_tiles`` was handed, without reaching cleopatra.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        pytest.importorskip("matplotlib")
+        from digitalearth.static.maps import decoration as static_decoration
+
+        self.calls = []
+        monkeypatch.setattr(
+            static_decoration,
+            "add_tiles",
+            lambda ax, source=None, crs=None, **kw: (
+                self.calls.append(source) or "artist"
+            ),
+        )
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_a_domain_that_cannot_be_resolved_leaves_coverage_to_the_service(self):
+        """An unknown region name is not a coverage answer, so it must not become a refusal.
+
+        Test scenario:
+            ``resolve_domain`` raises ``KeyError`` for a name it does not know. Turning that into
+            "outside the coverage" would blame the basemap for a typo in the domain.
+        """
+        from digitalearth import Map
+
+        Map(domain="atlantis").basemap("Planet.NICFI", date="2024-01")
+        assert self.calls, (
+            "an unresolvable domain was treated as being outside the coverage"
+        )
+
+    def test_lonlat_axes_are_used_as_they_are(self):
+        """With a lon/lat display CRS the limits are already degrees — reprojecting them would be wrong.
+
+        Test scenario:
+            A Netherlands box in EPSG:4326 is outside the NICFI band, and has to be refused on the
+            numbers as they stand.
+        """
+        from digitalearth import Map
+
+        m = Map(crs=4326)
+        m.ax.set_xlim(4.0, 7.0)
+        m.ax.set_ylim(51.0, 54.0)
+        with pytest.raises(ValueError, match="lies entirely outside"):
+            m.basemap("Planet.NICFI", date="2024-01")
+
+    def test_a_crs_that_cannot_be_reprojected_leaves_coverage_to_the_service(
+        self, monkeypatch
+    ):
+        """A CRS pyproj cannot resolve is not a reason to fail the plot.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            ``reproject_coordinates`` raising means the extent is unknown, not that it is uncovered —
+            so the request goes ahead and the service answers it.
+        """
+        from digitalearth import Map
+        from digitalearth.static.maps import decoration as static_decoration
+
+        def _refuse(*args, **kwargs):
+            """Stand in for a CRS pyproj cannot resolve."""
+            raise ValueError("unknown CRS")
+
+        monkeypatch.setattr(static_decoration, "reproject_coordinates", _refuse)
+        m = Map()
+        m.ax.set_xlim(556597.0, 668219.0)
+        m.ax.set_ylim(6800125.0, 6982997.0)
+        m.basemap("Planet.NICFI", date="2024-01")
+        assert self.calls, (
+            "an unreprojectable extent was treated as being outside the coverage"
+        )

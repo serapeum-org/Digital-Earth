@@ -584,12 +584,12 @@ class DecorationMixin(_MixinBase):
             The extent in lon/lat, or ``None`` when neither source yields one.
         """
         domain = getattr(self, "domain", None)
-        if domain is None:
-            return self._axes_lonlat_extent()
-        try:
-            resolved = resolve_domain(domain)
-        except (KeyError, TypeError, ValueError):
-            return None  # an unrecognised domain — leave the coverage question to the service
+        resolved = None
+        if domain is not None:
+            try:
+                resolved = resolve_domain(domain)
+            except (KeyError, TypeError, ValueError):
+                return None  # an unrecognised domain — leave the coverage question to the service
         if resolved is None:
             return self._axes_lonlat_extent()
         west, south, east, north = (float(value) for value in resolved)
