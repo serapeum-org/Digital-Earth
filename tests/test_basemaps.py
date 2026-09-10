@@ -1155,3 +1155,45 @@ class TestTheEnvelopeIsReprojectedAsAShape:
         assert m._axes_lonlat_extent() is None, (
             "a non-finite reprojection was treated as an extent"
         )
+
+
+class TestACredentialWithNothingToAuthenticate:
+    """L6: a caller who passes api_key believes they are authenticating; silence would be wrong."""
+
+    @pytest.fixture(autouse=True)
+    def _need_matplotlib(self, monkeypatch):
+        """Skip without matplotlib, and keep cleopatra out of it.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        pytest.importorskip("matplotlib")
+        from digitalearth.static.maps import decoration as static_decoration
+
+        monkeypatch.setattr(
+            static_decoration,
+            "add_tiles",
+            lambda ax, source=None, crs=None, **kw: "artist",
+        )
+
+    def test_an_api_key_on_a_token_free_source_is_refused(self):
+        """The parameter is consumed by the signature now, so nothing downstream would complain.
+
+        Test scenario:
+            Before the keyed presets, api_key= reached add_tiles and failed there. Hoisting it into a
+            keyword-only parameter made it silently vanish — two lines from a stray date= being a hard
+            error for exactly the same reason.
+        """
+        from digitalearth import Map
+
+        with pytest.raises(ValueError, match="takes no api_key"):
+            Map(domain=TROPICAL).basemap(api_key="x")
+
+    def test_a_keyed_preset_still_takes_one(self):
+        """The guard must not reach the case the parameter exists for."""
+        from digitalearth import Map
+
+        m = Map(domain=TROPICAL)
+        m.ax.set_xlim(TROPICAL[0], TROPICAL[2])
+        m.ax.set_ylim(TROPICAL[1], TROPICAL[3])
+        m.basemap("Planet.NICFI", date="2024-01", api_key=FAKE_KEY)

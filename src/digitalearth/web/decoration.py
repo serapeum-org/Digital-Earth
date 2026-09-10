@@ -186,6 +186,12 @@ class DecorationMixin(_MixinBase):
                 attribution=keyed.attribution,
                 opacity=opacity,
             )
+        if api_key is not None:
+            # Dropping it silently would leave a caller believing they had authenticated.
+            raise ValueError(
+                f"basemap({provider!r}) takes no api_key; it is a token-free source. Credentials apply "
+                f"only to a keyed preset such as 'Planet.NICFI'"
+            )
         if preset:
             stray = sorted(set(preset) - PRESET_KEYWORDS)
             if stray:

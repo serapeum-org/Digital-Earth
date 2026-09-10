@@ -149,3 +149,30 @@ class TestSavedOutputCarriesTheKey:
         assert FAKE_KEY in html, (
             "the key is gone from the saved page, so its tiles cannot load"
         )
+
+
+class TestACredentialWithNothingToAuthenticate:
+    """L6: the web tier hoisted api_key into its signature too, and dropped it just as silently."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the web extra, and supply a fake credential.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("maplibre")
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_an_api_key_on_a_token_free_provider_is_refused(self):
+        """CartoDark needs no credential, so passing one is a misunderstanding worth reporting."""
+        from digitalearth.web import WebMap
+
+        with pytest.raises(ValueError, match="takes no api_key"):
+            WebMap().basemap("CartoDark", api_key="x")
+
+    def test_a_keyed_preset_still_takes_one(self):
+        """The guard sits after the keyed branch returns, and must stay there."""
+        from digitalearth.web import WebMap
+
+        WebMap().basemap("Planet.NICFI", date="2024-01", api_key=FAKE_KEY)

@@ -586,6 +586,12 @@ class DecorationMixin(_MixinBase):
                     f"basemap({source!r}) takes no preset keywords; {stray} apply only to a keyed preset "
                     f"such as 'Planet.NICFI'"
                 )
+            if api_key is not None:
+                # Dropping it silently would leave a caller believing they had authenticated.
+                raise ValueError(
+                    f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
+                    f"only to a keyed preset such as 'Planet.NICFI'"
+                )
             return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
 
         preset_kwargs = {
