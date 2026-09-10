@@ -239,12 +239,18 @@ class KeyedTileSource:
         Only a request with no overlap at all is refused, because that renders an empty basemap after a
         round of failed fetches.
 
+        Longitude is compared modulo 360, so a ``0–360`` domain (200°E, say) is understood as the same
+        place as ``-160``, and a box crossing the antimeridian is treated as the two spans it really
+        covers rather than as an inverted one. Latitude is compared directly — it has no such convention.
+
         Args:
             extent: The area about to be drawn, as lon/lat ``(west, south, east, north)``; ``None`` skips
                 the check, as does a source with no declared :attr:`bounds`.
 
         Raises:
-            ValueError: when the two boxes do not overlap, quoting both so the mismatch is obvious.
+            ValueError: when the two boxes do not overlap, quoting both so the mismatch is obvious; when
+                the latitudes are inverted or outside ``[-90, 90]``, which usually means the extent is in
+                a projected CRS rather than lon/lat.
 
         Examples:
             - A tropical extent passes, and so does one that merely straddles the edge:
@@ -270,12 +276,82 @@ class KeyedTileSource:
             return
         west, south, east, north = extent
         b_west, b_south, b_east, b_north = self.bounds
-        if east < b_west or west > b_east or north < b_south or south > b_north:
+        if not (-90.0 <= south <= 90.0 and -90.0 <= north <= 90.0):
+            raise ValueError(
+                f"{self.name}: the extent {extent} has latitudes outside [-90, 90], so it is not lon/lat "
+                f"— reproject it before checking coverage."
+            )
+        if south > north:
+            raise ValueError(
+                f"{self.name}: the extent {extent} is inverted (south {south} is north of north {north})."
+            )
+        if not _spans_latitude(south, north, b_south, b_north) or not _spans_longitude(
+            west, east, b_west, b_east
+        ):
             raise ValueError(
                 f"{self.name} covers only {self.bounds} (lon/lat), and the requested extent {extent} "
                 f"lies entirely outside it — this basemap would render blank. Use a global basemap, or "
                 f"plot an area within the covered band."
             )
+
+
+def _spans_latitude(south: float, north: float, low: float, high: float) -> bool:
+    """Whether two latitude ranges overlap at all.
+
+    Args:
+        south: Southern edge of the requested extent.
+        north: Northern edge of the requested extent.
+        low: Southern edge of the service's coverage.
+        high: Northern edge of the service's coverage.
+
+    Returns:
+        ``True`` when the ranges share any latitude, touching edges included.
+    """
+    return not (north < low or south > high)
+
+
+def _wrap_longitude(lon: float) -> float:
+    """Normalise a longitude to ``[-180, 180)`` so 0–360 and -180–180 conventions compare equal.
+
+    Args:
+        lon: A longitude in either convention.
+
+    Returns:
+        The same meridian expressed in ``[-180, 180)``.
+    """
+    return (lon + 180.0) % 360.0 - 180.0
+
+
+def _spans_longitude(west: float, east: float, low: float, high: float) -> bool:
+    """Whether two longitude ranges overlap, allowing for wrap-around in either.
+
+    A range whose normalised west is greater than its east crosses the antimeridian, and is treated as the
+    two spans it actually covers. A service spanning the whole globe overlaps everything.
+
+    Args:
+        west: Western edge of the requested extent, in either longitude convention.
+        east: Eastern edge of the requested extent.
+        low: Western edge of the service's coverage.
+        high: Eastern edge of the service's coverage.
+
+    Returns:
+        ``True`` when the ranges share any meridian.
+    """
+    if east - west >= 360.0 or high - low >= 360.0:
+        return True  # one of them is global in longitude
+
+    def segments(start: float, end: float) -> list:
+        """Split a possibly-wrapping range into non-wrapping ``(start, end)`` pieces."""
+        a, b = _wrap_longitude(start), _wrap_longitude(end)
+        if a <= b:
+            return [(a, b)]
+        return [(a, 180.0), (-180.0, b)]
+
+    return any(
+        not (b_end < a_start or b_start > a_end)
+        for a_start, a_end in segments(west, east)
+        for b_start, b_end in segments(low, high)
+    )
 
 
 def planet_nicfi(

@@ -653,6 +653,79 @@ class TestUrlSafety:
         assert "planet_medres_normalized_analytic_2024-01_mosaic" in url
 
 
+
+
+class TestLongitudeConventions:
+    """``check_bounds`` compares longitude modulo 360, and rejects extents that are not lon/lat."""
+
+    @pytest.mark.parametrize(
+        "extent, refused",
+        [
+            (
+                (200.0, -10.0, 300.0, 10.0),
+                False,
+            ),  # 0–360 Pacific tropics — same place as -160..-60
+            ((-60.0, -5.0, -55.0, 0.0), False),
+            ((5.0, 52.0, 6.0, 53.0), True),
+        ],
+    )
+    def test_a_0_360_domain_is_understood(self, extent, refused):
+        """A domain expressed 0–360 must not be mistaken for one outside the coverage.
+
+        Args:
+            extent: The requested extent.
+            refused: Whether the guard should raise.
+
+        Test scenario:
+            NICFI spans every longitude, so a tropical box at 200–300°E is inside it — but compared
+            literally against ``east <= 180`` it looked outside.
+        """
+        source = planet_nicfi("2024-01")
+        if refused:
+            with pytest.raises(ValueError, match="lies entirely outside"):
+                source.check_bounds(extent)
+        else:
+            source.check_bounds(extent)
+
+    @pytest.mark.parametrize(
+        "extent, refused",
+        [((174.0, -5.0, 176.0, 5.0), False), ((-5.0, -5.0, 5.0, 5.0), True)],
+    )
+    def test_a_source_crossing_the_antimeridian_is_handled(self, extent, refused):
+        """A source spanning 170°E–170°W wraps; it is not an inverted range.
+
+        Args:
+            extent: The requested extent.
+            refused: Whether the guard should raise.
+        """
+        source = KeyedTileSource(
+            name="Pacific",
+            url_template="https://a/{z}/{x}/{y}.png?k={api_key}",
+            attribution="Pacific",
+            credential_env="EXAMPLE_KEY",
+            bounds=(170.0, -10.0, -170.0, 10.0),
+        )
+        if refused:
+            with pytest.raises(ValueError, match="lies entirely outside"):
+                source.check_bounds(extent)
+        else:
+            source.check_bounds(extent)
+
+    def test_a_projected_extent_says_so_rather_than_out_of_coverage(self):
+        """Metres are not degrees; reporting "outside coverage" would send the caller the wrong way.
+
+        Test scenario:
+            A Web-Mercator extent has latitudes in the millions, which cannot be a lon/lat box.
+        """
+        with pytest.raises(ValueError, match="not lon/lat"):
+            planet_nicfi("2024-01").check_bounds(
+                (500000.0, 5800000.0, 510000.0, 5810000.0)
+            )
+
+    def test_an_inverted_extent_is_reported_as_inverted(self):
+        """South above north is a caller error, not an absence of coverage."""
+        with pytest.raises(ValueError, match="inverted"):
+            planet_nicfi("2024-01").check_bounds((-60.0, 10.0, -55.0, -10.0))
 class TestKeyStaysOutOfTheLog:
     """M3: assert no record escapes, not merely that the logger level was raised."""
 
