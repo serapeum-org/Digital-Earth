@@ -12,7 +12,7 @@ pytest.importorskip("imageio")
 
 from digitalearth.base.sources import get_source
 from digitalearth.three_d import Scene3D, animation
-from digitalearth.three_d.animation import _MOVIE_SUFFIXES, _open_writer
+from digitalearth.three_d.animation import _finite_number, _open_writer, _up_vector
 
 
 @pytest.fixture(autouse=True)
@@ -444,7 +444,12 @@ def test_orbit_accepts_a_numpy_viewup(monkeypatch, tmp_path):
     scene.close()
 
 
-def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path):
+@pytest.mark.parametrize(
+    "bad",
+    [np.zeros((3, 1)), np.float64(1.0)],
+    ids=["column-vector", "zero-dimensional"],
+)
+def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path, bad):
     """A numpy viewup of the wrong shape is caught here, not deep inside pyvista.
 
     Widening the annotation to accept arrays admits shapes a length check cannot judge: `(3, 1)` has `len` 3
@@ -452,9 +457,8 @@ def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path):
     `len` at all.
     """
     scene = _terrain_scene()
-    for bad in (np.zeros((3, 1)), np.float64(1.0)):
-        with pytest.raises(ValueError, match="3-component viewup"):
-            scene.orbit(str(tmp_path / "bad.gif"), n_frames=4, viewup=bad)
+    with pytest.raises(ValueError, match="3-component viewup"):
+        scene.orbit(str(tmp_path / "bad.gif"), n_frames=4, viewup=bad)
     scene.close()
 
 
@@ -566,30 +570,21 @@ def test_writer_dispatch_forwards_the_frame_rate(name, keyword):
     )
 
 
-@pytest.mark.parametrize(
-    "given",
-    [["0", "0", "1"], np.ma.array([0.0, 0.0, 1.0], mask=[True, False, False])],
-    ids=["numeric-strings", "masked-array"],
-)
-def test_orbit_forwards_the_validated_vector_not_the_original(
-    monkeypatch, tmp_path, given
-):
+def test_orbit_forwards_the_validated_vector_not_the_original(monkeypatch, tmp_path):
     """pyvista receives the float array the guard checked, never the caller's original object.
 
     Args:
         monkeypatch: Installs the recording stubs.
         tmp_path: Destination for the notional GIF.
-        given: A viewup that converts cleanly but misbehaves if forwarded as-is.
 
     Test scenario:
         pyvista does `np.array(viewup) * shift` on whatever it is handed. Validating a converted copy and
-        passing the original lets numeric strings die inside pyvista with a ufunc error naming neither viewup
-        nor orbit, and lets a masked array clear the finiteness check on its fill data and then render from a
-        masked value. Both are caught only by checking what actually reaches the call.
+        passing the original lets a list of numeric strings die inside pyvista with a ufunc error naming
+        neither viewup nor orbit, so the check has to be on what actually reaches the call.
     """
     scene = _terrain_scene()
     seen = _record_pyvista_calls(monkeypatch, scene)
-    scene.orbit(str(tmp_path / "spin.gif"), n_frames=4, viewup=given)
+    scene.orbit(str(tmp_path / "spin.gif"), n_frames=4, viewup=["0", "0", "1"])
     passed = seen["generate_orbital_path"]["viewup"]
     assert passed.dtype == np.dtype(float), (
         f"the forwarded viewup must be the validated float array, got {passed!r}"
@@ -597,7 +592,57 @@ def test_orbit_forwards_the_validated_vector_not_the_original(
     assert np.array_equal(passed, np.array([0.0, 0.0, 1.0])), (
         f"the forwarded viewup must equal the converted vector, got {passed!r}"
     )
-    assert seen["orbit_on_path"]["viewup"] is passed, (
-        "the camera must get the same validated object as the path"
+    assert np.array_equal(seen["orbit_on_path"]["viewup"], passed), (
+        "the camera must get the same validated vector as the path"
     )
     scene.close()
+
+
+@pytest.mark.parametrize(
+    "masked",
+    [
+        np.ma.array([0.0, 0.0, 1.0], mask=[True, False, False]),
+        np.ma.array([5.0, 0.0, 1.0], mask=[True, False, False]),
+        np.ma.array([0.0, 0.0, 1.0], mask=[True, True, True]),
+    ],
+    ids=["masked-zero", "masked-value", "fully-masked"],
+)
+def test_orbit_refuses_a_masked_viewup(tmp_path, masked):
+    """A masked up vector is refused rather than read from under its mask.
+
+    Args:
+        tmp_path: Destination for the file that must not be written.
+        masked: An up vector with at least one component masked out.
+
+    Test scenario:
+        `np.asarray` discards a mask and returns the underlying data, so accepting one would make the orbit
+        depend on a value the caller declared missing — `5.0` under a mask tilts the plane, `nan` under one
+        raises, and a fully masked vector names no up direction at all yet would clear the zero-vector check.
+    """
+    scene = _terrain_scene()
+    with pytest.raises(ValueError, match="masked viewup"):
+        scene.orbit(str(tmp_path / "masked.gif"), n_frames=4, viewup=masked)
+    scene.close()
+
+
+def test_up_vector_and_finite_number_reject_without_a_scene():
+    """The two validation helpers are pure, and are exercised here without building a VTK scene.
+
+    Test scenario:
+        Every other test of these guards goes through `orbit()`, which costs a render window for a check that
+        touches none. These pin the helpers directly, including that a valid vector round-trips to a float
+        array.
+    """
+    assert _finite_number("0.9", "factor") == pytest.approx(0.9), (
+        "a numeric string is accepted, as the docstring says"
+    )
+    assert np.array_equal(_up_vector([0, 0, 1]), np.array([0.0, 0.0, 1.0])), (
+        "a valid vector converts to a float array"
+    )
+    assert _up_vector(None) is None, "None passes through untouched"
+    with pytest.raises(ValueError, match="numeric factor"):
+        _finite_number(1 + 2j, "factor")
+    with pytest.raises(ValueError, match="finite factor"):
+        _finite_number(float("inf"), "factor")
+    with pytest.raises(ValueError, match="3-component viewup"):
+        _up_vector([1.0, 2.0])
