@@ -475,7 +475,10 @@ class TestStaticTierDetails:
         """The built provider keeps the preset's identity and zoom ceiling.
 
         Test scenario:
-            ``max_zoom`` bounds what cleopatra will request; losing it would let it ask for tiles the
+            ``max_zoom`` reaches the provider as the ``xyzservices`` metadata it is. cleopatra does not
+            read it — it picks a zoom from the extent and caps itself at 19 — so this pins what is
+            carried, not a bound that is enforced here. The web tier is where it is honoured; losing it
+            there would let MapLibre ask for tiles the
             service does not serve.
         """
         self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01")

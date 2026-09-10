@@ -99,6 +99,7 @@ class DecorationMixin(_MixinBase):
         attribution: str = "",
         tile_size: int = 256,
         opacity: float = 1.0,
+        max_zoom: Optional[int] = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -107,6 +108,9 @@ class DecorationMixin(_MixinBase):
             attribution: Attribution text shown in the map's attribution control.
             tile_size: Tile edge length in pixels (256 for standard XYZ; 512 for some retina services).
             opacity: Raster opacity in ``[0, 1]``.
+            max_zoom: The deepest zoom the service serves. Past it MapLibre over-zooms the last real
+                tiles instead of requesting levels that do not exist; ``None`` leaves the source
+                unbounded.
 
         Returns:
             The same map instance, so builder calls chain; the basemap is registered as an underlay so
@@ -121,6 +125,8 @@ class DecorationMixin(_MixinBase):
         }
         if attribution:
             source["attribution"] = attribution
+        if max_zoom is not None:
+            source["maxzoom"] = int(max_zoom)
         layer = Layer(
             id=layer_id,
             type=LayerType.RASTER,
@@ -185,6 +191,7 @@ class DecorationMixin(_MixinBase):
                 keyed.tile_url(api_key),
                 attribution=keyed.attribution,
                 opacity=opacity,
+                max_zoom=keyed.max_zoom,
             )
         if api_key is not None:
             # Dropping it silently would leave a caller believing they had authenticated.

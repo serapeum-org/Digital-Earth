@@ -16,6 +16,33 @@ TROPICAL = (-60.0, -5.0, -55.0, 0.0)
 TEMPERATE = (5.0, 52.0, 6.0, 53.0)
 
 
+def _first_raster_source(web_map):
+    """Return the source spec the map registered, by replaying its layers against a recorder.
+
+    Args:
+        web_map: A `WebMap` a basemap has been added to.
+
+    Returns:
+        The first registered source dict — the only way to see the spec without rendering a widget.
+    """
+    recorded = {}
+
+    class Recorder:
+        """Captures what a layer registers instead of building a MapLibre widget."""
+
+        def add_source(self, src_id, source):
+            """Record the source spec."""
+            recorded[src_id] = source
+
+        def add_layer(self, layer):
+            """Ignore the layer; only the source is under test."""
+
+    for apply in web_map.layers:
+        apply(Recorder())
+    assert recorded, "no source was registered"
+    return next(iter(recorded.values()))
+
+
 class TestWebTierDispatch:
     """``WebMap.basemap`` resolving a keyed preset (MapLibre)."""
 
@@ -176,3 +203,37 @@ class TestACredentialWithNothingToAuthenticate:
         from digitalearth.web import WebMap
 
         WebMap().basemap("Planet.NICFI", date="2024-01", api_key=FAKE_KEY)
+
+
+class TestTheServiceZoomCeilingReachesMapLibre:
+    """L3: `max_zoom` was inert everywhere; the web tier is the one that can act on it."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the web extra, and supply a fake credential.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("maplibre")
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_a_keyed_preset_bounds_the_raster_source(self):
+        """Past the service's deepest level MapLibre should stretch tiles, not request 404s.
+
+        Test scenario:
+            Without ``maxzoom`` on the source, zooming past NICFI's ceiling asks Planet for levels it
+            does not publish — a wall of failed requests, each carrying the credential.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap("Planet.NICFI", date="2024-01")
+        source = _first_raster_source(m)
+        assert source["maxzoom"] == 20, source
+
+    def test_an_ordinary_provider_is_left_unbounded(self):
+        """A token-free provider declares no ceiling, and inventing one would clamp a working basemap."""
+        from digitalearth.web import WebMap
+
+        source = _first_raster_source(WebMap().basemap("CartoDark"))
+        assert "maxzoom" not in source, source

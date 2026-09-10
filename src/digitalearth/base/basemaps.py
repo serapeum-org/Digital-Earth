@@ -87,7 +87,10 @@ class KeyedTileSource:
             rendering engine.
         attribution: The text a map must display when using this service.
         credential_env: The environment variable :meth:`resolve_key` reads when no key is passed.
-        max_zoom: The deepest zoom level the service serves.
+        max_zoom: The deepest zoom level the service serves. The web tier applies it to the MapLibre
+            source, so a viewer who zooms past it sees the last real tiles stretched rather than a wall
+            of 404s. The static tier passes it to ``xyzservices`` as provider metadata, where cleopatra
+            does not read it — cleopatra picks a zoom from the extent and caps itself at 19.
         bounds: Optional lon/lat ``(west, south, east, north)`` the service covers; ``None`` means global.
         params: Extra template placeholders to substitute, e.g. the resolved mosaic id.
 
