@@ -158,3 +158,40 @@ class TestAttributionIsCarried:
         assert FAKE_KEY not in "".join(attributions), (
             "the credential leaked into the attribution"
         )
+
+
+class TestTheAttributionHookLeavesOtherRenderersAlone:
+    """A figure holds the data renderers too, and the hook must only touch the tile sources."""
+
+    def test_only_tile_renderers_are_written_to(self):
+        """The hook walks every renderer in the plot, so it has to recognise which ones are tiles.
+
+        Test scenario:
+            A glyph renderer has no ``tile_source``; assigning an attribution to one would either fail
+            or invent an attribute on someone else's object.
+        """
+        from digitalearth.interactive.decoration import _attribution_hook
+
+        class TileRenderer:
+            """Stands in for a Bokeh tile renderer."""
+
+            def __init__(self):
+                self.tile_source = type("Source", (), {"attribution": ""})()
+
+        class GlyphRenderer:
+            """Stands in for a Bokeh glyph renderer, which has no tile source."""
+
+        tiles, glyphs = TileRenderer(), GlyphRenderer()
+        plot = type(
+            "Plot",
+            (),
+            {"handles": {"plot": type("Fig", (), {"renderers": [glyphs, tiles]})()}},
+        )()
+        _attribution_hook("ATTR")(plot, None)
+
+        assert tiles.tile_source.attribution == "ATTR", (
+            "the tile source was not written to"
+        )
+        assert not hasattr(glyphs, "tile_source"), (
+            "the hook invented an attribute on a glyph renderer"
+        )
