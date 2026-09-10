@@ -401,3 +401,21 @@ def test_jupyter_round_trips_the_process_global_backend():
     assert pv.global_theme.jupyter_backend == previous, (
         f"the backend must round-trip, got {pv.global_theme.jupyter_backend!r} not {previous!r}"
     )
+
+
+def test_orbit_accepts_a_numpy_viewup(monkeypatch, tmp_path):
+    """A numpy array is a valid viewup, which is why the annotation is not `Sequence[float]`.
+
+    `np.ndarray` is not a `typing.Sequence`, so annotating it that way puts every caller who spells a vector
+    the natural way into the repo's mypy arg-type baseline. It works at runtime, and the length check has to
+    cope with it too.
+    """
+    scene = _terrain_scene()
+    seen = _record_pyvista_calls(monkeypatch, scene)
+    scene.orbit(
+        str(tmp_path / "spin.gif"), n_frames=6, viewup=np.array([0.0, 0.0, 1.0])
+    )
+    passed = seen["generate_orbital_path"]["viewup"]
+    assert np.array_equal(passed, np.array([0.0, 0.0, 1.0])), (
+        f"a numpy viewup must reach the generator unchanged, got {passed!r}"
+    )
