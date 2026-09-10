@@ -737,6 +737,27 @@ class TestOffLimbEveryLayerKind:
             "a hidden hemisphere is expected on a globe and must not warn"
         )
 
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_too_few_points_is_a_caller_error_not_an_empty_view(self, method):
+        """Two points can never be triangulated, and saying "outside the view" would be a lie.
+
+        Test scenario:
+            The off-limb arm fires when the reprojection loses the points. If there were never three to
+            begin with, no projection can fix that — reporting it as a hidden layer both returns the wrong
+            thing and logs a misleading reason for a map that is looking straight at the data.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        two = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+            )
+        )
+        with pytest.raises(ValueError, match="at least three points"):
+            getattr(Map(crs=4326, figsize=(4, 4)), method)(two)
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None

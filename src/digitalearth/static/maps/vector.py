@@ -450,10 +450,14 @@ class VectorMixin(_MixinBase):
             **opts: Styling kwargs forwarded to the glyph.
 
         Returns:
-            The mappable (registered as a Scene layer), or ``None`` when fewer than three points
-            survive the reprojection — a vector warp sends off-view points to infinity rather than
-            raising, and too few left to triangulate means the same as an off-limb raster: nothing
-            on the view to draw.
+            The mappable (registered as a Scene layer), or ``None`` when three points were supplied
+            but fewer than three survive the reprojection — a vector warp sends off-view points to
+            infinity rather than raising, and losing them all means the same as an off-limb raster:
+            nothing on the view to draw.
+
+        Raises:
+            ValueError: when fewer than three points were supplied in the first place, which no
+                projection can fix.
         """
         from matplotlib.tri import Triangulation
 
@@ -465,12 +469,19 @@ class VectorMixin(_MixinBase):
         finite = np.isfinite(x) & np.isfinite(
             y
         )  # drop far-side points on a globe (Triangulation needs finite)
+        supplied = np.asarray(x).size
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
         if x.size < 3:
+            if supplied < 3:
+                # Never enough points to triangulate, whatever the projection — a caller error, and the
+                # accurate complaint is the one matplotlib would give.
+                raise ValueError(
+                    f"{kind}() needs at least three points to triangulate, got {supplied}"
+                )
+            # There were enough, and the reprojection took them: a vector warp does not raise when the
+            # data is off the view, it sends the points to infinity for the filter above to drop. That
+            # means the same as an OffLimbError does for a raster — nothing on the view to draw.
             self._skipped_off_limb(kind)
-            # A vector reprojection does not raise when the data is off the view — it sends the points to
-            # infinity, which the filter above then removes. Too few survivors to triangulate means the
-            # same thing an OffLimbError means for a raster: there is nothing on the view to draw.
             return None
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
