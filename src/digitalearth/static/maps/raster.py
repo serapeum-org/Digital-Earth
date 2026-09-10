@@ -18,6 +18,7 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
+from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -52,9 +53,16 @@ class RasterMixin(_MixinBase):
             **opts: Extra styling kwargs; filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
-            The glyph's mappable (also registered as a Scene layer).
+            The glyph's mappable (also registered as a Scene layer), or ``None`` when the data lies
+            entirely outside what the display CRS shows — an off-limb frame draws nothing rather than
+            raising, so a rotation past the far side of a globe still renders.
         """
-        src = self._prepare(dataset, band)
+        try:
+            src = self._prepare(dataset, band)
+        except OffLimbError:
+            self._skipped_off_limb(kind)
+            return None
+
         z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
         if opts.pop(
             "cyclic", False
@@ -94,6 +102,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="imshow", **kwargs)
 
@@ -102,6 +112,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The filled-contour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="contourf", **kwargs)
 
@@ -110,6 +122,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The line-contour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="contour", **kwargs)
 
@@ -118,6 +132,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
@@ -132,6 +148,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
@@ -168,6 +186,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -215,7 +235,11 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("rgb_composite", bands)
-        ds = self._reproject(dataset)
+        try:
+            ds = self._reproject(dataset)
+        except OffLimbError:
+            self._skipped_off_limb("rgb_composite")
+            return None
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
@@ -255,6 +279,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -303,7 +329,11 @@ class RasterMixin(_MixinBase):
         from matplotlib.colors import hsv_to_rgb
 
         require_three_bands("hsv_composite", bands)
-        ds = self._reproject(dataset)
+        try:
+            ds = self._reproject(dataset)
+        except OffLimbError:
+            self._skipped_off_limb("hsv_composite")
+            return None
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
@@ -330,9 +360,14 @@ class RasterMixin(_MixinBase):
             **opts: Styling kwargs forwarded to the per-member contour call.
 
         Returns:
-            The list of per-member contour mappables (each also registered as a Scene layer).
+            The list of per-member contour mappables (each also registered as a Scene layer). Members
+            lying outside what the display CRS shows draw nothing and are absent from the list, so it
+            stays one entry per *drawn* member and never contains ``None``. That means the list cannot be
+            zipped against ``collection.datasets`` when some members are hidden — pair by drawing members
+            individually if a per-member legend needs to know which is which.
         """
-        return [
+        drawn = [
             self._field(member, kind="contour", band=band, add_colorbar=False, **opts)
             for member in collection.datasets
         ]
+        return [artist for artist in drawn if artist is not None]

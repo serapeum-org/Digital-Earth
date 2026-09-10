@@ -101,6 +101,181 @@ def rgb_stack():
     return [_rgb_field(shift=s) for s in (0.0, 10.0, 20.0)]
 
 
+class TestAnimateOffLimb:
+    """A stack no frame of which is on the view still animates (issue #151, via the colour scan)."""
+
+    @pytest.fixture
+    def regional_stack(self):
+        """Two frames of a small AOI that any far-side orthographic view hides.
+
+        Returns:
+            list[Dataset]: two single-band regional rasters.
+        """
+        frames = []
+        for index in range(2):
+            _, xx = np.mgrid[0:20, 0:24]
+            values = (25 + 8 * np.sin((xx + index * 10) / 14.0)).astype("float32")
+            frames.append(
+                Dataset.from_array(
+                    values,
+                    geo_ref=GeoReference(
+                        geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326
+                    ),
+                    no_data_value=-9999.0,
+                )
+            )
+        return frames
+
+    def test_a_swept_clim_ignores_the_views_that_see_nothing(self, regional_stack):
+        """A rotation's colour scale comes from the views that can see the data, not the ones that cannot.
+
+        Test scenario:
+            rotate unions one measurement per swept projection. A view showing none of the data must
+            contribute nothing; folding in the "no finite values" placeholder instead floors the scale at
+            zero, and a regional AOI whose values sit around 250 then collapses into the top few percent
+            of the ramp — visually the same bug the frozen-stretch work exists to prevent.
+        """
+        values = np.concatenate(
+            [frame.read_array(band=0).ravel() for frame in regional_stack]
+        )
+        m = Map(crs=4326, globe=True, figsize=(4, 4))
+        views = [
+            projections.orthographic(lon=-180.0 + step * 15.0, lat=15.0)
+            for step in range(24)
+        ]
+        opts = {}
+        m._resolve_animation_clim(regional_stack, opts, views=views)
+        assert opts["vmin"] == pytest.approx(float(np.nanmin(values)), rel=1e-3), (
+            f"the swept clim floored at a placeholder instead of the data: {opts}"
+        )
+        assert opts["vmin"] > 1.0, (
+            f"a placeholder (0, 1) must not leak into the union: {opts}"
+        )
+
+    def test_a_scalar_stack_animates_on_a_hiding_globe(self, regional_stack, tmp_path):
+        """The colour-scale scan reprojects every frame, so it needed the guard too.
+
+        Test scenario:
+            The per-frame guard is unreachable for animate: _stack_clim warps each frame to derive one
+            shared clim *before* any frame is drawn, so an entirely hidden stack raised out of the scan
+            and never reached the draw. A frame that cannot be drawn contributes no colour range.
+        """
+        from matplotlib.animation import PillowWriter
+
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        anim = m.animate(regional_stack, fps=2)
+        out = tmp_path / "hidden.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, (
+            "a fully hidden stack should still render empty frames"
+        )
+
+    def test_a_composite_stack_animates_on_a_hiding_globe(
+        self, regional_stack, tmp_path
+    ):
+        """The composite stretch scan warps each frame as well, and needed the same guard."""
+        from matplotlib.animation import PillowWriter
+
+        stack = []
+        for frame in regional_stack:
+            band = np.nan_to_num(frame.read_array(band=0)).astype("float32")
+            stack.append(
+                Dataset.from_array(
+                    np.stack([band, band * 0.5, band * 0.25]),
+                    geo_ref=GeoReference(
+                        geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326
+                    ),
+                    no_data_value=-9999.0,
+                )
+            )
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        anim = m.animate(stack, kind="rgb_composite", fps=2)
+        out = tmp_path / "hidden_rgb.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, (
+            "a hidden composite stack should still render empty frames"
+        )
+
+    def test_a_visible_stack_still_gets_a_real_clim(self, regional_stack):
+        """Skipping hidden frames must not skip visible ones: an on-limb stack keeps its colour range."""
+        m = Map(crs=4326, figsize=(4, 4))
+        opts = {}
+        m._resolve_animation_clim(regional_stack, opts)
+        values = np.concatenate(
+            [frame.read_array(band=0).ravel() for frame in regional_stack]
+        )
+        assert opts["vmin"] == pytest.approx(float(np.nanmin(values)), rel=1e-3), (
+            f"vmin should be the stack's own minimum, not a placeholder: {opts}"
+        )
+        assert opts["vmax"] == pytest.approx(float(np.nanmax(values)), rel=1e-3), (
+            f"vmax should be the stack's own maximum: {opts}"
+        )
+
+
+class TestAnimateDatasetCollection:
+    """animate accepts the DatasetCollection its docstring promises (issue #154)."""
+
+    @pytest.fixture
+    def cube(self, tmp_path):
+        """A 3-member DatasetCollection written to disk.
+
+        Returns:
+            DatasetCollection: three single-band rasters read back from files.
+        """
+        from pyramids.dataset.collection import DatasetCollection
+
+        paths = []
+        for index in range(3):
+            _, xx = np.mgrid[0:20, 0:24]
+            values = (25 + 8 * np.sin((xx + index * 10) / 13.0)).astype("float32")
+            path = tmp_path / f"f{index}.tif"
+            Dataset.from_array(
+                values,
+                geo_ref=GeoReference(
+                    geo=(58.2, 0.05, 0.0, 46.8, 0.0, -0.05), epsg=4326
+                ),
+                no_data_value=-9999.0,
+            ).to_file(str(path))
+            paths.append(str(path))
+        return DatasetCollection.from_files(paths)
+
+    def test_a_collection_iterates_to_arrays_not_datasets(self, cube):
+        """The premise of the bug: plain iteration hands back numpy, so animate must not rely on it."""
+        assert isinstance(next(iter(cube)), np.ndarray), (
+            "if a collection ever iterates to Datasets, the unwrap in animate can go"
+        )
+
+    def test_animate_renders_a_collection(self, cube, tmp_path):
+        """A DatasetCollection animates and renders, not just builds.
+
+        Test scenario:
+            animate did `list(stack)`, which on a collection yields the members' arrays rather than the
+            Datasets, so the first thing to ask a frame for its CRS died with an AttributeError. Rendering
+            (not merely constructing the lazy FuncAnimation) is what proves the frames are real Datasets.
+        """
+        m = Map(crs=4326, figsize=(4, 4))
+        anim = m.animate(cube, fps=2)
+        assert len(list(anim.new_frame_seq())) == 3, "one frame per collection member"
+        out = tmp_path / "cube.gif"
+        anim.save(str(out), writer=PillowWriter(fps=2))
+        assert out.stat().st_size > 0, (
+            "the collection animation should render a non-empty GIF"
+        )
+        assert m.ax.images, "each frame should draw its raster"
+
+    def test_a_collection_and_its_members_animate_alike(self, cube):
+        """Passing the collection and passing `.datasets` must produce the same animation."""
+        by_collection = Map(crs=4326, figsize=(4, 4)).animate(cube, fps=2)
+        by_members = Map(crs=4326, figsize=(4, 4)).animate(cube.datasets, fps=2)
+        assert len(list(by_collection.new_frame_seq())) == len(
+            list(by_members.new_frame_seq())
+        )
+
+
 class TestAnimate:
     """Tests for Map.animate."""
 

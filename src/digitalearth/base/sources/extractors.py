@@ -12,6 +12,7 @@ read ``band - 1`` internally.
 from typing import Any, Optional
 
 import numpy as np
+from pandas.api.types import is_bool_dtype, is_numeric_dtype
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import mask_nodata, read_masked_band
@@ -179,8 +180,11 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
     """Build a vector (point) :class:`Source` from a pyramids ``FeatureCollection``.
 
     ``FeatureCollection`` is a GeoDataFrame subclass, so we read its geometry/CRS directly. ``z`` is the
-    first numeric non-geometry column (or ``None`` when there is none). Point coordinates come from the
-    geometry; non-point geometries fall back to their centroid.
+    first numeric non-geometry column (or ``None`` when there is none). "Numeric" is decided by pandas, so
+    a nullable ``Int64``/``Float64`` counts and a ``string``/``boolean`` column does not. Bools are
+    excluded, as ``np.issubdtype`` had them; timedeltas are too, which ``np.issubdtype`` did not, because
+    a timedelta column cannot be rendered — picking one only moved the failure downstream. Point
+    coordinates come from the geometry; non-point geometries fall back to their centroid.
     """
     geom_name = fc.geometry.name
     geom = fc.geometry
@@ -190,10 +194,19 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
         cent = geom.centroid
         xs, ys = cent.x.to_numpy(), cent.y.to_numpy()
 
+    # Classified with pandas, not np.issubdtype: the latter understands only numpy dtypes and *raises*
+    # on a pandas extension dtype rather than answering False, so one nullable or string column anywhere
+    # in the frame took down every vector render.
+    #
+    # Two dtypes answer differently from np.issubdtype, both deliberately. Bools: numeric to pandas, but
+    # np.issubdtype said False and they were never a value column here. Timedeltas: np.timedelta64 sits
+    # under np.signedinteger so np.issubdtype said True, but choosing one only moved the failure — the
+    # values reach the renderer as datetime.timedelta objects and float() rejects them. Skipping the
+    # column renders the frame instead of crashing on it.
     value_cols = [
         c
         for c in fc.columns
-        if c != geom_name and np.issubdtype(fc[c].dtype, np.number)
+        if c != geom_name and is_numeric_dtype(fc[c]) and not is_bool_dtype(fc[c])
     ]
     column = value_cols[0] if value_cols else None
     z = _axis(fc[column].to_numpy(), "z") if column is not None else None

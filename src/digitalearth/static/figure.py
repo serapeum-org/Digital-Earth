@@ -88,14 +88,18 @@ def shared_colorbar(
     Args:
         fig: The figure created by :func:`grid`.
         mappable: A drawn mappable (e.g. an ``AxesImage`` / ``QuadMesh`` returned by a panel's ``imshow``)
-            whose colour scale the bar represents.
+            whose colour scale the bar represents. ``None`` is accepted and adds no bar, since a layer
+            whose data lies outside the display CRS draws nothing and so has no scale to represent.
         maps: Panels the colorbar should steal space from; ``None`` spans all of the figure's axes.
         label: Optional colorbar label.
         **kwargs: Forwarded to ``Figure.colorbar`` (e.g. ``orientation``, ``shrink``, ``fraction``).
 
     Returns:
-        The :class:`~matplotlib.colorbar.Colorbar` added to the figure.
+        The :class:`~matplotlib.colorbar.Colorbar` added to the figure, or ``None`` when ``mappable`` is
+        ``None`` — there is no colour scale to draw a bar for.
     """
+    if mappable is None:  # the layer it would describe was never drawn (e.g. off-limb)
+        return None
     axes = [m.ax for m in maps] if maps is not None else None
     cbar = fig.colorbar(mappable, ax=axes, **kwargs)
     if label is not None:

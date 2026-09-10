@@ -26,6 +26,12 @@ later is then a one-line deletion here.
 
 from digitalearth.static.figure import grid, shared_colorbar
 from digitalearth.static.map import Map
+
+# Importable as ``from digitalearth.static import OffLimbError`` so a caller can catch it, but kept
+# out of ``__all__``: it is a signal the layer methods already answer, not part of the backend's
+# advertised surface, and the guard on that list expects its non-deprecated names to be package-root
+# exports too (StaticGlyph is the deprecated exception).
+from digitalearth.static.maps.base import OffLimbError  # noqa: F401
 from digitalearth.static.scene import Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 

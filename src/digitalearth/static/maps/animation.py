@@ -22,6 +22,7 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
+from digitalearth.static.maps.base import OffLimbError
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
@@ -43,6 +44,26 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     # Round the stride UP: a floor divide returns 1 for anything under twice the cap, so a 47-frame stack
     # would scan all 47 while claiming a cap of 24.
     return seq[:: -(-len(seq) // _CLIM_SCAN_CAP) if seq else 1]
+
+
+def _as_frames(stack: Any) -> List[Any]:
+    """Return an animation stack as a list of pyramids ``Dataset`` frames.
+
+    A ``DatasetCollection`` is documented as an accepted stack, but iterating one yields the members'
+    **numpy arrays** rather than the ``Dataset`` objects themselves, so everything downstream that reads a
+    frame's CRS or bands broke on it. The collection exposes its members under ``.datasets``, which is how
+    the rest of the package reads one; anything else (a list, a tuple) is already a sequence of frames.
+    The check is by attribute rather than by type so a collection-like object works too — nothing in
+    the package exposes a non-sequence ``.datasets``, and a caller that did would be handing over
+    something that is not a stack in the first place.
+
+    Args:
+        stack: A ``DatasetCollection``, or any ordered collection of ``Dataset`` frames.
+
+    Returns:
+        The frames as a list.
+    """
+    return list(getattr(stack, "datasets", stack))
 
 
 def _union_channel_limits(
@@ -208,16 +229,40 @@ class AnimationMixin(_MixinBase):
             datasets: The frames to measure (already sampled by :func:`_scan_subset`).
 
         Returns:
-            The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value.
+            The ``(min, max)`` across them, or ``(0, 1)`` when no frame holds a finite value —
+            which includes the case where no frame is on the view at all, since a frame that
+            cannot be warped draws nothing and so contributes no colour range.
+        """
+        measured = self._measured_clim(datasets)
+        return measured if measured is not None else (0.0, 1.0)
+
+    def _measured_clim(self, datasets: Sequence[Any]) -> Optional[Tuple[float, float]]:
+        """Return the ``(min, max)`` actually measured across ``datasets``, or ``None`` if nothing was.
+
+        The difference from :meth:`_stack_clim` matters to :meth:`_clim_across_views`, which unions one
+        result per swept projection: a view showing none of the data must contribute *nothing*, not the
+        ``(0, 1)`` placeholder, or the union floors at zero and the real data collapses into the top of
+        the colour ramp.
+
+        Args:
+            datasets: The frames to measure.
+
+        Returns:
+            The ``(min, max)`` across every frame that could be warped and held a finite value, or
+            ``None`` when no frame did.
         """
         lows: List[float] = []
         highs: List[float] = []
         for ds in datasets:
-            arr = finite(read_masked_band(self._reproject(ds), band=1))
+            try:
+                warped = self._reproject(ds)
+            except OffLimbError:
+                continue  # this frame draws nothing, so it contributes no colour range
+            arr = finite(read_masked_band(warped, band=1))
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))
-        return (min(lows), max(highs)) if lows else (0.0, 1.0)
+        return (min(lows), max(highs)) if lows else None
 
     def _clim_across_views(
         self, dataset: Any, views: Sequence[Any]
@@ -241,12 +286,10 @@ class AnimationMixin(_MixinBase):
             bounds = []
             for view in _scan_subset(views):
                 self.crs = view
-                try:
-                    bounds.append(self._stack_clim([dataset]))
-                except (
-                    Exception
-                ):  # this view shows none of the data — a sweep passes the far side
-                    continue
+                measured = self._measured_clim([dataset])
+                if measured is None:
+                    continue  # this view shows none of the data, so it bounds nothing
+                bounds.append(measured)
             return (
                 (min(lo for lo, _ in bounds), max(hi for _, hi in bounds))
                 if bounds
@@ -337,10 +380,19 @@ class AnimationMixin(_MixinBase):
         # Measure what the frame will actually render: the composites stretch get_stack(self._reproject(ds)),
         # so scanning the stored values would freeze the wrong bounds under any non-trivial display CRS.
         if views is None:
-            scanned = [
-                channel_limits(get_stack(self._reproject(ds), bands, mask=mask_nodata))
-                for ds in _scan_subset(seq)
-            ]
+            scanned = []
+            for ds in _scan_subset(seq):
+                try:
+                    warped = self._reproject(ds)
+                except OffLimbError:
+                    continue  # this frame draws nothing, so it contributes no stretch bound
+                scanned.append(
+                    channel_limits(get_stack(warped, bands, mask=mask_nodata))
+                )
+            if not scanned:  # no frame is on the view at all
+                scanned.append(
+                    channel_limits(get_stack(seq[0], bands, mask=mask_nodata))
+                )
         else:
             scanned = self._scan_across_views(
                 seq[0], bands, views, mask_nodata=mask_nodata
@@ -380,9 +432,7 @@ class AnimationMixin(_MixinBase):
                 self.crs = view
                 try:
                     stack = get_stack(self._reproject(dataset), bands, mask=mask_nodata)
-                except (
-                    Exception
-                ):  # this view shows none of the data — a sweep passes the far side
+                except OffLimbError:  # this view shows none of the data
                     continue
                 measured.append(channel_limits(stack))
             if not measured:  # no view showed anything: fall back to the data as stored
@@ -447,9 +497,8 @@ class AnimationMixin(_MixinBase):
                     f"colorbar=True is not supported for a {kind!r} animation: a composite renders an RGB "
                     "image, which has no single scalar mappable to key a colorbar to"
                 )
-            bands = (
-                opts.get("bands") or DEFAULT_COMPOSITE_BANDS
-            )  # absent or None -> the default (M2)
+            # absent or None -> the default (M2)
+            bands = opts.get("bands") or DEFAULT_COMPOSITE_BANDS
             opts["bands"] = bands
             require_three_bands(kind, bands)  # before the scan, not after it (M3)
             if opts.get("limits") is None:  # absent *or* explicitly None (H1)
@@ -522,7 +571,7 @@ class AnimationMixin(_MixinBase):
         what the globe shows: an extreme value on the hidden hemisphere does not set the top of it.
 
         Args:
-            stack: An ordered, indexable collection of pyramids ``Dataset`` frames (e.g. a list, or a
+            stack: An ordered collection of pyramids ``Dataset`` frames (e.g. a list, or a
                 ``DatasetCollection`` datacube) — one raster per animation frame.
             kind: The method used to draw each frame — a scalar field (``"imshow"`` / ``"contourf"`` /
                 ``"contour"`` / ``"pcolormesh"`` / ``"block"``) or a true/false-colour composite
@@ -608,7 +657,9 @@ class AnimationMixin(_MixinBase):
             raise ValueError(
                 f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}"
             )
-        frames = list(stack)
+        frames = _as_frames(
+            stack
+        )  # a DatasetCollection iterates to arrays, not Datasets
         if not frames:
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):

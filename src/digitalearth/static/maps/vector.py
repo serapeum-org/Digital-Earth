@@ -26,6 +26,7 @@ from digitalearth.base.symbology import (
     nulls_to_none,
     resolve_categorical_cmap,
 )
+from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
@@ -217,6 +218,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Examples:
             - Scatter the raster's valid cell centres and count the resulting layer:
@@ -233,7 +236,11 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        xyz = self._reproject(dataset).to_xyz()
+        try:
+            xyz = self._reproject(dataset).to_xyz()
+        except OffLimbError:
+            self._skipped_off_limb("grid_points")
+            return None
         x = xyz.iloc[:, 0].to_numpy()
         y = xyz.iloc[:, 1].to_numpy()
         z = xyz.iloc[:, 2].to_numpy()
@@ -247,6 +254,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self.grid_points(dataset, **opts)
 
@@ -262,6 +271,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Examples:
             - Draw one polygon per raster cell and confirm the count equals rows*columns:
@@ -278,7 +289,11 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        ds = self._reproject(dataset)
+        try:
+            ds = self._reproject(dataset)
+        except OffLimbError:
+            self._skipped_off_limb("grid_cells")
+            return None
         if ds.epsg is None:
             # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
             # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
@@ -311,9 +326,15 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The vector mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
-        su = self._prepare(u_dataset, band)
-        sv = self._prepare(v_dataset, band)
+        try:
+            su = self._prepare(u_dataset, band)
+            sv = self._prepare(v_dataset, band)
+        except OffLimbError:
+            self._skipped_off_limb(kind)
+            return None
         xs, ys = su.x.values, su.y.values
         u, v = su.z.values, sv.z.values
         # streamplot (and a tidy grid generally) needs strictly increasing axes; raster y runs
@@ -343,6 +364,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``Quiver`` mappable (registered as a Scene layer; carries the key for :meth:`quiverkey`).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
 
@@ -351,6 +374,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``Barbs`` mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
 
@@ -359,6 +384,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The streamplot mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
@@ -414,14 +441,48 @@ class VectorMixin(_MixinBase):
         return src.x.values, src.y.values, src.z.values
 
     def _tri(self, data: Any, *, kind: str, **opts) -> Any:
-        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``."""
+        """Triangulate scattered points and render via ``cleopatra.MeshGlyph``.
+
+        Args:
+            data: A pyramids ``Dataset`` (its cells become points) or a ``FeatureCollection``.
+            kind: The triangulated render to draw (``tricontourf`` / ``tricontour`` /
+                ``tripcolor``).
+            **opts: Styling kwargs forwarded to the glyph.
+
+        Returns:
+            The mappable (registered as a Scene layer), or ``None`` when three points were supplied
+            but fewer than three survive the reprojection — a vector warp sends off-view points to
+            infinity rather than raising, and losing them all means the same as an off-limb raster:
+            nothing on the view to draw.
+
+        Raises:
+            ValueError: when fewer than three points were supplied in the first place, which no
+                projection can fix.
+        """
         from matplotlib.tri import Triangulation
 
-        x, y, z = self._scattered(data)
+        try:
+            x, y, z = self._scattered(data)
+        except OffLimbError:
+            self._skipped_off_limb(kind)
+            return None
         finite = np.isfinite(x) & np.isfinite(
             y
         )  # drop far-side points on a globe (Triangulation needs finite)
+        supplied = np.asarray(x).size
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
+        if x.size < 3:
+            if supplied < 3:
+                # Never enough points to triangulate, whatever the projection — a caller error, and the
+                # accurate complaint is the one matplotlib would give.
+                raise ValueError(
+                    f"{kind}() needs at least three points to triangulate, got {supplied}"
+                )
+            # There were enough, and the reprojection took them: a vector warp does not raise when the
+            # data is off the view, it sends the points to infinity for the filter above to drop. That
+            # means the same as an OffLimbError does for a raster — nothing on the view to draw.
+            self._skipped_off_limb(kind)
+            return None
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
         # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
@@ -444,6 +505,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The tricontourf mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._tri(data, kind="tricontourf", **kwargs)
 
@@ -452,6 +515,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The tricontour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._tri(data, kind="tricontour", **kwargs)
 
@@ -460,6 +525,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The tripcolor mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._tri(data, kind="tripcolor", **kwargs)
 

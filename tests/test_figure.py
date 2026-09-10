@@ -65,3 +65,19 @@ class TestSharedColorbar:
         im = maps[0].imshow(dataset)
         cbar = shared_colorbar(fig, im)
         assert cbar.ax in fig.axes
+
+    def test_a_none_mappable_adds_no_bar(self):
+        """A layer that drew nothing has no colour scale, so it gets no colorbar rather than a TypeError.
+
+        Test scenario:
+            shared_colorbar is the documented consumer of what the layer methods return, and those can now
+            hand back None when the data lies outside the display CRS. fig.colorbar(None) raises
+            "TypeError: 'NoneType' object is not callable" deep in matplotlib.
+        """
+        from digitalearth.static.figure import grid, shared_colorbar
+
+        fig, maps = grid(1, 1, figsize=(4, 4))
+        assert shared_colorbar(fig, None, maps) is None, (
+            "a None mappable should add no bar rather than raising"
+        )
+        assert not fig.axes[0].collections, "no colorbar axes should have been added"

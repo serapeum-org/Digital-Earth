@@ -170,6 +170,75 @@ class TestExtractorHelpers:
             _from_netcdf(_StubNetCDF(), None, None)
 
 
+@pytest.mark.parametrize("dtype", ["string", "boolean"])
+def test_feature_source_survives_pandas_extension_dtypes(dtype):
+    """A pandas extension dtype anywhere in the frame must not take the whole render down.
+
+    Test scenario:
+        The value-column scan asked numpy to classify the dtype, and np.issubdtype *raises* on a pandas
+        extension dtype instead of answering False. One nullable or string column — even one nobody is
+        plotting — therefore killed every path through get_source. Under pandas 3 a plain list of strings
+        is already a StringDtype, so this is the common case, not an exotic one. Both dtypes here are
+        non-numeric, so the float column beside them stays the z (a nullable *integer* column is numeric
+        and is a legitimate z — covered separately).
+    """
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {
+            "other": pd.array(["a", "b"] if dtype == "string" else [1, 0], dtype=dtype),
+            "score": [1.5, 2.5],
+        },
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert src.z is not None, (
+        f"a numeric column should still be found alongside a {dtype} column"
+    )
+    assert list(src.z.values) == [1.5, 2.5], (
+        f"the {dtype} column must not be chosen as z"
+    )
+
+
+def test_feature_source_reads_a_nullable_numeric_column():
+    """A nullable integer column is a legitimate z, and its NA becomes NaN rather than an object array."""
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"score": pd.array([1, None, 3], dtype="Int64")},
+        geometry=[Point(0, 0), Point(1, 1), Point(2, 2)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert src.z is not None, "a nullable Int64 column should be usable as z"
+    assert np.isnan(src.z.values[1]), (
+        f"the missing value should read as NaN, got {src.z.values[1]!r}"
+    )
+
+
+def test_feature_source_still_ignores_booleans():
+    """Bools are numeric to pandas but were never a value column here; that must not change."""
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"flag": pd.array([True, False], dtype="boolean")},
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert src.z is None, f"a boolean-only frame should yield no z, got {src.z}"
+
+
 def test_feature_source_polygon_uses_centroid():
     """A non-point FeatureCollection falls back to geometry centroids for x/y."""
     from pyramids.feature import FeatureCollection
@@ -234,3 +303,92 @@ def test_raster_source_nodata_is_exact_not_tolerant():
         "a value near (but != ) nodata must be kept under exact-compare"
     )
     assert z[0, 0] == 1.0 and z[1, 1] == 4.0, f"real values changed: {z}"
+
+
+@pytest.mark.parametrize(
+    "values, dtype, expected_numeric",
+    [
+        ([1, 2], "int64", True),
+        ([1.5, 2.5], "float64", True),
+        ([True, False], "bool", False),
+        (["1 days", "2 days"], "timedelta64[ns]", False),
+        (["2020-01-01", "2020-01-02"], "datetime64[ns]", False),
+    ],
+)
+def test_value_column_matches_the_numpy_rule_it_replaced(
+    values, dtype, expected_numeric
+):
+    """The pandas classification answers what np.issubdtype did, wherever numpy could answer.
+
+    Test scenario:
+        Two dtypes differ from what np.issubdtype answered, both on purpose. Bools it already called
+        non-numeric. Timedeltas it called numeric, but a timedelta column cannot be rendered — float()
+        rejects the values — so selecting one only moved the crash downstream.
+    """
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"candidate": pd.Series(values).astype(dtype)},
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    chosen = src.z is not None
+    assert chosen is expected_numeric, (
+        f"a {dtype} column should {'' if expected_numeric else 'not '}be picked as z"
+    )
+
+
+def test_a_timedelta_column_is_skipped_for_a_renderable_one():
+    """A timedelta column is passed over rather than chosen and then failing to draw."""
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"elapsed": pd.to_timedelta([1, 2], unit="D"), "score": [1.5, 2.5]},
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    assert list(src.z.values) == [1.5, 2.5], (
+        f"the renderable column should win over the timedelta, got {src.z.values}"
+    )
+
+
+def test_reproject_reports_an_empty_view_as_off_limb():
+    """The shared reprojection turns GDAL's wording into the typed signal every backend reads."""
+    import numpy as np
+    from pyramids.dataset import Dataset, GeoReference
+
+    from digitalearth.base.crs import OffLimbError, reproject
+    from digitalearth.static import projections
+
+    ds = Dataset.from_array(
+        np.ones((20, 20), "float32"),
+        geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+        no_data_value=-9999.0,
+    )
+    hidden = projections.orthographic(lon=-175, lat=15)
+    with pytest.raises(OffLimbError, match="too few sample points"):
+        reproject(ds, hidden)
+
+
+def test_reproject_passes_other_failures_through():
+    """Only the "too few points survived" message becomes OffLimbError; the rest stay as they came."""
+    from digitalearth.base.crs import OffLimbError, reproject
+
+    class Broken:
+        def to_crs(self, crs):
+            raise RuntimeError("PROJ: proj_create: unrecognized format / unknown name")
+
+    broken = Broken()
+    with pytest.raises(RuntimeError) as caught:
+        reproject(broken, 3857)
+    assert not isinstance(caught.value, OffLimbError), (
+        "a real projection failure must not be reported as an empty view"
+    )

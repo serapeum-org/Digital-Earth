@@ -408,3 +408,406 @@ def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     m.save(str(out))
     assert out.exists() and out.stat().st_size > 0
     assert m._framed is True
+
+
+class TestOffLimbDraw:
+    """A draw whose data is wholly behind the visible limb renders empty instead of raising (issue #151)."""
+
+    @pytest.fixture
+    def regional(self):
+        """A small AOI over the Netherlands (~1.6 x 1.2 degrees).
+
+        Returns:
+            Dataset: a regional raster that any far-side orthographic view hides completely.
+        """
+        _, xx = np.mgrid[0:60, 0:80]
+        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+        return Dataset.from_array(
+            values,
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        )
+
+    def test_a_static_off_limb_field_draws_nothing(self, regional):
+        """imshow on a hiding projection returns None rather than raising — no animation involved.
+
+        Test scenario:
+            The reprojection to the display CRS raises out of GDAL when every sample point falls behind
+            the limb. That is a rendering question, not an error: there is simply nothing to draw, so the
+            layer is skipped and the frame stays empty.
+        """
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        assert m.imshow(regional) is None, (
+            "an off-limb field should draw nothing, not raise"
+        )
+        assert not m.ax.images, "no raster should have been drawn"
+
+    def test_an_on_limb_field_still_draws(self, regional):
+        """The guard must not swallow a view that can see the data."""
+        m = Map(crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4))
+        assert m.imshow(regional) is not None, "a visible field must still render"
+        assert m.ax.images, "the raster should have been drawn"
+
+    def test_rotate_spins_a_regional_aoi(self, regional, tmp_path):
+        """A full sweep passes the far side, which used to surface as 'needs at least one frame'.
+
+        Test scenario:
+            rotate's 360-degree sweep guarantees a centre longitude that hides a regional AOI. The frame
+            that could not draw aborted the render, and because the default lon0=-180 makes it the *first*
+            frame, the writer reported having captured nothing rather than the real cause.
+        """
+        from matplotlib.animation import PillowWriter
+
+        m = Map(crs=4326, globe=True, figsize=(4, 4))
+        anim = m.rotate(regional, n_frames=4, fps=4)
+        out = tmp_path / "spin.gif"
+        anim.save(str(out), writer=PillowWriter(fps=4))
+        assert out.stat().st_size > 0, (
+            "a regional AOI should spin, with the hidden frames left empty"
+        )
+
+    def test_a_partial_count_is_still_off_limb(self, regional, monkeypatch):
+        """GDAL's threshold is `failed > total - 10`, not all of them — the guard must match it.
+
+        Test scenario:
+            Keying the guard on N == M left a nine-count window (436/441 … 440/441) in which the raw
+            RuntimeError escaped and the reported crash was still reachable. By the time GDAL emits this
+            message it has already refused to compute output bounds, so there is no raster either way and
+            every count means the same thing: nothing to draw.
+        """
+
+        def _partial(*_args, **_kwargs):
+            raise RuntimeError(
+                "Too many points (438 out of 441) failed to transform, unable to compute output bounds."
+            )
+
+        monkeypatch.setattr(type(regional), "to_crs", _partial)
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        assert m.imshow(regional) is None, (
+            "a partial count must be treated as off-limb too"
+        )
+
+    def test_an_unrelated_projection_failure_still_propagates(
+        self, regional, monkeypatch
+    ):
+        """A real projection failure must not be mistaken for an empty view.
+
+        Test scenario:
+            The guard keys on GDAL's specific "too few points survived" message. Anything else — a bad
+            datum, an unparseable CRS — is a genuine error the caller needs to see, not a blank map.
+        """
+        from digitalearth.static.maps.base import OffLimbError
+
+        def _broken(*_args, **_kwargs):
+            raise RuntimeError("PROJ: proj_create: unrecognized format / unknown name")
+
+        monkeypatch.setattr(type(regional), "to_crs", _broken)
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        with pytest.raises(RuntimeError) as caught:
+            m.imshow(regional)
+        assert not isinstance(caught.value, OffLimbError), (
+            "an unrelated failure must stay a plain RuntimeError, not become OffLimbError"
+        )
+        assert "proj_create" in str(caught.value), (
+            f"the original message should survive, got {caught.value}"
+        )
+
+    def test_the_off_limb_error_names_the_cause(self, regional):
+        """The typed error explains itself, rather than surfacing GDAL's wording."""
+        from digitalearth.static.maps.base import OffLimbError
+
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        with pytest.raises(OffLimbError, match="too few sample points"):
+            m._reproject(regional)
+
+
+class TestOffLimbEveryLayerKind:
+    """Every layer that reprojects must answer an off-limb view the same way (issue #151)."""
+
+    @pytest.fixture
+    def hidden(self):
+        """A Map whose orthographic view hides the regional AOI entirely.
+
+        Returns:
+            Map: a globe centred on the far side of the data.
+        """
+        return Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+
+    @pytest.fixture
+    def regional(self):
+        """A single-band regional raster (~1.6 x 1.2 degrees over the Netherlands).
+
+        Returns:
+            Dataset: the raster every far-side view hides.
+        """
+        _, xx = np.mgrid[0:40, 0:50]
+        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+        return Dataset.from_array(
+            values,
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        )
+
+    @pytest.fixture
+    def regional_rgb(self, regional):
+        """The same AOI as a 3-band raster, for the composite renders.
+
+        Returns:
+            Dataset: a 3-band regional raster.
+        """
+        band = np.nan_to_num(regional.read_array(band=0)).astype("float32")
+        return Dataset.from_array(
+            np.stack([band, band * 0.5, band * 0.25]),
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        )
+
+    @pytest.mark.parametrize(
+        "method", ["imshow", "contourf", "pcolormesh", "grid_points", "grid_cells"]
+    )
+    def test_single_raster_layers_draw_nothing(self, hidden, regional, method):
+        """Every layer taking one raster returns None rather than raising."""
+        assert getattr(hidden, method)(regional) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
+    def test_composites_draw_nothing(self, hidden, regional_rgb, method):
+        """The composites reproject before stretching, so they need the same guard."""
+        assert getattr(hidden, method)(regional_rgb) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
+    def test_vector_field_layers_draw_nothing(self, hidden, regional, method):
+        """The u/v vector fields prepare two rasters; either being hidden means nothing to draw."""
+        assert getattr(hidden, method)(regional, regional) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_unstructured_layers_draw_nothing(self, hidden, regional, method):
+        """The triangulated renders read scattered cells out of a reprojected raster."""
+        assert getattr(hidden, method)(regional) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    def test_stock_img_handles_an_off_limb_backdrop(self, hidden, regional):
+        """stock_img consumes imshow's return, so it had to learn about the None too.
+
+        Test scenario:
+            It set a z-order on whatever imshow handed back. Once a hidden layer returns None that became
+            "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard turning one crash
+            into another, in the one place inside src/ that consumes these returns.
+        """
+        assert hidden.stock_img(regional) is None, (
+            "an off-limb backdrop should be absent, not an AttributeError"
+        )
+
+    def test_spaghetti_keeps_one_entry_per_drawn_member(
+        self, hidden, regional, tmp_path
+    ):
+        """spaghetti returns drawn artists, so hidden members drop out rather than becoming None.
+
+        Test scenario:
+            It returned one entry per member regardless, so an off-limb collection produced [None, None]
+            — breaking both its own Returns contract and the len(artists) == len(m.layers) invariant its
+            callers rely on to pair artists with registered layers.
+        """
+        from pyramids.dataset.collection import DatasetCollection
+
+        paths = []
+        for index in range(2):
+            path = tmp_path / f"member{index}.tif"
+            regional.to_file(str(path))
+            paths.append(str(path))
+        collection = DatasetCollection.from_files(paths)
+        artists = hidden.spaghetti(collection)
+        assert artists == [], (
+            f"no member is on the view, so nothing is returned: {artists}"
+        )
+        assert len(artists) == len(hidden.layers), (
+            f"artists ({len(artists)}) must match registered layers ({len(hidden.layers)})"
+        )
+
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_off_limb_features_do_not_break_triangulation(self, hidden, method):
+        """A FeatureCollection off the view leaves too few points to triangulate, not a crash.
+
+        Test scenario:
+            A vector reprojection does not raise the way a raster warp does — it sends the points to
+            infinity, and the finite filter then removes them. Triangulation needs three, so an off-limb
+            FeatureCollection died with "x and y arrays must have a length of at least 3" instead of
+            drawing nothing like every other hidden layer.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0, 3.0]},
+            geometry=[Point(4.0, 53.0), Point(4.5, 53.2), Point(4.2, 53.4)],
+            crs=4326,
+        )
+        assert getattr(hidden, method)(FeatureCollection(gdf)) is None, (
+            f"{method} should draw nothing when its features are off the view"
+        )
+
+    def test_a_skipped_layer_says_so_in_the_log(self, hidden, regional, caplog):
+        """A blank map should be diagnosable: the skip leaves a record naming the layer and the CRS.
+
+        Test scenario:
+            Sixteen draw paths swallow the off-limb case, so a mis-specified projection renders an empty
+            figure that looks like a data problem. Debug rather than warning because a rotation sweep
+            passes the far side every run and would otherwise spam.
+        """
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+            hidden.imshow(regional)
+        assert any("nothing drawn" in record.message for record in caplog.records), (
+            f"the skip should be logged, got {[r.message for r in caplog.records]}"
+        )
+        assert any("imshow" in record.getMessage() for record in caplog.records), (
+            "the log line should name the public method, not the private helper behind it"
+        )
+
+    @pytest.mark.parametrize(
+        "method", ["imshow", "contourf", "pcolormesh", "grid_points", "grid_cells"]
+    )
+    def test_the_same_layers_still_draw_when_visible(self, regional, method):
+        """The positive control: every layer asserted to return None above must draw when it can see.
+
+        Test scenario:
+            Without this, a regression that made these methods return None unconditionally would satisfy
+            the whole off-limb suite while silently drawing nothing anywhere.
+        """
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    def test_a_broken_raster_on_an_unclipped_crs_warns(self, caplog):
+        """Off-limb is normal on a globe and suspicious anywhere else, so the severity differs.
+
+        Test scenario:
+            The guard swallows any warp that places none of the data, and it cannot tell a hidden
+            hemisphere from a mislabelled raster — GDAL reports that too few points survived, not why. On
+            an unclipped projection there is no limb to hide behind, so this is nearly always broken
+            georeferencing, and a debug line nobody sees would leave a blank figure as the only symptom.
+        """
+        import logging
+
+        mislabelled = Dataset.from_array(
+            np.ones((20, 20), "float32"),
+            geo_ref=GeoReference(
+                geo=(500000.0, 30.0, 0.0, 4649776.0, 0.0, -30.0), epsg=4326
+            ),
+            no_data_value=-9999.0,
+        )
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+            assert Map(crs=3857, figsize=(4, 4)).imshow(mislabelled) is None
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings, (
+            f"an unclipped projection that places no data should warn, got {caplog.records}"
+        )
+        assert "geo-transform" in warnings[0].getMessage(), (
+            f"the warning should name the likely cause, got {warnings[0].getMessage()}"
+        )
+
+    def test_a_hidden_globe_layer_does_not_warn(self, hidden, regional, caplog):
+        """A rotation passes the far side every run, so those skips must stay at debug."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+            hidden.imshow(regional)
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING], (
+            "a hidden hemisphere is expected on a globe and must not warn"
+        )
+
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_too_few_points_is_a_caller_error_not_an_empty_view(self, method):
+        """Two points can never be triangulated, and saying "outside the view" would be a lie.
+
+        Test scenario:
+            The off-limb arm fires when the reprojection loses the points. If there were never three to
+            begin with, no projection can fix that — reporting it as a hidden layer both returns the wrong
+            thing and logs a misleading reason for a map that is looking straight at the data.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        two = FeatureCollection(
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
+            )
+        )
+        render = getattr(Map(crs=4326, figsize=(4, 4)), method)
+        with pytest.raises(ValueError, match="at least three points"):
+            render(two)
+
+    @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
+    def test_composites_still_draw_when_visible(self, regional_rgb, method):
+        """Positive control for the composites asserted to return None above."""
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional_rgb) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
+    def test_vector_fields_still_draw_when_visible(self, regional, method):
+        """Positive control for the u/v vector fields."""
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional, regional) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_triangulated_renders_still_draw_when_visible(self, regional, method):
+        """Positive control for the triangulated renders."""
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert getattr(visible, method)(regional) is not None, (
+            f"{method} must still draw when the data is on the view"
+        )
+
+    def test_stock_img_and_spaghetti_still_draw_when_visible(self, regional, tmp_path):
+        """Positive control for the two remaining layers asserted to return None above."""
+        from pyramids.dataset.collection import DatasetCollection
+
+        visible = Map(
+            crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4)
+        )
+        assert visible.stock_img(regional) is not None, "a visible backdrop must draw"
+
+        paths = []
+        for index in range(2):
+            path = tmp_path / f"visible{index}.tif"
+            regional.to_file(str(path))
+            paths.append(str(path))
+        artists = visible.spaghetti(DatasetCollection.from_files(paths))
+        assert len(artists) == 2, f"both visible members should draw, got {artists}"
+
+    def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
+        """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
+        assert hidden.imshow(regional) is None
+        assert not hidden.ax.images, "nothing should have been drawn"
+        assert hidden.layers == [], "no layer should have been registered"

@@ -5,14 +5,18 @@ The protected base every Map capability mixin builds on: it owns the display-CRS
 Source-extraction helpers the plotting mixins consume via ``self``.
 """
 
+import logging
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
 from matplotlib.animation import FuncAnimation
 
+from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
+
+logger = logging.getLogger(__name__)
 
 
 class GeoLayerBase(Scene):
@@ -58,11 +62,61 @@ class GeoLayerBase(Scene):
         """
         return not (isinstance(self.crs, int) and dataset.epsg == self.crs)
 
+    def _skipped_off_limb(self, layer: str) -> None:
+        """Record that ``layer`` drew nothing because its data is outside the display CRS.
+
+        The severity depends on whether hiding the data is a normal thing for this map to do. On a globe it
+        is: a clipped projection shows one hemisphere, and a rotation sweeps past the far side on every
+        run, so those skips are logged at debug and stay out of the way. On an unclipped display CRS there
+        is no limb to be behind, so a warp that places *none* of the data almost always means the raster is
+        mislabelled or its geo-transform is wrong — that is worth a warning, which is visible without any
+        logging setup, because otherwise the only symptom is a blank figure.
+
+        The guard cannot tell the two apart from the warp alone: GDAL reports that too few points survived,
+        not why. This is the signal that lets a reader tell a hidden hemisphere from a broken raster.
+
+        Args:
+            layer: The public layer method that drew nothing, named for the log line.
+        """
+        if self.globe:
+            logger.debug("%s: data lies outside %r; nothing drawn", layer, self.crs)
+        else:
+            logger.warning(
+                "%s: none of the data could be placed in %r, so nothing was drawn — on an unclipped "
+                "projection this usually means the raster's CRS or geo-transform is wrong",
+                layer,
+                self.crs,
+            )
+
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
-        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`."""
-        ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
-        return get_source(ds, band=band)
+        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
+
+        Args:
+            dataset: The pyramids ``Dataset`` to place in the display CRS and read.
+            band: 1-based band to extract.
+
+        Returns:
+            The dataset as a uniform :class:`Source` view.
+
+        Raises:
+            OffLimbError: when the data lies outside what the display CRS can show.
+        """
+        return get_source(self._reproject(dataset), band=band)
 
     def _reproject(self, dataset: Any) -> Any:
-        """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
-        return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
+        """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there).
+
+        Args:
+            dataset: The pyramids ``Dataset`` to place in the display CRS.
+
+        Returns:
+            The reprojected dataset, or ``dataset`` itself when it is already in the display CRS.
+
+        Raises:
+            OffLimbError: when the warp reports too few surviving sample points to bound an output, i.e. the
+                data is outside the projection's visible area. Any *other* ``RuntimeError`` is re-raised as
+                it came — a real projection failure must not be mistaken for an empty view.
+        """
+        if not self._needs_reproject(dataset):
+            return dataset
+        return reproject(dataset, self.crs)
