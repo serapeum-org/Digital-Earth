@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.basemaps import (
     KEYED_BASEMAP_NAMES,
-    PRESET_KEYWORDS,
     get_keyed_basemap,
     is_keyed_basemap,
 )
@@ -146,7 +145,7 @@ class DecorationMixin(_MixinBase):
         *,
         opacity: float = 1.0,
         api_key: Optional[str] = None,
-        **preset: Any,
+        preset: Optional[dict] = None,
     ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
@@ -163,22 +162,24 @@ class DecorationMixin(_MixinBase):
                 :mod:`digitalearth.base.basemaps`), whose credential is read from the environment.
             opacity: Basemap opacity in ``[0, 1]``.
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
-            **preset: The keyed preset's own keywords (for NICFI: ``date``, ``flavour``, ``mosaic``).
+            preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
+                ``mosaic``). A dict rather than loose keywords so that all three tiers take a preset the
+                same way, and so a mistyped style argument is an unexpected keyword rather than something
+                ``**preset`` silently swallows.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``provider`` is neither a known basemap name nor a keyed preset, when preset
-                keywords are passed to a non-keyed provider, or when a keyed credential is unavailable.
-            TypeError: for a keyword that is not a preset keyword at all — a misspelled style argument is
-                reported as the unexpected argument it is, not as a problem with presets.
+            ValueError: when ``provider`` is neither a known basemap name nor a keyed preset, when a
+                ``preset`` is passed to a non-keyed provider, or when a keyed credential is unavailable.
+            TypeError: for any other keyword, which Python reports as the unexpected argument it is.
 
         Examples:
             - A keyed preset resolves its own tile URL and attribution:
                 ```python
                 >>> from digitalearth.web import WebMap                 # doctest: +SKIP
-                >>> WebMap().basemap("Planet.NICFI", date="2024-01")   # doctest: +SKIP
+                >>> WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})   # doctest: +SKIP
 
                 ```
 
@@ -186,7 +187,7 @@ class DecorationMixin(_MixinBase):
             digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
         if is_keyed_basemap(provider):
-            keyed = get_keyed_basemap(provider, **preset)
+            keyed = get_keyed_basemap(provider, **(preset or {}))
             return self.tiles(
                 keyed.tile_url(api_key),
                 attribution=keyed.attribution,
@@ -200,13 +201,6 @@ class DecorationMixin(_MixinBase):
                 f"only to a keyed preset such as 'Planet.NICFI'"
             )
         if preset:
-            stray = sorted(set(preset) - PRESET_KEYWORDS)
-            if stray:
-                # Not a preset keyword at all — almost certainly a typo, so say that rather than blame
-                # the preset machinery the caller never invoked.
-                raise TypeError(
-                    f"basemap() got an unexpected keyword argument {stray[0]!r}"
-                )
             raise ValueError(
                 f"basemap({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
                 f"preset such as 'Planet.NICFI'"

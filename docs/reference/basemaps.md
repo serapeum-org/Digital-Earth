@@ -18,16 +18,17 @@ export PLANET_API_KEY="…"        # Windows PowerShell: $env:PLANET_API_KEY = "
 from digitalearth import Map
 
 m = Map(domain=(-60, -5, -55, 0))          # somewhere in the Amazon
-m.basemap("Planet.NICFI", date="2024-01")
+m.basemap("Planet.NICFI", preset={"date": "2024-01"})
 ```
 
-The same preset works on all three rendering tiers:
+Every tier takes the preset the same way — as a `preset` dict, because on the static tier `**kwargs` belongs
+to cleopatra and on the interactive tier it belongs to HoloViews' style options:
 
 ```python
 from digitalearth.web import WebMap
 from digitalearth.interactive import InteractiveMap
 
-WebMap().basemap("Planet.NICFI", date="2024-01")
+WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
 InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
 ```
 
@@ -39,8 +40,11 @@ InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
   products, not a styling flag.
 - **`mosaic`** — an explicit Planet mosaic id, overriding the one derived from `date` and `flavour`.
 
-`api_key=` overrides the environment variable for one call. Passing it to a basemap that needs no credential is
-an error rather than a no-op, so a call that looks authenticated always is.
+Write them in the `preset` dict, not loose: `basemap("Planet.NICFI", date="2024-01")` is refused with a
+message pointing at the right form.
+
+`api_key=` overrides the environment variable for one call. Passing it to a basemap that needs no credential
+is an error rather than a no-op, so a call that looks authenticated always is.
 
 ### Coverage
 

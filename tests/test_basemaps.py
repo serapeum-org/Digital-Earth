@@ -337,7 +337,7 @@ class TestStaticTierDispatch:
         """
         with pytest.raises(ConnectionError):
             self._tropical_map().basemap(
-                "Planet.NICFI", date="2024-01", flavour="visual"
+                "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
             )
         assert self.requested, "no tile fetch was attempted"
         url = self.requested[0]
@@ -356,7 +356,7 @@ class TestStaticTierDispatch:
         logger.setLevel(logging.DEBUG)
         try:
             with pytest.raises(ConnectionError):
-                self._tropical_map().basemap("Planet.NICFI", date="2024-01")
+                self._tropical_map().basemap("Planet.NICFI", preset={"date": "2024-01"})
             assert self.requested, "no fetch was attempted"
             assert not self.escaped, (
                 f"a DEBUG record escaped during the fetch: {self.escaped}"
@@ -379,7 +379,7 @@ class TestStaticTierDispatch:
         m.ax.set_xlim(TEMPERATE[0], TEMPERATE[2])
         m.ax.set_ylim(TEMPERATE[1], TEMPERATE[3])
         with pytest.raises(ValueError, match="lies entirely outside"):
-            m.basemap("Planet.NICFI", date="2024-01")
+            m.basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert not self.requested, "a fetch was attempted despite the guard"
 
     def test_an_ordinary_source_is_unaffected(self):
@@ -462,13 +462,15 @@ class TestStaticTierDetails:
         Test scenario:
             NICFI is non-commercial-only, so its attribution is a licence obligation, not decoration.
         """
-        self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01")
+        self._map(TROPICAL).basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert self.calls, "add_tiles was never called"
         assert "Planet Labs" in self.calls[0]["kwargs"]["attribution"]
 
     def test_a_caller_supplied_attribution_is_not_overridden(self):
         """``setdefault`` means an explicit attribution wins, as for any other add_tiles keyword."""
-        self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01", attribution="mine")
+        self._map(TROPICAL).basemap(
+            "Planet.NICFI", preset={"date": "2024-01"}, attribution="mine"
+        )
         assert self.calls[0]["kwargs"]["attribution"] == "mine"
 
     def test_the_provider_carries_the_name_and_zoom(self):
@@ -481,7 +483,7 @@ class TestStaticTierDetails:
             there would let MapLibre ask for tiles the
             service does not serve.
         """
-        self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01")
+        self._map(TROPICAL).basemap("Planet.NICFI", preset={"date": "2024-01"})
         provider = self.calls[0]["source"]
         assert provider.name == "Planet.NICFI.analytic.2024-01", provider.name
         assert provider.max_zoom == 20, provider.max_zoom
@@ -489,7 +491,7 @@ class TestStaticTierDetails:
     def test_an_explicit_api_key_reaches_the_provider(self):
         """``api_key=`` overrides the environment at the tier boundary too."""
         self._map(TROPICAL).basemap(
-            "Planet.NICFI", date="2024-01", api_key="EXPLICIT-KEY"
+            "Planet.NICFI", preset={"date": "2024-01"}, api_key="EXPLICIT-KEY"
         )
         assert "EXPLICIT-KEY" in self.calls[0]["source"].url
         assert FAKE_KEY not in self.calls[0]["source"].url
@@ -502,7 +504,7 @@ class TestStaticTierDetails:
             default unit square — a box that sits inside the NICFI band by coordinates but means nothing.
             Treating it as an extent would decide coverage from a placeholder.
         """
-        self._map(None).basemap("Planet.NICFI", date="2024-01")
+        self._map(None).basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert self.calls, "a map with no extent yet was refused"
 
 
@@ -694,12 +696,16 @@ class TestStaticCoverageGuardSources:
             NICFI tiles that do not exist there.
         """
         with pytest.raises(ValueError, match="lies entirely outside"):
-            self._map_with_limits("temperate").basemap("Planet.NICFI", date="2024-01")
+            self._map_with_limits("temperate").basemap(
+                "Planet.NICFI", preset={"date": "2024-01"}
+            )
         assert not self.calls, "a fetch was set up despite the guard"
 
     def test_a_tropical_axes_extent_still_passes(self):
         """The fallback must not refuse a map that is inside the coverage."""
-        self._map_with_limits("tropical").basemap("Planet.NICFI", date="2024-01")
+        self._map_with_limits("tropical").basemap(
+            "Planet.NICFI", preset={"date": "2024-01"}
+        )
         assert self.calls, "a tropical map was refused"
 
     def test_an_untouched_axes_is_not_mistaken_for_an_extent(self):
@@ -712,18 +718,28 @@ class TestStaticCoverageGuardSources:
         """
         from digitalearth import Map
 
-        Map().basemap("Planet.NICFI", date="2024-01")
+        Map().basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert self.calls, "an undrawn map was refused on its default limits"
 
-    def test_preset_keywords_on_an_ordinary_source_are_refused(self):
-        """``date=`` means nothing to cleopatra's default provider, so it is an error (M5).
+    def test_a_preset_on_an_ordinary_source_is_refused(self):
+        """A preset means nothing to cleopatra's default provider, so it is an error (M5).
 
         Test scenario:
-            The web and interactive tiers already refused this; the static tier passed it straight to
-            add_tiles, which would have raised something far less clear.
+            The static tier passed these straight to add_tiles, which would have raised something far
+            less clear.
         """
         with pytest.raises(ValueError, match="no preset keywords"):
-            self._map_with_limits("tropical").basemap(date="2024-01")
+            self._map_with_limits("tropical").basemap(preset={"date": "2024-01"})
+
+    def test_a_preset_keyword_written_loose_says_where_it_belongs(self):
+        """``**kwargs`` here goes to add_tiles, so a loose ``date=`` would vanish into cleopatra.
+
+        Test scenario:
+            All three tiers take a preset as a dict. A caller who writes the keyword loose gets the
+            call they meant, not a cleopatra error about an argument it has never heard of.
+        """
+        with pytest.raises(ValueError, match="not loose"):
+            self._map_with_limits("tropical").basemap("Planet.NICFI", date="2024-01")
 
 
 class TestKeyStaysOutOfTheLog:
@@ -773,7 +789,7 @@ class TestKeyStaysOutOfTheLog:
             m.ax.set_xlim(TROPICAL[0], TROPICAL[2])
             m.ax.set_ylim(TROPICAL[1], TROPICAL[3])
             with pytest.raises(ConnectionError):
-                m.basemap("Planet.NICFI", date="2024-01")
+                m.basemap("Planet.NICFI", preset={"date": "2024-01"})
         finally:
             root.removeHandler(handler)
             root.setLevel(previous_root)
@@ -842,7 +858,7 @@ class TestWhereTheStaticExtentComesFrom:
         """
         from digitalearth import Map
 
-        Map(domain="atlantis").basemap("Planet.NICFI", date="2024-01")
+        Map(domain="atlantis").basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert self.calls, (
             "an unresolvable domain was treated as being outside the coverage"
         )
@@ -860,7 +876,7 @@ class TestWhereTheStaticExtentComesFrom:
         m.ax.set_xlim(4.0, 7.0)
         m.ax.set_ylim(51.0, 54.0)
         with pytest.raises(ValueError, match="lies entirely outside"):
-            m.basemap("Planet.NICFI", date="2024-01")
+            m.basemap("Planet.NICFI", preset={"date": "2024-01"})
 
     def test_a_crs_that_cannot_be_reprojected_leaves_coverage_to_the_service(
         self, monkeypatch
@@ -885,7 +901,7 @@ class TestWhereTheStaticExtentComesFrom:
         m = Map()
         m.ax.set_xlim(556597.0, 668219.0)
         m.ax.set_ylim(6800125.0, 6982997.0)
-        m.basemap("Planet.NICFI", date="2024-01")
+        m.basemap("Planet.NICFI", preset={"date": "2024-01"})
         assert self.calls, (
             "an unreprojectable extent was treated as being outside the coverage"
         )
@@ -1099,14 +1115,18 @@ class TestThePresetKeywordSetIsDerived:
         }
         assert PRESET_KEYWORDS == expected, f"{PRESET_KEYWORDS} != {expected}"
 
-    def test_both_backends_use_the_shared_set(self):
-        """Importing it is what makes the guarantee hold; a local copy would not."""
+    def test_the_static_backend_uses_the_shared_set(self):
+        """Importing it is what makes the guarantee hold; a local copy would not.
+
+        Test scenario:
+            The static tier is the one that still needs the set: its ``**kwargs`` go to ``add_tiles``, so
+            a preset keyword written loose there has to be recognised and refused. The web and
+            interactive tiers take the preset as an explicit dict and need no such test.
+        """
         from digitalearth.base.basemaps import PRESET_KEYWORDS
         from digitalearth.static.maps import decoration as static_decoration
-        from digitalearth.web import decoration as web_decoration
 
         assert static_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS
-        assert web_decoration.PRESET_KEYWORDS is PRESET_KEYWORDS
 
 
 class TestTheEnvelopeIsReprojectedAsAShape:
@@ -1209,4 +1229,4 @@ class TestACredentialWithNothingToAuthenticate:
         m = Map(domain=TROPICAL)
         m.ax.set_xlim(TROPICAL[0], TROPICAL[2])
         m.ax.set_ylim(TROPICAL[1], TROPICAL[3])
-        m.basemap("Planet.NICFI", date="2024-01", api_key=FAKE_KEY)
+        m.basemap("Planet.NICFI", preset={"date": "2024-01"}, api_key=FAKE_KEY)

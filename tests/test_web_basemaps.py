@@ -71,7 +71,7 @@ class TestWebTierDispatch:
             def add_layer(self, layer):
                 pass
 
-        m = WebMap().basemap("Planet.NICFI", date="2024-01")
+        m = WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         for apply in m.layers:
             apply(Recorder())
         assert recorded, "no source was registered"
@@ -82,8 +82,8 @@ class TestWebTierDispatch:
         assert FAKE_KEY in source["tiles"][0], "the credential never reached the source"
         assert "Planet Labs" in source["attribution"], "the attribution was not carried"
 
-    def test_preset_keywords_on_an_ordinary_provider_are_refused(self):
-        """``date=`` means nothing to CartoDark, so it is an error rather than a silent no-op.
+    def test_a_preset_on_an_ordinary_provider_is_refused(self):
+        """A preset means nothing to CartoDark, so it is an error rather than a silent no-op.
 
         Test scenario:
             Silently ignoring it would render the wrong basemap and look like the preset failed.
@@ -91,7 +91,7 @@ class TestWebTierDispatch:
         from digitalearth.web import WebMap
 
         with pytest.raises(ValueError, match="no preset keywords"):
-            WebMap().basemap("CartoDark", date="2024-01")
+            WebMap().basemap("CartoDark", preset={"date": "2024-01"})
 
     def test_the_unknown_provider_error_lists_the_presets(self):
         """A caller who mistypes a preset should see the presets among the options.
@@ -128,11 +128,16 @@ class TestPresetKeywordErrors:
         with pytest.raises(TypeError, match="opacty"):
             WebMap().basemap("CartoDark", opacty=0.5)
 
-    def test_a_real_preset_keyword_on_an_ordinary_provider_still_says_so(self):
-        """``date=`` *is* a preset keyword, so that message remains the right one."""
+    def test_a_preset_keyword_written_loose_is_an_unexpected_argument(self):
+        """With `preset` an explicit parameter, there is no ``**preset`` left to swallow anything.
+
+        Test scenario:
+            ``date=`` was a preset keyword the signature absorbed; now Python reports it the same way it
+            reports any other keyword the method does not take.
+        """
         from digitalearth.web import WebMap
 
-        with pytest.raises(ValueError, match="no preset keywords"):
+        with pytest.raises(TypeError, match="date"):
             WebMap().basemap("CartoDark", date="2024-01")
 
 
@@ -149,7 +154,7 @@ class TestSavedOutputCarriesTheKey:
         """
         from digitalearth.web import WebMap
 
-        html = WebMap().basemap("Planet.NICFI", date="2024-01").to_html()
+        html = WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"}).to_html()
         assert FAKE_KEY in html, (
             "the key is gone from the saved page, so its tiles cannot load"
         )
@@ -169,7 +174,7 @@ class TestACredentialWithNothingToAuthenticate:
         """The guard sits after the keyed branch returns, and must stay there."""
         from digitalearth.web import WebMap
 
-        WebMap().basemap("Planet.NICFI", date="2024-01", api_key=FAKE_KEY)
+        WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"}, api_key=FAKE_KEY)
 
 
 class TestTheServiceZoomCeilingReachesMapLibre:
@@ -184,7 +189,7 @@ class TestTheServiceZoomCeilingReachesMapLibre:
         """
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap("Planet.NICFI", date="2024-01")
+        m = WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
         source = _first_raster_source(m)
         assert source["maxzoom"] == 20, source
 

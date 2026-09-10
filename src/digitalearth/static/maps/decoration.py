@@ -561,6 +561,7 @@ class DecorationMixin(_MixinBase):
         source: Any = None,
         *,
         api_key: Optional[str] = None,
+        preset: Optional[dict] = None,
         **kwargs: Any,
     ) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
@@ -575,16 +576,19 @@ class DecorationMixin(_MixinBase):
             source: A cleopatra provider name, an ``xyzservices.TileProvider``, ``None``, or a keyed preset
                 name such as ``"Planet.NICFI"``.
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
-            **kwargs: Forwarded to ``add_tiles`` — plus the preset's own keywords when ``source`` names one
-                (for NICFI: ``date``, ``flavour``, ``mosaic``).
+            preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
+                ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to
+                ``add_tiles``, and the three tiers take presets the same way.
+            **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
             The tile artist ``add_tiles`` added to the axes.
 
         Raises:
-            ValueError: when a keyed preset is unknown, its credential is unavailable, when preset keywords
-                are passed to an ordinary source, or when the extent being drawn — the declared ``domain``
-                if there is one, else the current axes limits — lies entirely outside the coverage.
+            ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``
+                is passed to an ordinary source, when a preset keyword is passed loose instead of in
+                ``preset``, or when the extent being drawn — the declared ``domain`` if there is one, else
+                the current axes limits — lies entirely outside the coverage.
             TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.
 
         Examples:
@@ -600,12 +604,18 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
+        loose = sorted(set(kwargs) & PRESET_KEYWORDS)
+        if loose:
+            # These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.
+            raise ValueError(
+                f"basemap() takes preset keywords in preset={{...}}, not loose; move {loose} into it — "
+                f"basemap({source!r}, preset={{{loose[0]!r}: ...}})"
+            )
         if not is_keyed_basemap(source):
-            stray = sorted(set(kwargs) & PRESET_KEYWORDS)
-            if stray:
+            if preset:
                 raise ValueError(
-                    f"basemap({source!r}) takes no preset keywords; {stray} apply only to a keyed preset "
-                    f"such as 'Planet.NICFI'"
+                    f"basemap({source!r}) takes no preset keywords; {sorted(preset)} apply only to a "
+                    f"keyed preset such as 'Planet.NICFI'"
                 )
             if api_key is not None:
                 # Dropping it silently would leave a caller believing they had authenticated.
@@ -615,10 +625,7 @@ class DecorationMixin(_MixinBase):
                 )
             return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
 
-        preset_kwargs = {
-            key: kwargs.pop(key) for key in list(kwargs) if key in PRESET_KEYWORDS
-        }
-        keyed = get_keyed_basemap(str(source), **preset_kwargs)
+        keyed = get_keyed_basemap(str(source), **(preset or {}))
         keyed.check_bounds(self._coverage_extent())
         provider = _keyed_tile_provider(keyed, api_key)
         kwargs.setdefault("attribution", keyed.attribution)
