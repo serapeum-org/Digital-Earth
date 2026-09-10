@@ -3,9 +3,12 @@
 Three deliverables on top of a built scene:
 
 - :meth:`orbit` — sweep the camera around the scene on a circular path and write each frame to a GIF/MP4.
+  The path is shapeable: ``factor`` sets its radius and ``shift`` lifts it along ``viewup``, which together
+  decide whether near-flat terrain is looked down on or seen edge-on (#159).
 - :meth:`animate` — drive a frame-by-frame animation from a sequence of states (e.g. a ``DatasetCollection``
   time stack), via a user ``update`` callback, to a GIF/MP4.
 - :meth:`jupyter` — switch PyVista to the trame backend so the scene displays interactively in a notebook.
+  That backend is process-wide, not per scene.
 
 GIF/MP4 writing uses PyVista's ``open_gif``/``open_movie`` (which need ``imageio`` / ``imageio-ffmpeg`` — both in
 the ``3d`` extra). No GIS is touched here: animation is pure rendering of already-built meshes; data still comes
