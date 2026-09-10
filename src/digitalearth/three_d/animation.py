@@ -94,9 +94,13 @@ def _up_vector(viewup: "UpVector | None") -> "np.ndarray | None":
     """Return ``viewup`` as a validated ``(3,)`` float array, or ``None``.
 
     The array returned is the one that must be forwarded to pyvista. Validating a converted copy and passing
-    the caller's original lets a masked array clear the finiteness check on its fill data while pyvista then
-    multiplies the masked value, and lets a list of numeric strings reach ``np.array(viewup) * shift`` and die
-    there naming neither ``viewup`` nor ``orbit``.
+    the caller's original lets a list of numeric strings reach ``np.array(viewup) * shift`` inside pyvista and
+    die there naming neither ``viewup`` nor ``orbit``.
+
+    A masked array is refused rather than converted. ``np.asarray`` discards the mask and reads the *underlying*
+    data, so whether one is accepted would depend on the value hidden beneath it — ``nan`` under a mask raises
+    while ``5.0`` under a mask silently tilts the orbit — and a fully masked vector, which names no up direction
+    at all, would sail past the zero-vector check below.
 
     Args:
         viewup: The caller's up vector, or ``None`` to leave pyvista's default.
@@ -105,10 +109,15 @@ def _up_vector(viewup: "UpVector | None") -> "np.ndarray | None":
         The validated vector, or ``None``.
 
     Raises:
-        ValueError: If it is not three finite numbers with a direction — a zero vector names none.
+        ValueError: If it is masked, or not three finite numbers with a direction — a zero vector names none.
     """
     if viewup is None:
         return None
+    if np.ma.isMaskedArray(viewup) and np.ma.getmaskarray(viewup).any():
+        raise ValueError(
+            "orbit() cannot use a masked viewup: converting it would read the data under the mask, which the "
+            f"caller declared missing. Got {viewup!r}"
+        )
     try:
         vector = np.asarray(viewup, dtype=float)
     except (TypeError, ValueError) as exc:
@@ -196,13 +205,16 @@ class AnimationMixin(_MixinBase):
         is now a behaviour change for such a caller, and a deliberate one: the two cannot sensibly disagree.
 
         Args:
-            path: Output file. A suffix in :data:`_MOVIE_SUFFIXES` writes a movie; anything else a GIF.
-            n_frames: Number of frames (camera positions) along the orbit. At least 3. pyvista silently
+            path: Output file. A video suffix (``.mp4``/``.mov``/``.avi``/``.m4v``) writes a movie;
+                anything else a GIF.
+            n_frames: Number of frames (camera positions) along the orbit. A whole number, at least 3.
+                pyvista silently
                 clamps a smaller value to 3, so fewer used to "work" and produce a three-frame clip; this
                 rejects it instead, which is a narrowing of what the argument accepted before.
             framerate: Frames per second of the output.
             factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
-                Must be positive.
+                Must be positive and finite. Anything :func:`float` accepts is taken, so ``"0.9"`` works as
+                well as ``0.9``.
             shift: How far to lift the orbit off the data's mid-plane, as an absolute offset **along**
                 ``viewup`` (so along z while ``viewup`` is z-aligned, which is the default). It is in scene
                 units, not a fraction, so the useful value depends on the data's own extent along that vector
@@ -238,12 +250,10 @@ class AnimationMixin(_MixinBase):
                 >>> from digitalearth.three_d import Scene3D
                 >>> from digitalearth.base.sources import get_source
                 >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
-                >>> with tempfile.TemporaryDirectory() as folder:
-                ...     scene = Scene3D(off_screen=True)
+                >>> with tempfile.TemporaryDirectory() as folder, Scene3D(off_screen=True) as scene:
                 ...     _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
                 ...     out = scene.orbit(os.path.join(folder, "spin.gif"), n_frames=6)
                 ...     size = os.path.getsize(out)
-                ...     scene.close()
                 >>> size > 0
                 True
 
@@ -257,14 +267,12 @@ class AnimationMixin(_MixinBase):
                 >>> from digitalearth.three_d import Scene3D
                 >>> from digitalearth.base.sources import get_source
                 >>> dem = np.add.outer(np.linspace(0, 1, 8), np.linspace(0, 1, 8))
-                >>> with tempfile.TemporaryDirectory() as folder:
-                ...     scene = Scene3D(off_screen=True)
+                >>> with tempfile.TemporaryDirectory() as folder, Scene3D(off_screen=True) as scene:
                 ...     _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
                 ...     out = scene.orbit(
                 ...         os.path.join(folder, "spin.gif"), n_frames=4, factor=0.9, shift=8.0
                 ...     )
                 ...     size = os.path.getsize(out)
-                ...     scene.close()
                 >>> size > 0
                 True
 
@@ -342,7 +350,7 @@ class AnimationMixin(_MixinBase):
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     out = scene.animate([1.1, 1.1, 1.1], os.path.join(folder, "grow.gif"), grow)
                 ...     size = os.path.getsize(out)
-                ...     scene.close()
+                >>> scene.close()
                 >>> size > 0
                 True
 
