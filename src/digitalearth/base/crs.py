@@ -51,6 +51,34 @@ class OffLimbError(RuntimeError):
     globe means the data sits behind the visible limb. Layer methods treat it as "there is nothing to draw
     here" and render an empty frame; it is a distinct type so that a caller can tell it apart from a real
     projection failure.
+
+    Examples:
+        - Callers rarely see it: the layer methods answer it by drawing nothing:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import Map, projections
+            >>> ds = Dataset.from_array(
+            ...     np.ones((20, 20), "float32"),
+            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            ... )
+            >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
+            >>> hidden.imshow(ds) is None
+            True
+            >>> len(hidden.ax.images)
+            0
+
+            ```
+        - The matplotlib backend re-exports the very same class, for a caller that wants to catch it:
+            ```python
+            >>> from digitalearth.base.crs import OffLimbError
+            >>> from digitalearth.static import OffLimbError as FromBackend
+            >>> OffLimbError is FromBackend
+            True
+
+            ```
     """
 
 
@@ -69,6 +97,38 @@ def reproject(dataset: Any, crs: Any) -> Any:
             data is outside the projection's visible area.
         RuntimeError: any other warp failure, re-raised as it came — a real projection error must not be
             mistaken for an empty view.
+
+    Examples:
+        - A dataset the projection can show comes back reprojected:
+            ```python
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.base.crs import reproject
+            >>> ds = Dataset.from_array(
+            ...     np.ones((20, 20), "float32"),
+            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            ... )
+            >>> reproject(ds, 3857).epsg
+            3857
+
+            ```
+        - One it cannot is reported as an empty view rather than in GDAL's wording:
+            ```python
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.base.crs import OffLimbError, reproject
+            >>> from digitalearth.static import projections
+            >>> ds = Dataset.from_array(
+            ...     np.ones((20, 20), "float32"),
+            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            ... )
+            >>> try:
+            ...     reproject(ds, projections.orthographic(lon=-175, lat=15))
+            ... except OffLimbError as error:
+            ...     print(str(error).split(":")[-1].strip())
+            too few sample points survive the warp for it to produce any output
+
+            ```
     """
     try:
         return dataset.to_crs(crs)
