@@ -9,24 +9,21 @@ Nothing here needs a real Planet key or the network.
 import pytest
 
 FAKE_KEY = "FAKE-KEY-NOT-REAL"
-#: The Amazon — inside the NICFI band. (west, south, east, north)
-TROPICAL = (-60.0, -5.0, -55.0, 0.0)
-#: The Netherlands — outside it.
-TEMPERATE = (5.0, 52.0, 6.0, 53.0)
+
+
+@pytest.fixture(autouse=True)
+def _need_engine(monkeypatch):
+    """Skip the module without the interactive extra, and give every test a credential that is not a real key.
+
+    Args:
+        monkeypatch: pytest's environment patcher, which restores the environment afterwards.
+    """
+    pytest.importorskip("geoviews")
+    monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
 
 class TestInteractiveTierDispatch:
     """``InteractiveMap.tiles`` resolving a keyed preset (HoloViz / GeoViews)."""
-
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the interactive extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("geoviews")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
     def test_the_preset_becomes_a_wmts_with_upper_cased_placeholders(self):
         """GeoViews wants ``{Z}/{X}/{Y}``, so the lower-case template is converted on the way in.
@@ -90,16 +87,6 @@ class TestUpperPlaceholders:
 
 class TestAttributionIsCarried:
     """NICFI is non-commercial-only, so its attribution is a licence obligation, not decoration."""
-
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the interactive extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("geoviews")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
     @staticmethod
     def _rendered(element):

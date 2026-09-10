@@ -10,10 +10,17 @@ Nothing here needs a real Planet key or the network.
 import pytest
 
 FAKE_KEY = "FAKE-KEY-NOT-REAL"
-#: The Amazon — inside the NICFI band. (west, south, east, north)
-TROPICAL = (-60.0, -5.0, -55.0, 0.0)
-#: The Netherlands — outside it.
-TEMPERATE = (5.0, 52.0, 6.0, 53.0)
+
+
+@pytest.fixture(autouse=True)
+def _need_engine(monkeypatch):
+    """Skip the module without the web extra, and give every test a credential that is not a real key.
+
+    Args:
+        monkeypatch: pytest's environment patcher, which restores the environment afterwards.
+    """
+    pytest.importorskip("maplibre")
+    monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
 
 def _first_raster_source(web_map):
@@ -45,16 +52,6 @@ def _first_raster_source(web_map):
 
 class TestWebTierDispatch:
     """``WebMap.basemap`` resolving a keyed preset (MapLibre)."""
-
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the web extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("maplibre")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
     def test_the_preset_becomes_a_raster_source_carrying_the_key(self):
         """The web tier emits the tile URL into a MapLibre raster source.
@@ -119,16 +116,6 @@ class TestWebTierDispatch:
 class TestPresetKeywordErrors:
     """M6: a typo'd style keyword must not be blamed on the preset machinery."""
 
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the web extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("maplibre")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
-
     def test_a_misspelled_style_keyword_is_a_type_error(self):
         """``opacty=`` is a typo for ``opacity``, not an attempt to use a preset.
 
@@ -152,16 +139,6 @@ class TestPresetKeywordErrors:
 class TestSavedOutputCarriesTheKey:
     """H1: the exposure the module docstring warns about is pinned here, not left to be discovered."""
 
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the web extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("maplibre")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
-
     def test_the_html_contains_the_credential(self):
         """A saved web map is a secret, because the browser needs the key to fetch the tiles.
 
@@ -181,16 +158,6 @@ class TestSavedOutputCarriesTheKey:
 class TestACredentialWithNothingToAuthenticate:
     """L6: the web tier hoisted api_key into its signature too, and dropped it just as silently."""
 
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the web extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("maplibre")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
-
     def test_an_api_key_on_a_token_free_provider_is_refused(self):
         """CartoDark needs no credential, so passing one is a misunderstanding worth reporting."""
         from digitalearth.web import WebMap
@@ -207,16 +174,6 @@ class TestACredentialWithNothingToAuthenticate:
 
 class TestTheServiceZoomCeilingReachesMapLibre:
     """L3: `max_zoom` was inert everywhere; the web tier is the one that can act on it."""
-
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the web extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("maplibre")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
 
     def test_a_keyed_preset_bounds_the_raster_source(self):
         """Past the service's deepest level MapLibre should stretch tiles, not request 404s.

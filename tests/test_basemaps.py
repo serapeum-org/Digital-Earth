@@ -494,15 +494,16 @@ class TestStaticTierDetails:
         assert "EXPLICIT-KEY" in self.calls[0]["source"].url
         assert FAKE_KEY not in self.calls[0]["source"].url
 
-    def test_a_map_without_a_domain_is_not_guarded(self):
-        """With no declared domain there is nothing to check, so the basemap must still be allowed.
+    def test_a_map_with_nothing_drawn_yet_is_not_guarded(self):
+        """With no domain and nothing plotted there is no extent to check, so the basemap goes ahead.
 
         Test scenario:
-            The guard reads the map's ``domain``, not the axes limits — which before anything is drawn are
-            matplotlib's default unit square and would refuse every keyed basemap on Earth.
+            The guard falls back to the axes limits, and before anything is drawn those are matplotlib's
+            default unit square — a box that sits inside the NICFI band by coordinates but means nothing.
+            Treating it as an extent would decide coverage from a placeholder.
         """
         self._map(None).basemap("Planet.NICFI", date="2024-01")
-        assert self.calls, "an undomained map was refused"
+        assert self.calls, "a map with no extent yet was refused"
 
 
 class TestUrlSafety:
