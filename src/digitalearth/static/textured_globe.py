@@ -34,8 +34,8 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
 from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
 from matplotlib.animation import FuncAnimation
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.colors import Normalize
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band
