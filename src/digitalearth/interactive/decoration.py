@@ -31,8 +31,11 @@ def _upper_placeholders(url: str) -> str:
         url: A tile URL template using the lower-case placeholders.
 
     Returns:
-        The same template with the three tile-coordinate placeholders upper-cased. Only those three are
-        touched, and only where they appear as placeholders.
+        The same string with every occurrence of the exact tokens ``{z}``, ``{x}`` and ``{y}`` upper-cased
+        — wherever they appear, including a second copy inside the query string. Nothing else is touched,
+        and no other placeholder is: a ``{mosaic}`` or ``{api_key}`` still reads as it did. Substitution
+        happens before this, so a value that itself contained one of the three tokens would be rewritten
+        too; :meth:`~digitalearth.base.basemaps.KeyedTileSource.tile_url` is what keeps such values out.
     """
     for lower, upper in (("{z}", "{Z}"), ("{x}", "{X}"), ("{y}", "{Y}")):
         url = url.replace(lower, upper)

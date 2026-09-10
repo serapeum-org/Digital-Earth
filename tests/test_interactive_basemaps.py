@@ -67,17 +67,25 @@ class TestInteractiveTierDispatch:
 class TestUpperPlaceholders:
     """The Bokeh placeholder casing, which lives in this backend rather than in ``base/``."""
 
-    def test_only_the_tile_coordinates_are_upper_cased(self):
-        """GeoViews substitutes ``{Z}/{X}/{Y}`` case-sensitively; nothing else in the URL may change.
+    def test_every_copy_of_the_three_tokens_is_upper_cased(self):
+        """GeoViews substitutes ``{Z}/{X}/{Y}`` case-sensitively, so each copy has to be rewritten.
 
         Test scenario:
-            A substituted credential and any other query parameter must survive untouched — only the
-            three tile-coordinate placeholders are Bokeh's convention.
+            The path placeholders and a second ``{z}`` in the query string both change; the credential
+            and the other query parameters do not. The name previously claimed only the tile-coordinate
+            *path* was touched, which the second ``{z}`` contradicts.
         """
         from digitalearth.interactive.decoration import _upper_placeholders
 
         out = _upper_placeholders("https://a/{z}/{x}/{y}.png?api_key=abc&m={z}x")
         assert out == "https://a/{Z}/{X}/{Y}.png?api_key=abc&m={Z}x", out
+
+    def test_no_other_placeholder_is_touched(self):
+        """``{mosaic}`` and ``{api_key}`` are the tile service's, not Bokeh's, and must survive as they are."""
+        from digitalearth.interactive.decoration import _upper_placeholders
+
+        out = _upper_placeholders("https://a/{mosaic}/{z}/{x}/{y}?k={api_key}")
+        assert out == "https://a/{mosaic}/{Z}/{X}/{Y}?k={api_key}", out
 
 
 class TestAttributionIsCarried:
