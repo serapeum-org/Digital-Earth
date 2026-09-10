@@ -186,7 +186,7 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             The backdrop ``AxesImage`` (raster path), the tile artist, or ``None`` if a tile backdrop is
-            unavailable offline.
+            unavailable offline or the raster lies outside what the display CRS shows.
         """
         if dataset is None:
             try:
@@ -196,6 +196,10 @@ class DecorationMixin(_MixinBase):
                 return None
         with self._preserve_view():
             im = self.imshow(dataset, cmap=cmap, **kwargs)
+            if (
+                im is None
+            ):  # the backdrop is off-limb: there is nothing to push behind the data
+                return None
             im.set_zorder(zorder)
         return im
 

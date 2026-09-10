@@ -602,6 +602,18 @@ class TestOffLimbEveryLayerKind:
             f"{method} should draw nothing when the data is behind the limb"
         )
 
+    def test_stock_img_handles_an_off_limb_backdrop(self, hidden, regional):
+        """stock_img consumes imshow's return, so it had to learn about the None too.
+
+        Test scenario:
+            It set a z-order on whatever imshow handed back. Once a hidden layer returns None that became
+            "AttributeError: 'NoneType' object has no attribute 'set_zorder'" — the guard turning one crash
+            into another, in the one place inside src/ that consumes these returns.
+        """
+        assert hidden.stock_img(regional) is None, (
+            "an off-limb backdrop should be absent, not an AttributeError"
+        )
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None
