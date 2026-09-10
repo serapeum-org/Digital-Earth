@@ -453,3 +453,162 @@ class TestWebTierDispatch:
         assert WebMap().basemap("CartoDark").layers, (
             "the ordinary basemap path stopped registering layers"
         )
+
+
+class TestSourceIsImmutable:
+    """``KeyedTileSource`` is frozen — a shared preset must not be mutable by one caller."""
+
+    def test_fields_cannot_be_reassigned(self):
+        """The dataclass is frozen, so a registry entry cannot be edited in place.
+
+        Test scenario:
+            Presets are built fresh per call today, but the frozen contract is what makes it safe to hand
+            the same source to two tiers.
+        """
+        import dataclasses
+
+        source = planet_nicfi("2024-01")
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            source.attribution = "mine"
+
+    def test_a_source_without_params_builds_a_url(self):
+        """``params`` defaults to empty, so a service with no extra placeholders still works.
+
+        Test scenario:
+            NICFI has a ``{mosaic}``; a simpler keyed service would have only ``{api_key}``.
+        """
+        source = KeyedTileSource(
+            name="Example",
+            url_template="https://a/{z}/{x}/{y}.png?k={api_key}",
+            attribution="Example",
+            credential_env="EXAMPLE_KEY",
+        )
+        assert source.tile_url(api_key="K") == "https://a/{z}/{x}/{y}.png?k=K"
+
+
+class TestInteractiveTierDispatch:
+    """``InteractiveMap.tiles`` resolving a keyed preset (HoloViz / GeoViews)."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the interactive extra, and supply a fake credential.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("geoviews")
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_the_preset_becomes_a_wmts_with_upper_cased_placeholders(self):
+        """GeoViews wants ``{Z}/{X}/{Y}``, so the lower-case template is converted on the way in.
+
+        Test scenario:
+            Handing GeoViews the lower-case form yields a WMTS that requests literal ``{z}`` tiles.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
+        url = m.layers[0].data
+        assert "{Z}/{X}/{Y}" in url, f"placeholders were not upper-cased: {url}"
+        assert FAKE_KEY in url, "the credential never reached the element"
+        assert "planet_medres_normalized_analytic_2024-01_mosaic" in url, (
+            f"wrong mosaic: {url}"
+        )
+
+    def test_preset_keywords_without_a_preset_provider_are_refused(self):
+        """``preset=`` means nothing to a catalog provider, so it is an error rather than ignored.
+
+        Test scenario:
+            Silently dropping it would render CartoLight while the caller believed they got NICFI.
+        """
+        from digitalearth.interactive import InteractiveMap
+
+        with pytest.raises(ValueError, match="no preset keywords"):
+            InteractiveMap().tiles("CartoLight", preset={"date": "2024-01"})
+
+    def test_ordinary_providers_are_unaffected(self):
+        """A catalog name still resolves through the GeoViews tile sources as before."""
+        from digitalearth.interactive import InteractiveMap
+
+        assert InteractiveMap().tiles("CartoLight").layers, (
+            "the ordinary tile path stopped working"
+        )
+
+
+class TestStaticTierDetails:
+    """The parts of the static dispatch not covered by the happy path."""
+
+    @pytest.fixture(autouse=True)
+    def _spy(self, monkeypatch):
+        """Capture what ``add_tiles`` was handed, without reaching cleopatra at all.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        pytest.importorskip("matplotlib")
+        from digitalearth.static.maps import decoration as static_decoration
+
+        self.calls = []
+
+        def fake_add_tiles(ax, source=None, crs=None, **kwargs):
+            self.calls.append({"source": source, "crs": crs, "kwargs": kwargs})
+            return "artist"
+
+        monkeypatch.setattr(static_decoration, "add_tiles", fake_add_tiles)
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    @staticmethod
+    def _map(domain):
+        """A map over ``domain`` with matching axes limits."""
+        from digitalearth import Map
+
+        m = Map(domain=domain)
+        if domain is not None:
+            m.ax.set_xlim(domain[0], domain[2])
+            m.ax.set_ylim(domain[1], domain[3])
+        return m
+
+    def test_the_attribution_is_forwarded_to_the_engine(self):
+        """The service's attribution must reach ``add_tiles`` so the map displays it.
+
+        Test scenario:
+            NICFI is non-commercial-only, so its attribution is a licence obligation, not decoration.
+        """
+        self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01")
+        assert self.calls, "add_tiles was never called"
+        assert "Planet Labs" in self.calls[0]["kwargs"]["attribution"]
+
+    def test_a_caller_supplied_attribution_is_not_overridden(self):
+        """``setdefault`` means an explicit attribution wins, as for any other add_tiles keyword."""
+        self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01", attribution="mine")
+        assert self.calls[0]["kwargs"]["attribution"] == "mine"
+
+    def test_the_provider_carries_the_name_and_zoom(self):
+        """The built provider keeps the preset's identity and zoom ceiling.
+
+        Test scenario:
+            ``max_zoom`` bounds what cleopatra will request; losing it would let it ask for tiles the
+            service does not serve.
+        """
+        self._map(TROPICAL).basemap("Planet.NICFI", date="2024-01")
+        provider = self.calls[0]["source"]
+        assert provider.name == "Planet.NICFI.analytic.2024-01", provider.name
+        assert provider.max_zoom == 20, provider.max_zoom
+
+    def test_an_explicit_api_key_reaches_the_provider(self):
+        """``api_key=`` overrides the environment at the tier boundary too."""
+        self._map(TROPICAL).basemap(
+            "Planet.NICFI", date="2024-01", api_key="EXPLICIT-KEY"
+        )
+        assert "EXPLICIT-KEY" in self.calls[0]["source"].url
+        assert FAKE_KEY not in self.calls[0]["source"].url
+
+    def test_a_map_without_a_domain_is_not_guarded(self):
+        """With no declared domain there is nothing to check, so the basemap must still be allowed.
+
+        Test scenario:
+            The guard reads the map's ``domain``, not the axes limits — which before anything is drawn are
+            matplotlib's default unit square and would refuse every keyed basemap on Earth.
+        """
+        self._map(None).basemap("Planet.NICFI", date="2024-01")
+        assert self.calls, "an undomained map was refused"
