@@ -755,8 +755,9 @@ class TestOffLimbEveryLayerKind:
                 {"v": [1.0, 2.0]}, geometry=[Point(0, 0), Point(1, 1)], crs=4326
             )
         )
+        render = getattr(Map(crs=4326, figsize=(4, 4)), method)
         with pytest.raises(ValueError, match="at least three points"):
-            getattr(Map(crs=4326, figsize=(4, 4)), method)(two)
+            render(two)
 
     @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
     def test_composites_still_draw_when_visible(self, regional_rgb, method):

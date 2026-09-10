@@ -373,8 +373,9 @@ def test_reproject_reports_an_empty_view_as_off_limb():
         geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
         no_data_value=-9999.0,
     )
+    hidden = projections.orthographic(lon=-175, lat=15)
     with pytest.raises(OffLimbError, match="too few sample points"):
-        reproject(ds, projections.orthographic(lon=-175, lat=15))
+        reproject(ds, hidden)
 
 
 def test_reproject_passes_other_failures_through():
@@ -385,8 +386,9 @@ def test_reproject_passes_other_failures_through():
         def to_crs(self, crs):
             raise RuntimeError("PROJ: proj_create: unrecognized format / unknown name")
 
+    broken = Broken()
     with pytest.raises(RuntimeError) as caught:
-        reproject(Broken(), 3857)
+        reproject(broken, 3857)
     assert not isinstance(caught.value, OffLimbError), (
         "a real projection failure must not be reported as an empty view"
     )
