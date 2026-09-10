@@ -146,6 +146,13 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
+        A keyed preset's coverage is **not** checked here, unlike the static tier. A web map is pannable
+        and zoomable, so it has no one extent to check against: the initial ``center``/``zoom`` is where
+        the viewer starts, not where they stay, and refusing a NICFI basemap because the first view sits
+        outside the tropics would block a map the viewer can simply pan into. The static tier renders one
+        fixed extent, where an out-of-coverage basemap is a dead end rather than a scroll away, which is
+        why the guard lives there.
+
         Args:
             provider: A token-free basemap name — ``"CartoDark"``, ``"CartoLight"``, ``"CartoVoyager"`` or
                 ``"OSM"`` (case-insensitive) — or a **keyed** preset name such as ``"Planet.NICFI"`` (see

@@ -71,6 +71,12 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
 
+        A keyed preset's coverage is **not** checked here, unlike the static tier. A Bokeh plot is pannable
+        and zoomable, so there is no one extent to check against — refusing a NICFI basemap because the
+        opening view sits outside the tropics would block a map the viewer can pan into. The static tier
+        renders one fixed extent, where an out-of-coverage basemap is a dead end, which is where the guard
+        lives.
+
         Args:
             provider: A ``geoviews.tile_sources`` provider name (``"CartoLight"``/``"OSM"``/
                 ``"EsriImagery"``/…); a raw XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``);
