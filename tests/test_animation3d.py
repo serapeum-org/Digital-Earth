@@ -131,8 +131,9 @@ def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
 def _record_pyvista_calls(monkeypatch, scene):
     """Record what orbit() hands to each pyvista call, rendering nothing.
 
-    The frame writer is stubbed out too: with `orbit_on_path` replaced, no frame is ever appended, and closing
-    an empty GIF writer is an error rather than the point of these tests.
+    The frame writer is stubbed out too. Not because closing an empty one fails — it does not, as
+    `test_orbit_finalizes_writer_when_an_unknown_kwarg_raises` relies on — but because these tests are about
+    which arguments reach which call, and opening a writer for that is pure cost.
     """
     seen = {}
 
@@ -175,22 +176,28 @@ def test_orbit_forwards_the_path_shape_to_the_generator(monkeypatch, tmp_path):
     scene.close()
 
 
-def test_orbit_path_defaults_match_pyvistas_own(monkeypatch, tmp_path):
-    """Calling orbit() with no shaping arguments reproduces pyvista's defaults, so old clips are unchanged.
+def test_orbit_path_defaults_are_the_documented_ones(monkeypatch, tmp_path):
+    """Calling orbit() with no shaping arguments sends the documented defaults, so old clips are unchanged.
 
-    The defaults are asserted against `generate_orbital_path`'s own signature rather than hard-coded, so this
-    fails if pyvista changes them out from under us instead of silently drifting.
+    The values are asserted as *our* contract, not against `inspect.signature(pv.Plotter...)`. They were
+    chosen to equal pyvista's at the time of writing, but gating on upstream's would mean a pyvista release
+    that changed a default turned an unrelated dependency bump into red CI — and the only way back to green,
+    copying the new value, would change our users' fly-throughs. That is precisely what this test exists to
+    prevent, so ours are pinned here and following upstream stays a deliberate decision.
     """
     scene = _terrain_scene()
     seen = _record_pyvista_calls(monkeypatch, scene)
     scene.orbit(str(tmp_path / "spin.gif"), n_frames=6)
     generated = seen["generate_orbital_path"]
-    upstream = inspect.signature(pv.Plotter.generate_orbital_path).parameters
-    for name in ("factor", "shift", "viewup"):
-        assert generated[name] == upstream[name].default, (
-            f"orbit()'s {name} default ({generated[name]!r}) must match pyvista's "
-            f"({upstream[name].default!r}) so existing fly-throughs render identically"
-        )
+    assert generated["factor"] == 3.0, (
+        f"the documented factor default is 3.0, got {generated['factor']!r}"
+    )
+    assert generated["shift"] == 0.0, (
+        f"the documented shift default is 0.0, got {generated['shift']!r}"
+    )
+    assert generated["viewup"] is None, (
+        f"the documented viewup default is None, got {generated['viewup']!r}"
+    )
     scene.close()
 
 
@@ -229,6 +236,18 @@ def test_orbit_kwargs_still_reach_orbit_on_path(monkeypatch, tmp_path):
     scene.close()
 
 
+def _orbit_geometry(scene, **shape):
+    """Return the mean horizontal radius and height of the path orbit() would fly for `shape`."""
+    path = scene.plotter.generate_orbital_path(n_points=8, **shape)
+    points = np.asarray(path.points)
+    radius = float(
+        np.hypot(
+            points[:, 0] - points[:, 0].mean(), points[:, 1] - points[:, 1].mean()
+        ).mean()
+    )
+    return radius, float(points[:, 2].mean())
+
+
 def test_orbit_writes_a_gif_with_a_shaped_path(tmp_path):
     """A shaped orbit renders for real, not just in the argument plumbing.
 
@@ -240,13 +259,105 @@ def test_orbit_writes_a_gif_with_a_shaped_path(tmp_path):
         str(tmp_path / "close.gif"),
         n_frames=6,
         factor=0.9,
-        shift=1.6,
+        shift=8.0,
         viewup=(0.0, 0.0, 1.0),
     )
     assert (tmp_path / "close.gif").stat().st_size > 0, (
         "a shaped orbit must still write frames"
     )
     assert out.endswith("close.gif")
+    scene.close()
+
+
+def test_factor_and_shift_actually_move_the_orbit():
+    """factor scales the orbit's radius and shift raises it — the geometry, not just the argument passing.
+
+    Asserting only that a shaped orbit writes a non-empty file would pass with the feature removed, since the
+    unshaped orbit writes one too. These are the numbers the arguments exist to change.
+    """
+    scene = _terrain_scene()
+    base_radius, base_height = _orbit_geometry(scene)
+    closer_radius, _ = _orbit_geometry(scene, factor=0.9)
+    wider_radius, _ = _orbit_geometry(scene, factor=6.0)
+    _, lifted_height = _orbit_geometry(scene, shift=8.0)
+    assert closer_radius < base_radius, (
+        f"factor below the default must close the orbit in: {closer_radius} !< {base_radius}"
+    )
+    assert wider_radius > base_radius, (
+        f"factor above the default must widen the orbit: {wider_radius} !> {base_radius}"
+    )
+    assert lifted_height == pytest.approx(base_height + 8.0), (
+        f"shift must raise the orbit by its own value: {lifted_height} != {base_height} + 8.0"
+    )
+    scene.close()
+
+
+def test_shift_moves_along_viewup_not_along_z():
+    """shift offsets the orbit along `viewup`, which is only the z axis while viewup is z-aligned.
+
+    pyvista computes `center += np.array(viewup) * shift`, so the two new arguments interact. The docstring
+    says so; this pins it, because a y-up scene shifted "upwards" moves along y.
+    """
+    scene = _terrain_scene()
+    path = scene.plotter.generate_orbital_path(
+        n_points=8, viewup=(0.0, 1.0, 0.0), shift=2.0
+    )
+    unshifted = scene.plotter.generate_orbital_path(
+        n_points=8, viewup=(0.0, 1.0, 0.0), shift=0.0
+    )
+    moved = np.asarray(path.points).mean(axis=0) - np.asarray(unshifted.points).mean(
+        axis=0
+    )
+    assert moved[1] == pytest.approx(2.0), (
+        f"a y-up shift must move along y, got {moved}"
+    )
+    assert moved[2] == pytest.approx(0.0, abs=1e-6), (
+        f"a y-up shift must not move along z, got {moved}"
+    )
+    scene.close()
+
+
+def test_orbit_refuses_threaded_rather_than_writing_nothing(tmp_path):
+    """threaded=True is rejected: it would return a path for a file that never gets written.
+
+    `orbit_on_path(threaded=True)` returns before the render thread has appended a frame, so orbit's
+    `finally` closes the writer first and no file is produced — silently, with the path handed back as if it
+    had been. Refusing is the honest answer.
+    """
+    scene = _terrain_scene()
+    out = tmp_path / "threaded.gif"
+    with pytest.raises(ValueError, match="threaded"):
+        scene.orbit(str(out), n_frames=6, threaded=True)
+    assert not out.exists(), "nothing should be written for a rejected orbit"
+    scene.close()
+
+
+@pytest.mark.parametrize(
+    "kwargs, message",
+    [
+        ({"factor": 0.0}, "positive factor"),
+        ({"factor": -2.0}, "positive factor"),
+        ({"n_frames": 1}, "at least 3 frames"),
+        ({"viewup": (0.0, 1.0)}, "3-component viewup"),
+    ],
+    ids=["zero-factor", "negative-factor", "too-few-frames", "short-viewup"],
+)
+def test_orbit_rejects_degenerate_shapes(tmp_path, kwargs, message):
+    """Degenerate path arguments raise ValueError naming the argument, instead of rendering nonsense.
+
+    Args:
+        tmp_path: Destination for the file that must not be written.
+        kwargs: The single degenerate argument under test.
+        message: Fragment the error must contain, so the message names the offending argument.
+
+    Test scenario:
+        Before these arguments existed none of these values was reachable. A zero or negative factor gives a
+        degenerate or mirrored path, fewer than three frames is not a circle, and a two-component viewup fails
+        deep inside numpy with a message naming neither viewup nor orbit.
+    """
+    scene = _terrain_scene()
+    with pytest.raises(ValueError, match=message):
+        scene.orbit(str(tmp_path / "bad.gif"), **kwargs)
     scene.close()
 
 
@@ -268,3 +379,25 @@ def test_orbit_finalizes_writer_when_an_unknown_kwarg_raises(tmp_path):
         getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
     ), "the frame writer must be closed even when orbit_on_path rejects a keyword"
     scene.close()
+
+
+def test_jupyter_round_trips_the_process_global_backend():
+    """jupyter() really does change PyVista's process-wide backend, and it can be put back.
+
+    The doctest on the method shows the same round trip, but a doctest shares its interpreter with every other
+    one in `doctests-3d`. Asserting it here, where the restore is in a fixture-free `finally` that pytest
+    cannot skip, is what makes the claim safe to make.
+    """
+    scene = _terrain_scene()
+    previous = pv.global_theme.jupyter_backend
+    try:
+        scene.jupyter("static")
+        assert pv.global_theme.jupyter_backend == "static", (
+            f"jupyter() must set the backend, got {pv.global_theme.jupyter_backend!r}"
+        )
+    finally:
+        pv.set_jupyter_backend(previous)
+        scene.close()
+    assert pv.global_theme.jupyter_backend == previous, (
+        f"the backend must round-trip, got {pv.global_theme.jupyter_backend!r} not {previous!r}"
+    )
