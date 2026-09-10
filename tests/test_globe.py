@@ -640,6 +640,29 @@ class TestOffLimbEveryLayerKind:
             f"artists ({len(artists)}) must match registered layers ({len(hidden.layers)})"
         )
 
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_off_limb_features_do_not_break_triangulation(self, hidden, method):
+        """A FeatureCollection off the view leaves too few points to triangulate, not a crash.
+
+        Test scenario:
+            A vector reprojection does not raise the way a raster warp does — it sends the points to
+            infinity, and the finite filter then removes them. Triangulation needs three, so an off-limb
+            FeatureCollection died with "x and y arrays must have a length of at least 3" instead of
+            drawing nothing like every other hidden layer.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0, 3.0]},
+            geometry=[Point(4.0, 53.0), Point(4.5, 53.2), Point(4.2, 53.4)],
+            crs=4326,
+        )
+        assert getattr(hidden, method)(FeatureCollection(gdf)) is None, (
+            f"{method} should draw nothing when its features are off the view"
+        )
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None

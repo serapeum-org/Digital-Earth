@@ -447,6 +447,11 @@ class VectorMixin(_MixinBase):
             y
         )  # drop far-side points on a globe (Triangulation needs finite)
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
+        if x.size < 3:
+            # A vector reprojection does not raise when the data is off the view — it sends the points to
+            # infinity, which the filter above then removes. Too few survivors to triangulate means the
+            # same thing an OffLimbError means for a raster: there is nothing on the view to draw.
+            return None
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
         # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
