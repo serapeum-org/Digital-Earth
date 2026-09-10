@@ -50,12 +50,15 @@ dependencies = [
 # NOTE: pixi exposes this extra as a feature named `3d`, which the `viz3d` env uses directly — do NOT also
 # declare a `[tool.pixi.feature.viz3d.pypi-dependencies]` table duplicating these.
 "3d" = [
-    "pyvista >=0.48",
-    "trame >=3.13",
-    # trame-vtk / trame-vuetify are the widget backends export_html (interactive HTML save) needs; the bare
-    # `trame` meta-package does not pull them, so list them explicitly or `export_html` raises at runtime.
-    "trame-vtk >=2.8",
-    "trame-vuetify >=2.7",
+    # `pyvista[jupyter]` is not a notebook nicety — that extra IS pyvista's trame/vtk.js export stack, the one
+    # `export_html` runs on, and pyvista redefines it per version: 0.48 pulls trame + trame-client/-server/-vtk
+    # (with its own exclusions) + trame-vuetify + nest-asyncio2, while 0.49 moved trame support out to
+    # trame-pyvista. Hand-listing the 0.48 shape here broke `export_html` on 0.49 and dropped nest-asyncio2 on
+    # every version (#158), so let pyvista declare its own stack instead of restating it.
+    # The trade this makes: `jupyter` also carries `ipywidgets` and (on 0.48) `jupyter-server-proxy`, which
+    # pulls jupyter-server/tornado/simpervisor. A headless or CLI user of the 3-D tier installs that notebook
+    # stack too. Accepted deliberately — it is what keeps the export dependencies correct per pyvista version.
+    "pyvista[jupyter] >=0.48",
     "geovista >=0.5.3",
     "imageio >=2.34",
     "imageio-ffmpeg >=0.5",

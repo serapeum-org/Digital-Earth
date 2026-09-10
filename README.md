@@ -72,6 +72,10 @@ pip install 'digitalearth[3d]'            # true-3D scenes (PyVista)
 pip install 'digitalearth[web]'           # MapLibre + deck.gl web maps, shareable HTML
 ```
 
+The `3d` extra installs `pyvista[jupyter]`, because that extra is the trame/vtk.js stack
+`Scene3D.export_html` renders through and pyvista redefines it per version. It brings a notebook stack
+along with it (`ipywidgets`, and `jupyter-server-proxy` on pyvista 0.48) even for headless use.
+
 The `web` tier renders pyramids rasters/vectors as MapLibre GL JS / deck.gl layers and exports a
 self-contained HTML page — `WebMap().choropleth(gdf, column="pop").basemap().save("map.html")`, or
 `quickplot(data, backend="web")`. See `docs/examples/web/` for a runnable gallery.

@@ -11,10 +11,16 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
 
-from typing import Any, List, Optional, Self, Tuple
+import os
+import sys
+from pathlib import Path
+from typing import Any, Self, Union
 
 import numpy as np
 import pyvista as pv
+
+#: Anything acceptable as an output destination.
+Destination = Union[str, "os.PathLike[str]"]
 
 
 def house_theme() -> pv.themes.Theme:
@@ -23,6 +29,32 @@ def house_theme() -> pv.themes.Theme:
     Returns:
         pyvista.themes.Theme: a tuned :class:`pyvista.themes.DocumentTheme` — white background, ``viridis``
         default colormap, SSAA anti-aliasing — for clean publication-grade frames.
+
+    Examples:
+        - Read back the settings a scene renders with by default:
+            ```python
+            >>> from digitalearth.three_d.base import house_theme
+            >>> theme = house_theme()
+            >>> theme.cmap
+            'viridis'
+            >>> theme.background.hex_rgb
+            '#ffffff'
+            >>> theme.anti_aliasing
+            'ssaa'
+
+            ```
+        - Every call hands back a fresh theme, so tweaking one scene's colours leaves the next untouched:
+            ```python
+            >>> from digitalearth.three_d.base import house_theme
+            >>> mine = house_theme()
+            >>> mine.cmap = "magma"
+            >>> house_theme().cmap
+            'viridis'
+
+            ```
+
+    See Also:
+        Scene3DBase: applies this theme whenever its ``theme`` argument is left as ``None``.
     """
     theme = pv.themes.DocumentTheme()
     theme.background = "white"
@@ -30,6 +62,64 @@ def house_theme() -> pv.themes.Theme:
     theme.anti_aliasing = "ssaa"
     theme.font.color = "black"
     return theme
+
+
+def _pyvista_vtk_root() -> str:
+    """Return the top-level VTK package pyvista is bound to (``vtkmodules`` for a stock build).
+
+    pyvista resolves this itself and caches it as ``pyvista._vtk._VTK_ROOT``, which is the authoritative
+    answer: the backend can be any distribution name, not only a ``vtk``-prefixed one — ``PYVISTA_VTK_BACKEND``
+    names it outright, and ``cvista`` is selected merely by being importable. That attribute arrived in pyvista
+    0.49, exactly the versions where the trame component branch is reachable. On 0.48, where it is absent, the
+    MRO of a pyvista type gives the same answer for every stock build.
+
+    Returns:
+        The package name, e.g. ``"vtkmodules"``.
+    """
+    resolved = getattr(getattr(pv, "_vtk", None), "_VTK_ROOT", None)
+    if resolved:
+        return str(resolved)
+    for klass in pv.PolyData.__mro__:
+        root: str = klass.__module__.split(".")[0]
+        if root.startswith("vtk"):
+            return root
+    return "vtkmodules"
+
+
+def _trame_vtk_root() -> str:
+    """Return the top-level VTK package trame will use.
+
+    trame resolves its VTK binding through ``VTK_MODULE_NAME``, caching the import as ``vtk_module``.
+
+    Returns:
+        The package name, e.g. ``"vtkmodules"``.
+    """
+    resolved = sys.modules.get("vtk_module")
+    if resolved is not None:
+        return resolved.__name__
+    return os.environ.get("VTK_MODULE_NAME", "vtkmodules")
+
+
+def _require_one_vtk_build() -> None:
+    """Raise if trame and pyvista are bound to different VTK builds.
+
+    A process must use one VTK build: objects cannot be shared between two, and handing a mesh from one to a
+    renderer built against the other fails deep inside trame on a wrapped-type mismatch. pyvista 0.49 makes
+    this check inside its (deprecated) ``Plotter.export_html`` and raises a ``RuntimeError`` rather than an
+    ``ImportError``, so a misconfiguration cannot be mistaken for a missing package; going straight to the
+    plotter component skips it. pyvista 0.48 makes no such check anywhere. Running it here therefore restores
+    it on the component branch and adds it on the fallback, so every export is guarded on both versions.
+
+    Raises:
+        RuntimeError: If the two roots differ, naming the variable to set.
+    """
+    trame_root, pyvista_root = _trame_vtk_root(), _pyvista_vtk_root()
+    if trame_root != pyvista_root:
+        raise RuntimeError(
+            f"trame is using the {trame_root!r} VTK build but PyVista is using {pyvista_root!r}. Objects "
+            f"cannot be shared between two VTK builds — set VTK_MODULE_NAME={pyvista_root} before importing "
+            "trame, or install a single VTK."
+        )
 
 
 class Scene3DBase:
@@ -44,13 +134,52 @@ class Scene3DBase:
     Attributes:
         plotter: The wrapped :class:`pyvista.Plotter`.
         layers: Registered ``(mesh, actor)`` pairs, in add order.
+
+    Examples:
+        - Build a scene, stack two meshes on its single plotter, and read the layer registry back:
+            ```python
+            >>> import pyvista as pv
+            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> scene = Scene3DBase(off_screen=True)
+            >>> _ = scene.add_mesh(pv.Sphere())
+            >>> _ = scene.add_mesh(pv.Cube(center=(3, 0, 0)))
+            >>> len(scene.layers)
+            2
+            >>> scene.close()
+
+            ```
+        - Size the render window, then render a frame from it:
+            ```python
+            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> scene = Scene3DBase(off_screen=True, window_size=(320, 240))
+            >>> list(scene.plotter.window_size)
+            [320, 240]
+            >>> scene.screenshot().ndim
+            3
+            >>> scene.close()
+
+            ```
+        - Used as a context manager the plotter is closed on the way out, even if the body raises:
+            ```python
+            >>> import pyvista as pv
+            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> with Scene3DBase(off_screen=True) as scene:
+            ...     _ = scene.add_mesh(pv.Sphere())
+            ...     len(scene.layers)
+            1
+
+            ```
+
+    See Also:
+        digitalearth.three_d.scene3d.Scene3D: composes this base with the terrain/point-cloud/volume/vector
+            capability mixins, and is the class to use directly.
     """
 
     def __init__(
         self,
-        off_screen: Optional[bool] = None,
-        window_size: Tuple[int, int] = (1024, 768),
-        theme: Optional[pv.themes.Theme] = None,
+        off_screen: bool | None = None,
+        window_size: tuple[int, int] = (1024, 768),
+        theme: pv.themes.Theme | None = None,
         **plotter_kwargs: Any,
     ):
         self.plotter: pv.Plotter = pv.Plotter(
@@ -59,7 +188,7 @@ class Scene3DBase:
             theme=theme or house_theme(),
             **plotter_kwargs,
         )
-        self.layers: List[Tuple[Any, Any]] = []
+        self.layers: list[tuple[Any, Any]] = []
 
     def _add_actor(self, mesh: Any, actor: Any) -> Any:
         """Register a rendered ``mesh`` and its ``actor``, returning the actor.
@@ -86,6 +215,37 @@ class Scene3DBase:
 
         Returns:
             The registered :class:`pyvista.Actor`.
+
+        Examples:
+            - Add one mesh and find it, paired with its actor, in the layer registry:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> actor = scene.add_mesh(pv.Sphere())
+                >>> mesh, registered = scene.layers[0]
+                >>> registered is actor
+                True
+                >>> scene.close()
+
+                ```
+            - Style the mesh through ``kwargs``, then tune the returned actor further:
+                ```python
+                >>> import numpy as np, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> grid = pv.ImageData(dimensions=(8, 8, 1))
+                >>> grid.point_data["z"] = np.linspace(0.0, 1.0, 64)
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> actor = scene.add_mesh(grid, scalars="z", cmap="terrain", show_edges=True)
+                >>> actor.prop.opacity = 0.5
+                >>> len(scene.layers)
+                1
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            add_volume: the ray-cast counterpart, for scalar fields rather than surfaces.
         """
         actor = self.plotter.add_mesh(mesh, **kwargs)
         return self._add_actor(mesh, actor)
@@ -99,36 +259,164 @@ class Scene3DBase:
 
         Returns:
             The registered volume actor.
+
+        Examples:
+            - Ray-cast a 3-D scalar field and see it registered as one layer:
+                ```python
+                >>> import numpy as np, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> grid = pv.ImageData(dimensions=(6, 6, 6))
+                >>> grid.cell_data["v"] = np.linspace(0.0, 1.0, 125)
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> _ = scene.add_volume(grid, cmap="viridis")
+                >>> len(scene.layers)
+                1
+                >>> scene.close()
+
+                ```
+            - A volume and a surface share the one plotter, stacking in add order:
+                ```python
+                >>> import numpy as np, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> grid = pv.ImageData(dimensions=(6, 6, 6))
+                >>> grid.cell_data["v"] = np.linspace(0.0, 1.0, 125)
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> _ = scene.add_volume(grid)
+                >>> _ = scene.add_mesh(pv.Sphere(radius=1.0, center=(2, 2, 2)))
+                >>> len(scene.layers)
+                2
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            add_mesh: the surface counterpart, and the method the capability mixins call.
         """
         actor = self.plotter.add_volume(volume, **kwargs)
         return self._add_actor(volume, actor)
 
-    def screenshot(self, path: Optional[str] = None, **kwargs: Any) -> np.ndarray:
+    def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
 
         Args:
-            path: Optional file path to save the PNG. When ``None`` the image is only returned.
+            path: Optional destination for the PNG, as a string or ``os.PathLike``. When ``None`` the
+                image is only returned.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.screenshot`.
 
         Returns:
             numpy.ndarray: the ``(height, width, 3)`` RGB frame.
+
+        Examples:
+            - Render to memory and work with the frame as an array:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True, window_size=(200, 150))
+                >>> _ = scene.add_mesh(pv.Sphere())
+                >>> frame = scene.screenshot()
+                >>> frame.ndim, frame.shape[-1]
+                (3, 3)
+                >>> bool(frame.any())
+                True
+                >>> scene.close()
+
+                ```
+            - Write a PNG to disk; the frame is still returned:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Cube())
+                ...     out = os.path.join(folder, "frame.png")
+                ...     frame = scene.screenshot(path=out)
+                ...     scene.close()
+                ...     os.path.getsize(out) > 0
+                True
+
+                ```
+
+        See Also:
+            save: dispatches here for any path that is not ``*.html``.
         """
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
 
-    def export_html(self, path: str) -> str:
+    def export_html(self, path: Destination) -> str:
         """Export the scene to a self-contained interactive HTML page (via trame/vtk.js).
 
+        The page embeds the whole mesh, so it grows with the geometry rather than with the rendered image: about
+        a 1 MB vtk.js floor plus ~19 bytes per point (a 12x12 grid gives 1.1 MB, 512x512 gives 6 MB, and a
+        4700x4700 DEM gives ~430 MB). Past a modest tile the result is technically interactive but too heavy to
+        sit beside a notebook or in docs — prefer :meth:`digitalearth.three_d.Scene3D.orbit`, which writes a
+        compact GIF/MP4 fly-through of the same scene.
+
+        The destination is normalised to a ``.html`` suffix before writing, and that normalised path is what
+        comes back. pyvista's own behaviour here differs by version — the ``trame-pyvista`` component used from
+        0.49 rewrites a non-``.html`` suffix, while 0.48's native export honours the name it was given — so
+        normalising up front is what makes the two agree and keeps the returned path the file that exists.
+
         Args:
-            path: Destination ``.html`` file.
+            path: Destination file. A suffix other than ``.html`` (including ``.HTML``) is replaced with
+                ``.html``; a name with no suffix gains one. Replacement is :meth:`pathlib.Path.with_suffix`,
+                matching what ``trame-pyvista`` does, so a dotted stem loses its last segment
+                (``report.v2`` becomes ``report.html``). Note :meth:`save` dispatches only on a literal
+                ``.html`` suffix, so ``save(\"x.htm\")`` writes a PNG while ``export_html(\"x.htm\")``
+                writes ``x.html``.
 
         Returns:
-            The ``path`` written.
-        """
-        self.plotter.export_html(path)
-        return path
+            The ``.html`` path written, as a string.
 
-    def save(self, path: str, **kwargs: Any) -> Optional[np.ndarray]:
+        Raises:
+            ImportError: If the trame/vtk.js export stack is missing. pyvista raises this itself and its message
+                names the package to install; the ``3d`` extra pulls the stack via ``pyvista[jupyter]``.
+                Note pyvista's registry turns a *failing* plugin import into a ``UserWarning`` and drops the
+                entry, so a broken-but-installed ``trame-pyvista`` reports that same message — when the
+                package is present, read the warning for the real cause.
+            RuntimeError: If trame and pyvista are bound to different VTK builds — the message names
+                ``VTK_MODULE_NAME``, the variable that reconciles them.
+
+        Examples:
+            - Export a small scene. Asking for ``scene.HTML`` writes ``scene.html``, and the returned path is
+              the normalised one — the page that exists, on either pyvista — so it can be passed straight on:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     out = scene.export_html(os.path.join(folder, "scene.HTML"))
+                ...     scene.close()
+                ...     os.path.basename(out), os.path.getsize(out) > 0, sorted(os.listdir(folder))
+                ('scene.html', True, ['scene.html'])
+
+                ```
+
+        See Also:
+            digitalearth.three_d.Scene3D.orbit: a compact GIF/MP4 fly-through, the better choice for a heavy
+                scene.
+            save: routes here automatically for a ``*.html`` destination.
+        """
+        # pyvista >=0.49 moved trame support out into the separate `trame-pyvista` package: the export now lives
+        # on a registered `trame` plotter component and `Plotter.export_html` is deprecated. This is a capability
+        # switch, not a version one — 0.48 ships the same component registry, so a 0.48 user who installs
+        # trame-pyvista takes the component branch too. Falling back (rather than raising here) hands the
+        # not-installed case to pyvista's own actionable ImportError. The VTK-build check runs before either
+        # branch: 0.49 makes it inside the deprecated Plotter.export_html we no longer call, and 0.48 makes
+        # it nowhere at all, so doing it here is what guards both versions rather than neither.
+        destination = str(Path(path).with_suffix(".html"))
+        _require_one_vtk_build()
+        component = getattr(self.plotter, "trame", None)
+        if component is None:
+            self.plotter.export_html(destination)
+        else:
+            component.export_html(destination)
+        return destination
+
+    def save(self, path: Destination, **kwargs: Any) -> np.ndarray | None:
         """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
+
+        The HTML branch delegates to :meth:`export_html` — see there for why a heavy scene is better served by
+        :meth:`digitalearth.three_d.Scene3D.orbit`, and for the ``.html`` suffix normalisation it applies.
 
         Args:
             path: Output file. ``*.html`` exports an interactive page; anything else saves a PNG screenshot.
@@ -137,6 +425,41 @@ class Scene3DBase:
         Returns:
             Optional[numpy.ndarray]: the rendered ``(H, W, 3)`` RGB frame for the PNG path, or ``None`` for the
             HTML path (which writes an interactive page rather than a raster frame).
+
+        Examples:
+            - A raster suffix screenshots, returning the frame that was written:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     out = os.path.join(folder, "scene.png")
+                ...     frame = scene.save(out)
+                ...     scene.close()
+                ...     frame.shape[-1], os.path.getsize(out) > 0
+                (3, True)
+
+                ```
+            - An ``.html`` suffix exports an interactive page instead, and returns ``None`` rather than a frame.
+              The match is case-insensitive, and :meth:`export_html` normalises the suffix it writes, so
+              ``SCENE.HTML`` lands as ``SCENE.html``:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     returned = scene.save(os.path.join(folder, "SCENE.HTML"))
+                ...     scene.close()
+                ...     returned is None, sorted(os.listdir(folder))
+                (True, ['SCENE.html'])
+
+                ```
+
+        See Also:
+            screenshot: the raster branch, and where ``**kwargs`` end up.
+            export_html: the interactive branch.
         """
         if str(path).lower().endswith(".html"):
             self.export_html(path)
@@ -151,11 +474,66 @@ class Scene3DBase:
 
         Returns:
             Whatever :meth:`pyvista.Plotter.show` returns.
+
+        Examples:
+            - Off-screen (as in CI, or under :data:`pyvista.OFF_SCREEN`) it renders a frame and returns without
+              opening a window. What comes back is pyvista's own return value, which its ``return_cpos``
+              theme setting decides — do not rely on it:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> _ = scene.add_mesh(pv.Sphere())
+                >>> _ = scene.show()
+                >>> scene.close()
+
+                ```
+            - Keyword arguments reach :meth:`pyvista.Plotter.show`, so the camera can be framed on the way in:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> _ = scene.add_mesh(pv.Cube())
+                >>> _ = scene.show(cpos="xy")
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            screenshot: returns the rendered frame as an array instead of displaying it.
         """
         return self.plotter.show(**kwargs)
 
     def close(self) -> None:
-        """Close the wrapped plotter and free its render window."""
+        """Close the wrapped plotter and free its render window.
+
+        Closing twice is harmless, so a scene can be closed explicitly inside a ``with`` block that will close
+        it again on exit.
+
+        Examples:
+            - Free the render window when the scene is finished with:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> _ = scene.add_mesh(pv.Sphere())
+                >>> scene.close()
+                >>> len(scene.layers)
+                1
+
+                ```
+            - A second close is a no-op, not an error:
+                ```python
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> scene.close()
+                >>> scene.close()
+
+                ```
+
+        See Also:
+            __exit__: calls this on the way out of a ``with`` block.
+        """
         self.plotter.close()
 
     def __enter__(self) -> Self:
@@ -169,6 +547,11 @@ class Scene3DBase:
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
         """Close the plotter on exit (whether or not the body raised); exceptions propagate.
+
+        Args:
+            exc_type: Exception class raised in the block, or ``None``.
+            exc: The exception instance, or ``None``.
+            tb: The traceback, or ``None``.
 
         Returns:
             ``False`` — exceptions are not suppressed.
