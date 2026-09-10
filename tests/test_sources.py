@@ -303,3 +303,40 @@ def test_raster_source_nodata_is_exact_not_tolerant():
         "a value near (but != ) nodata must be kept under exact-compare"
     )
     assert z[0, 0] == 1.0 and z[1, 1] == 4.0, f"real values changed: {z}"
+
+
+@pytest.mark.parametrize(
+    "values, dtype, expected_numeric",
+    [
+        ([1, 2], "int64", True),
+        ([1.5, 2.5], "float64", True),
+        ([True, False], "bool", False),
+        (["1 days", "2 days"], "timedelta64[ns]", True),
+        (["2020-01-01", "2020-01-02"], "datetime64[ns]", False),
+    ],
+)
+def test_value_column_matches_the_numpy_rule_it_replaced(
+    values, dtype, expected_numeric
+):
+    """The pandas classification answers what np.issubdtype did, wherever numpy could answer.
+
+    Test scenario:
+        Swapping np.issubdtype for pandas silently moved two dtypes if done naively: bools (pandas calls
+        them numeric, numpy did not) and timedeltas (numpy called them numeric via np.signedinteger,
+        pandas does not). Both are pinned here so the swap stays behaviour-preserving.
+    """
+    import geopandas as gpd
+    import pandas as pd
+    from pyramids.feature import FeatureCollection
+    from shapely.geometry import Point
+
+    gdf = gpd.GeoDataFrame(
+        {"candidate": pd.Series(values).astype(dtype)},
+        geometry=[Point(0, 0), Point(1, 1)],
+        crs=4326,
+    )
+    src = get_source(FeatureCollection(gdf))
+    chosen = src.z is not None
+    assert chosen is expected_numeric, (
+        f"a {dtype} column should {'' if expected_numeric else 'not '}be picked as z"
+    )

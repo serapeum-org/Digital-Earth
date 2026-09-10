@@ -12,7 +12,11 @@ read ``band - 1`` internally.
 from typing import Any, Optional
 
 import numpy as np
-from pandas.api.types import is_bool_dtype, is_numeric_dtype
+from pandas.api.types import (
+    is_bool_dtype,
+    is_numeric_dtype,
+    is_timedelta64_dtype,
+)
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import mask_nodata, read_masked_band
@@ -181,8 +185,9 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
 
     ``FeatureCollection`` is a GeoDataFrame subclass, so we read its geometry/CRS directly. ``z`` is the
     first numeric non-geometry column (or ``None`` when there is none). "Numeric" is decided by pandas, so
-    a nullable ``Int64``/``Float64`` counts and a ``string``/``boolean`` column does not — bools are
-    excluded deliberately, since pandas calls them numeric but they were never a value column here. Point
+    a nullable ``Int64``/``Float64`` counts and a ``string``/``boolean`` column does not. Bools are
+    excluded and timedeltas included so the answer matches what ``np.issubdtype`` used to give wherever it
+    could give one at all — it called bools non-numeric and timedeltas numeric. Point
     coordinates come from the geometry; non-point geometries fall back to their centroid.
     """
     geom_name = fc.geometry.name
@@ -195,12 +200,18 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
 
     # Classified with pandas, not np.issubdtype: the latter understands only numpy dtypes and *raises*
     # on a pandas extension dtype rather than answering False, so one nullable or string column anywhere
-    # in the frame took down every vector render. Bools are excluded to match what numpy did — they are
-    # numeric to pandas but were never picked as a value column here.
+    # in the frame took down every vector render. The rule reproduces what numpy answered wherever numpy
+    # could answer at all — bools stay out (numeric to pandas, but np.issubdtype said False) and
+    # timedeltas stay in (pandas says they are not numeric, but np.timedelta64 sits under np.signedinteger
+    # so np.issubdtype said True).
     value_cols = [
         c
         for c in fc.columns
-        if c != geom_name and is_numeric_dtype(fc[c]) and not is_bool_dtype(fc[c])
+        if c != geom_name
+        and (
+            (is_numeric_dtype(fc[c]) and not is_bool_dtype(fc[c]))
+            or is_timedelta64_dtype(fc[c])
+        )
     ]
     column = value_cols[0] if value_cols else None
     z = _axis(fc[column].to_numpy(), "z") if column is not None else None
