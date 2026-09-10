@@ -1,4 +1,7 @@
-"""Keyed-XYZ basemap presets (#160) — the provider definitions and the per-tier dispatch.
+"""Keyed-XYZ basemap presets (#160) — the provider definitions and the static-tier dispatch.
+
+The web and interactive dispatch live in ``test_web_basemaps.py`` /
+``test_interactive_basemaps.py``, which is what the per-tier CI tasks glob.
 
 The definitions in :mod:`digitalearth.base.basemaps` are pure data, so most of this runs in the lean ``dev``
 env. The tier-dispatch tests ``importorskip`` their engine. Nothing here needs a real Planet key or reaches
@@ -390,79 +393,6 @@ class TestStaticTierDispatch:
         )
 
 
-class TestWebTierDispatch:
-    """``WebMap.basemap`` resolving a keyed preset (MapLibre)."""
-
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the web extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("maplibre")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
-
-    def test_the_preset_becomes_a_raster_source_carrying_the_key(self):
-        """The web tier emits the tile URL into a MapLibre raster source.
-
-        Test scenario:
-            Replaying the registered layer against a recorder is the only way to see the source spec
-            without rendering a widget.
-        """
-        from digitalearth.web import WebMap
-
-        recorded = {}
-
-        class Recorder:
-            def add_source(self, src_id, source):
-                recorded[src_id] = source
-
-            def add_layer(self, layer):
-                pass
-
-        m = WebMap().basemap("Planet.NICFI", date="2024-01")
-        for apply in m.layers:
-            apply(Recorder())
-        assert recorded, "no source was registered"
-        source = next(iter(recorded.values()))
-        assert source["type"] == "raster", (
-            f"expected a raster source, got {source['type']!r}"
-        )
-        assert FAKE_KEY in source["tiles"][0], "the credential never reached the source"
-        assert "Planet Labs" in source["attribution"], "the attribution was not carried"
-
-    def test_preset_keywords_on_an_ordinary_provider_are_refused(self):
-        """``date=`` means nothing to CartoDark, so it is an error rather than a silent no-op.
-
-        Test scenario:
-            Silently ignoring it would render the wrong basemap and look like the preset failed.
-        """
-        from digitalearth.web import WebMap
-
-        with pytest.raises(ValueError, match="no preset keywords"):
-            WebMap().basemap("CartoDark", date="2024-01")
-
-    def test_the_unknown_provider_error_lists_the_presets(self):
-        """A caller who mistypes a preset should see the presets among the options.
-
-        Test scenario:
-            The message previously listed only the four token-free names.
-        """
-        from digitalearth.web import WebMap
-
-        with pytest.raises(ValueError, match="planet.nicfi"):
-            WebMap().basemap("NotARealBasemap")
-
-    def test_ordinary_providers_still_work(self):
-        """The four token-free basemaps are unaffected by the dispatch."""
-        from digitalearth.web import WebMap
-
-        assert WebMap().basemap("CartoDark").layers, (
-            "the ordinary basemap path stopped registering layers"
-        )
-
-
 class TestSourceIsImmutable:
     """``KeyedTileSource`` is frozen — a shared preset must not be mutable by one caller."""
 
@@ -479,68 +409,15 @@ class TestSourceIsImmutable:
         with pytest.raises(dataclasses.FrozenInstanceError):
             source.attribution = "mine"
 
-    def test_a_source_without_params_builds_a_url(self):
-        """``params`` defaults to empty, so a service with no extra placeholders still works.
+    def test_the_params_mapping_cannot_be_edited_either(self):
+        """``frozen=True`` protects the field, not the dict it points at — so the mapping is wrapped.
 
         Test scenario:
-            NICFI has a ``{mosaic}``; a simpler keyed service would have only ``{api_key}``.
+            Without this, ``source.params["mosaic"] = ...`` would edit a preset in place, and presets are
+            handed to more than one tier.
         """
-        source = KeyedTileSource(
-            name="Example",
-            url_template="https://a/{z}/{x}/{y}.png?k={api_key}",
-            attribution="Example",
-            credential_env="EXAMPLE_KEY",
-        )
-        assert source.tile_url(api_key="K") == "https://a/{z}/{x}/{y}.png?k=K"
-
-
-class TestInteractiveTierDispatch:
-    """``InteractiveMap.tiles`` resolving a keyed preset (HoloViz / GeoViews)."""
-
-    @pytest.fixture(autouse=True)
-    def _need_engine(self, monkeypatch):
-        """Skip without the interactive extra, and supply a fake credential.
-
-        Args:
-            monkeypatch: pytest's environment patcher.
-        """
-        pytest.importorskip("geoviews")
-        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
-
-    def test_the_preset_becomes_a_wmts_with_upper_cased_placeholders(self):
-        """GeoViews wants ``{Z}/{X}/{Y}``, so the lower-case template is converted on the way in.
-
-        Test scenario:
-            Handing GeoViews the lower-case form yields a WMTS that requests literal ``{z}`` tiles.
-        """
-        from digitalearth.interactive import InteractiveMap
-
-        m = InteractiveMap().tiles("Planet.NICFI", preset={"date": "2024-01"})
-        url = m.layers[0].data
-        assert "{Z}/{X}/{Y}" in url, f"placeholders were not upper-cased: {url}"
-        assert FAKE_KEY in url, "the credential never reached the element"
-        assert "planet_medres_normalized_analytic_2024-01_mosaic" in url, (
-            f"wrong mosaic: {url}"
-        )
-
-    def test_preset_keywords_without_a_preset_provider_are_refused(self):
-        """``preset=`` means nothing to a catalog provider, so it is an error rather than ignored.
-
-        Test scenario:
-            Silently dropping it would render CartoLight while the caller believed they got NICFI.
-        """
-        from digitalearth.interactive import InteractiveMap
-
-        with pytest.raises(ValueError, match="no preset keywords"):
-            InteractiveMap().tiles("CartoLight", preset={"date": "2024-01"})
-
-    def test_ordinary_providers_are_unaffected(self):
-        """A catalog name still resolves through the GeoViews tile sources as before."""
-        from digitalearth.interactive import InteractiveMap
-
-        assert InteractiveMap().tiles("CartoLight").layers, (
-            "the ordinary tile path stopped working"
-        )
+        with pytest.raises(TypeError):
+            planet_nicfi("2024-01").params["mosaic"] = "something-else"
 
 
 class TestStaticTierDetails:
