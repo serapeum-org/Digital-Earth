@@ -612,3 +612,97 @@ class TestStaticTierDetails:
         """
         self._map(None).basemap("Planet.NICFI", date="2024-01")
         assert self.calls, "an undomained map was refused"
+
+
+class TestUrlSafety:
+    """The credential lives in the URL, so nothing may rewrite or expose that URL unnoticed."""
+
+    def test_a_non_http_template_is_refused(self):
+        """cleopatra reports a non-http(s) URL by raising *with the URL in the message*.
+
+        Test scenario:
+            That message would carry the credential, and it is an exception rather than a log record, so
+            the static tier's log suppression does not cover it. Refusing here closes the path.
+        """
+        source = KeyedTileSource(
+            name="Example",
+            url_template="ftp://a/{z}/{x}/{y}.png?k={api_key}",
+            attribution="Example",
+            credential_env="EXAMPLE_KEY",
+        )
+        with pytest.raises(ValueError, match="non-http"):
+            source.tile_url(api_key="K")
+
+    @pytest.mark.parametrize("bad", ["a#b", "a?b", "a&b", "a b"])
+    def test_a_placeholder_value_cannot_rewrite_the_request(self, bad):
+        """A URL delimiter in a substituted value would change what is requested, not fill a slot.
+
+        Args:
+            bad: A placeholder value containing a delimiter.
+
+        Test scenario:
+            ``#`` is the dangerous one — it truncates the query string and silently drops ``api_key``,
+            turning an authenticated request into an anonymous one that fails confusingly.
+        """
+        with pytest.raises(ValueError, match="rewrite the tile request"):
+            planet_nicfi("2024-01", mosaic=bad).tile_url(api_key="K")
+
+    def test_a_normal_mosaic_id_is_unaffected(self):
+        """The delimiter guard must not reject the ids Planet actually publishes."""
+        url = planet_nicfi("2024-01").tile_url(api_key="K")
+        assert "planet_medres_normalized_analytic_2024-01_mosaic" in url
+
+
+class TestKeyStaysOutOfTheLog:
+    """M3: assert no record escapes, not merely that the logger level was raised."""
+
+    def test_no_log_record_carries_the_credential(self, monkeypatch):
+        """A root handler at DEBUG must see no record containing the key.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Test scenario:
+            The previous test asserted the logger's *level* during the fetch, which would still pass if
+            the record reached a handler by another route — propagation to an already-configured root
+            logger, for instance.
+        """
+        pytest.importorskip("matplotlib")
+        from cleopatra.basemap import tiles as cleo_tiles
+
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+        def failing_fetch(tile, provider, timeout, retries, user_agent="test"):
+            logging.getLogger("cleopatra.basemap.tiles").debug(
+                "Tile fetch failed for %s",
+                provider.build_url(x=tile.x, y=tile.y, z=tile.z),
+            )
+            raise ConnectionError("network not used in tests")
+
+        monkeypatch.setattr(cleo_tiles, "fetch_single_tile", failing_fetch)
+
+        records = []
+
+        class Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record.getMessage())
+
+        root = logging.getLogger()
+        handler = Capture()
+        root.addHandler(handler)
+        previous_root = root.level
+        root.setLevel(logging.DEBUG)
+        logging.getLogger("cleopatra.basemap.tiles").setLevel(logging.NOTSET)
+        try:
+            from digitalearth import Map
+
+            m = Map(domain=TROPICAL)
+            m.ax.set_xlim(TROPICAL[0], TROPICAL[2])
+            m.ax.set_ylim(TROPICAL[1], TROPICAL[3])
+            with pytest.raises(ConnectionError):
+                m.basemap("Planet.NICFI", date="2024-01")
+        finally:
+            root.removeHandler(handler)
+            root.setLevel(previous_root)
+        leaked = [msg for msg in records if FAKE_KEY in msg]
+        assert not leaked, f"the credential reached a log handler: {leaked}"

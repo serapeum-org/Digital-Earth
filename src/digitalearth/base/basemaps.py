@@ -15,10 +15,22 @@ the static backend is the only place an ``xyzservices.TileProvider`` is construc
 **Planet NICFI** is the first preset (:func:`planet_nicfi`): ~4.77 m monthly mosaics of the tropics, free for
 non-commercial use under NICFI terms. Two things about it are worth knowing before you rely on it:
 
-* **The credential ends up in the tile URL.** That is how the service authenticates, but it means the URL is
-  sensitive. ``cleopatra.basemap.tiles`` logs the built URL at ``DEBUG`` when a tile fetch fails, so the
-  static backend suppresses that logger for the duration of a keyed fetch — see
-  ``digitalearth.static.maps.decoration``. Do not otherwise run tile fetches at ``DEBUG`` into shared logs.
+* **The credential ends up in the tile URL, and therefore in anything that records that URL.** That is how
+  an XYZ service authenticates a browser, so it is inherent rather than a bug — but it has consequences
+  worth stating plainly:
+
+  - **A saved web map contains the key.** ``WebMap.basemap("Planet.NICFI").save("map.html")`` writes the
+    tile URL, key and all, into the HTML. So does a rendered interactive map, which means a committed
+    notebook with saved output carries it too. Treat such a file as a secret: do not commit it, publish
+    it, or paste it into an issue. The static tier does not have this exposure — it fetches tiles at plot
+    time and embeds only the resulting image.
+  - **A failed fetch can log it.** ``cleopatra.basemap.tiles`` logs the built URL at ``DEBUG``, so the
+    static backend suppresses that logger for the duration of a keyed fetch (see
+    ``digitalearth.static.maps.decoration``). Do not otherwise run tile fetches at ``DEBUG`` into shared
+    logs.
+  - **A non-``http(s)`` URL is refused here**, before it reaches a tile engine, because cleopatra reports
+    that case by raising with the offending URL in the message — which the log suppression does not
+    cover, since it is an exception rather than a log record.
 * **The mosaic ids are Planet's, and they have varied.** The pattern here matches Planet's published
   normalized-analytic / visual naming, but the ids should be confirmed against Planet's ``/mosaics`` API for
   any date you depend on; ``mosaic=`` overrides the derived id when they differ.
@@ -174,7 +186,9 @@ class KeyedTileSource:
             The URL template, ready for a tile engine.
 
         Raises:
-            ValueError: when no credential is available (see :meth:`resolve_key`).
+            ValueError: when no credential is available (see :meth:`resolve_key`), when a substituted
+                placeholder contains a URL delimiter that would rewrite the request, or when the template
+                is not ``http(s)``.
 
         Examples:
             - The credential is filled in and the tile coordinates are left for the engine:
@@ -200,7 +214,22 @@ class KeyedTileSource:
         """
         url = self.url_template
         for placeholder, value in self.params.items():
+            for delimiter in ("#", "?", "&", " "):
+                if delimiter in value:
+                    # `#` is the dangerous one: it would truncate the query string and silently drop the
+                    # api_key, producing an unauthenticated request rather than an error.
+                    raise ValueError(
+                        f"{self.name}: the {placeholder!r} value {value!r} contains {delimiter!r}, which "
+                        f"would rewrite the tile request rather than fill a placeholder."
+                    )
             url = url.replace("{" + placeholder + "}", value)
+        if not url.lower().startswith(("http://", "https://")):
+            # Refuse here rather than let a tile engine complain: cleopatra reports this by raising with
+            # the offending URL in the message, and that message would carry the credential.
+            raise ValueError(
+                f"{self.name} has a non-http(s) tile URL, which is refused because the error a tile "
+                f"engine would raise for it quotes the URL — and the URL carries the credential."
+            )
         return url.replace("{api_key}", self.resolve_key(api_key))
 
     def check_bounds(self, extent: Optional[Extent]) -> None:
