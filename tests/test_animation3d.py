@@ -248,3 +248,23 @@ def test_orbit_writes_a_gif_with_a_shaped_path(tmp_path):
     )
     assert out.endswith("close.gif")
     scene.close()
+
+
+def test_orbit_finalizes_writer_when_an_unknown_kwarg_raises(tmp_path):
+    """An unrecognised orbit_kwarg raises TypeError, and the frame writer is still finalized (try/finally).
+
+    Test scenario:
+        `orbit_on_path` takes no `**kwargs`, so anything it does not name — the docstring calls out `factor`
+        and `shift`, which are the named arguments here instead — raises TypeError from inside the try block.
+        The writer must still be flushed and closed, or the plotter is left holding an open GIF writer and the
+        next render appends to a half-written file. `animate` has this covered; `orbit` did not, and the new
+        keyword surface makes it the likelier way in.
+    """
+    scene = _terrain_scene()
+    out = tmp_path / "boom.gif"
+    with pytest.raises(TypeError, match="not_a_real_orbit_argument"):
+        scene.orbit(str(out), n_frames=4, not_a_real_orbit_argument=1.0)
+    assert getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed, (
+        "the frame writer must be closed even when orbit_on_path rejects a keyword"
+    )
+    scene.close()
