@@ -4,7 +4,7 @@ Three deliverables on top of a built scene:
 
 - :meth:`orbit` — sweep the camera around the scene on a circular path and write each frame to a GIF/MP4.
   The path is shapeable: ``factor`` sets its radius and ``shift`` lifts it along ``viewup``, which together
-  decide whether near-flat terrain is looked down on or seen edge-on (#159).
+  decide whether near-flat terrain is looked down on or seen edge-on.
 - :meth:`animate` — drive a frame-by-frame animation from a sequence of states (e.g. a ``DatasetCollection``
   time stack), via a user ``update`` callback, to a GIF/MP4.
 - :meth:`jupyter` — switch PyVista to the trame backend so the scene displays interactively in a notebook.
@@ -55,8 +55,8 @@ def _open_writer(plotter: Any, path: str, framerate: int) -> None:
 def _finalize_frames(plotter: Any) -> None:
     """Flush and close the frame writer so the GIF/MP4 is fully written, leaving the plotter usable.
 
-    A no-op when no writer was opened, so it is safe to call from a ``finally`` that may run before
-    :func:`_open_writer` ever succeeded.
+    A no-op when no writer was opened. Both callers open theirs before the ``try``, so this only matters to a
+    direct caller — it keeps the helper safe to use on a plotter that never wrote frames.
 
     Args:
         plotter: The :class:`pyvista.Plotter` whose ``mwriter`` should be flushed and closed.
@@ -114,7 +114,9 @@ class AnimationMixin(_MixinBase):
 
         Args:
             path: Output file. A video suffix (``.mp4``/``.mov``/``.avi``) writes a movie; anything else a GIF.
-            n_frames: Number of frames (camera positions) along the orbit. At least 3 — fewer is not a circle.
+            n_frames: Number of frames (camera positions) along the orbit. At least 3. pyvista silently
+                clamps a smaller value to 3, so fewer used to "work" and produce a three-frame clip; this
+                rejects it instead, which is a narrowing of what the argument accepted before.
             framerate: Frames per second of the output.
             factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
                 Must be positive.
@@ -136,8 +138,13 @@ class AnimationMixin(_MixinBase):
             The ``path`` written.
 
         Raises:
-            ValueError: If ``factor`` is not positive, ``n_frames`` is below 3, ``viewup`` is not three
-                components, or ``threaded=True`` is passed — see the note on it below.
+            ValueError: If ``factor`` is not positive and finite, ``shift`` is not finite, ``n_frames`` is
+                below 3, or ``viewup`` is not three finite components with a direction (a zero vector gives
+                none). Also if ``threaded=True`` is passed: :meth:`pyvista.Plotter.orbit_on_path` returns
+                before its render thread has written a frame, so the writer here would already be closed and
+                no file would be produced — drive that method yourself for a background render.
+            TypeError: If ``orbit_kwargs`` carries a keyword ``orbit_on_path`` does not name; it takes no
+                ``**kwargs`` of its own. The frame writer is still closed when this happens.
 
         Examples:
             - Orbit a terrain scene to a GIF (needs the ``3d`` extra for imageio):
@@ -157,8 +164,9 @@ class AnimationMixin(_MixinBase):
 
                 ```
             - Close the orbit in and lift it clear of the terrain, so a near-flat sheet is looked down on
-              rather than seen edge-on. This scene's z runs 0..6, so a shift above that clears it; pick the
-              value from your own data's extent, not from this example:
+              rather than seen edge-on. The orbit sits at the middle of the data, so a shift greater than half
+              the vertical extent lifts the camera above it — 3.0 for this scene, whose z runs 0..6. Pick it
+              from your own data's extent, not from this example:
                 ```python
                 >>> import numpy as np, os, tempfile
                 >>> from digitalearth.three_d import Scene3D
@@ -168,7 +176,7 @@ class AnimationMixin(_MixinBase):
                 ...     scene = Scene3D(off_screen=True)
                 ...     _ = scene.terrain(get_source(dem), z_exaggeration=3.0)
                 ...     out = scene.orbit(
-                ...         os.path.join(folder, "spin.gif"), n_frames=6, factor=0.9, shift=8.0
+                ...         os.path.join(folder, "spin.gif"), n_frames=4, factor=0.9, shift=8.0
                 ...     )
                 ...     size = os.path.getsize(out)
                 ...     scene.close()
@@ -177,18 +185,31 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
-        if factor <= 0:
+        if not np.isfinite(factor) or factor <= 0:
             raise ValueError(
-                f"orbit() needs a positive factor (orbit radius), got {factor!r}"
+                f"orbit() needs a positive, finite factor (orbit radius), got {factor!r}"
             )
+        if not np.isfinite(shift):
+            raise ValueError(f"orbit() needs a finite shift, got {shift!r}")
         if n_frames < 3:
             raise ValueError(
                 f"orbit() needs at least 3 frames to describe a circle, got {n_frames!r}"
             )
-        if viewup is not None and len(viewup) != 3:
-            raise ValueError(
-                f"orbit() needs a 3-component viewup, got {len(viewup)} components: {viewup!r}"
-            )
+        if viewup is not None:
+            # Checked as a vector rather than by len(): the annotation admits a numpy array, and a (3, 1) or
+            # 0-d one either passes a length check and then dies inside pyvista naming neither viewup nor
+            # orbit, or raises TypeError from the check itself.
+            vector = np.asarray(viewup, dtype=float)
+            if vector.shape != (3,):
+                raise ValueError(
+                    f"orbit() needs a 3-component viewup, got shape {vector.shape} from {viewup!r}"
+                )
+            if not np.isfinite(vector).all():
+                raise ValueError(f"orbit() needs a finite viewup, got {viewup!r}")
+            if not vector.any():
+                raise ValueError(
+                    "orbit() cannot use a zero viewup: it names no up direction for the orbit to lie against"
+                )
         if orbit_kwargs.get("threaded"):
             # orbit_on_path(threaded=True) returns before the render thread has written a frame, so the
             # finally below closes the writer first and the file is never created — silently, with a path
@@ -247,10 +268,12 @@ class AnimationMixin(_MixinBase):
                 >>> _ = scene.terrain(get_source(dem))
                 >>> def grow(s, factor):
                 ...     s.layers[0][0].points[:, 2] *= factor
-                >>> out = scene.animate([1.1, 1.1, 1.1], os.path.join(tempfile.mkdtemp(), "grow.gif"), grow)
-                >>> os.path.getsize(out) > 0
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     out = scene.animate([1.1, 1.1, 1.1], os.path.join(folder, "grow.gif"), grow)
+                ...     size = os.path.getsize(out)
+                ...     scene.close()
+                >>> size > 0
                 True
-                >>> scene.close()
 
                 ```
         """
