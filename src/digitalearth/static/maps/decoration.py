@@ -8,8 +8,10 @@ the globe limb-splitting; ``add_features`` for the flat, hole-aware reprojected 
 moved out of pyramids into cleopatra in pyramids 0.32 / cleopatra 0.17.
 """
 
+import contextlib
 import logging
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+import math
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Tuple
 
 import numpy as np
 from cleopatra.basemap.reference import add_features, natural_earth
@@ -17,7 +19,14 @@ from cleopatra.basemap.tiles import add_tiles
 from matplotlib.collections import PolyCollection
 from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.basemaps import (
+    PRESET_KEYWORDS,
+    KeyedTileSource,
+    get_keyed_basemap,
+    is_keyed_basemap,
+)
 from digitalearth.static import projections
+from digitalearth.static.domains import resolve_domain
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +73,106 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+#: cleopatra logs the built tile URL at DEBUG when a fetch fails. For a keyed service that URL carries the
+#: credential, so the static backend silences exactly this logger while a keyed basemap is being fetched.
+_CLEOPATRA_TILES_LOGGER = "cleopatra.basemap.tiles"
+
+
+class _DropDebug(logging.Filter):
+    """Drops the ``DEBUG`` records that carry the built tile URL, and passes everything else."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Whether a record survives.
+
+        Args:
+            record: The record cleopatra is about to emit.
+
+        Returns:
+            ``False`` for ``DEBUG``, which is the level the tile URL is logged at, and ``True`` for
+            everything at ``INFO`` or above.
+        """
+        return record.levelno > logging.DEBUG
+
+
+#: One shared instance, so nesting adds and removes the same filter rather than stacking copies.
+_DROP_DEBUG = _DropDebug()
+
+
+def _edge_samples(
+    west: float, south: float, east: float, north: float, count: int = 21
+) -> Tuple[list, list]:
+    """Return points along all four edges of a box, for reprojecting it as a shape rather than a corner.
+
+    Args:
+        west: Western edge, in the box's own CRS.
+        south: Southern edge.
+        east: Eastern edge.
+        north: Northern edge.
+        count: Samples per edge. 21 is what cleopatra uses for the same job a moment later, so the
+            envelope this produces and the one it tiles against agree.
+
+    Returns:
+        ``(xs, ys)``, the sampled coordinates as two parallel lists.
+    """
+    steps = [index / (count - 1) for index in range(count)]
+    xs: list = []
+    ys: list = []
+    for step in steps:
+        x = west + (east - west) * step
+        y = south + (north - south) * step
+        xs.extend([x, x, west, east])
+        ys.extend([south, north, y, y])
+    return xs, ys
+
+
+@contextlib.contextmanager
+def _quiet_tile_urls() -> Iterator[None]:
+    """Drop the cleopatra tile logger's DEBUG records so a keyed URL cannot reach the logs.
+
+    The credential is part of the tile URL — that is how the service authenticates — and cleopatra logs
+    that URL on a failed fetch. Errors still surface: the ``ConnectionError`` cleopatra raises carries the
+    tile coordinates, not the URL, so nothing diagnostic is lost.
+
+    A filter is attached rather than the logger's level raised. Raising the level is process-global state
+    that two threads rendering keyed basemaps can interleave on — the inner restore puts back the level
+    the outer block had already changed — and it silences the logger for unrelated work in the meantime.
+    Adding and removing a filter is idempotent per block and leaves the level alone.
+
+    Yields:
+        ``None``, with the filter removed on the way out even if the fetch raises.
+    """
+    logger_obj = logging.getLogger(_CLEOPATRA_TILES_LOGGER)
+    logger_obj.addFilter(_DROP_DEBUG)
+    try:
+        yield
+    finally:
+        logger_obj.removeFilter(_DROP_DEBUG)
+
+
+def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> Any:
+    """Build the ``xyzservices.TileProvider`` cleopatra renders from a keyed source definition.
+
+    This is the one place a tile-library object is constructed: :mod:`digitalearth.base.basemaps` stays
+    engine-neutral and hands out a URL, and only the static backend needs the provider type that
+    ``add_tiles`` resolves.
+
+    Args:
+        keyed: The resolved keyed basemap.
+        api_key: Credential for it, or ``None`` to read the environment.
+
+    Returns:
+        An ``xyzservices.TileProvider`` whose URL already carries the credential.
+    """
+    from xyzservices import TileProvider
+
+    return TileProvider(
+        name=keyed.name,
+        url=keyed.tile_url(api_key),
+        attribution=keyed.attribution,
+        max_zoom=keyed.max_zoom,
+    )
 
 
 class DecorationMixin(_MixinBase):
@@ -447,10 +556,136 @@ class DecorationMixin(_MixinBase):
             **kwargs,
         )
 
-    def basemap(self, source: Any = None, **kwargs) -> Any:
+    def basemap(
+        self,
+        source: Any = None,
+        *,
+        api_key: Optional[str] = None,
+        preset: Optional[dict] = None,
+        **kwargs: Any,
+    ) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
+
+        ``source`` is passed through to cleopatra unchanged — a provider name, an
+        ``xyzservices.TileProvider``, or ``None`` for its default — with one addition: the name of a
+        **keyed** basemap preset (see :mod:`digitalearth.base.basemaps`) is resolved here into a configured
+        provider, with its credential read from the environment and its coverage checked against the map's
+        domain first.
+
+        Args:
+            source: A cleopatra provider name, an ``xyzservices.TileProvider``, ``None``, or a keyed preset
+                name such as ``"Planet.NICFI"``.
+            api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
+            preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
+                ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to
+                ``add_tiles``, and the three tiers take presets the same way.
+            **kwargs: Forwarded to ``add_tiles``.
 
         Returns:
             The tile artist ``add_tiles`` added to the axes.
+
+        Raises:
+            ValueError: when a keyed preset is unknown, its credential is unavailable, when a ``preset``
+                or an ``api_key`` is passed to an ordinary source, when a preset keyword is passed loose
+                instead of in ``preset``, or when the extent being drawn — the declared ``domain`` if there
+                is one, else the current axes limits — lies entirely outside the coverage.
+            TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.
+
+        Examples:
+            - A keyed preset resolves its own provider and credential:
+                ```python
+                >>> from digitalearth import Map                       # doctest: +SKIP
+                >>> Map(domain=(-60, -5, -55, 0)).basemap(             # doctest: +SKIP
+                ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
+                ... )                                                  # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
-        return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
+        loose = sorted(set(kwargs) & PRESET_KEYWORDS)
+        if loose:
+            # These would otherwise reach add_tiles and fail there, or worse, be accepted and ignored.
+            raise ValueError(
+                f"basemap() takes preset keywords in preset={{...}}, not loose; move {loose} into it — "
+                f"basemap({source!r}, preset={{{loose[0]!r}: ...}})"
+            )
+        if not is_keyed_basemap(source):
+            if preset:
+                raise ValueError(
+                    f"basemap({source!r}) takes no preset keywords; {sorted(preset)} apply only to a "
+                    f"keyed preset such as 'Planet.NICFI'"
+                )
+            if api_key is not None:
+                # Dropping it silently would leave a caller believing they had authenticated.
+                raise ValueError(
+                    f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
+                    f"only to a keyed preset such as 'Planet.NICFI'"
+                )
+            return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
+
+        keyed = get_keyed_basemap(str(source), **(preset or {}))
+        keyed.check_bounds(self._coverage_extent())
+        provider = _keyed_tile_provider(keyed, api_key)
+        kwargs.setdefault("attribution", keyed.attribution)
+        with _quiet_tile_urls():
+            return add_tiles(self.ax, source=provider, crs=self.crs, **kwargs)
+
+    def _coverage_extent(self) -> Optional[Tuple[float, float, float, float]]:
+        """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.
+
+        A declared ``domain`` is preferred. Without one the axes limits are used instead — reprojected to
+        lon/lat when the display CRS is something else — because plotting data and then adding a basemap is
+        the common flow, and reading only ``domain`` left the coverage guard inert for it. Matplotlib's
+        default unit square is not mistaken for an extent: cleopatra refuses to tile axes with no data, so
+        by the time this runs the limits are real.
+
+        Returns:
+            The extent in lon/lat, or ``None`` when neither source yields one.
+        """
+        domain = getattr(self, "domain", None)
+        resolved = None
+        if domain is not None:
+            try:
+                resolved = resolve_domain(domain)
+            except (KeyError, TypeError, ValueError):
+                return None  # an unrecognised domain — leave the coverage question to the service
+        if resolved is None:
+            return self._axes_lonlat_extent()
+        west, south, east, north = (float(value) for value in resolved)
+        return west, south, east, north
+
+    def _axes_lonlat_extent(self) -> Optional[Tuple[float, float, float, float]]:
+        """Return the current axes limits as lon/lat, reprojecting from the display CRS when needed.
+
+        The edges are sampled rather than just the two corners: outside the cylindrical projections a
+        projected rectangle's lon/lat envelope is not the envelope of its corners, and taking the corners
+        gave a zero-height box at the wrong latitude for a polar stereographic map. The sampling follows
+        the edges only, so a pole enclosed *inside* the box is not represented — the envelope is a good
+        approximation of what the axes show, not a proof about their interior.
+
+        Returns:
+            ``(west, south, east, north)`` in lon/lat, or ``None`` when the limits are matplotlib's
+            untouched default, the reprojection fails, or any sampled point lands outside the
+            projection's domain — in which case the coverage question is left to the service.
+        """
+        west, east = (float(v) for v in self.ax.get_xlim())
+        south, north = (float(v) for v in self.ax.get_ylim())
+        if (west, east, south, north) == (0.0, 1.0, 0.0, 1.0):
+            return None  # matplotlib's default unit square — nothing has been drawn yet
+        if self.crs in (4326, "EPSG:4326", None):
+            return west, south, east, north
+        xs, ys = _edge_samples(west, south, east, north)
+        try:
+            lons, lats = reproject_coordinates(xs, ys, from_crs=self.crs, to_crs=4326)
+        except (ValueError, RuntimeError):
+            # A CRS pyproj cannot resolve: leave the coverage question to the service rather than fail
+            # the plot. A TypeError here would be a bug in this call, so it is deliberately not caught.
+            return None
+        if not all(math.isfinite(value) for value in (*lons, *lats)):
+            # pyproj answers `inf` for a point outside the projection's domain rather than raising —
+            # an orthographic globe's corners are off the visible hemisphere, for instance. That is an
+            # unknown extent, which takes the same fail-open path as an unresolvable CRS.
+            return None
+        return float(min(lons)), float(min(lats)), float(max(lons)), float(max(lats))

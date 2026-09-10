@@ -37,6 +37,11 @@ dependencies = [
     "matplotlib >=3.8",
     "geopandas >=1.1.3",
     "cleopatra[tiles] >=0.36.0",
+    # static/maps/decoration.py constructs the TileProvider a keyed basemap is handed to cleopatra as,
+    # so it is imported directly here and declared for the same reason matplotlib is above: it currently
+    # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
+    # one repackaging away from a ModuleNotFoundError raised from inside basemap().
+    "xyzservices >=2023.10.0",
     "pyramids-gis >=0.59.0",
     "pyramids-eo >=0.8.0",
     "geostatista >=0.3.0",

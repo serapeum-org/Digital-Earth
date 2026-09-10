@@ -24,6 +24,9 @@ What lives here:
   sentinel all tiers resolve through.
 * :mod:`~digitalearth.base.chartdata` — chart data preparation: a column name or array-like → plottable values.
 * :mod:`~digitalearth.base.arrays` — nodata masking and the finite-value reductions.
+* :mod:`~digitalearth.base.basemaps` — keyed-XYZ basemap definitions (URL template, credential
+  variable, attribution, coverage) every backend resolves by name. Pure data: it emits a URL with the
+  tile placeholders intact and constructs no engine object.
 * :mod:`~digitalearth.base.crs` — the best-effort EPSG lookup.
 * :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
 * :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend

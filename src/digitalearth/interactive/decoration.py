@@ -9,14 +9,69 @@ on any other CRS they would silently misalign with the pre-reprojected data laye
 elements touches no network; tiles/coastline geometry is fetched by the renderer at display time.
 """
 
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
+from digitalearth.base.basemaps import get_keyed_basemap, is_keyed_basemap
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _attribution_hook(attribution: str) -> Callable[[Any, Any], None]:
+    """Build a Bokeh plot hook that writes ``attribution`` onto the rendered tile source.
+
+    The element's ``label`` is not an attribution slot — it is the element's display name, which Bokeh
+    renders as the **plot title**. That is wrong twice over: on a bare tile map it silently replaces the
+    caller's title (and changes the ``(group, label)`` key that ``.opts``/``.select`` match on), and the
+    moment the tiles are overlaid with data the title comes from the overlay instead, so the attribution
+    is displayed nowhere at all — which is the only way these tiles are ever actually used.
+
+    Args:
+        attribution: The text the licence requires the map to display.
+
+    Returns:
+        A hook that assigns the attribution to every tile source in the rendered figure, leaving the
+        title untouched.
+    """
+
+    def hook(plot: Any, element: Any) -> None:
+        """Assign the attribution to the Bokeh tile renderers of one rendered plot.
+
+        Args:
+            plot: The Bokeh plot HoloViews is building.
+            element: The element being rendered; unused, but part of the hook signature.
+        """
+        for renderer in plot.handles["plot"].renderers:
+            tile_source = getattr(renderer, "tile_source", None)
+            if tile_source is not None:
+                tile_source.attribution = attribution
+
+    return hook
+
+
+def _upper_placeholders(url: str) -> str:
+    """Return ``url`` with ``{z}``/``{x}``/``{y}`` upper-cased, the spelling GeoViews' ``WMTS`` expects.
+
+    This lives in the interactive backend rather than in :mod:`digitalearth.base.basemaps` because the
+    casing is Bokeh's convention, not a property of the tile service — the web and static tiers use the
+    lower-case template unchanged.
+
+    Args:
+        url: A tile URL template using the lower-case placeholders.
+
+    Returns:
+        The same string with every occurrence of the exact tokens ``{z}``, ``{x}`` and ``{y}`` upper-cased
+        — wherever they appear, including a second copy inside the query string. Nothing else is touched,
+        and no other placeholder is: a ``{mosaic}`` or ``{api_key}`` still reads as it did. Substitution
+        happens before this, so a value that itself contained one of the three tokens would be rewritten
+        too; :meth:`~digitalearth.base.basemaps.KeyedTileSource.tile_url` is what keeps such values out.
+    """
+    for lower, upper in (("{z}", "{Z}"), ("{x}", "{X}"), ("{y}", "{Y}")):
+        url = url.replace(lower, upper)
+    return url
 
 
 class DecorationMixin(_MixinBase):
@@ -43,18 +98,30 @@ class DecorationMixin(_MixinBase):
         *,
         level: str = "underlay",
         api_key: Any = None,
+        preset: Optional[dict] = None,
         **opts: Any,
     ) -> Self:
         """Add a web-tile basemap beneath the data layers (DI.1c + DI.10 catalog / custom WMTS).
 
+        A keyed preset's coverage is **not** checked here, unlike the static tier. A Bokeh plot is pannable
+        and zoomable, so there is no one extent to check against — refusing a NICFI basemap because the
+        opening view sits outside the tropics would block a map the viewer can pan into. The static tier
+        renders one fixed extent, where an out-of-coverage basemap is a dead end, which is where the guard
+        lives.
+
         Args:
             provider: A ``geoviews.tile_sources`` provider name (``"CartoLight"``/``"OSM"``/
-                ``"EsriImagery"``/…); a raw XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``);
-                or an ``xyzservices.TileProvider``.
+                ``"EsriImagery"``/…); a **keyed** preset name such as ``"Planet.NICFI"`` (see
+                :mod:`digitalearth.base.basemaps`), whose credential is read from the environment; a raw
+                XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``); or an
+                ``xyzservices.TileProvider``.
             level: ``"underlay"`` (default) keeps tiles behind the data layers; ``"overlay"`` puts
                 them on top (rare — e.g. a labels overlay).
-            api_key: API key for a keyed provider (e.g. Stadia); a keyed provider used without a key
-                raises rather than rendering blank tiles.
+            api_key: Credential for a keyed provider. For a keyed **preset** (``"Planet.NICFI"``) it is the
+                service's API key and ``None`` reads the preset's environment variable; for a catalog
+                provider that needs one (Stadia) it is only checked for presence.
+            preset: A keyed preset's own keywords, e.g. ``{"date": "2024-01", "flavour": "visual"}``. A
+                dict rather than ``**kwargs`` so it cannot collide with a HoloViews style option.
             **opts: Extra HoloViews style options applied to the tile element.
 
         Returns:
@@ -70,6 +137,14 @@ class DecorationMixin(_MixinBase):
                 >>> m = InteractiveMap().image(dem).tiles("CartoLight")         # doctest: +SKIP
                 >>> type(m.layers[0]).__name__                                  # doctest: +SKIP
                 'WMTS'
+
+                ```
+            - Use a keyed preset, whose credential comes from the environment:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().tiles(                                # doctest: +SKIP
+                ...     "Planet.NICFI", preset={"date": "2024-01", "flavour": "visual"}
+                ... )
 
                 ```
             - Use a custom XYZ URL template:
@@ -92,7 +167,7 @@ class DecorationMixin(_MixinBase):
                 "tiles() cannot compose with a non-Mercator projection() — Bokeh tiles render in "
                 "Web-Mercator only. Drop the projection to use a tile basemap."
             )
-        element = self._build_tiles(provider, api_key)
+        element = self._build_tiles(provider, api_key, **(preset or {}))
         if opts:
             element = element.opts(**opts)
         element = element.opts(level=level)
@@ -105,21 +180,39 @@ class DecorationMixin(_MixinBase):
             self.layers.insert(0, element)
         return self
 
-    def _build_tiles(self, provider: Any, api_key: Any) -> Any:
+    def _build_tiles(self, provider: Any, api_key: Any, **preset: Any) -> Any:
         """Resolve ``provider`` to a ``gv.WMTS``/``gv.Tiles`` element (name, URL, or xyzservices).
 
         Args:
-            provider: A catalog name, a raw ``{Z}/{X}/{Y}`` URL, or an ``xyzservices.TileProvider``.
-            api_key: API key for keyed providers.
+            provider: A catalog name, a keyed preset name, a raw ``{Z}/{X}/{Y}`` URL, or an
+                ``xyzservices.TileProvider``.
+            api_key: Credential for a keyed provider or preset.
+            **preset: A keyed preset's own keywords, e.g. ``date`` / ``flavour``.
 
         Returns:
             The tile element (a fresh clone for catalog names — the shared instance is never mutated).
 
         Raises:
-            ValueError: for an unknown provider name.
+            ValueError: for an unknown provider name, or when preset keywords are passed with a provider
+                that is not a keyed preset.
             ImportError: when a keyed provider needs an ``api_key`` that was not supplied.
         """
         gv, hv = _require_holoviz()
+        if is_keyed_basemap(provider):
+            # A keyed preset resolves to a URL with the credential already substituted; GeoViews wants the
+            # tile placeholders upper-cased.
+            keyed = get_keyed_basemap(str(provider), **preset)
+            # NICFI is non-commercial-only, so the attribution is a licence obligation the other two
+            # tiers already carry. Bokeh's slot for it is the tile source's own `attribution`, which is
+            # what its attribution control renders; reaching it needs a plot hook.
+            return gv.WMTS(_upper_placeholders(keyed.tile_url(api_key))).opts(
+                hooks=[_attribution_hook(keyed.attribution)]
+            )
+        if preset:
+            raise ValueError(
+                f"tiles({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
+                f"preset such as 'Planet.NICFI'"
+            )
         if isinstance(provider, str) and "://" in provider:  # raw XYZ/WMTS URL template
             return gv.WMTS(provider)
         if isinstance(provider, str):

@@ -14,6 +14,11 @@ geodesic distance/area (the GIS part).
 
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
+from digitalearth.base.basemaps import (
+    KEYED_BASEMAP_NAMES,
+    get_keyed_basemap,
+    is_keyed_basemap,
+)
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
@@ -93,6 +98,7 @@ class DecorationMixin(_MixinBase):
         attribution: str = "",
         tile_size: int = 256,
         opacity: float = 1.0,
+        max_zoom: Optional[int] = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -101,6 +107,9 @@ class DecorationMixin(_MixinBase):
             attribution: Attribution text shown in the map's attribution control.
             tile_size: Tile edge length in pixels (256 for standard XYZ; 512 for some retina services).
             opacity: Raster opacity in ``[0, 1]``.
+            max_zoom: The deepest zoom the service serves. Past it MapLibre over-zooms the last real
+                tiles instead of requesting levels that do not exist; ``None`` leaves the source
+                unbounded.
 
         Returns:
             The same map instance, so builder calls chain; the basemap is registered as an underlay so
@@ -115,6 +124,8 @@ class DecorationMixin(_MixinBase):
         }
         if attribution:
             source["attribution"] = attribution
+        if max_zoom is not None:
+            source["maxzoom"] = int(max_zoom)
         layer = Layer(
             id=layer_id,
             type=LayerType.RASTER,
@@ -128,25 +139,79 @@ class DecorationMixin(_MixinBase):
 
         return self.add_underlay(apply)
 
-    def basemap(self, provider: str = "CartoDark", *, opacity: float = 1.0) -> Self:
+    def basemap(
+        self,
+        provider: str = "CartoDark",
+        *,
+        opacity: float = 1.0,
+        api_key: Optional[str] = None,
+        preset: Optional[dict] = None,
+    ) -> Self:
         """Add a named raster basemap beneath the data (recipe W1).
 
+        A keyed preset's coverage is **not** checked here, unlike the static tier. A web map is pannable
+        and zoomable, so it has no one extent to check against: the initial ``center``/``zoom`` is where
+        the viewer starts, not where they stay, and refusing a NICFI basemap because the first view sits
+        outside the tropics would block a map the viewer can simply pan into. The static tier renders one
+        fixed extent, where an out-of-coverage basemap is a dead end rather than a scroll away, which is
+        why the guard lives there.
+
         Args:
-            provider: A basemap name — ``"CartoDark"``, ``"CartoLight"``, ``"CartoVoyager"`` or ``"OSM"``
-                (case-insensitive). All are token-free public tile services.
+            provider: A token-free basemap name — ``"CartoDark"``, ``"CartoLight"``, ``"CartoVoyager"`` or
+                ``"OSM"`` (case-insensitive) — or a **keyed** preset name such as ``"Planet.NICFI"`` (see
+                :mod:`digitalearth.base.basemaps`), whose credential is read from the environment.
             opacity: Basemap opacity in ``[0, 1]``.
+            api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
+            preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
+                ``mosaic``). A dict rather than loose keywords so that all three tiers take a preset the
+                same way, and so a mistyped style argument is an unexpected keyword rather than something
+                ``**preset`` silently swallows.
 
         Returns:
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``provider`` is not a known basemap name.
+            ValueError: when ``provider`` is neither a known basemap name nor a keyed preset, when a
+                ``preset`` or an ``api_key`` is passed to a provider that takes neither, or when a keyed
+                preset's credential is unavailable.
+            TypeError: for any other keyword, which Python reports as the unexpected argument it is.
+
+        Examples:
+            - A keyed preset resolves its own tile URL and attribution:
+                ```python
+                >>> from digitalearth.web import WebMap                 # doctest: +SKIP
+                >>> WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})   # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.base.basemaps: the keyed-preset definitions this resolves.
         """
+        if is_keyed_basemap(provider):
+            keyed = get_keyed_basemap(provider, **(preset or {}))
+            return self.tiles(
+                keyed.tile_url(api_key),
+                attribution=keyed.attribution,
+                opacity=opacity,
+                max_zoom=keyed.max_zoom,
+            )
+        if api_key is not None:
+            # Dropping it silently would leave a caller believing they had authenticated.
+            raise ValueError(
+                f"basemap({provider!r}) takes no api_key; it is a token-free source. Credentials apply "
+                f"only to a keyed preset such as 'Planet.NICFI'"
+            )
+        if preset:
+            raise ValueError(
+                f"basemap({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
+                f"preset such as 'Planet.NICFI'"
+            )
         key = provider.replace(" ", "").lower()
         if key not in _BASEMAP_PROVIDERS:
             raise ValueError(
                 f"unknown basemap provider {provider!r}; choose one of "
-                f"{sorted(_BASEMAP_DISPLAY_NAMES.values())} or pass a tile URL to tiles()"
+                f"{sorted(_BASEMAP_DISPLAY_NAMES.values())}, a keyed preset "
+                f"({', '.join(sorted(KEYED_BASEMAP_NAMES.values()))}), or pass a tile URL to tiles()"
             )
         url, attribution = _BASEMAP_PROVIDERS[key]
         return self.tiles(url, attribution=attribution, opacity=opacity)
