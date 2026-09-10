@@ -18,6 +18,7 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
+from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -52,9 +53,15 @@ class RasterMixin(_MixinBase):
             **opts: Extra styling kwargs; filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
-            The glyph's mappable (also registered as a Scene layer).
+            The glyph's mappable (also registered as a Scene layer), or ``None`` when the data lies
+            entirely outside what the display CRS shows — an off-limb frame draws nothing rather than
+            raising, so a rotation past the far side of a globe still renders.
         """
-        src = self._prepare(dataset, band)
+        try:
+            src = self._prepare(dataset, band)
+        except OffLimbError:
+            return None  # nothing of this raster is on the view: draw an empty frame
+
         z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
         if opts.pop(
             "cyclic", False
@@ -215,7 +222,10 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("rgb_composite", bands)
-        ds = self._reproject(dataset)
+        try:
+            ds = self._reproject(dataset)
+        except OffLimbError:
+            return None  # nothing of this raster is on the view: draw an empty frame
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
@@ -303,7 +313,10 @@ class RasterMixin(_MixinBase):
         from matplotlib.colors import hsv_to_rgb
 
         require_three_bands("hsv_composite", bands)
-        ds = self._reproject(dataset)
+        try:
+            ds = self._reproject(dataset)
+        except OffLimbError:
+            return None  # nothing of this raster is on the view: draw an empty frame
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False

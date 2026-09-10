@@ -5,6 +5,7 @@ The protected base every Map capability mixin builds on: it owns the display-CRS
 Source-extraction helpers the plotting mixins consume via ``self``.
 """
 
+import re
 from typing import Any, List, Optional, Tuple
 
 import numpy as np
@@ -13,6 +14,24 @@ from matplotlib.animation import FuncAnimation
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
+
+
+#: GDAL's complaint when a warp cannot place the data in the target CRS. It carries the counts, and only an
+#: all-of-them failure means the data is genuinely outside what the projection can show — a partial failure
+#: still has visible pixels, so it is left to propagate rather than silently dropping them.
+_POINTS_FAILED = re.compile(
+    r"Too many points \((\d+) out of (\d+)\) failed to transform"
+)
+
+
+class OffLimbError(RuntimeError):
+    """The data lies entirely outside the area the display CRS can represent.
+
+    Raised in place of GDAL's opaque "Too many points ... failed to transform" when *every* sample point
+    fails, which on an orthographic globe means the data sits wholly behind the visible limb. Layer methods
+    treat it as "there is nothing to draw here" and render an empty frame; it is a distinct type so that a
+    caller can tell it apart from a real projection failure.
+    """
 
 
 class GeoLayerBase(Scene):
@@ -59,10 +78,36 @@ class GeoLayerBase(Scene):
         return not (isinstance(self.crs, int) and dataset.epsg == self.crs)
 
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
-        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`."""
-        ds = dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
-        return get_source(ds, band=band)
+        """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.
+
+        Raises:
+            OffLimbError: when the data lies entirely outside what the display CRS can show.
+        """
+        return get_source(self._reproject(dataset), band=band)
 
     def _reproject(self, dataset: Any) -> Any:
-        """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there)."""
-        return dataset.to_crs(self.crs) if self._needs_reproject(dataset) else dataset
+        """Reproject a pyramids ``Dataset`` to the display CRS (returns it unchanged when already there).
+
+        Args:
+            dataset: The pyramids ``Dataset`` to place in the display CRS.
+
+        Returns:
+            The reprojected dataset, or ``dataset`` itself when it is already in the display CRS.
+
+        Raises:
+            OffLimbError: when *every* sample point fails to transform, i.e. the data is wholly outside the
+                projection's visible area. A partial failure is re-raised as it came: some of the data does
+                land on the view, and swallowing that would drop pixels that should have been drawn.
+        """
+        if not self._needs_reproject(dataset):
+            return dataset
+        try:
+            return dataset.to_crs(self.crs)
+        except RuntimeError as error:
+            failed = _POINTS_FAILED.search(str(error))
+            if failed and failed.group(1) == failed.group(2):
+                raise OffLimbError(
+                    f"the data lies entirely outside what {self.crs!r} can show "
+                    f"({failed.group(1)} of {failed.group(2)} sample points failed to transform)"
+                ) from error
+            raise

@@ -26,6 +26,7 @@ from digitalearth.base.symbology import (
     nulls_to_none,
     resolve_categorical_cmap,
 )
+from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
@@ -233,7 +234,10 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        xyz = self._reproject(dataset).to_xyz()
+        try:
+            xyz = self._reproject(dataset).to_xyz()
+        except OffLimbError:
+            return None  # nothing of this layer is on the view: draw an empty frame
         x = xyz.iloc[:, 0].to_numpy()
         y = xyz.iloc[:, 1].to_numpy()
         z = xyz.iloc[:, 2].to_numpy()
@@ -278,7 +282,10 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        ds = self._reproject(dataset)
+        try:
+            ds = self._reproject(dataset)
+        except OffLimbError:
+            return None  # nothing of this layer is on the view: draw an empty frame
         if ds.epsg is None:
             # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
             # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
@@ -312,8 +319,11 @@ class VectorMixin(_MixinBase):
         Returns:
             The vector mappable (registered as a Scene layer).
         """
-        su = self._prepare(u_dataset, band)
-        sv = self._prepare(v_dataset, band)
+        try:
+            su = self._prepare(u_dataset, band)
+            sv = self._prepare(v_dataset, band)
+        except OffLimbError:
+            return None  # nothing of this layer is on the view: draw an empty frame
         xs, ys = su.x.values, su.y.values
         u, v = su.z.values, sv.z.values
         # streamplot (and a tidy grid generally) needs strictly increasing axes; raster y runs
@@ -417,7 +427,10 @@ class VectorMixin(_MixinBase):
         """Triangulate scattered points and render via ``cleopatra.MeshGlyph``."""
         from matplotlib.tri import Triangulation
 
-        x, y, z = self._scattered(data)
+        try:
+            x, y, z = self._scattered(data)
+        except OffLimbError:
+            return None  # nothing of this layer is on the view: draw an empty frame
         finite = np.isfinite(x) & np.isfinite(
             y
         )  # drop far-side points on a globe (Triangulation needs finite)

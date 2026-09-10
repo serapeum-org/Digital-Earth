@@ -408,3 +408,93 @@ def test_globe_basemap_with_fills_saves_png(land_fc, dataset, tmp_path, mocker):
     m.save(str(out))
     assert out.exists() and out.stat().st_size > 0
     assert m._framed is True
+
+
+class TestOffLimbDraw:
+    """A draw whose data is wholly behind the visible limb renders empty instead of raising (issue #151)."""
+
+    @pytest.fixture
+    def regional(self):
+        """A small AOI over the Netherlands (~1.6 x 1.2 degrees).
+
+        Returns:
+            Dataset: a regional raster that any far-side orthographic view hides completely.
+        """
+        _, xx = np.mgrid[0:60, 0:80]
+        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+        return Dataset.from_array(
+            values,
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        )
+
+    def test_a_static_off_limb_field_draws_nothing(self, regional):
+        """imshow on a hiding projection returns None rather than raising — no animation involved.
+
+        Test scenario:
+            The reprojection to the display CRS raises out of GDAL when every sample point falls behind
+            the limb. That is a rendering question, not an error: there is simply nothing to draw, so the
+            layer is skipped and the frame stays empty.
+        """
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        assert m.imshow(regional) is None, (
+            "an off-limb field should draw nothing, not raise"
+        )
+        assert not m.ax.images, "no raster should have been drawn"
+
+    def test_an_on_limb_field_still_draws(self, regional):
+        """The guard must not swallow a view that can see the data."""
+        m = Map(crs=projections.orthographic(lon=4, lat=53), globe=True, figsize=(4, 4))
+        assert m.imshow(regional) is not None, "a visible field must still render"
+        assert m.ax.images, "the raster should have been drawn"
+
+    def test_rotate_spins_a_regional_aoi(self, regional, tmp_path):
+        """A full sweep passes the far side, which used to surface as 'needs at least one frame'.
+
+        Test scenario:
+            rotate's 360-degree sweep guarantees a centre longitude that hides a regional AOI. The frame
+            that could not draw aborted the render, and because the default lon0=-180 makes it the *first*
+            frame, the writer reported having captured nothing rather than the real cause.
+        """
+        from matplotlib.animation import PillowWriter
+
+        m = Map(crs=4326, globe=True, figsize=(4, 4))
+        anim = m.rotate(regional, n_frames=4, fps=4)
+        out = tmp_path / "spin.gif"
+        anim.save(str(out), writer=PillowWriter(fps=4))
+        assert out.stat().st_size > 0, (
+            "a regional AOI should spin, with the hidden frames left empty"
+        )
+
+    def test_a_partial_transform_failure_is_not_swallowed(self, regional, monkeypatch):
+        """Only an all-points failure means 'nothing visible'; a partial one still has pixels to draw.
+
+        Test scenario:
+            GDAL reports the counts. Treating any transform failure as off-limb would silently drop a
+            frame that does have visible data, which is worse than the crash being fixed here — so a
+            partial failure must propagate untouched.
+        """
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+
+        def _partial(*_args, **_kwargs):
+            raise RuntimeError(
+                "Too many points (100 out of 441) failed to transform, unable to compute output bounds."
+            )
+
+        monkeypatch.setattr(type(regional), "to_crs", _partial)
+        with pytest.raises(RuntimeError, match="100 out of 441"):
+            m.imshow(regional)
+
+    def test_the_off_limb_error_names_the_cause(self, regional):
+        """The typed error explains itself, rather than surfacing GDAL's wording."""
+        from digitalearth.static.maps.base import OffLimbError
+
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+        with pytest.raises(OffLimbError, match="entirely outside"):
+            m._reproject(regional)
