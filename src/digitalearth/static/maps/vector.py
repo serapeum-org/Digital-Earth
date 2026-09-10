@@ -333,7 +333,7 @@ class VectorMixin(_MixinBase):
             su = self._prepare(u_dataset, band)
             sv = self._prepare(v_dataset, band)
         except OffLimbError:
-            self._skipped_off_limb("_vector")
+            self._skipped_off_limb(kind)
             return None
         xs, ys = su.x.values, su.y.values
         u, v = su.z.values, sv.z.values
@@ -460,14 +460,14 @@ class VectorMixin(_MixinBase):
         try:
             x, y, z = self._scattered(data)
         except OffLimbError:
-            self._skipped_off_limb("_tri")
+            self._skipped_off_limb(kind)
             return None
         finite = np.isfinite(x) & np.isfinite(
             y
         )  # drop far-side points on a globe (Triangulation needs finite)
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
         if x.size < 3:
-            self._skipped_off_limb("_tri")
+            self._skipped_off_limb(kind)
             # A vector reprojection does not raise when the data is off the view — it sends the points to
             # infinity, which the filter above then removes. Too few survivors to triangulate means the
             # same thing an OffLimbError means for a raster: there is nothing on the view to draw.

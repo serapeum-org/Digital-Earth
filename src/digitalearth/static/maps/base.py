@@ -122,15 +122,28 @@ class GeoLayerBase(Scene):
     def _skipped_off_limb(self, layer: str) -> None:
         """Record that ``layer`` drew nothing because its data is outside the display CRS.
 
-        Logged at debug rather than warning on purpose: a rotation sweep passes the far side of the globe
-        every time it runs, so hidden frames are expected there and a warning would be noise. It is still
-        the only signal that a blank map came from the projection rather than the data, which is what makes
-        a mis-specified CRS diagnosable.
+        The severity depends on whether hiding the data is a normal thing for this map to do. On a globe it
+        is: a clipped projection shows one hemisphere, and a rotation sweeps past the far side on every
+        run, so those skips are logged at debug and stay out of the way. On an unclipped display CRS there
+        is no limb to be behind, so a warp that places *none* of the data almost always means the raster is
+        mislabelled or its geo-transform is wrong — that is worth a warning, which is visible without any
+        logging setup, because otherwise the only symptom is a blank figure.
+
+        The guard cannot tell the two apart from the warp alone: GDAL reports that too few points survived,
+        not why. This is the signal that lets a reader tell a hidden hemisphere from a broken raster.
 
         Args:
-            layer: The layer method that drew nothing, named for the log line.
+            layer: The public layer method that drew nothing, named for the log line.
         """
-        logger.debug("%s: data lies outside %r; nothing drawn", layer, self.crs)
+        if self.globe:
+            logger.debug("%s: data lies outside %r; nothing drawn", layer, self.crs)
+        else:
+            logger.warning(
+                "%s: none of the data could be placed in %r, so nothing was drawn — on an unclipped "
+                "projection this usually means the raster's CRS or geo-transform is wrong",
+                layer,
+                self.crs,
+            )
 
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
         """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.

@@ -678,8 +678,8 @@ class TestOffLimbEveryLayerKind:
         assert any("nothing drawn" in record.message for record in caplog.records), (
             f"the skip should be logged, got {[r.message for r in caplog.records]}"
         )
-        assert any("_field" in record.getMessage() for record in caplog.records), (
-            "the log line should name the layer that drew nothing"
+        assert any("imshow" in record.getMessage() for record in caplog.records), (
+            "the log line should name the public method, not the private helper behind it"
         )
 
     @pytest.mark.parametrize(
@@ -697,6 +697,44 @@ class TestOffLimbEveryLayerKind:
         )
         assert getattr(visible, method)(regional) is not None, (
             f"{method} must still draw when the data is on the view"
+        )
+
+    def test_a_broken_raster_on_an_unclipped_crs_warns(self, caplog):
+        """Off-limb is normal on a globe and suspicious anywhere else, so the severity differs.
+
+        Test scenario:
+            The guard swallows any warp that places none of the data, and it cannot tell a hidden
+            hemisphere from a mislabelled raster — GDAL reports that too few points survived, not why. On
+            an unclipped projection there is no limb to hide behind, so this is nearly always broken
+            georeferencing, and a debug line nobody sees would leave a blank figure as the only symptom.
+        """
+        import logging
+
+        mislabelled = Dataset.from_array(
+            np.ones((20, 20), "float32"),
+            geo_ref=GeoReference(
+                geo=(500000.0, 30.0, 0.0, 4649776.0, 0.0, -30.0), epsg=4326
+            ),
+            no_data_value=-9999.0,
+        )
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+            assert Map(crs=3857, figsize=(4, 4)).imshow(mislabelled) is None
+        warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+        assert warnings, (
+            f"an unclipped projection that places no data should warn, got {caplog.records}"
+        )
+        assert "geo-transform" in warnings[0].getMessage(), (
+            f"the warning should name the likely cause, got {warnings[0].getMessage()}"
+        )
+
+    def test_a_hidden_globe_layer_does_not_warn(self, hidden, regional, caplog):
+        """A rotation passes the far side every run, so those skips must stay at debug."""
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+            hidden.imshow(regional)
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING], (
+            "a hidden hemisphere is expected on a globe and must not warn"
         )
 
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):

@@ -60,7 +60,7 @@ class RasterMixin(_MixinBase):
         try:
             src = self._prepare(dataset, band)
         except OffLimbError:
-            self._skipped_off_limb("_field")
+            self._skipped_off_limb(kind)
             return None
 
         z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
