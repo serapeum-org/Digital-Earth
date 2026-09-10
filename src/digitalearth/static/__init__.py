@@ -27,19 +27,15 @@ later is then a one-line deletion here.
 
 from digitalearth.static.figure import grid, shared_colorbar
 from digitalearth.static.map import Map
-from digitalearth.static.maps.base import OffLimbError
+
+# Importable as ``from digitalearth.static import OffLimbError`` so a caller can catch it, but kept
+# out of ``__all__``: it is a signal the layer methods already answer, not part of the backend's
+# advertised surface, and every name in that list is also a package-root export.
+from digitalearth.static.maps.base import OffLimbError  # noqa: F401
 from digitalearth.static.scene import Scene
 from digitalearth.static.textured_globe import TexturedGlobe
 
-__all__ = [
-    "Scene",
-    "Map",
-    "TexturedGlobe",
-    "StaticGlyph",
-    "OffLimbError",
-    "grid",
-    "shared_colorbar",
-]
+__all__ = ["Scene", "Map", "TexturedGlobe", "StaticGlyph", "grid", "shared_colorbar"]
 
 
 def __getattr__(name: str):
