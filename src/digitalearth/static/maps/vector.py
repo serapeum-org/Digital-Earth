@@ -218,6 +218,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Examples:
             - Scatter the raster's valid cell centres and count the resulting layer:
@@ -251,6 +253,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self.grid_points(dataset, **opts)
 
@@ -266,6 +270,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Examples:
             - Draw one polygon per raster cell and confirm the count equals rows*columns:
@@ -353,6 +359,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``Quiver`` mappable (registered as a Scene layer; carries the key for :meth:`quiverkey`).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._vector(u_dataset, v_dataset, kind="quiver", **kwargs)
 
@@ -361,6 +369,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``Barbs`` mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._vector(u_dataset, v_dataset, kind="barbs", **kwargs)
 
@@ -369,6 +379,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The streamplot mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._vector(u_dataset, v_dataset, kind="streamplot", **kwargs)
 
@@ -457,6 +469,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The tricontourf mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._tri(data, kind="tricontourf", **kwargs)
 
@@ -465,6 +479,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The tricontour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._tri(data, kind="tricontour", **kwargs)
 
@@ -473,6 +489,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The tripcolor mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._tri(data, kind="tripcolor", **kwargs)
 

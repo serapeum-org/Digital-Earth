@@ -30,6 +30,46 @@ class OffLimbError(RuntimeError):
     fails, which on an orthographic globe means the data sits wholly behind the visible limb. Layer methods
     treat it as "there is nothing to draw here" and render an empty frame; it is a distinct type so that a
     caller can tell it apart from a real projection failure.
+
+    Examples:
+        - The reprojection reports a hidden dataset as such, rather than as a GDAL failure:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import Map, projections
+            >>> from digitalearth.static.maps.base import OffLimbError
+            >>> ds = Dataset.from_array(
+            ...     np.ones((20, 20), "float32"),
+            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            ... )
+            >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
+            >>> try:
+            ...     hidden._reproject(ds)
+            ... except OffLimbError as error:
+            ...     print(str(error)[:41])
+            the data lies entirely outside what '+pro
+
+            ```
+        - Callers rarely see it: the layer methods answer it by drawing nothing:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import numpy as np
+            >>> from pyramids.dataset import Dataset, GeoReference
+            >>> from digitalearth.static import Map, projections
+            >>> ds = Dataset.from_array(
+            ...     np.ones((20, 20), "float32"),
+            ...     geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            ... )
+            >>> hidden = Map(crs=projections.orthographic(lon=-175, lat=15), globe=True)
+            >>> hidden.imshow(ds) is None
+            True
+            >>> len(hidden.ax.images)
+            0
+
+            ```
     """
 
 

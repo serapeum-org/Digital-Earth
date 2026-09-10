@@ -101,6 +101,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="imshow", **kwargs)
 
@@ -109,6 +111,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The filled-contour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="contourf", **kwargs)
 
@@ -117,6 +121,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The line-contour mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="contour", **kwargs)
 
@@ -125,6 +131,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
@@ -139,6 +147,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The ``QuadMesh`` mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
@@ -175,6 +185,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without
@@ -265,6 +277,8 @@ class RasterMixin(_MixinBase):
 
         Returns:
             The image mappable (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: when ``bands`` does not hold exactly three indices, or ``limits`` is given without

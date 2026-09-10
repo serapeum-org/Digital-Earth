@@ -180,8 +180,10 @@ def _from_feature(fc: Any, metadata: Optional[dict]) -> Source:
     """Build a vector (point) :class:`Source` from a pyramids ``FeatureCollection``.
 
     ``FeatureCollection`` is a GeoDataFrame subclass, so we read its geometry/CRS directly. ``z`` is the
-    first numeric non-geometry column (or ``None`` when there is none). Point coordinates come from the
-    geometry; non-point geometries fall back to their centroid.
+    first numeric non-geometry column (or ``None`` when there is none). "Numeric" is decided by pandas, so
+    a nullable ``Int64``/``Float64`` counts and a ``string``/``boolean`` column does not — bools are
+    excluded deliberately, since pandas calls them numeric but they were never a value column here. Point
+    coordinates come from the geometry; non-point geometries fall back to their centroid.
     """
     geom_name = fc.geometry.name
     geom = fc.geometry
