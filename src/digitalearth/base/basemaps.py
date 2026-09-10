@@ -284,6 +284,24 @@ class KeyedTileSource:
                 Planet.NICFI.analytic.2024-01 covers only (-180.0
 
                 ```
+            - A domain expressed 0-360 names the same place as its negative counterpart, and passes:
+                ```python
+                >>> from digitalearth.base.basemaps import planet_nicfi
+                >>> source = planet_nicfi("2024-01")
+                >>> source.check_bounds((200.0, -10.0, 300.0, 10.0))
+                >>> source.check_bounds((-160.0, -10.0, -60.0, 10.0))
+
+                ```
+            - Metres are not degrees, and are reported as such rather than as missing coverage:
+                ```python
+                >>> from digitalearth.base.basemaps import planet_nicfi
+                >>> try:
+                ...     planet_nicfi("2024-01").check_bounds((500000.0, 5800000.0, 510000.0, 5810000.0))
+                ... except ValueError as err:
+                ...     print(str(err).split(",")[-1].strip())
+                so it is not lon/lat — reproject it before checking coverage.
+
+                ```
         """
         if extent is None or self.bounds is None:
             return
@@ -390,7 +408,9 @@ def planet_nicfi(
         The configured source. The credential is *not* read here — only when a URL is built.
 
     Raises:
-        ValueError: when ``date`` is not ``YYYY-MM``, or ``flavour`` is not one of the two published kinds.
+        ValueError: when ``date`` is not ``YYYY-MM``; when it predates the monthly series and no explicit
+            ``mosaic`` is given, since the derived id would name a mosaic that does not exist; or when
+            ``flavour`` is not one of the two published kinds.
 
     Examples:
         - Build a source and see the mosaic id it derived:
@@ -417,6 +437,21 @@ def planet_nicfi(
             Traceback (most recent call last):
                 ...
             ValueError: date must be a 'YYYY-MM' month, got 'Jan 2024'
+
+            ```
+        - A month before the monthly series says so, and points at the way to reach those periods:
+            ```python
+            >>> from digitalearth.base.basemaps import planet_nicfi
+            >>> try:
+            ...     planet_nicfi("2019-06")
+            ... except ValueError as err:
+            ...     print(str(err).split(";")[0])
+            NICFI monthly mosaics start at 2020-09
+            >>> older = planet_nicfi(
+            ...     "2019-06", mosaic="planet_medres_normalized_analytic_2019-06_2019-11_mosaic"
+            ... )
+            >>> older.params["mosaic"]
+            'planet_medres_normalized_analytic_2019-06_2019-11_mosaic'
 
             ```
 
@@ -498,7 +533,8 @@ def get_keyed_basemap(name: str, **kwargs: object) -> KeyedTileSource:
 
     Raises:
         ValueError: when ``name`` is not a known preset, listing the ones that are.
-        TypeError: when the preset's required keywords are missing, from the preset itself.
+        TypeError: when a keyword is missing or misspelled — re-raised naming the preset the caller asked
+            for and the keywords it takes, since the factory behind it is an implementation detail.
 
     Examples:
         - Resolve NICFI by the name a ``basemap()`` caller would type:

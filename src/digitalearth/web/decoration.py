@@ -167,6 +167,8 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when ``provider`` is neither a known basemap name nor a keyed preset, when preset
                 keywords are passed to a non-keyed provider, or when a keyed credential is unavailable.
+            TypeError: for a keyword that is not a preset keyword at all — a misspelled style argument is
+                reported as the unexpected argument it is, not as a problem with presets.
 
         Examples:
             - A keyed preset resolves its own tile URL and attribution:

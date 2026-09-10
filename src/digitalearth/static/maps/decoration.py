@@ -536,8 +536,10 @@ class DecorationMixin(_MixinBase):
             The tile artist ``add_tiles`` added to the axes.
 
         Raises:
-            ValueError: when a keyed preset is unknown, its credential is unavailable, or the map's domain
-                lies entirely outside the service's coverage.
+            ValueError: when a keyed preset is unknown, its credential is unavailable, when preset keywords
+                are passed to an ordinary source, or when the extent being drawn — the declared ``domain``
+                if there is one, else the current axes limits — lies entirely outside the coverage.
+            TypeError: when a preset keyword is missing or misspelled, naming the preset and its keywords.
 
         Examples:
             - A keyed preset resolves its own provider and credential:
