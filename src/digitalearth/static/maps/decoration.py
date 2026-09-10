@@ -80,6 +80,26 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 _CLEOPATRA_TILES_LOGGER = "cleopatra.basemap.tiles"
 
 
+class _DropDebug(logging.Filter):
+    """Drops the ``DEBUG`` records that carry the built tile URL, and passes everything else."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        """Whether a record survives.
+
+        Args:
+            record: The record cleopatra is about to emit.
+
+        Returns:
+            ``False`` for ``DEBUG``, which is the level the tile URL is logged at, and ``True`` for
+            everything at ``INFO`` or above.
+        """
+        return record.levelno > logging.DEBUG
+
+
+#: One shared instance, so nesting adds and removes the same filter rather than stacking copies.
+_DROP_DEBUG = _DropDebug()
+
+
 def _edge_samples(
     west: float, south: float, east: float, north: float, count: int = 21
 ) -> Tuple[list, list]:
@@ -109,25 +129,26 @@ def _edge_samples(
 
 @contextlib.contextmanager
 def _quiet_tile_urls() -> Iterator[None]:
-    """Raise the cleopatra tile logger above DEBUG so a keyed URL cannot reach the logs.
+    """Drop the cleopatra tile logger's DEBUG records so a keyed URL cannot reach the logs.
 
     The credential is part of the tile URL — that is how the service authenticates — and cleopatra logs
     that URL on a failed fetch. Errors still surface: the ``ConnectionError`` cleopatra raises carries the
     tile coordinates, not the URL, so nothing diagnostic is lost.
 
+    A filter is attached rather than the logger's level raised. Raising the level is process-global state
+    that two threads rendering keyed basemaps can interleave on — the inner restore puts back the level
+    the outer block had already changed — and it silences the logger for unrelated work in the meantime.
+    Adding and removing a filter is idempotent per block and leaves the level alone.
+
     Yields:
-        ``None``, with the logger's level restored on the way out even if the fetch raises.
+        ``None``, with the filter removed on the way out even if the fetch raises.
     """
     logger_obj = logging.getLogger(_CLEOPATRA_TILES_LOGGER)
-    previous = logger_obj.level
-    # NOTSET (0) already compares <= DEBUG, so the one comparison covers both an unset level (which
-    # inherits a possibly-DEBUG parent) and an explicitly-DEBUG one.
-    if previous <= logging.DEBUG:
-        logger_obj.setLevel(logging.INFO)
+    logger_obj.addFilter(_DROP_DEBUG)
     try:
         yield
     finally:
-        logger_obj.setLevel(previous)
+        logger_obj.removeFilter(_DROP_DEBUG)
 
 
 def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> Any:
@@ -598,13 +619,13 @@ class DecorationMixin(_MixinBase):
             key: kwargs.pop(key) for key in list(kwargs) if key in PRESET_KEYWORDS
         }
         keyed = get_keyed_basemap(str(source), **preset_kwargs)
-        keyed.check_bounds(self._lonlat_domain())
+        keyed.check_bounds(self._coverage_extent())
         provider = _keyed_tile_provider(keyed, api_key)
         kwargs.setdefault("attribution", keyed.attribution)
         with _quiet_tile_urls():
             return add_tiles(self.ax, source=provider, crs=self.crs, **kwargs)
 
-    def _lonlat_domain(self) -> Optional[Tuple[float, float, float, float]]:
+    def _coverage_extent(self) -> Optional[Tuple[float, float, float, float]]:
         """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.
 
         A declared ``domain`` is preferred. Without one the axes limits are used instead — reprojected to

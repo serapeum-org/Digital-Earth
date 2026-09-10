@@ -299,11 +299,20 @@ class TestStaticTierDispatch:
         from cleopatra.basemap import tiles as cleo_tiles
 
         self.requested = []
-        self.levels = []
+        self.escaped = []
 
         def spy(tile, provider, timeout, retries, user_agent="test"):
-            self.requested.append(provider.build_url(x=tile.x, y=tile.y, z=tile.z))
-            self.levels.append(logging.getLogger("cleopatra.basemap.tiles").level)
+            url = provider.build_url(x=tile.x, y=tile.y, z=tile.z)
+            self.requested.append(url)
+            # Emit the record cleopatra emits here, and record whether it survived the suppression.
+            logger = logging.getLogger("cleopatra.basemap.tiles")
+            handler = logging.Handler()
+            handler.emit = self.escaped.append
+            logger.addHandler(handler)
+            try:
+                logger.debug("fetching %s", url)
+            finally:
+                logger.removeHandler(handler)
             raise ConnectionError("network not used in tests")
 
         monkeypatch.setattr(cleo_tiles, "fetch_single_tile", spy)
@@ -339,21 +348,21 @@ class TestStaticTierDispatch:
         """cleopatra logs the built URL at DEBUG on a failed fetch, and that URL carries the key.
 
         Test scenario:
-            The fetch is wrapped so that logger sits above DEBUG for its duration, and is restored after —
-            including when the fetch raises, which is what happens here.
+            The assertion is about records, not about how they are stopped: with the logger explicitly at
+            DEBUG, nothing it emits during the fetch may escape, and the caller's own configuration must
+            be exactly as they left it afterwards — including when the fetch raises, as it does here.
         """
         logger = logging.getLogger("cleopatra.basemap.tiles")
         logger.setLevel(logging.DEBUG)
         try:
             with pytest.raises(ConnectionError):
                 self._tropical_map().basemap("Planet.NICFI", date="2024-01")
-            assert self.levels, "no fetch was attempted"
-            assert all(lvl > logging.DEBUG for lvl in self.levels), (
-                f"the keyed URL could have been logged at DEBUG: levels {self.levels}"
+            assert self.requested, "no fetch was attempted"
+            assert not self.escaped, (
+                f"a DEBUG record escaped during the fetch: {self.escaped}"
             )
-            assert logger.level == logging.DEBUG, (
-                "the caller's log level was not restored"
-            )
+            assert logger.level == logging.DEBUG, "the caller's log level was changed"
+            assert not logger.filters, "the suppression outlived the fetch"
         finally:
             logger.setLevel(logging.NOTSET)
 
@@ -798,7 +807,7 @@ class TestPresetKeywordErrorsAreNamed:
 
 
 class TestWhereTheStaticExtentComesFrom:
-    """The three ways `_lonlat_domain` can end up with nothing to check, and the lon/lat shortcut."""
+    """The three ways `_coverage_extent` can end up with nothing to check, and the lon/lat shortcut."""
 
     @pytest.fixture(autouse=True)
     def _spy(self, monkeypatch):
