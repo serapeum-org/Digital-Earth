@@ -233,6 +233,24 @@ class AnimationMixin(_MixinBase):
             which includes the case where no frame is on the view at all, since a frame that
             cannot be warped draws nothing and so contributes no colour range.
         """
+        measured = self._measured_clim(datasets)
+        return measured if measured is not None else (0.0, 1.0)
+
+    def _measured_clim(self, datasets: Sequence[Any]) -> Optional[Tuple[float, float]]:
+        """Return the ``(min, max)`` actually measured across ``datasets``, or ``None`` if nothing was.
+
+        The difference from :meth:`_stack_clim` matters to :meth:`_clim_across_views`, which unions one
+        result per swept projection: a view showing none of the data must contribute *nothing*, not the
+        ``(0, 1)`` placeholder, or the union floors at zero and the real data collapses into the top of
+        the colour ramp.
+
+        Args:
+            datasets: The frames to measure.
+
+        Returns:
+            The ``(min, max)`` across every frame that could be warped and held a finite value, or
+            ``None`` when no frame did.
+        """
         lows: List[float] = []
         highs: List[float] = []
         for ds in datasets:
@@ -244,7 +262,7 @@ class AnimationMixin(_MixinBase):
             if arr.size:
                 lows.append(float(arr.min()))
                 highs.append(float(arr.max()))
-        return (min(lows), max(highs)) if lows else (0.0, 1.0)
+        return (min(lows), max(highs)) if lows else None
 
     def _clim_across_views(
         self, dataset: Any, views: Sequence[Any]
@@ -268,9 +286,10 @@ class AnimationMixin(_MixinBase):
             bounds = []
             for view in _scan_subset(views):
                 self.crs = view
-                # _stack_clim skips its own off-limb frames, so a view showing none of the data comes
-                # back as the (0, 1) fallback rather than raising — there is nothing to catch here.
-                bounds.append(self._stack_clim([dataset]))
+                measured = self._measured_clim([dataset])
+                if measured is None:
+                    continue  # this view shows none of the data, so it bounds nothing
+                bounds.append(measured)
             return (
                 (min(lo for lo, _ in bounds), max(hi for _, hi in bounds))
                 if bounds

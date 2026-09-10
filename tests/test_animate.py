@@ -126,6 +126,32 @@ class TestAnimateOffLimb:
             )
         return frames
 
+    def test_a_swept_clim_ignores_the_views_that_see_nothing(self, regional_stack):
+        """A rotation's colour scale comes from the views that can see the data, not the ones that cannot.
+
+        Test scenario:
+            rotate unions one measurement per swept projection. A view showing none of the data must
+            contribute nothing; folding in the "no finite values" placeholder instead floors the scale at
+            zero, and a regional AOI whose values sit around 250 then collapses into the top few percent
+            of the ramp — visually the same bug the frozen-stretch work exists to prevent.
+        """
+        values = np.concatenate(
+            [frame.read_array(band=0).ravel() for frame in regional_stack]
+        )
+        m = Map(crs=4326, globe=True, figsize=(4, 4))
+        views = [
+            projections.orthographic(lon=-180.0 + step * 15.0, lat=15.0)
+            for step in range(24)
+        ]
+        opts = {}
+        m._resolve_animation_clim(regional_stack, opts, views=views)
+        assert opts["vmin"] == pytest.approx(float(np.nanmin(values)), rel=1e-3), (
+            f"the swept clim floored at a placeholder instead of the data: {opts}"
+        )
+        assert opts["vmin"] > 1.0, (
+            f"a placeholder (0, 1) must not leak into the union: {opts}"
+        )
+
     def test_a_scalar_stack_animates_on_a_hiding_globe(self, regional_stack, tmp_path):
         """The colour-scale scan reprojects every frame, so it needed the guard too.
 
@@ -179,8 +205,14 @@ class TestAnimateOffLimb:
         m = Map(crs=4326, figsize=(4, 4))
         opts = {}
         m._resolve_animation_clim(regional_stack, opts)
-        assert opts["vmin"] < opts["vmax"], (
-            f"a visible stack must still resolve a real clim, got {opts}"
+        values = np.concatenate(
+            [frame.read_array(band=0).ravel() for frame in regional_stack]
+        )
+        assert opts["vmin"] == pytest.approx(float(np.nanmin(values)), rel=1e-3), (
+            f"vmin should be the stack's own minimum, not a placeholder: {opts}"
+        )
+        assert opts["vmax"] == pytest.approx(float(np.nanmax(values)), rel=1e-3), (
+            f"vmax should be the stack's own maximum: {opts}"
         )
 
 
