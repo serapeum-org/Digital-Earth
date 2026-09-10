@@ -7,10 +7,11 @@ GPU-friendly renderers for large feature sets:
 * ``deck_scatter`` / ``deck_polygons`` — deck.gl ``GeoJsonLayer`` overlays driven through the maplibre widget's
   ``add_deck_layers`` (deck.gl JSON), so millions of features render on the GPU instead of one DOM glyph each.
 
-The ``[web]`` extra ships ``lonboard`` for its GeoArrow path, but py-maplibregl's deck integration consumes
+Recipe W3 named ``lonboard`` for its zero-copy GeoArrow path, but py-maplibregl's deck integration consumes
 deck.gl **JSON / pydeck** layers, not lonboard widget objects — they cannot be composited into the same
-``maplibre`` widget. We therefore drive deck.gl through ``add_deck_layers`` here; a lonboard-native (zero-copy
-GeoArrow) renderer would be a separate widget and is left as a future enhancement.
+``maplibre`` widget. We therefore drive deck.gl through ``add_deck_layers`` here, and lonboard is no longer a
+dependency of the ``[web]`` extra: it was installed and never imported. A lonboard-native renderer would be a
+separate widget, and would re-declare it.
 
 Builders that colour by value reuse the base ``_color_expr`` helpers; numpy/maplibre are imported lazily.
 """

@@ -81,14 +81,21 @@ interactive = [
     "panel >=1.9",
 ]
 # Web tier (MapLibre GL JS + deck.gl via their anywidget Python bindings). `maplibre` (py-maplibregl) drives both
-# the MapLibre basemap/vector layers AND deck.gl overlays from one widget; lonboard is the GeoArrow-fast deck.gl
-# path for very large vector/point data. Neither is a GIS competitor — they are renderers; pyramids stays the only
-# GIS dep (enforced by tests/test_no_competitor_imports.py).
+# the MapLibre basemap/vector layers AND deck.gl overlays from one widget. It is not a GIS competitor — it is a
+# renderer; pyramids stays the only GIS dep (enforced by tests/test_no_competitor_imports.py).
+# `lonboard` was declared here for recipe W3's GeoArrow path and never imported: py-maplibregl's deck integration
+# consumes deck.gl JSON / pydeck layers, not lonboard widget objects, and the two cannot be composited into one
+# `maplibre` widget — so the tier drives deck.gl through `add_deck_layers` instead (see web/bigdata.py). It pulled
+# a GeoArrow/pyarrow stack into every install for nothing, so it is gone; a lonboard-native renderer would be a
+# separate widget, and can re-declare it when someone builds one.
+# The `[ipywidget]` extra is NOT optional: `maplibre` declares `anywidget` only under it, and the whole tier is
+# built on `maplibre.ipywidget.MapWidget`. Bare `maplibre` imports and then fails at render with
+# `NameError: name 'AnyWidget' is not defined` — until now that was masked because lonboard pulled anywidget in
+# transitively, exactly the kind of borrowed dependency the comment on `xyzservices` above rejects.
 # NOTE: pixi exposes this extra as a feature named `web`, which the `web` env uses directly — do NOT also declare a
 # `[tool.pixi.feature.web.pypi-dependencies]` table (it would double-declare these and break `pixi update`).
 web = [
-    "maplibre >=0.3",
-    "lonboard >=0.10",
+    "maplibre[ipywidget] >=0.3",
 ]
 
 [project.scripts]
@@ -458,7 +465,7 @@ viz3d = { features = ["dev", "3d"], solve-group = "viz3d" }
 # Separate solve-group so geoviews/datashader/panel stay out of default/dev. Run: pixi run -e interactive test-interactive
 interactive = { features = ["dev", "interactive", "numba-numpy"], solve-group = "interactive" }
 # Web tier (MapLibre + deck.gl). Uses the `web` feature pixi derives from the `[web]` extra. Separate solve-group
-# so maplibre/lonboard stay out of default/dev. Run: pixi run -e web test-web
+# so maplibre stays out of default/dev. Run: pixi run -e web test-web
 web = { features = ["dev", "web"], solve-group = "web" }
 py311 = { features = ["py311", "dev"], solve-group = "py311" }
 py312 = { features = ["py312", "dev"], solve-group = "py312" }

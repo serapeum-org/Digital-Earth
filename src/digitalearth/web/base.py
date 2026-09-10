@@ -32,7 +32,7 @@ from digitalearth.base.sources.source import Source
 
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
-    "the web tier needs MapLibre GL JS + deck.gl (maplibre/lonboard). "
+    "the web tier needs MapLibre GL JS + deck.gl (maplibre). "
     "Install it with `pip install 'digitalearth[web]'` "
     "(or, in this repo, `pixi install -e web`)."
 )
