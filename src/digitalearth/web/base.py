@@ -1063,9 +1063,10 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
         """
-        kind = (
-            fmt or ("png" if str(path).lower().endswith(".png") else "html")
-        ).lower()
+        suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
+        kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
+        if kind == "gif":
+            return self.to_gif(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)
