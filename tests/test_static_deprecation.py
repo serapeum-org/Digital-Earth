@@ -158,3 +158,25 @@ class TestStaticPackageSurface:
         assert "StaticGlyph" not in digitalearth.__all__, (
             "a deprecated class should not be advertised on the package facade"
         )
+
+    @pytest.mark.parametrize("name", ["geostatistics", "definitely_not_a_module"])
+    def test_unknown_attribute_raises_attribute_error(self, name):
+        """The lazy hook resolves ``StaticGlyph`` and refuses everything else.
+
+        Args:
+            name: A name the backend does not define.
+
+        Test scenario:
+            ``__getattr__`` exists only to keep the deprecated class off the eager import path, so any
+            other name must fail exactly as it would without the hook -- a hook that returned something
+            for an unknown name would turn a typo into a silent ``None``. ``geostatistics`` is the case
+            that matters now: the module was deleted, so this fallback is what a stale
+            ``digitalearth.static.geostatistics`` reference lands on.
+        """
+        from digitalearth import static
+
+        with pytest.raises(
+            AttributeError,
+            match=rf"module 'digitalearth\.static' has no attribute '{name}'",
+        ):
+            getattr(static, name)

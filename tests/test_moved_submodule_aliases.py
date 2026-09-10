@@ -200,6 +200,58 @@ class TestRemovedGeostatisticsNames:
             f"{name} must not be in the supported facade"
         )
 
+    @pytest.mark.parametrize("name", digitalearth._REMOVED_GEOSTATISTICS)
+    def test_removed_name_is_not_offered_by_dir(self, name):
+        """``dir()`` must not advertise a name that can only raise.
+
+        Args:
+            name: A removed geostatistics preset or the removed submodule.
+
+        Test scenario:
+            :func:`digitalearth.__dir__` builds its listing from ``globals()`` and
+            :data:`_MOVED_SUBMODULES`, so a removed name drops out of tab-completion for free -- but only
+            for as long as it stays out of both. Offering it back would send a user straight into the
+            AttributeError the listing exists to help them avoid.
+        """
+        assert name not in dir(digitalearth), (
+            f"dir(digitalearth) still offers {name}, which resolves to nothing"
+        )
+
+    @pytest.mark.parametrize("name", digitalearth._REMOVED_GEOSTATISTICS)
+    def test_from_import_form_raises_import_error(self, name):
+        """The ``from`` form fails as well -- with the interpreter's message, not ours.
+
+        Args:
+            name: A removed geostatistics preset or the removed submodule.
+
+        Test scenario:
+            ``from digitalearth import lisa_map`` is how the presets were actually written, so it is the
+            form that has to fail. It does, but not with the guidance above it: CPython's ``IMPORT_FROM``
+            discards the ``AttributeError`` a PEP 562 hook raises and substitutes its own ``ImportError``,
+            so the pointer at geostatista survives only on attribute access. Raising ``ImportError`` from
+            ``__getattr__`` would carry it through both forms, at the price of ``hasattr`` no longer
+            returning ``False`` -- the property :class:`TestRemovedGeostatisticsNames` opens by pinning.
+            The trade-off is recorded here rather than left to be rediscovered.
+        """
+        with pytest.raises(ImportError) as excinfo:
+            exec(f"from digitalearth import {name}")
+        assert f"cannot import name {name!r}" in str(excinfo.value), (
+            f"the from-form should name the missing import, got: {excinfo.value}"
+        )
+
+    def test_removed_submodule_is_gone_from_disk(self):
+        """``digitalearth.static.geostatistics`` is deleted, not merely unbound from the facade.
+
+        Test scenario:
+            An attribute hook on the package root says nothing about a module that is still importable by
+            its full dotted path, and a leftover file would keep importing geostatista -- the dependency
+            this branch drops. The deletion therefore has to be checked where it happened.
+        """
+        with pytest.raises(
+            ModuleNotFoundError, match="digitalearth.static.geostatistics"
+        ):
+            importlib.import_module("digitalearth.static.geostatistics")
+
 
 def _fresh_interpreter(code: str) -> str:
     """Run ``code`` in a new interpreter with ``src/`` importable and return its stdout.
