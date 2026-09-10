@@ -246,6 +246,122 @@ class VectorMixin(_MixinBase):
             layout=layout,
         )
 
+    def contours(
+        self,
+        dataset: Any,
+        *,
+        interval: Optional[float] = None,
+        levels: Optional[Any] = None,
+        base: float = 0.0,
+        band: int = 1,
+        filled: bool = False,
+        cmap: str = "viridis",
+        color: Optional[str] = None,
+        width: float = 1.5,
+        opacity: float = 1.0,
+        labels: bool = False,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Trace iso-value contours from a raster band and draw them as vectors.
+
+        The GIS is pyramids' (``Dataset.contour``, the ``gdal_contour`` equivalent); this only draws what
+        it returns. Contours are the one field type that maps cleanly onto MapLibre — the result is a
+        ``FeatureCollection``, which the tier already knows how to render — so it is the field renderer
+        this tier can honestly offer. Vector fields and meshes have no native primitive here; see the
+        static and interactive tiers for those.
+
+        Args:
+            dataset: A pyramids ``Dataset``.
+            interval: Spacing between levels, anchored at ``base``. Give exactly one of this or ``levels``.
+            levels: Explicit levels to contour. Give exactly one of this or ``interval``.
+            base: The value a regular ``interval`` is anchored to.
+            band: 1-based band to contour, matching
+                :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and
+                this converts, so the same number means the same band everywhere in this tier.
+            filled: Draw filled bands between successive levels instead of lines.
+            cmap: Colormap for colouring by level.
+            color: A single colour for every contour, overriding ``cmap``. Use it when the levels are
+                labelled rather than colour-coded.
+            width: Line width in pixels; ignored when ``filled``.
+            opacity: Layer opacity in ``[0, 1]``.
+            labels: Whether to label each contour with its value — the level for a line, the band's lower
+                edge when ``filled``.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when neither or both of ``interval`` and ``levels`` are given — pyramids requires
+                exactly one, and saying so here names the argument the caller actually wrote.
+
+        Examples:
+            - Contour a DEM every 100 m:
+                ```python
+                >>> from digitalearth.web import WebMap                        # doctest: +SKIP
+                >>> WebMap().basemap().contours(dem, interval=100)             # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.
+        """
+        if (interval is None) == (levels is None):
+            raise ValueError(
+                "contours() needs exactly one of interval= or levels=; "
+                f"got interval={interval!r} and levels={levels!r}"
+            )
+        data = self._to_display_raster(dataset)
+        features = data.contour(
+            interval=interval,
+            fixed_levels=list(levels) if levels is not None else None,
+            base=base,
+            band=int(band) - 1,  # pyramids counts bands from 0; this tier counts from 1
+            attribute="level",
+            polygonize=filled,
+        )
+        if len(features) == 0:
+            # No level fell inside the band's range. Passing this on raises "column 'level' not found",
+            # because pyramids only writes the attribute when it writes a feature — which points at the
+            # wrong thing entirely.
+            raise ValueError(
+                f"contours() traced nothing: no level lies within the data. Check that "
+                f"{'levels=' + repr(levels) if levels is not None else 'interval=' + repr(interval)} "
+                f"suits band {band}'s range."
+            )
+        # Lines carry `level`; filled bands carry `level_min`/`level_max` for the band's two edges, so
+        # colour and label the lower edge — it is what orders the bands.
+        attribute = "level_min" if filled else "level"
+        column = None if color else attribute
+        if filled:
+            self.polygons(
+                features,
+                column=column,
+                scheme=None,
+                cmap=cmap,
+                color=color or "#3388ff",
+                opacity=opacity,
+                name=name,
+                visible=visible,
+            )
+        else:
+            self.lines(
+                features,
+                column=column,
+                scheme=None,
+                cmap=cmap,
+                color=color or "#3388ff",
+                width=width,
+                opacity=opacity,
+                name=name,
+                visible=visible,
+            )
+        if labels:
+            return self.labels(features, attribute)
+        return self
+
     def _vector_layer(
         self,
         features: Any,

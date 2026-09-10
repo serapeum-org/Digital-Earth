@@ -194,22 +194,6 @@ class RasterMixin(_MixinBase):
         self._index_layer(layer_id, name)
         return self.add_layer(apply)
 
-    def _to_display_raster(self, dataset: Any) -> Any:
-        """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
-
-        ``_to_display_source`` gives one band; a composite needs the dataset itself so ``get_stack`` can
-        read three from it.
-
-        Args:
-            dataset: A pyramids ``Dataset``.
-
-        Returns:
-            The dataset in the display CRS.
-        """
-        if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
-            return dataset.to_crs(self.crs)
-        return dataset
-
     @staticmethod
     def _composite_png_datauri(unit_stack: Any) -> str:
         """Encode a stretched ``(rows, cols, 3)`` stack as a ``data:image/png;base64,`` URI.

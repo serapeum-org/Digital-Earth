@@ -619,6 +619,22 @@ class WebMapBase:
             data = reproject(data, self.crs)
         return get_source(data, band=band)
 
+    def _to_display_raster(self, dataset: Any) -> Any:
+        """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
+
+        ``_to_display_source`` gives one band; a composite needs the dataset itself so ``get_stack`` can
+        read three from it.
+
+        Args:
+            dataset: A pyramids ``Dataset``.
+
+        Returns:
+            The dataset in the display CRS.
+        """
+        if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
+            return dataset.to_crs(self.crs)
+        return dataset
+
     @staticmethod
     def _reject_raster(data: Any, method: str) -> None:
         """Raise ``TypeError`` when ``data`` is a pyramids raster, leaving anything else alone.
