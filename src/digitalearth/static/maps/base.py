@@ -5,6 +5,7 @@ The protected base every Map capability mixin builds on: it owns the display-CRS
 Source-extraction helpers the plotting mixins consume via ``self``.
 """
 
+import logging
 import re
 from typing import Any, List, Optional, Tuple
 
@@ -14,6 +15,8 @@ from matplotlib.animation import FuncAnimation
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
+
+logger = logging.getLogger(__name__)
 
 #: GDAL's complaint when a warp cannot place the data in the target CRS. It fires as soon as too few sample
 #: points survive to bound an output — its own threshold is ``failed > total - 10``, not all of them — and by
@@ -115,6 +118,19 @@ class GeoLayerBase(Scene):
             display CRS); ``True`` otherwise — i.e. for a differing EPSG code or any proj4/string CRS.
         """
         return not (isinstance(self.crs, int) and dataset.epsg == self.crs)
+
+    def _skipped_off_limb(self, layer: str) -> None:
+        """Record that ``layer`` drew nothing because its data is outside the display CRS.
+
+        Logged at debug rather than warning on purpose: a rotation sweep passes the far side of the globe
+        every time it runs, so hidden frames are expected there and a warning would be noise. It is still
+        the only signal that a blank map came from the projection rather than the data, which is what makes
+        a mis-specified CRS diagnosable.
+
+        Args:
+            layer: The layer method that drew nothing, named for the log line.
+        """
+        logger.debug("%s: data lies outside %r; nothing drawn", layer, self.crs)
 
     def _prepare(self, dataset: Any, band: int = 1) -> Source:
         """Reproject ``dataset`` to the display CRS (if needed) and wrap it as a :class:`Source`.

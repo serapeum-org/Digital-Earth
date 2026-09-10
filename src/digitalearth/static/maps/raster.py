@@ -60,7 +60,8 @@ class RasterMixin(_MixinBase):
         try:
             src = self._prepare(dataset, band)
         except OffLimbError:
-            return None  # nothing of this raster is on the view: draw an empty frame
+            self._skipped_off_limb("_field")
+            return None
 
         z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
         if opts.pop(
@@ -237,7 +238,8 @@ class RasterMixin(_MixinBase):
         try:
             ds = self._reproject(dataset)
         except OffLimbError:
-            return None  # nothing of this raster is on the view: draw an empty frame
+            self._skipped_off_limb("rgb_composite")
+            return None
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
@@ -330,7 +332,8 @@ class RasterMixin(_MixinBase):
         try:
             ds = self._reproject(dataset)
         except OffLimbError:
-            return None  # nothing of this raster is on the view: draw an empty frame
+            self._skipped_off_limb("hsv_composite")
+            return None
         stack = get_stack(
             ds, bands, mask=mask_nodata
         )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False

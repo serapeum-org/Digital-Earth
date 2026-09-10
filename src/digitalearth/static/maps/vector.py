@@ -239,7 +239,8 @@ class VectorMixin(_MixinBase):
         try:
             xyz = self._reproject(dataset).to_xyz()
         except OffLimbError:
-            return None  # nothing of this layer is on the view: draw an empty frame
+            self._skipped_off_limb("grid_points")
+            return None
         x = xyz.iloc[:, 0].to_numpy()
         y = xyz.iloc[:, 1].to_numpy()
         z = xyz.iloc[:, 2].to_numpy()
@@ -291,7 +292,8 @@ class VectorMixin(_MixinBase):
         try:
             ds = self._reproject(dataset)
         except OffLimbError:
-            return None  # nothing of this layer is on the view: draw an empty frame
+            self._skipped_off_limb("grid_cells")
+            return None
         if ds.epsg is None:
             # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
             # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
@@ -329,7 +331,8 @@ class VectorMixin(_MixinBase):
             su = self._prepare(u_dataset, band)
             sv = self._prepare(v_dataset, band)
         except OffLimbError:
-            return None  # nothing of this layer is on the view: draw an empty frame
+            self._skipped_off_limb("_vector")
+            return None
         xs, ys = su.x.values, su.y.values
         u, v = su.z.values, sv.z.values
         # streamplot (and a tidy grid generally) needs strictly increasing axes; raster y runs
@@ -442,12 +445,14 @@ class VectorMixin(_MixinBase):
         try:
             x, y, z = self._scattered(data)
         except OffLimbError:
-            return None  # nothing of this layer is on the view: draw an empty frame
+            self._skipped_off_limb("_tri")
+            return None
         finite = np.isfinite(x) & np.isfinite(
             y
         )  # drop far-side points on a globe (Triangulation needs finite)
         x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
         if x.size < 3:
+            self._skipped_off_limb("_tri")
             # A vector reprojection does not raise when the data is off the view — it sends the points to
             # infinity, which the filter above then removes. Too few survivors to triangulate means the
             # same thing an OffLimbError means for a raster: there is nothing on the view to draw.

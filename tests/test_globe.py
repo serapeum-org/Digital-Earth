@@ -663,6 +663,25 @@ class TestOffLimbEveryLayerKind:
             f"{method} should draw nothing when its features are off the view"
         )
 
+    def test_a_skipped_layer_says_so_in_the_log(self, hidden, regional, caplog):
+        """A blank map should be diagnosable: the skip leaves a record naming the layer and the CRS.
+
+        Test scenario:
+            Sixteen draw paths swallow the off-limb case, so a mis-specified projection renders an empty
+            figure that looks like a data problem. Debug rather than warning because a rotation sweep
+            passes the far side every run and would otherwise spam.
+        """
+        import logging
+
+        with caplog.at_level(logging.DEBUG, logger="digitalearth.static.maps.base"):
+            hidden.imshow(regional)
+        assert any("nothing drawn" in record.message for record in caplog.records), (
+            f"the skip should be logged, got {[r.message for r in caplog.records]}"
+        )
+        assert any("_field" in record.getMessage() for record in caplog.records), (
+            "the log line should name the layer that drew nothing"
+        )
+
     def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
         """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
         assert hidden.imshow(regional) is None
