@@ -186,6 +186,7 @@ nav:
         - timeseries: examples/plots/25_timeseries.ipynb
         - climatology: examples/plots/26_climatology.ipynb
   - Reference:
+    - Keyed basemaps: reference/basemaps.md
     - TexturedGlobe (3-D globe): reference/textured_globe.md
     - Saving animations: reference/animation.md
     - Composite stretch: reference/stretch.md
