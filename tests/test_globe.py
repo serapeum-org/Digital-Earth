@@ -498,3 +498,83 @@ class TestOffLimbDraw:
         )
         with pytest.raises(OffLimbError, match="entirely outside"):
             m._reproject(regional)
+
+
+class TestOffLimbEveryLayerKind:
+    """Every layer that reprojects must answer an off-limb view the same way (issue #151)."""
+
+    @pytest.fixture
+    def hidden(self):
+        """A Map whose orthographic view hides the regional AOI entirely.
+
+        Returns:
+            Map: a globe centred on the far side of the data.
+        """
+        return Map(
+            crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+        )
+
+    @pytest.fixture
+    def regional(self):
+        """A single-band regional raster (~1.6 x 1.2 degrees over the Netherlands).
+
+        Returns:
+            Dataset: the raster every far-side view hides.
+        """
+        _, xx = np.mgrid[0:40, 0:50]
+        values = (25 + 8 * np.sin(xx / 14.0)).astype("float32")
+        return Dataset.from_array(
+            values,
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        )
+
+    @pytest.fixture
+    def regional_rgb(self, regional):
+        """The same AOI as a 3-band raster, for the composite renders.
+
+        Returns:
+            Dataset: a 3-band regional raster.
+        """
+        band = np.nan_to_num(regional.read_array(band=0)).astype("float32")
+        return Dataset.from_array(
+            np.stack([band, band * 0.5, band * 0.25]),
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+            no_data_value=-9999.0,
+        )
+
+    @pytest.mark.parametrize(
+        "method", ["imshow", "contourf", "pcolormesh", "grid_points", "grid_cells"]
+    )
+    def test_single_raster_layers_draw_nothing(self, hidden, regional, method):
+        """Every layer taking one raster returns None rather than raising."""
+        assert getattr(hidden, method)(regional) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    @pytest.mark.parametrize("method", ["rgb_composite", "hsv_composite"])
+    def test_composites_draw_nothing(self, hidden, regional_rgb, method):
+        """The composites reproject before stretching, so they need the same guard."""
+        assert getattr(hidden, method)(regional_rgb) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    @pytest.mark.parametrize("method", ["quiver", "barbs", "streamplot"])
+    def test_vector_field_layers_draw_nothing(self, hidden, regional, method):
+        """The u/v vector fields prepare two rasters; either being hidden means nothing to draw."""
+        assert getattr(hidden, method)(regional, regional) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    @pytest.mark.parametrize("method", ["tricontourf", "tricontour", "tripcolor"])
+    def test_unstructured_layers_draw_nothing(self, hidden, regional, method):
+        """The triangulated renders read scattered cells out of a reprojected raster."""
+        assert getattr(hidden, method)(regional) is None, (
+            f"{method} should draw nothing when the data is behind the limb"
+        )
+
+    def test_the_figure_is_still_usable_afterwards(self, hidden, regional):
+        """An off-limb draw leaves a clean, still-drawable Map rather than a half-built one."""
+        assert hidden.imshow(regional) is None
+        assert not hidden.ax.images, "nothing should have been drawn"
+        assert hidden.layers == [], "no layer should have been registered"
