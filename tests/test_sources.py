@@ -196,8 +196,12 @@ def test_feature_source_survives_pandas_extension_dtypes(dtype):
         crs=4326,
     )
     src = get_source(FeatureCollection(gdf))
-    assert src.z is not None, f"a numeric column should still be found alongside a {dtype} column"
-    assert list(src.z.values) == [1.5, 2.5], f"the {dtype} column must not be chosen as z"
+    assert src.z is not None, (
+        f"a numeric column should still be found alongside a {dtype} column"
+    )
+    assert list(src.z.values) == [1.5, 2.5], (
+        f"the {dtype} column must not be chosen as z"
+    )
 
 
 def test_feature_source_reads_a_nullable_numeric_column():
@@ -214,7 +218,9 @@ def test_feature_source_reads_a_nullable_numeric_column():
     )
     src = get_source(FeatureCollection(gdf))
     assert src.z is not None, "a nullable Int64 column should be usable as z"
-    assert np.isnan(src.z.values[1]), f"the missing value should read as NaN, got {src.z.values[1]!r}"
+    assert np.isnan(src.z.values[1]), (
+        f"the missing value should read as NaN, got {src.z.values[1]!r}"
+    )
 
 
 def test_feature_source_still_ignores_booleans():

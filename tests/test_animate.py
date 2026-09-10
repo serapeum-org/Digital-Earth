@@ -120,7 +120,9 @@ class TestAnimateDatasetCollection:
             path = tmp_path / f"f{index}.tif"
             Dataset.from_array(
                 values,
-                geo_ref=GeoReference(geo=(58.2, 0.05, 0.0, 46.8, 0.0, -0.05), epsg=4326),
+                geo_ref=GeoReference(
+                    geo=(58.2, 0.05, 0.0, 46.8, 0.0, -0.05), epsg=4326
+                ),
                 no_data_value=-9999.0,
             ).to_file(str(path))
             paths.append(str(path))
@@ -145,14 +147,18 @@ class TestAnimateDatasetCollection:
         assert len(list(anim.new_frame_seq())) == 3, "one frame per collection member"
         out = tmp_path / "cube.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
-        assert out.stat().st_size > 0, "the collection animation should render a non-empty GIF"
+        assert out.stat().st_size > 0, (
+            "the collection animation should render a non-empty GIF"
+        )
         assert m.ax.images, "each frame should draw its raster"
 
     def test_a_collection_and_its_members_animate_alike(self, cube):
         """Passing the collection and passing `.datasets` must produce the same animation."""
         by_collection = Map(crs=4326, figsize=(4, 4)).animate(cube, fps=2)
         by_members = Map(crs=4326, figsize=(4, 4)).animate(cube.datasets, fps=2)
-        assert len(list(by_collection.new_frame_seq())) == len(list(by_members.new_frame_seq()))
+        assert len(list(by_collection.new_frame_seq())) == len(
+            list(by_members.new_frame_seq())
+        )
 
 
 class TestAnimate:

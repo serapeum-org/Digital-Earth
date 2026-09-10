@@ -625,7 +625,9 @@ class AnimationMixin(_MixinBase):
             raise ValueError(
                 f"unknown animation kind {kind!r}; choose one of {_ANIMATION_KINDS}"
             )
-        frames = _as_frames(stack)  # a DatasetCollection iterates to arrays, not Datasets
+        frames = _as_frames(
+            stack
+        )  # a DatasetCollection iterates to arrays, not Datasets
         if not frames:
             raise ValueError("animate got an empty stack (nothing to animate)")
         if titles is not None and len(titles) != len(frames):
