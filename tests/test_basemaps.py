@@ -940,3 +940,72 @@ class TestPathSeparatorsAreDelimitersToo:
         """
         with pytest.raises(ValueError, match="rewrite the tile request"):
             planet_nicfi("2024-01", mosaic="../../etc").tile_url(api_key="K")
+
+
+class TestTheExtentIsValidatedOnItsOwn:
+    """Whether an extent is lon/lat is a question about the caller's input, not about the coverage."""
+
+    @staticmethod
+    def _global_source():
+        """A source that declares no bounds, so the coverage comparison is skipped.
+
+        Returns:
+            A :class:`KeyedTileSource` with ``bounds=None``.
+        """
+        return KeyedTileSource(
+            name="Global",
+            url_template="https://a/{z}/{x}/{y}.png?k={api_key}",
+            attribution="Global",
+            credential_env="EXAMPLE_KEY",
+        )
+
+    def test_a_source_without_bounds_still_rejects_a_projected_extent(self):
+        """Covering the whole globe is not a reason to accept metres.
+
+        Test scenario:
+            The early return for ``bounds is None`` used to skip the validation entirely, so garbage
+            passed silently for any global source — and the answer would then be wrong the moment a
+            preset with real bounds was added.
+        """
+        with pytest.raises(ValueError, match="not lon/lat"):
+            self._global_source().check_bounds(
+                (500000.0, 5800000.0, 510000.0, 5810000.0)
+            )
+
+    def test_a_projected_extent_whose_northings_look_like_latitudes_is_caught(self):
+        """Latitude alone does not settle it — an equatorial Web-Mercator box has small northings.
+
+        Test scenario:
+            ``y`` in ``[-50, 50]`` metres passes a latitude range check, and the eastings then read as a
+            10 km longitude span, which ``_spans_longitude`` would call "global in longitude". The
+            longitude magnitude is what catches it.
+        """
+        with pytest.raises(ValueError, match="cannot be degrees"):
+            planet_nicfi("2024-01").check_bounds((500000.0, -50.0, 510000.0, 50.0))
+
+    def test_an_extent_wider_than_the_planet_is_not_lon_lat(self):
+        """No lon/lat box spans more than 360 degrees, whatever convention it is written in."""
+        with pytest.raises(ValueError, match="cannot be degrees"):
+            planet_nicfi("2024-01").check_bounds((-200.0, -5.0, 200.0, 5.0))
+
+    def test_a_0_360_extent_at_the_top_of_the_range_still_passes(self):
+        """The magnitude check must not refuse the 0-360 convention it was written to allow."""
+        planet_nicfi("2024-01").check_bounds((340.0, -5.0, 355.0, 5.0))
+
+
+class TestTheLongitudeAsymmetryIsDeliberate:
+    """L8: `south > north` raises while `west > east` does not, and that choice is load-bearing."""
+
+    def test_inverted_longitudes_are_read_as_a_crossing_not_an_error(self):
+        """A Pacific extent and a swapped tuple are the same four numbers, and the real case wins.
+
+        Test scenario:
+            (10, -5, -10, 5) could be a typo, or a 340-degree box the long way round. Refusing it would
+            break every genuine antimeridian extent to catch a mistake the numbers cannot prove.
+        """
+        planet_nicfi("2024-01").check_bounds((10.0, -5.0, -10.0, 5.0))
+
+    def test_a_fully_swapped_tuple_is_still_caught_by_its_latitudes(self):
+        """The latitude half of a swapped tuple is what makes the mistake visible."""
+        with pytest.raises(ValueError, match="inverted"):
+            planet_nicfi("2024-01").check_bounds((10.0, 5.0, -10.0, -5.0))

@@ -250,6 +250,38 @@ class KeyedTileSource:
         self._check_substitution("api_key", key, quote=False)
         return url.replace("{api_key}", key)
 
+    def _check_is_lonlat(self, extent: Extent) -> None:
+        """Refuse an extent that cannot be a lon/lat box, whatever this source's coverage is.
+
+        This validates the *caller's* input, so it runs whether or not the source declares
+        :attr:`bounds` — a source that covers the globe is not a reason to accept metres.
+
+        Args:
+            extent: The extent as passed to :meth:`check_bounds`.
+
+        Raises:
+            ValueError: when a latitude is outside ``[-90, 90]``, when the extent is inverted in latitude,
+                or when the longitudes are too large or too far apart to be degrees. All three usually
+                mean the extent is in a projected CRS.
+        """
+        west, south, east, north = extent
+        if not (-90.0 <= south <= 90.0 and -90.0 <= north <= 90.0):
+            raise ValueError(
+                f"{self.name}: the extent {extent} has latitudes outside [-90, 90], so it is not lon/lat "
+                f"— reproject it before checking coverage."
+            )
+        if abs(west) > 360.0 or abs(east) > 360.0 or abs(east - west) > 360.0:
+            # Northings can land inside [-90, 90] by coincidence, so latitude alone does not settle it;
+            # eastings and a span wider than the planet do.
+            raise ValueError(
+                f"{self.name}: the extent {extent} has longitudes that cannot be degrees, so it is not "
+                f"lon/lat — reproject it before checking coverage."
+            )
+        if south > north:
+            raise ValueError(
+                f"{self.name}: the extent {extent} is inverted (south {south} is north of north {north})."
+            )
+
     def _check_substitution(
         self, placeholder: str, value: str, *, quote: bool = True
     ) -> None:
@@ -284,14 +316,21 @@ class KeyedTileSource:
         place as ``-160``, and a box crossing the antimeridian is treated as the two spans it really
         covers rather than as an inverted one. Latitude is compared directly — it has no such convention.
 
+        That makes the two axes deliberately asymmetric: ``south > north`` is an error, while
+        ``west > east`` is read as a crossing rather than a mistake. The numbers cannot tell a swapped
+        longitude pair from a genuine Pacific extent, and refusing the crossing would break the real case
+        to catch the typo — so the crossing wins. A swapped tuple is caught by its latitudes instead.
+
         Args:
             extent: The area about to be drawn, as lon/lat ``(west, south, east, north)``; ``None`` skips
                 the check, as does a source with no declared :attr:`bounds`.
 
         Raises:
-            ValueError: when the two boxes do not overlap, quoting both so the mismatch is obvious; when
-                the latitudes are inverted or outside ``[-90, 90]``, which usually means the extent is in
-                a projected CRS rather than lon/lat.
+            ValueError: when the two boxes do not overlap, quoting both so the mismatch is obvious; or
+                when ``extent`` cannot be a lon/lat box at all — latitudes outside ``[-90, 90]``,
+                longitudes too large or too far apart to be degrees, or an extent inverted in latitude,
+                all of which usually mean it is in a projected CRS. An extent whose *longitudes* are
+                inverted is read as an antimeridian crossing, not an error; see above.
 
         Examples:
             - A tropical extent passes, and so does one that merely straddles the edge:
@@ -331,19 +370,13 @@ class KeyedTileSource:
 
                 ```
         """
-        if extent is None or self.bounds is None:
+        if extent is None:
+            return
+        self._check_is_lonlat(extent)
+        if self.bounds is None:
             return
         west, south, east, north = extent
         b_west, b_south, b_east, b_north = self.bounds
-        if not (-90.0 <= south <= 90.0 and -90.0 <= north <= 90.0):
-            raise ValueError(
-                f"{self.name}: the extent {extent} has latitudes outside [-90, 90], so it is not lon/lat "
-                f"— reproject it before checking coverage."
-            )
-        if south > north:
-            raise ValueError(
-                f"{self.name}: the extent {extent} is inverted (south {south} is north of north {north})."
-            )
         if not _spans_latitude(south, north, b_south, b_north) or not _spans_longitude(
             west, east, b_west, b_east
         ):
