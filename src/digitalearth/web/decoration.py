@@ -19,6 +19,9 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+
+#: Keywords that belong to a keyed preset; anything else passed as one is a typo, not a preset.
+_PRESET_KEYWORDS = frozenset({"date", "flavour", "mosaic"})
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
@@ -177,6 +180,13 @@ class DecorationMixin(_MixinBase):
                 opacity=opacity,
             )
         if preset:
+            stray = sorted(set(preset) - _PRESET_KEYWORDS)
+            if stray:
+                # Not a preset keyword at all — almost certainly a typo, so say that rather than blame
+                # the preset machinery the caller never invoked.
+                raise TypeError(
+                    f"basemap() got an unexpected keyword argument {stray[0]!r}"
+                )
             raise ValueError(
                 f"basemap({provider!r}) takes no preset keywords; {sorted(preset)} apply only to a keyed "
                 f"preset such as 'Planet.NICFI'"

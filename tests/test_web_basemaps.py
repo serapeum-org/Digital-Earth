@@ -87,3 +87,36 @@ class TestWebTierDispatch:
         assert WebMap().basemap("CartoDark").layers, (
             "the ordinary basemap path stopped registering layers"
         )
+
+
+class TestPresetKeywordErrors:
+    """M6: a typo'd style keyword must not be blamed on the preset machinery."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the web extra, and supply a fake credential.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("maplibre")
+        monkeypatch.setenv("PLANET_API_KEY", FAKE_KEY)
+
+    def test_a_misspelled_style_keyword_is_a_type_error(self):
+        """``opacty=`` is a typo for ``opacity``, not an attempt to use a preset.
+
+        Test scenario:
+            ``**preset`` swallows every unknown keyword, so before this the caller was told their
+            "preset keywords" were wrong — about a preset they never mentioned.
+        """
+        from digitalearth.web import WebMap
+
+        with pytest.raises(TypeError, match="opacty"):
+            WebMap().basemap("CartoDark", opacty=0.5)
+
+    def test_a_real_preset_keyword_on_an_ordinary_provider_still_says_so(self):
+        """``date=`` *is* a preset keyword, so that message remains the right one."""
+        from digitalearth.web import WebMap
+
+        with pytest.raises(ValueError, match="no preset keywords"):
+            WebMap().basemap("CartoDark", date="2024-01")
