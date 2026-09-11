@@ -12,10 +12,12 @@ The boundary/graticule geometry is assembled here from pyramids' existing coordi
 digitalearth, no new pyramids code. cleopatra then *draws* this geometry via ``apply_projection_frame``.
 """
 
-from typing import Any, Callable, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 import numpy as np
 from pyramids.base.crs import reproject_coordinates
+
+from digitalearth.base.arrays import ring_runs
 
 __all__ = [
     "PROJECTIONS",
@@ -286,7 +288,10 @@ def close_visible_runs(
     """Turn a reprojected polygon ring into finite, closed, limb-clipped fill rings.
 
     The far hemisphere of a global polygon reprojects to ``inf``/``nan``; the visible part is one or more
-    finite runs (via :func:`_split_finite`). A fully-finite ring is simply closed. A ring that crosses the
+    finite runs. They are found with :func:`~digitalearth.base.arrays.ring_runs`, which treats the ring as the
+    loop it is: a visible stretch crossing the ring's seam stays one run instead of being cut in two there,
+    which is what used to add a spur from the ring's first vertex to the limb. A fully-finite ring is simply
+    closed. A ring that crosses the
     projection limb has each visible run re-closed along the **shorter** ``boundary`` arc between the run's
     endpoints (the limb maps to the boundary). The shorter-arc rule is exact when the visible span is under
     half the limb (most continents in a hemisphere view); a span over half the limb may mis-close — a known
@@ -317,11 +322,18 @@ def close_visible_runs(
 
             ```
     """
-    runs = _split_finite(x, y)
-    fully = bool((np.isfinite(x) & np.isfinite(y)).all())
+    points = np.column_stack([np.asarray(x, dtype=float), np.asarray(y, dtype=float)])
+    seen = np.isfinite(points).all(axis=1)
+    if len(points) > 1 and seen[0] and np.array_equal(points[0], points[-1]):
+        # a closed ring repeats its first vertex; the repeat would sit inside the run crossing the seam
+        points, seen = points[:-1], seen[:-1]
+    fully = bool(seen.all())
     boundary_open = np.asarray(boundary)[:-1]
     out: List[np.ndarray] = []
-    for run in runs:
+    for index in ring_runs(seen):
+        if index.size < 2:
+            continue  # a lone visible vertex encloses nothing
+        run = points[index]
         if fully:
             ring = np.vstack([run, run[:1]])
         else:

@@ -51,7 +51,7 @@ from mpl_toolkits.mplot3d.art3d import (
 )
 from pyramids.dataset import Dataset, GeoReference
 
-from digitalearth.base.arrays import finite, read_masked_band
+from digitalearth.base.arrays import finite, read_masked_band, ring_runs
 from digitalearth.base.crs import source_epsg
 from digitalearth.static.animation import save_animation
 
@@ -181,40 +181,6 @@ _POINT_RANK = 1.003
 #: How many points to sample along a limb arc when closing a clipped land ring. The arc is at most a
 #: half-circle, so this holds the chord error under a pixel at any figure size these globes are drawn at.
 _LIMB_ARC_STEPS = 48
-
-
-def _visible_runs(near: np.ndarray) -> List[np.ndarray]:
-    """Split a boolean near-side mask into the index runs of consecutive visible vertices.
-
-    Args:
-        near: An ``(N,)`` boolean mask, ``True`` where the vertex faces the camera.
-
-    Returns:
-        One index array per contiguous run of ``True``, in order; runs shorter than two vertices are
-        kept, since a filled ring still needs its single-vertex touches closed.
-
-    Examples:
-        - A mask with two separate runs yields two index arrays:
-            ```python
-            >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _visible_runs
-            >>> [run.tolist() for run in _visible_runs(np.array([1, 1, 0, 0, 1], dtype=bool))]
-            [[0, 1], [4]]
-
-            ```
-        - Nothing visible yields nothing to draw:
-            ```python
-            >>> import numpy as np
-            >>> from digitalearth.static.textured_globe import _visible_runs
-            >>> _visible_runs(np.zeros(4, dtype=bool))
-            []
-
-            ```
-    """
-    index = np.flatnonzero(np.asarray(near, dtype=bool))
-    if index.size == 0:
-        return []
-    return np.split(index, np.flatnonzero(np.diff(index) != 1) + 1)
 
 
 def _limb_point(
@@ -368,10 +334,10 @@ def _front_depth(axes: Any, radius: float) -> float:
 def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
     """Clip one closed ring to the hemisphere facing the camera, re-closing it along the limb.
 
-    A closed ring repeats its first vertex, so the repeat is dropped first and the ring is rolled to start on
-    a hidden vertex. Without that, a ring whose data happens to begin on the near side has its visible stretch
-    split at the seam, and each half is closed out to the limb separately — a spur from the first vertex to
-    the horizon, which shows the moment the fill is given an edge colour.
+    A closed ring repeats its first vertex, so the repeat is dropped first, and the visible runs are found with
+    :func:`~digitalearth.base.arrays.ring_runs`, which keeps a stretch crossing the ring's seam whole. Cut there
+    instead, a ring whose data happens to begin on the near side would have each half closed out to the limb
+    separately — a spur from the first vertex to the horizon, which shows as soon as the fill has an edge.
 
     Args:
         world: The ring's ``(N, 3)`` world-space vertices, as placed on the sphere.
@@ -409,17 +375,15 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
         return None
     if near.all():
         return ring
-    start = int(np.flatnonzero(~near)[0])
-    ring, near = np.roll(ring, -start, axis=0), np.roll(near, -start)
-    runs = _visible_runs(near)
+    runs = ring_runs(near)
     count = len(ring)
     pieces: List[np.ndarray] = []
     for position, run in enumerate(runs):
-        # index 0 is hidden after the roll, so every run has a hidden vertex just before it
-        entry = _limb_point(ring[run[0]], ring[run[0] - 1], view)
+        # every run is bounded by hidden vertices on both sides, wrapping round the seam if need be
+        entry = _limb_point(ring[run[0]], ring[(run[0] - 1) % count], view)
         exit_ = _limb_point(ring[run[-1]], ring[(run[-1] + 1) % count], view)
         following = runs[(position + 1) % len(runs)]
-        resume = _limb_point(ring[following[0]], ring[following[0] - 1], view)
+        resume = _limb_point(ring[following[0]], ring[(following[0] - 1) % count], view)
         pieces += [
             entry[None, :],
             ring[run],

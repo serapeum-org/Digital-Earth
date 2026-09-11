@@ -211,6 +211,37 @@ class TestCloseVisibleRuns:
         y = np.full(6, np.inf)
         assert projections.close_visible_runs(x, y, boundary) == []
 
+    @pytest.mark.parametrize("closed", [False, True], ids=["open-ring", "closed-ring"])
+    def test_a_ring_starting_on_the_near_side_is_one_piece(self, closed):
+        """A ring whose data begins on the visible side re-closes as one fill ring, not two.
+
+        Args:
+            closed: Whether the ring repeats its first vertex at the end, as GeoJSON rings do.
+
+        Test scenario:
+            The rectangle over 60..120 east starts at lon 60, which an orthographic view centred on
+            (0, 0) can see. Split as a straight line, its visible stretch was cut at the seam into two
+            runs, each closed along the boundary on its own — two pieces and a spur, where there is one.
+        """
+        crs = projections.orthographic(0, 0)
+        boundary, _, _ = projections.projection_frame(crs, n=360)
+        lons = np.linspace(60, 120, 40)
+        ring = np.vstack(
+            [
+                np.column_stack([lons, np.full_like(lons, -30.0)]),
+                np.column_stack([lons[::-1], np.full_like(lons, 30.0)]),
+            ]
+        )
+        if closed:
+            ring = np.vstack([ring, ring[:1]])
+        x, y = projections.reproject_coordinates(
+            ring[:, 0].tolist(), ring[:, 1].tolist(), from_crs=4326, to_crs=crs
+        )
+        rings = projections.close_visible_runs(
+            np.asarray(x, float), np.asarray(y, float), boundary
+        )
+        assert len(rings) == 1, f"the visible part is one piece, got {len(rings)}"
+
     def test_limb_crossing_is_finite_closed_in_disc(self):
         """A limb-crossing ring re-closes into finite rings that stay within the projection disc."""
         crs = projections.orthographic(0, 0)

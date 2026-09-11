@@ -26,7 +26,6 @@ from digitalearth.static.textured_globe import (
     _limb_arc,
     _limb_point,
     _texture_axes,
-    _visible_runs,
 )
 
 
@@ -1483,28 +1482,6 @@ class TestReferenceGeography:
 
 class TestOverlayGeometryHelpers:
     """The small geometry helpers the overlay layers are built from, including their degenerate cases."""
-
-    def test_visible_runs_splits_a_mask_into_contiguous_runs(self):
-        """A near-side mask becomes one index array per unbroken stretch of visible vertices.
-
-        Test scenario:
-            The split is what keeps a polyline off the far side; a mask that goes on, off and on
-            again must yield two runs in order.
-        """
-        runs = _visible_runs(np.array([1, 1, 0, 0, 1, 1, 1], dtype=bool))
-        assert [run.tolist() for run in runs] == [[0, 1], [4, 5, 6]], (
-            f"expected two runs, got {[run.tolist() for run in runs]}"
-        )
-
-    def test_visible_runs_of_a_hidden_part_is_empty(self):
-        """Nothing visible yields no runs at all, so the caller draws nothing.
-
-        Test scenario:
-            The far-side case, which is most of the geography at any one camera angle.
-        """
-        assert _visible_runs(np.zeros(5, dtype=bool)) == [], (
-            "a wholly hidden part should produce no runs"
-        )
 
     def test_limb_point_lands_on_the_limb_at_the_rings_radius(self):
         """The crossing between a visible and a hidden vertex sits on the limb, same shell.

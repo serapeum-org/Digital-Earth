@@ -12,16 +12,79 @@ legitimate values that merely sit close to the sentinel (which ``np.isclose`` co
 pyramids/cleopatra import — so the module stays a leaf consumable from anywhere, which is what qualifies it for
 :mod:`digitalearth.base`.
 
+:func:`ring_runs` is here for the same reason: both globe tiers — the 2-D projected disc in
+:mod:`digitalearth.static.projections` and the 3-D sphere in :mod:`digitalearth.static.textured_globe` — clip a
+closed ring to what the camera sees, and both split it into visible runs first. Doing that on a boolean mask
+keeps it engine-neutral, and doing it once keeps the seam handling the same in both.
+
 The one matplotlib chore that used to sit alongside these (``fig_of``) is not here: when the old flat
 ``digitalearth._arrays`` was split it went to :mod:`digitalearth.static.figures`, since a figure lookup belongs to
 the matplotlib backend rather than to the engine-neutral shared layer.
 """
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import numpy as np
 
-__all__ = ["NAN_REDUCERS", "finite", "mask_nodata", "read_masked_band"]
+__all__ = ["NAN_REDUCERS", "finite", "mask_nodata", "read_masked_band", "ring_runs"]
+
+
+def ring_runs(visible: Any) -> List[np.ndarray]:
+    """Split a closed ring's visibility mask into runs of consecutive visible vertex indices.
+
+    A ring is circular, so the stretch that runs off the end of the array carries on at its start. Splitting the
+    array as a straight line would cut that stretch in two at the seam, and a caller closing each run along a
+    horizon would then add a spur from wherever the data happens to begin out to the edge. Here the run that
+    wraps is returned whole, its indices continuing past the end (``[8, 9, 0, 1]``), and the runs come back in
+    the order they occur round the ring, so each one's neighbours on either side are hidden.
+
+    Pass the ring *without* the repeated closing vertex a GeoJSON-style ring ends with; that repeat would
+    otherwise sit in the middle of the wrapped run.
+
+    Args:
+        visible: One boolean per vertex, ``True`` where the vertex can be seen.
+
+    Returns:
+        One integer index array per run of visible vertices, in ring order — one run covering every index when
+        the whole ring is visible, and an empty list when none of it is.
+
+    Examples:
+        - The visible stretch that crosses the seam comes back as one run, not two:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.arrays import ring_runs
+            >>> [run.tolist() for run in ring_runs([True, True, False, False, True])]
+            [[4, 0, 1]]
+
+            ```
+        - Separate stretches stay separate, in the order they occur round the ring:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.arrays import ring_runs
+            >>> [run.tolist() for run in ring_runs([False, True, False, True, True, False])]
+            [[1], [3, 4]]
+
+            ```
+        - A wholly visible ring is one run; a wholly hidden one has none:
+            ```python
+            >>> from digitalearth.base.arrays import ring_runs
+            >>> [run.tolist() for run in ring_runs([True, True, True])], ring_runs([False, False])
+            ([[0, 1, 2]], [])
+
+            ```
+    """
+    mask = np.asarray(visible, dtype=bool).ravel()
+    if not mask.any():
+        return []
+    count = mask.size
+    if mask.all():
+        return [np.arange(count)]
+    # start the scan on a hidden vertex, so no run can straddle the array's end
+    offset = int(np.flatnonzero(~mask)[0])
+    shown = np.flatnonzero(np.roll(mask, -offset))
+    runs = np.split(shown, np.flatnonzero(np.diff(shown) != 1) + 1)
+    return [(run + offset) % count for run in runs]
+
 
 #: NaN-aware spatial/array reducers keyed by name — the single source consumed by the temporal time-series
 #: reducer and the quadtree per-cell aggregator (which adds its own ``"count"`` on top). Each maps a name to a

@@ -17,6 +17,7 @@ from digitalearth.base.arrays import (  # noqa: E402
     finite,
     mask_nodata,
     read_masked_band,
+    ring_runs,
 )
 
 
@@ -37,6 +38,81 @@ class _FakeDataset:
         """Record the requested 0-based band index and return the stored array."""
         self.requested_band = band
         return self._array
+
+
+class TestRingRuns:
+    """Tests for ring_runs — the seam-safe visible-run splitter both globe tiers clip rings with."""
+
+    def test_separate_stretches_come_back_in_ring_order(self):
+        """Two visible stretches either side of a hidden one are two runs, in the order they occur.
+
+        Test scenario:
+            Neither stretch touches the seam, so this is the plain split every caller relied on before.
+        """
+        runs = [
+            run.tolist() for run in ring_runs([False, True, True, False, True, False])
+        ]
+        assert runs == [[1, 2], [4]], f"expected two runs, got {runs}"
+
+    def test_a_stretch_crossing_the_seam_is_one_run(self):
+        """A visible stretch that runs off the end of the array and on at its start stays whole.
+
+        Test scenario:
+            The seam case both globes got wrong: split as a straight line, the stretch came back as two
+            runs, and each was closed out to the horizon on its own — a spur from the first vertex.
+        """
+        runs = [
+            run.tolist() for run in ring_runs([True, True, False, False, True, True])
+        ]
+        assert runs == [[4, 5, 0, 1]], (
+            f"the wrapped stretch should be one run, got {runs}"
+        )
+
+    def test_every_run_is_flanked_by_hidden_vertices(self):
+        """The vertex just before and just after each run, round the ring, is hidden.
+
+        Test scenario:
+            Callers find a run's two limb crossings from those neighbours, so none may be visible.
+        """
+        visible = np.array(
+            [True, False, True, True, False, True, True, True, False, True]
+        )
+        count = visible.size
+        for run in ring_runs(visible):
+            assert not visible[(run[0] - 1) % count], (
+                f"run {run.tolist()} has a visible predecessor"
+            )
+            assert not visible[(run[-1] + 1) % count], (
+                f"run {run.tolist()} has a visible successor"
+            )
+
+    @pytest.mark.parametrize(
+        "visible, expected",
+        [
+            pytest.param([True, True, True], [[0, 1, 2]], id="all-visible"),
+            pytest.param([False, False, False], [], id="all-hidden"),
+            pytest.param([], [], id="empty"),
+            pytest.param([True], [[0]], id="one-visible-vertex"),
+        ],
+    )
+    def test_boundary_masks(self, visible, expected):
+        """A wholly visible ring is one run, a hidden or empty one has none.
+
+        Args:
+            visible: The visibility mask.
+            expected: The runs it must yield.
+        """
+        runs = [run.tolist() for run in ring_runs(visible)]
+        assert runs == expected, f"expected {expected}, got {runs}"
+
+    def test_any_sized_boolean_sequence_is_accepted(self):
+        """A numpy mask and a plain list of 0/1 give the same runs."""
+        mask = np.array([1, 0, 1, 1], dtype=bool)
+        from_array = [run.tolist() for run in ring_runs(mask)]
+        from_list = [run.tolist() for run in ring_runs([1, 0, 1, 1])]
+        assert from_array == from_list == [[2, 3, 0]], (
+            f"both inputs should wrap the same run, got {from_array} and {from_list}"
+        )
 
 
 class TestMaskNodata:
