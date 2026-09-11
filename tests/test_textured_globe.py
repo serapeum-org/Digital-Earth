@@ -17,7 +17,14 @@ from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.static import TexturedGlobe
-from digitalearth.static.textured_globe import _cull_per_point, _texture_axes
+from digitalearth.static.textured_globe import (
+    _cull_per_point,
+    _drawn_artists,
+    _limb_arc,
+    _limb_point,
+    _texture_axes,
+    _visible_runs,
+)
 
 
 @pytest.fixture(scope="module")
@@ -961,6 +968,26 @@ class TestOverlaysFollowTheSpin:
         )
         globe.close()
 
+    def test_redraw_survives_an_artist_that_is_already_gone(self, globe):
+        """An artist removed from under us does not break the next frame's redraw.
+
+        Test scenario:
+            Clearing the axes (or closing its figure) takes the overlay's artists with it, and the
+            redraw would then raise on remove(). It has nothing left to undo in that case, so it
+            carries on and draws the frame.
+        """
+        globe.draw(figsize=(3, 3))
+        globe.points([0.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        globe._overlay_artists[0].remove()
+        globe._redraw_overlays(30.0)
+        assert len(globe._overlay_artists) == 1, (
+            "the overlay should have been drawn again despite the stale artist"
+        )
+        assert globe._overlay_artists[0] in globe.ax.collections, (
+            "the replacement artist should be live on the axes"
+        )
+        globe.close()
+
     def test_a_globe_with_no_overlays_is_untouched(self, globe, tmp_path):
         """The redraw is a no-op when nothing has been registered.
 
@@ -1217,6 +1244,137 @@ class TestReferenceGeography:
         globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4)
         with pytest.raises(RuntimeError, match="draw"):
             getattr(globe, layer)()
+
+
+class TestOverlayGeometryHelpers:
+    """The small geometry helpers the overlay layers are built from, including their degenerate cases."""
+
+    @pytest.mark.parametrize(
+        "drawn, expected",
+        [
+            (None, []),
+            ("artist", ["artist"]),
+            (["a", "b"], ["a", "b"]),
+            (["a", ["b", "c"], None], ["a", "b", "c"]),
+            ((), []),
+        ],
+    )
+    def test_drawn_artists_flattens_what_an_overlay_returned(self, drawn, expected):
+        """Whatever an overlay hands back is normalised into a flat list of removable artists.
+
+        Args:
+            drawn: The overlay's return value.
+            expected: The artists that should come out.
+
+        Test scenario:
+            points() returns one artist, a line layer returns a list of them, and a layer that drew
+            nothing returns None — the redraw has to undo all three shapes.
+        """
+        assert _drawn_artists(drawn) == expected, (
+            f"expected {expected} from {drawn!r}, got {_drawn_artists(drawn)}"
+        )
+
+    def test_visible_runs_splits_a_mask_into_contiguous_runs(self):
+        """A near-side mask becomes one index array per unbroken stretch of visible vertices.
+
+        Test scenario:
+            The split is what keeps a polyline off the far side; a mask that goes on, off and on
+            again must yield two runs in order.
+        """
+        runs = _visible_runs(np.array([1, 1, 0, 0, 1, 1, 1], dtype=bool))
+        assert [run.tolist() for run in runs] == [[0, 1], [4, 5, 6]], (
+            f"expected two runs, got {[run.tolist() for run in runs]}"
+        )
+
+    def test_visible_runs_of_a_hidden_part_is_empty(self):
+        """Nothing visible yields no runs at all, so the caller draws nothing.
+
+        Test scenario:
+            The far-side case, which is most of the geography at any one camera angle.
+        """
+        assert _visible_runs(np.zeros(5, dtype=bool)) == [], (
+            "a wholly hidden part should produce no runs"
+        )
+
+    def test_limb_point_lands_on_the_limb_at_the_rings_radius(self):
+        """The crossing between a visible and a hidden vertex sits on the limb, same shell.
+
+        Test scenario:
+            With the camera down +x, a vertex at 45 degrees east of the limb and its neighbour 45
+            degrees behind it must cross exactly at the limb plane, keeping the ring's radius.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        radius = 1.01
+        inside = radius * np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+        outside = radius * np.array([-np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+        crossing = _limb_point(inside, outside, view)
+        assert abs(float(crossing @ view)) < 1e-12, (
+            f"the crossing should sit on the limb, depth {float(crossing @ view)}"
+        )
+        assert np.isclose(np.linalg.norm(crossing), radius), (
+            f"the crossing should keep the ring's radius, got {np.linalg.norm(crossing)}"
+        )
+
+    def test_limb_point_falls_back_when_the_chord_runs_through_the_centre(self):
+        """A chord straight down the view axis has no limb direction, so the visible end is kept.
+
+        Test scenario:
+            Both vertices lie on the view axis, so their crossing is the sphere's centre and there is
+            no tangential direction to push it out along. Returning the visible vertex keeps the ring
+            finite instead of emitting a zero vector.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        inside = np.array([0.5, 0.0, 0.0])
+        crossing = _limb_point(inside, np.array([-0.5, 0.0, 0.0]), view)
+        assert np.allclose(crossing, inside), (
+            f"expected the visible vertex back, got {crossing}"
+        )
+
+    def test_limb_point_handles_two_vertices_at_the_same_depth(self):
+        """Neighbours at equal depth give no interpolation span, and the visible one is used.
+
+        Test scenario:
+            The zero-span branch: the crossing cannot be interpolated, so the near-side vertex is
+            projected onto the limb rather than dividing by zero.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        inside = np.array([0.5, 0.5, 0.0])
+        crossing = _limb_point(inside, np.array([0.5, -0.5, 0.0]), view)
+        assert abs(float(crossing @ view)) < 1e-12, (
+            f"the fallback should still land on the limb, depth {float(crossing @ view)}"
+        )
+
+    def test_limb_arc_walks_the_short_way_round(self):
+        """The closing arc stays on the limb and spans the shorter of the two ways round.
+
+        Test scenario:
+            From 0 to 90 degrees around the limb, every sampled point must sit on the limb plane at
+            the same radius, and the arc must not take the 270-degree route.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        start = np.array([0.0, 1.0, 0.0])
+        arc = _limb_arc(start, np.array([0.0, 0.0, 1.0]), view)
+        assert len(arc) > 0, "a quarter turn should be sampled, not skipped"
+        assert np.allclose(arc @ view, 0.0, atol=1e-12), (
+            "every arc point should lie on the limb"
+        )
+        assert np.allclose(np.linalg.norm(arc, axis=1), 1.0), (
+            "the arc should keep its radius"
+        )
+        assert arc[0][1] > arc[-1][1], (
+            "the arc should run from the start toward the end"
+        )
+
+    def test_limb_arc_is_empty_when_the_start_faces_the_camera(self):
+        """A start point on the view axis has no limb direction, so no arc is produced.
+
+        Test scenario:
+            The degenerate branch: the cross product that builds the arc's basis vanishes, and
+            returning nothing lets the ring close on its own vertices rather than on NaNs.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        arc = _limb_arc(view.copy(), np.array([0.0, 1.0, 0.0]), view)
+        assert arc.shape == (0, 3), f"expected no arc points, got {arc.shape}"
 
 
 class TestRenderLifecycle:
