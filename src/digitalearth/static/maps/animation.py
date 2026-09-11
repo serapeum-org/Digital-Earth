@@ -326,6 +326,59 @@ class AnimationMixin(_MixinBase):
         The scan reads the band the frames will be **drawn** from. ``band`` rides in ``opts`` on its way to
         the renderer, so scanning band 1 regardless would scale every other band against the wrong range —
         usually a fully saturated clip under a colorbar labelled with band 1's numbers.
+
+        Args:
+            datasets: The animation's frames.
+            opts: The render options every frame will be drawn with. Read for ``vmin``, ``vmax`` and
+                ``band``; the resolved ``vmin``/``vmax`` are written back into it.
+            views: The display CRSs :meth:`rotate` will sweep, or ``None`` for an :meth:`animate` whose
+                frames share the current CRS.
+
+        Examples:
+            - The scale is measured from the band being animated, not from band 1:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.1, epsg=4326)
+                >>> frames = [
+                ...     Dataset.from_array(
+                ...         np.stack([np.full((4, 5), 1.0 + k), np.full((4, 5), 500.0 + 100 * k)])
+                ...         .astype("float32"),
+                ...         geo_ref=geo,
+                ...     )
+                ...     for k in range(3)
+                ... ]
+                >>> opts = {"band": 2}
+                >>> Map(crs=4326)._resolve_animation_clim(frames, opts)
+                >>> opts["vmin"], opts["vmax"]
+                (500.0, 700.0)
+
+                ```
+            - A bound the caller already set is kept, and only the missing one is measured:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset, GeoReference
+                >>> from digitalearth.static import Map
+                >>> geo = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.1, epsg=4326)
+                >>> frames = [
+                ...     Dataset.from_array(
+                ...         np.stack([np.full((4, 5), 1.0 + k), np.full((4, 5), 500.0 + 100 * k)])
+                ...         .astype("float32"),
+                ...         geo_ref=geo,
+                ...     )
+                ...     for k in range(3)
+                ... ]
+                >>> opts = {"band": 2, "vmin": 0.0}
+                >>> Map(crs=4326)._resolve_animation_clim(frames, opts)
+                >>> opts["vmin"], opts["vmax"]
+                (0.0, 700.0)
+
+                ```
         """
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
@@ -596,8 +649,9 @@ class AnimationMixin(_MixinBase):
             colorbar: When True, add one static colorbar (drawn once, not per frame) using the shared
                 colour scale. Not available on a composite ``kind`` — an RGB image has no scalar mappable.
             cbar_label: Optional label for the colorbar.
-            **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``cmap``, ``vmin``, ``vmax``
-                and the rest of its styling; a composite takes ``bands``, ``mask_nodata`` and ``limits``.
+            **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,
+                ``vmax`` and the rest of its styling — the shared colour scale is measured from that same
+                ``band`` (1 by default); a composite takes ``bands``, ``mask_nodata`` and ``limits``.
                 ``vmin``/``vmax`` are accepted on a composite because they reach the glyph like any other
                 kwarg, but an RGB image has no colour scale for them to move — use ``limits``.
 
@@ -733,8 +787,9 @@ class AnimationMixin(_MixinBase):
             colorbar: When True, add one static colorbar (drawn once) using the shared colour scale. Not
                 available on a composite ``kind``.
             cbar_label: Optional label for the colorbar.
-            **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``cmap``, ``vmin``, ``vmax``
-                and the rest of its styling; a composite takes ``bands``, ``mask_nodata`` and ``limits``.
+            **kwargs: Forwarded to the ``kind`` method. A scalar field takes ``band``, ``cmap``, ``vmin``,
+                ``vmax`` and the rest of its styling — the shared colour scale is measured from that same
+                ``band`` (1 by default); a composite takes ``bands``, ``mask_nodata`` and ``limits``.
                 ``vmin``/``vmax`` are accepted on a composite because they reach the glyph like any other
                 kwarg, but an RGB image has no colour scale for them to move — use ``limits``.
 

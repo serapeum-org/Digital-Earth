@@ -293,6 +293,30 @@ def _limb_point(
 
     Returns:
         np.ndarray: the ``(3,)`` crossing point, on the limb and at ``inside``'s radius.
+
+    Examples:
+        - A vertex 45 degrees in front of the limb and its neighbour 45 degrees behind it cross on it:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _limb_point
+            >>> view = np.array([1.0, 0.0, 0.0])
+            >>> inside = np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+            >>> outside = np.array([-np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+            >>> _limb_point(inside, outside, view).round(6).tolist()
+            [0.0, 1.0, 0.0]
+
+            ```
+        - The crossing stays on the ring's own shell, so a lifted overlay is not pulled onto the sphere:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _limb_point
+            >>> inside = 1.01 * np.array([0.6, 0.8, 0.0])
+            >>> outside = 1.01 * np.array([-0.6, 0.8, 0.0])
+            >>> crossing = _limb_point(inside, outside, np.array([1.0, 0.0, 0.0]))
+            >>> round(float(np.linalg.norm(crossing)), 6)
+            1.01
+
+            ```
     """
     depth_in, depth_out = float(inside @ view), float(outside @ view)
     span = depth_in - depth_out
@@ -319,7 +343,31 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
         view: The unit ``(3,)`` vector pointing at the camera.
 
     Returns:
-        np.ndarray: an ``(_LIMB_ARC_STEPS, 3)`` arc, excluding both endpoints.
+        np.ndarray: an ``(_LIMB_ARC_STEPS, 3)`` arc, excluding both endpoints; empty when ``start`` lies
+        on the view axis, where there is no limb direction to walk along.
+
+    Examples:
+        - A quarter turn round the limb, sampled between its endpoints, every point on the limb:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _limb_arc
+            >>> view = np.array([1.0, 0.0, 0.0])
+            >>> arc = _limb_arc(np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]), view)
+            >>> arc.shape
+            (48, 3)
+            >>> bool(np.allclose(arc @ view, 0.0))
+            True
+
+            ```
+        - A start facing the camera has no direction to walk, so no arc comes back:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _limb_arc
+            >>> view = np.array([1.0, 0.0, 0.0])
+            >>> _limb_arc(view.copy(), np.array([0.0, 1.0, 0.0]), view).shape
+            (0, 3)
+
+            ```
     """
     radius = float(np.linalg.norm(start))
     first = start / radius
@@ -1082,6 +1130,11 @@ class TexturedGlobe:
     ) -> Tuple[Any, Any]:
         """Draw the globe, returning the matplotlib ``(fig, ax)`` and recording them on the instance.
 
+        Overlays that follow the globe — :meth:`points`, :meth:`coastlines`, :meth:`borders` and
+        :meth:`land` without a ``spin=`` — are redrawn at the new ``spin`` when this draws onto the axes
+        they are already on. A bare ``draw()`` resolves a fresh figure each time and closes the old one, so
+        the overlays go with it; pass the same ``ax`` to turn an already-decorated globe.
+
         Args:
             ax: An existing ``Axes3D`` to draw on, accepted positionally to match :meth:`animate`. A figure
                 the caller supplies is never closed by :meth:`close`.
@@ -1158,7 +1211,9 @@ class TexturedGlobe:
             **kwargs: Forwarded to ``Axes3D.scatter`` (e.g. ``c``, ``s``, ``marker``, ``color``).
 
         Returns:
-            The ``Path3DCollection`` returned by ``Axes3D.scatter``.
+            The ``Path3DCollection`` returned by ``Axes3D.scatter``. For points that follow the globe it is
+            the artist for the *current* spin: the next frame or redraw removes it and draws a replacement,
+            so restyle through this call's arguments rather than by editing the returned artist.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
@@ -1196,6 +1251,28 @@ class TexturedGlobe:
                 >>> scatter = globe.points([0.0, 180.0], lat=[0.0, 0.0], hide_far_side=False)
                 >>> len(scatter.get_offsets())
                 2
+
+                ```
+            - Points follow the globe unless pinned; turning it half-way takes the follower out of sight:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import matplotlib.pyplot as plt
+                >>> import numpy as np
+                >>> from digitalearth.static import TexturedGlobe
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), tilt_deg=0.0,
+                ...                       n_lon=8, n_lat=4)
+                >>> ax = plt.figure().add_subplot(projection="3d")
+                >>> _ = globe.draw(ax, elev=0.0, azim=0.0)
+                >>> follower = globe.points([0.0], lat=[0.0])
+                >>> pinned = globe.points([0.0], lat=[0.0], spin=0.0)
+                >>> _ = globe.draw(ax, elev=0.0, azim=0.0, spin=180.0)
+                >>> len(pinned.get_offsets())
+                1
+                >>> follower in ax.collections
+                False
+                >>> len(ax.collections[-1].get_offsets())
+                0
 
                 ```
         """
@@ -1311,7 +1388,9 @@ class TexturedGlobe:
             RuntimeError: if the globe has not been drawn yet, so there is no camera to clip against.
         """
         if self.ax is None:
-            raise RuntimeError(f"draw() the globe before adding {layer} to it")
+            raise RuntimeError(
+                f"draw() the globe before adding the {layer!r} layer to it"
+            )
         parts = [
             np.asarray(part, dtype=float) for part in natural_earth(layer, resolution)
         ]
@@ -1391,9 +1470,25 @@ class TexturedGlobe:
             - Restyle them like any matplotlib line, and pin them to one spin so they stay put while the
               globe turns:
                 ```python
+                >>> import matplotlib                                      # doctest: +SKIP
+                >>> matplotlib.use("Agg")                                  # doctest: +SKIP
+                >>> import numpy as np                                     # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
+                >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
                 >>> arcs = globe.coastlines(color="white", linewidth=1.2, spin=0.0)  # doctest: +SKIP
                 >>> arcs[0].get_color()                                              # doctest: +SKIP
                 'white'
+
+                ```
+            - Asking before the globe is drawn is refused — there is no camera yet to clip against:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static import TexturedGlobe
+                >>> TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8)).coastlines()
+                Traceback (most recent call last):
+                    ...
+                RuntimeError: draw() the globe before adding the 'coastline' layer to it
 
                 ```
         """
@@ -1448,9 +1543,25 @@ class TexturedGlobe:
                 ```
             - Ask for the finer cut when the globe is drawn large:
                 ```python
+                >>> import matplotlib                                      # doctest: +SKIP
+                >>> matplotlib.use("Agg")                                  # doctest: +SKIP
+                >>> import numpy as np                                     # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
+                >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
                 >>> fine, coarse = globe.borders("50m"), globe.borders("110m")  # doctest: +SKIP
                 >>> len(fine) > len(coarse)                                     # doctest: +SKIP
                 True
+
+                ```
+            - Asking before the globe is drawn is refused — there is no camera yet to clip against:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static import TexturedGlobe
+                >>> TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8)).borders()
+                Traceback (most recent call last):
+                    ...
+                RuntimeError: draw() the globe before adding the 'borders' layer to it
 
                 ```
         """
@@ -1513,9 +1624,25 @@ class TexturedGlobe:
                 ```
             - Colour it like any patch — a translucent fill still lets the texture read through:
                 ```python
+                >>> import matplotlib                                      # doctest: +SKIP
+                >>> matplotlib.use("Agg")                                  # doctest: +SKIP
+                >>> import numpy as np                                     # doctest: +SKIP
+                >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
+                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
+                >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
                 >>> patch = globe.land(color="0.4", alpha=0.5)             # doctest: +SKIP
                 >>> round(float(patch.get_facecolor()[0][3]), 2)           # doctest: +SKIP
                 0.5
+
+                ```
+            - Asking before the globe is drawn is refused — there is no camera yet to clip against:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.static import TexturedGlobe
+                >>> TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8)).land()
+                Traceback (most recent call last):
+                    ...
+                RuntimeError: draw() the globe before adding the 'land' layer to it
 
                 ```
         """
@@ -1574,6 +1701,11 @@ class TexturedGlobe:
         When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and
         :attr:`ax` are known without reaching into the animation's internals — which is what lets
         :meth:`save_gif` and :meth:`stamp` work on an animated globe.
+
+        Overlays turn with the sphere. Anything added with :meth:`points`, :meth:`coastlines`,
+        :meth:`borders` or :meth:`land` — before this call or after it — is redrawn at each frame's spin,
+        so markers and coastlines stay attached to the ground. Pass ``spin=`` to one of those to pin it to
+        a fixed position instead.
 
         Args:
             ax: An existing ``Axes3D`` to animate on. When omitted, the constructor's axes is used if one
