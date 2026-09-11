@@ -321,6 +321,38 @@ def close_visible_runs(
             True
 
             ```
+        - A ring that starts on the visible side and runs off the limb re-closes as one piece:
+            ```python
+            >>> import numpy as np
+            >>> from pyramids.base.crs import reproject_coordinates
+            >>> from digitalearth.static.projections import (
+            ...     close_visible_runs, orthographic, projection_frame,
+            ... )
+            >>> crs = orthographic(0, 0)
+            >>> boundary, _, _ = projection_frame(crs, n=180)
+            >>> lons = np.linspace(60, 120, 20)
+            >>> ring = np.vstack([
+            ...     np.column_stack([lons, np.full(20, -30.0)]),
+            ...     np.column_stack([lons[::-1], np.full(20, 30.0)]),
+            ... ])
+            >>> x, y = reproject_coordinates(
+            ...     ring[:, 0].tolist(), ring[:, 1].tolist(), from_crs=4326, to_crs=crs
+            ... )
+            >>> len(close_visible_runs(np.asarray(x, float), np.asarray(y, float), boundary))
+            1
+
+            ```
+        - A ring wholly on the far side has nothing to fill:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.projections import (
+            ...     close_visible_runs, orthographic, projection_frame,
+            ... )
+            >>> boundary, _, _ = projection_frame(orthographic(0, 0), n=90)
+            >>> close_visible_runs(np.full(4, np.inf), np.full(4, np.inf), boundary)
+            []
+
+            ```
     """
     points = np.column_stack([np.asarray(x, dtype=float), np.asarray(y, dtype=float)])
     seen = np.isfinite(points).all(axis=1)

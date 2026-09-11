@@ -324,7 +324,36 @@ def _front_depth(axes: Any, radius: float) -> float:
         radius: How far out along the view axis to claim to sit.
 
     Returns:
-        The depth matplotlib's sort key compares, nearer for a larger ``radius``.
+        The depth matplotlib's sort key compares: a smaller value is nearer the camera, and matplotlib paints
+        the largest first, so the nearest ends up on top.
+
+    Examples:
+        - A point just outside the sphere, on the camera's side, sorts nearer than the sphere's centre:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from digitalearth.static.textured_globe import _front_depth
+            >>> ax = plt.figure().add_subplot(projection="3d")
+            >>> ax.view_init(elev=0.0, azim=0.0)
+            >>> ax.M = ax.get_proj()
+            >>> bool(_front_depth(ax, 1.003) < _front_depth(ax, 0.0))
+            True
+
+            ```
+        - Anything floated further out still sorts nearer than an overlay lying on the surface:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import matplotlib.pyplot as plt
+            >>> from digitalearth.static.textured_globe import _front_depth
+            >>> ax = plt.figure().add_subplot(projection="3d")
+            >>> ax.view_init(elev=0.0, azim=0.0)
+            >>> ax.M = ax.get_proj()
+            >>> bool(_front_depth(ax, 2.0) < _front_depth(ax, 1.003))
+            True
+
+            ```
     """
     view = _view_vector(axes.elev, axes.azim)
     x, y, z = view * float(radius)
@@ -436,7 +465,11 @@ class _GlobeOverlay:
         )
 
     def _view(self) -> np.ndarray:
-        """The unit vector toward the camera of the axes the overlay is on, as it stands now."""
+        """The unit vector toward the camera of the axes the overlay is on, as it stands now.
+
+        Returns:
+            A unit ``(3,)`` array pointing from the sphere's centre toward the camera.
+        """
         axes: Any = getattr(self, "axes")
         return _view_vector(axes.elev, axes.azim)
 
@@ -484,19 +517,36 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
         return not (self._masking or getattr(self, "_in_draw", False))
 
     def set_sizes(self, sizes: Any, dpi: float = 72.0) -> None:
-        """Set the marker sizes, remembering a caller's choice so the far-side mask applies over it."""
+        """Set the marker sizes, remembering a caller's choice so the far-side mask applies over it.
+
+        The mask rewrites the sizes on every render, zeroing the hidden markers; it starts from what was
+        last asked for here, so a restyle of the returned scatter holds as the globe turns.
+
+        Args:
+            sizes: The marker sizes, in points squared — one for every marker, or one per point.
+            dpi: The resolution the sizes are scaled for, as matplotlib's own ``set_sizes`` takes it.
+        """
         super().set_sizes(sizes, dpi)
         if self._restyling():
             self._sizes_asked = np.atleast_1d(np.asarray(sizes, dtype=float))
 
     def set_linewidth(self, lw: Any) -> None:
-        """Set the marker edge widths, remembering a caller's choice so the far-side mask applies over it."""
+        """Set the marker edge widths, remembering a caller's choice so the far-side mask applies over it.
+
+        Args:
+            lw: The edge width in points — one for every marker, or one per point.
+        """
         super().set_linewidth(lw)
         if self._restyling():
             self._widths_asked = np.atleast_1d(np.asarray(lw, dtype=float))
 
     def do_3d_projection(self) -> float:
-        """Place the points at the current spin, hide the far side, and sort in front of the sphere."""
+        """Place the points at the current spin, hide the far side, and sort in front of the sphere.
+
+        Returns:
+            The depth matplotlib sorts the scatter by: just in front of the sphere when the far side is
+            hidden, and the scatter's own nearest point otherwise.
+        """
         world = self._world(self._body)
         self._offsets3d = (world[:, 0], world[:, 1], world[:, 2])
         if not self._cull:
@@ -572,7 +622,11 @@ class _SphereLines(_GlobeOverlay, Line3DCollection):
         return segments
 
     def do_3d_projection(self) -> float:
-        """Re-split the layer for the current spin and camera, and sort in front of the sphere."""
+        """Re-split the layer for the current spin and camera, and sort in front of the sphere.
+
+        Returns:
+            The depth matplotlib sorts the layer by — just in front of the sphere, and of any fill.
+        """
         self.set_segments(self._near_side_segments())
         super().do_3d_projection()
         return _front_depth(getattr(self, "axes"), _LINE_RANK)
@@ -627,7 +681,11 @@ class _SphereFill(_GlobeOverlay, Poly3DCollection):
         return faces
 
     def do_3d_projection(self) -> float:
-        """Re-clip the layer for the current spin and camera, and sort in front of the sphere."""
+        """Re-clip the layer for the current spin and camera, and sort in front of the sphere.
+
+        Returns:
+            The depth matplotlib sorts the fill by — just in front of the sphere, behind any line layer.
+        """
         self.set_verts(self._near_side_faces())
         super().do_3d_projection()
         return _front_depth(getattr(self, "axes"), _FILL_RANK)
@@ -2010,7 +2068,7 @@ class TexturedGlobe:
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
     def close(self) -> None:
-        """Close the globe's figure and drop the animation reference.
+        """Close the globe's figure, drop the animation reference, and forget the overlays.
 
         Every :meth:`draw` or :meth:`animate` that is not handed an existing axes creates a pyplot figure,
         and pyplot keeps a reference to it forever. A loop that builds many globes therefore grows without
@@ -2020,6 +2078,9 @@ class TexturedGlobe:
         Only a figure this globe created is closed. An axes handed in by the caller — to ``__init__``,
         ``draw(ax=...)`` or ``animate(ax=...)`` — belongs to the caller, who may well have other subplots on
         it, so its figure is left alone.
+
+        The overlays are forgotten either way, so a later draw — on any axes — starts without them rather
+        than turning markers that belong to a figure the caller has finished with.
 
         Safe to call more than once, and on a globe that was never drawn.
 
