@@ -242,6 +242,21 @@ class TestCloseVisibleRuns:
         )
         assert len(rings) == 1, f"the visible part is one piece, got {len(rings)}"
 
+    def test_a_lone_visible_vertex_encloses_nothing(self):
+        """A single finite vertex between far-side ones yields no fill ring.
+
+        Test scenario:
+            One point is not an area, so it is dropped — as the straight-line split always dropped it.
+        """
+        boundary, _, _ = projections.projection_frame(
+            projections.orthographic(0, 0), n=120
+        )
+        x = np.array([np.inf, 1.0e6, np.inf, np.inf])
+        y = np.array([np.inf, 1.0e6, np.inf, np.inf])
+        assert projections.close_visible_runs(x, y, boundary) == [], (
+            "a lone visible vertex should not become a ring"
+        )
+
     def test_limb_crossing_is_finite_closed_in_disc(self):
         """A limb-crossing ring re-closes into finite rings that stay within the projection disc."""
         crs = projections.orthographic(0, 0)

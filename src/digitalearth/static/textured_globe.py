@@ -344,8 +344,8 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
         view: The unit ``(3,)`` vector pointing at the camera.
 
     Returns:
-        The clipped ``(M, 3)`` ring, or ``None`` when none of it faces the camera or too little is left to
-        enclose an area.
+        The clipped ``(M, 3)`` ring, or ``None`` when none of it faces the camera or it has fewer than three
+        vertices, which enclose nothing.
 
     Examples:
         - A ring wholly on the near side comes back whole, without its repeated closing vertex:
@@ -370,6 +370,8 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
     ring = np.asarray(world, dtype=float)
     if len(ring) > 1 and np.array_equal(ring[0], ring[-1]):
         ring = ring[:-1]
+    if len(ring) < 3:
+        return None  # fewer than three vertices enclose nothing
     near = ring @ view > 0.0
     if not near.any():
         return None
@@ -390,8 +392,8 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
             exit_[None, :],
             _limb_arc(exit_, resume, view),
         ]
-    face = np.vstack(pieces)
-    return face if len(face) >= 3 else None
+    # each run contributes its entry, its own vertices and its exit, so a face always has three or more
+    return np.vstack(pieces)
 
 
 class _GlobeOverlay:
@@ -564,9 +566,9 @@ class _SphereLines(_GlobeOverlay, Line3DCollection):
                 )
             if last < final and self._part[last + 1] == self._part[last]:
                 pieces.append(_limb_point(world[last], world[last + 1], view)[None, :])
-            segment = np.vstack(pieces)
-            if len(segment) > 1:
-                segments.append(segment)
+            # parts have two or more vertices, so a run always has a hidden neighbour in its own part
+            # and gains at least one limb point: every segment has two vertices or more
+            segments.append(np.vstack(pieces))
         return segments
 
     def do_3d_projection(self) -> float:

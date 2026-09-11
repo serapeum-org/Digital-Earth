@@ -1098,6 +1098,25 @@ class TestOverlaysFollowTheSpin:
         )
         plt.close(ax.get_figure())
 
+    def test_a_restyled_edge_width_survives_the_mask(self, globe):
+        """An edge width set on the returned artist is kept for the markers that show.
+
+        Test scenario:
+            The far-side mask zeroes hidden markers' edges on every render; it must apply over the width
+            the caller set, not over the one the scatter was created with.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0, spin=0.0)
+        scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, linewidths=1.0)
+        scatter.set_linewidth(3.0)
+        globe.draw(ax, elev=0.0, azim=0.0, spin=5.0)
+        ax.get_figure().canvas.draw()
+        widths = sorted(float(w) for w in np.atleast_1d(scatter.get_linewidths()))
+        assert widths == [0.0, 3.0, 3.0], (
+            f"the near-side markers should keep width 3 and the hidden one 0, got {widths}"
+        )
+        plt.close(ax.get_figure())
+
     def test_close_forgets_the_overlays(self, globe):
         """close() drops every overlay, so a later draw on any axes starts clean."""
         globe.draw(figsize=(3, 3))
@@ -1352,6 +1371,42 @@ class TestReferenceGeography:
             f"latitudes should stay within -20..20, got {lat.min()}..{lat.max()}"
         )
 
+    @pytest.mark.parametrize("layer", ["coastlines", "land"])
+    def test_a_layer_with_no_usable_parts_draws_nothing(self, drawn, mocker, layer):
+        """A layer whose source has no drawable parts is added and renders as nothing.
+
+        Args:
+            layer: The layer method under test.
+
+        Test scenario:
+            A part needs two vertices to be a line or a ring; a source offering only shorter ones (or
+            none) must not break the render.
+        """
+        self._patch(mocker, [np.array([[0.0, 0.0]])])
+        overlay = getattr(drawn, layer)()
+        drawn.fig.canvas.draw()
+        pieces = (
+            overlay._near_side_faces()
+            if layer == "land"
+            else overlay._near_side_segments()
+        )
+        assert pieces == [], (
+            f"{layer} should have nothing to draw, got {len(pieces)} pieces"
+        )
+
+    def test_a_degenerate_land_ring_is_skipped(self, drawn, mocker):
+        """A land ring too short to enclose anything is dropped without disturbing its neighbours.
+
+        Test scenario:
+            A two-vertex sliver sits beside a proper rectangle; only the rectangle becomes a face.
+        """
+        sliver = np.array([[10.0, 0.0], [12.0, 1.0]])
+        self._patch(mocker, [sliver, self._ring(-40.0, 40.0, -20.0, 20.0)])
+        faces = drawn.land()._near_side_faces()
+        assert len(faces) == 1, (
+            f"only the rectangle should become a face, got {len(faces)}"
+        )
+
     def test_a_land_layer_with_nothing_in_view_has_no_faces(self, drawn, mocker):
         """land() still returns its collection, which simply has nothing to fill at this camera."""
         self._patch(mocker, [self._ring(160.0, 200.0, -10.0, 10.0)])
@@ -1564,6 +1619,49 @@ class TestOverlayGeometryHelpers:
             "a zero-length arc should add no points"
         )
 
+    def test_clip_ring_accepts_a_ring_without_its_closing_repeat(self):
+        """An open ring is clipped the same way, with nothing to strip first.
+
+        Test scenario:
+            A three-vertex ring with one vertex behind the limb: the face keeps the two visible vertices
+            and gains the two limb crossings either side of the hidden one.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        ring = np.array([[1.0, 0.0, 0.0], [0.6, 0.8, 0.0], [-0.6, 0.0, 0.8]])
+        face = _clip_ring(ring, view)
+        assert face is not None, "a ring with visible vertices should clip to a face"
+        assert len(face) > 4, (
+            f"two vertices plus the crossings and the limb arc, got {len(face)}"
+        )
+        assert (face @ view >= -1e-9).all(), (
+            "no vertex of the face should be behind the limb"
+        )
+
+    def test_clip_ring_of_a_hidden_ring_is_none(self):
+        """A ring wholly behind the globe clips to nothing."""
+        view = np.array([1.0, 0.0, 0.0])
+        ring = np.array([[-1.0, 0.0, 0.0], [-0.8, 0.6, 0.0], [-0.8, 0.0, 0.6]])
+        assert _clip_ring(ring, view) is None, "a hidden ring should clip to None"
+
+    @pytest.mark.parametrize(
+        "ring",
+        [
+            pytest.param([[1.0, 0.0, 0.0], [0.8, 0.6, 0.0]], id="two-vertices"),
+            pytest.param(
+                [[1.0, 0.0, 0.0], [0.8, 0.6, 0.0], [1.0, 0.0, 0.0]], id="closed-pair"
+            ),
+        ],
+    )
+    def test_clip_ring_of_a_degenerate_ring_is_none(self, ring):
+        """Fewer than three distinct vertices enclose nothing, visible or not.
+
+        Args:
+            ring: A ring too short to enclose an area, with or without its closing repeat.
+        """
+        assert _clip_ring(np.array(ring), np.array([1.0, 0.0, 0.0])) is None, (
+            "a degenerate ring should clip to None"
+        )
+
     def test_clip_ring_does_not_depend_on_where_the_ring_starts(self):
         """Rolling a ring's seam round does not change the face it clips to.
 
@@ -1766,6 +1864,16 @@ class TestRenderLifecycle:
         """interval=0 used to raise ZeroDivisionError from the frame-rate bookkeeping."""
         with pytest.raises(ValueError, match="positive number of milliseconds"):
             globe.animate(n_frames=2, interval=0)
+
+    @pytest.mark.parametrize("frames", [0, -3], ids=["zero", "negative"])
+    def test_an_animation_with_no_frames_is_refused(self, globe, frames):
+        """A rotation has to have at least one frame to show.
+
+        Args:
+            frames: A frame count below one.
+        """
+        with pytest.raises(ValueError, match="n_frames must be at least 1"):
+            globe.animate(n_frames=frames, interval=100)
 
     def test_saving_before_drawing_is_refused(self, globe, tmp_path):
         with pytest.raises(RuntimeError, match="draw"):
