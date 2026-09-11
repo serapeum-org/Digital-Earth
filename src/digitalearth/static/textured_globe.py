@@ -327,7 +327,7 @@ def _limb_point(
     length = float(np.linalg.norm(tangential))
     if length == 0.0:
         return np.asarray(inside, dtype=float)
-    return tangential / length * float(np.linalg.norm(inside))
+    return np.asarray(tangential / length * float(np.linalg.norm(inside)), dtype=float)
 
 
 def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarray:
