@@ -25,7 +25,7 @@ from tests.test_no_competitor_imports import (
 )
 
 _INTERACTIVE_ROOT = (
-    pathlib.Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "interactive"
+    pathlib.Path(__file__).resolve().parents[2] / "src" / "digitalearth" / "interactive"
 )
 
 

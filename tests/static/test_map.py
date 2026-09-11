@@ -63,7 +63,7 @@ def test_no_cartopy_import():
     wherever pytest is invoked from and covers ``static/maps/`` too. The populated-assert is the point: this
     test globbed the pre-rename ``scene/`` path for a while and so passed while checking nothing.
     """
-    pkg = Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "static"
+    pkg = Path(__file__).resolve().parents[2] / "src" / "digitalearth" / "static"
     modules = sorted(pkg.rglob("*.py"))
     assert len(modules) > 5, (
         f"no modules found under {pkg} — has the package moved again?"

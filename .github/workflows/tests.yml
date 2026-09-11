@@ -449,4 +449,4 @@ jobs:
 
       - name: Run the deck.gl browser smoke test
         run: |
-          pixi run -e web pytest tests/test_web_deck_smoke.py -v
+          pixi run -e web pytest tests/web/test_web_deck_smoke.py -v

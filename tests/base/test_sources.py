@@ -264,7 +264,7 @@ def test_no_competitor_imports():
         "cartopy",
     )
     pkg = (
-        Path(__file__).resolve().parents[1]
+        Path(__file__).resolve().parents[2]
         / "src"
         / "digitalearth"
         / "base"

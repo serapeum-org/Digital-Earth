@@ -1,7 +1,7 @@
 """Direct tests for digitalearth.base.chartdata — the backend-neutral chart data preparation helpers.
 
 These four helpers were lifted out of the static backend's ``charts`` module precisely because the
-interactive backend was reaching across the backend boundary to import them. ``tests/test_charts.py`` still
+interactive backend was reaching across the backend boundary to import them. ``tests/static/test_charts.py`` still
 exercises them *through* the matplotlib renderer; this file pins the contract at the unit level instead —
 return types, dtypes, key ordering and the two deliberately different non-finite policies
 (:func:`column_or_array` keeps non-finite values so paired inputs stay index-aligned, :func:`field_values`

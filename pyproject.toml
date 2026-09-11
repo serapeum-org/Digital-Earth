@@ -43,7 +43,6 @@ dependencies = [
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
     "pyramids-gis >=0.59.0",
-    "pyramids-eo >=0.8.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -90,6 +89,11 @@ web = [
     "maplibre >=0.3",
     "lonboard >=0.10",
 ]
+# Every optional backend in one install: `pip install digitalearth[all]`. Written as a self-reference so the
+# three lists above stay the single source of truth — adding a package to `web` reaches `all` automatically,
+# and the two can never drift. Note this pulls three rendering stacks (VTK, the HoloViz stack, MapLibre) into
+# one environment; the per-backend extras exist because most users want exactly one of them.
+all = ["digitalearth[3d,interactive,web]"]
 
 [project.scripts]
 digitalearth = "digitalearth.ops.cli:main"
@@ -417,11 +421,11 @@ digitalearth = { path = ".", editable = true }
 main = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite" }
 test-all = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml --cov-report=term-missing", description = "Run all testsuite" }
 notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb' --ignore-glob='docs/examples/pyvista/**' --ignore-glob='docs/examples/interactive/**' --ignore-glob='docs/examples/web/**'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; the 3-D/PyVista notebooks need the viz3d env, run via `notebooks-3d`; the interactive/HoloViz notebooks need the interactive env, run via `notebooks-interactive`; the web/MapLibre notebooks need the web env, run via `notebooks-web`)" }
-test-3d = { cmd = "pytest -vvv tests/test_*3d.py --cov=src/digitalearth --cov-report=xml", description = "Run the 3-D (PyVista) tier tests — run in the viz3d env (`pixi run -e viz3d test-3d`)" }
+test-3d = { cmd = "pytest -vvv tests/three_d --cov=src/digitalearth --cov-report=xml", description = "Run the 3-D (PyVista) tier tests — run in the viz3d env (`pixi run -e viz3d test-3d`)" }
 notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
-test-interactive = { cmd = "pytest -vvv tests/test_interactive_*.py --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`)" }
+test-interactive = { cmd = "pytest -vvv tests/interactive --cov=src/digitalearth --cov-report=xml", description = "Run the interactive (HoloViz) tier tests — run in the interactive env (`pixi run -e interactive test-interactive`)" }
 notebooks-interactive = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/interactive", description = "check the interactive (HoloViz) notebooks — run in the interactive env (`pixi run -e interactive notebooks-interactive`). Notebooks 01/06/07 guard their WorldClim cells (in the gitignored examples/data/global/) — they render locally when present and skip otherwise." }
-test-web = { cmd = "pytest -vvv tests/test_web_*.py --cov=src/digitalearth --cov-report=xml", description = "Run the web (MapLibre + deck.gl) tier tests — run in the web env (`pixi run -e web test-web`)" }
+test-web = { cmd = "pytest -vvv tests/web --cov=src/digitalearth --cov-report=xml", description = "Run the web (MapLibre + deck.gl) tier tests — run in the web env (`pixi run -e web test-web`)" }
 notebooks-web = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/web", description = "check the web (MapLibre + deck.gl) notebooks — run in the web env (`pixi run -e web notebooks-web`)" }
 jupyter = { cmd = "jupyter lab --no-browser --IdentityProvider.token='' --ServerApp.password='' --port=8889", description = "launch jupyter lab" }
 build-dist = { cmd = "python -m build", description = "Build sdist and wheel for PyPI" }
