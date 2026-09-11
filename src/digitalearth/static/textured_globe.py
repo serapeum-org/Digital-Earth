@@ -344,7 +344,8 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
 
     Returns:
         np.ndarray: an ``(_LIMB_ARC_STEPS, 3)`` arc, excluding both endpoints; empty when ``start`` lies
-        on the view axis, where there is no limb direction to walk along.
+        on the view axis, where there is no limb direction to walk along, or when ``end`` coincides with
+        it, where there is no distance to cover.
 
     Examples:
         - A quarter turn round the limb, sampled between its endpoints, every point on the limb:
@@ -377,6 +378,9 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
         return np.empty((0, 3))
     second = second / length
     angle = float(np.arctan2(end @ second, end @ first))
+    # the ring leaves and rejoins the limb at one point, so there is no distance to walk
+    if abs(angle) < 1e-9:
+        return np.empty((0, 3))
     steps = np.linspace(0.0, angle, _LIMB_ARC_STEPS + 2)[1:-1]
     return radius * (
         np.cos(steps)[:, None] * first[None, :]

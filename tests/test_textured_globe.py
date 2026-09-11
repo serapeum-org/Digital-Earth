@@ -1365,6 +1365,18 @@ class TestOverlayGeometryHelpers:
             "the arc should run from the start toward the end"
         )
 
+    def test_limb_arc_is_empty_when_it_starts_where_it_ends(self):
+        """A ring that leaves and rejoins the limb at one point has no arc to add.
+
+        Test scenario:
+            Sampling a zero-length arc used to emit dozens of copies of one point into the ring.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        point = np.array([0.0, 1.0, 0.0])
+        assert _limb_arc(point, point.copy(), view).shape == (0, 3), (
+            "a zero-length arc should add no points"
+        )
+
     def test_limb_arc_is_empty_when_the_start_faces_the_camera(self):
         """A start point on the view axis has no limb direction, so no arc is produced.
 
