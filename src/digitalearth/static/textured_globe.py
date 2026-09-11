@@ -13,6 +13,12 @@ texture the glyph wants, and maps lon/lat back onto the rendered sphere:
 - :meth:`TexturedGlobe.project` and :meth:`TexturedGlobe.points` push lon/lat (or a pyramids
   ``FeatureCollection``) through the glyph's own ``transform``, so overlays land exactly on the drawn surface
   at any ``spin`` — including the axial tilt — rather than being re-derived here.
+- :meth:`TexturedGlobe.coastlines`, :meth:`TexturedGlobe.borders` and :meth:`TexturedGlobe.land` add the
+  Natural-Earth reference geography the 2-D globe :class:`~digitalearth.static.map.Map` offers.
+
+Every overlay is one persistent matplotlib collection that places itself on the sphere each time it is drawn:
+at the spin of the axes it lives on, and against the camera that axes has *then*. That is what lets it turn
+with an animation, survive a mouse-drag of the camera, and hand back an artist that stays valid.
 
 Like the cleopatra glyph it wraps (and unlike :class:`~digitalearth.static.map.Map`), this is a standalone
 class rather than a :class:`~digitalearth.static.scene.Scene` subclass: ``Scene`` owns a 2-D axes and the
@@ -33,9 +39,16 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
 )
 from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
+from matplotlib import cbook
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from matplotlib.lines import Line2D
+from mpl_toolkits.mplot3d import proj3d
+from mpl_toolkits.mplot3d.art3d import (
+    Line3DCollection,
+    Path3DCollection,
+    Poly3DCollection,
+)
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band
@@ -55,9 +68,13 @@ _EDGE_INSET = 1e-6
 
 #: The glyph's own default inter-frame interval, in milliseconds, read from its signature rather than
 #: mirrored as a literal: a hand-copied default drifts silently, and the saved frame rate is derived from it.
-_DEFAULT_INTERVAL_MS = (
-    inspect.signature(TexturedGlobeGlyph.animate).parameters["interval"].default
-)
+_GLYPH_ANIMATE = inspect.signature(TexturedGlobeGlyph.animate).parameters
+_DEFAULT_INTERVAL_MS = _GLYPH_ANIMATE["interval"].default
+
+#: The glyph's own rotation defaults, read the same way: :meth:`TexturedGlobe.animate` sweeps the rotation
+#: itself so it knows each frame's spin, and has to sweep exactly the one the glyph's animate would have.
+_DEFAULT_N_FRAMES = _GLYPH_ANIMATE["n_frames"].default
+_DEFAULT_REVOLUTIONS = _GLYPH_ANIMATE["revolutions"].default
 
 
 def _texture_axes(n_lat: int, n_lon: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -152,91 +169,14 @@ def _lonlat_to_body(lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
     )
 
 
-#: ``Axes3D.scatter`` arguments that may carry one value per point, and so have to be culled alongside the
-#: points themselves when the far side is hidden. Anything left whole would silently shift onto the wrong
-#: points (``linewidths``) or make matplotlib reject the call outright (``color``, ``c``). ``marker`` and
-#: ``hatch`` are deliberately absent: ``scatter`` takes a single value for each.
-_PER_POINT_SCATTER_KEYS = (
-    "c",
-    "s",
-    "color",
-    "facecolor",
-    "facecolors",
-    "edgecolor",
-    "edgecolors",
-    "linewidth",
-    "linewidths",
-    "linestyle",
-    "linestyles",
-    "alpha",
-)
-
-#: Colour arguments where a bare 3- or 4-element sequence of numbers is one RGB(A) value rather than one
-#: value per point. ``c`` is deliberately excluded: matplotlib gives value-mapping precedence for a sequence
-#: whose length matches the point count, so a length-matching ``c`` is per-point data and must be culled.
-_RGBA_EXEMPT_KEYS = frozenset(
-    {"color", "facecolor", "facecolors", "edgecolor", "edgecolors"}
-)
-
-
-def _is_rgba_literal(key: str, value: Any) -> bool:
-    """Whether ``value`` is a single RGB(A) colour rather than one value per point.
-
-    Applies only to the colour arguments in :data:`_RGBA_EXEMPT_KEYS`, and only to a 3- or 4-element sequence
-    of plain numbers. Container type is not the test — ``color=[1, 0, 0, 1]`` is as much a single red as
-    ``color=(1, 0, 0, 1)``, and culling it would leave ``[1, 0, 1]``, which renders as magenta with no error.
-
-    Args:
-        key: The scatter keyword the value was passed under.
-        value: The value the caller supplied.
-
-    Returns:
-        ``True`` when the value should be passed through whole rather than culled.
-    """
-    if key not in _RGBA_EXEMPT_KEYS or len(value) not in (3, 4):
-        return False
-    return all(
-        isinstance(v, (int, float, np.floating, np.integer)) and not isinstance(v, bool)
-        for v in value
-    )
-
-
-def _cull_per_point(kwargs: dict, keep: np.ndarray) -> dict:
-    """Drop the hidden points' entries from every per-point scatter argument.
-
-    Only a sequence whose length matches the point count is treated as per-point; a scalar (``color="red"``,
-    ``s=30``) applies to every point and is passed through untouched. A bare RGB(A) colour is passed through
-    as well — see :func:`_is_rgba_literal` for which arguments that covers and why ``c`` is not one of them.
-
-    Any sized sequence is accepted, including a pandas ``Series``, which is what a caller naturally passes
-    when the colours come from a dataframe column.
-
-    Args:
-        kwargs: The scatter keyword arguments as the caller supplied them.
-        keep: Boolean mask of the points that survive the far-side cull.
-
-    Returns:
-        A new mapping with every per-point sequence reduced to the kept points.
-    """
-    culled = dict(kwargs)
-    for key in _PER_POINT_SCATTER_KEYS:
-        value = culled.get(key)
-        # `np.ndim` is 0 for a scalar and for anything numpy cannot see a shape in (a set, a generator, an
-        # arbitrary object), so everything past this point is a real sequence with a length.
-        if value is None or isinstance(value, str) or np.ndim(value) == 0:
-            continue
-        if len(value) != keep.size or _is_rgba_literal(key, value):
-            continue
-        culled[key] = np.asarray(value)[keep]
-    return culled
-
-
-#: Draw order for the overlays, above the sphere's own surface (a matplotlib ``Collection``, so zorder 1).
-#: Every overlay is clipped to the hemisphere facing the camera before it is drawn, so it belongs in front
-#: of the sphere unconditionally — see :meth:`TexturedGlobe._bind` for why that has to be said explicitly.
-_FILL_ZORDER = 2.0
-_LINE_ZORDER = 3.0
-_POINT_ZORDER = 4.0
+#: Where each kind of overlay claims to sit when matplotlib depth-sorts the axes' collections, as a radius
+#: along the view axis. All three are nearer the camera than any point of the unit sphere, so a near-side
+#: overlay always sorts in front of the surface it lies on; they are ordered so a fill sits under its
+#: coastlines and both sit under markers; and anything a caller floats further out than 1.003 still sorts in
+#: front of all three. See :func:`_front_depth`.
+_FILL_RANK = 1.001
+_LINE_RANK = 1.002
+_POINT_RANK = 1.003
 
 #: How many points to sample along a limb arc when closing a clipped land ring. The arc is at most a
 #: half-circle, so this holds the chord error under a pixel at any figure size these globes are drawn at.
@@ -388,44 +328,6 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
     )
 
 
-def _drawn_artists(drawn: Any) -> List[Any]:
-    """Flatten whatever an overlay's draw returned into the artists that undo it.
-
-    An overlay hands back one artist (``points`` returns a single ``PathCollection``) or a list of them
-    (a polyline layer returns one ``Line3D`` per visible arc). Both have to be removable, so this
-    normalises them into a flat list, skipping a ``None`` from an overlay that drew nothing.
-
-    Args:
-        drawn: Whatever an overlay's draw callable returned.
-
-    Returns:
-        The artists to remove, in a flat list.
-
-    Examples:
-        - A single artist becomes a one-element list, and nothing drawn becomes an empty one:
-            ```python
-            >>> from digitalearth.static.textured_globe import _drawn_artists
-            >>> _drawn_artists("artist")
-            ['artist']
-            >>> _drawn_artists(None)
-            []
-
-            ```
-        - Nested lists are flattened, so a layer of arcs removes in one pass:
-            ```python
-            >>> from digitalearth.static.textured_globe import _drawn_artists
-            >>> _drawn_artists(["a", ["b", "c"], None])
-            ['a', 'b', 'c']
-
-            ```
-    """
-    if drawn is None:
-        return []
-    if isinstance(drawn, (list, tuple)):
-        return [artist for item in drawn for artist in _drawn_artists(item)]
-    return [drawn]
-
-
 def _view_vector(elev: float, azim: float) -> np.ndarray:
     """Unit vector pointing from the sphere's centre toward the camera at ``elev``/``azim`` degrees.
 
@@ -438,6 +340,331 @@ def _view_vector(elev: float, azim: float) -> np.ndarray:
     """
     e, a = np.deg2rad(float(elev)), np.deg2rad(float(azim))
     return np.array([np.cos(e) * np.cos(a), np.cos(e) * np.sin(a), np.sin(e)])
+
+
+def _front_depth(axes: Any, radius: float) -> float:
+    """The projected depth of the point on the view axis at ``radius`` from the sphere's centre.
+
+    An overlay reports this as its depth when matplotlib sorts the axes' collections back to front. The
+    sphere's nearest point sits on that same axis at radius 1, so any ``radius`` above 1 is nearer the camera
+    than every point of the surface: a near-side overlay sorts in front of the sphere it lies on, while the
+    caller's own artists keep matplotlib's depth sort among themselves and against the globe.
+
+    This replaces switching off ``computed_zorder``, which would have been simpler and wrong: it disables
+    depth sorting for the whole axes, including artists the caller drew on it.
+
+    Args:
+        axes: The ``Axes3D`` being drawn; its current ``elev``/``azim`` and projection matrix are used.
+        radius: How far out along the view axis to claim to sit.
+
+    Returns:
+        The depth matplotlib's sort key compares, nearer for a larger ``radius``.
+    """
+    view = _view_vector(axes.elev, axes.azim)
+    x, y, z = view * float(radius)
+    return float(proj3d.proj_transform(x, y, z, axes.M)[2])
+
+
+def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
+    """Clip one closed ring to the hemisphere facing the camera, re-closing it along the limb.
+
+    A closed ring repeats its first vertex, so the repeat is dropped first and the ring is rolled to start on
+    a hidden vertex. Without that, a ring whose data happens to begin on the near side has its visible stretch
+    split at the seam, and each half is closed out to the limb separately — a spur from the first vertex to
+    the horizon, which shows the moment the fill is given an edge colour.
+
+    Args:
+        world: The ring's ``(N, 3)`` world-space vertices, as placed on the sphere.
+        view: The unit ``(3,)`` vector pointing at the camera.
+
+    Returns:
+        The clipped ``(M, 3)`` ring, or ``None`` when none of it faces the camera or too little is left to
+        enclose an area.
+
+    Examples:
+        - A ring wholly on the near side comes back whole, without its repeated closing vertex:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _clip_ring
+            >>> ring = np.array([[1.0, 0.0, 0.0], [0.9, 0.3, 0.0], [0.9, 0.0, 0.3], [1.0, 0.0, 0.0]])
+            >>> _clip_ring(ring, np.array([1.0, 0.0, 0.0])).shape
+            (3, 3)
+
+            ```
+        - A ring wholly behind the globe clips to nothing:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _clip_ring
+            >>> ring = np.array([[-1.0, 0.0, 0.0], [-0.9, 0.3, 0.0], [-0.9, 0.0, 0.3]])
+            >>> _clip_ring(ring, np.array([1.0, 0.0, 0.0])) is None
+            True
+
+            ```
+    """
+    ring = np.asarray(world, dtype=float)
+    if len(ring) > 1 and np.array_equal(ring[0], ring[-1]):
+        ring = ring[:-1]
+    near = ring @ view > 0.0
+    if not near.any():
+        return None
+    if near.all():
+        return ring
+    start = int(np.flatnonzero(~near)[0])
+    ring, near = np.roll(ring, -start, axis=0), np.roll(near, -start)
+    runs = _visible_runs(near)
+    count = len(ring)
+    pieces: List[np.ndarray] = []
+    for position, run in enumerate(runs):
+        # index 0 is hidden after the roll, so every run has a hidden vertex just before it
+        entry = _limb_point(ring[run[0]], ring[run[0] - 1], view)
+        exit_ = _limb_point(ring[run[-1]], ring[(run[-1] + 1) % count], view)
+        following = runs[(position + 1) % len(runs)]
+        resume = _limb_point(ring[following[0]], ring[following[0] - 1], view)
+        pieces += [
+            entry[None, :],
+            ring[run],
+            exit_[None, :],
+            _limb_arc(exit_, resume, view),
+        ]
+    face = np.vstack(pieces)
+    return face if len(face) >= 3 else None
+
+
+class _GlobeOverlay:
+    """What every globe overlay shares: lon/lat geometry placed on the sphere afresh at each draw.
+
+    The body-frame coordinates are computed once, when the overlay is made. Each draw pushes them through the
+    glyph's own ``transform`` at the overlay's current spin, and decides visibility against the camera the
+    axes has at that moment. So turning the globe moves the overlay, turning the camera — a ``view_init`` or
+    a mouse drag — re-decides which half of it shows, and neither ever rebuilds the artist. The artist the
+    caller got back therefore stays the one on the axes: restyling it, removing it, or keying a colorbar to
+    it keep working as the globe turns.
+
+    Mixed into a matplotlib 3-D collection, whose ``do_3d_projection`` each subclass overrides.
+    """
+
+    _place: Callable[..., np.ndarray]
+    _spin: float
+
+    def _adopt(self, place: Callable[..., np.ndarray], spin: float) -> None:
+        """Bind the overlay to the glyph transform that places it, at a starting spin.
+
+        Args:
+            place: The glyph's ``transform``, taking body-frame points and a ``spin``.
+            spin: The spin, in degrees, to place the overlay at until it is turned.
+        """
+        self._place = place
+        self._spin = float(spin)
+
+    def _world(self, body: np.ndarray) -> np.ndarray:
+        """Place body-frame points on the sphere at the overlay's current spin.
+
+        Args:
+            body: ``(N, 3)`` body-frame points.
+
+        Returns:
+            The ``(N, 3)`` world-space points.
+        """
+        return np.atleast_2d(
+            np.asarray(self._place(body, spin=self._spin), dtype=float)
+        )
+
+    def _view(self) -> np.ndarray:
+        """The unit vector toward the camera of the axes the overlay is on, as it stands now."""
+        axes: Any = getattr(self, "axes")
+        return _view_vector(axes.elev, axes.azim)
+
+
+class _SpherePoints(_GlobeOverlay, Path3DCollection):
+    """A globe scatter: follows the spin, and hides its far-side markers at draw time.
+
+    The scatter keeps every point, so every per-point argument (``c``, ``s``, ``linewidths``, colours as a
+    list or a ``Series``) stays aligned with its point and the colour scale is fitted once, to all of them —
+    rather than to whichever subset happens to face the camera, which would re-colour a value as the globe
+    turned. A hidden marker is drawn at size zero with no edge.
+    """
+
+    _body: np.ndarray
+    _cull: bool
+    _sizes_asked: np.ndarray
+    _widths_asked: np.ndarray
+    _masking: bool = False
+
+    def _adopt_points(
+        self,
+        place: Callable[..., np.ndarray],
+        body: np.ndarray,
+        spin: float,
+        cull: bool,
+    ) -> None:
+        """Turn a freshly made scatter into a globe overlay.
+
+        Args:
+            place: The glyph's ``transform``.
+            body: The points' ``(N, 3)`` body-frame coordinates, already lifted to their altitude.
+            spin: The starting spin, in degrees.
+            cull: Whether to hide the markers on the far hemisphere.
+        """
+        self._adopt(place, spin)
+        self._body = body
+        self._cull = bool(cull)
+        self._sizes_asked = np.atleast_1d(np.asarray(self.get_sizes(), dtype=float))
+        self._widths_asked = np.atleast_1d(
+            np.asarray(self.get_linewidths(), dtype=float)
+        )
+
+    def _restyling(self) -> bool:
+        """Whether a size or width change comes from the caller, rather than the far-side mask or a draw."""
+        return not (self._masking or getattr(self, "_in_draw", False))
+
+    def set_sizes(self, sizes: Any, dpi: float = 72.0) -> None:
+        """Set the marker sizes, remembering a caller's choice so the far-side mask applies over it."""
+        super().set_sizes(sizes, dpi)
+        if self._restyling():
+            self._sizes_asked = np.atleast_1d(np.asarray(sizes, dtype=float))
+
+    def set_linewidth(self, lw: Any) -> None:
+        """Set the marker edge widths, remembering a caller's choice so the far-side mask applies over it."""
+        super().set_linewidth(lw)
+        if self._restyling():
+            self._widths_asked = np.atleast_1d(np.asarray(lw, dtype=float))
+
+    def do_3d_projection(self) -> float:
+        """Place the points at the current spin, hide the far side, and sort in front of the sphere."""
+        world = self._world(self._body)
+        self._offsets3d = (world[:, 0], world[:, 1], world[:, 2])
+        if not self._cull:
+            depth: float = super().do_3d_projection()
+            return depth
+        near = world @ self._view() > 0.0
+        count = len(world)
+        self._masking = True
+        try:
+            self.set_sizes(np.where(near, np.resize(self._sizes_asked, count), 0.0))
+            self.set_linewidth(
+                np.where(near, np.resize(self._widths_asked, count), 0.0)
+            )
+        finally:
+            self._masking = False
+        super().do_3d_projection()
+        return _front_depth(getattr(self, "axes"), _POINT_RANK)
+
+
+class _SphereLines(_GlobeOverlay, Line3DCollection):
+    """A reference line layer on the globe: one collection holding every near-side arc of every part."""
+
+    _body: np.ndarray
+    _part: np.ndarray
+
+    def _adopt_parts(
+        self, place: Callable[..., np.ndarray], parts: List[np.ndarray], spin: float
+    ) -> None:
+        """Hold the layer's parts as one array, tagged by part, so a frame places them in one transform.
+
+        Args:
+            place: The glyph's ``transform``.
+            parts: One ``(N, 3)`` body-frame array per polyline.
+            spin: The starting spin, in degrees.
+        """
+        self._adopt(place, spin)
+        self._body = np.concatenate(parts) if parts else np.empty((0, 3))
+        self._part = np.repeat(np.arange(len(parts)), [len(part) for part in parts])
+
+    def _near_side_segments(self) -> List[np.ndarray]:
+        """Split every part into the arcs facing the camera, carried out to the limb at each end.
+
+        A run of visible vertices ends one vertex short of the horizon; the crossing point is added at each
+        end whose neighbour in the same part is hidden, so the lines meet the limb where a land fill does.
+
+        Returns:
+            One ``(M, 3)`` world-space arc per visible run.
+        """
+        if not len(self._body):
+            return []
+        world = self._world(self._body)
+        view = self._view()
+        keep = np.flatnonzero(world @ view > 0.0)
+        if keep.size == 0:
+            return []
+        breaks = (
+            np.flatnonzero((np.diff(keep) != 1) | (np.diff(self._part[keep]) != 0)) + 1
+        )
+        final = len(world) - 1
+        segments: List[np.ndarray] = []
+        for run in np.split(keep, breaks):
+            first, last = int(run[0]), int(run[-1])
+            pieces = [world[run]]
+            if first > 0 and self._part[first - 1] == self._part[first]:
+                pieces.insert(
+                    0, _limb_point(world[first], world[first - 1], view)[None, :]
+                )
+            if last < final and self._part[last + 1] == self._part[last]:
+                pieces.append(_limb_point(world[last], world[last + 1], view)[None, :])
+            segment = np.vstack(pieces)
+            if len(segment) > 1:
+                segments.append(segment)
+        return segments
+
+    def do_3d_projection(self) -> float:
+        """Re-split the layer for the current spin and camera, and sort in front of the sphere."""
+        self.set_segments(self._near_side_segments())
+        super().do_3d_projection()
+        return _front_depth(getattr(self, "axes"), _LINE_RANK)
+
+
+class _SphereFill(_GlobeOverlay, Poly3DCollection):
+    """A reference fill layer on the globe: one collection holding every near-side face."""
+
+    _body: np.ndarray
+    _starts: np.ndarray
+
+    def _adopt_rings(
+        self, place: Callable[..., np.ndarray], rings: List[np.ndarray], spin: float
+    ) -> None:
+        """Hold the layer's rings as one array plus offsets, so a frame places them in one transform.
+
+        Args:
+            place: The glyph's ``transform``.
+            rings: One closed ``(N, 3)`` body-frame ring per polygon.
+            spin: The starting spin, in degrees.
+        """
+        self._adopt(place, spin)
+        rings = [
+            ring[:-1] if len(ring) > 1 and np.array_equal(ring[0], ring[-1]) else ring
+            for ring in rings
+        ]
+        self._body = np.concatenate(rings) if rings else np.empty((0, 3))
+        self._starts = np.concatenate(
+            [[0], np.cumsum([len(ring) for ring in rings])]
+        ).astype(int)
+
+    def _near_side_faces(self) -> List[np.ndarray]:
+        """Clip every ring to the hemisphere facing the camera.
+
+        Visibility is decided for every vertex in one pass, so a ring wholly on the far side — about half
+        of them at any moment — is skipped without being clipped.
+
+        Returns:
+            One ``(M, 3)`` world-space face per ring with any part on the near side.
+        """
+        if not len(self._body):
+            return []
+        world = self._world(self._body)
+        view = self._view()
+        starts, stops = self._starts[:-1], self._starts[1:]
+        in_view = np.logical_or.reduceat(world @ view > 0.0, starts)
+        faces = []
+        for index in np.flatnonzero(in_view):
+            face = _clip_ring(world[starts[index] : stops[index]], view)
+            if face is not None:
+                faces.append(face)
+        return faces
+
+    def do_3d_projection(self) -> float:
+        """Re-clip the layer for the current spin and camera, and sort in front of the sphere."""
+        self.set_verts(self._near_side_faces())
+        super().do_3d_projection()
+        return _front_depth(getattr(self, "axes"), _FILL_RANK)
 
 
 class TexturedGlobe:
@@ -513,78 +740,61 @@ class TexturedGlobe:
         )
         #: The spin the globe was last drawn at, so an overlay defaults to the surface it can see.
         self._spin: float = 0.0
-        #: Overlays that follow the globe: each redraws itself at the spin it is handed. Registered by the
-        #: overlay methods and replayed by :meth:`_redraw_overlays` on every frame the glyph draws.
-        self._overlays: List[Callable[[float], Any]] = []
-        #: What those overlays drew last, kept so the previous frame's artists can be removed before the
-        #: next one is drawn — the glyph clears only its own surface, never a foreign artist.
-        self._overlay_artists: List[Any] = []
-        self._track_spin()
+        #: The overlays that follow the globe, each still on the axes it was drawn on. A draw or animation
+        #: frame turns the ones on its own axes (see :meth:`_turn_overlays`).
+        self._overlays: List[Any] = []
         #: Whether :attr:`fig` is ours to close. A caller-supplied axes belongs to the caller.
         self._owns_fig: bool = False
         #: The axes the constructor was given, if any. animate() falls back to it so a globe built around a
         #: caller's axes keeps drawing there instead of opening a figure of its own.
         self._ctor_ax: Any = kwargs.get("ax")
 
-    def _track_spin(self) -> None:
-        """Wrap the glyph's ``draw`` so registered overlays are redrawn at whatever spin it renders.
+    def _turn_overlays(self, axes: Any, spin: float) -> None:
+        """Turn the overlays drawn on ``axes`` to ``spin``, and forget the ones no longer drawn anywhere.
 
-        The glyph is the only thing that knows a frame's spin: :meth:`animate` hands the whole rotation to
-        ``glyph.animate``, which computes its own angle sequence and calls ``glyph.draw(spin=...)`` per
-        frame. Wrapping ``draw`` reads that angle instead of re-deriving it here, so an overlay cannot
-        drift out of step with the sphere however the glyph chooses to sweep.
-
-        It also covers a plain :meth:`draw` at a new spin, which turns the sphere for the same reason and
-        so has to carry its overlays along too — but only onto the axes the overlays are already on. A
-        ``draw(ax=...)`` onto a *different* axes rebinds afterwards, so redrawing there would put the
-        overlay on the axes being left behind; those stay where they were drawn, as they always have.
-        """
-        original = self.glyph.draw
-
-        def _draw(*args: Any, **kwargs: Any) -> Any:
-            result = original(*args, **kwargs)
-            self._spin = float(kwargs.get("spin", 0.0))
-            target = (
-                result[1] if isinstance(result, tuple) and len(result) == 2 else None
-            )
-            if target is self.ax:
-                self._redraw_overlays(self._spin)
-            return result
-
-        self.glyph.draw = _draw  # type: ignore[method-assign]
-
-    def _follow_spin(self, draw: Callable[[float], Any]) -> Any:
-        """Draw an overlay at the current spin and register it to be redrawn as the globe turns.
+        Scoped to one axes on purpose. A globe drawn into several panels — a contact sheet of spins — keeps
+        each panel's overlays at that panel's spin, so turning one panel must not move, strip or duplicate
+        another's. An overlay that has left its axes — removed by the caller, or wiped by ``ax.clear()`` — is
+        dropped here, so it is never brought back and a hand-written redraw loop cannot pile copies up.
 
         Args:
-            draw: Draws the overlay at the spin it is given and returns the artist(s) it made.
+            axes: The axes the globe has just been drawn on.
+            spin: The spin, in degrees, it was drawn at.
+        """
+        kept = []
+        for overlay in self._overlays:
+            if overlay.axes is None:
+                continue
+            if overlay.axes is axes:
+                overlay._spin = float(spin)
+                overlay.stale = True
+            kept.append(overlay)
+        self._overlays = kept
+
+    @staticmethod
+    def _to_body(lon: Any, lat: Any, altitude: float) -> np.ndarray:
+        """Turn lon/lat degrees into body-frame points lifted ``altitude`` above the unit surface.
+
+        Args:
+            lon: Longitude(s) in degrees.
+            lat: Latitude(s) in degrees, the same shape as ``lon``.
+            altitude: Radial offset from the unit surface.
 
         Returns:
-            Whatever ``draw`` returned for the current spin — the artist the caller gets back.
+            An ``(N, 3)`` array of body-frame points.
+
+        Raises:
+            ValueError: if ``lon`` and ``lat`` do not have the same shape.
         """
-        drawn = draw(self._spin)
-        self._overlays.append(draw)
-        self._overlay_artists.append(drawn)
-        return drawn
-
-    def _redraw_overlays(self, spin: float) -> None:
-        """Replace every registered overlay with one drawn at ``spin``.
-
-        The previous frame's artists are removed first: the glyph clears only the artists it marked as its
-        own, so an overlay left in place would accumulate a copy per frame instead of moving.
-
-        Args:
-            spin: The spin, in degrees, the globe has just been drawn at.
-        """
-        if not self._overlays:
-            return
-        for drawn in self._overlay_artists:
-            for artist in _drawn_artists(drawn):
-                try:
-                    artist.remove()
-                except (ValueError, NotImplementedError):
-                    pass  # already gone with its axes; there is nothing left to undo
-        self._overlay_artists = [draw(spin) for draw in self._overlays]
+        lon_arr = np.atleast_1d(np.asarray(lon, dtype=float))
+        lat_arr = np.atleast_1d(np.asarray(lat, dtype=float))
+        if lon_arr.shape != lat_arr.shape:
+            raise ValueError(
+                f"lon and lat must have the same shape, got {lon_arr.shape} and {lat_arr.shape}"
+            )
+        return _lonlat_to_body(lon_arr.ravel(), lat_arr.ravel()) * (
+            1.0 + float(altitude)
+        )
 
     # ------------------------------------------------------------------ constructors
 
@@ -1030,17 +1240,7 @@ class TexturedGlobe:
                 ```
         """
         spin = self._spin if spin is None else spin
-        lon_arr, lat_arr = (
-            np.atleast_1d(np.asarray(lon, dtype=float)),
-            np.atleast_1d(np.asarray(lat, dtype=float)),
-        )
-        if lon_arr.shape != lat_arr.shape:
-            raise ValueError(
-                f"lon and lat must have the same shape, got {lon_arr.shape} and {lat_arr.shape}"
-            )
-        body = _lonlat_to_body(lon_arr.ravel(), lat_arr.ravel()) * (
-            1.0 + float(altitude)
-        )
+        body = self._to_body(lon, lat, altitude)
         return np.atleast_2d(self.glyph.transform(body, spin=spin))
 
     def visible(self, world_xyz: np.ndarray) -> np.ndarray:
@@ -1111,21 +1311,20 @@ class TexturedGlobe:
         ``close()``'s reach; rebinding to another axes on the *same* figure closes nothing, because that
         figure is still in use.
 
-        Binding also takes the axes off matplotlib's computed z-order. A 3-D axes normally *overwrites*
-        every collection's zorder with a depth sort that ranks each collection by a single representative
-        depth — and the sphere is one collection spanning the whole globe, so it wins against overlays that
-        sit right on top of it: coastlines and land fills came out almost entirely hidden behind the
-        planet, with only fragments leaking out at the limb. Every overlay here is already clipped to the
-        hemisphere facing the camera, so the order is not in question and is stated outright instead.
-
         Args:
             ax: The axes now being drawn on.
             owns: Whether the figure behind ``ax`` was created by this globe.
         """
-        ax.computed_zorder = False
         figure = ax.get_figure()
         if self._owns_fig and self.fig is not None and self.fig is not figure:
-            plt.close(self.fig)
+            closing = self.fig
+            plt.close(closing)
+            # the overlays on that figure go with it; keeping them registered would only pin a dead figure
+            self._overlays = [
+                overlay
+                for overlay in self._overlays
+                if overlay.axes is not None and overlay.axes.get_figure() is not closing
+            ]
         self.ax, self.fig = ax, figure
         self._owns_fig = owns
 
@@ -1186,6 +1385,7 @@ class TexturedGlobe:
         _, drawn_ax = self.glyph.draw(spin=spin, **kwargs)
         self._bind(drawn_ax, owns=not supplied)
         self._spin = float(spin)
+        self._turn_overlays(drawn_ax, self._spin)
         return self.fig, self.ax
 
     def points(
@@ -1210,14 +1410,18 @@ class TexturedGlobe:
                 they are drawn at the spin it was last drawn at, and redrawn at each animation frame's
                 spin so they turn with the surface. Giving a value opts out of that and fixes them there.
             altitude: Radial lift above the surface, to avoid z-fighting with it.
-            hide_far_side: When True (default), drop the points on the hemisphere facing away from the
-                camera, which matplotlib would otherwise draw straight through the sphere.
+            hide_far_side: When True (default), hide the markers on the hemisphere facing away from the
+                camera, which matplotlib would otherwise draw straight through the sphere. Decided at each
+                draw, against the camera as it is then, so a camera move re-decides it. With False every
+                marker is drawn and the collection is depth-sorted like any other artist, so markers near
+                the limb can be painted over by the sphere.
             **kwargs: Forwarded to ``Axes3D.scatter`` (e.g. ``c``, ``s``, ``marker``, ``color``).
 
         Returns:
-            The ``Path3DCollection`` returned by ``Axes3D.scatter``. For points that follow the globe it is
-            the artist for the *current* spin: the next frame or redraw removes it and draws a replacement,
-            so restyle through this call's arguments rather than by editing the returned artist.
+            The scatter collection on the axes. It stays there as the globe turns — re-placed at each draw,
+            never replaced — so restyling it, removing it, or keying a colorbar to it keeps working. It
+            holds every point: a hidden marker is drawn at size zero rather than dropped, which keeps each
+            per-point value with its point and fits the colour scale to all of them.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
@@ -1229,7 +1433,7 @@ class TexturedGlobe:
             polygon layer can be marked on the globe without converting it first.
 
         Examples:
-            - Scatter lon/lat points; the ones behind the globe are dropped:
+            - Scatter lon/lat points; the ones behind the globe are drawn at size zero:
                 ```python
                 >>> import matplotlib
                 >>> matplotlib.use("Agg")
@@ -1239,7 +1443,8 @@ class TexturedGlobe:
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
                 >>> scatter = globe.points([0.0, 180.0], lat=[0.0, 0.0])
-                >>> len(scatter.get_offsets())
+                >>> fig.canvas.draw()
+                >>> int((scatter.get_sizes() > 0).sum())
                 1
 
                 ```
@@ -1253,6 +1458,7 @@ class TexturedGlobe:
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
                 >>> scatter = globe.points([0.0, 180.0], lat=[0.0, 0.0], hide_far_side=False)
+                >>> fig.canvas.draw()
                 >>> len(scatter.get_offsets())
                 2
 
@@ -1271,97 +1477,28 @@ class TexturedGlobe:
                 >>> follower = globe.points([0.0], lat=[0.0])
                 >>> pinned = globe.points([0.0], lat=[0.0], spin=0.0)
                 >>> _ = globe.draw(ax, elev=0.0, azim=0.0, spin=180.0)
-                >>> len(pinned.get_offsets())
-                1
+                >>> ax.get_figure().canvas.draw()
+                >>> int((follower.get_sizes() > 0).sum()), int((pinned.get_sizes() > 0).sum())
+                (0, 1)
                 >>> follower in ax.collections
-                False
-                >>> len(ax.collections[-1].get_offsets())
-                0
+                True
 
                 ```
         """
         if self.ax is None:
             raise RuntimeError("draw() the globe before adding points to it")
         lon_vals, lat_vals = self._as_lonlat(data, lat)
-
-        def _draw(at_spin: float) -> Any:
-            world = self.project(lon_vals, lat_vals, spin=at_spin, altitude=altitude)
-            style = dict(kwargs)
-            if hide_far_side:
-                keep = self.visible(world)
-                world = world[keep]
-                style = _cull_per_point(kwargs, keep)
-            style.setdefault("zorder", _POINT_ZORDER)
-            return self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **style)
-
-        if spin is not None:
-            return _draw(float(spin))
-        return self._follow_spin(_draw)
+        body = self._to_body(lon_vals, lat_vals, altitude)
+        at = self._spin if spin is None else float(spin)
+        world = np.atleast_2d(self.glyph.transform(body, spin=at))
+        scatter = self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **kwargs)
+        scatter.__class__ = _SpherePoints
+        scatter._adopt_points(self.glyph.transform, body, at, cull=hide_far_side)
+        if spin is None:
+            self._overlays.append(scatter)
+        return scatter
 
     # ------------------------------------------------------------------ reference geography
-
-    def _near_side_arcs(
-        self, part: np.ndarray, spin: float, altitude: float
-    ) -> List[np.ndarray]:
-        """Project one lon/lat part and split it into the arcs that face the camera.
-
-        Splitting is the whole job: a polyline drawn through its hidden vertices cuts a chord straight
-        through the planet, which is the mistake this saves every caller from making by hand.
-
-        Args:
-            part: An ``(N, 2)`` lon/lat array, as ``natural_earth`` returns.
-            spin: The spin, in degrees, to place it at.
-            altitude: Radial lift above the surface.
-
-        Returns:
-            One ``(M, 3)`` world-space arc per visible run, dropping runs too short to draw.
-        """
-        world = self.project(part[:, 0], part[:, 1], spin=spin, altitude=altitude)
-        return [
-            world[run] for run in _visible_runs(self.visible(world)) if run.size > 1
-        ]
-
-    def _near_side_ring(
-        self, part: np.ndarray, spin: float, altitude: float
-    ) -> Optional[np.ndarray]:
-        """Clip one closed lon/lat ring to the near side, re-closing it along the limb.
-
-        Args:
-            part: An ``(N, 2)`` lon/lat ring, as ``natural_earth`` returns for a polygon layer.
-            spin: The spin, in degrees, to place it at.
-            altitude: Radial lift above the surface.
-
-        Returns:
-            The clipped ``(M, 3)`` ring, or ``None`` when none of it faces the camera or too little is
-            left to enclose an area.
-        """
-        world = self.project(part[:, 0], part[:, 1], spin=spin, altitude=altitude)
-        near = self.visible(world)
-        if not near.any():
-            return None
-        if near.all():
-            return world
-        view = _view_vector(self.ax.elev, self.ax.azim)
-        runs = _visible_runs(near)
-        count = len(world)
-        pieces: List[np.ndarray] = []
-        for position, run in enumerate(runs):
-            before = world[(run[0] - 1) % count]
-            after = world[(run[-1] + 1) % count]
-            entry = _limb_point(world[run[0]], before, view)
-            exit_ = _limb_point(world[run[-1]], after, view)
-            following = runs[(position + 1) % len(runs)]
-            resume = _limb_point(
-                world[following[0]], world[(following[0] - 1) % count], view
-            )
-            pieces += [
-                entry[None, :],
-                world[run],
-                exit_[None, :],
-                _limb_arc(exit_, resume, view),
-            ]
-        ring = np.vstack(pieces)
-        return ring if len(ring) >= 3 else None
 
     def _reference_layer(
         self,
@@ -1374,59 +1511,52 @@ class TexturedGlobe:
         fill: bool,
         **kwargs: Any,
     ) -> Any:
-        """Draw a Natural-Earth layer on the sphere, split (or closed) at the visible limb.
+        """Add a Natural-Earth layer to the globe as one overlay collection.
 
         Args:
             layer: The Natural-Earth layer name (``"coastline"``, ``"borders"``, ``"land"``).
             resolution: Natural-Earth resolution (``"110m"`` / ``"50m"`` / ``"10m"``).
-            defaults: The layer's base style, overridden by ``kwargs``.
+            defaults: The layer's base style. The caller's styling overrides it, after matplotlib's short
+                aliases (``lw``, ``c``, ``ec``, ...) are spelled out, so both spellings work.
             spin: Pin the layer to this spin, or ``None`` to follow the globe.
             altitude: Radial lift above the surface.
             fill: Whether the parts are closed rings to fill rather than lines to stroke.
 
         Returns:
-            The artists drawn — a list of ``Line3D`` for a line layer, one ``Poly3DCollection`` for a
-            filled one, or ``None`` when nothing of it is on the near side.
+            The ``Line3DCollection`` (lines) or ``Poly3DCollection`` (fill) now on the axes.
 
         Raises:
-            RuntimeError: if the globe has not been drawn yet, so there is no camera to clip against.
+            RuntimeError: if the globe has not been drawn yet, so there is no axes to add the layer to.
         """
         if self.ax is None:
             raise RuntimeError(
                 f"draw() the globe before adding the {layer!r} layer to it"
             )
-        parts = [
-            np.asarray(part, dtype=float) for part in natural_earth(layer, resolution)
+        bodies = [
+            self._to_body(part[:, 0], part[:, 1], altitude)
+            for part in (
+                np.asarray(raw, dtype=float) for raw in natural_earth(layer, resolution)
+            )
+            if part.ndim == 2 and len(part) >= 2
         ]
-        parts = [part for part in parts if part.ndim == 2 and len(part) >= 2]
-        style = {**defaults, **kwargs}
-
-        def _draw(at_spin: float) -> Any:
-            if fill:
-                rings = [
-                    self._near_side_ring(part, at_spin, altitude) for part in parts
-                ]
-                faces = [ring for ring in rings if ring is not None]
-                if not faces:
-                    return None
-                patch = Poly3DCollection(faces, zorder=_FILL_ZORDER, **style)
-                self.ax.add_collection3d(patch)
-                return patch
-            arcs = [
-                arc
-                for part in parts
-                for arc in self._near_side_arcs(part, at_spin, altitude)
-            ]
-            return [
-                self.ax.plot(
-                    arc[:, 0], arc[:, 1], arc[:, 2], zorder=_LINE_ZORDER, **style
-                )[0]
-                for arc in arcs
-            ]
-
-        if spin is not None:
-            return _draw(float(spin))
-        return self._follow_spin(_draw)
+        style = {
+            **defaults,
+            **cbook.normalize_kwargs(kwargs, Poly3DCollection if fill else Line2D),
+        }
+        at = self._spin if spin is None else float(spin)
+        overlay: Any
+        if fill:
+            overlay = _SphereFill([], **style)
+            overlay._adopt_rings(self.glyph.transform, bodies, at)
+        else:
+            overlay = _SphereLines([], **style)
+            overlay._adopt_parts(self.glyph.transform, bodies, at)
+        # add_collection, not add_collection3d: the overlay is already 3-D, starts empty (it is placed at
+        # draw time), and add_collection3d's autolim would try to size the view from that empty geometry
+        self.ax.add_collection(overlay, autolim=False)
+        if spin is None:
+            self._overlays.append(overlay)
+        return overlay
 
     def coastlines(
         self,
@@ -1439,19 +1569,21 @@ class TexturedGlobe:
         """Draw Natural-Earth coastlines on the globe, split at the visible limb.
 
         Named and styled to match :meth:`~digitalearth.static.Map.coastlines` on the 2-D globe, so the two
-        tiers read alike. Each coastline is projected onto the sphere at ``spin`` and broken into the arcs
-        that face the camera; without that split every line crossing the horizon would be drawn as a chord
-        through the planet.
+        tiers read alike. Each coastline is placed on the sphere and broken into the arcs that face the
+        camera, each carried out to the horizon; without that split every line crossing the limb would be
+        drawn as a chord through the planet. The split is redone at every draw, for the spin and the camera
+        of that moment.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             spin: Pin the coastlines to this spin, in degrees. Omitted, they follow the globe and are
                 redrawn at each animation frame's spin.
             altitude: Radial lift above the surface, so the lines are not z-fought by it.
-            **kwargs: Line styling forwarded to matplotlib (``color``, ``linewidth``, ``alpha``, ...).
+            **kwargs: Line styling forwarded to matplotlib (``color``, ``linewidth``, ``linestyle``,
+                ``alpha``), in either the long or the short spelling (``c``, ``lw``, ``ls``).
 
         Returns:
-            The list of polyline artists drawn — one per visible arc.
+            The ``Line3DCollection`` holding every near-side arc. It stays on the axes as the globe turns.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
@@ -1466,8 +1598,9 @@ class TexturedGlobe:
                 >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
                 >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
-                >>> arcs = globe.coastlines()                              # doctest: +SKIP
-                >>> len(arcs)                                              # doctest: +SKIP
+                >>> lines = globe.coastlines()                             # doctest: +SKIP
+                >>> globe.fig.canvas.draw()                                # doctest: +SKIP
+                >>> len(lines.get_segments())                              # doctest: +SKIP
                 57
 
                 ```
@@ -1480,9 +1613,9 @@ class TexturedGlobe:
                 >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
                 >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
-                >>> arcs = globe.coastlines(color="white", linewidth=1.2, spin=0.0)  # doctest: +SKIP
-                >>> arcs[0].get_color()                                              # doctest: +SKIP
-                'white'
+                >>> lines = globe.coastlines(color="white", lw=1.2, spin=0.0)  # doctest: +SKIP
+                >>> float(lines.get_linewidth()[0])                            # doctest: +SKIP
+                1.2
 
                 ```
             - Asking before the globe is drawn is refused — there is no camera yet to clip against:
@@ -1523,10 +1656,10 @@ class TexturedGlobe:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             spin: Pin the borders to this spin, in degrees. Omitted, they follow the globe.
             altitude: Radial lift above the surface.
-            **kwargs: Line styling forwarded to matplotlib.
+            **kwargs: Line styling forwarded to matplotlib, as for :meth:`coastlines`.
 
         Returns:
-            The list of polyline artists drawn — one per visible arc.
+            The ``Line3DCollection`` holding every near-side arc. It stays on the axes as the globe turns.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
@@ -1541,7 +1674,7 @@ class TexturedGlobe:
                 >>> from digitalearth.static import TexturedGlobe          # doctest: +SKIP
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
                 >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
-                >>> globe.borders()[0].get_linewidth()                     # doctest: +SKIP
+                >>> float(globe.borders().get_linewidth()[0])              # doctest: +SKIP
                 0.4
 
                 ```
@@ -1554,7 +1687,8 @@ class TexturedGlobe:
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), np.uint8))  # doctest: +SKIP
                 >>> _ = globe.draw(elev=0.0, azim=0.0)                     # doctest: +SKIP
                 >>> fine, coarse = globe.borders("50m"), globe.borders("110m")  # doctest: +SKIP
-                >>> len(fine) > len(coarse)                                     # doctest: +SKIP
+                >>> globe.fig.canvas.draw()                                     # doctest: +SKIP
+                >>> len(fine.get_segments()) > len(coarse.get_segments())       # doctest: +SKIP
                 True
 
                 ```
@@ -1601,12 +1735,14 @@ class TexturedGlobe:
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             spin: Pin the fill to this spin, in degrees. Omitted, it follows the globe.
-            altitude: Radial lift above the surface. The fill is drawn under the line layers by
-                z-order rather than by radius, so this only has to clear the sphere itself.
-            **kwargs: Patch styling forwarded to matplotlib (``color``, ``alpha``, ``edgecolor``, ...).
+            altitude: Radial lift above the surface. The fill sorts under the line layers by the depth
+                it reports rather than by its radius, so this only has to clear the sphere itself.
+            **kwargs: Patch styling forwarded to matplotlib (``color``, ``alpha``, ``edgecolor``, ...),
+                in either the long or the short spelling (``fc``, ``ec``, ``lw``).
 
         Returns:
-            The ``Poly3DCollection`` holding the fill, or ``None`` when no land is on the near side.
+            The ``Poly3DCollection`` holding the fill. It stays on the axes as the globe turns, re-clipped
+            at each draw; at a camera that shows no land it simply has no faces.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
@@ -1707,9 +1843,13 @@ class TexturedGlobe:
         :meth:`save_gif` and :meth:`stamp` work on an animated globe.
 
         Overlays turn with the sphere. Anything added with :meth:`points`, :meth:`coastlines`,
-        :meth:`borders` or :meth:`land` — before this call or after it — is redrawn at each frame's spin,
-        so markers and coastlines stay attached to the ground. Pass ``spin=`` to one of those to pin it to
-        a fixed position instead.
+        :meth:`borders` or :meth:`land` after this call — or before it, on the axes the animation draws on
+        — is turned to each frame's spin, so markers and coastlines stay attached to the ground. Pass
+        ``spin=`` to one of those to pin it to a fixed position instead.
+
+        The rotation is swept here rather than by the glyph's own ``animate``, which is how each frame's
+        spin is known; it sweeps the same one, ``start_spin`` plus ``revolutions`` whole turns spread over
+        ``n_frames`` frames. The first frame is drawn by this call, so a bad render option is refused here.
 
         Args:
             ax: An existing ``Axes3D`` to animate on. When omitted, the constructor's axes is used if one
@@ -1723,7 +1863,8 @@ class TexturedGlobe:
             garbage-collected before you save or display it.
 
         Raises:
-            ValueError: If ``interval`` is not a positive number of milliseconds.
+            ValueError: If ``interval`` is not a positive number of milliseconds, ``n_frames`` is below 1,
+                or a render option or lighting argument is out of contract.
 
         Examples:
             - Animate a rotation; the figure and axes are recorded for saving or stamping afterwards:
@@ -1755,11 +1896,20 @@ class TexturedGlobe:
 
                 ```
         """
-        interval = float(kwargs.get("interval", _DEFAULT_INTERVAL_MS))
+        interval = float(kwargs.pop("interval", _DEFAULT_INTERVAL_MS))
         if interval <= 0:
             raise ValueError(
                 f"interval must be a positive number of milliseconds, got {interval!r}"
             )
+        n_frames = int(kwargs.pop("n_frames", _DEFAULT_N_FRAMES))
+        if n_frames < 1:
+            raise ValueError(f"n_frames must be at least 1, got {n_frames}")
+        spins = float(kwargs.pop("start_spin", 0.0)) + np.linspace(
+            0.0,
+            360.0 * float(kwargs.pop("revolutions", _DEFAULT_REVOLUTIONS)),
+            n_frames,
+            endpoint=False,
+        )
         supplied = ax is not None or self._caller_supplied_axes
         if ax is None:
             ax = (
@@ -1770,12 +1920,24 @@ class TexturedGlobe:
                 "figsize", self.glyph.default_options.get("figsize", (6, 6))
             )
             ax = plt.figure(figsize=figsize).add_subplot(projection="3d")
-        anim: FuncAnimation = self.glyph.animate(ax, **kwargs)
+        # The rotation is swept here rather than by the glyph's own animate, so each frame's spin is known
+        # without reaching into the glyph. The first frame is drawn now: a bad render option or lighting
+        # argument is refused at this call, as the glyph's animate would, and not from inside the frame loop.
+        self.glyph.draw(ax, spin=float(spins[0]), **kwargs)
         self._bind(ax, owns=not supplied)
-        # Record the spin the animation *starts* at, so an overlay added between here and the first
-        # rendered frame lands on the frame the reader will see first. From there each frame redraws the
-        # registered overlays at its own spin (see _track_spin), so they turn with the sphere.
-        self._spin = float(kwargs.get("start_spin", 0.0))
+        self._spin = float(spins[0])
+        self._turn_overlays(ax, self._spin)
+
+        def _frame(index: int) -> Tuple[Any, ...]:
+            spin = float(spins[index])
+            self.glyph.draw(ax, spin=spin, **kwargs)
+            self._spin = spin
+            self._turn_overlays(ax, spin)
+            return (self.glyph.surface,)
+
+        anim = FuncAnimation(
+            self.fig, _frame, frames=n_frames, interval=interval, blit=False
+        )
         self._animation = (
             anim  # keep a strong reference so it survives until save/display
         )
@@ -1921,6 +2083,7 @@ class TexturedGlobe:
         self.ax = None
         self._animation = None
         self._animation_fps = None
+        self._overlays = []
 
     def __enter__(self) -> "TexturedGlobe":
         """Enter the runtime context, returning the globe so ``with TexturedGlobe(...) as g:`` binds it.
