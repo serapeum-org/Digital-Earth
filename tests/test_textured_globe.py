@@ -890,6 +890,44 @@ class TestOverlaysFollowTheSpin:
         )
         globe.close()
 
+    def test_a_marker_stays_on_the_ground_it_was_placed_on(self, globe):
+        """After a turn each marker sits exactly where the surface point under it has moved to.
+
+        Test scenario:
+            Checked at 45 degrees on a tilted globe. At 180 degrees turning either way lands in the same
+            place, which is how an overlay turning the wrong way once passed every placement test.
+        """
+        lon, lat = [30.0, -60.0], [10.0, -25.0]
+        ax = self._axes()
+        globe.draw(ax, spin=0.0)
+        scatter = globe.points(lon, lat=lat, hide_far_side=False)
+        globe.draw(ax, spin=45.0)
+        ax.get_figure().canvas.draw()
+        expected = globe.project(lon, lat, spin=45.0, altitude=0.01)
+        assert np.allclose(self._offsets(scatter), expected), (
+            f"the markers should sit on the ground at spin 45, got {self._offsets(scatter).tolist()} "
+            f"instead of {expected.tolist()}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_after_an_animation_a_marker_sits_on_the_last_frames_ground(
+        self, globe, tmp_path
+    ):
+        """The last rendered frame leaves each marker on the ground at that frame's spin.
+
+        Test scenario:
+            Three frames over a revolution end at 240 degrees, a spin where the two directions of turn
+            disagree.
+        """
+        globe.animate(n_frames=3, interval=100, figsize=(3, 3), start_spin=0.0)
+        scatter = globe.points([30.0], lat=[10.0], hide_far_side=False)
+        globe._animation.save(str(tmp_path / "ground.gif"), writer=PillowWriter(fps=2))
+        expected = globe.project([30.0], [10.0], spin=240.0, altitude=0.01)
+        assert np.allclose(self._offsets(scatter), expected), (
+            f"the marker should sit on the ground at spin 240, got {self._offsets(scatter).tolist()}"
+        )
+        globe.close()
+
     def test_the_returned_artist_is_the_one_that_moves(self, globe, tmp_path):
         """The scatter points() returned is still on the axes after the animation, and has turned.
 
@@ -1437,6 +1475,50 @@ class TestReferenceGeography:
         plt.close(
             drawn.fig
         )  # drawing onto the globe's own axes hands the figure to the caller
+
+    def test_a_coastline_stays_on_the_ground_it_traces(self, drawn, mocker):
+        """After a turn a coastline's vertices are exactly the turned surface points.
+
+        Test scenario:
+            A wholly visible arc, turned 45 degrees: every vertex must equal the projection of its lon/lat
+            at that spin, not merely have moved.
+        """
+        arc = self._arc(-20.0, 20.0)
+        self._patch(mocker, [arc])
+        lines = drawn.coastlines()
+        drawn.draw(drawn.ax, elev=0.0, azim=0.0, spin=45.0)
+        (segment,) = lines._near_side_segments()
+        expected = drawn.project(arc[:, 0], arc[:, 1], spin=45.0, altitude=0.002)
+        assert np.allclose(segment, expected), (
+            "the coastline should trace the ground at spin 45"
+        )
+        plt.close(drawn.fig)
+
+    def test_a_land_fill_stays_on_the_ground_it_covers(self, drawn, mocker):
+        """After a turn a wholly visible land ring's face is exactly the turned surface ring.
+
+        Test scenario:
+            The same check for the fill layer, on a small ring well inside the visible hemisphere.
+        """
+        ring = np.array(
+            [
+                [-10.0, -5.0],
+                [10.0, -5.0],
+                [15.0, 5.0],
+                [0.0, 12.0],
+                [-15.0, 5.0],
+                [-10.0, -5.0],
+            ]
+        )
+        self._patch(mocker, [ring])
+        fill = drawn.land()
+        drawn.draw(drawn.ax, elev=0.0, azim=0.0, spin=30.0)
+        (face,) = fill._near_side_faces()
+        expected = drawn.project(ring[:-1, 0], ring[:-1, 1], spin=30.0, altitude=0.001)
+        assert np.allclose(face, expected), (
+            "the fill should cover the ground at spin 30"
+        )
+        plt.close(drawn.fig)
 
     def test_a_pinned_layer_stays_where_it_was_put(self, drawn, mocker):
         """Naming a spin opts the layer out of following, exactly as it does for points()."""
