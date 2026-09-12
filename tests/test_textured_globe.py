@@ -15,6 +15,7 @@ from cleopatra.styling.colors import resolve_colormap
 from matplotlib import colors as mcolors
 from matplotlib.animation import PillowWriter
 from matplotlib.colors import Normalize
+from matplotlib.path import Path
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
@@ -23,8 +24,10 @@ from shapely.geometry import Point, Polygon
 from digitalearth.static import TexturedGlobe
 from digitalearth.static.textured_globe import (
     _clip_ring,
+    _interior_is_left,
     _limb_arc,
     _limb_point,
+    _lonlat_to_body,
     _texture_axes,
 )
 
@@ -1496,7 +1499,7 @@ class TestReferenceGeography:
         world = drawn.project(
             *self._ring(60.0, 120.0, -20.0, 20.0, start).T, altitude=0.001
         )
-        face = _clip_ring(world, np.array([1.0, 0.0, 0.0]))
+        (face,) = _clip_ring(world, np.array([1.0, 0.0, 0.0]))
         lon, lat = self._lonlat(face)
         assert np.allclose(np.linalg.norm(face, axis=1), 1.001), (
             "the face should stay on one shell"
@@ -1898,8 +1901,8 @@ class TestOverlayGeometryHelpers:
         """
         view = np.array([1.0, 0.0, 0.0])
         ring = np.array([[1.0, 0.0, 0.0], [0.6, 0.8, 0.0], [-0.6, 0.0, 0.8]])
-        face = _clip_ring(ring, view)
-        assert face is not None, "a ring with visible vertices should clip to a face"
+        (face,) = _clip_ring(ring, view)
+        assert len(face) > 0, "a ring with visible vertices should clip to a face"
         assert len(face) > 4, (
             f"two vertices plus the crossings and the limb arc, got {len(face)}"
         )
@@ -1907,11 +1910,11 @@ class TestOverlayGeometryHelpers:
             "no vertex of the face should be behind the limb"
         )
 
-    def test_clip_ring_of_a_hidden_ring_is_none(self):
+    def test_clip_ring_of_a_hidden_ring_has_no_faces(self):
         """A ring wholly behind the globe clips to nothing."""
         view = np.array([1.0, 0.0, 0.0])
         ring = np.array([[-1.0, 0.0, 0.0], [-0.8, 0.6, 0.0], [-0.8, 0.0, 0.6]])
-        assert _clip_ring(ring, view) is None, "a hidden ring should clip to None"
+        assert _clip_ring(ring, view) == [], "a hidden ring should clip to no faces"
 
     @pytest.mark.parametrize(
         "ring",
@@ -1922,14 +1925,121 @@ class TestOverlayGeometryHelpers:
             ),
         ],
     )
-    def test_clip_ring_of_a_degenerate_ring_is_none(self, ring):
+    def test_clip_ring_of_a_degenerate_ring_has_no_faces(self, ring):
         """Fewer than three distinct vertices enclose nothing, visible or not.
 
         Args:
             ring: A ring too short to enclose an area, with or without its closing repeat.
         """
-        assert _clip_ring(np.array(ring), np.array([1.0, 0.0, 0.0])) is None, (
-            "a degenerate ring should clip to None"
+        assert _clip_ring(np.array(ring), np.array([1.0, 0.0, 0.0])) == [], (
+            "a degenerate ring should clip to no faces"
+        )
+
+    @staticmethod
+    def _lonlat_ring(lon, lat):
+        """A closed lon/lat ring and the world-space points it places to, at spin 0 with no tilt.
+
+        Args:
+            lon: Longitudes in degrees.
+            lat: Latitudes in degrees, parallel to ``lon``.
+
+        Returns:
+            tuple: the ``(N, 2)`` lon/lat ring and its ``(N, 3)`` unit-sphere points.
+        """
+        ring = np.column_stack([np.asarray(lon, float), np.asarray(lat, float)])
+        ring = np.vstack([ring, ring[:1]])
+        return ring, _lonlat_to_body(ring[:, 0], ring[:, 1])
+
+    def test_two_arms_of_one_ring_stay_two_pieces(self):
+        """A ring passing behind the globe and showing at both edges fills each edge, not the sea between.
+
+        Test scenario:
+            A band from 60 degrees east round the far side to 60 degrees west shows only near the two
+            edges of the disc. Joining each visible stretch to the next in the ring's order instead
+            spans the whole near side — 97% of the disc filled where 3% is land.
+        """
+        lon = np.r_[
+            np.linspace(60, 300, 61),
+            np.full(6, 300.0),
+            np.linspace(300, 60, 61),
+            np.full(6, 60.0),
+        ]
+        lat = np.r_[
+            np.full(61, -10.0),
+            np.linspace(-10, 10, 6),
+            np.full(61, 10.0),
+            np.linspace(10, -10, 6),
+        ]
+        ring, world = self._lonlat_ring(lon, lat)
+        faces = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
+        assert len(faces) == 2, (
+            f"the two visible arms should stay two faces, got {len(faces)}"
+        )
+        for face in faces:
+            spread = np.degrees(np.arctan2(face[:, 1], face[:, 0]))
+            assert spread.max() - spread.min() < 45.0, (
+                "each face should hug its own edge of the disc, not reach across it"
+            )
+
+    def test_a_bay_across_the_limb_is_not_filled_in(self):
+        """A ring whose bay opens behind the globe keeps the bay empty.
+
+        Test scenario:
+            The counterpart of the two arms: here the two visible stretches are the shores of one bay, so
+            they belong to a single face that goes round the bay — closing each stretch on itself would
+            fill it.
+        """
+        lon = np.r_[
+            np.linspace(-80, 100, 46),
+            np.full(6, 100.0),
+            np.linspace(100, 80, 6),
+            np.full(6, 80.0),
+            np.linspace(80, 100, 6),
+            np.full(6, 100.0),
+            np.linspace(100, -80, 46),
+            np.full(11, -80.0),
+        ]
+        lat = np.r_[
+            np.full(46, -40.0),
+            np.linspace(-40, -10, 6),
+            np.full(6, -10.0),
+            np.linspace(-10, 10, 6),
+            np.full(6, 10.0),
+            np.linspace(10, 40, 6),
+            np.full(46, 40.0),
+            np.linspace(40, -40, 11),
+        ]
+        ring, world = self._lonlat_ring(lon, lat)
+        faces = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
+        assert len(faces) == 1, f"the two shores belong to one face, got {len(faces)}"
+        inside_bay = _lonlat_to_body(np.array([85.0]), np.array([0.0]))[0]
+        flat = np.column_stack([faces[0][:, 1], faces[0][:, 2]])
+        assert not Path(flat).contains_point((inside_bay[1], inside_bay[2])), (
+            "the bay should be left unfilled"
+        )
+
+    @pytest.mark.parametrize(
+        "reverse", [False, True], ids=["anticlockwise", "clockwise"]
+    )
+    def test_a_ring_is_clipped_the_same_whichever_way_it_is_wound(self, reverse):
+        """Reversing a ring's vertex order does not change the land it covers.
+
+        Args:
+            reverse: Whether to store the ring the other way round.
+
+        Test scenario:
+            Natural Earth stores rings both ways. The winding decides which way round the horizon a
+            clipped ring closes, so reading it wrong fills the sea instead of the land.
+        """
+        lon = np.r_[np.linspace(60, 120, 13), np.linspace(120, 60, 13)]
+        lat = np.r_[np.full(13, -20.0), np.full(13, 20.0)]
+        if reverse:
+            lon, lat = lon[::-1], lat[::-1]
+        ring, world = self._lonlat_ring(lon, lat)
+        (face,) = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
+        longitudes = np.degrees(np.arctan2(face[:, 1], face[:, 0]))
+        assert longitudes.min() >= 60.0 - 1e-6 and longitudes.max() <= 90.0 + 1e-6, (
+            f"the face should cover 60..90 east, got {longitudes.min()}..{longitudes.max()}"
         )
 
     def test_clip_ring_does_not_depend_on_where_the_ring_starts(self):
@@ -1946,7 +2056,7 @@ class TestOverlayGeometryHelpers:
             [np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)]
         )
         faces = [
-            _clip_ring(np.vstack([rolled, rolled[:1]]), view)
+            _clip_ring(np.vstack([rolled, rolled[:1]]), view)[0]
             for rolled in (ring, np.roll(ring, -13, axis=0))
         ]
         assert faces[0].shape == faces[1].shape, (

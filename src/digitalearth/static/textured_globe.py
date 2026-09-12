@@ -233,7 +233,9 @@ def _limb_point(
     return np.asarray(tangential / length * float(np.linalg.norm(inside)), dtype=float)
 
 
-def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarray:
+def _limb_arc(
+    start: np.ndarray, end: np.ndarray, view: np.ndarray, direction: float = 0.0
+) -> np.ndarray:
     """Points along the limb from ``start`` to ``end``, the short way round.
 
     A land ring that runs off the near side has to be closed along the limb, or the fill cuts a chord
@@ -244,6 +246,8 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
         start: The ``(3,)`` limb point the ring left the near side at.
         end: The ``(3,)`` limb point it comes back at.
         view: The unit ``(3,)`` vector pointing at the camera.
+        direction: Which way round to walk — positive or negative for the two rotational directions, or
+            ``0`` (the default) to take whichever way is shorter.
 
     Returns:
         np.ndarray: an ``(_LIMB_ARC_STEPS, 3)`` arc, excluding both endpoints; empty when ``start`` lies
@@ -281,6 +285,9 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
         return np.empty((0, 3))
     second = second / length
     angle = float(np.arctan2(end @ second, end @ first))
+    if direction:  # commit to one way round, however far it is
+        turn = 2.0 * np.pi
+        angle = angle % turn if direction > 0 else -(-angle % turn)
     # the ring leaves and rejoins the limb at one point, so there is no distance to walk
     if abs(angle) < 1e-9:
         return np.empty((0, 3))
@@ -419,21 +426,80 @@ def _front_depth(axes: Any, radius: float) -> float:
     return float(proj3d.proj_transform(x, y, z, axes.M)[2])
 
 
-def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
+def _interior_is_left(lonlat: np.ndarray) -> bool:
+    """Whether a ring's own region lies to the left of the way its lon/lat vertices are ordered.
+
+    This is the winding of the ring as the data stores it: anticlockwise in lon/lat — east to the right,
+    north up — puts the region it encloses on the left, which is also its left on the globe, since a
+    rotation of the sphere cannot change which side of a line its own region is on.
+
+    Reading the winding here rather than from the placed 3-D ring keeps it exact and cheap. On the sphere
+    it would have to be inferred from spherical area, which is delicate on the rings this actually gets:
+    slivers, repeated vertices, and seams along the antimeridian, where being wrong by a sign fills a
+    hemisphere.
+
+    Args:
+        lonlat: The ring's ``(N, 2)`` lon/lat degrees, as Natural Earth gives them.
+
+    Returns:
+        True when the ring encloses the region on its left.
+
+    Examples:
+        - A ring traced anticlockwise — east along the south edge first — holds its region on the left:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _interior_is_left
+            >>> _interior_is_left(np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]))
+            True
+
+            ```
+        - The same ring stored the other way round holds it on the right:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _interior_is_left
+            >>> _interior_is_left(np.array([[0.0, 10.0], [10.0, 10.0], [10.0, 0.0], [0.0, 0.0]]))
+            False
+
+            ```
+        - A closing repeat does not change it:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.static.textured_globe import _interior_is_left
+            >>> square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0], [0.0, 0.0]]
+            >>> _interior_is_left(np.array(square))
+            True
+
+            ```
+    """
+    ring = np.asarray(lonlat, dtype=float)
+    lon, lat = ring[:, 0], ring[:, 1]
+    return bool(np.sum(lon * np.roll(lat, -1) - np.roll(lon, -1) * lat) > 0.0)
+
+
+def _clip_ring(
+    world: np.ndarray, view: np.ndarray, interior_left: bool = True
+) -> List[np.ndarray]:
     """Clip one closed ring to the hemisphere facing the camera, re-closing it along the limb.
 
-    A closed ring repeats its first vertex, so the repeat is dropped first, and the visible runs are found with
-    :func:`~digitalearth.base.arrays.ring_runs`, which keeps a stretch crossing the ring's seam whole. Cut there
-    instead, a ring whose data happens to begin on the near side would have each half closed out to the limb
-    separately — a spur from the first vertex to the horizon, which shows as soon as the fill has an edge.
+    A closed ring repeats its first vertex, so the repeat is dropped first, and the visible runs are found
+    with :func:`~digitalearth.base.arrays.ring_runs`, which keeps a stretch crossing the ring's seam whole.
+
+    Where a run leaves the near side, the ring is followed along the limb — the way its own interior lies,
+    which :func:`_interior_is_left` settles — until it meets the run that comes back. That is what decides
+    whether two visible stretches of one ring are two separate pieces of land or the two shores of one bay:
+    joining each run to the next one in the ring's order instead would fill the sea between two arms of a
+    ring that passes behind the globe, and taking the shorter way round would fill the wrong half whenever
+    a ring covers more than half the horizon.
 
     Args:
         world: The ring's ``(N, 3)`` world-space vertices, as placed on the sphere.
         view: The unit ``(3,)`` vector pointing at the camera.
+        interior_left: Whether the ring holds its own region on its left, from
+            :func:`_interior_is_left`. It decides which way round the horizon the ring closes.
 
     Returns:
-        The clipped ``(M, 3)`` ring, or ``None`` when none of it faces the camera or it has fewer than three
-        vertices, which enclose nothing.
+        One ``(M, 3)`` face per visible piece of the ring — empty when none of it faces the camera, or it
+        has fewer than three vertices, which enclose nothing.
 
     Examples:
         - A ring wholly on the near side comes back whole, without its repeated closing vertex:
@@ -441,8 +507,8 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
             >>> import numpy as np
             >>> from digitalearth.static.textured_globe import _clip_ring
             >>> ring = np.array([[1.0, 0.0, 0.0], [0.9, 0.3, 0.0], [0.9, 0.0, 0.3], [1.0, 0.0, 0.0]])
-            >>> _clip_ring(ring, np.array([1.0, 0.0, 0.0])).shape
-            (3, 3)
+            >>> [face.shape for face in _clip_ring(ring, np.array([1.0, 0.0, 0.0]))]
+            [(3, 3)]
 
             ```
         - A ring wholly behind the globe clips to nothing:
@@ -450,8 +516,8 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
             >>> import numpy as np
             >>> from digitalearth.static.textured_globe import _clip_ring
             >>> ring = np.array([[-1.0, 0.0, 0.0], [-0.9, 0.3, 0.0], [-0.9, 0.0, 0.3]])
-            >>> _clip_ring(ring, np.array([1.0, 0.0, 0.0])) is None
-            True
+            >>> _clip_ring(ring, np.array([1.0, 0.0, 0.0]))
+            []
 
             ```
     """
@@ -459,29 +525,53 @@ def _clip_ring(world: np.ndarray, view: np.ndarray) -> Optional[np.ndarray]:
     if len(ring) > 1 and np.array_equal(ring[0], ring[-1]):
         ring = ring[:-1]
     if len(ring) < 3:
-        return None  # fewer than three vertices enclose nothing
+        return []  # fewer than three vertices enclose nothing
     near = ring @ view > 0.0
     if not near.any():
-        return None
+        return []
     if near.all():
-        return ring
+        return [ring]
+
     runs = ring_runs(near)
     count = len(ring)
-    pieces: List[np.ndarray] = []
-    for position, run in enumerate(runs):
-        # every run is bounded by hidden vertices on both sides, wrapping round the seam if need be
-        entry = _limb_point(ring[run[0]], ring[(run[0] - 1) % count], view)
-        exit_ = _limb_point(ring[run[-1]], ring[(run[-1] + 1) % count], view)
-        following = runs[(position + 1) % len(runs)]
-        resume = _limb_point(ring[following[0]], ring[(following[0] - 1) % count], view)
-        pieces += [
-            entry[None, :],
-            ring[run],
-            exit_[None, :],
-            _limb_arc(exit_, resume, view),
-        ]
-    # each run contributes its entry, its own vertices and its exit, so a face always has three or more
-    return np.vstack(pieces)
+    entries = np.array(
+        [_limb_point(ring[run[0]], ring[(run[0] - 1) % count], view) for run in runs]
+    )
+    exits = np.array(
+        [_limb_point(ring[run[-1]], ring[(run[-1] + 1) % count], view) for run in runs]
+    )
+
+    # where each crossing sits round the limb, in a basis fixed for this ring
+    axis = entries[0] / np.linalg.norm(entries[0])
+    across = np.cross(view, axis)
+    entry_angles = np.arctan2(entries @ across, entries @ axis)
+    exit_angles = np.arctan2(exits @ across, exits @ axis)
+
+    # Walking the horizon in the +angle direction keeps the near side on the left, so a ring whose own
+    # region is on its left is closed by following the horizon forwards from each exit, and one wound the
+    # other way round by following it backwards. That is the whole of the pairing rule.
+    direction = 1.0 if interior_left else -1.0
+    faces: List[np.ndarray] = []
+    unused = set(range(len(runs)))
+    while unused:
+        first = min(unused)
+        current = first
+        pieces: List[np.ndarray] = []
+        while True:
+            unused.discard(current)
+            reach = (direction * (entry_angles - exit_angles[current])) % (2.0 * np.pi)
+            following = int(np.argmin(np.where(reach < 1e-9, np.inf, reach)))
+            pieces += [
+                entries[current][None, :],
+                ring[runs[current]],
+                exits[current][None, :],
+                _limb_arc(exits[current], entries[following], view, direction),
+            ]
+            if following == first or following not in unused:
+                break
+            current = following
+        faces.append(np.vstack(pieces))
+    return faces
 
 
 class _GlobeOverlay:
@@ -743,9 +833,14 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
 
     _body: np.ndarray
     _starts: np.ndarray
+    _windings: List[bool]
 
     def _adopt_rings(
-        self, place: Callable[..., np.ndarray], rings: List[np.ndarray], spin: float
+        self,
+        place: Callable[..., np.ndarray],
+        rings: List[np.ndarray],
+        spin: float,
+        windings: List[bool],
     ) -> None:
         """Hold the layer's rings as one array plus offsets, so a frame places them in one transform.
 
@@ -753,8 +848,10 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
             place: The glyph's ``transform``.
             rings: One closed ``(N, 3)`` body-frame ring per polygon.
             spin: The starting spin, in degrees.
+            windings: Whether each ring holds its region on its left, read from the lon/lat it came from.
         """
         self._adopt(place, spin)
+        self._windings = list(windings)
         rings = [
             ring[:-1] if len(ring) > 1 and np.array_equal(ring[0], ring[-1]) else ring
             for ring in rings
@@ -779,11 +876,11 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
         view = self._view()
         starts, stops = self._starts[:-1], self._starts[1:]
         in_view = np.logical_or.reduceat(world @ view > 0.0, starts)
-        faces = []
+        faces: List[np.ndarray] = []
         for index in np.flatnonzero(in_view):
-            face = _clip_ring(world[starts[index] : stops[index]], view)
-            if face is not None:
-                faces.append(face)
+            faces += _clip_ring(
+                world[starts[index] : stops[index]], view, self._windings[index]
+            )
         return faces
 
     def do_3d_projection(self) -> float:
@@ -1726,19 +1823,25 @@ class TexturedGlobe:
             raise RuntimeError(
                 f"draw() the globe before adding the {layer!r} layer to it"
             )
-        bodies = [
-            self._to_body(part[:, 0], part[:, 1], altitude)
+        parts = [
+            part
             for part in (
                 np.asarray(raw, dtype=float) for raw in natural_earth(layer, resolution)
             )
             if part.ndim == 2 and len(part) >= 2
         ]
+        bodies = [self._to_body(part[:, 0], part[:, 1], altitude) for part in parts]
         style = _overlay_style(defaults, kwargs, fill)
         at = self._spin if spin is None else float(spin)
         overlay: Any
         if fill:
             overlay = _SphereFill([], **style)
-            overlay._adopt_rings(self._placer.transform, bodies, at)
+            overlay._adopt_rings(
+                self._placer.transform,
+                bodies,
+                at,
+                [_interior_is_left(p) for p in parts],
+            )
         else:
             overlay = _SphereLines([], **style)
             overlay._adopt_parts(self._placer.transform, bodies, at)
@@ -1923,9 +2026,10 @@ class TexturedGlobe:
         filled to the horizon instead of having a chord cut across the disc. This is what turns an ocean
         product — SST, sea ice, chlorophyll — from a ball of colour with white holes into a readable map.
 
-        Interior rings (holes) are dropped, as they are on the 2-D globe. A ring spanning more than half
-        the visible limb is closed the short way round, which is the wrong half for such a ring; no
-        Natural-Earth land part does that at the resolutions offered here.
+        Interior rings (holes) are dropped, as they are on the 2-D globe. A ring that runs off the near
+        side is closed along the horizon the way its own winding leads, so a landmass reaching past the
+        horizon in several places fills each of its visible pieces and not the sea between them, however
+        far round the horizon that takes.
 
         Args:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
