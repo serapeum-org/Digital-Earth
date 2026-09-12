@@ -150,42 +150,73 @@ def _graticule_features(spacing: float) -> dict:
         return [start + index * step for index in range(count + 1)]
 
     def anchored(limit: float, step: float) -> list:
-        """Lines at 0, ±step, ±2·step … within ``±limit``.
+        """Return ``(index, value)`` for lines at 0, ±step, ±2·step … within ``±limit``.
 
         Anchored on zero rather than on the edge of the range, so the equator and the prime meridian are
         always drawn — stepping from -80 upwards misses the equator at any spacing that does not divide 80.
+        The index comes back with the value because the caller's decisions ("is this the antimeridian?",
+        "which hemisphere?") are about *which* line it is, and asking that of a float would be an equality
+        test on a computed product.
         """
         count = int(limit // step)
-        return [index * step for index in range(-count, count + 1)]
+        return [(index, index * step) for index in range(-count, count + 1)]
 
     features = []
-    for lon in anchored(180.0, spacing):
-        if lon == 180.0:
+    last_meridian = int(180.0 // spacing)
+    for index, lon in anchored(180.0, spacing):
+        if index == last_meridian and lon >= 180.0:
             continue  # the antimeridian is the same line as -180
-        suffix = "" if lon == 0 else ("E" if lon > 0 else "W")
         features.append(
-            {
-                "type": "Feature",
-                "properties": {"label": f"{abs(lon):g}°{suffix}"},
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[lon, lat] for lat in steps(-85.0, 85.0, 5.0)],
-                },
-            }
+            _graticule_line(
+                lon,
+                _hemisphere(index, "E", "W"),
+                [[lon, lat] for lat in steps(-85.0, 85.0, 5.0)],
+            )
         )
-    for lat in anchored(80.0, spacing):
-        suffix = "" if lat == 0 else ("N" if lat > 0 else "S")
+    for index, lat in anchored(80.0, spacing):
         features.append(
-            {
-                "type": "Feature",
-                "properties": {"label": f"{abs(lat):g}°{suffix}"},
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": [[lon, lat] for lon in steps(-180.0, 180.0, 5.0)],
-                },
-            }
+            _graticule_line(
+                lat,
+                _hemisphere(index, "N", "S"),
+                [[lon, lat] for lon in steps(-180.0, 180.0, 5.0)],
+            )
         )
     return {"type": "FeatureCollection", "features": features}
+
+
+def _hemisphere(index: int, positive: str, negative: str) -> str:
+    """Return the hemisphere letter for the line at ``index`` steps from zero.
+
+    Args:
+        index: Step count from the equator / prime meridian; the sign is the hemisphere.
+        positive: Letter for the positive side (``"E"`` or ``"N"``).
+        negative: Letter for the negative side (``"W"`` or ``"S"``).
+
+    Returns:
+        The letter, or ``""`` for the zero line, which belongs to neither hemisphere. Decided from the
+        step index rather than the coordinate, so no float is compared for equality.
+    """
+    if index == 0:
+        return ""
+    return positive if index > 0 else negative
+
+
+def _graticule_line(value: float, suffix: str, coordinates: list) -> dict:
+    """Build one graticule line as a GeoJSON feature.
+
+    Args:
+        value: The line's degree value, used for its label.
+        suffix: The hemisphere letter, or ``""`` for the zero line.
+        coordinates: The line's sampled vertices.
+
+    Returns:
+        A GeoJSON ``Feature`` carrying a ``label`` property such as ``"10°E"``.
+    """
+    return {
+        "type": "Feature",
+        "properties": {"label": f"{abs(value):g}°{suffix}"},
+        "geometry": {"type": "LineString", "coordinates": coordinates},
+    }
 
 
 def _check_position(position: str) -> None:

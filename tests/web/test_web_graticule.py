@@ -73,8 +73,10 @@ class TestTheGridItself:
         labels = {
             f["properties"]["label"] for f in _graticule_features(10.0)["features"]
         }
-        assert "10°E" in labels and "10°W" in labels
-        assert "10°N" in labels and "10°S" in labels
+        assert "10°E" in labels
+        assert "10°W" in labels
+        assert "10°N" in labels
+        assert "10°S" in labels
         assert "0°" in labels, "the prime meridian and equator take no hemisphere"
 
     def test_meridians_are_sampled_not_straight(self):

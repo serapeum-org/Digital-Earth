@@ -138,7 +138,9 @@ class TestTheLegendReachesTheSavedPage:
             .legend(labels=["Arable", "Built", "Water"])
             .to_html()
         )
-        assert "Arable" in payload and "Built" in payload and "Water" in payload
+        assert "Arable" in payload
+        assert "Built" in payload
+        assert "Water" in payload
 
     def test_a_graduated_key_shows_class_ranges(self, cells):
         """A swatch with no numbers beside it says nothing about where the classes fall.

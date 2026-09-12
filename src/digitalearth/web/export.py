@@ -53,6 +53,8 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
     )
 
 
+from digitalearth.web.base import DEFAULT_TITLE
+
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
 _ASSET_RE = re.compile(
     r'<(script|link)[^>]*?(?:src|href)="(?P<url>https?://[^"]+?\.(?:js|css))"[^>]*?>(?:</script>)?'
@@ -83,7 +85,7 @@ class ExportMixin(_MixinBase):
     """
 
     def to_html(
-        self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any
+        self, *, title: str = DEFAULT_TITLE, offline: bool = False, **kwargs: Any
     ) -> str:
         """Return the map as a standalone HTML string.
 
@@ -143,7 +145,7 @@ class ExportMixin(_MixinBase):
         return new_html
 
     def _render_png(
-        self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any
+        self, path: str, *, title: str = DEFAULT_TITLE, **kwargs: Any
     ) -> str:
         """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
 
@@ -190,7 +192,7 @@ class ExportMixin(_MixinBase):
         *,
         duration: float = 0.8,
         loop: int = 0,
-        title: str = "Digital-Earth map",
+        title: str = DEFAULT_TITLE,
     ) -> str:
         """Write a temporal map's steps as an animated GIF (recipe W7).
 

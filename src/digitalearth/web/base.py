@@ -22,6 +22,10 @@ import math
 import pathlib
 from typing import Any, List, Optional, Self
 
+#: The document title an exported page gets when the caller names none. Shared by every export entry
+#: point, so a page, a PNG snapshot and an animation frame are titled alike.
+DEFAULT_TITLE = "Digital-Earth map"
+
 #: The constructor's zoom when the caller expresses no preference. A map still on it is taken to have no
 #: chosen view, so the data's own extent may frame it.
 _DEFAULT_ZOOM = 2
@@ -1037,7 +1041,7 @@ class WebMapBase:
         path: str,
         *,
         fmt: Optional[str] = None,
-        title: str = "Digital-Earth map",
+        title: str = DEFAULT_TITLE,
         offline: bool = False,
         **kwargs: Any,
     ) -> str:
