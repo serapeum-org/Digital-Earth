@@ -291,6 +291,25 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
     )
 
 
+def _root_figure(axes: Any) -> Any:
+    """The top-level figure an axes belongs to, looking through any sub-figure it sits in.
+
+    An animation has to be built on the figure that owns the canvas: a ``SubFigure`` cannot be saved, so a
+    globe animated inside one produced an animation that raised on ``save_animation``.
+
+    Args:
+        axes: The axes being drawn on.
+
+    Returns:
+        The root ``Figure``.
+    """
+    try:
+        return axes.get_figure(root=True)  # matplotlib >= 3.10
+    except TypeError:
+        figure = axes.get_figure()
+        return getattr(figure, "figure", figure) or figure
+
+
 def _view_vector(elev: float, azim: float) -> np.ndarray:
     """Unit vector pointing from the sphere's centre toward the camera at ``elev``/``azim`` degrees.
 
@@ -2017,7 +2036,7 @@ class TexturedGlobe:
             return (self.glyph.surface,)
 
         anim = FuncAnimation(
-            self.fig, _frame, frames=n_frames, interval=interval, blit=False
+            _root_figure(ax), _frame, frames=n_frames, interval=interval, blit=False
         )
         self._animation = (
             anim  # keep a strong reference so it survives until save/display

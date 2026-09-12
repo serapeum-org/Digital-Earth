@@ -1975,6 +1975,21 @@ class TestRenderLifecycle:
             f"expected 1 open figure, got {len(plt.get_fignums())}"
         )
 
+    def test_an_animation_in_a_subfigure_can_be_saved(self, globe, tmp_path):
+        """A globe animated on an axes inside a sub-figure still writes a GIF.
+
+        Test scenario:
+            The animation has to be built on the figure that owns the canvas. Built on the sub-figure, the
+            writer reached for savefig, which a SubFigure does not have, and the save failed.
+        """
+        figure = plt.figure(figsize=(3, 3))
+        panel = figure.subfigures(1, 1)
+        globe.animate(panel.add_subplot(projection="3d"), n_frames=2, interval=100)
+        out = tmp_path / "subfigure.gif"
+        globe.save_animation(str(out), fps=2)
+        assert out.stat().st_size > 0, "the animation should have been written"
+        plt.close(figure)
+
     def test_close_is_safe_before_drawing_and_twice(self, globe):
         globe.close()
         globe.draw()
