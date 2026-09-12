@@ -28,8 +28,29 @@ from digitalearth.static.textured_globe import (
     _limb_arc,
     _limb_point,
     _lonlat_to_body,
+    _root_figure,
     _texture_axes,
 )
+
+
+class _AxesOfOlderMatplotlib:
+    """An axes whose ``get_figure`` takes no ``root`` argument, as matplotlib's did before 3.10."""
+
+    def __init__(self, figure):
+        """Hold the figure this stand-in belongs to.
+
+        Args:
+            figure: The figure or sub-figure to report.
+        """
+        self._figure = figure
+
+    def get_figure(self):
+        """The figure this axes is on.
+
+        Returns:
+            The figure given to the constructor.
+        """
+        return self._figure
 
 
 def _drawn(scatter, values: str = "sizes") -> np.ndarray:
@@ -1058,6 +1079,38 @@ class TestOverlaysFollowTheSpin:
         )
         plt.close(ax.get_figure())
 
+    def test_a_bare_redraw_resizes_the_figure_it_keeps(self, globe):
+        """figsize on a redraw resizes the figure the globe owns rather than opening another.
+
+        Test scenario:
+            The globe carries on where it is, so the only way to honour a new figsize is to resize that
+            figure.
+        """
+        fig, _ = globe.draw(figsize=(3.0, 3.0))
+        globe.draw(figsize=(5.0, 4.0), spin=10.0)
+        assert globe.fig is fig, "the globe should still be on the figure it owns"
+        assert tuple(fig.get_size_inches()) == (5.0, 4.0), (
+            f"the figure should have been resized, got {tuple(fig.get_size_inches())}"
+        )
+        globe.close()
+
+    def test_the_root_figure_is_found_on_older_matplotlib(self, flat_texture):
+        """An axes whose get_figure takes no root argument still resolves to the top-level figure.
+
+        Test scenario:
+            matplotlib gained get_figure(root=...) in 3.10, and this project supports 3.8 upwards; there
+            the sub-figure's own .figure is the root.
+        """
+        figure = plt.figure(figsize=(3, 3))
+        panel = figure.subfigures(1, 1)
+        assert _root_figure(_AxesOfOlderMatplotlib(panel)) is figure, (
+            "a sub-figure's root should be the figure that owns the canvas"
+        )
+        assert _root_figure(_AxesOfOlderMatplotlib(figure)) is figure, (
+            "a plain figure is its own root"
+        )
+        plt.close(figure)
+
     def test_a_bare_redraw_turns_the_overlays_it_already_has(self, globe):
         """draw(spin=...) with no axes turns the globe where it is, overlays and all.
 
@@ -1742,6 +1795,13 @@ class TestReferenceGeography:
         [
             pytest.param(
                 "coastlines", {"c": "white"}, "get_color", "#ffffff", id="line-colour"
+            ),
+            pytest.param(
+                "coastlines",
+                {"colors": "white"},
+                "get_color",
+                "#ffffff",
+                id="line-colours",
             ),
             pytest.param(
                 "land", {"fc": "red"}, "get_facecolor", "#ff0000", id="fill-facecolour"
