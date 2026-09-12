@@ -18,8 +18,17 @@ The engine import is **lazy**: ``import digitalearth.web`` works without the ``w
 calling a builder/render method raises an actionable ``ImportError`` (``pip install 'digitalearth[web]'``).
 """
 
+import math
 import pathlib
 from typing import Any, List, Optional, Self
+
+#: The document title an exported page gets when the caller names none. Shared by every export entry
+#: point, so a page, a PNG snapshot and an animation frame are titled alike.
+DEFAULT_TITLE = "Digital-Earth map"
+
+#: The constructor's zoom when the caller expresses no preference. A map still on it is taken to have no
+#: chosen view, so the data's own extent may frame it.
+_DEFAULT_ZOOM = 2
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources import get_source
@@ -27,7 +36,7 @@ from digitalearth.base.sources.source import Source
 
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
-    "the web tier needs MapLibre GL JS + deck.gl (maplibre/lonboard). "
+    "the web tier needs MapLibre GL JS + deck.gl (maplibre). "
     "Install it with `pip install 'digitalearth[web]'` "
     "(or, in this repo, `pixi install -e web`)."
 )
@@ -330,7 +339,7 @@ class WebMapBase:
         self,
         *,
         center: Optional[Any] = None,
-        zoom: int = 2,
+        zoom: int = _DEFAULT_ZOOM,
         style: Any = "dark",
         crs: int = 4326,
         height: Optional[int] = 500,
@@ -345,16 +354,193 @@ class WebMapBase:
         self._id_counter = 0
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
+        #: Every data layer added, in order, as ``(id, label)``. The id addresses the layer in MapLibre;
+        #: the label is what a layer switcher shows a viewer. Controls and basemaps are not in here —
+        #: they are not things a viewer turns on and off.
+        self._layer_index: List[tuple] = []
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
+        #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
+        #: the most recent classification: its ``kind`` (``"categorical"``/``"graduated"``/``"continuous"``),
+        #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
+        #: :attr:`last_breaks`, which stays the raw-numbers accessor it has always been.
+        self.last_legend: Optional[dict] = None
         #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
         self._deck_layers: Optional[List[dict]] = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
         self.big_data_threshold = 50_000
+        #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
+        #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
+        self._data_bounds: Optional[List[float]] = None
+        #: An explicit :meth:`fit_bounds` request, which always wins over the accumulated extent.
+        self._fit: Optional[dict] = None
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
         #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
         #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
         self._temporal: Optional[dict] = None
+
+    def _noted(self, gdf: Any) -> Any:
+        """Record a display-CRS frame's extent, then return the frame unchanged.
+
+        Wraps the returns of :meth:`_display_gdf` so every vector builder contributes to the map's framing
+        without knowing that it does.
+
+        Args:
+            gdf: A GeoDataFrame already in the display CRS.
+
+        Returns:
+            The same object, so this can wrap a return expression.
+        """
+        self._note_bounds(getattr(gdf, "total_bounds", None))
+        return gdf
+
+    def _note_bounds(self, bounds: Any) -> None:
+        """Union a layer's lon/lat extent into the running data extent.
+
+        Called by the builders' shared choke points — :meth:`_display_gdf` for vector data and
+        ``add_raster`` for rasters — so a new builder inherits framing without doing anything.
+
+        Args:
+            bounds: ``(west, south, east, north)`` in lon/lat, or ``None``/a degenerate extent, which is
+                ignored. A non-finite value is ignored too: an empty frame reports ``inf`` bounds, and one
+                unusable layer must not decide where the map looks.
+        """
+        if bounds is None:
+            return
+        try:
+            west, south, east, north = (float(value) for value in bounds)
+        except (TypeError, ValueError):
+            return
+        if not all(math.isfinite(value) for value in (west, south, east, north)):
+            return
+        if self._data_bounds is None:
+            self._data_bounds = [west, south, east, north]
+            return
+        current = self._data_bounds
+        self._data_bounds = [
+            min(current[0], west),
+            min(current[1], south),
+            max(current[2], east),
+            max(current[3], north),
+        ]
+
+    def fit_bounds(
+        self,
+        bounds: Optional[Any] = None,
+        *,
+        padding: int = 20,
+        animate: bool = False,
+    ) -> Self:
+        """Frame the map on ``bounds``, or on everything added so far.
+
+        Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of
+        one country opened on the whole world unless the caller worked out a centre themselves.
+
+        Args:
+            bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added
+                so far, which is what most callers want and is applied automatically anyway (see
+                :meth:`_map_view`).
+            padding: Pixels of breathing room left around the extent.
+            animate: Whether the browser eases into the new view rather than jumping.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there
+                is nothing to frame on, and silently doing nothing would look like the call was ignored.
+
+        Examples:
+            - Frame on an explicit box:
+                ```python
+                >>> from digitalearth.web import WebMap                     # doctest: +SKIP
+                >>> WebMap().basemap().fit_bounds((4.0, 51.0, 7.0, 54.0))   # doctest: +SKIP
+
+                ```
+        """
+        if bounds is None:
+            if self._data_bounds is None:
+                raise ValueError(
+                    "fit_bounds() has nothing to frame on: no layer with an extent has been added yet. "
+                    "Add the data first, or pass bounds=(west, south, east, north)."
+                )
+            bounds = list(self._data_bounds)
+        west, south, east, north = (float(value) for value in bounds)
+        self._fit = {
+            "bounds": [west, south, east, north],
+            "padding": int(padding),
+            "animate": bool(animate),
+        }
+        return self
+
+    def _map_view(self) -> Optional[dict]:
+        """Return the framing to apply to the built widget, or ``None`` to leave the view alone.
+
+        An explicit :meth:`fit_bounds` always wins. Otherwise the accumulated data extent is used, but only
+        when the caller expressed no view of their own — passing ``center`` or a non-default ``zoom`` is
+        taken as "I have chosen the view", and it is not overridden.
+
+        Returns:
+            The ``fit_bounds`` keyword arguments, or ``None``.
+        """
+        if self._fit is not None:
+            return self._fit
+        chose_view = self.center is not None or self.zoom != _DEFAULT_ZOOM
+        if chose_view or self._data_bounds is None:
+            return None
+        return {"bounds": list(self._data_bounds), "padding": 20, "animate": False}
+
+    @property
+    def layer_ids(self) -> List[str]:
+        """The MapLibre ids of the data layers added so far, in order.
+
+        The registry used to be write-only: builders minted ids internally and nothing surfaced them, so a
+        caller could not address a layer afterwards to hide, remove or switch it.
+
+        Returns:
+            The layer ids, oldest first.
+        """
+        return [layer_id for layer_id, _ in self._layer_index]
+
+    def _index_layer(self, layer_id: str, label: Optional[str]) -> None:
+        """Record a data layer so it can be addressed later.
+
+        Args:
+            layer_id: The MapLibre layer id.
+            label: What a layer switcher should call it; ``None`` falls back to the id.
+        """
+        self._layer_index.append((layer_id, label or layer_id))
+
+    def remove_layer(self, layer_id: str) -> Self:
+        """Drop a previously added layer from the map.
+
+        Building a `WebMap` was one-way: a mistake meant starting over, which in a notebook — where these
+        maps are built — is the normal workflow.
+
+        Args:
+            layer_id: An id from :attr:`layer_ids`.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
+                look exactly like a layer that refused to go away.
+        """
+        if layer_id not in self.layer_ids:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; added layers are {self.layer_ids}"
+            )
+        index = self.layer_ids.index(layer_id)
+        self._layer_index.pop(index)
+        self.layers = [
+            layer
+            for layer in self.layers
+            if getattr(layer, "_digitalearth_layer_id", None) != layer_id
+        ]
+        if self._last_layer_id == layer_id:
+            self._last_layer_id = self.layer_ids[-1] if self.layer_ids else None
+        return self
 
     def _uid(self, prefix: str) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
@@ -436,6 +622,22 @@ class WebMapBase:
         ):
             data = reproject(data, self.crs)
         return get_source(data, band=band)
+
+    def _to_display_raster(self, dataset: Any) -> Any:
+        """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
+
+        ``_to_display_source`` gives one band; a composite needs the dataset itself so ``get_stack`` can
+        read three from it.
+
+        Args:
+            dataset: A pyramids ``Dataset``.
+
+        Returns:
+            The dataset in the display CRS.
+        """
+        if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
+            return dataset.to_crs(self.crs)
+        return dataset
 
     @staticmethod
     def _reject_raster(data: Any, method: str) -> None:
@@ -696,13 +898,13 @@ class WebMapBase:
         ):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
                 features = features.to_crs(self.crs)
-            return self._json_safe(features)
+            return self._noted(self._json_safe(features))
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if (
             crs_epsg is not None and crs_epsg != self.crs
         ):  # a bare GeoDataFrame in another CRS
-            return self._json_safe(features.to_crs(self.crs))
-        return self._json_safe(features)
+            return self._noted(self._json_safe(features.to_crs(self.crs)))
+        return self._noted(self._json_safe(features))
 
     def add_underlay(self, layer: Any) -> Self:
         """Register ``layer`` at the **bottom** of the stack (drawn first) and return ``self``.
@@ -798,12 +1000,21 @@ class WebMapBase:
             ImportError: when the ``web`` extra is not installed.
         """
         MapOptions, MapWidget = _require_maplibre()
+        add_temporal_control = getattr(self, "_add_temporal_export_control", None)
+        if add_temporal_control is not None:
+            add_temporal_control()
         kwargs: dict = {"map_options": MapOptions(**self._map_options())}
         if self.height is not None:
             kwargs["height"] = int(self.height)
         widget = MapWidget(**kwargs)
         for layer in self.layers:
             self._apply_layer(widget, layer)
+        view = self._map_view()
+        if view is not None:
+            # After the layers, so a builder that adds to the extent while applying is included.
+            widget.fit_bounds(
+                view["bounds"], padding=view["padding"], animate=view["animate"]
+            )
         return widget
 
     def render(self) -> Any:
@@ -830,7 +1041,7 @@ class WebMapBase:
         path: str,
         *,
         fmt: Optional[str] = None,
-        title: str = "Digital-Earth map",
+        title: str = DEFAULT_TITLE,
         offline: bool = False,
         **kwargs: Any,
     ) -> str:
@@ -856,9 +1067,10 @@ class WebMapBase:
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
         """
-        kind = (
-            fmt or ("png" if str(path).lower().endswith(".png") else "html")
-        ).lower()
+        suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
+        kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
+        if kind == "gif":
+            return self.to_gif(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)

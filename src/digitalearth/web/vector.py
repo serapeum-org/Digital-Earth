@@ -63,7 +63,9 @@ class VectorMixin(_MixinBase):
 
         Returns:
             A MapLibre expression list (``["step", …]``, ``["match", …]`` or ``["interpolate", …]``). Also
-            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops.
+            sets ``self.last_breaks`` to the breaks (graduated edges), the categories, or the ramp stops,
+            and ``self.last_legend`` to those values *plus the colours they were drawn with*, which is what
+            :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
 
         Raises:
             ValueError: propagated from ``cleopatra.styling.styles.classify`` (unknown scheme, no spread, …) or from
@@ -108,6 +110,12 @@ class VectorMixin(_MixinBase):
                 MISSING_COLOR
             )  # fallback for values outside the known categories (shared by all tiers)
             self.last_breaks = [_native(c) for c in categories]
+            self.last_legend = {
+                "kind": "categorical",
+                "column": column,
+                "values": [_native(c) for c in categories],
+                "colors": list(colors),
+            }
             return expr
 
         if scheme is not None:
@@ -126,6 +134,12 @@ class VectorMixin(_MixinBase):
             for edge, color in zip(edges[1:-1], colors[1:]):
                 expr.extend([float(edge), color])
             self.last_breaks = [float(e) for e in edges]
+            self.last_legend = {
+                "kind": "graduated",
+                "column": column,
+                "values": [float(e) for e in edges],
+                "colors": list(colors),
+            }
             return expr
 
         finite = np.asarray(values, dtype=float)
@@ -141,7 +155,212 @@ class VectorMixin(_MixinBase):
         for stop, color in zip(stops, colors):
             expr.extend([float(stop), color])
         self.last_breaks = [float(s) for s in stops]
+        self.last_legend = {
+            "kind": "continuous",
+            "column": column,
+            "values": [float(s) for s in stops],
+            "colors": list(colors),
+        }
         return expr
+
+    def labels(
+        self,
+        features: Any,
+        column: str,
+        *,
+        size: float = 12.0,
+        color: str = "#ffffff",
+        halo_color: str = "#000000",
+        halo_width: float = 1.0,
+        offset: Optional[Any] = None,
+        allow_overlap: bool = False,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Label features with the text in ``column`` (recipe W2).
+
+        Labels are how a map says what is on it, and MapLibre's symbol layer does the work — data-driven
+        text, collision detection, halos and placement. None of it was reachable: the only symbol layer the
+        tier built was the count inside ``cluster``.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` or GeoDataFrame; points label at the point, lines
+                and polygons at a placement MapLibre picks.
+            column: The property to read the text from.
+            size: Text size in pixels.
+            color: Text colour.
+            halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
+                over imagery.
+            halo_width: Halo width in pixels; ``0`` disables it.
+            offset: ``(x, y)`` offset in ems, e.g. ``(0, -1.2)`` to lift a label off its point.
+            allow_overlap: Whether labels may overlap. ``False`` (the default) lets MapLibre drop labels
+                that collide, which is what keeps a dense layer readable.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is not a vector layer.
+            KeyError: when ``column`` is not one of its properties — a MapLibre expression reading a
+                missing property renders nothing at all, with no error to explain the empty map.
+
+        Examples:
+            - Name each feature:
+                ```python
+                >>> from digitalearth.web import WebMap                          # doctest: +SKIP
+                >>> WebMap().basemap().polygons(gdf).labels(gdf, "name")         # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
+        """
+        _, LayerType = _require_layer_api()
+        gdf = self._display_gdf(features, method="labels")
+        if column not in getattr(gdf, "columns", []):
+            raise KeyError(
+                f"labels(column={column!r}) is not a property of these features; available: "
+                f"{sorted(c for c in getattr(gdf, 'columns', []) if c != 'geometry')}"
+            )
+        layout: dict = {
+            "text-field": ["get", column],
+            "text-size": float(size),
+            "text-allow-overlap": bool(allow_overlap),
+        }
+        if offset is not None:
+            layout["text-offset"] = [float(value) for value in offset]
+        paint = {
+            "text-color": color,
+            "text-halo-color": halo_color,
+            "text-halo-width": float(halo_width),
+        }
+        return self._vector_layer(
+            gdf,
+            "label",
+            LayerType.SYMBOL,
+            paint,
+            name=name,
+            visible=visible,
+            layout=layout,
+        )
+
+    def contours(
+        self,
+        dataset: Any,
+        *,
+        interval: Optional[float] = None,
+        levels: Optional[Any] = None,
+        base: float = 0.0,
+        band: int = 1,
+        filled: bool = False,
+        cmap: str = "viridis",
+        color: Optional[str] = None,
+        width: float = 1.5,
+        opacity: float = 1.0,
+        labels: bool = False,
+        name: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Trace iso-value contours from a raster band and draw them as vectors.
+
+        The GIS is pyramids' (``Dataset.contour``, the ``gdal_contour`` equivalent); this only draws what
+        it returns. Contours are the one field type that maps cleanly onto MapLibre — the result is a
+        ``FeatureCollection``, which the tier already knows how to render — so it is the field renderer
+        this tier can honestly offer. Vector fields and meshes have no native primitive here; see the
+        static and interactive tiers for those.
+
+        Args:
+            dataset: A pyramids ``Dataset``.
+            interval: Spacing between levels, anchored at ``base``. Give exactly one of this or ``levels``.
+            levels: Explicit levels to contour. Give exactly one of this or ``interval``.
+            base: The value a regular ``interval`` is anchored to.
+            band: 1-based band to contour, matching
+                :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and
+                this converts, so the same number means the same band everywhere in this tier.
+            filled: Draw filled bands between successive levels instead of lines.
+            cmap: Colormap for colouring by level.
+            color: A single colour for every contour, overriding ``cmap``. Use it when the levels are
+                labelled rather than colour-coded.
+            width: Line width in pixels; ignored when ``filled``.
+            opacity: Layer opacity in ``[0, 1]``.
+            labels: Whether to label each contour with its value — the level for a line, the band's lower
+                edge when ``filled``.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when neither or both of ``interval`` and ``levels`` are given — pyramids requires
+                exactly one, and saying so here names the argument the caller actually wrote.
+
+        Examples:
+            - Contour a DEM every 100 m:
+                ```python
+                >>> from digitalearth.web import WebMap                        # doctest: +SKIP
+                >>> WebMap().basemap().contours(dem, interval=100)             # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.
+        """
+        if (interval is None) == (levels is None):
+            raise ValueError(
+                "contours() needs exactly one of interval= or levels=; "
+                f"got interval={interval!r} and levels={levels!r}"
+            )
+        data = self._to_display_raster(dataset)
+        features = data.contour(
+            interval=interval,
+            fixed_levels=list(levels) if levels is not None else None,
+            base=base,
+            band=int(band) - 1,  # pyramids counts bands from 0; this tier counts from 1
+            attribute="level",
+            polygonize=filled,
+        )
+        if len(features) == 0:
+            # No level fell inside the band's range. Passing this on raises "column 'level' not found",
+            # because pyramids only writes the attribute when it writes a feature — which points at the
+            # wrong thing entirely.
+            raise ValueError(
+                f"contours() traced nothing: no level lies within the data. Check that "
+                f"{'levels=' + repr(levels) if levels is not None else 'interval=' + repr(interval)} "
+                f"suits band {band}'s range."
+            )
+        # Lines carry `level`; filled bands carry `level_min`/`level_max` for the band's two edges, so
+        # colour and label the lower edge — it is what orders the bands.
+        attribute = "level_min" if filled else "level"
+        column = None if color else attribute
+        if filled:
+            self.polygons(
+                features,
+                column=column,
+                scheme=None,
+                cmap=cmap,
+                color=color or "#3388ff",
+                opacity=opacity,
+                name=name,
+                visible=visible,
+            )
+        else:
+            self.lines(
+                features,
+                column=column,
+                scheme=None,
+                cmap=cmap,
+                color=color or "#3388ff",
+                width=width,
+                opacity=opacity,
+                name=name,
+                visible=visible,
+            )
+        if labels:
+            return self.labels(features, attribute)
+        return self
 
     def _vector_layer(
         self,
@@ -149,6 +368,10 @@ class VectorMixin(_MixinBase):
         prefix: str,
         layer_type: Any,
         paint: dict,
+        *,
+        name: Optional[str] = None,
+        visible: bool = True,
+        layout: Optional[dict] = None,
     ) -> Self:
         """Register a GeoJSON source + a typed layer with ``paint`` and record it as the last data layer.
 
@@ -157,19 +380,34 @@ class VectorMixin(_MixinBase):
             prefix: The id prefix / kind tag (``"circle"``/``"line"``/``"fill"``).
             layer_type: The ``maplibre`` ``LayerType`` member for the layer.
             paint: The MapLibre paint dict for the layer.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            layout: MapLibre layout properties for the layer (a symbol layer's ``text-field`` and its
+                placement live here rather than in ``paint``). Merged with the visibility flag.
 
         Returns:
             The same map instance, so builder calls chain.
         """
         Layer, _ = _require_layer_api()
         src_id, layer_id = self._uid(f"{prefix}-src"), self._uid(prefix)
-        layer = Layer(id=layer_id, type=layer_type, source=src_id, paint=paint)
+        spec_layout = dict(layout) if layout else {}
+        if not visible:
+            spec_layout["visibility"] = "none"
+        layer = Layer(
+            id=layer_id,
+            type=layer_type,
+            source=src_id,
+            paint=paint,
+            layout=spec_layout or None,
+        )
 
         def apply(widget: Any) -> None:
             widget.add_source(src_id, features)
             widget.add_layer(layer)
 
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
+        self._index_layer(layer_id, name)
         return self.add_layer(apply)
 
     @staticmethod
@@ -191,6 +429,8 @@ class VectorMixin(_MixinBase):
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
@@ -206,6 +446,9 @@ class VectorMixin(_MixinBase):
             opacity: Circle fill opacity in ``[0, 1]``.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
+
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -229,7 +472,9 @@ class VectorMixin(_MixinBase):
             )
         else:
             paint["circle-color"] = color
-        return self._vector_layer(gdf, "circle", LayerType.CIRCLE, paint)
+        return self._vector_layer(
+            gdf, "circle", LayerType.CIRCLE, paint, name=name, visible=visible
+        )
 
     def lines(
         self,
@@ -242,6 +487,8 @@ class VectorMixin(_MixinBase):
         width: float = 2.0,
         color: str = "#3388ff",
         opacity: float = 1.0,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a line ``FeatureCollection`` as a MapLibre line layer (recipe W2).
 
@@ -255,6 +502,9 @@ class VectorMixin(_MixinBase):
             color: Fixed line colour used when ``column`` is ``None``.
             opacity: Line opacity in ``[0, 1]``.
 
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
         Returns:
             The same map instance, so builder calls chain.
         """
@@ -267,7 +517,9 @@ class VectorMixin(_MixinBase):
             )
         else:
             paint["line-color"] = color
-        return self._vector_layer(gdf, "line", LayerType.LINE, paint)
+        return self._vector_layer(
+            gdf, "line", LayerType.LINE, paint, name=name, visible=visible
+        )
 
     def polygons(
         self,
@@ -281,6 +533,8 @@ class VectorMixin(_MixinBase):
         opacity: float = 0.6,
         outline_color: str = "#ffffff",
         big: Optional[bool] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a polygon ``FeatureCollection`` as a MapLibre fill layer (recipe W2).
 
@@ -296,6 +550,9 @@ class VectorMixin(_MixinBase):
             outline_color: Polygon outline colour.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
+
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -322,7 +579,9 @@ class VectorMixin(_MixinBase):
             )
         else:
             paint["fill-color"] = color
-        return self._vector_layer(gdf, "fill", LayerType.FILL, paint)
+        return self._vector_layer(
+            gdf, "fill", LayerType.FILL, paint, name=name, visible=visible
+        )
 
     def choropleth(
         self,
@@ -334,6 +593,8 @@ class VectorMixin(_MixinBase):
         cmap: str = "viridis",
         opacity: float = 0.85,
         outline_color: str = "#ffffff",
+        name: Optional[str] = None,
+        visible: bool = True,
     ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
@@ -359,6 +620,9 @@ class VectorMixin(_MixinBase):
             opacity: Fill opacity in ``[0, 1]``.
             outline_color: Polygon outline colour.
 
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+
         Returns:
             The same map instance, so builder calls chain.
 
@@ -374,4 +638,6 @@ class VectorMixin(_MixinBase):
             "fill-opacity": float(opacity),
             "fill-outline-color": outline_color,
         }
-        return self._vector_layer(gdf, "fill", LayerType.FILL, paint)
+        return self._vector_layer(
+            gdf, "fill", LayerType.FILL, paint, name=name, visible=visible
+        )

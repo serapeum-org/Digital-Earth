@@ -18,6 +18,43 @@ import re
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+
+def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
+    """Encode PNG frames into an animated GIF.
+
+    Pillow does the encoding — it arrives with matplotlib, so an animation needs no dependency the tier
+    does not already have. MP4 would need ffmpeg, which it does not.
+
+    Args:
+        frames: Paths to the rendered PNG frames, in order.
+        path: Where to write the GIF.
+        duration: Seconds each frame is held.
+        loop: Repeat count; ``0`` loops forever.
+
+    Raises:
+        ValueError: when there are no frames to write.
+    """
+    from PIL import Image
+
+    if not frames:
+        raise ValueError("no frames to write")
+    images = []
+    for frame in frames:
+        # Closed before the GIF is written: PIL opens lazily, and a still-open frame keeps a Windows file
+        # handle on the caller's temporary directory, which then fails to delete.
+        with Image.open(frame) as handle:
+            images.append(handle.convert("RGB"))
+    images[0].save(
+        path,
+        save_all=True,
+        append_images=images[1:],
+        duration=int(duration * 1000),
+        loop=int(loop),
+    )
+
+
+from digitalearth.web.base import DEFAULT_TITLE
+
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
 _ASSET_RE = re.compile(
     r'<(script|link)[^>]*?(?:src|href)="(?P<url>https?://[^"]+?\.(?:js|css))"[^>]*?>(?:</script>)?'
@@ -48,7 +85,7 @@ class ExportMixin(_MixinBase):
     """
 
     def to_html(
-        self, *, title: str = "Digital-Earth map", offline: bool = False, **kwargs: Any
+        self, *, title: str = DEFAULT_TITLE, offline: bool = False, **kwargs: Any
     ) -> str:
         """Return the map as a standalone HTML string.
 
@@ -108,7 +145,7 @@ class ExportMixin(_MixinBase):
         return new_html
 
     def _render_png(
-        self, path: str, *, title: str = "Digital-Earth map", **kwargs: Any
+        self, path: str, *, title: str = DEFAULT_TITLE, **kwargs: Any
     ) -> str:
         """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
 
@@ -118,8 +155,9 @@ class ExportMixin(_MixinBase):
         Args:
             path: Output ``*.png`` file.
             title: HTML document title.
-            **kwargs: Forwarded to ``to_html`` (e.g. an inline-data ``offline`` is not applied — PNG embeds
-                pixels, not the live map).
+            **kwargs: Reserved for headless-browser options, and not forwarded to ``to_html``. The one
+                recognised key is ``widget``: a pre-built map widget to render instead of building a fresh
+                one, which is how :meth:`to_gif` renders a frame with one step visible.
 
         Returns:
             The ``path`` written.
@@ -128,9 +166,11 @@ class ExportMixin(_MixinBase):
             ImportError: when neither Playwright nor Selenium is installed.
         """
         # kwargs are reserved for future headless-browser options; they are NOT forwarded into to_html
-        # (which would surface unknown-keyword errors from deep inside maplibre).
+        # (which would surface unknown-keyword errors from deep inside maplibre). `widget` is the one
+        # exception: an animation frame hands in a widget it has already set the step visibility on.
+        widget = kwargs.pop("widget", None)
         _ = kwargs
-        html = self._build_map_widget().to_html(title=title)
+        html = (widget or self._build_map_widget()).to_html(title=title)
         with tempfile.TemporaryDirectory() as tmp:
             html_path = pathlib.Path(tmp) / "map.html"
             html_path.write_text(html, encoding="utf-8")
@@ -145,6 +185,99 @@ class ExportMixin(_MixinBase):
             "PNG export needs a headless browser, which is not part of digitalearth[web]. Install Playwright "
             "(`pip install playwright && python -m playwright install chromium`) or Selenium + a driver."
         )
+
+    def to_gif(
+        self,
+        path: str,
+        *,
+        duration: float = 0.8,
+        loop: int = 0,
+        title: str = DEFAULT_TITLE,
+    ) -> str:
+        """Write a temporal map's steps as an animated GIF (recipe W7).
+
+        A time series is the case where a moving image says most, and it is also the case a web page
+        carries worst — a saved page shows a step picker, not an animation, and nothing could be pasted
+        into a report. The other two tiers have had ``save_animation`` all along.
+
+        One frame is rendered per time step, by making that step the only visible one and screenshotting
+        the page, so the frames are the same pixels the map draws.
+
+        Args:
+            path: Where to write the GIF.
+            duration: Seconds each frame is held.
+            loop: How many times to repeat; ``0`` loops forever.
+            title: HTML document title used while rendering.
+
+        Returns:
+            The ``path`` written.
+
+        Raises:
+            ValueError: when the map has no time steps to animate, or fewer than two.
+            ImportError: when no headless browser is installed — the same gated dependency the PNG
+                snapshot needs, and deliberately not part of ``digitalearth[web]``.
+
+        Examples:
+            - Animate a raster stack:
+                ```python
+                >>> from digitalearth.web import WebMap                          # doctest: +SKIP
+                >>> WebMap().basemap().timeslider(stack).to_gif("out.gif")       # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
+        """
+        import tempfile
+
+        frames = self._temporal_frames()
+        with tempfile.TemporaryDirectory() as work:
+            images = [
+                self._frame_png(pathlib.Path(work) / f"frame{index}.png", frame, title)
+                for index, frame in enumerate(frames)
+            ]
+            _write_gif(images, path, duration=duration, loop=loop)
+        return str(path)
+
+    def _temporal_frames(self) -> list:
+        """Return the visible-layer set for each time step, oldest first.
+
+        Args:
+            None.
+
+        Returns:
+            One list of layer ids per step — the layers that must be visible in that frame.
+
+        Raises:
+            ValueError: when there is no series to animate, naming what to add.
+        """
+        config = getattr(self, "_temporal", None)
+        layer_ids = list((config or {}).get("layer_ids") or [])
+        if config is None or (config.get("mode") != "raster") or len(layer_ids) < 2:
+            raise ValueError(
+                "to_gif() needs a raster time series with at least two steps; add one with "
+                "timeslider(collection). The vector time-slider filters a single layer, so its steps "
+                "are not separately renderable."
+            )
+        return [[layer_id] for layer_id in layer_ids]
+
+    def _frame_png(self, path: Any, visible: list, title: str) -> str:
+        """Render one animation frame by showing only ``visible`` and screenshotting the page.
+
+        Args:
+            path: Where to write this frame.
+            visible: The layer ids to show; every other step layer is hidden.
+            title: HTML document title used while rendering.
+
+        Returns:
+            The frame's path, as a string.
+        """
+        config = self._temporal or {}
+        steps = list(config.get("layer_ids") or [])
+        widget = self._build_map_widget()
+        for layer_id in steps:
+            widget.set_visibility(layer_id, layer_id in visible)
+        return self._render_png(str(path), title=title, widget=widget)
 
     @staticmethod
     def _png_via_playwright(url: str, path: str) -> None:
