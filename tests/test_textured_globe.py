@@ -1445,6 +1445,34 @@ class TestReferenceGeography:
             f"only the rectangle should become a face, got {len(faces)}"
         )
 
+    def test_a_long_land_ring_does_not_pad_every_face(self, drawn, mocker):
+        """Rendering one very long ring beside many short ones stays within a few megabytes.
+
+        Test scenario:
+            matplotlib 3.11's Poly3DCollection pads every face to the longest, so 300 small islands next to
+            one 20 000-vertex coast would cost ~150 MB per frame there. The fill projects its own faces, so
+            the render's peak allocation must stay far below that.
+        """
+        tracemalloc = pytest.importorskip("tracemalloc")
+        angle = np.linspace(0.0, 2.0 * np.pi, 20_000)
+        coast = np.column_stack([20.0 * np.cos(angle), 20.0 * np.sin(angle)])
+        islands = [
+            np.array(
+                [[lon, -60.0], [lon + 1.0, -60.0], [lon + 1.0, -59.0], [lon, -59.0]]
+            )
+            for lon in np.linspace(-80.0, 80.0, 300)
+        ]
+        self._patch(mocker, [coast, *islands])
+        drawn.land()
+        drawn.fig.canvas.draw()
+        tracemalloc.start()
+        drawn.fig.canvas.draw()
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert peak < 40 * 1024 * 1024, (
+            f"one render should stay small, peaked at {peak / 2**20:.0f} MB"
+        )
+
     def test_a_land_layer_with_nothing_in_view_has_no_faces(self, drawn, mocker):
         """land() still returns its collection, which simply has nothing to fill at this camera."""
         self._patch(mocker, [self._ring(160.0, 200.0, -10.0, 10.0)])

@@ -41,14 +41,11 @@ from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
 from matplotlib import cbook
 from matplotlib.animation import FuncAnimation
+from matplotlib.collections import PolyCollection
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
 from mpl_toolkits.mplot3d import proj3d
-from mpl_toolkits.mplot3d.art3d import (
-    Line3DCollection,
-    Path3DCollection,
-    Poly3DCollection,
-)
+from mpl_toolkits.mplot3d.art3d import Line3DCollection, Path3DCollection
 from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band, ring_runs
@@ -632,8 +629,15 @@ class _SphereLines(_GlobeOverlay, Line3DCollection):
         return _front_depth(getattr(self, "axes"), _LINE_RANK)
 
 
-class _SphereFill(_GlobeOverlay, Poly3DCollection):
-    """A reference fill layer on the globe: one collection holding every near-side face."""
+class _SphereFill(_GlobeOverlay, PolyCollection):
+    """A reference fill layer on the globe: one 2-D collection holding every near-side face, projected here.
+
+    A plain ``PolyCollection`` on purpose, not a ``Poly3DCollection``. From matplotlib 3.11 the 3-D collection
+    pads every face to the length of the longest, so one Natural-Earth ring of ten thousand vertices makes
+    every face ten thousand vertices long — hundreds of megabytes a frame at 50m, gigabytes at 10m. Projected
+    here, each face stays the size it is. ``Axes3D.draw`` asks a collection for nothing but
+    ``do_3d_projection``, so the class it derives from is free.
+    """
 
     _body: np.ndarray
     _starts: np.ndarray
@@ -681,14 +685,27 @@ class _SphereFill(_GlobeOverlay, Poly3DCollection):
         return faces
 
     def do_3d_projection(self) -> float:
-        """Re-clip the layer for the current spin and camera, and sort in front of the sphere.
+        """Re-clip the layer for the current spin and camera, project it, and sort in front of the sphere.
+
+        Every face is projected in one pass through the axes' projection matrix, then split back apart.
 
         Returns:
             The depth matplotlib sorts the fill by — just in front of the sphere, behind any line layer.
         """
-        self.set_verts(self._near_side_faces())
-        super().do_3d_projection()
-        return _front_depth(getattr(self, "axes"), _FILL_RANK)
+        axes: Any = getattr(self, "axes")
+        faces = self._near_side_faces()
+        if faces:
+            stacked = np.concatenate(faces)
+            xs, ys, _ = proj3d.proj_transform(
+                stacked[:, 0], stacked[:, 1], stacked[:, 2], axes.M
+            )
+            flat = np.column_stack([xs, ys])
+            self.set_verts(
+                np.split(flat, np.cumsum([len(face) for face in faces])[:-1])
+            )
+        else:
+            self.set_verts([])
+        return _front_depth(axes, _FILL_RANK)
 
 
 class TexturedGlobe:
@@ -1547,7 +1564,7 @@ class TexturedGlobe:
             fill: Whether the parts are closed rings to fill rather than lines to stroke.
 
         Returns:
-            The ``Line3DCollection`` (lines) or ``Poly3DCollection`` (fill) now on the axes.
+            The ``Line3DCollection`` (lines) or ``PolyCollection`` (fill) now on the axes.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet, so there is no axes to add the layer to.
@@ -1565,7 +1582,7 @@ class TexturedGlobe:
         ]
         style = {
             **defaults,
-            **cbook.normalize_kwargs(kwargs, Poly3DCollection if fill else Line2D),
+            **cbook.normalize_kwargs(kwargs, PolyCollection if fill else Line2D),
         }
         at = self._spin if spin is None else float(spin)
         overlay: Any
@@ -1765,8 +1782,8 @@ class TexturedGlobe:
                 in either the long or the short spelling (``fc``, ``ec``, ``lw``).
 
         Returns:
-            The ``Poly3DCollection`` holding the fill. It stays on the axes as the globe turns, re-clipped
-            at each draw; at a camera that shows no land it simply has no faces.
+            The ``PolyCollection`` holding the fill. It stays on the axes as the globe turns, re-clipped and
+            re-projected at each draw; at a camera that shows no land it simply has no faces.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
