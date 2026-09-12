@@ -1,6 +1,6 @@
 """The legend a classified web map carries (#185).
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env. The assertions are about
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env. The assertions are about
 what reaches the exported page's call payload, not about the bundled MapLibre library — searching the whole
 page would match the library's own source and pass either way.
 """

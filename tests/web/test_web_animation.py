@@ -3,7 +3,7 @@
 The frame enumeration and the GIF encoder are tested without a browser — the headless browser the frames
 themselves need is an optional, deliberately un-declared dependency, so nothing here renders a page.
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env.
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env.
 """
 
 import pathlib

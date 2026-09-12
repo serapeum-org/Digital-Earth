@@ -16,7 +16,7 @@ class hierarchy exactly as it was. The whole construction is only safe as long a
 winning at runtime, and the failure mode is silent in the one backend where it matters most: if the guard were
 dropped, ``digitalearth.interactive``/``web``/``three_d`` would raise a *loud* MRO ``TypeError`` at import, but
 ``static.map.Map`` lists ``GeoLayerBase`` last, so C3 would still linearise to the very same nine class **names**
-that ``tests/test_map_composition.py`` pins — while every mixin quietly gained a real base class, and with it a
+that ``tests/static/test_map_composition.py`` pins — while every mixin quietly gained a real base class, and with it a
 different ``super()`` chain and a different ``__init__``. Nothing else in the suite compares ``__bases__``, so
 this file does.
 
@@ -341,7 +341,7 @@ class TestComposedClassMro:
             The existing per-backend tests assert only that each mixin appears *somewhere* in the MRO, which
             a re-ordering — or a mixin gaining a real base — would survive. Order decides which definition
             wins when two mixins name the same method, so it is pinned here. `static.Map` is not repeated:
-            its MRO is already pinned by `tests/test_map_composition.py`.
+            its MRO is already pinned by `tests/static/test_map_composition.py`.
         """
         composed = getattr(_import_or_skip(module), name)
         assert [cls.__name__ for cls in composed.__mro__] == expected, (

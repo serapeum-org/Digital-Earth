@@ -1,7 +1,7 @@
 """Text on a web map (#191) — labels from a column, a single annotation, and the map's own title.
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env. Assertions read the
-exported page's call payload, not the page as a whole, which also contains the MapLibre library.
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env. Assertions
+read the exported page's call payload, not the page as a whole, which also contains the MapLibre library.
 """
 
 import geopandas as gpd

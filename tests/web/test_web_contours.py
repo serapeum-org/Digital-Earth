@@ -4,7 +4,7 @@ pyramids does the tracing (``Dataset.contour``, the ``gdal_contour`` equivalent)
 comes back. Contours are the one field type with a native MapLibre representation — the result is a
 ``FeatureCollection``, which the vector builders already render.
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env.
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env.
 """
 
 import pytest

@@ -1,8 +1,8 @@
 """DX.1 (3-D half) — ``quickplot(backend="3d")`` dispatches to a :class:`Scene3D`.
 
-Mirrors ``tests/test_interactive_autostyle.py::TestQuickplotBackend`` for the PyVista backend: a raster becomes
-3-D ``terrain``, a point ``FeatureCollection`` a ``point_cloud``, a polygon one ``extruded_polygons``; lines and
-unknown backends raise. Gated on the ``3d`` extra (pyvista).
+Mirrors ``tests/interactive/test_interactive_autostyle.py::TestQuickplotBackend`` for the PyVista backend: a
+raster becomes 3-D ``terrain``, a point ``FeatureCollection`` a ``point_cloud``, a polygon one
+``extruded_polygons``; lines and unknown backends raise. Gated on the ``3d`` extra (pyvista).
 """
 
 import pytest

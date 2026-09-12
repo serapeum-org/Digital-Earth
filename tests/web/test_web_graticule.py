@@ -1,7 +1,7 @@
 """The lat/lon grid a web map can draw for itself (#192).
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env. A graticule is arithmetic
-rather than data, so none of this touches the network or a data source.
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env. A graticule is
+arithmetic rather than data, so none of this touches the network or a data source.
 """
 
 import pytest

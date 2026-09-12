@@ -1,7 +1,7 @@
 """Framing a web map on its data (#186) — the accumulated extent, and who wins when views disagree.
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env. Nothing here needs the
-network: the widget is built and inspected, never displayed.
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env. Nothing here
+needs the network: the widget is built and inspected, never displayed.
 """
 
 import geopandas as gpd

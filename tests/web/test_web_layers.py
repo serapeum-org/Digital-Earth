@@ -1,7 +1,8 @@
 """Addressing the layers on a web map (#188) — ids, visibility, removal and the viewer's switch.
 
-Named ``test_web_*`` so the ``test-web`` pixi task collects it in the ``web`` env. Assertions read the
-exported page's call payload rather than the page as a whole, which also contains the MapLibre library.
+Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the ``web`` env. Assertions
+read the exported page's call payload rather than the page as a whole, which also contains the MapLibre
+library.
 """
 
 import geopandas as gpd
