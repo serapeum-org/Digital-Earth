@@ -29,21 +29,26 @@ from digitalearth.static.textured_globe import (
 )
 
 
-def _drawn_sizes(scatter) -> np.ndarray:
-    """Render the scatter's figure and return the sizes of the markers actually drawn.
+def _drawn(scatter, values: str = "sizes") -> np.ndarray:
+    """Render the scatter's figure and return the values its painted markers were drawn with.
 
-    A globe scatter keeps every point and hides the far side by drawing those markers at size zero, so the
-    markers a reader can see are exactly the ones with a size left after a render.
+    A globe scatter keeps every point and paints the far-side ones at size zero, then puts the caller's
+    sizes back once the render is over. What each visible marker was drawn with is therefore its own
+    entry, taken for the points the render actually showed.
 
     Args:
         scatter: A scatter returned by ``TexturedGlobe.points``.
+        values: ``"sizes"`` for marker sizes, ``"widths"`` for marker edge widths.
 
     Returns:
-        np.ndarray: the non-zero marker sizes, in matplotlib's depth order.
+        np.ndarray: one value per painted marker, in the order the points were given.
     """
     scatter.axes.get_figure().canvas.draw()
-    sizes = np.asarray(scatter.get_sizes(), dtype=float)
-    return sizes[sizes > 0]
+    asked = scatter.get_sizes() if values == "sizes" else scatter.get_linewidths()
+    per_point = np.resize(
+        np.atleast_1d(np.asarray(asked, dtype=float)), scatter._shown.size
+    )
+    return per_point[scatter._shown]
 
 
 @pytest.fixture(scope="module")
@@ -647,14 +652,12 @@ class TestPoints:
         """A point behind the globe must not be drawn through it."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([180.0], lat=[0.0], hide_far_side=True)
-        assert _drawn_sizes(collection).size == 0, (
-            "a far-side marker should not be drawn"
-        )
+        assert _drawn(collection).size == 0, "a far-side marker should not be drawn"
 
     def test_far_side_points_are_kept_when_asked(self, globe):
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([180.0], lat=[0.0], hide_far_side=False)
-        assert _drawn_sizes(collection).size == 1, "hide_far_side=False should draw it"
+        assert _drawn(collection).size == 1, "hide_far_side=False should draw it"
 
     def test_per_point_colours_stay_with_their_points(self, globe):
         """The colour array is never cut down to the visible points, so it cannot fall out of step."""
@@ -662,9 +665,7 @@ class TestPoints:
         collection = globe.points(
             [0.0, 180.0], lat=[0.0, 0.0], c=[1.0, 2.0], hide_far_side=True
         )
-        assert _drawn_sizes(collection).size == 1, (
-            "only the near-side marker should be drawn"
-        )
+        assert _drawn(collection).size == 1, "only the near-side marker should be drawn"
         assert list(collection.get_array()) == [1.0, 2.0], (
             f"the colour values should stay whole, got {list(collection.get_array())}"
         )
@@ -694,9 +695,7 @@ class TestPoints:
         collection = globe.points(
             [0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, **{key: values}
         )
-        collection.axes.get_figure().canvas.draw()
-        drawn = collection.get_sizes() if key == "s" else collection.get_linewidths()
-        kept = sorted(float(v) for v in np.atleast_1d(drawn) if v > 0)
+        kept = list(_drawn(collection, "sizes" if key == "s" else "widths"))
         assert kept == expected, f"{key} should keep {expected}, got {kept}"
 
     @pytest.mark.parametrize(
@@ -748,7 +747,7 @@ class TestPoints:
         """A single colour or size applies to every point; only the far-side one goes undrawn."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, **kwargs)
-        assert _drawn_sizes(collection).size == 3, (
+        assert _drawn(collection).size == 3, (
             f"{kwargs} should still draw the 3 near-side points"
         )
 
@@ -1131,8 +1130,8 @@ class TestOverlaysFollowTheSpin:
         scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, s=10)
         scatter.set_sizes([80.0])
         globe.draw(ax, elev=0.0, azim=0.0, spin=5.0)
-        assert list(_drawn_sizes(scatter)) == [80.0, 80.0], (
-            f"the two near-side markers should keep the new size, got {list(_drawn_sizes(scatter))}"
+        assert list(_drawn(scatter)) == [80.0, 80.0], (
+            f"the two near-side markers should keep the new size, got {list(_drawn(scatter))}"
         )
         plt.close(ax.get_figure())
 
@@ -1148,10 +1147,9 @@ class TestOverlaysFollowTheSpin:
         scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, linewidths=1.0)
         scatter.set_linewidth(3.0)
         globe.draw(ax, elev=0.0, azim=0.0, spin=5.0)
-        ax.get_figure().canvas.draw()
-        widths = sorted(float(w) for w in np.atleast_1d(scatter.get_linewidths()))
-        assert widths == [0.0, 3.0, 3.0], (
-            f"the near-side markers should keep width 3 and the hidden one 0, got {widths}"
+        widths = list(_drawn(scatter, "widths"))
+        assert widths == [3.0, 3.0], (
+            f"the two near-side markers should keep the new width, got {widths}"
         )
         plt.close(ax.get_figure())
 
@@ -1178,10 +1176,33 @@ class TestOverlaysFollowTheSpin:
         ax = self._axes()
         globe.draw(ax, elev=0.0, azim=0.0)
         scatter = globe.points([0.0], lat=[0.0], s=40)
-        assert _drawn_sizes(scatter).size == 1, "the marker should show from the front"
+        assert _drawn(scatter).size == 1, "the marker should show from the front"
         ax.view_init(elev=0.0, azim=180.0)
-        assert _drawn_sizes(scatter).size == 0, (
+        assert _drawn(scatter).size == 0, (
             "the marker should hide once the camera goes round"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_legend_built_after_a_render_shows_the_marker_as_asked(self, globe):
+        """A legend made once the figure has been drawn takes the caller's size and edge, not the mask.
+
+        Test scenario:
+            matplotlib's legend handler reads the sizes and edge widths straight off the artist. While a
+            render is under way those hold the far-side mask, which would size the legend's marker from a
+            zero — half what was asked here — and leave it with no edge.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0)
+        globe.points(
+            [0.0, 10.0, 180.0], lat=[0.0] * 3, s=40, linewidths=1.0, label="sites"
+        )
+        ax.get_figure().canvas.draw()
+        handle = ax.legend().legend_handles[0]
+        assert list(np.atleast_1d(handle.get_sizes())) == [40.0], (
+            f"the legend marker should be the size asked for, got {handle.get_sizes()}"
+        )
+        assert list(np.atleast_1d(handle.get_linewidths())) == [1.0], (
+            f"the legend marker should keep its edge, got {handle.get_linewidths()}"
         )
         plt.close(ax.get_figure())
 

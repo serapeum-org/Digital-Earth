@@ -485,6 +485,8 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
     _sizes_asked: np.ndarray
     _widths_asked: np.ndarray
     _masking: bool = False
+    #: Which markers the last render actually painted — the near-side mask it was drawn with.
+    _shown: np.ndarray
 
     def _adopt_points(
         self,
@@ -508,6 +510,7 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
         self._widths_asked = np.atleast_1d(
             np.asarray(self.get_linewidths(), dtype=float)
         )
+        self._shown = np.ones(len(body), dtype=bool)
 
     def _restyling(self) -> bool:
         """Whether a size or width change comes from the caller, rather than the far-side mask or a draw."""
@@ -537,6 +540,20 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
         if self._restyling():
             self._widths_asked = np.atleast_1d(np.asarray(lw, dtype=float))
 
+    def _apply(self, sizes: np.ndarray, widths: np.ndarray) -> None:
+        """Set the sizes and edge widths to draw with, without recording them as a caller's restyle.
+
+        Args:
+            sizes: One marker size per point.
+            widths: One edge width per point.
+        """
+        self._masking = True
+        try:
+            self.set_sizes(sizes)
+            self.set_linewidth(widths)
+        finally:
+            self._masking = False
+
     def do_3d_projection(self) -> float:
         """Place the points at the current spin, hide the far side, and sort in front of the sphere.
 
@@ -546,21 +563,35 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
         """
         world = self._world(self._body)
         self._offsets3d = (world[:, 0], world[:, 1], world[:, 2])
+        count = len(world)
         if not self._cull:
+            self._shown = np.ones(count, dtype=bool)
             depth: float = super().do_3d_projection()
             return depth
-        near = world @ self._view() > 0.0
-        count = len(world)
-        self._masking = True
-        try:
-            self.set_sizes(np.where(near, np.resize(self._sizes_asked, count), 0.0))
-            self.set_linewidth(
-                np.where(near, np.resize(self._widths_asked, count), 0.0)
-            )
-        finally:
-            self._masking = False
+        self._shown = world @ self._view() > 0.0
+        self._apply(
+            np.where(self._shown, np.resize(self._sizes_asked, count), 0.0),
+            np.where(self._shown, np.resize(self._widths_asked, count), 0.0),
+        )
         super().do_3d_projection()
         return _front_depth(getattr(self, "axes"), _POINT_RANK)
+
+    def draw(self, renderer: Any) -> None:
+        """Draw the markers, then hand the caller's sizes and edge widths back.
+
+        The far-side mask belongs to the render and nothing else. matplotlib's legend handler reads the
+        sizes and edge widths straight off the artist, so a legend built after a figure had been drawn
+        would otherwise take its marker from the mask — half the size asked for and no edge, or nothing
+        at all when every point happens to face away.
+
+        Args:
+            renderer: The renderer matplotlib is drawing into.
+        """
+        try:
+            super().draw(renderer)
+        finally:
+            if self._cull:
+                self._apply(self._sizes_asked, self._widths_asked)
 
 
 class _SphereLines(_GlobeOverlay, Line3DCollection):
