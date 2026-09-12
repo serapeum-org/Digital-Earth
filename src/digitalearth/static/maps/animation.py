@@ -112,6 +112,49 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def _animated_band(opts: dict) -> int:
+    """Read the band an animation will draw from its render options.
+
+    Checked here rather than at the first rendered frame: bands are counted from 1, and passing 0 used to
+    reach pyramids as the 0-based band -1, which reported a band the caller never asked for.
+
+    Args:
+        opts: The render options the frames will be drawn with.
+
+    Returns:
+        The 1-based band index, defaulting to the first band.
+
+    Raises:
+        ValueError: if ``band`` is not a whole number of 1 or more.
+
+    Examples:
+        - The first band is the default:
+            ```python
+            >>> from digitalearth.static.maps.animation import _animated_band
+            >>> _animated_band({}), _animated_band({"band": 3})
+            (1, 3)
+
+            ```
+        - Counting from zero is refused, naming what was passed:
+            ```python
+            >>> from digitalearth.static.maps.animation import _animated_band
+            >>> _animated_band({"band": 0})
+            Traceback (most recent call last):
+                ...
+            ValueError: band must be a whole number of 1 or more, got 0
+
+            ```
+    """
+    asked = opts.get("band", 1)
+    try:
+        band = int(asked)
+    except (TypeError, ValueError):
+        band = 0
+    if band < 1 or band != asked:
+        raise ValueError(f"band must be a whole number of 1 or more, got {asked!r}")
+    return band
+
+
 class AnimationMixin(_MixinBase):
     """Stack animation and globe rotation for :class:`~digitalearth.static.map.Map`."""
 
@@ -382,7 +425,7 @@ class AnimationMixin(_MixinBase):
         """
         vmin, vmax = opts.get("vmin"), opts.get("vmax")
         if vmin is None or vmax is None:
-            band = int(opts.get("band", 1))
+            band = _animated_band(opts)
             if views is None:
                 lo, hi = self._stack_clim(_scan_subset(datasets), band=band)
             else:

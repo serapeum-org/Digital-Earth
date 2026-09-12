@@ -590,6 +590,34 @@ class TestAnimateBand:
             f"explicit bounds should be kept, got {opts['vmin']}..{opts['vmax']}"
         )
 
+    @pytest.mark.parametrize(
+        "band",
+        [
+            pytest.param(0, id="zero"),
+            pytest.param(-1, id="negative"),
+            pytest.param(None, id="none"),
+            pytest.param("first", id="text"),
+            pytest.param(1.5, id="fractional"),
+        ],
+    )
+    def test_a_band_that_is_not_a_band_number_is_refused(self, two_band_stack, band):
+        """Bands count from 1, and anything else is refused by name before a frame is drawn.
+
+        Args:
+            band: Something that is not a 1-based band number.
+
+        Test scenario:
+            band=0 used to reach pyramids as the 0-based band -1 and come back as "band -1 is out of
+            range", naming a band the caller never passed.
+        """
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            Map(crs=4326)._resolve_animation_clim(two_band_stack, {"band": band})
+
+    def test_animate_refuses_a_bad_band_up_front(self, two_band_stack):
+        """The check happens at the animate() call, not from inside the frame loop."""
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            Map(crs=4326, figsize=(3, 3)).animate(two_band_stack, band=0, fps=2)
+
     def test_rotate_scan_reads_the_band_too(self, two_band_stack):
         """The per-view union rotate() uses scans the animated band as well.
 
