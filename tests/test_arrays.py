@@ -1,7 +1,7 @@
 """Tests for digitalearth.base.arrays — shared array helpers (PA-1).
 
-Covers every public/private helper in the module: ``mask_nodata``, ``finite``, ``read_masked_band`` and
-``_band_nodata``. ``fig_of`` moved to the static backend with the module split; see
+Covers every public/private helper in the module: ``ring_runs``, ``mask_nodata``, ``finite``,
+``read_masked_band`` and ``_band_nodata``. ``fig_of`` moved to the static backend with the module split; see
 ``tests/test_figures.py``. The dataset-reading helpers are exercised against a small in-memory fake so no
 real raster or filesystem access is needed.
 """
