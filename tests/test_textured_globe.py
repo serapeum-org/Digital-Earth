@@ -1183,6 +1183,34 @@ class TestOverlaysFollowTheSpin:
         )
         plt.close(ax.get_figure())
 
+    @pytest.mark.parametrize(
+        "setter, values",
+        [("set_sizes", "sizes"), ("set_linewidth", "widths")],
+        ids=["sizes", "widths"],
+    )
+    def test_clearing_a_style_falls_back_to_matplotlibs_default(
+        self, globe, setter, values
+    ):
+        """Passing None asks matplotlib for its default, which the mask must not turn into NaN.
+
+        Args:
+            setter: The setter the caller clears the style with.
+            values: Which drawn values that setter governs.
+
+        Test scenario:
+            The mask re-applies the remembered style on every render, so remembering the raw None left
+            every marker at a NaN size or edge and they silently vanished.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0)
+        scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, s=40, linewidths=1.0)
+        getattr(scatter, setter)(None)
+        drawn = _drawn(scatter, values)
+        assert np.isfinite(drawn).all() and (drawn > 0).all(), (
+            f"clearing {setter} should fall back to a real default, got {list(drawn)}"
+        )
+        plt.close(ax.get_figure())
+
     def test_a_legend_built_after_a_render_shows_the_marker_as_asked(self, globe):
         """A legend made once the figure has been drawn takes the caller's size and edge, not the mask.
 

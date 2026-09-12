@@ -39,7 +39,7 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
 )
 from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
-from matplotlib import cbook
+from matplotlib import cbook, rcParams
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import PolyCollection
 from matplotlib.colors import Normalize
@@ -519,8 +519,8 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
     def set_sizes(self, sizes: Any, dpi: float = 72.0) -> None:
         """Set the marker sizes, remembering a caller's choice so the far-side mask applies over it.
 
-        The mask rewrites the sizes on every render, zeroing the hidden markers; it starts from what was
-        last asked for here, so a restyle of the returned scatter holds as the globe turns.
+        What matplotlib stored is read back rather than the argument, because ``None`` means "no size of
+        my own" and would otherwise be remembered as a NaN and re-applied at every render.
 
         Args:
             sizes: The marker sizes, in points squared — one for every marker, or one per point.
@@ -528,17 +528,26 @@ class _SpherePoints(_GlobeOverlay, Path3DCollection):
         """
         super().set_sizes(sizes, dpi)
         if self._restyling():
-            self._sizes_asked = np.atleast_1d(np.asarray(sizes, dtype=float))
+            stored = np.atleast_1d(np.asarray(self.get_sizes(), dtype=float))
+            # matplotlib keeps no size at all for None; the mask has to scale from a number
+            self._sizes_asked = (
+                stored
+                if stored.size
+                else np.array([float(rcParams["lines.markersize"]) ** 2])
+            )
 
     def set_linewidth(self, lw: Any) -> None:
-        """Set the marker edge widths, remembering a caller's choice so the far-side mask applies over it.
+        """Set the marker edge widths, remembering a caller's choice so the mask applies over it.
 
         Args:
-            lw: The edge width in points — one for every marker, or one per point.
+            lw: The edge width in points — one for every marker, or one per point. ``None`` asks for
+                matplotlib's default, and that resolved width is what gets remembered.
         """
         super().set_linewidth(lw)
         if self._restyling():
-            self._widths_asked = np.atleast_1d(np.asarray(lw, dtype=float))
+            self._widths_asked = np.atleast_1d(
+                np.asarray(self.get_linewidths(), dtype=float)
+            )
 
     def _apply(self, sizes: np.ndarray, widths: np.ndarray) -> None:
         """Set the sizes and edge widths to draw with, without recording them as a caller's restyle.
