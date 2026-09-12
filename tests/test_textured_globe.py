@@ -1709,29 +1709,88 @@ class TestReferenceGeography:
         )
 
     @pytest.mark.parametrize(
-        "layer, kwargs",
+        "spelling",
         [
-            pytest.param("coastlines", {"lw": 1.2, "c": "white"}, id="line-aliases"),
-            pytest.param("coastlines", {"zorder": 5}, id="line-zorder"),
-            pytest.param("land", {"fc": "red", "ec": "blue"}, id="fill-aliases"),
-            pytest.param("land", {"zorder": 5}, id="fill-zorder"),
+            pytest.param({"linewidth": 1.2}, id="linewidth"),
+            pytest.param({"lw": 1.2}, id="lw"),
+            pytest.param({"linewidths": 1.2}, id="linewidths"),
         ],
     )
-    def test_matplotlibs_own_spellings_are_accepted(self, drawn, mocker, layer, kwargs):
-        """Short aliases and zorder are ordinary styling, and must not collide with the defaults.
+    def test_a_line_width_reaches_the_layer_however_it_is_spelled(
+        self, drawn, mocker, spelling
+    ):
+        """Every spelling matplotlib takes for a line width changes the width.
+
+        Args:
+            spelling: The caller's styling.
+
+        Test scenario:
+            A collection's plural ``linewidths`` arrived beside the layer's own ``linewidth`` default
+            rather than replacing it, so it was silently ignored and the line stayed at 0.5.
+        """
+        self._patch(mocker, [self._arc(-60.0, 60.0)])
+        lines = drawn.coastlines(**spelling)
+        assert float(lines.get_linewidth()[0]) == 1.2, (
+            f"{spelling} should set the width, got {lines.get_linewidth()}"
+        )
+
+    @pytest.mark.parametrize(
+        "layer, kwargs, reader, expected",
+        [
+            pytest.param(
+                "coastlines", {"c": "white"}, "get_color", "#ffffff", id="line-colour"
+            ),
+            pytest.param(
+                "land", {"fc": "red"}, "get_facecolor", "#ff0000", id="fill-facecolour"
+            ),
+            pytest.param(
+                "land", {"ec": "blue"}, "get_edgecolor", "#0000ff", id="fill-edgecolour"
+            ),
+        ],
+    )
+    def test_a_colour_reaches_the_layer_however_it_is_spelled(
+        self, drawn, mocker, layer, kwargs, reader, expected
+    ):
+        """matplotlib's short colour names reach the layer instead of colliding with its defaults.
 
         Args:
             layer: The layer method under test.
-            kwargs: The styling to pass.
-
-        Test scenario:
-            ``lw=`` met the default ``linewidth`` and ``zorder=`` met an explicit one, each raising a
-            TypeError; both spellings now resolve to one value.
+            kwargs: The caller's styling.
+            reader: The getter that reads it back.
+            expected: The colour it should be.
         """
         self._patch(mocker, [self._ring(-40.0, 40.0, -20.0, 20.0)])
         overlay = getattr(drawn, layer)(**kwargs)
-        assert overlay in drawn.ax.collections, (
-            f"{layer}({kwargs}) should add its layer"
+        drawn.fig.canvas.draw()
+        assert mcolors.to_hex(getattr(overlay, reader)()[0]) == expected, (
+            f"{kwargs} should reach the layer, got {getattr(overlay, reader)()[0]}"
+        )
+
+    @pytest.mark.parametrize("layer", ["coastlines", "land"])
+    def test_zorder_is_taken_but_the_depth_sort_decides(self, drawn, mocker, layer):
+        """zorder is accepted for parity with Map, and the axes' depth sort still owns the order.
+
+        Args:
+            layer: The layer method under test.
+
+        Test scenario:
+            Passing it used to raise; it is taken now, but a 3-D axes reassigns every collection's zorder
+            from the depth sort when it draws, so the layer stays between the sphere and the markers.
+        """
+        self._patch(mocker, [self._ring(-40.0, 40.0, -20.0, 20.0)])
+        overlay = getattr(drawn, layer)(zorder=50)
+        markers = drawn.points([0.0], lat=[0.0])
+        drawn.fig.canvas.draw()
+        assert overlay.get_zorder() != 50, (
+            "the axes' depth sort should have taken the order over"
+        )
+        assert (
+            drawn.glyph.surface.get_zorder()
+            < overlay.get_zorder()
+            < markers.get_zorder()
+        ), (
+            f"the layer should sit between sphere and markers, got "
+            f"{drawn.glyph.surface.get_zorder()}, {overlay.get_zorder()}, {markers.get_zorder()}"
         )
 
     @pytest.mark.parametrize("layer", ["coastlines", "borders", "land"])

@@ -41,7 +41,7 @@ from cleopatra.styling.colors import resolve_colormap
 from cleopatra.styling.watermark import stamp_mark
 from matplotlib import cbook, rcParams
 from matplotlib.animation import FuncAnimation
-from matplotlib.collections import PolyCollection
+from matplotlib.collections import LineCollection, PolyCollection
 from matplotlib.colors import Normalize
 from matplotlib.lines import Line2D
 from mpl_toolkits.mplot3d import proj3d
@@ -289,6 +289,49 @@ def _limb_arc(start: np.ndarray, end: np.ndarray, view: np.ndarray) -> np.ndarra
         np.cos(steps)[:, None] * first[None, :]
         + np.sin(steps)[:, None] * second[None, :]
     )
+
+
+def _overlay_style(defaults: dict, asked: dict, fill: bool) -> dict:
+    """Merge a reference layer's defaults with the caller's styling, in whichever spelling they used.
+
+    A line layer is spelled like a line (``lw``, ``c``, ``ls``) but drawn as a collection, which has its own
+    plural names (``linewidths``, ``linestyles``). Folding both alias maps first means every spelling lands
+    on the one name the defaults use, instead of arriving beside it and being quietly ignored.
+
+    Args:
+        defaults: The layer's own styling.
+        asked: The caller's styling, in any spelling matplotlib accepts.
+        fill: Whether the layer is a filled one, which takes a collection's own names.
+
+    Returns:
+        One style mapping, the caller's choices winning.
+
+    Examples:
+        - The plural and the short spelling of a line width both reach the same name:
+            ```python
+            >>> from digitalearth.static.textured_globe import _overlay_style
+            >>> _overlay_style({"linewidth": 0.5}, {"linewidths": 2.0}, fill=False)
+            {'linewidth': 2.0}
+            >>> _overlay_style({"linewidth": 0.5}, {"lw": 2.0}, fill=False)
+            {'linewidth': 2.0}
+
+            ```
+        - A fill takes a collection's own short names:
+            ```python
+            >>> from digitalearth.static.textured_globe import _overlay_style
+            >>> sorted(_overlay_style({"color": "#efefdb"}, {"fc": "red"}, fill=True).items())
+            [('color', '#efefdb'), ('facecolor', 'red')]
+
+            ```
+    """
+    if fill:
+        return {**defaults, **cbook.normalize_kwargs(asked, PolyCollection)}
+    style = cbook.normalize_kwargs(
+        cbook.normalize_kwargs(asked, LineCollection), Line2D
+    )
+    if "colors" in style:  # a collection's own plural, which neither alias map folds
+        style["color"] = style.pop("colors")
+    return {**defaults, **style}
 
 
 def _root_figure(axes: Any) -> Any:
@@ -1666,8 +1709,7 @@ class TexturedGlobe:
         Args:
             layer: The Natural-Earth layer name (``"coastline"``, ``"borders"``, ``"land"``).
             resolution: Natural-Earth resolution (``"110m"`` / ``"50m"`` / ``"10m"``).
-            defaults: The layer's base style. The caller's styling overrides it, after matplotlib's short
-                aliases (``lw``, ``c``, ``ec``, ...) are spelled out, so both spellings work.
+            defaults: The layer's base style, overridden by the caller's (see :func:`_overlay_style`).
             spin: Pin the layer to this spin, or ``None`` to follow the globe.
             altitude: Radial lift above the surface.
             fill: Whether the parts are closed rings to fill rather than lines to stroke.
@@ -1689,10 +1731,7 @@ class TexturedGlobe:
             )
             if part.ndim == 2 and len(part) >= 2
         ]
-        style = {
-            **defaults,
-            **cbook.normalize_kwargs(kwargs, PolyCollection if fill else Line2D),
-        }
+        style = _overlay_style(defaults, kwargs, fill)
         at = self._spin if spin is None else float(spin)
         overlay: Any
         if fill:
@@ -1730,7 +1769,10 @@ class TexturedGlobe:
                 redrawn at each animation frame's spin.
             altitude: Radial lift above the surface, so the lines are not z-fought by it.
             **kwargs: Line styling forwarded to matplotlib (``color``, ``linewidth``, ``linestyle``,
-                ``alpha``), in either the long or the short spelling (``c``, ``lw``, ``ls``).
+                ``alpha``), in any spelling it accepts (``c``, ``lw``, ``ls``, ``linewidths``). ``zorder``
+                is taken for parity with :class:`~digitalearth.static.Map` but cannot move the layer: a
+                3-D axes orders its collections by depth, which always puts a layer in front of the sphere
+                and behind the markers.
 
         Returns:
             The ``Line3DCollection`` holding every near-side arc. It stays on the axes as the globe turns.
@@ -1806,7 +1848,8 @@ class TexturedGlobe:
             resolution: Natural-Earth resolution — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
             spin: Pin the borders to this spin, in degrees. Omitted, they follow the globe.
             altitude: Radial lift above the surface.
-            **kwargs: Line styling forwarded to matplotlib, as for :meth:`coastlines`.
+            **kwargs: Line styling forwarded to matplotlib, as for :meth:`coastlines`, including what
+                ``zorder`` can and cannot do there.
 
         Returns:
             The ``Line3DCollection`` holding every near-side arc. It stays on the axes as the globe turns.
@@ -1888,7 +1931,8 @@ class TexturedGlobe:
             altitude: Radial lift above the surface. The fill sorts under the line layers by the depth
                 it reports rather than by its radius, so this only has to clear the sphere itself.
             **kwargs: Patch styling forwarded to matplotlib (``color``, ``alpha``, ``edgecolor``, ...),
-                in either the long or the short spelling (``fc``, ``ec``, ``lw``).
+                in any spelling it accepts (``fc``, ``ec``, ``lw``). As for :meth:`coastlines`, ``zorder``
+                is accepted but the axes' depth sort decides the order.
 
         Returns:
             The ``PolyCollection`` holding the fill. It stays on the axes as the globe turns, re-clipped and
