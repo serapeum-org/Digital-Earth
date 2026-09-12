@@ -18,7 +18,7 @@ This module has two distinct jobs, with **different scopes** — do not conflate
    colour expression and GeoViews a plain ``{value: colour}`` dict — neither can consume a matplotlib mappable,
    so both tiers need the category→colour pairs as plain data. The ordering rule (sorted when sortable, else
    first-seen) is **independently reimplemented** here (:func:`_categories`) and in cleopatra's
-   ``styles.categorize``, kept in agreement by ``tests/test_symbology.py::test_matches_cleopatra_categorize``
+   ``styles.categorize``, kept in agreement by ``tests/base/test_symbology.py::test_matches_cleopatra_categorize``
    — not shared code, so a change on either side must be mirrored (the test is what catches a drift).
 """
 
@@ -228,7 +228,7 @@ def categorical_colors(
     palette entries in order, cycling when there are more categories than colours, while a continuous
     ``LinearSegmentedColormap`` (``coolwarm``/``RdBu``/…) is sampled at ``n`` **evenly-spaced** points so the
     categories stay visually distinct rather than collapsing to the first few near-identical LUT entries. This
-    parity is pinned by ``tests/test_symbology.py::test_matches_cleopatra_categorize``.
+    parity is pinned by ``tests/base/test_symbology.py::test_matches_cleopatra_categorize``.
 
     Args:
         values: An array-like of category labels (strings or numbers); nulls (``None``/``NaN``/``pd.NA``) are

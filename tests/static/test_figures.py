@@ -1,6 +1,6 @@
 """Tests for digitalearth.static.figures — the static backend's axes-to-figure helper.
 
-Split out of ``tests/test_arrays.py`` when ``digitalearth._arrays`` was divided: the numpy helpers went to
+Split out of ``tests/base/test_arrays.py`` when ``digitalearth._arrays`` was divided: the numpy helpers went to
 :mod:`digitalearth.base.arrays`, and ``fig_of`` — the only part needing matplotlib — went to the static
 backend. ``fig_of`` is a one-liner, so the coverage here is about its *contract* rather than its branches:
 it must work for every kind of axes the backend actually creates (plain, gridded, inset, 3-D), it must be a

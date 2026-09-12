@@ -26,7 +26,7 @@ from tests.test_no_competitor_imports import (
     test_tiers_import_no_gis_competitor,
 )
 
-_WEB_ROOT = pathlib.Path(__file__).resolve().parents[1] / "src" / "digitalearth" / "web"
+_WEB_ROOT = pathlib.Path(__file__).resolve().parents[2] / "src" / "digitalearth" / "web"
 
 
 class TestLazyImport:
