@@ -304,9 +304,8 @@ class TestAnimate:
         )
         out = tmp_path / "anim.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
-        assert out.exists() and out.stat().st_size > 0, (
-            "animation GIF should be non-empty"
-        )
+        assert out.exists(), "animation GIF should have been written"
+        assert out.stat().st_size > 0, "animation GIF should be non-empty"
         assert m.ax.get_title() == titles[-1], (
             f"last title not applied: {m.ax.get_title()!r}"
         )
@@ -360,9 +359,8 @@ class TestAnimate:
         assert scanned <= anim_mod._CLIM_SCAN_CAP, (
             f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
         )
-        assert "vmin" in opts and "vmax" in opts, (
-            "clim should still be resolved from the sampled frames"
-        )
+        assert "vmin" in opts, "vmin should be resolved from the sampled frames"
+        assert "vmax" in opts, "vmax should be resolved from the sampled frames"
 
     def test_titles_length_mismatch_raises(self, stack):
         """A titles list of the wrong length raises ValueError."""
@@ -434,9 +432,8 @@ class TestAnimate:
         )
         one = {"vmin": -100.0}
         m._resolve_animation_clim(stack, one)
-        assert one["vmin"] == -100.0 and one["vmax"] == hi, (
-            "only the missing bound should be filled"
-        )
+        assert one["vmin"] == -100.0, "the given bound should be kept"
+        assert one["vmax"] == hi, "only the missing bound should be filled"
         explicit = {"vmin": -5.0, "vmax": 5.0}
         m._resolve_animation_clim(stack, explicit)
         assert (explicit["vmin"], explicit["vmax"]) == (-5.0, 5.0), (
@@ -449,8 +446,9 @@ class TestAnimate:
         opts = {"cmap": "viridis"}
         m._resolve_animation_clim(stack, opts)
         lo, hi = m._stack_clim(stack)
-        assert opts["vmin"] == lo and opts["vmax"] == hi, (
-            "resolved clim should be injected into opts"
+        assert opts["vmin"] == lo, "the resolved low bound should be injected into opts"
+        assert opts["vmax"] == hi, (
+            "the resolved high bound should be injected into opts"
         )
         m._animation_colorbar(opts, "auto")
         assert len(m.fig.axes) == 2, "a colorbar axes should be present"
@@ -509,6 +507,134 @@ class TestAnimate:
             "animation should still render when coastlines fail"
         )
         assert Map.coastlines.called, "coastlines should have been attempted"
+
+
+class TestAnimateBand:
+    """Tests for the band the shared colour scale is measured from (#155)."""
+
+    @pytest.fixture
+    def two_band_stack(self):
+        """A 3-frame stack whose two bands sit in very different ranges.
+
+        Returns:
+            list[Dataset]: frames whose band 1 spans 1..3 and band 2 spans 500..700.
+        """
+        geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+        frames = []
+        for k in range(3):
+            low = np.full((40, 50), 1.0 + k, dtype="float32")
+            high = np.full((40, 50), 500.0 + 100 * k, dtype="float32")
+            frames.append(
+                Dataset.from_array(
+                    np.stack([low, high]), geo_ref=geo_ref, no_data_value=-9999.0
+                )
+            )
+        return frames
+
+    def test_scan_reads_the_band_being_animated(self, two_band_stack):
+        """band=2 in opts scales against band 2's range, not band 1's.
+
+        Test scenario:
+            The stack's band 1 spans 1..3 and its band 2 spans 500..700. Resolving the clim with
+            ``band=2`` must report 500..700; reporting 1..3 is the defect this covers.
+        """
+        opts = {"band": 2}
+        Map(crs=4326)._resolve_animation_clim(two_band_stack, opts)
+        assert (opts["vmin"], opts["vmax"]) == (500.0, 700.0), (
+            f"band 2 spans 500..700, got {opts['vmin']}..{opts['vmax']}"
+        )
+
+    def test_scan_defaults_to_the_first_band(self, two_band_stack):
+        """With no band in opts the scan keeps its band-1 default.
+
+        Test scenario:
+            The control for the case above — an unspecified band must still measure band 1.
+        """
+        opts = {}
+        Map(crs=4326)._resolve_animation_clim(two_band_stack, opts)
+        assert (opts["vmin"], opts["vmax"]) == (1.0, 3.0), (
+            f"band 1 spans 1..3, got {opts['vmin']}..{opts['vmax']}"
+        )
+
+    def test_animate_applies_the_scanned_band_to_the_drawn_image(
+        self, two_band_stack, tmp_path
+    ):
+        """End to end: animate(band=2) draws band 2 under band 2's clim.
+
+        Test scenario:
+            Renders every frame, then reads the clim matplotlib actually applied. The drawn data is band
+            2's (700 in the last frame), so a clim of 1..3 would clip it to a flat saturated block.
+        """
+        m = Map(crs=4326, figsize=(3, 3))
+        anim = m.animate(two_band_stack, kind="imshow", band=2, fps=2)
+        anim.save(str(tmp_path / "band2.gif"), writer=PillowWriter(fps=2))
+        image = m.ax.get_images()[-1]
+        assert image.get_clim() == (500.0, 700.0), (
+            f"drawn image should use band 2's range, got {image.get_clim()}"
+        )
+        assert float(np.nanmax(image.get_array())) == 700.0, (
+            "the drawn data should be band 2's, confirming scale and draw agree"
+        )
+
+    def test_explicit_bounds_still_win_over_the_band_scan(self, two_band_stack):
+        """A caller's own vmin/vmax is kept whatever band is animated.
+
+        Test scenario:
+            band=2 would scan 500..700, but explicit bounds must not be overwritten.
+        """
+        opts = {"band": 2, "vmin": -1.0, "vmax": 1.0}
+        Map(crs=4326)._resolve_animation_clim(two_band_stack, opts)
+        assert (opts["vmin"], opts["vmax"]) == (-1.0, 1.0), (
+            f"explicit bounds should be kept, got {opts['vmin']}..{opts['vmax']}"
+        )
+
+    @pytest.mark.parametrize(
+        "band",
+        [
+            pytest.param(0, id="zero"),
+            pytest.param(-1, id="negative"),
+            pytest.param(None, id="none"),
+            pytest.param("first", id="text"),
+            pytest.param(1.5, id="fractional"),
+        ],
+    )
+    def test_a_band_that_is_not_a_band_number_is_refused(self, two_band_stack, band):
+        """Bands count from 1, and anything else is refused by name before a frame is drawn.
+
+        Args:
+            band: Something that is not a 1-based band number.
+
+        Test scenario:
+            band=0 used to reach pyramids as the 0-based band -1 and come back as "band -1 is out of
+            range", naming a band the caller never passed.
+        """
+        m = Map(crs=4326)
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            m._resolve_animation_clim(two_band_stack, {"band": band})
+
+    def test_animate_refuses_a_bad_band_up_front(self, two_band_stack):
+        """The check happens at the animate() call, not from inside the frame loop."""
+        m = Map(crs=4326, figsize=(3, 3))
+        with pytest.raises(ValueError, match="whole number of 1 or more"):
+            m.animate(two_band_stack, band=0, fps=2)
+
+    def test_rotate_scan_reads_the_band_too(self, two_band_stack):
+        """The per-view union rotate() uses scans the animated band as well.
+
+        Test scenario:
+            rotate() turns one dataset under a sweep of projections, so it takes the
+            ``_clim_across_views`` path and measures only the first frame. That frame's band 2 is a
+            constant 500 and its band 1 a constant 1, so the reported bound says which band was read.
+        """
+        opts = {"band": 2}
+        views = [projections.orthographic(lon, 30.0) for lon in (4.0, 5.0)]
+        Map(crs=views[0], globe=True)._resolve_animation_clim(
+            two_band_stack, opts, views=views
+        )
+        assert (opts["vmin"], opts["vmax"]) == (500.0, 500.0), (
+            f"rotate's scan should read band 2 of the first frame, got "
+            f"{opts['vmin']}..{opts['vmax']}"
+        )
 
 
 class TestAnimateComposites:
@@ -1075,14 +1201,16 @@ class TestRotate:
     def test_invalid_n_frames_raises(self):
         """rotate with fewer than one frame raises ValueError."""
         m = Map(crs=projections.orthographic(0, 0), globe=True)
+        field = _field(0.0)
         with pytest.raises(ValueError, match="n_frames"):
-            m.rotate(_field(0.0), n_frames=0)
+            m.rotate(field, n_frames=0)
 
     def test_unknown_kind_raises_up_front(self):
         """An invalid kind fails fast at the rotate() call (N1)."""
         m = Map(crs=projections.orthographic(0, 0), globe=True)
+        field = _field(0.0)
         with pytest.raises(ValueError, match="unknown animation kind"):
-            m.rotate(_field(0.0), kind="bogus")
+            m.rotate(field, kind="bogus")
 
     def test_colorbar_static(self, tmp_path):
         """rotate(colorbar=True) adds one persistent colorbar axes across the rotation frames."""
@@ -1100,9 +1228,8 @@ class TestRotate:
         assert len(m.fig.axes) == 2, "rotate colorbar should add one axes"
         out = tmp_path / "rotcbar.gif"
         anim.save(str(out), writer=PillowWriter(fps=4))
-        assert len(m.fig.axes) == 2 and out.stat().st_size > 0, (
-            "colorbar must stay single after rendering"
-        )
+        assert len(m.fig.axes) == 2, "colorbar must stay single after rendering"
+        assert out.stat().st_size > 0, "the rendered animation should be non-empty"
 
     def test_rotate_coastlines_best_effort(self, tmp_path, mocker):
         """rotate(coastlines=True) attempts coastlines each frame and still renders when they fail offline."""

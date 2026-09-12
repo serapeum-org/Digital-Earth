@@ -1,9 +1,9 @@
 """Tests for digitalearth.base.arrays — shared array helpers (PA-1).
 
-Covers every public/private helper in the module: ``mask_nodata``, ``finite``, ``read_masked_band`` and
-``_band_nodata``. ``fig_of`` moved to the static backend with the module split; see
-``tests/static/test_figures.py``. The dataset-reading helpers are exercised against a small in-memory fake so no
-real raster or filesystem access is needed.
+Covers every public/private helper in the module: ``ring_runs``, ``mask_nodata``, ``finite``,
+``read_masked_band`` and ``_band_nodata``. ``fig_of`` moved to the static backend with the module split; see
+``tests/static/test_figures.py``. The dataset-reading helpers are exercised against a small in-memory fake so
+no real raster or filesystem access is needed.
 """
 
 from types import SimpleNamespace
@@ -17,6 +17,7 @@ from digitalearth.base.arrays import (  # noqa: E402
     finite,
     mask_nodata,
     read_masked_band,
+    ring_runs,
 )
 
 
@@ -39,6 +40,81 @@ class _FakeDataset:
         return self._array
 
 
+class TestRingRuns:
+    """Tests for ring_runs — the seam-safe visible-run splitter both globe tiers clip rings with."""
+
+    def test_separate_stretches_come_back_in_ring_order(self):
+        """Two visible stretches either side of a hidden one are two runs, in the order they occur.
+
+        Test scenario:
+            Neither stretch touches the seam, so this is the plain split every caller relied on before.
+        """
+        runs = [
+            run.tolist() for run in ring_runs([False, True, True, False, True, False])
+        ]
+        assert runs == [[1, 2], [4]], f"expected two runs, got {runs}"
+
+    def test_a_stretch_crossing_the_seam_is_one_run(self):
+        """A visible stretch that runs off the end of the array and on at its start stays whole.
+
+        Test scenario:
+            The seam case both globes got wrong: split as a straight line, the stretch came back as two
+            runs, and each was closed out to the horizon on its own — a spur from the first vertex.
+        """
+        runs = [
+            run.tolist() for run in ring_runs([True, True, False, False, True, True])
+        ]
+        assert runs == [[4, 5, 0, 1]], (
+            f"the wrapped stretch should be one run, got {runs}"
+        )
+
+    def test_every_run_is_flanked_by_hidden_vertices(self):
+        """The vertex just before and just after each run, round the ring, is hidden.
+
+        Test scenario:
+            Callers find a run's two limb crossings from those neighbours, so none may be visible.
+        """
+        visible = np.array(
+            [True, False, True, True, False, True, True, True, False, True]
+        )
+        count = visible.size
+        for run in ring_runs(visible):
+            assert not visible[(run[0] - 1) % count], (
+                f"run {run.tolist()} has a visible predecessor"
+            )
+            assert not visible[(run[-1] + 1) % count], (
+                f"run {run.tolist()} has a visible successor"
+            )
+
+    @pytest.mark.parametrize(
+        "visible, expected",
+        [
+            pytest.param([True, True, True], [[0, 1, 2]], id="all-visible"),
+            pytest.param([False, False, False], [], id="all-hidden"),
+            pytest.param([], [], id="empty"),
+            pytest.param([True], [[0]], id="one-visible-vertex"),
+        ],
+    )
+    def test_boundary_masks(self, visible, expected):
+        """A wholly visible ring is one run, a hidden or empty one has none.
+
+        Args:
+            visible: The visibility mask.
+            expected: The runs it must yield.
+        """
+        runs = [run.tolist() for run in ring_runs(visible)]
+        assert runs == expected, f"expected {expected}, got {runs}"
+
+    def test_any_sized_boolean_sequence_is_accepted(self):
+        """A numpy mask and a plain list of 0/1 give the same runs."""
+        mask = np.array([1, 0, 1, 1], dtype=bool)
+        from_array = [run.tolist() for run in ring_runs(mask)]
+        from_list = [run.tolist() for run in ring_runs([1, 0, 1, 1])]
+        assert from_array == from_list == [[2, 3, 0]], (
+            f"both inputs should wrap the same run, got {from_array} and {from_list}"
+        )
+
+
 class TestMaskNodata:
     """Tests for mask_nodata."""
 
@@ -50,7 +126,8 @@ class TestMaskNodata:
         """
         out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
         assert np.isnan(out[1]), "sentinel cell should be NaN"
-        assert out[0] == 1.0 and out[2] == 3.0, f"non-sentinel cells changed: {out}"
+        assert out[0] == 1.0, f"the first non-sentinel cell changed: {out}"
+        assert out[2] == 3.0, f"the last non-sentinel cell changed: {out}"
 
     def test_none_nodata_is_float_passthrough(self):
         """mask_nodata(arr, None) returns a float64 copy unchanged.
@@ -83,7 +160,8 @@ class TestMaskNodata:
         """
         out = mask_nodata(np.array([[1.0, 0.0], [0.0, 2.0]]), 0.0)
         assert out.shape == (2, 2), f"shape changed: {out.shape}"
-        assert np.isnan(out[0, 1]) and np.isnan(out[1, 0]), "zero cells should be NaN"
+        assert np.isnan(out[0, 1]), f"the first zero cell should be NaN: {out}"
+        assert np.isnan(out[1, 0]), f"the second zero cell should be NaN: {out}"
 
     def test_accepts_array_like_input(self):
         """mask_nodata coerces any array-like, not just ndarrays.
@@ -393,10 +471,10 @@ class TestReadMaskedBand:
         ds = _FakeDataset([[5.0, -1.0], [-1.0, 8.0]], no_data_value=(-1.0,))
         out = read_masked_band(ds, band=1)
         assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-        assert np.isnan(out[0, 1]) and np.isnan(out[1, 0]), (
-            "sentinel cells should be NaN"
-        )
-        assert out[0, 0] == 5.0 and out[1, 1] == 8.0, f"real values changed: {out}"
+        assert np.isnan(out[0, 1]), f"the first sentinel cell should be NaN: {out}"
+        assert np.isnan(out[1, 0]), f"the second sentinel cell should be NaN: {out}"
+        assert out[0, 0] == 5.0, f"the first real value changed: {out}"
+        assert out[1, 1] == 8.0, f"the second real value changed: {out}"
 
     def test_no_nodata_leaves_values(self):
         """read_masked_band leaves values intact when the band has no sentinel.
