@@ -1636,9 +1636,10 @@ class TexturedGlobe:
                 ...                       n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw(elev=0.0, azim=0.0)
                 >>> scatter = globe.points([0.0, 180.0], lat=[0.0, 0.0])
-                >>> fig.canvas.draw()
-                >>> int((scatter.get_sizes() > 0).sum())
-                1
+                >>> len(scatter.get_offsets())
+                2
+                >>> globe.visible(globe.project([0.0, 180.0], [0.0, 0.0])).tolist()
+                [True, False]
 
                 ```
             - Keep the far side when you want the full set drawn:
@@ -1670,9 +1671,10 @@ class TexturedGlobe:
                 >>> follower = globe.points([0.0], lat=[0.0])
                 >>> pinned = globe.points([0.0], lat=[0.0], spin=0.0)
                 >>> _ = globe.draw(ax, elev=0.0, azim=0.0, spin=180.0)
-                >>> ax.get_figure().canvas.draw()
-                >>> int((follower.get_sizes() > 0).sum()), int((pinned.get_sizes() > 0).sum())
-                (0, 1)
+                >>> bool(globe.visible(globe.project([0.0], [0.0]))[0])
+                False
+                >>> bool(globe.visible(globe.project([0.0], [0.0], spin=0.0))[0])
+                True
                 >>> follower in ax.collections
                 True
 
