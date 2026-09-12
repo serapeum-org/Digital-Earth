@@ -827,6 +827,17 @@ class TexturedGlobe:
                 is out of contract (a zero-length ``sun``, an ``ambient`` outside ``[0, 1]``).
         """
         self.glyph = TexturedGlobeGlyph(texture, **kwargs)
+        #: A glyph of the same tilt carrying no texture, whose ``transform`` places the overlays. They
+        #: cannot hold the drawing glyph's own method: that keeps its texture alive for as long as the
+        #: artist lives, and drags it into anything the figure is pickled or copied into — one marker took
+        #: a saved figure from about 1 MB to 134 MB. The rotation depends on the tilt and nothing else, so
+        #: this places points exactly as the real glyph does.
+        self._placer = TexturedGlobeGlyph(
+            np.zeros((2, 4, 3), dtype=np.uint8),
+            tilt_deg=kwargs.get("tilt_deg", EARTH_TILT_DEG),
+            n_lon=4,
+            n_lat=2,
+        )
         self.fig: Any = None
         self.ax: Any = None
         # Declared up front rather than sprung into existence by animate(), so every reader can see the
@@ -1632,7 +1643,7 @@ class TexturedGlobe:
         world = np.atleast_2d(self.glyph.transform(body, spin=at))
         scatter = self.ax.scatter(world[:, 0], world[:, 1], world[:, 2], **kwargs)
         scatter.__class__ = _SpherePoints
-        scatter._adopt_points(self.glyph.transform, body, at, cull=hide_far_side)
+        scatter._adopt_points(self._placer.transform, body, at, cull=hide_far_side)
         if spin is None:
             self._overlays.append(scatter)
         return scatter
@@ -1686,10 +1697,10 @@ class TexturedGlobe:
         overlay: Any
         if fill:
             overlay = _SphereFill([], **style)
-            overlay._adopt_rings(self.glyph.transform, bodies, at)
+            overlay._adopt_rings(self._placer.transform, bodies, at)
         else:
             overlay = _SphereLines([], **style)
-            overlay._adopt_parts(self.glyph.transform, bodies, at)
+            overlay._adopt_parts(self._placer.transform, bodies, at)
         # add_collection, not add_collection3d: the overlay is already 3-D, starts empty (it is placed at
         # draw time), and add_collection3d's autolim would try to size the view from that empty geometry
         self.ax.add_collection(overlay, autolim=False)

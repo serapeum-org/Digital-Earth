@@ -1299,6 +1299,26 @@ class TestOverlaysFollowTheSpin:
         )
         plt.close(ax.get_figure())
 
+    def test_an_overlay_does_not_drag_the_texture_into_a_saved_figure(self):
+        """Adding an overlay barely changes what a pickle of the figure costs.
+
+        Test scenario:
+            An overlay places itself through a transform. Holding the drawing glyph's own method kept its
+            whole texture alive and serialisable with the artist, taking a saved figure from about 1 MB to
+            134 MB at the default texture size.
+        """
+        globe = TexturedGlobe(
+            np.zeros((360, 720, 3), dtype=np.uint8), n_lon=24, n_lat=12
+        )
+        fig, _ = globe.draw(figsize=(3, 3))
+        bare = len(pickle.dumps(fig))
+        globe.points([0.0], lat=[0.0])
+        grown = len(pickle.dumps(fig)) - bare
+        assert grown < 1024 * 1024, (
+            f"one overlay should not add megabytes to a saved figure, it added {grown / 2**20:.0f} MB"
+        )
+        globe.close()
+
     def test_a_fresh_globe_survives_pickling_and_copying(self, flat_texture):
         """A globe carries no closures, so it pickles, and a copy turns its own overlays.
 
