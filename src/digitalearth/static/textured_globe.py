@@ -849,6 +849,43 @@ class TexturedGlobe:
         #: caller's axes keeps drawing there instead of opening a figure of its own.
         self._ctor_ax: Any = kwargs.get("ax")
 
+    def _is_ours(self, axes: Any) -> bool:
+        """Whether ``axes`` sits on the figure this globe made and still owns.
+
+        Args:
+            axes: The axes about to be drawn on.
+
+        Returns:
+            True when drawing there is the globe drawing on its own figure.
+        """
+        return (
+            self._owns_fig
+            and self.fig is not None
+            and axes is not None
+            and axes.get_figure() is self.fig
+        )
+
+    def _reuse_own_axes(self, ax: Any, kwargs: dict) -> Any:
+        """Fall back to the axes this globe already owns, resizing its figure if asked.
+
+        A globe that is drawn, decorated and then drawn (or animated) again should carry on where it is.
+        Opening a fresh figure each time would leave its overlays behind on a figure about to be closed —
+        which is exactly what made a plain ``animate()`` after ``coastlines()`` come out bare.
+
+        Args:
+            ax: The axes the caller asked for, or ``None``.
+            kwargs: The render options; ``figsize`` is consumed here when the axes is reused.
+
+        Returns:
+            The axes to draw on, which may still be ``None`` when this globe owns nothing yet.
+        """
+        if ax is not None or self._caller_supplied_axes or not self._is_ours(self.ax):
+            return ax
+        figsize = kwargs.pop("figsize", None)
+        if figsize is not None:
+            self.fig.set_size_inches(figsize)
+        return self.ax
+
     def _turn_overlays(self, axes: Any, spin: float) -> None:
         """Turn the overlays drawn on ``axes`` to ``spin``, and forget the ones no longer drawn anywhere.
 
@@ -1433,55 +1470,57 @@ class TexturedGlobe:
     ) -> Tuple[Any, Any]:
         """Draw the globe, returning the matplotlib ``(fig, ax)`` and recording them on the instance.
 
-        Overlays that follow the globe — :meth:`points`, :meth:`coastlines`, :meth:`borders` and
-        :meth:`land` without a ``spin=`` — are redrawn at the new ``spin`` when this draws onto the axes
-        they are already on. A bare ``draw()`` resolves a fresh figure each time and closes the old one, so
-        the overlays go with it; pass the same ``ax`` to turn an already-decorated globe.
+        A globe keeps drawing where it already is: called without an ``ax``, this reuses the axes it owns, so
+                overlays added since the last draw — :meth:`points`, :meth:`coastlines`, :meth:`borders`,
+                :meth:`land` without a ``spin=`` — turn to the new ``spin`` and stay. ``figsize`` resizes that
+                figure. Pass an ``ax`` to draw somewhere else instead; overlays stay behind with the axes they
+                were drawn on, and a figure this globe owned and is leaving is closed.
 
-        Args:
-            ax: An existing ``Axes3D`` to draw on, accepted positionally to match :meth:`animate`. A figure
-                the caller supplies is never closed by :meth:`close`.
-            spin: Rotation about the polar axis, in degrees.
-            **kwargs: Forwarded to the glyph's ``draw`` (``sun``, ``ambient``, ``figsize``, ``elev``,
-                ``azim``, ``background``).
+                Args:
+                    ax: An existing ``Axes3D`` to draw on, accepted positionally to match :meth:`animate`. A figure
+                        the caller supplies is never closed by :meth:`close`.
+                    spin: Rotation about the polar axis, in degrees.
+                    **kwargs: Forwarded to the glyph's ``draw`` (``sun``, ``ambient``, ``figsize``, ``elev``,
+                        ``azim``, ``background``).
 
-        Returns:
-            The ``(Figure, Axes3D)`` the globe was drawn on.
+                Returns:
+                    The ``(Figure, Axes3D)`` the globe was drawn on.
 
-        Examples:
-            - Draw the globe and keep the axes for further decoration:
-                ```python
-                >>> import matplotlib
-                >>> matplotlib.use("Agg")
-                >>> import numpy as np
-                >>> from digitalearth.static import TexturedGlobe
-                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
-                >>> fig, ax = globe.draw(spin=45.0)
-                >>> ax.name
-                '3d'
-                >>> globe.ax is ax
-                True
+                Examples:
+                    - Draw the globe and keep the axes for further decoration:
+                        ```python
+                        >>> import matplotlib
+                        >>> matplotlib.use("Agg")
+                        >>> import numpy as np
+                        >>> from digitalearth.static import TexturedGlobe
+                        >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                        >>> fig, ax = globe.draw(spin=45.0)
+                        >>> ax.name
+                        '3d'
+                        >>> globe.ax is ax
+                        True
 
-                ```
-            - Draw several spins onto axes you own, to build a contact sheet:
-                ```python
-                >>> import matplotlib
-                >>> matplotlib.use("Agg")
-                >>> import numpy as np
-                >>> from digitalearth.static import TexturedGlobe
-                >>> import matplotlib.pyplot as plt
-                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
-                >>> fig, axes = plt.subplots(1, 3, subplot_kw={"projection": "3d"})
-                >>> for spin, sub in zip([0.0, 120.0, 240.0], axes):
-                ...     _ = globe.draw(ax=sub, spin=spin)
-                >>> len(fig.axes)
-                3
+                        ```
+                    - Draw several spins onto axes you own, to build a contact sheet:
+                        ```python
+                        >>> import matplotlib
+                        >>> matplotlib.use("Agg")
+                        >>> import numpy as np
+                        >>> from digitalearth.static import TexturedGlobe
+                        >>> import matplotlib.pyplot as plt
+                        >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                        >>> fig, axes = plt.subplots(1, 3, subplot_kw={"projection": "3d"})
+                        >>> for spin, sub in zip([0.0, 120.0, 240.0], axes):
+                        ...     _ = globe.draw(ax=sub, spin=spin)
+                        >>> len(fig.axes)
+                        3
 
-                ```
+                        ```
         """
+        ax = self._reuse_own_axes(ax, kwargs)
         if ax is not None:
             kwargs["ax"] = ax
-        supplied = kwargs.get("ax") is not None or self._caller_supplied_axes
+        supplied = not (ax is None or self._is_ours(ax)) or self._caller_supplied_axes
         _, drawn_ax = self.glyph.draw(spin=spin, **kwargs)
         self._bind(drawn_ax, owns=not supplied)
         self._spin = float(spin)
@@ -1938,63 +1977,64 @@ class TexturedGlobe:
     def animate(self, ax: Any = None, **kwargs: Any) -> FuncAnimation:
         """Animate a full rotation, returning a matplotlib ``FuncAnimation``.
 
-        When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and
-        :attr:`ax` are known without reaching into the animation's internals — which is what lets
-        :meth:`save_gif` and :meth:`stamp` work on an animated globe.
+                When no ``ax`` is given the 3-D axes is created here rather than inside the glyph, so :attr:`fig` and
+                :attr:`ax` are known without reaching into the animation's internals — which is what lets
+                :meth:`save_gif` and :meth:`stamp` work on an animated globe.
 
         Overlays turn with the sphere. Anything added with :meth:`points`, :meth:`coastlines`,
-        :meth:`borders` or :meth:`land` after this call — or before it, on the axes the animation draws on
-        — is turned to each frame's spin, so markers and coastlines stay attached to the ground. Pass
-        ``spin=`` to one of those to pin it to a fixed position instead.
+                :meth:`borders` or :meth:`land` is turned to each frame's spin, so markers and coastlines stay
+                attached to the ground; pass ``spin=`` to one of those to pin it in place instead. Called without
+                an ``ax``, this animates on the axes the globe already owns, so a globe that was drawn and
+                decorated keeps its overlays.
 
-        The rotation is swept here rather than by the glyph's own ``animate``, which is how each frame's
-        spin is known; it sweeps the same one, ``start_spin`` plus ``revolutions`` whole turns spread over
-        ``n_frames`` frames. The first frame is drawn by this call, so a bad render option is refused here.
+                The rotation is swept here rather than by the glyph's own ``animate``, which is how each frame's
+                spin is known; it sweeps the same one, ``start_spin`` plus ``revolutions`` whole turns spread over
+                ``n_frames`` frames. The first frame is drawn by this call, so a bad render option is refused here.
 
-        Args:
-            ax: An existing ``Axes3D`` to animate on. When omitted, the constructor's axes is used if one
-                was given, and only otherwise is a new figure created.
-            **kwargs: Forwarded to the glyph's ``animate`` (``n_frames``, ``revolutions``, ``start_spin``,
-                ``sun``, ``ambient``, ``interval``, plus the render options). ``figsize`` sizes the figure
-                created here, and is ignored when ``ax`` is given — that figure already exists.
+                Args:
+                    ax: An existing ``Axes3D`` to animate on. When omitted, the constructor's axes is used if one
+                        was given, and only otherwise is a new figure created.
+                    **kwargs: Forwarded to the glyph's ``animate`` (``n_frames``, ``revolutions``, ``start_spin``,
+                        ``sun``, ``ambient``, ``interval``, plus the render options). ``figsize`` sizes the figure
+                        created here, and is ignored when ``ax`` is given — that figure already exists.
 
-        Returns:
-            The ``FuncAnimation`` over the rotation. It is also kept on ``self._animation`` so it is not
-            garbage-collected before you save or display it.
+                Returns:
+                    The ``FuncAnimation`` over the rotation. It is also kept on ``self._animation`` so it is not
+                    garbage-collected before you save or display it.
 
-        Raises:
-            ValueError: If ``interval`` is not a positive number of milliseconds, ``n_frames`` is below 1,
-                or a render option or lighting argument is out of contract.
+                Raises:
+                    ValueError: If ``interval`` is not a positive number of milliseconds, ``n_frames`` is below 1,
+                        or a render option or lighting argument is out of contract.
 
-        Examples:
-            - Animate a rotation; the figure and axes are recorded for saving or stamping afterwards:
-                ```python
-                >>> import matplotlib
-                >>> matplotlib.use("Agg")
-                >>> import numpy as np
-                >>> from digitalearth.static import TexturedGlobe
-                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
-                >>> anim = globe.animate(n_frames=4, interval=100)
-                >>> globe.ax.name
-                '3d'
-                >>> globe.fig is globe.ax.get_figure()
-                True
+                Examples:
+                    - Animate a rotation; the figure and axes are recorded for saving or stamping afterwards:
+                        ```python
+                        >>> import matplotlib
+                        >>> matplotlib.use("Agg")
+                        >>> import numpy as np
+                        >>> from digitalearth.static import TexturedGlobe
+                        >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                        >>> anim = globe.animate(n_frames=4, interval=100)
+                        >>> globe.ax.name
+                        '3d'
+                        >>> globe.fig is globe.ax.get_figure()
+                        True
 
-                ```
-            - Animate onto an axes you already own:
-                ```python
-                >>> import matplotlib
-                >>> matplotlib.use("Agg")
-                >>> import numpy as np
-                >>> from digitalearth.static import TexturedGlobe
-                >>> import matplotlib.pyplot as plt
-                >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
-                >>> ax = plt.figure().add_subplot(projection="3d")
-                >>> anim = globe.animate(ax, n_frames=2, interval=200)
-                >>> globe.ax is ax
-                True
+                        ```
+                    - Animate onto an axes you already own:
+                        ```python
+                        >>> import matplotlib
+                        >>> matplotlib.use("Agg")
+                        >>> import numpy as np
+                        >>> from digitalearth.static import TexturedGlobe
+                        >>> import matplotlib.pyplot as plt
+                        >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
+                        >>> ax = plt.figure().add_subplot(projection="3d")
+                        >>> anim = globe.animate(ax, n_frames=2, interval=200)
+                        >>> globe.ax is ax
+                        True
 
-                ```
+                        ```
         """
         interval = float(kwargs.pop("interval", _DEFAULT_INTERVAL_MS))
         if interval <= 0:
@@ -2010,11 +2050,12 @@ class TexturedGlobe:
             n_frames,
             endpoint=False,
         )
-        supplied = ax is not None or self._caller_supplied_axes
+        supplied = not (ax is None or self._is_ours(ax)) or self._caller_supplied_axes
         if ax is None:
             ax = (
                 self._ctor_ax
             )  # a globe built around the caller's axes keeps animating there
+        ax = self._reuse_own_axes(ax, kwargs)
         if ax is None:
             figsize = kwargs.pop(
                 "figsize", self.glyph.default_options.get("figsize", (6, 6))

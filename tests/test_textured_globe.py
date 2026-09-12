@@ -997,26 +997,43 @@ class TestOverlaysFollowTheSpin:
         )
         plt.close(ax.get_figure())
 
-    def test_an_animation_on_a_new_figure_does_not_bring_old_overlays_back(
+    def test_a_bare_animate_keeps_the_overlays_of_the_globe_it_owns(
         self, globe, tmp_path
     ):
-        """An overlay stays with the figure it was drawn on, and goes when that figure is closed.
+        """draw, decorate, then animate() carries the overlays into the animation.
 
         Test scenario:
-            A bare animate() makes its own figure and closes the one the globe drew before, so the overlay
-            drawn there must neither appear in the animation nor stay registered to the dead figure.
+            Every overlay method needs a drawn globe, so this is the natural order to write. Opening a
+            fresh figure for the animation dropped them all silently, which is the failure #164 is about.
         """
         globe.draw(figsize=(3, 3))
-        globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
-        globe.animate(n_frames=2, interval=100)
-        globe._animation.save(str(tmp_path / "fresh.gif"), writer=PillowWriter(fps=2))
-        assert self._overlays_on(globe.ax, globe) == [], (
-            "the animation's figure should not gain the old figure's overlay"
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        globe.animate(n_frames=2, interval=100, start_spin=0.0)
+        globe._animation.save(str(tmp_path / "kept.gif"), writer=PillowWriter(fps=2))
+        assert scatter in globe.ax.collections, (
+            "the marker should still be on the animated globe"
+        )
+        assert globe._overlays == [scatter], "it should still be following the globe"
+        globe.close()
+
+    def test_drawing_onto_another_axes_leaves_the_overlays_behind(self, globe):
+        """Handing the globe a different axes starts clean there, and closes the figure it leaves.
+
+        Test scenario:
+            The overlay belongs to the axes it was drawn on, so it neither follows the globe to a caller's
+            axes nor keeps the old figure alive.
+        """
+        globe.draw(figsize=(3, 3))
+        globe.points([120.0], lat=[0.0], hide_far_side=False)
+        ax = self._axes()
+        globe.draw(ax, spin=10.0)
+        assert self._overlays_on(ax, globe) == [], (
+            "the new axes should start without overlays"
         )
         assert globe._overlays == [], (
             "an overlay on a closed figure should be forgotten"
         )
-        globe.close()
+        plt.close(ax.get_figure())
 
     def test_redrawing_at_a_new_spin_turns_the_overlay(self, globe):
         """A draw() at another spin on the same axes turns an overlay already on it.
@@ -1037,6 +1054,21 @@ class TestOverlaysFollowTheSpin:
             "redrawing at a new spin should move the overlay with the sphere"
         )
         plt.close(ax.get_figure())
+
+    def test_a_bare_redraw_turns_the_overlays_it_already_has(self, globe):
+        """draw(spin=...) with no axes turns the globe where it is, overlays and all.
+
+        Test scenario:
+            This is the documented way to turn a decorated globe, so it must not open a new figure and
+            leave the overlays on the one it closes.
+        """
+        globe.draw(figsize=(3, 3))
+        scatter = globe.points([120.0], lat=[0.0], hide_far_side=False)
+        first = globe.ax
+        globe.draw(spin=90.0)
+        assert globe.ax is first, "a bare redraw should stay on the axes the globe owns"
+        assert scatter._spin == 90.0, "the overlay should have turned with it"
+        globe.close()
 
     def test_each_panel_of_a_contact_sheet_keeps_its_own_overlay(self, globe):
         """Turning one panel moves only that panel's overlay, and no panel loses or gains one.
@@ -2003,6 +2035,26 @@ class TestRenderLifecycle:
             globe.draw()
             assert len(plt.get_fignums()) == 1
         assert plt.get_fignums() == [], "leaving the block should close the figure"
+
+    def test_turning_a_decorated_globe_still_closes_its_own_figure(self, flat_texture):
+        """Redrawing a globe — bare or on its own axes — leaves it owning its figure.
+
+        Test scenario:
+            Turning an already-decorated globe used to hand its own figure to "the caller", so close()
+            and the context manager stopped releasing it and a loop leaked one figure per globe.
+        """
+        plt.close("all")
+        with TexturedGlobe(flat_texture, n_lon=8, n_lat=4) as globe:
+            globe.draw()
+            globe.points([0.0], lat=[0.0])
+            globe.draw(spin=30.0)
+            globe.draw(globe.ax, spin=60.0)
+            assert len(plt.get_fignums()) == 1, (
+                "the globe should still be on one figure"
+            )
+        assert plt.get_fignums() == [], (
+            "leaving the block should close the globe's figure"
+        )
 
     def test_the_context_manager_propagates_errors(self, flat_texture):
         """It must not swallow an exception raised inside the block, and must still close the figure."""
