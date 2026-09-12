@@ -175,6 +175,10 @@ _FILL_RANK = 1.001
 _LINE_RANK = 1.002
 _POINT_RANK = 1.003
 
+#: Below this, a length is treated as nothing: the two points it separates are the same point as far as
+#: the horizon geometry goes, and dividing by it would turn rounding error into a wild direction.
+_VANISHING = 1e-12
+
 #: How many points to sample along a limb arc when closing a clipped land ring. The arc is at most a
 #: half-circle, so this holds the chord error under a pixel at any figure size these globes are drawn at.
 _LIMB_ARC_STEPS = 48
@@ -224,11 +228,13 @@ def _limb_point(
     depth_in, depth_out = float(inside @ view), float(outside @ view)
     span = depth_in - depth_out
     crossing = (
-        inside if span == 0.0 else inside + (depth_in / span) * (outside - inside)
+        inside
+        if abs(span) < _VANISHING
+        else inside + (depth_in / span) * (outside - inside)
     )
     tangential = crossing - (crossing @ view) * view
     length = float(np.linalg.norm(tangential))
-    if length == 0.0:
+    if length < _VANISHING:
         return np.asarray(inside, dtype=float)
     return np.asarray(tangential / length * float(np.linalg.norm(inside)), dtype=float)
 
@@ -281,7 +287,7 @@ def _limb_arc(
     first = start / radius
     second = np.cross(view, first)
     length = float(np.linalg.norm(second))
-    if length == 0.0:
+    if length < _VANISHING:
         return np.empty((0, 3))
     second = second / length
     angle = float(np.arctan2(end @ second, end @ first))

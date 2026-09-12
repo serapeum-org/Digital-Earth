@@ -1294,7 +1294,10 @@ class TestOverlaysFollowTheSpin:
         scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, s=40, linewidths=1.0)
         getattr(scatter, setter)(None)
         drawn = _drawn(scatter, values)
-        assert np.isfinite(drawn).all() and (drawn > 0).all(), (
+        assert np.isfinite(drawn).all(), (
+            f"clearing {setter} should leave no NaN, got {list(drawn)}"
+        )
+        assert (drawn > 0).all(), (
             f"clearing {setter} should fall back to a real default, got {list(drawn)}"
         )
         plt.close(ax.get_figure())
@@ -1557,14 +1560,18 @@ class TestReferenceGeography:
         assert np.allclose(np.linalg.norm(face, axis=1), 1.001), (
             "the face should stay on one shell"
         )
-        assert lon.min() >= 60.0 - 1e-6 and lon.max() <= 90.0 + 1e-6, (
-            f"longitudes should run 60..90, got {lon.min()}..{lon.max()}"
+        assert lon.min() >= 60.0 - 1e-6, (
+            f"longitudes should start at 60, got {lon.min()}"
+        )
+        assert lon.max() <= 90.0 + 1e-6, (
+            f"longitudes should stop at the limb, got {lon.max()}"
         )
         # a limb crossing sits on the chord between two vertices of a parallel, a few hundredths of a
         # degree off it; the spur this guards against overshot the polygon by nearly three degrees
-        assert lat.min() >= -20.1 and lat.max() <= 20.1, (
-            f"latitudes should stay within -20..20, got {lat.min()}..{lat.max()}"
+        assert lat.min() >= -20.1, (
+            f"latitudes should stay north of -20, got {lat.min()}"
         )
+        assert lat.max() <= 20.1, f"latitudes should stay south of 20, got {lat.max()}"
 
     @pytest.mark.parametrize("layer", ["coastlines", "land"])
     def test_a_layer_with_no_usable_parts_draws_nothing(self, drawn, mocker, layer):
@@ -1864,8 +1871,9 @@ class TestReferenceGeography:
             layer: The reference layer method under test.
         """
         globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4)
+        add_layer = getattr(globe, layer)
         with pytest.raises(RuntimeError, match="draw"):
-            getattr(globe, layer)()
+            add_layer()
 
 
 class TestOverlayGeometryHelpers:
@@ -2098,8 +2106,11 @@ class TestOverlayGeometryHelpers:
         ring, world = self._lonlat_ring(lon, lat)
         (face,) = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
         longitudes = np.degrees(np.arctan2(face[:, 1], face[:, 0]))
-        assert longitudes.min() >= 60.0 - 1e-6 and longitudes.max() <= 90.0 + 1e-6, (
-            f"the face should cover 60..90 east, got {longitudes.min()}..{longitudes.max()}"
+        assert longitudes.min() >= 60.0 - 1e-6, (
+            f"the face should start at 60 east, got {longitudes.min()}"
+        )
+        assert longitudes.max() <= 90.0 + 1e-6, (
+            f"the face should stop at the limb, got {longitudes.max()}"
         )
 
     def test_clip_ring_does_not_depend_on_where_the_ring_starts(self):

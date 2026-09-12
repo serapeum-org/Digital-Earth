@@ -126,7 +126,8 @@ class TestMaskNodata:
         """
         out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
         assert np.isnan(out[1]), "sentinel cell should be NaN"
-        assert out[0] == 1.0 and out[2] == 3.0, f"non-sentinel cells changed: {out}"
+        assert out[0] == 1.0, f"the first non-sentinel cell changed: {out}"
+        assert out[2] == 3.0, f"the last non-sentinel cell changed: {out}"
 
     def test_none_nodata_is_float_passthrough(self):
         """mask_nodata(arr, None) returns a float64 copy unchanged.
@@ -159,7 +160,8 @@ class TestMaskNodata:
         """
         out = mask_nodata(np.array([[1.0, 0.0], [0.0, 2.0]]), 0.0)
         assert out.shape == (2, 2), f"shape changed: {out.shape}"
-        assert np.isnan(out[0, 1]) and np.isnan(out[1, 0]), "zero cells should be NaN"
+        assert np.isnan(out[0, 1]), f"the first zero cell should be NaN: {out}"
+        assert np.isnan(out[1, 0]), f"the second zero cell should be NaN: {out}"
 
     def test_accepts_array_like_input(self):
         """mask_nodata coerces any array-like, not just ndarrays.
@@ -469,10 +471,10 @@ class TestReadMaskedBand:
         ds = _FakeDataset([[5.0, -1.0], [-1.0, 8.0]], no_data_value=(-1.0,))
         out = read_masked_band(ds, band=1)
         assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-        assert np.isnan(out[0, 1]) and np.isnan(out[1, 0]), (
-            "sentinel cells should be NaN"
-        )
-        assert out[0, 0] == 5.0 and out[1, 1] == 8.0, f"real values changed: {out}"
+        assert np.isnan(out[0, 1]), f"the first sentinel cell should be NaN: {out}"
+        assert np.isnan(out[1, 0]), f"the second sentinel cell should be NaN: {out}"
+        assert out[0, 0] == 5.0, f"the first real value changed: {out}"
+        assert out[1, 1] == 8.0, f"the second real value changed: {out}"
 
     def test_no_nodata_leaves_values(self):
         """read_masked_band leaves values intact when the band has no sentinel.

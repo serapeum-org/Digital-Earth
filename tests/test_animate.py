@@ -304,9 +304,8 @@ class TestAnimate:
         )
         out = tmp_path / "anim.gif"
         anim.save(str(out), writer=PillowWriter(fps=2))
-        assert out.exists() and out.stat().st_size > 0, (
-            "animation GIF should be non-empty"
-        )
+        assert out.exists(), "animation GIF should have been written"
+        assert out.stat().st_size > 0, "animation GIF should be non-empty"
         assert m.ax.get_title() == titles[-1], (
             f"last title not applied: {m.ax.get_title()!r}"
         )
@@ -360,9 +359,8 @@ class TestAnimate:
         assert scanned <= anim_mod._CLIM_SCAN_CAP, (
             f"scanned {scanned} frames, cap is {anim_mod._CLIM_SCAN_CAP}"
         )
-        assert "vmin" in opts and "vmax" in opts, (
-            "clim should still be resolved from the sampled frames"
-        )
+        assert "vmin" in opts, "vmin should be resolved from the sampled frames"
+        assert "vmax" in opts, "vmax should be resolved from the sampled frames"
 
     def test_titles_length_mismatch_raises(self, stack):
         """A titles list of the wrong length raises ValueError."""
@@ -434,9 +432,8 @@ class TestAnimate:
         )
         one = {"vmin": -100.0}
         m._resolve_animation_clim(stack, one)
-        assert one["vmin"] == -100.0 and one["vmax"] == hi, (
-            "only the missing bound should be filled"
-        )
+        assert one["vmin"] == -100.0, "the given bound should be kept"
+        assert one["vmax"] == hi, "only the missing bound should be filled"
         explicit = {"vmin": -5.0, "vmax": 5.0}
         m._resolve_animation_clim(stack, explicit)
         assert (explicit["vmin"], explicit["vmax"]) == (-5.0, 5.0), (
@@ -449,8 +446,9 @@ class TestAnimate:
         opts = {"cmap": "viridis"}
         m._resolve_animation_clim(stack, opts)
         lo, hi = m._stack_clim(stack)
-        assert opts["vmin"] == lo and opts["vmax"] == hi, (
-            "resolved clim should be injected into opts"
+        assert opts["vmin"] == lo, "the resolved low bound should be injected into opts"
+        assert opts["vmax"] == hi, (
+            "the resolved high bound should be injected into opts"
         )
         m._animation_colorbar(opts, "auto")
         assert len(m.fig.axes) == 2, "a colorbar axes should be present"
@@ -610,13 +608,15 @@ class TestAnimateBand:
             band=0 used to reach pyramids as the 0-based band -1 and come back as "band -1 is out of
             range", naming a band the caller never passed.
         """
+        m = Map(crs=4326)
         with pytest.raises(ValueError, match="whole number of 1 or more"):
-            Map(crs=4326)._resolve_animation_clim(two_band_stack, {"band": band})
+            m._resolve_animation_clim(two_band_stack, {"band": band})
 
     def test_animate_refuses_a_bad_band_up_front(self, two_band_stack):
         """The check happens at the animate() call, not from inside the frame loop."""
+        m = Map(crs=4326, figsize=(3, 3))
         with pytest.raises(ValueError, match="whole number of 1 or more"):
-            Map(crs=4326, figsize=(3, 3)).animate(two_band_stack, band=0, fps=2)
+            m.animate(two_band_stack, band=0, fps=2)
 
     def test_rotate_scan_reads_the_band_too(self, two_band_stack):
         """The per-view union rotate() uses scans the animated band as well.
@@ -1201,14 +1201,16 @@ class TestRotate:
     def test_invalid_n_frames_raises(self):
         """rotate with fewer than one frame raises ValueError."""
         m = Map(crs=projections.orthographic(0, 0), globe=True)
+        field = _field(0.0)
         with pytest.raises(ValueError, match="n_frames"):
-            m.rotate(_field(0.0), n_frames=0)
+            m.rotate(field, n_frames=0)
 
     def test_unknown_kind_raises_up_front(self):
         """An invalid kind fails fast at the rotate() call (N1)."""
         m = Map(crs=projections.orthographic(0, 0), globe=True)
+        field = _field(0.0)
         with pytest.raises(ValueError, match="unknown animation kind"):
-            m.rotate(_field(0.0), kind="bogus")
+            m.rotate(field, kind="bogus")
 
     def test_colorbar_static(self, tmp_path):
         """rotate(colorbar=True) adds one persistent colorbar axes across the rotation frames."""
@@ -1226,9 +1228,8 @@ class TestRotate:
         assert len(m.fig.axes) == 2, "rotate colorbar should add one axes"
         out = tmp_path / "rotcbar.gif"
         anim.save(str(out), writer=PillowWriter(fps=4))
-        assert len(m.fig.axes) == 2 and out.stat().st_size > 0, (
-            "colorbar must stay single after rendering"
-        )
+        assert len(m.fig.axes) == 2, "colorbar must stay single after rendering"
+        assert out.stat().st_size > 0, "the rendered animation should be non-empty"
 
     def test_rotate_coastlines_best_effort(self, tmp_path, mocker):
         """rotate(coastlines=True) attempts coastlines each frame and still renders when they fail offline."""
