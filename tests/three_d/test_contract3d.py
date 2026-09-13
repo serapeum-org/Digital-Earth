@@ -298,6 +298,76 @@ class TestC4SchemeAndK:
         codes = sorted({int(value) for value in scene.layers[0][0]["scalar"]})
         assert codes == list(range(k)), f"expected classes 0..{k - 1}, got {codes}"
 
+    def test_a_missing_value_is_not_painted_as_the_top_class(self, scene):
+        """A ``NaN`` in the value column renders as missing, never as the column's maximum.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            ``np.digitize`` sorts ``NaN`` above every class edge, so clipping the codes into ``0 .. k-1``
+            promoted a feature with no value into the **top** class: it reached the lookup table as the same
+            code as the largest value in the column and rendered as a hotspot that is not in the data. What
+            is checked here is the colour the feature actually ends up with, not just its code — the layer's
+            own lookup table must hand back the tiers' shared neutral grey for it, and something else for
+            the top class.
+        """
+        from matplotlib.colors import to_hex
+
+        from digitalearth.base.symbology import MISSING_COLOR
+
+        values = np.array([1.0, 2.0, 3.0, 40.0, np.nan])
+        actor = scene.point_cloud(_points(5), values=values, scheme="quantiles", k=4)
+        codes = scene.layers[0][0]["scalar"]
+        assert np.isnan(codes[-1]), (
+            f"a value that is missing must stay missing, got code {codes[-1]}"
+        )
+        assert sorted(int(value) for value in codes[:-1]) == [0, 1, 2, 3], (
+            f"the present values must still span the four classes, got {list(codes[:-1])}"
+        )
+        table = actor.mapper.lookup_table
+        missing = table.map_value(float("nan"))
+        assert missing != table.map_value(float(codes[-2])), (
+            "a feature with no value must not render in the top class's colour"
+        )
+        assert to_hex(missing[:3]) == MISSING_COLOR, (
+            f"missing data must render in the tiers' shared grey, got {missing}"
+        )
+
+    def test_a_missing_category_is_not_painted_as_the_first_category(self, scene):
+        """A null in a categorical column renders as missing, not as the first category.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The categorical classifier builds its categories from the non-null values, then looked every
+            value up with a default of ``0`` — so a feature with no category was drawn in the first
+            category's colour, indistinguishable from a feature that really is in it. It must reach the
+            lookup table as ``NaN`` and be painted the shared neutral grey instead.
+        """
+        from matplotlib.colors import to_hex
+
+        from digitalearth.base.symbology import MISSING_COLOR
+
+        values = np.array(["park", "road", None, "park"], dtype=object)
+        actor = scene.point_cloud(_points(4), values=values, scheme="categorical")
+        codes = scene.layers[0][0]["scalar"]
+        assert np.isnan(codes[2]), (
+            f"a feature with no category must stay missing, got code {codes[2]}"
+        )
+        assert [int(value) for value in codes[[0, 1, 3]]] == [0, 1, 0], (
+            f"the labelled features must keep their own classes, got {list(codes)}"
+        )
+        table = actor.mapper.lookup_table
+        missing = table.map_value(float("nan"))
+        assert missing != table.map_value(0.0), (
+            "a feature with no category must not render in the first category's colour"
+        )
+        assert to_hex(missing[:3]) == MISSING_COLOR, (
+            f"missing data must render in the tiers' shared grey, got {missing}"
+        )
+
     def test_the_classes_match_what_the_other_tiers_compute(self):
         """The 3-D classes come from the same classifier the 2-D tiers use.
 

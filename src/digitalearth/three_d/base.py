@@ -62,6 +62,15 @@ def classified_scalars(
     ``(-0.5, n - 0.5)`` so index *i* lands in the middle of the *i*-th colour. The picture is a flat-filled
     classified layer, which is what the scheme asked for.
 
+    **A missing value stays missing.** A feature whose value is ``NaN``/``None``/``pd.NA`` gets no class
+    index at all: it reaches the engine as ``NaN``, and the style carries ``nan_color`` —
+    :data:`~digitalearth.base.symbology.MISSING_COLOR`, the same neutral grey the static, interactive and web
+    choropleths paint missing data with. A lookup table's NaN colour is VTK's own mechanism for "no value",
+    so nothing is squeezed into the ramp to express it. It has to be done deliberately because both
+    classifiers would otherwise give missing data a real class: ``np.digitize`` sorts ``NaN`` above every
+    edge, so a graduated scheme would clip it into the **top** class and draw it as the column's maximum — a
+    hotspot that is not in the data — and a categorical scheme would fall back to the first category.
+
     Args:
         values: The per-feature values to colour by; coerced to float for the graduated schemes, taken as-is
             (labels or codes) for ``"categorical"``.
@@ -77,8 +86,8 @@ def classified_scalars(
 
     Returns:
         dict: keyword arguments to splat into :meth:`pyvista.Plotter.add_mesh` /
-        :meth:`pyvista.Plotter.add_points` — always ``scalars`` and ``cmap``, plus ``clim`` and ``n_colors``
-        when the layer was classified.
+        :meth:`pyvista.Plotter.add_points` — always ``scalars``, ``cmap`` and ``nan_color``, plus ``clim``
+        and ``n_colors`` when the layer was classified.
 
     Raises:
         ValueError: when the column cannot be classified — an unknown scheme, a constant column with no
@@ -91,7 +100,7 @@ def classified_scalars(
             >>> from digitalearth.three_d.base import classified_scalars
             >>> style = classified_scalars([1.0, 5.0, 9.0], scheme=None, k=5, cmap="viridis")
             >>> sorted(style), [float(v) for v in style["scalars"]]
-            (['cmap', 'scalars'], [1.0, 5.0, 9.0])
+            (['cmap', 'nan_color', 'scalars'], [1.0, 5.0, 9.0])
 
             ```
         - A graduated scheme replaces the values with class indices and supplies one colour per class:
@@ -116,21 +125,48 @@ def classified_scalars(
             (3, [0, 1, 0, 2])
 
             ```
+        - A feature with no value is drawn as missing, never as the top class:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.three_d.base import classified_scalars
+            >>> style = classified_scalars(
+            ...     [1.0, 2.0, 3.0, 40.0, np.nan], scheme="quantiles", k=4, cmap="viridis"
+            ... )
+            >>> [float(v) for v in style["scalars"]]
+            [0.0, 1.0, 2.0, 3.0, nan]
+            >>> style["nan_color"]
+            '#cccccc'
+
+            ```
     """
     from digitalearth.base.symbology import (
+        MISSING_COLOR,
         categorical_colors,
         resolve_categorical_cmap,
     )
 
     if scheme is None:
-        return {"scalars": np.asarray(values, dtype="float64"), "cmap": cmap}
+        return {
+            "scalars": np.asarray(values, dtype="float64"),
+            "cmap": cmap,
+            "nan_color": MISSING_COLOR,
+        }
 
     if isinstance(scheme, str) and scheme.lower() == "categorical":
         categories, colours = categorical_colors(
             values, cmap=resolve_categorical_cmap(cmap)
         )
         index = {category: position for position, category in enumerate(categories)}
-        codes = np.array([index.get(value, 0) for value in values], dtype="int64")
+        # `categorical_colors` builds its categories from the non-null values alone, so a value the index
+        # has no entry for is a missing one — code it NaN rather than defaulting it into category 0, which
+        # would paint a feature with no value in the first category's colour.
+        codes = np.array(
+            [
+                index.get(value, np.nan)
+                for value in np.asarray(values, dtype=object).ravel()
+            ],
+            dtype="float64",
+        )
         return _discrete_style(codes, colours)
 
     from cleopatra.styling.styles import classify
@@ -145,7 +181,13 @@ def classified_scalars(
     # `edges` bounds the classes, so it holds one more entry than there are classes; digitize against the
     # interior edges to land every value in 0 .. n_classes - 1 (clip catches the closed upper bound).
     n_classes = max(len(edges) - 1, 1)
-    codes = np.clip(np.digitize(numbers, np.asarray(edges)[1:-1]), 0, n_classes - 1)
+    codes = np.clip(
+        np.digitize(numbers, np.asarray(edges)[1:-1]), 0, n_classes - 1
+    ).astype("float64")
+    # `np.digitize` sorts NaN above every edge, so a missing value would be clipped into the top class and
+    # render as the column's maximum. `classify` already cut the edges from the finite values alone, so the
+    # classes themselves are unaffected — only the missing values need lifting back out of the ramp.
+    codes[np.isnan(numbers)] = np.nan
     return _discrete_style(codes, _sample_cmap(cmap, n_classes))
 
 
@@ -175,19 +217,24 @@ def _discrete_style(codes: np.ndarray, colours: list[str]) -> dict[str, Any]:
     """Build the add_mesh keywords that paint integer ``codes`` with one flat colour each.
 
     Args:
-        codes: Per-feature class index, ``0 .. len(colours) - 1``.
+        codes: Per-feature class index, ``0 .. len(colours) - 1``, with ``NaN`` where the feature had no
+            value to classify.
         colours: One colour per class, in class order.
 
     Returns:
-        dict: ``scalars``/``cmap``/``clim``/``n_colors`` for :meth:`pyvista.Plotter.add_mesh`. ``clim`` is
-        half-open around the integers so each index sits at the centre of its colour band rather than on the
-        boundary between two.
+        dict: ``scalars``/``cmap``/``clim``/``n_colors``/``nan_color`` for :meth:`pyvista.Plotter.add_mesh`.
+        ``clim`` is half-open around the integers so each index sits at the centre of its colour band rather
+        than on the boundary between two, and ``nan_color`` is what the lookup table paints the ``NaN``
+        codes with — so missing data reads as missing instead of borrowing a class's colour.
     """
+    from digitalearth.base.symbology import MISSING_COLOR
+
     return {
         "scalars": codes,
         "cmap": colours,
         "clim": (-0.5, len(colours) - 0.5),
         "n_colors": len(colours),
+        "nan_color": MISSING_COLOR,
     }
 
 
