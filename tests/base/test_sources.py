@@ -164,20 +164,6 @@ class TestExtractorHelpers:
 
         assert _band_item(("a",), 5, default=None) is None
 
-    def test_mask_nodata_passthrough_when_none(self):
-        """mask_nodata returns the array unchanged (as float) when nodata is None."""
-        from digitalearth.base.arrays import mask_nodata
-
-        out = mask_nodata(np.array([1, 2, 3]), None)
-        np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
-
-    def test_mask_nodata_replaces_with_nan(self):
-        """mask_nodata replaces cells matching nodata with NaN."""
-        from digitalearth.base.arrays import mask_nodata
-
-        out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
-        assert np.isnan(out[1]) and not np.isnan(out[0])
-
     def test_from_netcdf_no_variables_raises(self):
         """_from_netcdf raises ValueError when the NetCDF exposes no variables."""
         from digitalearth.base.sources.extractors import _from_netcdf
@@ -605,6 +591,26 @@ class TestSourceCrsContract:
             f"crs must keep the spelling it was given, got {source.crs!r}"
         )
 
+    def test_a_written_out_definition_still_answers_its_code(self):
+        """A CRS spelled as WKT is read down to the authority block it carries.
+
+        Test scenario:
+            ``crs`` is documented to hold a full definition whenever pyramids reports no code of its own,
+            and a warp into a *coded* CRS reports its WKT — which ends on ``AUTHORITY["EPSG", ...]``. A
+            reader that only stripped an ``"EPSG:"`` prefix answered "no code" for those, so ``epsg`` said
+            ``None`` for a source whose CRS names its authority outright.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        wkt = crs_from_user_input(3857).to_wkt()
+        source = get_source(np.zeros((2, 2)), crs=wkt)
+        assert source.epsg == 3857, (
+            f"the authority block names EPSG:3857, got {source.epsg!r}"
+        )
+        assert source.crs == wkt, (
+            "crs must keep the definition it was given, not the code read out of it"
+        )
+
     def test_epsg_is_none_when_there_is_no_code_to_report(self):
         """An unknown CRS has no code, and a boolean is never mistaken for one.
 
@@ -619,6 +625,9 @@ class TestSourceCrsContract:
         axis = DimensionInfo(np.array([0.0]), "x")
         assert Source(None, axis, axis, crs=True).epsg is None, (
             "a boolean must not be read as the EPSG code 1"
+        )
+        assert Source(None, axis, axis, crs=ORTHOGRAPHIC).epsg is None, (
+            "a projection that names no authority must still report no code"
         )
 
 

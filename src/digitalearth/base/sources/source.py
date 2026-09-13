@@ -10,6 +10,7 @@ This module is a **leaf**: it imports nothing from :mod:`digitalearth.base.sourc
 
 from typing import Any, Optional
 
+from digitalearth.base.crs import authority_code
 from digitalearth.base.sources.dimension import DimensionInfo
 
 
@@ -152,11 +153,19 @@ class Source:
         """The EPSG code of :attr:`crs`, or ``None`` when it has none.
 
         The narrower of the two CRS questions: :attr:`crs` always says where the coordinates are, while this
-        answers only "is there an authority code for it". A projection defined by proj4/WKT alone gives
-        ``None`` here and still gives its definition from :attr:`crs`.
+        answers only "is there an authority code for it". ``None`` therefore means the CRS genuinely names
+        no authority — not merely that it was written out rather than abbreviated.
+
+        The distinction matters because :attr:`crs` is allowed to hold a full definition: a caller that warps
+        into a display CRS stores what pyramids reports, and a warp into a *coded* CRS reports its WKT, which
+        ends on the authority block (``AUTHORITY["EPSG", ...]`` in WKT1, ``ID["EPSG", ...]`` in WKT2). The
+        code spellings are read here directly and anything longer is handed to
+        :func:`~digitalearth.base.crs.authority_code`, so pyramids does the reading — the same rule
+        :func:`~digitalearth.base.crs.is_geographic` follows, and for the same reason: a reader that only
+        matched ``"EPSG:<code>"`` reported "no code" for a CRS that plainly carries one.
 
         Returns:
-            The EPSG integer, or ``None`` for an unknown or code-less CRS.
+            The EPSG integer, or ``None`` for an unknown CRS or one that names no authority.
 
         Examples:
             - An EPSG-coded source answers both questions the same way:
@@ -168,7 +177,17 @@ class Source:
                 3857
 
                 ```
-            - A projection with no authority code keeps its definition but has no code:
+            - A CRS written out as a definition is read down to the authority block it carries:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.crs import crs_from_user_input
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> Source(None, axis, axis, crs=crs_from_user_input(3857).to_wkt()).epsg
+                3857
+
+                ```
+            - A projection that names no authority keeps its definition and has no code:
                 ```python
                 >>> import numpy as np
                 >>> from digitalearth.base.sources import Source, DimensionInfo
@@ -178,6 +197,9 @@ class Source:
                 (True, True)
 
                 ```
+
+        See Also:
+            crs: the wider question — where the coordinates are, in whatever spelling was supplied.
         """
         crs = self._crs
         if isinstance(crs, bool) or crs is None:
@@ -187,7 +209,9 @@ class Source:
         text = str(crs).strip()
         if text.lower().startswith("epsg:"):
             text = text.split(":", 1)[1].strip()
-        return int(text) if text.isdigit() else None
+        if text.isdigit():
+            return int(text)
+        return authority_code(crs)
 
     @property
     def units(self) -> Optional[str]:
