@@ -485,7 +485,10 @@ def _quickmap_interactive(
         scene.colorbar(False)
     if basemap:
         source = _basemap_source(basemap)
-        scene.tiles() if source is None else scene.tiles(source)
+        if source is None:
+            scene.tiles()
+        else:
+            scene.tiles(source)
     if coastlines:
         scene.coastlines()
     return scene
