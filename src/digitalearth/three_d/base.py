@@ -143,6 +143,7 @@ def classified_scalars(
         MISSING_COLOR,
         categorical_colors,
         resolve_categorical_cmap,
+        sample_cmap,
     )
 
     if scheme is None:
@@ -188,29 +189,7 @@ def classified_scalars(
     # render as the column's maximum. `classify` already cut the edges from the finite values alone, so the
     # classes themselves are unaffected — only the missing values need lifting back out of the ramp.
     codes[np.isnan(numbers)] = np.nan
-    return _discrete_style(codes, _sample_cmap(cmap, n_classes))
-
-
-def _sample_cmap(cmap: Any, n: int) -> list[str]:
-    """Sample ``cmap`` at ``n`` evenly-spaced points, as hex colours.
-
-    Args:
-        cmap: A matplotlib colormap name, or an already-built sequence of colours (returned as a list).
-        n: How many colours to draw — one per class.
-
-    Returns:
-        list[str]: ``n`` ``#rrggbb`` colours, in ramp order.
-    """
-    if not isinstance(cmap, str):
-        return list(cmap)
-    from matplotlib import colormaps
-    from matplotlib.colors import to_hex
-
-    colormap = colormaps[cmap]
-    # One point per class, spread across the whole ramp — for n == 1 that is the middle of it, since
-    # linspace(0, 1, 1) would otherwise pin the single class to the ramp's dark end.
-    positions = [0.5] if n == 1 else np.linspace(0.0, 1.0, n)
-    return [to_hex(colormap(position)) for position in positions]
+    return _discrete_style(codes, sample_cmap(cmap, n_classes))
 
 
 def _discrete_style(codes: np.ndarray, colours: list[str]) -> dict[str, Any]:
@@ -793,10 +772,16 @@ class Scene3DBase:
 
         **It returns the path it wrote**, like every other tier's ``save()``, so a caller can chain on the
         result without rebuilding the filename — and ``.html`` returns the *normalised* name, which is not
-        always the one passed in. It used to return the RGB frame for a raster suffix and ``None`` for an
-        export, which made the return type depend on the suffix and gave the one branch that produced a
-        useful value no counterpart on the others. That frame is still available, from :meth:`screenshot`,
-        which is now the only way to get it.
+        always the one passed in.
+
+        **Changed, with no transition: it used to return the RGB frame** for a raster suffix, and ``None``
+        for an export — a return type that depended on the suffix, and gave the one branch producing a
+        useful value no counterpart on the others. Ask for the frame by name instead:
+        :meth:`screenshot` writes the same file *and* hands back the array, so ``frame = scene.save(out)``
+        becomes ``frame = scene.screenshot(out)`` — one call, the same two effects. Unlike the renamed
+        keywords in this batch, which keep their old spelling for a release, a return *type* has no shim to
+        offer: a value contrived to read as both a ``Path`` and an array would be worse than the break, so
+        this one is announced rather than eased.
 
         Args:
             path: Output file, as a string or ``os.PathLike``. Its suffix selects the branch.
