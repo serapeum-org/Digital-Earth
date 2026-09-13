@@ -34,6 +34,12 @@ logger = logging.getLogger(__name__)
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
 _POLYGON_LAYERS = frozenset({"land", "ocean", "lakes"})
 
+#: Colormap a raster backdrop falls back to when neither the caller nor ``auto_style`` names one — the
+#: hypsometric look a relief/imagery backdrop is usually wanted in. It sits *behind* the lookup rather than
+#: in :meth:`DecorationMixin.stock_img`'s signature, so a backdrop whose variable is recognised (a DEM, say)
+#: is coloured the same way the same data would be as a data layer.
+STOCK_IMG_CMAP = "gist_earth"
+
 
 def _to_feature_style(kind: str, style: dict) -> dict:
     """Translate singular matplotlib style keys to the plural collection keys ``add_features`` expects.
@@ -273,7 +279,7 @@ class DecorationMixin(_MixinBase):
         dataset: Any = None,
         *,
         zorder: float = -3.0,
-        cmap: str = "gist_earth",
+        cmap: Optional[str] = None,
         **kwargs,
     ) -> Any:
         """Draw a background raster (a "stock image" backdrop) beneath all data layers.
@@ -290,7 +296,10 @@ class DecorationMixin(_MixinBase):
         Args:
             dataset: A pyramids ``Dataset`` to use as the backdrop, or ``None`` to try a tile basemap.
             zorder: Draw order for the backdrop (default ``-3.0``, below data/coastlines).
-            cmap: Colormap for a raster backdrop (ignored for the tile path).
+            cmap: Colormap for a raster backdrop (ignored for the tile path). ``None`` (default) resolves
+                one from the backdrop's own variable via
+                :func:`~digitalearth.base.autostyle.auto_style` — so a DEM backdrop is coloured as terrain
+                — falling back to :data:`STOCK_IMG_CMAP` when the lookup has no opinion.
             **kwargs: Forwarded to :meth:`imshow` (raster) or :meth:`basemap` (tiles).
 
         Returns:
@@ -304,7 +313,7 @@ class DecorationMixin(_MixinBase):
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
         with self._preserve_view():
-            im = self.imshow(dataset, cmap=cmap, **kwargs)
+            im = self.imshow(dataset, cmap=cmap, default_cmap=STOCK_IMG_CMAP, **kwargs)
             # the backdrop is off-limb: there is nothing to push behind the data
             if im is None:
                 return None

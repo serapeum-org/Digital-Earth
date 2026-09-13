@@ -137,7 +137,7 @@ class TestTheGifEncoder:
             tmp_path: pytest's per-test directory.
 
         Test scenario:
-            ``to_gif`` renders its frames into a ``TemporaryDirectory``; a leaked handle makes that
+            ``animate`` renders its frames into a ``TemporaryDirectory``; a leaked handle makes that
             directory fail to delete with ``PermissionError`` on Windows.
         """
         out = tmp_path / "out.gif"
@@ -203,7 +203,7 @@ class TestSaveDispatch:
             called["path"] = path
             return str(path)
 
-        monkeypatch.setattr(WebMap, "to_gif", fake_gif)
+        monkeypatch.setattr(WebMap, "animate", fake_gif)
         out = tmp_path / "out.gif"
         WebMap().basemap().save(str(out))
         assert called["path"] == str(out), called
@@ -220,7 +220,7 @@ class TestSaveDispatch:
 
 
 class TestTheAnimationOrchestration:
-    """`to_gif` drives the step visibility, renders each frame and encodes them.
+    """`animate` drives the step visibility, renders each frame and encodes them.
 
     The screenshot itself needs a headless browser, which is deliberately not a declared dependency — so
     only that one step is faked here. Everything around it is the real code: the frame enumeration, the
@@ -305,7 +305,7 @@ class TestTheAnimationOrchestration:
         monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
         out = tmp_path / "series.gif"
         m = WebMap().basemap().timeslider(raster_stack)
-        m.to_gif(str(out))
+        m.animate(str(out))
 
         assert len(seen) == 3, f"expected one frame per step, rendered {len(seen)}"
         with Image.open(out) as animation:
@@ -328,7 +328,7 @@ class TestTheAnimationOrchestration:
         monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
         m = WebMap().basemap().timeslider(raster_stack)
         steps = list(m._temporal["layer_ids"])
-        m.to_gif(str(tmp_path / "series.gif"))
+        m.animate(str(tmp_path / "series.gif"))
 
         for index, record in enumerate(seen):
             visible = [layer for layer, shown in record["visibility"].items() if shown]
@@ -358,7 +358,9 @@ class TestTheAnimationOrchestration:
         out = tmp_path / "series.gif"
         m = WebMap().basemap().timeslider(raster_stack)
 
-        assert m.to_gif(str(out)) == str(out)
+        assert m.animate(str(out)) == pathlib.Path(out), (
+            "save/animate return the pathlib.Path written (C1)"
+        )
         assert out.exists()
         for record in seen:
             assert not pathlib.Path(record["path"]).exists(), (
@@ -381,14 +383,14 @@ class TestTheAnimationOrchestration:
         seen = []
         monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
         m = WebMap().basemap().timeslider(raster_stack)
-        m.to_gif(str(tmp_path / "series.gif"), title="Rainfall")
+        m.animate(str(tmp_path / "series.gif"), title="Rainfall")
 
         assert {record["title"] for record in seen} == {"Rainfall"}, seen
 
     def test_save_with_a_gif_suffix_runs_the_real_animation(
         self, raster_stack, tmp_path, monkeypatch, spy_widget
     ):
-        """The dispatch test elsewhere fakes `to_gif`; this one runs it for real through `save`.
+        """The dispatch test elsewhere fakes `animate`; this one runs it for real through `save`.
 
         Args:
             raster_stack: The 3-member collection fixture.

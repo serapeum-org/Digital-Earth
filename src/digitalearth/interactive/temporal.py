@@ -12,7 +12,11 @@ materialise a frame (``dmap[0]``) to assert on it.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
-from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
+from digitalearth.interactive.base import (
+    _masked_to_nan,
+    _require_holoviz,
+    _skips_off_limb,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -62,6 +66,7 @@ class TemporalMixin(_MixinBase):
                 highs.append(np.nanmax(arr))
         return (float(min(lows)), float(max(highs))) if lows else (0.0, 1.0)
 
+    @_skips_off_limb
     def timecube(
         self,
         collection: Any,
@@ -69,7 +74,7 @@ class TemporalMixin(_MixinBase):
         kdim: str = "time",
         labels: Optional[Sequence] = None,
         band: int = 1,
-        cmap: str = "viridis",
+        cmap: Optional[str] = None,
         clim: Optional[Tuple[float, float]] = None,
         colorbar: bool = True,
         **opts: Any,
@@ -86,7 +91,8 @@ class TemporalMixin(_MixinBase):
             labels: Optional per-member labels (e.g. datetimes) shown on the slider instead of the
                 integer index; must match the member count.
             band: 1-based band rendered in every frame.
-            cmap: Colormap name.
+            cmap: Colormap name; ``None`` (default) resolves it from the variable through
+                ``autostyle.auto_style`` (#249), exactly as ``image`` does.
             clim: Frozen ``(vmin, vmax)`` colour limits; ``None`` computes a global range once over
                 the whole stack.
             colorbar: Whether to draw a colorbar.
@@ -135,6 +141,10 @@ class TemporalMixin(_MixinBase):
                     "make the matching frames unreachable"
                 )
         frozen_clim = clim if clim is not None else self._global_clim(collection, band)
+        # One colormap for the whole cube, resolved from the first member so every frame matches.
+        if cmap is None and members:
+            cmap = self._auto_cmap(self._to_display_source(members[0], band=band), None)
+        cmap = cmap or "viridis"
         keys = list(labels) if labels is not None else list(range(n))
         key_to_index = {key: index for index, key in enumerate(keys)}
 

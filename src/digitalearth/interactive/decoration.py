@@ -1,7 +1,9 @@
 """DecorationMixin — tiles & cartographic features for :class:`~digitalearth.interactive.map.InteractiveMap`.
 
-Owns ``tiles`` / ``coastlines`` / ``features``, the ``legend``/``colorbar`` toggles (DI.1c) and the
-``text`` / ``labels`` annotations (DI.5); the full provider catalog + custom WMTS lands in DI.10.
+Owns ``tiles`` / ``features`` + the six named Natural-Earth layers (``coastlines`` / ``borders`` /
+``land`` / ``ocean`` / ``lakes`` / ``rivers`` — the canonical cross-tier surface, #253), the
+``legend``/``colorbar`` toggles (DI.1c) and the ``text`` / ``labels`` annotations (DI.5); the full
+provider catalog + custom WMTS lands in DI.10.
 
 Tile basemaps (``gv.tile_sources``) and Natural-Earth features (``gv.feature``) are Web-Mercator-only in
 Bokeh, so every decoration guards on the default ``crs=3857`` display CRS (``_require_web_mercator``) —
@@ -11,8 +13,20 @@ elements touches no network; tiles/coastline geometry is fetched by the renderer
 
 from typing import TYPE_CHECKING, Any, Callable, Optional, Self
 
-from digitalearth.base.basemaps import get_keyed_basemap, is_keyed_basemap
-from digitalearth.interactive.base import _require_holoviz
+from loguru import logger
+
+# DEFAULT_BASEMAP_PROVIDER is the shared cross-tier default (#247): one constant in base/, read by this
+# tier and the web tier, so neither spells "CartoLight" for itself.
+from digitalearth.base.basemaps import (
+    DEFAULT_BASEMAP_PROVIDER,
+    get_keyed_basemap,
+    is_keyed_basemap,
+)
+from digitalearth.interactive.base import _require_holoviz, _skips_off_limb
+
+# TODO(#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
+# `provider=` argument. Splitting that collision (a `tiles(url=...)` vs `basemap(provider=...)` rename)
+# is Core-contract work and is deliberately out of this batch.
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -48,6 +62,38 @@ def _attribution_hook(attribution: str) -> Callable[[Any, Any], None]:
             tile_source = getattr(renderer, "tile_source", None)
             if tile_source is not None:
                 tile_source.attribution = attribution
+
+    return hook
+
+
+def _coverage_hook(bounds: tuple) -> Callable[[Any, Any], None]:
+    """Build a Bokeh plot hook declaring a keyed provider's coverage as the pannable range (#233).
+
+    A keyed service that covers only part of the world (NICFI's tropics band, say) serves 404s outside it.
+    MapLibre takes that coverage as the source's ``bounds``; Bokeh's tile source has no such slot — its
+    engine-level equivalent is the plot range's ``bounds``, which is what stops a viewer panning off the
+    covered area into blank tiles. This is a **declaration**, not validation: nothing is refused here, and
+    a pannable map is never rejected for opening outside the coverage (that guard belongs to the static
+    tier, which renders one fixed extent).
+
+    Args:
+        bounds: ``(x0, y0, x1, y1)`` in the **display** CRS — the lon/lat coverage already reprojected.
+
+    Returns:
+        A hook that assigns the covered range to the rendered figure's x and y ranges.
+    """
+
+    def hook(plot: Any, element: Any) -> None:
+        """Assign the covered extent to one rendered plot's axis ranges.
+
+        Args:
+            plot: The Bokeh plot HoloViews is building.
+            element: The element being rendered; unused, but part of the hook signature.
+        """
+        x0, y0, x1, y1 = bounds
+        figure = plot.handles["plot"]
+        figure.x_range.bounds = (x0, x1)
+        figure.y_range.bounds = (y0, y1)
 
     return hook
 
@@ -94,7 +140,7 @@ class DecorationMixin(_MixinBase):
 
     def tiles(
         self,
-        provider: Any = "CartoLight",
+        provider: Any = DEFAULT_BASEMAP_PROVIDER,
         *,
         level: str = "underlay",
         api_key: Any = None,
@@ -111,7 +157,9 @@ class DecorationMixin(_MixinBase):
 
         Args:
             provider: A ``geoviews.tile_sources`` provider name (``"CartoLight"``/``"OSM"``/
-                ``"EsriImagery"``/…); a **keyed** preset name such as ``"Planet.NICFI"`` (see
+                ``"EsriImagery"``/…), defaulting to the shared
+                :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` every tier reads (#247);
+                a **keyed** preset name such as ``"Planet.NICFI"`` (see
                 :mod:`digitalearth.base.basemaps`), whose credential is read from the environment; a raw
                 XYZ/WMTS URL template (``"https://…/{Z}/{X}/{Y}.png"``); or an
                 ``xyzservices.TileProvider``.
@@ -205,8 +253,19 @@ class DecorationMixin(_MixinBase):
             # NICFI is non-commercial-only, so the attribution is a licence obligation the other two
             # tiers already carry. Bokeh's slot for it is the tile source's own `attribution`, which is
             # what its attribution control renders; reaching it needs a plot hook.
+            hooks = [_attribution_hook(keyed.attribution)]
+            covered = self._display_bounds(keyed.bounds)
+            if (
+                covered is not None
+            ):  # declare a partial-coverage service to the engine (#233)
+                logger.info(
+                    f"tiles({provider!r}): the provider covers {keyed.bounds} (lon/lat) only, so that "
+                    "box is declared as the map's pannable range — data outside it will be framed by "
+                    "the limit rather than by the data"
+                )
+                hooks.append(_coverage_hook(covered))
             return gv.WMTS(_upper_placeholders(keyed.tile_url(api_key))).opts(
-                hooks=[_attribution_hook(keyed.attribution)]
+                hooks=hooks
             )
         if preset:
             raise ValueError(
@@ -231,6 +290,22 @@ class DecorationMixin(_MixinBase):
         return gv.WMTS(
             provider
         )  # an xyzservices.TileProvider (or any gv.WMTS-accepted object)
+
+    def _display_bounds(self, bounds: Optional[tuple]) -> Optional[tuple]:
+        """Reproject a keyed provider's lon/lat coverage into the display CRS (#233).
+
+        Args:
+            bounds: ``(west, south, east, north)`` in lon/lat, or ``None`` for a global service.
+
+        Returns:
+            ``(x0, y0, x1, y1)`` in the display CRS, or ``None`` when the service declares no coverage —
+            a global service needs no declaration, so nothing is forwarded for it.
+        """
+        if not bounds:
+            return None
+        west, south, east, north = bounds
+        (x0, x1), (y0, y1) = self._to_display_xy([west, east], [south, north], 4326)
+        return (x0, y0, x1, y1)
 
     def list_tile_providers(self) -> list:
         """Return the sorted catalog of named ``geoviews.tile_sources`` providers.
@@ -285,6 +360,10 @@ class DecorationMixin(_MixinBase):
     ) -> Self:
         """Add Natural-Earth context layers (land/ocean beneath the data, borders/rivers on top).
 
+        The flag-per-layer form, kept as the way to request several layers in one call. The six named
+        methods (:meth:`coastlines`, :meth:`borders`, :meth:`land`, :meth:`ocean`, :meth:`lakes`,
+        :meth:`rivers`) are the canonical cross-tier surface (#253) and delegate here.
+
         Args:
             land: Draw the land polygons (underlay).
             ocean: Draw the ocean polygons (underlay).
@@ -333,6 +412,90 @@ class DecorationMixin(_MixinBase):
                 self.add_element(_styled_feature(getattr(gv.feature, overlay)))
         return self
 
+    def borders(self, resolution: str = "110m", **opts: Any) -> Self:
+        """Overlay Natural-Earth country borders (one of the six named feature layers, #253).
+
+        Args:
+            resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **opts: Extra HoloViews style options applied to the feature element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator.
+
+        Examples:
+            - Name the layer instead of spelling out a ``features`` flag:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> len(InteractiveMap().borders().layers)                     # doctest: +SKIP
+                1
+
+                ```
+        """
+        return self.features(borders=True, resolution=resolution, **opts)
+
+    def land(self, resolution: str = "110m", **opts: Any) -> Self:
+        """Fill Natural-Earth land polygons beneath the data (one of the six named layers, #253).
+
+        Args:
+            resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **opts: Extra HoloViews style options applied to the feature element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator.
+        """
+        return self.features(land=True, resolution=resolution, **opts)
+
+    def ocean(self, resolution: str = "110m", **opts: Any) -> Self:
+        """Fill Natural-Earth ocean polygons beneath the data (one of the six named layers, #253).
+
+        Args:
+            resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **opts: Extra HoloViews style options applied to the feature element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator.
+        """
+        return self.features(ocean=True, resolution=resolution, **opts)
+
+    def lakes(self, resolution: str = "110m", **opts: Any) -> Self:
+        """Overlay Natural-Earth lake polygons (one of the six named layers, #253).
+
+        Args:
+            resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **opts: Extra HoloViews style options applied to the feature element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator.
+        """
+        return self.features(lakes=True, resolution=resolution, **opts)
+
+    def rivers(self, resolution: str = "110m", **opts: Any) -> Self:
+        """Overlay Natural-Earth river centerlines (one of the six named layers, #253).
+
+        Args:
+            resolution: Natural-Earth scale — ``"110m"`` (default), ``"50m"`` or ``"10m"``.
+            **opts: Extra HoloViews style options applied to the feature element.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator.
+        """
+        return self.features(rivers=True, resolution=resolution, **opts)
+
     def _to_display_xy(self, lon: Any, lat: Any, crs: Any) -> tuple:
         """Reproject ``(lon, lat)`` from ``crs`` to the display CRS via pyramids.
 
@@ -379,6 +542,7 @@ class DecorationMixin(_MixinBase):
             element = element.opts(**opts)
         return self.add_element(element)
 
+    @_skips_off_limb
     def labels(
         self, features: Any, column: str, *, crs: Any = 4326, **opts: Any
     ) -> Self:

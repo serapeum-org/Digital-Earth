@@ -471,7 +471,7 @@ class TestAnimate:
         from types import SimpleNamespace
 
         ds = SimpleNamespace(
-            read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+            read_array=lambda band=0, masked=False: np.array([[1.0, 2.0], [3.0, 4.0]]),
             no_data_value=[None],
             epsg=4326,
         )
@@ -482,7 +482,9 @@ class TestAnimate:
         from types import SimpleNamespace
 
         ds = SimpleNamespace(
-            read_array=lambda band=0: np.array([[-9999.0, -9999.0]]),
+            read_array=lambda band=0, masked=False: np.ma.masked_equal(
+                np.array([[-9999.0, -9999.0]]), -9999.0
+            ),
             no_data_value=[-9999.0],
             epsg=4326,
         )

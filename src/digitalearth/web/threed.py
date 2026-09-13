@@ -16,7 +16,7 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, deprecated_alias
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
 #: needs a served ``raster-dem`` tile source, so the default is hosted tiles; to use your own DEM, encode it to
@@ -186,7 +186,8 @@ class ThreeDMixin(_MixinBase):
         *,
         z_column: Optional[str] = None,
         color: Sequence[int] = (255, 140, 0),
-        point_size: float = 2.0,
+        size: float = 2.0,
+        point_size: Optional[float] = None,
     ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
 
@@ -195,12 +196,15 @@ class ThreeDMixin(_MixinBase):
                 ``(N, 2|3)`` coordinate array.
             z_column: Elevation column for a GeoDataFrame input (0 when omitted).
             color: RGB point colour (0-255 per channel).
-            point_size: Point size in pixels.
+            size: Point size in pixels — the same ``size`` that means marker size on every tier.
+            point_size: **Deprecated** spelling of ``size``; forwarded unchanged.
 
         Returns:
             This map (chainable).
         """
         _require_layer_api()
+        if point_size is not None:
+            size = deprecated_alias("size", "point_size", point_size)
         # point_cloud also accepts a raw sequence of xyz triples, so the full vector guard would be too
         # strict here; reject only a raster, which would otherwise die inside `_point_cloud_data`.
         self._reject_raster(points, "point_cloud")
@@ -216,7 +220,7 @@ class ThreeDMixin(_MixinBase):
             "data": data,
             "getPosition": "@@=position",
             "getColor": list(color),
-            "pointSize": float(point_size),
+            "pointSize": float(size),
         }
         return self._add_deck_layer(layer)
 

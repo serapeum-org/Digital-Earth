@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from loguru import logger
 
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, deprecated_alias
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -230,14 +230,18 @@ class BigDataMixin(_MixinBase):
         features: Any,
         *,
         fill_color: Sequence[int] = (51, 136, 255, 200),
-        radius: float = 5.0,
+        size: float = 5.0,
+        radius: Optional[float] = None,
     ) -> Self:
         """Render points as a GPU deck.gl ``GeoJsonLayer`` (recipe W3).
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.
             fill_color: RGBA fill colour (0-255 per channel).
-            radius: Point radius in pixels.
+            size: Point radius in pixels — the same ``size`` that means marker size on every tier, and the
+                same number :meth:`~digitalearth.web.vector.VectorMixin.points` hands down when it routes
+                a large layer here.
+            radius: **Deprecated** spelling of ``size``; forwarded unchanged.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -245,6 +249,8 @@ class BigDataMixin(_MixinBase):
         from maplibre.sources import geopandas_to_geojson
 
         _require_layer_api()
+        if radius is not None:
+            size = deprecated_alias("size", "radius", radius)
         gdf = self._display_gdf(features, method="deck_scatter")
         layer = {
             "@@type": "GeoJsonLayer",
@@ -253,9 +259,9 @@ class BigDataMixin(_MixinBase):
             "pointType": "circle",
             "filled": True,
             "getFillColor": list(fill_color),
-            "getPointRadius": float(radius),
+            "getPointRadius": float(size),
             "pointRadiusUnits": "pixels",
-            "pointRadiusMinPixels": float(radius),
+            "pointRadiusMinPixels": float(size),
         }
         return self._add_deck_layer(layer)
 
@@ -292,21 +298,52 @@ class BigDataMixin(_MixinBase):
         }
         return self._add_deck_layer(layer)
 
-    def _route_big(self, gdf: Any, kind: str) -> bool:
+    def _threshold(self, big_data_threshold: Optional[int] = None) -> int:
+        """Resolve the feature count that routes a layer to the GPU: the call's, else the map's.
+
+        The two ways of setting it are deliberately the same name: assigning
+        :attr:`~digitalearth.web.base.WebMapBase.big_data_threshold` on the map moves the cutoff for
+        every layer that follows, while passing ``big_data_threshold=`` to one builder moves it for that
+        call alone and leaves the map's setting untouched.
+
+        Args:
+            big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
+
+        Returns:
+            The feature count above which a builder auto-routes to a deck.gl layer.
+
+        Raises:
+            ValueError: when the override is negative — a cutoff below zero routes everything, including
+                an empty layer, which is never what the caller meant.
+        """
+        if big_data_threshold is None:
+            return int(self.big_data_threshold)
+        if int(big_data_threshold) < 0:
+            raise ValueError(
+                f"big_data_threshold must not be negative; got {big_data_threshold!r}"
+            )
+        return int(big_data_threshold)
+
+    def _route_big(
+        self, gdf: Any, kind: str, *, threshold: Optional[int] = None
+    ) -> bool:
         """Whether ``gdf`` exceeds the big-data threshold — and log the routing decision when it does.
 
         Args:
             gdf: The display-CRS GeoDataFrame about to be drawn.
             kind: The builder name (for the log message).
+            threshold: The caller's per-call ``big_data_threshold``; ``None`` uses the map's attribute.
 
         Returns:
-            ``True`` when the feature count exceeds ``big_data_threshold`` (the caller should route to a GPU
-            layer); ``False`` otherwise. The decision is logged when it fires (the M2 "never silent" rule).
+            ``True`` when the feature count exceeds the resolved ``big_data_threshold`` (the caller should
+            route to a GPU layer); ``False`` otherwise. The decision is logged when it fires (the M2
+            "never silent" rule).
         """
+        limit = self._threshold(threshold)
         n = len(gdf)
-        if n > self.big_data_threshold:
+        if n > limit:
             logger.info(
-                f"{kind}: {n} features exceed big_data_threshold={self.big_data_threshold}; "
+                f"{kind}: {n} features exceed big_data_threshold={limit}; "
                 "routing to a GPU deck.gl layer (pass big=False to keep per-feature rendering)"
             )
             return True

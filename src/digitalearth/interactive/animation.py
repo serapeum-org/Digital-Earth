@@ -7,6 +7,7 @@ registered: ``play`` binds a ``panel.widgets.Player`` to its time kdim for auto-
 matplotlib backend or a client-side **scrubber** HTML that animates offline with no server.
 """
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from digitalearth.interactive.base import _require_holoviz
@@ -65,11 +66,12 @@ class AnimationMixin(_MixinBase):
         keys = list(dmap.kdims[0].values)
         return hv.HoloMap({key: dmap[key] for key in keys}, kdims=dmap.kdims)
 
-    def play(self, *, fps: int = 3, loop: bool = True) -> Any:
+    def play(self, *, fps: float = 3.0, loop: bool = True) -> Any:
         """Wrap the time cube in a Panel layout with an auto-advancing ``Player`` widget.
 
         Args:
-            fps: Playback frames per second (the Player interval).
+            fps: Playback frames per second (the Player interval). ``3.0`` is the shared cross-tier
+                default (#256), so the same animation plays at the same speed on every backend.
             loop: Loop at the end (``True``) or stop (``False``).
 
         Returns:
@@ -94,7 +96,7 @@ class AnimationMixin(_MixinBase):
         view = pn.bind(lambda value: dmap[value], player)
         return pn.Column(pn.panel(view), player)
 
-    def save_animation(self, path: str, *, fps: int = 3, **kwargs: Any) -> str:
+    def save_animation(self, path: Any, *, fps: float = 3.0, **kwargs: Any) -> Path:
         """Export the time cube as a GIF/MP4 (matplotlib backend) or a scrubber HTML.
 
         ``.gif``/``.mp4`` materialise the DynamicMap to a finite ``HoloMap`` and render via the
@@ -102,12 +104,13 @@ class AnimationMixin(_MixinBase):
         plays offline with no server.
 
         Args:
-            path: Output file (``.gif`` / ``.mp4`` / ``.html``).
-            fps: Frames per second.
+            path: Output file (``.gif`` / ``.mp4`` / ``.html``), as ``str`` or ``pathlib.Path``.
+            fps: Frames per second; ``3.0`` is the shared cross-tier default (#256).
             **kwargs: Forwarded to :func:`holoviews.save`.
 
         Returns:
-            The ``path`` written.
+            pathlib.Path: the file written, matching :meth:`~digitalearth.interactive.base.\
+InteractiveMapBase.save` (#248).
 
         Raises:
             ValueError: when no ``timecube`` layer has been added.
@@ -119,4 +122,4 @@ class AnimationMixin(_MixinBase):
             hv.save(holomap, path, fmt="scrubber", fps=fps, **kwargs)
         else:
             hv.save(holomap, path, backend="matplotlib", fps=fps, **kwargs)
-        return str(path)
+        return Path(path)

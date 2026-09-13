@@ -392,3 +392,136 @@ def test_reproject_passes_other_failures_through():
     assert not isinstance(caught.value, OffLimbError), (
         "a real projection failure must not be reported as an empty view"
     )
+
+
+#: An orthographic projection has no EPSG code, so pyramids reports ``epsg is None`` for a dataset warped
+#: into it — the case that used to leave ``Source.crs`` saying "unknown" while holding orthographic metres.
+ORTHOGRAPHIC = "+proj=ortho +lat_0=53 +lon_0=4 +datum=WGS84 +units=m +no_defs"
+
+
+def _small_raster():
+    """Build a 20x20 lon/lat raster around (4E, 53N).
+
+    Returns:
+        pyramids.dataset.Dataset: the raster, in EPSG:4326.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+
+    return Dataset.from_array(
+        np.ones((20, 20), "float32"),
+        geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+    )
+
+
+class TestSourceCrsContract:
+    """Regression tests for #235 — ``Source.crs`` was write-only and wrong after a warp."""
+
+    def test_warped_source_reports_the_display_crs_it_was_given(self):
+        """A caller that warped the data names the CRS, and the Source reports it verbatim.
+
+        Test scenario:
+            The reported repro: after ``to_crs(orthographic)`` the source said ``None`` while its x/y held
+            orthographic metres. Now the display CRS the caller warped to is what comes back.
+        """
+        warped = _small_raster().to_crs(ORTHOGRAPHIC)
+        src = get_source(warped, band=1, crs=ORTHOGRAPHIC)
+        assert src.crs == ORTHOGRAPHIC, (
+            f"the display CRS should be stored as given, got {src.crs!r}"
+        )
+        assert src.crs != 4326 and src.crs is not None, (
+            "a warped source must not report its pre-warp CRS, nor 'unknown'"
+        )
+
+    def test_code_less_projection_still_reports_its_definition(self):
+        """Without a caller-supplied CRS the projection definition is used, never ``None``.
+
+        Test scenario:
+            ``epsg is None`` means "no authority code", not "no CRS" — the two questions used to share one
+            slot, and the answer to the wrong one was being stored.
+        """
+        warped = _small_raster().to_crs(ORTHOGRAPHIC)
+        src = get_source(warped, band=1)
+        assert warped.epsg is None, (
+            "the fixture must be a code-less projection to be the case under test"
+        )
+        assert src.crs, (
+            f"a code-less projection must still report its definition, got {src.crs!r}"
+        )
+        assert "ortho" in str(src.crs).lower(), (
+            f"expected the orthographic definition, got {src.crs!r}"
+        )
+
+    def test_epsg_answers_the_code_question_separately(self):
+        """``Source.epsg`` is the code-or-None question; ``crs`` keeps saying where the coordinates are.
+
+        Test scenario:
+            An EPSG-coded raster answers both; the orthographic one answers only ``crs``.
+        """
+        coded = get_source(_small_raster(), band=1)
+        warped = get_source(
+            _small_raster().to_crs(ORTHOGRAPHIC), band=1, crs=ORTHOGRAPHIC
+        )
+        assert (coded.crs, coded.epsg) == (4326, 4326), (
+            f"an EPSG raster should report 4326 twice, got {(coded.crs, coded.epsg)}"
+        )
+        assert warped.epsg is None, (
+            f"an orthographic source has no EPSG code, got {warped.epsg!r}"
+        )
+
+    def test_none_means_genuinely_unknown(self):
+        """``None`` is reserved for an input that declares no CRS at all.
+
+        Test scenario:
+            A raw numpy array is the only source of a ``None`` CRS now that a code-less projection reports
+            its definition.
+        """
+        assert get_source(np.zeros((2, 2))).crs is None, (
+            "a bare numpy array has no CRS, so None is the right answer there"
+        )
+
+
+class TestRasterIdentity:
+    """Regression tests for #231 — no extractor wrote the ``standard_name`` the style matcher reads."""
+
+    def test_band_standard_name_reaches_the_source(self):
+        """A band declaring a CF ``standard_name`` carries it into ``Source.metadata``.
+
+        Test scenario:
+            The key ``auto_style`` reads was written by nothing, so the Magics standard-name step was dead
+            code for every real input.
+        """
+        ds = _small_raster()
+        ds.bands.set_metadata({"standard_name": "air_temperature"}, band=0)
+        src = get_source(ds, band=1)
+        assert src.metadata("standard_name") == "air_temperature", (
+            f"expected the band's standard_name, got {src.metadata('standard_name')!r}"
+        )
+
+    def test_dataset_level_metadata_is_read_case_insensitively(self):
+        """A dataset-level ``STANDARD_NAME`` is found too, whatever case the writer used.
+
+        Test scenario:
+            GDAL metadata keys survive round-trips in whatever case a writer chose, so the lookup cannot be
+            case-sensitive.
+        """
+        ds = _small_raster()
+        ds.meta_data = {"STANDARD_NAME": "air_pressure_at_mean_sea_level"}
+        src = get_source(ds, band=1)
+        assert src.metadata("standard_name") == "air_pressure_at_mean_sea_level", (
+            f"an upper-cased key should still be read, got {src.metadata('standard_name')!r}"
+        )
+
+    def test_caller_metadata_still_wins(self):
+        """An explicit ``metadata=`` overrides the derived identity.
+
+        Test scenario:
+            Deriving the key must not take the override away from callers that pass one.
+        """
+        ds = _small_raster()
+        ds.bands.set_metadata({"standard_name": "air_temperature"}, band=0)
+        src = get_source(
+            ds, band=1, metadata={"standard_name": "sea_surface_temperature"}
+        )
+        assert src.metadata("standard_name") == "sea_surface_temperature", (
+            "a caller-supplied standard_name must win over the derived one"
+        )

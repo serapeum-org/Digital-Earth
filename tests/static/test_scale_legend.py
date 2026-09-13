@@ -32,10 +32,10 @@ def lines_fc(points_fc):
     return FeatureCollection(gdf)
 
 
-def test_scatter_scale_sizes_span_limits(points_fc):
-    """scale maps marker areas across size_limits (varying, monotone-bounded)."""
+def test_scatter_column_sizes_span_limits(points_fc):
+    """column maps marker areas across size_limits (varying, monotone-bounded)."""
     m = Map(crs=points_fc.epsg)
-    pc = m.scatter(points_fc, scale="fid", size_limits=(20, 200))
+    pc = m.scatter(points_fc, column="fid", size_limits=(20, 200))
     sizes = np.asarray(pc.get_sizes())
     assert sizes.min() == pytest.approx(20)
     assert sizes.max() == pytest.approx(200)
@@ -44,12 +44,12 @@ def test_scatter_scale_sizes_span_limits(points_fc):
 def test_scatter_size_legend(points_fc):
     """size_legend draws a legend on the axes."""
     m = Map(crs=points_fc.epsg)
-    m.scatter(points_fc, scale="fid", size_legend=True)
+    m.scatter(points_fc, column="fid", size_legend=True)
     assert m.ax.get_legend() is not None
 
 
-def test_scatter_no_scale_is_uniform(points_fc):
-    """Without scale, markers keep a single uniform size (backward compatible)."""
+def test_scatter_no_column_is_uniform(points_fc):
+    """Without a size column, markers keep a single uniform size (backward compatible)."""
     m = Map(crs=points_fc.epsg)
     pc = m.scatter(points_fc)
     assert len(set(np.asarray(pc.get_sizes()).tolist())) == 1

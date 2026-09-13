@@ -13,10 +13,13 @@ this module imports neither shapely nor geopandas (the HARD RULE / ``test_no_com
 stays in pyramids.
 """
 
-from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Union
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pyvista as pv
+
+from digitalearth.three_d.base import classified_scalars
 
 #: Attribute name the vector array is stored under for glyph orientation/scaling.
 VECTORS = "vectors"
@@ -108,7 +111,13 @@ class VectorMixin(_MixinBase):
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
 
         Returns:
-            The registered :class:`pyvista.Actor` for the glyph mesh.
+            The registered :class:`pyvista.Actor` for the glyph mesh, or ``None`` when there were no points
+            to place a glyph at (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+
+        Raises:
+            ValueError: if ``points`` and ``vectors`` do not have the same shape. Also — only when the scene
+                was built with ``strict=True`` — :class:`~digitalearth.base.crs.OffLimbError` for an empty
+                field, which is otherwise skipped with a warning.
 
         Examples:
             - A uniform eastward field renders as same-length arrows coloured by magnitude:
@@ -133,6 +142,9 @@ class VectorMixin(_MixinBase):
             raise ValueError(
                 f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}"
             )
+        if pts.size == 0:
+            self._skip_empty("vectors", "the field has no points")
+            return None
         cloud = pv.PolyData(pts)
         cloud[VECTORS] = vec
         cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
@@ -143,8 +155,10 @@ class VectorMixin(_MixinBase):
         self,
         gdf: Any,
         *,
-        height: Union[float, str] = 1.0,
-        column: Optional[str] = None,
+        height: float | str = 1.0,
+        column: str | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
         cmap: str = "viridis",
         **kwargs: Any,
     ) -> Any:
@@ -157,11 +171,23 @@ class VectorMixin(_MixinBase):
             height: Uniform extrusion height (``float``), or the name of a column (``str``) to read a
                 per-feature height from.
             column: Optional attribute column to colour the prisms by; ``None`` for a flat colour.
+            scheme: How ``column`` is classified. ``None`` (the default) is a continuous ramp over the raw
+                values; ``"categorical"`` gives every distinct value its own colour; any other
+                ``cleopatra.styling.styles.classify`` scheme name (``"quantiles"``, ``"equal_interval"``,
+                ``"fisher_jenks"``, …) colours ``k`` graduated classes — computed exactly as the 2-D tiers
+                compute them, so one ``scheme``/``k`` pair means one set of classes on every tier.
+            k: Number of classes for a graduated ``scheme``; ignored otherwise.
             cmap: Colormap used when colouring by ``column``.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
 
         Returns:
-            The registered :class:`pyvista.Actor` for the merged prism mesh.
+            The registered :class:`pyvista.Actor` for the merged prism mesh, or ``None`` when there was
+            nothing to extrude (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+
+        Raises:
+            ValueError: if ``scheme`` cannot classify ``column``. Also — only when the scene was built with
+                ``strict=True`` — :class:`~digitalearth.base.crs.OffLimbError` when no polygon rings were
+                found, which is otherwise skipped with a warning.
 
         Examples:
             - Extrude two squares to different heights and colour by an attribute (needs geopandas at the
@@ -182,12 +208,33 @@ class VectorMixin(_MixinBase):
                 >>> scene.close()
 
                 ```
+            - Nothing to extrude is a skipped layer with a warning, not a dead scene — unless the scene was
+              built ``strict=True``:
+                ```python
+                >>> import geopandas as gpd
+                >>> from digitalearth.three_d import Scene3D
+                >>> from digitalearth.base.crs import OffLimbError
+                >>> empty = gpd.GeoDataFrame({"pop": []}, geometry=[])
+                >>> scene = Scene3D(off_screen=True)
+                >>> scene.extruded_polygons(empty) is None, len(scene.layers)
+                (True, 0)
+                >>> scene.close()
+                >>> strict = Scene3D(off_screen=True, strict=True)
+                >>> try:
+                ...     strict.extruded_polygons(empty)
+                ... except OffLimbError as error:
+                ...     print(error)
+                ... finally:
+                ...     strict.close()
+                extruded_polygons: no polygon geometries to extrude
+
+                ```
         """
         geoms = gdf.geometry
         heights = gdf[height].to_numpy() if isinstance(height, str) else None
         colours = gdf[column].to_numpy() if column else None
 
-        prisms: List[pv.PolyData] = []
+        prisms: list[pv.PolyData] = []
         for i, geom in enumerate(geoms):
             h = float(heights[i]) if heights is not None else float(height)
             for ring in _exterior_rings(geom):
@@ -197,9 +244,18 @@ class VectorMixin(_MixinBase):
                 prisms.append(prism)
 
         if not prisms:
-            raise ValueError(
-                "extruded_polygons received no polygon geometries to extrude"
-            )
+            self._skip_empty("extruded_polygons", "no polygon geometries to extrude")
+            return None
         merged = pv.MultiBlock(prisms).combine()
-        scalars = VALUE if colours is not None else None
-        return self.add_mesh(merged, scalars=scalars, cmap=cmap, **kwargs)
+        if colours is None:
+            return self.add_mesh(merged, scalars=None, cmap=cmap, **kwargs)
+        # Classify against the per-feature column, then push each prism's class code onto its cells — the
+        # per-cell VALUE array was filled with the raw value above, so it is re-keyed here rather than
+        # classified cell-by-cell (which would re-derive the same breaks from a longer, duplicated array).
+        style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
+        codes = style.pop("scalars")
+        raw_to_code = {float(raw): code for raw, code in zip(colours, codes)}
+        merged.cell_data[VALUE] = np.array(
+            [raw_to_code[float(value)] for value in merged.cell_data[VALUE]]
+        )
+        return self.add_mesh(merged, scalars=VALUE, **style, **kwargs)

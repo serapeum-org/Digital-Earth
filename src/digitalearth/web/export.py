@@ -8,6 +8,9 @@ The headline of the tier: turn any ``WebMap`` into a shareable artifact.
 * PNG snapshot — render the HTML in a headless browser and screenshot it. The browser is an **optional,
   gated** dependency (not in the ``[web]`` extra): ``save(*.png)`` raises an actionable ``ImportError`` when
   neither Playwright nor Selenium is installed, rather than failing obscurely.
+* ``animate`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate every
+  tier's animation entry point takes). ``to_gif`` is its deprecated name, and ``duration=`` its deprecated
+  seconds-per-frame spelling, converted to ``fps`` rather than reinterpreted.
 
 ``WebMapBase.save`` dispatches HTML vs. PNG and the ``offline`` flag here (the base sits first in the MRO, so
 these are hooks it calls, not overrides). urllib / browser libs are imported lazily.
@@ -16,9 +19,14 @@ these are hooks it calls, not overrides). urllib / browser libs are imported laz
 import pathlib
 import re
 import tempfile
-from typing import TYPE_CHECKING, Any
+import warnings
+from typing import TYPE_CHECKING, Any, Optional
 
-from digitalearth.web.base import DEFAULT_TITLE
+from digitalearth.web.base import DEFAULT_TITLE, deprecated_alias
+
+#: Frames per second every tier's animation entry point defaults to, so one number means one speed
+#: whichever backend renders the series.
+DEFAULT_FPS = 3.0
 
 
 def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
@@ -34,7 +42,7 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
         loop: Repeat count; ``0`` loops forever.
 
     Raises:
-        ValueError: when there are no frames to write. ``to_gif`` cannot reach this — it refuses a series
+        ValueError: when there are no frames to write. ``animate`` cannot reach this — it refuses a series
             of fewer than two steps first — but this function is the encoder for any frame list, so it
             checks rather than writing a GIF with nothing in it.
     """
@@ -148,8 +156,8 @@ class ExportMixin(_MixinBase):
 
     def _render_png(
         self, path: str, *, title: str = DEFAULT_TITLE, **kwargs: Any
-    ) -> str:
-        """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
+    ) -> pathlib.Path:
+        """Render the map to a PNG via a headless browser and return its path (gated optional dep).
 
         Tries Playwright, then Selenium; both render the standalone HTML offscreen and screenshot it. Neither
         is in the ``[web]`` extra, so this raises an actionable ``ImportError`` when no browser is available.
@@ -159,11 +167,11 @@ class ExportMixin(_MixinBase):
             title: HTML document title.
             **kwargs: Reserved for headless-browser options, and not forwarded to ``to_html``. Two keys
                 are recognised: ``widget``, a pre-built map widget to render instead of building a fresh
-                one (how :meth:`to_gif` renders a frame with one step visible), and ``kind``, the export
+                one (how :meth:`animate` renders a frame with one step visible), and ``kind``, the export
                 name quoted in the missing-browser error so a GIF failure does not talk about PNG.
 
         Returns:
-            The ``path`` written.
+            The :class:`pathlib.Path` written.
 
         Raises:
             ImportError: when neither Playwright nor Selenium is installed.
@@ -183,8 +191,8 @@ class ExportMixin(_MixinBase):
             url = html_path.as_uri()
             for renderer in (self._png_via_playwright, self._png_via_selenium):
                 try:
-                    renderer(url, path)
-                    return str(path)
+                    renderer(url, str(path))
+                    return pathlib.Path(path)
                 except ImportError:
                     continue
         raise ImportError(
@@ -193,14 +201,15 @@ class ExportMixin(_MixinBase):
             "a driver."
         )
 
-    def to_gif(
+    def animate(
         self,
         path: str,
         *,
-        duration: float = 0.8,
+        fps: float = DEFAULT_FPS,
         loop: int = 0,
         title: str = DEFAULT_TITLE,
-    ) -> str:
+        duration: Optional[float] = None,
+    ) -> pathlib.Path:
         """Write a temporal map's steps as an animated GIF (recipe W7).
 
         A time series is the case where a moving image says most, and it is also the case a web page
@@ -212,37 +221,70 @@ class ExportMixin(_MixinBase):
 
         Args:
             path: Where to write the GIF.
-            duration: Seconds each frame is held.
+            fps: Frames per second — the rate every tier's animation entry point takes, with the same
+                default, so one number means one speed across the whole package.
             loop: How many times to repeat; ``0`` loops forever.
             title: HTML document title used while rendering.
+            duration: **Deprecated** spelling of the frame rate, in seconds held per frame. It is
+                *converted* (``fps = 1 / duration``), never reinterpreted, so an old call produces the
+                animation it always did.
 
         Returns:
-            The ``path`` written.
+            The :class:`pathlib.Path` written.
 
         Raises:
-            ValueError: when the map has no time steps to animate, or fewer than two.
+            ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` /
+                ``duration`` is not positive — a zero rate has no frame to hold.
             ImportError: when no headless browser is installed — the same gated dependency the PNG
                 snapshot needs, and deliberately not part of ``digitalearth[web]``.
 
         Examples:
             - Animate a raster stack:
                 ```python
-                >>> from digitalearth.web import WebMap                          # doctest: +SKIP
-                >>> WebMap().basemap().timeslider(stack).to_gif("out.gif")       # doctest: +SKIP
+                >>> from digitalearth.web import WebMap                           # doctest: +SKIP
+                >>> WebMap().basemap().timeslider(stack).animate("out.gif")       # doctest: +SKIP
 
                 ```
 
         See Also:
             digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
+            digitalearth.web.export.ExportMixin.to_gif: the deprecated name of this method.
         """
+        if duration is not None:
+            if float(duration) <= 0:
+                raise ValueError(f"duration= must be positive; got {duration!r}")
+            fps = deprecated_alias(
+                "fps", "duration", float(duration), convert=lambda d: 1.0 / d
+            )
+        if float(fps) <= 0:
+            raise ValueError(f"fps= must be positive; got {fps!r}")
         frames = self._temporal_frames()
         with tempfile.TemporaryDirectory() as work:
             images = [
                 self._frame_png(pathlib.Path(work) / f"frame{index}.png", frame, title)
                 for index, frame in enumerate(frames)
             ]
-            _write_gif(images, path, duration=duration, loop=loop)
-        return str(path)
+            _write_gif(images, path, duration=1.0 / float(fps), loop=loop)
+        return pathlib.Path(path)
+
+    def to_gif(self, path: str, **kwargs: Any) -> pathlib.Path:
+        """Deprecated alias of :meth:`animate` — same arguments, same result.
+
+        Args:
+            path: Where to write the GIF.
+            **kwargs: Forwarded to :meth:`animate` unchanged (``fps``/``loop``/``title``, and the
+                deprecated ``duration``).
+
+        Returns:
+            The :class:`pathlib.Path` written.
+        """
+        warnings.warn(
+            "WebMap.to_gif() is deprecated and will be removed in a future release; use "
+            "WebMap.animate() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self.animate(path, **kwargs)
 
     def _temporal_frames(self) -> list:
         """Return the visible-layer set for each time step, oldest first.
@@ -257,13 +299,13 @@ class ExportMixin(_MixinBase):
         layer_ids = list((config or {}).get("layer_ids") or [])
         if config is None or (config.get("mode") != "raster") or len(layer_ids) < 2:
             raise ValueError(
-                "to_gif() needs a raster time series with at least two steps; add one with "
+                "animate() needs a raster time series with at least two steps; add one with "
                 "timeslider(collection). The vector time-slider filters a single layer, so its steps "
                 "are not separately renderable."
             )
         return [[layer_id] for layer_id in layer_ids]
 
-    def _frame_png(self, path: Any, visible: list, title: str) -> str:
+    def _frame_png(self, path: Any, visible: list, title: str) -> pathlib.Path:
         """Render one animation frame by showing only ``visible`` and screenshotting the page.
 
         Args:
@@ -272,7 +314,7 @@ class ExportMixin(_MixinBase):
             title: HTML document title used while rendering.
 
         Returns:
-            The frame's path, as a string.
+            The frame's :class:`pathlib.Path`.
         """
         config = self._temporal or {}
         steps = list(config.get("layer_ids") or [])

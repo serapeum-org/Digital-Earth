@@ -88,7 +88,7 @@ class TestServeAndExport:
 
     def test_save_app_writes_standalone_file(self, m, tmp_path):
         out = tmp_path / "app.html"
-        assert m.save_app(str(out), widgets=("cmap",)) == str(out)
+        assert m.save_app(str(out), widgets=("cmap",)) == out
         assert out.stat().st_size > 1_000, (
             "exported app should be a non-trivial HTML page"
         )
@@ -191,3 +191,147 @@ class TestLayerControlAndTable:
         assert pn.state.location is None, "test assumes no active Panel session"
         out = multi.share(params=("cmap", "extent"))
         assert out == ("cmap", "extent")
+
+
+class TestBasemapWidgetIsWired:
+    """#244 — the basemap widgets actually change the map (dashboard *and* layer control)."""
+
+    @pytest.fixture()
+    def multi(self, dataset, point_fc):
+        return InteractiveMap().image(dataset).points(point_fc)
+
+    def test_dashboard_basemap_override_changes_the_tile_layer(self, m):
+        """Picking a provider prepends that provider's tiles, not the same map twice."""
+        dark = m._render_with_overrides({"basemap": "CartoDark"})
+        osm = m._render_with_overrides({"basemap": "OSM"})
+        dark_tiles = [e for e in dark if type(e).__name__ in ("WMTS", "Tiles")]
+        osm_tiles = [e for e in osm if type(e).__name__ in ("WMTS", "Tiles")]
+        assert dark_tiles and osm_tiles, "a basemap value must add a tile layer"
+        assert dark_tiles[0].data != osm_tiles[0].data, (
+            f"the provider must change the tile source: {dark_tiles[0].data}"
+        )
+
+    def test_dashboard_basemap_replaces_an_existing_basemap(self, dataset):
+        """On a map that already called tiles(), the widget swaps the basemap instead of stacking."""
+        built = InteractiveMap().image(dataset).tiles("CartoLight")
+        out = built._render_with_overrides({"basemap": "OSM"})
+        tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
+        assert len(tiles) == 1, f"exactly one basemap expected, got {len(tiles)}"
+        assert "openstreetmap" in tiles[0].data.lower(), (
+            f"the chosen provider must win: {tiles[0].data}"
+        )
+
+    def test_dashboard_basemap_offers_the_shared_provider_list(self, m):
+        """One provider list backs the dashboard widget and the layer-control switch."""
+        from digitalearth.interactive.dashboard import _BASEMAP_CHOICES
+
+        app = m.dashboard(widgets=("basemap",))
+        selects = [w for w in app.select(pn.widgets.Select) if w.name == "Basemap"]
+        assert selects, "the basemap Select is missing"
+        assert list(selects[0].options) == list(_BASEMAP_CHOICES), (
+            f"dashboard must use the shared provider list: {selects[0].options}"
+        )
+
+    def test_dashboard_basemap_refused_on_a_non_mercator_map(self, dataset):
+        """Bokeh renders tiles in 3857 only, so the widget is refused rather than misaligned."""
+        non_mercator = InteractiveMap(crs=4326).image(dataset)
+        with pytest.raises(ValueError, match="Web-Mercator"):
+            non_mercator.dashboard(widgets=("basemap",))
+
+    def test_layer_control_binds_its_basemap_select(self, multi):
+        """The layer-control Select is passed to pn.bind, not merely laid out."""
+        panel_obj = multi.layer_control(basemap_switch=True)
+        bound = panel_obj.select(pn.param.ParamFunction)[0].object
+        assert "basemap" in getattr(bound, "_dinfo", {}).get("kw", {}), (
+            "the basemap Select must be bound to the layer-control view"
+        )
+
+    def test_layer_control_compose_honours_the_basemap(self, multi):
+        """The bound view really composes the chosen provider under the visible layers."""
+        out = multi._compose_visible_layers(["0: Image"], op=0.5, basemap="OSM")
+        tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
+        assert tiles and "openstreetmap" in tiles[0].data.lower(), (
+            f"the layer-control basemap must reach the overlay: {[type(e).__name__ for e in out]}"
+        )
+
+    def test_layer_control_omits_the_switch_on_a_non_mercator_map(
+        self, dataset, point_fc
+    ):
+        """Off Web Mercator the switch is dropped, never drawn over misaligned data."""
+        non_mercator = InteractiveMap(crs=4326).image(dataset).points(point_fc)
+        panel_obj = non_mercator.layer_control(basemap_switch=True)
+        assert not [
+            w for w in panel_obj.select(pn.widgets.Select) if w.name == "Basemap"
+        ], "a non-Mercator map must not offer a basemap switch"
+
+
+class TestInertFlagsAreRefused:
+    """#242 / #243 — flags that are not implemented are refused, not silently ignored."""
+
+    @pytest.fixture()
+    def multi(self, dataset, point_fc):
+        return InteractiveMap().image(dataset).points(point_fc)
+
+    def test_layer_control_reorder_true_raises(self, multi):
+        """#242 — ``reorder=True`` is refused (reordering needs stable layer identity)."""
+        with pytest.raises(NotImplementedError, match="reorder"):
+            multi.layer_control(reorder=True)
+
+    def test_layer_control_reorder_defaults_to_false(self, multi):
+        """The default must not promise reordering."""
+        import inspect
+
+        default = inspect.signature(type(multi).layer_control).parameters["reorder"]
+        assert default.default is False, (
+            f"reorder must default to False, got {default.default!r}"
+        )
+        assert isinstance(multi.layer_control(), pn.viewable.Viewable), (
+            "the default call must keep working unchanged"
+        )
+
+    def test_attribute_table_linked_true_raises(self, point_fc):
+        """#243 — ``linked=True`` is refused (two-way linking needs link_selections)."""
+        with pytest.raises(NotImplementedError, match="linked"):
+            InteractiveMap().attribute_table(point_fc, linked=True)
+
+    def test_attribute_table_linked_defaults_to_false(self, point_fc):
+        """The default must not promise linking, and must still return the read-only table."""
+        import inspect
+
+        default = inspect.signature(InteractiveMap.attribute_table).parameters["linked"]
+        assert default.default is False, (
+            f"linked must default to False, got {default.default!r}"
+        )
+        table = InteractiveMap().attribute_table(point_fc)
+        assert isinstance(table, pn.widgets.Tabulator) and table.disabled, (
+            "the unlinked table stays a read-only Tabulator"
+        )
+
+
+class TestOverridesMergeOverRecordedStyle:
+    """#241 — widget overrides are merged over the recorded style, not applied blind."""
+
+    def test_recorded_style_is_read_back_for_the_colour_mapped_layers(
+        self, dataset, point_fc
+    ):
+        """The override base comes from the map's own style record, raster layers only."""
+        m = InteractiveMap().image(dataset, cmap="viridis", clim=(0.0, 10.0))
+        m.points(point_fc, value_column="fid", cmap="magma")
+        recorded = m._recorded_overridable_style()
+        assert recorded["cmap"] == "viridis", (
+            f"the raster layer's recorded cmap must drive the merge: {recorded}"
+        )
+        assert tuple(recorded["clim"]) == (0.0, 10.0), (
+            f"the recorded clim must be part of the merge base: {recorded}"
+        )
+
+    def test_override_wins_over_the_recorded_style(self, dataset):
+        """The widget value replaces the recorded entry; the untouched entries survive it."""
+        m = InteractiveMap().image(dataset, cmap="viridis", clim=(0.0, 10.0))
+        out = m._render_with_overrides({"cmap": "magma"})
+        style = hv.Store.lookup_options("bokeh", out, "style").kwargs
+        plot = hv.Store.lookup_options("bokeh", out, "plot").kwargs
+        assert style.get("cmap") == "magma", "the override must win"
+        assert tuple(plot.get("clim", ())) == (0.0, 10.0), (
+            f"the recorded clim must survive the override: {plot.get('clim')}"
+        )

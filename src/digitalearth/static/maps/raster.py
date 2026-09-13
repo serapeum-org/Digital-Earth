@@ -26,6 +26,17 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
+#: Colormap a field falls back to when ``cmap=None`` and ``auto_style`` resolves none — the tier's literal,
+#: kept *behind* the lookup rather than in a signature, so one variable-driven default decides the colour of
+#: every backend's render of the same data.
+DEFAULT_FIELD_CMAP = "viridis"
+
+#: Render kinds that draw contour lines/bands, i.e. the ones a resolved ``levels`` describes. ``auto_style``
+#: contributes canonical contour levels for the operational fields it recognises (ECMWF Magics), and those
+#: belong to a contour render — applying them to ``imshow``/``pcolormesh`` would quietly band a continuous
+#: field the caller asked to see continuously.
+_CONTOUR_KINDS = frozenset({"contour", "contourf"})
+
 
 class RasterMixin(_MixinBase):
     """Raster field renders and composites for :class:`~digitalearth.static.map.Map`."""
@@ -39,17 +50,26 @@ class RasterMixin(_MixinBase):
         cmap: Optional[str] = None,
         levels: Any = None,
         add_colorbar: bool = False,
+        default_cmap: str = DEFAULT_FIELD_CMAP,
         **opts,
     ) -> Any:
         """Render a raster ``dataset`` on the shared axes via ``cleopatra.ArrayGlyph`` (the canonical recipe).
+
+        The colour treatment is resolved here rather than defaulted in a signature: with ``cmap=None`` the
+        field's own metadata decides it, through :func:`~digitalearth.base.autostyle.auto_style`, and
+        ``default_cmap`` is what answers when that lookup has no opinion. The same lookup supplies the
+        contour ``levels`` and the colorbar label (``units``) a caller did not pass — a caller-supplied
+        value always wins.
 
         Args:
             dataset: A pyramids ``Dataset`` (reprojected to :attr:`crs` first).
             kind: ArrayGlyph render kind (``auto``/``imshow``/``pcolormesh``/``contour``/``contourf``).
             band: 1-based band index.
-            cmap: Optional colormap name.
-            levels: Optional discrete levels (int or sequence of edges).
+            cmap: Colormap name, or ``None`` (default) to resolve one from the variable via ``auto_style``.
+            levels: Discrete levels (int or sequence of edges), or ``None`` to take the canonical levels
+                ``auto_style`` resolved for the variable — on a contour render only.
             add_colorbar: When ``False`` (default) the Scene owns the colorbar, not the glyph.
+            default_cmap: Colormap used when ``cmap`` is ``None`` *and* ``auto_style`` resolves none.
             **opts: Extra styling kwargs; filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -68,10 +88,14 @@ class RasterMixin(_MixinBase):
             "cyclic", False
         ):  # close the antimeridian seam for global fields (T5.2)
             z_values, x_values = add_cyclic_column(z_values, x_values)
+        # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that
+        # label a colorbar the caller did not label itself.
+        style = auto_style(src)
         if cmap is None:
-            cmap = auto_style(src).get("cmap")  # per-variable default (T6.2)
-        if cmap is not None:
-            opts["cmap"] = cmap
+            cmap = style.get("cmap") or default_cmap
+        opts["cmap"] = cmap
+        if levels is None and kind in _CONTOUR_KINDS:
+            levels = style.get("levels")  # the variable's canonical contour levels
         if levels is not None:
             opts["levels"] = levels
         # Geo-reference the data. cleopatra honours `extent` only for imshow (bbox order
@@ -93,8 +117,9 @@ class RasterMixin(_MixinBase):
             **placement,
             **opts,
         )
+        units = style.get("units")  # the Scene's colorbar labels itself with it (T6.2)
         return self._render_glyph(
-            glyph, kind=kind, add_colorbar=add_colorbar, **plot_style
+            glyph, kind=kind, add_colorbar=add_colorbar, label=units, **plot_style
         )
 
     def imshow(self, dataset: Any, **kwargs) -> Any:

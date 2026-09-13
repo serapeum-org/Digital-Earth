@@ -10,8 +10,10 @@ Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can sup
 single colorbar for the layer of interest.
 """
 
+import os
 from contextlib import contextmanager
-from typing import Any, Iterator, List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
@@ -29,11 +31,15 @@ class Scene:
         ax: An existing axes to draw on. When ``None`` a new figure/axes is created.
         fig: The figure owning ``ax``. Ignored unless ``ax`` is also given.
         figsize: Size of the new figure when one is created (``(width, height)`` in inches).
+        strict: How a layer with nothing to draw is handled. ``False`` (default) skips it and logs a
+            warning naming the layer and why; ``True`` raises instead, so a pipeline that must not
+            silently produce an empty figure fails where the layer was added.
 
     Attributes:
         fig: The matplotlib figure.
         ax: The matplotlib axes all layers render onto.
         layers: Registered ``(glyph, mappable)`` pairs, in draw order, used for legends/colorbars.
+        strict: Whether a layer that draws nothing raises instead of being skipped.
 
     Examples:
         - Create a scene; it owns exactly one axes until a colorbar is added:
@@ -67,28 +73,63 @@ class Scene:
         ax: Optional[Axes] = None,
         fig: Optional[Figure] = None,
         figsize: Tuple[float, float] = (8, 8),
+        strict: bool = False,
     ):
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         self.fig: Figure = fig
         self.ax: Axes = ax
+        self.strict: bool = bool(strict)
         self.layers: List[Tuple[Any, Any]] = []
+        #: One entry per registered layer (same order as :attr:`layers`): the label :meth:`colorbar` falls
+        #: back to when the caller passes none — the layer's resolved ``units``, or ``None``.
+        self._layer_labels: List[Optional[str]] = []
 
-    def _add_layer(self, glyph: Any, mappable: Any) -> Any:
+    def _add_layer(self, glyph: Any, mappable: Any, label: Optional[str] = None) -> Any:
         """Register a rendered glyph and its mappable, returning the mappable.
 
         Args:
             glyph: The cleopatra glyph instance that was drawn on :attr:`ax`.
             mappable: The matplotlib mappable/artist the glyph produced (e.g. ``glyph.im``).
+            label: Optional default colorbar label for this layer (e.g. the units resolved by
+                :func:`~digitalearth.base.autostyle.auto_style`); used only when :meth:`colorbar` is
+                called without one.
 
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
         """
         self.layers.append((glyph, mappable))
+        self._layer_labels.append(label)
         return mappable
 
+    def _reset_layers(self) -> None:
+        """Forget every registered layer (and its default label), e.g. between animation frames."""
+        self.layers = []
+        self._layer_labels = []
+
+    def _default_label(self, layer: int) -> Optional[str]:
+        """Return the default colorbar label recorded for ``layer``, or ``None`` when there is none.
+
+        Args:
+            layer: Index into :attr:`layers` (negative indices count from the most recent layer).
+
+        Returns:
+            The label recorded by :meth:`_add_layer`, or ``None`` — also when the index is out of range,
+            so an unlabelled colorbar is never turned into an ``IndexError``.
+        """
+        # pragma-guarded: the labels track the layers one-for-one, so the index is always in range.
+        try:
+            return self._layer_labels[layer]
+        except IndexError:  # pragma: no cover - defensive
+            return None
+
     def _render_glyph(
-        self, glyph: Any, *plot_args: Any, artist: str = "im", **plot_kwargs: Any
+        self,
+        glyph: Any,
+        *plot_args: Any,
+        artist: str = "im",
+        label: Optional[str] = None,
+        **plot_kwargs: Any,
     ) -> Any:
         """Plot ``glyph`` on the shared axes, register the produced mappable, and return it.
 
@@ -104,6 +145,8 @@ class Scene:
             glyph: An already-constructed cleopatra glyph bound to this Scene's ``ax``/``fig``.
             *plot_args: Positional arguments forwarded to ``glyph.plot`` (e.g. the data array for a mesh).
             artist: Which return convention to read the mappable from (``"im"`` or ``"plot"``).
+            label: Optional default colorbar label recorded with the layer (see :meth:`_add_layer`); it is
+                *not* forwarded to ``glyph.plot``.
             **plot_kwargs: Keyword arguments forwarded to ``glyph.plot`` (e.g. ``kind``, ``outline_only``).
 
         Returns:
@@ -114,7 +157,7 @@ class Scene:
         mappable = glyph.im if artist == "im" else result[2]
         if deferred_alpha is not None and mappable is not None:
             mappable.set_alpha(deferred_alpha)
-        return self._add_layer(glyph, mappable)
+        return self._add_layer(glyph, mappable, label)
 
     @contextmanager
     def _preserve_view(self) -> Iterator[None]:
@@ -146,7 +189,10 @@ class Scene:
                 no slot — so count positions from what was actually rendered, not from the calls made.
                 That applies to the ``-1`` default too: if the most recent draw was skipped, ``-1`` is the
                 one before it, so check the return value rather than assuming the last call registered.
-            label: Optional text label drawn alongside the colorbar.
+            label: Optional text label drawn alongside the colorbar. When ``None`` the layer's own label is
+                used if it has one — a raster field records the ``units``
+                :func:`~digitalearth.base.autostyle.auto_style` resolved for its variable — and the bar is
+                left unlabelled otherwise. A caller-supplied label always wins; pass ``""`` for none.
             **kwargs: Forwarded to ``colorbar_legend`` / ``matplotlib`` colorbar.
 
         Returns:
@@ -158,6 +204,8 @@ class Scene:
         if not self.layers:
             raise ValueError("no layers to draw a colorbar for; add a glyph first")
         cbar = colorbar_legend(self.layers[layer][1], ax=self.ax, **kwargs)
+        if label is None:
+            label = self._default_label(layer)  # the layer's auto-styled units, if any
         if label is not None:
             cbar.set_label(label)
         return cbar
@@ -238,9 +286,35 @@ class Scene:
         """
         return stamp_mark(self.fig, mark, **kwargs)
 
-    def save(self, path: str, **kwargs) -> None:
-        """Save the figure to ``path`` (``bbox_inches="tight"`` by default)."""
+    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs) -> Path:
+        """Save the figure to ``path`` (``bbox_inches="tight"`` by default).
+
+        Args:
+            path: Destination file path; the extension picks the format matplotlib writes.
+            **kwargs: Forwarded to ``Figure.savefig`` (e.g. ``dpi``, ``bbox_inches``, ``transparent``).
+
+        Returns:
+            The path that was written, as a :class:`pathlib.Path` — every backend's ``save`` returns one, so
+            a caller can chain onto the result without re-deriving it.
+
+        Examples:
+            - Save a scene and read the written file back off the return value:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> import tempfile
+                >>> from pathlib import Path
+                >>> from digitalearth.static import Scene
+                >>> out = Scene().save(Path(tempfile.mkdtemp()) / "scene.png")
+                >>> out.suffix
+                '.png'
+                >>> out.exists()
+                True
+
+                ```
+        """
         self.fig.savefig(path, **{"bbox_inches": "tight", **kwargs})
+        return Path(path)
 
     def show(self) -> None:
         """Show the figure via ``matplotlib.pyplot.show``."""

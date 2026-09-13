@@ -5,6 +5,7 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
+import warnings
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -32,6 +33,76 @@ from digitalearth.static.render_compat import relocate_flat_style
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
+
+
+def _renamed_kwarg(
+    old: str, old_value: Any, new: str, new_value: Any, *, stacklevel: int = 3
+) -> Any:
+    """Resolve a renamed keyword argument, warning when the old spelling was the one used.
+
+    The old spelling keeps working for one release: it is accepted, warned about by name, and forwarded as
+    the new one. Passing both is refused rather than silently preferring one.
+
+    Args:
+        old: The deprecated parameter name, for the warning and the error.
+        old_value: What was passed under the old name (``None`` means "not passed").
+        new: The parameter name that replaces it.
+        new_value: What was passed under the new name (``None`` means "not passed").
+        stacklevel: Frames to skip so the warning points at the caller that used the old spelling.
+
+    Returns:
+        The value to use — ``new_value`` unless only the old spelling was given.
+
+    Raises:
+        TypeError: if both spellings were passed, since they name one parameter.
+
+    Warns:
+        DeprecationWarning: when ``old_value`` was passed, naming the replacement.
+    """
+    if old_value is None:
+        return new_value
+    if new_value is not None:
+        raise TypeError(
+            f"pass either {new}= or the deprecated {old}=, not both (they are the same parameter)"
+        )
+    warnings.warn(
+        f"{old}= is deprecated and will be removed in a future release; use {new}= instead",
+        DeprecationWarning,
+        stacklevel=stacklevel,
+    )
+    return old_value
+
+
+def _resolve_marker_size(opts: dict, plot_style: dict) -> None:
+    """Fold a ``size=`` marker size into the ``point_size`` cleopatra's point glyphs take (in place).
+
+    ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static
+    tier accepts too; ``point_size`` is cleopatra's own name for it and keeps working for one release.
+
+    Call this *after* :func:`~digitalearth.static.render_compat.relocate_flat_style`: ``point_size`` is one
+    of the flat keys that relocates onto ``plot()`` for the raster point overlay, and a point glyph takes
+    its marker size on the **constructor** instead — so the value has to be rescued from there and put back.
+
+    Args:
+        opts: The glyph constructor kwargs, mutated in place: the resolved size becomes ``point_size``.
+        plot_style: The relocated ``plot()`` kwargs, mutated in place: a ``point_size`` meant for this
+            glyph is taken back out of it.
+
+    Raises:
+        TypeError: if both ``size`` and ``point_size`` are passed.
+
+    Warns:
+        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
+    """
+    size = _renamed_kwarg(
+        "point_size",
+        plot_style.pop("point_size", None),
+        "size",
+        opts.pop("size", None),
+        stacklevel=4,  # _renamed_kwarg -> here -> the layer method -> its caller
+    )
+    if size is not None:
+        opts["point_size"] = size
 
 
 def _draw_missing_neutral(artist: Any) -> None:
@@ -176,28 +247,47 @@ class VectorMixin(_MixinBase):
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
 
-    def scatter(self, features: Any, *, scale: Optional[str] = None, **opts) -> Any:
+    def scatter(
+        self,
+        features: Any,
+        *,
+        column: Optional[str] = None,
+        scale: Optional[str] = None,
+        **opts,
+    ) -> Any:
         """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
 
         Args:
             features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
-            scale: Optional column name whose values set the per-point marker size. Pair
-                it with ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
-                legend. ``None`` (default) uses a single uniform marker size.
-            **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``size_limits``,
-                ``size_scale``, ``size_legend``, ``size_legend_values``, …).
+            column: Optional column name whose values set the per-point marker size. Pair it with
+                ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
+                legend. ``None`` (default) uses a single uniform marker size — set that size with
+                ``size`` (which every backend spells the same way).
+            scale: Deprecated spelling of ``column``; it names a column, not a magnification, and ``size``
+                is what sets a marker's visual size on every backend. Still accepted (with a
+                ``DeprecationWarning``) for one release.
+            **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``k``, ``size``,
+                ``size_limits``, ``size_scale``, ``size_legend``, ``size_legend_values``, …).
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+
+        Raises:
+            TypeError: if both ``column`` and the deprecated ``scale`` are passed.
+
+        Warns:
+            DeprecationWarning: when ``scale=`` is used instead of ``column=``.
         """
+        column = _renamed_kwarg("scale", scale, "column", column)
         fc = self._vector_input(
             features, name="scatter"
         )  # empty-guard; any geometry (centroid fallback) OK
         src = get_source(fc)
         values = src.z.values if src.z is not None else None
-        sizes = np.asarray(fc[scale], dtype=float) if scale is not None else None
+        sizes = np.asarray(fc[column], dtype=float) if column is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+        _resolve_marker_size(opts, plot_style)  # `size` -> cleopatra's `point_size`
         glyph = ScatterGlyph(
             src.x.values,
             src.y.values,
@@ -246,6 +336,7 @@ class VectorMixin(_MixinBase):
         z = xyz.iloc[:, 2].to_numpy()
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+        _resolve_marker_size(opts, plot_style)  # `size` -> cleopatra's `point_size`
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", **plot_style)
 
@@ -598,7 +689,15 @@ class VectorMixin(_MixinBase):
             return kept, None
         return kept, np.asarray(values)[keep]
 
-    def choropleth(self, features: Any, column: str, **opts) -> Any:
+    def choropleth(
+        self,
+        features: Any,
+        column: str,
+        *,
+        scheme: Optional[Any] = None,
+        k: int = 5,
+        **opts,
+    ) -> Any:
         """Fill polygons coloured by a feature attribute (pyramids ``FeatureCollection`` → ``PolygonGlyph``).
 
         Args:
@@ -606,22 +705,24 @@ class VectorMixin(_MixinBase):
             column: Name of the column whose values colour the polygons — numeric for a continuous or
                 graduated scale, or any nominal labels (strings, region codes, …) under
                 ``scheme="categorical"``.
-            **opts: Styling kwargs forwarded to ``PolygonGlyph``. Pass ``scheme`` (e.g. ``"quantiles"`` /
-                ``"fisher_jenks"``) + ``k`` to colour by discrete classes instead of a continuous scale, or
-                ``scheme="categorical"`` to give every distinct value its own colour (an unordered attribute
-                such as a land-use class or region name — ``k`` does not apply, and ``vmin``/``vmax``/
-                ``levels``/``color_scale`` are ignored). A categorical fill is keyed by a swatch legend rather
-                than a colorbar. For a categorical scheme, ``cmap`` should be a **qualitative**
-                (``ListedColormap``) map — ``"tab10"`` (the default), ``"Set2"``, ``"Paired"``, … A continuous
-                ``LinearSegmentedColormap`` (``"coolwarm"``, ``"RdBu"``) is sampled at evenly-spaced points so
-                the categories stay distinct; a perceptual ``ListedColormap`` (``"viridis"``, ``"plasma"``) is
-                accepted but reads poorly (its first *n* of 256 entries are near-identical shades). The colours
-                are identical to the web/interactive tiers either way. Missing values
-                (``NaN``/``None``/``pd.NA``) are drawn a neutral grey, not dropped.
-                Note the default ``scheme`` differs by tier: this static tier (like the interactive
-                ``choropleth``) defaults to a **continuous** scale, whereas the **web** ``choropleth`` is
-                graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification
-                across tiers.
+            scheme: How the values are classified. ``None`` (default) is a **continuous** ramp; a named
+                scheme (``"quantiles"``, ``"fisher_jenks"``, ``"equal_interval"``, …) or an explicit
+                sequence of bin edges is graduated into ``k`` classes; ``"categorical"`` gives every
+                distinct value its own colour (an unordered attribute such as a land-use class or region
+                name — ``k`` does not apply, and ``vmin``/``vmax``/``levels``/``color_scale`` are ignored),
+                keyed by a swatch legend rather than a colorbar. Spelled the same way, with the same
+                default, on every backend — except that the web tier's ``choropleth`` is graduated by
+                default, so pass ``scheme`` explicitly for identical classification across tiers.
+            k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
+                ``"categorical"``).
+            **opts: Styling kwargs forwarded to ``PolygonGlyph``. For a categorical scheme, ``cmap`` should
+                be a **qualitative** (``ListedColormap``) map — ``"tab10"`` (the default), ``"Set2"``,
+                ``"Paired"``, … A continuous ``LinearSegmentedColormap`` (``"coolwarm"``, ``"RdBu"``) is
+                sampled at evenly-spaced points so the categories stay distinct; a perceptual
+                ``ListedColormap`` (``"viridis"``, ``"plasma"``) is accepted but reads poorly (its first
+                *n* of 256 entries are near-identical shades). The colours are identical to the
+                web/interactive tiers either way. Missing values (``NaN``/``None``/``pd.NA``) are drawn a
+                neutral grey, not dropped.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
@@ -665,6 +766,8 @@ class VectorMixin(_MixinBase):
         polygons, values = self._finite_polygons(
             polygons, values
         )  # drop far-side polygons on a globe
+        if scheme is not None:  # None means a continuous ramp: classify nothing
+            opts["scheme"], opts["k"] = scheme, k
         return self._polygon_layer(polygons, values, **opts)
 
     def shapes(self, features: Any, **opts) -> Any:

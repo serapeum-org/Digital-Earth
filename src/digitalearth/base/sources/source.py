@@ -24,7 +24,8 @@ class Source:
         z: The data dimension (a :class:`DimensionInfo`), or ``None`` for geometry-only vector sources.
         x: The x / longitude axis (a :class:`DimensionInfo`).
         y: The y / latitude axis (a :class:`DimensionInfo`).
-        crs: The CRS as an EPSG integer or WKT string (whatever pyramids reported), or ``None``.
+        crs: The CRS the coordinates in ``x``/``y`` are expressed in, **as given** — see :attr:`crs` for
+            the contract.
         metadata: Free-form metadata dict (e.g. ``variable``, ``kind``, ``time``, ``member``).
         units: Unit string for the data values, or ``None``.
 
@@ -40,6 +41,8 @@ class Source:
             >>> src.z.values.shape
             (2, 3)
             >>> src.crs
+            4326
+            >>> src.epsg
             4326
             >>> src.metadata("variable")
             'rain'
@@ -88,8 +91,64 @@ class Source:
 
     @property
     def crs(self) -> Any:
-        """The CRS as reported by pyramids (EPSG int or WKT str), or ``None``."""
+        """The CRS the coordinates in :attr:`x` / :attr:`y` are expressed in, as given.
+
+        The contract, so a reader can trust the answer:
+
+        * It is the address of **these** coordinates, not of the file they came from. A caller that warps
+          data into a display CRS before wrapping it passes that CRS to ``get_source(..., crs=...)``, and it
+          is stored verbatim — an EPSG ``int``, or a proj4/WKT ``str`` for a projection with no authority
+          code (an orthographic globe, say, where pyramids reports ``epsg is None``).
+        * Without such a caller it is derived from the input: its EPSG code when it has one, else its
+          projection definition.
+        * ``None`` means the CRS is genuinely **unknown** — a raw numpy array, or an input declaring no CRS
+          at all. It never means "there was a CRS but no code for it"; that case yields the definition.
+
+        Use :attr:`epsg` for the separate code-or-``None`` question.
+        """
         return self._crs
+
+    @property
+    def epsg(self) -> Optional[int]:
+        """The EPSG code of :attr:`crs`, or ``None`` when it has none.
+
+        The narrower of the two CRS questions: :attr:`crs` always says where the coordinates are, while this
+        answers only "is there an authority code for it". A projection defined by proj4/WKT alone gives
+        ``None`` here and still gives its definition from :attr:`crs`.
+
+        Returns:
+            The EPSG integer, or ``None`` for an unknown or code-less CRS.
+
+        Examples:
+            - An EPSG-coded source answers both questions the same way:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> Source(None, axis, axis, crs="EPSG:3857").epsg
+                3857
+
+                ```
+            - A projection with no authority code keeps its definition but has no code:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> src = Source(None, axis, axis, crs="+proj=ortho +lat_0=53 +lon_0=4")
+                >>> src.epsg is None, src.crs.startswith("+proj=ortho")
+                (True, True)
+
+                ```
+        """
+        crs = self._crs
+        if isinstance(crs, bool) or crs is None:
+            return None
+        if isinstance(crs, int):
+            return crs
+        text = str(crs).strip()
+        if text.lower().startswith("epsg:"):
+            text = text.split(":", 1)[1].strip()
+        return int(text) if text.isdigit() else None
 
     @property
     def units(self) -> Optional[str]:

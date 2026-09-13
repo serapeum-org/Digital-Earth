@@ -195,11 +195,6 @@ class TestPolygonsAndChoropleth:
             f"missing rows must use a distinct sentinel: {cmap}"
         )
 
-    def test_choropleth_graduated_scheme_not_implemented(self, m, polygon_fc):
-        """A graduated scheme is rejected, not silently degraded to a continuous ramp (L1)."""
-        with pytest.raises(NotImplementedError, match="graduated scheme"):
-            m.choropleth(polygon_fc, "fid", scheme="quantiles")
-
     def test_choropleth_missing_column_raises(self, m, polygon_fc):
         with pytest.raises(KeyError, match="nope"):
             m.choropleth(polygon_fc, "nope")
@@ -220,3 +215,83 @@ class TestRasterVectorCompose:
         assert len(overlay) == 2, (
             f"expected 2 layers in the overlay, got {len(overlay)}"
         )
+
+
+class TestGraduatedChoropleth:
+    """#245 — graduated schemes classify here too, matching the web tier's classifier."""
+
+    @pytest.fixture()
+    def m(self) -> InteractiveMap:
+        return InteractiveMap()
+
+    @pytest.fixture()
+    def polygon_fc(self):
+        from pyramids.feature import FeatureCollection
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson").copy()
+        fc["geometry"] = fc.geometry.buffer(500.0)
+        return fc
+
+    def test_quantiles_renders_instead_of_raising(self, m, polygon_fc):
+        """The call that raised NotImplementedError now builds a graduated polygon layer."""
+        out = m.choropleth(polygon_fc, "fid", scheme="quantiles", k=5)
+        assert out is m, "choropleth() must return the map for chaining"
+        assert isinstance(m.layers[0], gv.Polygons), (
+            f"expected gv.Polygons, got {type(m.layers[0])}"
+        )
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
+        assert isinstance(style["cmap"], list) and len(style["cmap"]) == 5, (
+            f"one flat colour per class expected: {style['cmap']}"
+        )
+        assert len(plot["color_levels"]) == 6, (
+            f"k+1 class edges expected: {plot['color_levels']}"
+        )
+        assert type(hv.renderer("bokeh").get_plot(m.layers[0])).__name__.endswith(
+            "PolygonPlot"
+        ), "the graduated layer must build a real polygon plot"
+
+    def test_breaks_match_the_shared_classifier(self, m, polygon_fc):
+        """``last_breaks`` holds the edges cleopatra's classify returns — the web tier's contract."""
+        from cleopatra.styling.styles import classify
+
+        m.choropleth(polygon_fc, "fid", scheme="quantiles", k=5)
+        edges, _ = classify(polygon_fc.to_crs(3857)["fid"].to_numpy(), "quantiles", 5)
+        assert m.last_breaks == [float(edge) for edge in edges], (
+            f"breaks must match the shared classifier: {m.last_breaks}"
+        )
+
+    @pytest.mark.parametrize("scheme", ["equal_interval", "fisher_jenks"])
+    def test_other_schemes_classify_too(self, m, polygon_fc, scheme):
+        m.choropleth(polygon_fc, "fid", scheme=scheme, k=4)
+        assert m.last_breaks is not None and len(m.last_breaks) == 5, (
+            f"{scheme} must produce k+1 edges: {m.last_breaks}"
+        )
+
+    def test_k_controls_the_class_count(self, m, polygon_fc):
+        m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3)
+        style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
+        assert len(style["cmap"]) == 3 and len(m.last_breaks) == 4, (
+            f"k=3 must give 3 colours and 4 edges: {style['cmap']}, {m.last_breaks}"
+        )
+
+    def test_unknown_scheme_errors_with_context(self, m, polygon_fc):
+        """An unclassifiable request names the column, the scheme and k (web-tier parity)."""
+        with pytest.raises(ValueError, match=r"cannot classify column 'fid'"):
+            m.choropleth(polygon_fc, "fid", scheme="not_a_scheme")
+
+    def test_categorical_and_continuous_are_unchanged(self, m, polygon_fc):
+        """The two schemes that already worked keep their exact behaviour."""
+        categorical = InteractiveMap().choropleth(
+            polygon_fc, "fid", scheme="categorical"
+        )
+        cmap = hv.Store.lookup_options("bokeh", categorical.layers[0], "style").kwargs[
+            "cmap"
+        ]
+        assert isinstance(cmap, dict), "categorical still maps label -> colour"
+        m.choropleth(polygon_fc, "fid")
+        assert m.last_breaks is None, "the continuous ramp still records no breaks"
+        assert (
+            hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
+            == "viridis"
+        ), "the continuous ramp still takes the cmap name straight through"

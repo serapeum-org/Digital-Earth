@@ -163,19 +163,19 @@ class TestAutoRouting:
     """``points``/``polygons`` auto-route through Datashader above the threshold."""
 
     def test_points_above_threshold_auto_rasterize(self, m, big_points):
-        m.points(big_points, rasterize_threshold=1_000)
+        m.points(big_points, big_data_threshold=1_000)
         assert isinstance(m.layers[0], hv.DynamicMap), (
             "above-threshold points must become a rasterized layer, not glyphs"
         )
 
     def test_points_below_threshold_stay_glyphs(self, m, big_points):
-        m.points(big_points.head(100), rasterize_threshold=1_000)
+        m.points(big_points.head(100), big_data_threshold=1_000)
         assert isinstance(m.layers[0], gv.Points), (
             "below-threshold points must stay raw glyphs"
         )
 
     def test_points_forced_off_stays_glyphs_even_when_big(self, m, big_points):
-        m.points(big_points.head(5_000), rasterize=False, rasterize_threshold=1_000)
+        m.points(big_points.head(5_000), rasterize=False, big_data_threshold=1_000)
         assert isinstance(m.layers[0], gv.Points), (
             "rasterize=False must force raw glyphs"
         )

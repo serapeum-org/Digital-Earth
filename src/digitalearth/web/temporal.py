@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
+from digitalearth.base.crs import OffLimbError
 from digitalearth.web.base import _require_layer_api
 
 #: Members scanned when computing a stack's shared colour range. Mirrors the static tier's cap: the scan
@@ -82,7 +83,7 @@ class TemporalMixin(_MixinBase):
         labels: Optional[Sequence] = None,
         band: int = 1,
         column: Optional[str] = None,
-        scheme: Optional[Any] = "quantiles",
+        scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
         opacity: float = 0.85,
@@ -108,7 +109,8 @@ class TemporalMixin(_MixinBase):
                 index; must match the member count and be unique.
             band: Raster only — the 1-based band drawn for every member.
             column: Vector only — value column to colour by (graduated choropleth/circles when set).
-            scheme: Vector only — a cleopatra classification scheme for graduated colouring.
+            scheme: Vector only — a cleopatra classification scheme for graduated colouring;
+                ``None`` (the default) is a continuous ramp, matching every other builder.
             k: Vector only — number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
             opacity: Layer opacity in ``[0, 1]``.
@@ -267,9 +269,16 @@ class TemporalMixin(_MixinBase):
                     "timeslider labels must be unique — duplicate labels collapse the slider and make "
                     "the matching frames unreachable"
                 )
-        self._check_stack_is_drawable(members, band)
-
-        vmin, vmax = clim if clim is not None else self._global_clim(collection, band)
+        try:
+            self._check_stack_is_drawable(members, band)
+            vmin, vmax = (
+                clim if clim is not None else self._global_clim(collection, band)
+            )
+        except OffLimbError as error:
+            # A series missing frames is not a series, so the whole slider goes rather than part of it.
+            # Both reads happen before any layer is added, so skipping here leaves the map as it was.
+            self._skipped("timeslider", str(error), error)
+            return self
         step_names = [
             str(value) for value in (labels if labels is not None else range(count))
         ]
@@ -277,6 +286,7 @@ class TemporalMixin(_MixinBase):
         for index, member in enumerate(members):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
             # without a slider then shows one frame rather than the whole stack piled up.
+            previous = self._last_layer_id
             self.add_raster(
                 member,
                 band=band,
@@ -288,6 +298,16 @@ class TemporalMixin(_MixinBase):
                 # The switcher captions each row with the layer id, so the step's label has to *be* it.
                 name=step_names[index],
             )
+            if self._last_layer_id == previous:
+                # `add_raster` skipped this member (it could not be placed). Keeping the frames either
+                # side would leave a slider with a hole in it, so the steps already built are unwound.
+                for built in layer_ids:
+                    self.remove_layer(built)
+                self._skipped(
+                    "timeslider",
+                    f"step {step_names[index]!r} could not be placed, so the series was abandoned",
+                )
+                return self
             layer_ids.append(self._last_layer_id)
 
         self._temporal = {

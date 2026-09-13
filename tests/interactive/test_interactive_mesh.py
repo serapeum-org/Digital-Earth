@@ -54,7 +54,7 @@ class TestTrimesh:
         assert len(trimesh.nodes) == 4, "the four mesh nodes must be carried through"
 
     def test_auto_rasterize_above_threshold(self, m, point_fc):
-        m.trimesh(point_fc, value_column="fid", rasterize_threshold=1)
+        m.trimesh(point_fc, value_column="fid", big_data_threshold=1)
         assert isinstance(m.layers[0], hv.DynamicMap), (
             "above the face threshold the mesh must rasterize to an image"
         )

@@ -6,11 +6,22 @@ Three operations recurred verbatim across :mod:`digitalearth.base.sources.extrac
 every caller masks the same way. (``static.map`` and ``static.series`` were consumers before the backend
 restructure split ``fig_of`` out into :mod:`digitalearth.static.figures`; they no longer import from here.)
 
-Masking uses an **exact** comparison against the nodata sentinel (``arr == nodata``): a nodata value is a sentinel
-read straight from the dataset, so it is reproduced exactly in the array, and an exact test cannot accidentally null
-legitimate values that merely sit close to the sentinel (which ``np.isclose`` could). This is pure numpy — no
-pyramids/cleopatra import — so the module stays a leaf consumable from anywhere, which is what qualifies it for
-:mod:`digitalearth.base`.
+Masking has two tiers, and which one applies depends on whether there is a dataset behind the values.
+
+:func:`read_masked_band` — the tier every raster caller uses — asks pyramids for the mask instead of rebuilding
+it: ``read_array(band=..., masked=True)``, then the mask filled with ``NaN``. That is the only correct reading
+since pyramids 0.62.0, whose ``read_array`` unpacks CF-packed bands (``scale_factor``/``add_offset``) to
+physical units by default while ``no_data_value`` stays a **stored** sentinel — upstream's own docstring says to
+compare the sentinel against an ``unpack=False`` read or let ``masked=True`` build the mask, never to match it
+against physical values. Comparing the two by hand silently missed every nodata cell of a packed band (a stored
+``-9999`` reads as ``-98.49`` at ``scale=0.01, offset=1.5``). Going through pyramids also honours the band's
+GDAL **mask/alpha band**, which the hand-rolled comparison never saw.
+
+:func:`mask_nodata` remains for the raw-numpy callers that have no dataset behind them, and still uses an
+**exact** comparison (``arr == nodata``): given values and a sentinel in the same units, an exact test cannot
+accidentally null legitimate values that merely sit close to the sentinel (which ``np.isclose`` could). It is
+pure numpy — no pyramids/cleopatra import — so the module stays a leaf consumable from anywhere, which is what
+qualifies it for :mod:`digitalearth.base`.
 
 :func:`ring_runs` is here for the same reason: both globe tiers — the 2-D projected disc in
 :mod:`digitalearth.static.projections` and the 3-D sphere in :mod:`digitalearth.static.textured_globe` — clip a
@@ -202,27 +213,40 @@ def _band_nodata(dataset: Any, index: int) -> Optional[float]:
 
 
 def read_masked_band(dataset: Any, band: int = 1) -> np.ndarray:
-    """Read a 1-based ``band`` of a pyramids ``Dataset`` as ``float64`` with its nodata cells set to ``NaN``.
+    """Read a 1-based ``band`` of a pyramids ``Dataset`` as ``float64`` with its masked cells set to ``NaN``.
+
+    The mask comes from pyramids (``read_array(band=..., masked=True)``), not from comparing values against
+    ``no_data_value`` here. Two reasons, both of which the hand-rolled comparison got wrong:
+
+    * ``read_array`` unpacks a CF-packed band (``scale_factor``/``add_offset``) to physical units, while
+      ``no_data_value`` stays a **stored** sentinel — so the two are different numbers and no cell ever
+      matched. Letting pyramids build the mask is what its own docstring prescribes.
+    * A band's GDAL **mask/alpha band** marks cells that carry no sentinel at all; ``masked=True`` folds it in.
 
     Args:
-        dataset: A pyramids ``Dataset`` (duck-typed by ``read_array`` / ``no_data_value``).
+        dataset: A pyramids ``Dataset`` (duck-typed by ``read_array(band=..., masked=True)``).
         band: 1-based band index (the first band is ``1``); read internally as ``band - 1``.
 
     Returns:
-        The band as a ``float64`` array (same shape as stored) with nodata cells replaced by ``NaN``.
+        The band as a ``float64`` array (same shape as stored) with every masked cell replaced by ``NaN``.
 
     Examples:
-        - Read band 1 (1-based) and null its nodata cells:
+        - A packed band's nodata cell is masked even though its physical value is nothing like the sentinel:
             ```python
             >>> import numpy as np
-            >>> from types import SimpleNamespace
+            >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.base.arrays import read_masked_band
-            >>> ds = SimpleNamespace(no_data_value=(-1.0,),
-            ...                      read_array=lambda band=0: np.array([[5.0, -1.0]]))
+            >>> ds = Dataset.from_array(
+            ...     np.array([[100, 200], [300, -9999]], dtype="int16"),
+            ...     geo_ref=GeoReference(top_left_corner=(0, 0), cell_size=1.0, epsg=4326),
+            ...     no_data_value=-9999,
+            ... )
+            >>> ds.scale, ds.offset = [0.01], [1.5]
             >>> read_masked_band(ds, band=1).tolist()
-            [[5.0, nan]]
+            [[2.5, 3.5], [4.5, nan]]
 
             ```
     """
     idx = band - 1
-    return mask_nodata(dataset.read_array(band=idx), _band_nodata(dataset, idx))
+    values = np.ma.asarray(dataset.read_array(band=idx, masked=True)).astype("float64")
+    return np.ma.filled(values, np.nan)

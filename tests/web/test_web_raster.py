@@ -91,14 +91,26 @@ def _source_with(y_values, values):
         values: The 2-D band array, in the row order the source reports.
 
     Returns:
-        An object with `.x.values`, `.y.values` and `.z.values`.
+        An object with `.x.values`, `.y.values`, `.z.values` and the `metadata`/`units` accessors
+        `auto_style` reads — a real `Source` has all five, and the builder now consults the style
+        library for the band's units as well as its colormap.
     """
     axis = type("Axis", (), {})
     x, y, z = axis(), axis(), axis()
     x.values = np.array([0.0, 1.0])
     y.values = np.asarray(y_values, dtype=float)
     z.values = np.asarray(values, dtype=float)
-    return type("Source", (), {"x": x, "y": y, "z": z})()
+    return type(
+        "Source",
+        (),
+        {
+            "x": x,
+            "y": y,
+            "z": z,
+            "units": None,
+            "metadata": staticmethod(lambda key=None, default=None: None),
+        },
+    )()
 
 
 class TestAddRasterDrawsNorthFirst:
@@ -162,9 +174,26 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
         """Skip when the web extra is absent."""
         pytest.importorskip("maplibre")
 
+    @staticmethod
+    def _call(m, builder, dataset):
+        """Run `builder` on `m`, so the two parametrised cases read the same either side of the guard.
+
+        Args:
+            m: The map under test.
+            builder: The raster builder name.
+            dataset: The shared pyramids raster fixture.
+
+        Returns:
+            Whatever the builder returns (the map itself, since both are fluent).
+        """
+        return {
+            "add_raster": lambda: m.add_raster(dataset),
+            "rgb_composite": lambda: m.rgb_composite(dataset, bands=(1, 1, 1)),
+        }[builder]()
+
     @pytest.mark.parametrize("builder", ["add_raster", "rgb_composite"])
-    def test_unconvertible_corners_raise_rather_than_guess(
-        self, dataset, monkeypatch, builder
+    def test_unplaceable_corners_skip_the_layer_and_warn(
+        self, dataset, monkeypatch, builder, warning_log
     ):
         """Falling back to the projected numbers would place the image somewhere off the planet.
 
@@ -172,16 +201,32 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
             dataset: The shared pyramids raster fixture.
             monkeypatch: pytest's patcher.
             builder: The raster builder under test.
+            warning_log: The tier's loguru warnings, proving the skip is announced rather than silent.
 
         Test scenario:
             `_as_lonlat` answers `None` for a CRS that cannot be resolved or a reprojection that comes
-            back non-finite; both builders must stop there with an actionable message.
+            back non-finite; both builders must stop there — adding no layer, saying why, and leaving the
+            rest of the chain to draw (C7).
         """
         monkeypatch.setattr(WebMap, "_as_lonlat", lambda self, *bounds: None)
         m = WebMap().basemap()
-        call = {
-            "add_raster": lambda: m.add_raster(dataset),
-            "rgb_composite": lambda: m.rgb_composite(dataset, bands=(1, 1, 1)),
-        }
+        before = len(m.layers)
+        assert self._call(m, builder, dataset) is m, "the builder must stay chainable"
+        assert len(m.layers) == before, "the unplaceable raster was added anyway"
+        assert any("cannot be expressed in lon/lat" in line for line in warning_log), (
+            f"the skip has to name why the layer is missing; got {warning_log!r}"
+        )
+
+    @pytest.mark.parametrize("builder", ["add_raster", "rgb_composite"])
+    def test_strict_raises_instead_of_skipping(self, dataset, monkeypatch, builder):
+        """`strict=True` is for a pipeline that must not publish a map with a layer quietly missing.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher.
+            builder: The raster builder under test.
+        """
+        monkeypatch.setattr(WebMap, "_as_lonlat", lambda self, *bounds: None)
+        m = WebMap(strict=True).basemap()
         with pytest.raises(ValueError, match="cannot be expressed in lon/lat"):
-            call[builder]()
+            self._call(m, builder, dataset)

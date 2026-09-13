@@ -117,3 +117,54 @@ class TestGraticule:
 
     def test_chains(self, m):
         assert m.graticule() is m
+
+
+class TestGraticuleSpacing:
+    """#252 — ``graticule`` takes the same lon_step/lat_step the static tier does."""
+
+    def test_default_is_the_thirty_degree_grid(self, m):
+        """Unchanged behaviour: no arguments still draws the 30-degree Natural-Earth grid."""
+        m.graticule()
+        assert m.layers[-1].data.name == "graticules_30", (
+            f"default spacing changed: {m.layers[-1].data.name}"
+        )
+
+    @pytest.mark.parametrize("step", [1, 5, 10, 15, 20, 30])
+    def test_requested_spacing_is_honoured(self, step):
+        """The requested spacing selects the matching Natural-Earth graticule layer."""
+        m = InteractiveMap().graticule(lon_step=step, lat_step=step)
+        assert m.layers[-1].data.name == f"graticules_{step}", (
+            f"lon_step/lat_step ignored: {m.layers[-1].data.name}"
+        )
+
+    def test_signature_matches_the_static_tier(self):
+        """Both tiers spell the spacing the same way, with the same defaults."""
+        import inspect
+
+        from digitalearth.static.maps.projection import ProjectionMixin as StaticMixin
+
+        interactive = inspect.signature(InteractiveMap.graticule).parameters
+        static = inspect.signature(StaticMixin.graticule).parameters
+        for name in ("lon_step", "lat_step"):
+            assert name in interactive, f"interactive graticule must accept {name}"
+            assert interactive[name].default == static[name].default, (
+                f"{name} default differs between tiers: "
+                f"{interactive[name].default} vs {static[name].default}"
+            )
+
+    def test_asymmetric_spacing_raises(self, m):
+        """Natural Earth ships symmetric graticules only — say so, do not ignore the request."""
+        with pytest.raises(ValueError, match="symmetric"):
+            m.graticule(lon_step=10, lat_step=20)
+
+    def test_unsupported_spacing_raises(self, m):
+        with pytest.raises(ValueError, match="exist only at"):
+            m.graticule(lon_step=7, lat_step=7)
+
+    def test_style_opts_still_forwarded_alongside_spacing(self, m):
+        m.graticule(lon_step=10, lat_step=10, line_width=0.5)
+        assert isinstance(m.layers[-1], gv.element.Feature)
+        assert m.layers[-1].data.name == "graticules_10"
+
+    def test_chains(self, m):
+        assert m.graticule(lon_step=15, lat_step=15) is m

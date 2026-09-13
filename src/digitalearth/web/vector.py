@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
-from digitalearth.web.base import _require_layer_api
+from digitalearth.web.base import _require_layer_api, deprecated_alias
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -168,7 +168,7 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        size: float = 12.0,
+        text_size: float = 12.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
@@ -176,6 +176,7 @@ class VectorMixin(_MixinBase):
         allow_overlap: bool = False,
         name: Optional[str] = None,
         visible: bool = True,
+        size: Optional[float] = None,
     ) -> Self:
         """Label features with the text in ``column`` (recipe W2).
 
@@ -187,7 +188,8 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` or GeoDataFrame; points label at the point, lines
                 and polygons at a placement MapLibre picks.
             column: The property to read the text from.
-            size: Text size in pixels.
+            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
+                visual size of a marker everywhere else in the package.
             color: Text colour.
             halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
                 over imagery.
@@ -197,6 +199,7 @@ class VectorMixin(_MixinBase):
                 that collide, which is what keeps a dense layer readable.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            size: **Deprecated** spelling of ``text_size``; forwarded unchanged.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -218,6 +221,8 @@ class VectorMixin(_MixinBase):
             digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
         """
         _, LayerType = _require_layer_api()
+        if size is not None:
+            text_size = deprecated_alias("text_size", "size", size)
         gdf = self._display_gdf(features, method="labels")
         if column not in getattr(gdf, "columns", []):
             raise KeyError(
@@ -226,7 +231,7 @@ class VectorMixin(_MixinBase):
             )
         layout: dict = {
             "text-field": ["get", column],
-            "text-size": float(size),
+            "text-size": float(text_size),
             "text-allow-overlap": bool(allow_overlap),
         }
         if offset is not None:
@@ -255,7 +260,7 @@ class VectorMixin(_MixinBase):
         base: float = 0.0,
         band: int = 1,
         filled: bool = False,
-        cmap: str = "viridis",
+        cmap: Optional[str] = None,
         color: Optional[str] = None,
         width: float = 1.5,
         opacity: float = 1.0,
@@ -273,14 +278,18 @@ class VectorMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset``.
-            interval: Spacing between levels, anchored at ``base``. Give exactly one of this or ``levels``.
-            levels: Explicit levels to contour. Give exactly one of this or ``interval``.
+            interval: Spacing between levels, anchored at ``base``. Give at most one of this or ``levels``.
+            levels: Explicit levels to contour. Give at most one of this or ``interval``. With neither,
+                the levels come from :func:`~digitalearth.base.autostyle.auto_style` when the band's
+                variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels
+                that field is conventionally drawn with.
             base: The value a regular ``interval`` is anchored to.
             band: 1-based band to contour, matching
                 :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and
                 this converts, so the same number means the same band everywhere in this tier.
             filled: Draw filled bands between successive levels instead of lines.
-            cmap: Colormap for colouring by level.
+            cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the
+                band's variable.
             color: A single colour for every contour, overriding ``cmap``. Use it when the levels are
                 labelled rather than colour-coded.
             width: Line width in pixels; ignored when ``filled``.
@@ -294,8 +303,9 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when neither or both of ``interval`` and ``levels`` are given — pyramids requires
-                exactly one, and saying so here names the argument the caller actually wrote.
+            ValueError: when both ``interval`` and ``levels`` are given — pyramids takes exactly one, and
+                saying so here names the argument the caller actually wrote — or when neither is given
+                and the variable is not one ``auto_style`` knows levels for.
 
         Examples:
             - Contour a DEM every 100 m:
@@ -307,13 +317,27 @@ class VectorMixin(_MixinBase):
 
         See Also:
             digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.
+            digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
-        if (interval is None) == (levels is None):
+        if interval is not None and levels is not None:
             raise ValueError(
-                "contours() needs exactly one of interval= or levels=; "
+                "contours() takes at most one of interval= or levels=; "
                 f"got interval={interval!r} and levels={levels!r}"
             )
-        data = self._to_display_raster(dataset)
+        data = self._display_raster_or_skip(dataset, layer="contours")
+        if data is None:
+            return self
+        source = self._to_display_source(data, band=band)
+        cmap = self._auto_cmap(source, cmap)
+        if interval is None:
+            levels = self._auto_levels(source, levels)
+            if levels is None:
+                raise ValueError(
+                    "contours() needs interval= or levels=: neither was given, and the band's variable "
+                    f"({source.metadata('variable')!r}) is not one auto_style carries levels for."
+                )
+        # Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.
+        self.last_units = self._auto_units(source, None)
         features = data.contour(
             interval=interval,
             fixed_levels=list(levels) if levels is not None else None,
@@ -326,11 +350,13 @@ class VectorMixin(_MixinBase):
             # No level fell inside the band's range. Passing this on raises "column 'level' not found",
             # because pyramids only writes the attribute when it writes a feature — which points at the
             # wrong thing entirely.
-            raise ValueError(
-                f"contours() traced nothing: no level lies within the data. Check that "
-                f"{'levels=' + repr(levels) if levels is not None else 'interval=' + repr(interval)} "
-                f"suits band {band}'s range."
+            self._skipped(
+                "contours",
+                "no level lies within the data, so nothing was traced — check that "
+                f"{'levels=' + repr(levels) if interval is None else 'interval=' + repr(interval)} "
+                f"suits band {band}'s range",
             )
+            return self
         # Lines carry `level`; filled bands carry `level_min`/`level_max` for the band's two edges, so
         # colour and label the lower edge — it is what orders the bands.
         attribute = "level_min" if filled else "level"
@@ -358,6 +384,10 @@ class VectorMixin(_MixinBase):
                 name=name,
                 visible=visible,
             )
+        if self.last_units and self.last_legend is not None:
+            # The classification the sub-builder just recorded describes this raster's values, so the key
+            # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.
+            self.last_legend["units"] = self.last_units
         if labels:
             # Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.
             return self.labels(features, attribute, visible=visible)
@@ -427,12 +457,14 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        radius: float = 5.0,
+        size: float = 5.0,
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
+        big_data_threshold: Optional[int] = None,
         name: Optional[str] = None,
         visible: bool = True,
+        radius: Optional[float] = None,
     ) -> Self:
         """Draw a point ``FeatureCollection`` as a MapLibre circle layer (recipe W2).
 
@@ -441,24 +473,35 @@ class VectorMixin(_MixinBase):
             column: Optional value column; when given, circles are coloured by it (graduated if ``scheme``
                 is set, else a continuous ramp).
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
+                ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
-            radius: Circle radius in pixels.
+            size: Circle radius in pixels — the same ``size`` that means marker size on every tier.
             color: Fixed circle colour used when ``column`` is ``None``.
             opacity: Circle fill opacity in ``[0, 1]``.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
+            big_data_threshold: Feature count above which this one call auto-routes to deck.gl. ``None``
+                uses the map's :attr:`~digitalearth.web.base.WebMapBase.big_data_threshold`, which is the
+                way to change it for every layer at once.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            radius: **Deprecated** spelling of ``size``; forwarded unchanged.
 
         Returns:
             The same map instance, so builder calls chain.
         """
         Layer, LayerType = _require_layer_api()
+        if radius is not None:
+            size = deprecated_alias("size", "radius", radius)
         gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).
-        if big or (big is None and column is None and self._route_big(gdf, "points")):
+        if big or (
+            big is None
+            and column is None
+            and self._route_big(gdf, "points", threshold=big_data_threshold)
+        ):
             if column is not None:
                 logger.warning(
                     "points: big=True routes {} features to a flat deck.gl layer; column={!r} styling is dropped",
@@ -471,12 +514,12 @@ class VectorMixin(_MixinBase):
                 # Dropping these silently would change the API contract at 50 000 features.
                 raise ValueError(
                     f"points() is rendering {len(gdf)} features as a deck.gl overlay"
-                    f"{'' if big else ' (over the ' + str(self.big_data_threshold) + '-feature threshold)'}"
+                    f"{'' if big else ' (over the ' + str(self._threshold(big_data_threshold)) + '-feature threshold)'}"
                     ", which the layer registry cannot address — so name= and visible= cannot be "
                     "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
-            return self.deck_scatter(gdf, radius=radius)
-        paint: dict = {"circle-radius": float(radius), "circle-opacity": float(opacity)}
+            return self.deck_scatter(gdf, size=size)
+        paint: dict = {"circle-radius": float(size), "circle-opacity": float(opacity)}
         if column is not None:
             paint["circle-color"] = self._color_expr(
                 self._require_column(gdf, column), column, scheme, k, cmap
@@ -507,6 +550,7 @@ class VectorMixin(_MixinBase):
             features: A pyramids line ``FeatureCollection`` / GeoDataFrame.
             column: Optional value column to colour the lines by.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
+                ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
             width: Line width in pixels.
@@ -543,6 +587,7 @@ class VectorMixin(_MixinBase):
         opacity: float = 0.6,
         outline_color: str = "#ffffff",
         big: Optional[bool] = None,
+        big_data_threshold: Optional[int] = None,
         name: Optional[str] = None,
         visible: bool = True,
     ) -> Self:
@@ -553,6 +598,7 @@ class VectorMixin(_MixinBase):
             column: Optional value column to colour the polygons by (graduated if ``scheme`` is set, else a
                 continuous ramp). For full thematic symbology prefer :meth:`choropleth`.
             scheme: A cleopatra classification scheme for graduated colouring (with ``column``).
+                ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
             color: Fixed fill colour used when ``column`` is ``None``.
@@ -560,6 +606,9 @@ class VectorMixin(_MixinBase):
             outline_color: Polygon outline colour.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
+            big_data_threshold: Feature count above which this one call auto-routes to deck.gl. ``None``
+                uses the map's :attr:`~digitalearth.web.base.WebMapBase.big_data_threshold`, which is the
+                way to change it for every layer at once.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
@@ -570,7 +619,11 @@ class VectorMixin(_MixinBase):
         gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
-        if big or (big is None and column is None and self._route_big(gdf, "polygons")):
+        if big or (
+            big is None
+            and column is None
+            and self._route_big(gdf, "polygons", threshold=big_data_threshold)
+        ):
             if column is not None:
                 logger.warning(
                     "polygons: big=True routes {} features to a flat deck.gl layer; column={!r} styling is dropped",
@@ -583,7 +636,7 @@ class VectorMixin(_MixinBase):
                 # Dropping these silently would change the API contract at 50 000 features.
                 raise ValueError(
                     f"polygons() is rendering {len(gdf)} features as a deck.gl overlay"
-                    f"{'' if big else ' (over the ' + str(self.big_data_threshold) + '-feature threshold)'}"
+                    f"{'' if big else ' (over the ' + str(self._threshold(big_data_threshold)) + '-feature threshold)'}"
                     ", which the layer registry cannot address — so name= and visible= cannot be "
                     "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
@@ -607,7 +660,7 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        scheme: Optional[Any] = "quantiles",
+        scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
         opacity: float = 0.85,
@@ -617,15 +670,13 @@ class VectorMixin(_MixinBase):
     ) -> Self:
         """Draw a thematic polygon choropleth coloured by ``column`` (recipe W2).
 
-        Graduated by default (``scheme="quantiles"``): the class breaks come from
-        ``cleopatra.styling.styles.classify`` and are compiled into a MapLibre ``step`` paint expression. Pass
-        ``scheme="categorical"`` to colour an unordered attribute by distinct value (a MapLibre ``match``
-        expression, DC.8), or ``scheme=None`` for a continuous ramp. The breaks / categories are exposed on
+        A **continuous ramp** by default (``scheme=None``), the same default the static and interactive
+        ``choropleth`` carry — one call classifies the same way whichever tier draws it. Pass a scheme
+        (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) for a graduated map of ``k``
+        classes, whose breaks come from ``cleopatra.styling.styles.classify`` and compile into a MapLibre
+        ``step`` paint expression, or ``scheme="categorical"`` to colour an unordered attribute by distinct
+        value (a MapLibre ``match`` expression, DC.8). The breaks / categories are exposed on
         ``WebMap.last_breaks`` for building a legend.
-
-        Note the default ``scheme`` differs by tier: this **web** tier is graduated-by-default
-        (``"quantiles"``), whereas the interactive and static ``choropleth`` default to a **continuous** ramp.
-        Pass ``scheme`` explicitly for identical classification across tiers.
 
         Args:
             features: A pyramids polygon ``FeatureCollection`` / GeoDataFrame.
@@ -633,7 +684,7 @@ class VectorMixin(_MixinBase):
                 value for ``scheme="categorical"``). Required.
             scheme: A cleopatra classification scheme (``"quantiles"``, ``"equal_interval"``,
                 ``"fisher_jenks"``, …) or an explicit edge sequence for graduated colouring;
-                ``"categorical"`` for distinct-value colouring; ``None`` for a continuous ramp.
+                ``"categorical"`` for distinct-value colouring; ``None`` (the default) for a continuous ramp.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap name.
             opacity: Fill opacity in ``[0, 1]``.

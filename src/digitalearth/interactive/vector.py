@@ -15,14 +15,44 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Self, Tuple
 
-from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
+from digitalearth.base.crs import reproject
+from digitalearth.interactive.base import (
+    _masked_to_nan,
+    _require_holoviz,
+    _skips_off_limb,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _cmap_hex(cmap: str, n: int) -> List[str]:
+    """Sample ``cmap`` at ``n`` evenly spaced stops and return hex colour strings.
+
+    The colour side of graduated symbology — a colormap name becomes the concrete ``#rrggbb`` strings a
+    HoloViews ``cmap`` list needs, one per class. matplotlib is imported lazily (only when a builder
+    actually classifies something), so importing the tier stays engine-free. This mirrors the web tier's
+    ``WebMapBase._cmap_hex`` stop-for-stop, so a ``column``/``scheme``/``k`` triple colours identically on
+    both tiers; the shared ``Scale`` vocabulary (DE-12) is where the two collapse into one.
+
+    Args:
+        cmap: A matplotlib colormap name.
+        n: Number of colours to sample (>= 1).
+
+    Returns:
+        list: ``n`` ``#rrggbb`` hex strings spanning the colormap.
+    """
+    import numpy as np
+    from matplotlib import colormaps
+    from matplotlib.colors import to_hex
+
+    colormap = colormaps[cmap]
+    stops = [0.5] if n == 1 else list(np.linspace(0.0, 1.0, n))
+    return [to_hex(colormap(stop)) for stop in stops]
 
 
 class VectorMixin(_MixinBase):
@@ -50,6 +80,11 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` (or any GeoDataFrame-like with
                 ``epsg``/``to_crs``); plain GeoDataFrames already in the display CRS pass through.
 
+        Reprojection goes through the shared :func:`~digitalearth.base.crs.reproject` helper rather than
+        calling ``to_crs`` directly, so a warp that places none of the geometry is reported as an
+        ``OffLimbError`` here exactly as it is for a raster — which is what lets one skip-and-warn policy
+        (#257) cover both halves of the tier.
+
         Returns:
             The display-CRS GeoDataFrame (read-only from here on — geometry is never rebuilt).
         """
@@ -58,7 +93,7 @@ class VectorMixin(_MixinBase):
             and hasattr(features, "to_crs")
             and self._needs_reproject(features)
         ):
-            features = features.to_crs(self.crs)
+            features = reproject(features, self.crs)
         return features
 
     def _vector_element(self, kind: str, gdf: Any, vdims: Optional[list] = None) -> Any:
@@ -90,6 +125,7 @@ class VectorMixin(_MixinBase):
             kwargs["vdims"] = vdims
         return factory(gdf, **kwargs)
 
+    @_skips_off_limb
     def points(
         self,
         features: Any,
@@ -98,7 +134,8 @@ class VectorMixin(_MixinBase):
         size: float = 6.0,
         cmap: str = "viridis",
         rasterize: Any = "auto",
-        rasterize_threshold: int = 50_000,
+        big_data_threshold: Optional[int] = None,
+        rasterize_threshold: Optional[int] = None,
         **opts: Any,
     ) -> Self:
         """Add a point layer, optionally coloured by an attribute column.
@@ -107,11 +144,13 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
                 display CRS through pyramids when needed.
             value_column: Optional numeric column colouring the points (also shown on hover).
-            size: Marker size in screen pixels.
+            size: Marker size in screen pixels — the one thing ``size`` ever means on any tier (#251).
             cmap: Colormap used when ``value_column`` is given.
             rasterize: ``"auto"`` (default) routes through Datashader above
-                ``rasterize_threshold`` rows — logged, never silent; ``True``/``False`` force it.
-            rasterize_threshold: Row count above which ``"auto"`` switches to Datashader.
+                ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
+            big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
+                (default) uses the map's ``big_data_threshold`` attribute (#250).
+            rasterize_threshold: **Deprecated** alias of ``big_data_threshold``.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -131,10 +170,13 @@ class VectorMixin(_MixinBase):
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
+        threshold = self._resolve_big_data_threshold(
+            big_data_threshold, rasterize_threshold
+        )
         gdf = self._display_gdf(features)
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("points", len(gdf), rasterize_threshold)
+            and _route_through_rasterize("points", len(gdf), threshold)
         ):
             aggregator = "mean" if value_column else "count"
             return self.rasterize(
@@ -149,6 +191,7 @@ class VectorMixin(_MixinBase):
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
+    @_skips_off_limb
     def path(self, features: Any, **opts: Any) -> Self:
         """Add a line layer (LineString / MultiLineString features).
 
@@ -176,6 +219,7 @@ class VectorMixin(_MixinBase):
         element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
+    @_skips_off_limb
     def polygons(
         self,
         features: Any,
@@ -183,7 +227,8 @@ class VectorMixin(_MixinBase):
         column: Optional[str] = None,
         cmap: str = "viridis",
         rasterize: Any = "auto",
-        rasterize_threshold: int = 50_000,
+        big_data_threshold: Optional[int] = None,
+        rasterize_threshold: Optional[int] = None,
         **opts: Any,
     ) -> Self:
         """Add a polygon layer — outlines only, or filled by an attribute column.
@@ -195,9 +240,11 @@ class VectorMixin(_MixinBase):
                 draws unfilled outlines.
             cmap: Colormap used when ``column`` is given.
             rasterize: ``"auto"`` (default) routes through Datashader above
-                ``rasterize_threshold`` rows — logged, never silent; ``True``/``False`` force it.
+                ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
                 Polygon datashading needs the optional ``spatialpandas`` package.
-            rasterize_threshold: Row count above which ``"auto"`` switches to Datashader.
+            big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
+                (default) uses the map's ``big_data_threshold`` attribute (#250).
+            rasterize_threshold: **Deprecated** alias of ``big_data_threshold``.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -216,10 +263,13 @@ class VectorMixin(_MixinBase):
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
+        threshold = self._resolve_big_data_threshold(
+            big_data_threshold, rasterize_threshold
+        )
         gdf = self._display_gdf(features)
         if rasterize is True or (
             rasterize == "auto"
-            and _route_through_rasterize("polygons", len(gdf), rasterize_threshold)
+            and _route_through_rasterize("polygons", len(gdf), threshold)
         ):
             from importlib.util import find_spec
 
@@ -313,12 +363,70 @@ class VectorMixin(_MixinBase):
         self.last_breaks = list(categories)
         return self.add_element(element)
 
+    def _graduated_polygons(
+        self,
+        features: Any,
+        column: str,
+        *,
+        scheme: Any,
+        k: int,
+        cmap: str,
+        **opts: Any,
+    ) -> Self:
+        """Fill polygons by classified value — one flat colour per class (the graduated scheme).
+
+        A thin adapter over ``cleopatra.styling.styles.classify``, the **same** classifier the web and static
+        tiers use, so ``scheme``/``k`` mean one thing across the tiers. The class edges it returns are handed
+        to HoloViews as ``color_levels`` alongside a per-class ``cmap`` list, which is what makes Bokeh draw
+        discrete classes instead of interpolating the ramp. The classification itself is never reimplemented
+        here: when the shared ``Scale`` vocabulary (DE-12) lands, this method is the seam it replaces.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
+            column: The numeric attribute to classify and colour by.
+            scheme: A cleopatra classification scheme (``"quantiles"``/``"equal_interval"``/
+                ``"fisher_jenks"``/… or an explicit edge sequence).
+            k: Number of classes.
+            cmap: Colormap name sampled once per class.
+            **opts: Extra HoloViews style options.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
+                wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
+        """
+        from cleopatra.styling.styles import classify
+
+        gdf = self._display_gdf(features)
+        try:
+            edges, _ = classify(gdf[column].to_numpy(), scheme, k)
+        except ValueError as err:  # constant column, unknown scheme, k < 1, …
+            raise ValueError(
+                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
+            ) from err
+        colors = _cmap_hex(cmap, len(edges) - 1)
+        element = self._vector_element("Polygons", gdf, vdims=[column])
+        common = {
+            "color": column,
+            "cmap": colors,
+            "color_levels": [float(edge) for edge in edges],
+            "colorbar": True,
+            **opts,
+        }
+        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
+        self.last_breaks = [float(edge) for edge in edges]
+        return self.add_element(element)
+
+    @_skips_off_limb
     def choropleth(
         self,
         features: Any,
         column: str,
         *,
         scheme: Optional[str] = None,
+        k: int = 5,
         cmap: str = "viridis",
         clim: Optional[Tuple[float, float]] = None,
         **opts: Any,
@@ -327,22 +435,27 @@ class VectorMixin(_MixinBase):
 
         A thin colour-by-attribute :meth:`polygons`, mirroring the static ``Map.choropleth``. Pass
         ``scheme="categorical"`` to colour an unordered attribute by distinct value instead of a continuous
-        ramp (DC.8); the categories are recorded on ``last_breaks`` for legend parity with the web tier.
+        ramp (DC.8), or a **graduated** scheme (``"quantiles"``/``"equal_interval"``/``"fisher_jenks"``/…)
+        to classify a numeric column into ``k`` flat classes. Either way the categories or class edges are
+        recorded on ``last_breaks`` for legend parity with the web tier.
 
-        Note the default ``scheme`` differs by tier: this interactive tier (like the static ``Map.choropleth``)
-        defaults to a **continuous** ramp, whereas the **web** ``choropleth`` is graduated-by-default
-        (``"quantiles"``). Pass ``scheme`` explicitly for identical classification across tiers.
+        Graduated classification goes through ``cleopatra.styling.styles.classify`` — the same classifier the
+        web and static tiers use — so the same ``column``/``scheme``/``k`` yields the same breaks on every
+        tier. Note the *default* ``scheme`` still differs: this interactive tier (like the static
+        ``Map.choropleth``) defaults to a **continuous** ramp, whereas the **web** ``choropleth`` is
+        graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygon geometries; reprojected through
                 pyramids when needed.
             column: The column driving the fill colour (required); numeric for the continuous ramp, or any
                 hashable value for ``scheme="categorical"``.
-            scheme: ``"categorical"`` for distinct-value colouring; ``None`` (default) for a continuous ramp.
-                Graduated schemes (``"quantiles"``/``"fisher_jenks"``/…) are **not** supported in the
-                interactive tier and raise ``NotImplementedError`` rather than silently degrading.
+            scheme: ``"categorical"`` for distinct-value colouring; a graduated scheme name (or an explicit
+                sequence of class edges) for classified colouring; ``None`` (default) for a continuous ramp.
+            k: Number of classes for a graduated ``scheme`` (ignored by ``"categorical"``/``None``);
+                ``5`` is the shared cross-tier default (#246).
             cmap: Colormap name (a qualitative map such as ``"tab10"`` is used for the categorical scheme when
-                left at the default).
+                left at the default); sampled once per class for a graduated scheme.
             clim: Optional ``(vmin, vmax)`` colour limits for the continuous ramp; ``None`` auto-scales.
             **opts: Extra HoloViews style options applied to the element.
 
@@ -363,8 +476,8 @@ class VectorMixin(_MixinBase):
 
         Raises:
             KeyError: when ``column`` is not a column of ``features``.
-            NotImplementedError: when ``scheme`` is a graduated scheme (only ``"categorical"``/``None`` are
-                supported in the interactive tier).
+            ValueError: when a graduated ``scheme`` cannot classify ``column`` (unknown scheme name, a
+                constant column, ``k < 1``, …).
         """
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
@@ -373,10 +486,10 @@ class VectorMixin(_MixinBase):
         if isinstance(scheme, str) and scheme.lower() == "categorical":
             return self._categorical_polygons(features, column, cmap=cmap, **opts)
         if scheme is not None:
-            raise NotImplementedError(
-                f"interactive choropleth supports scheme='categorical' or None (continuous ramp); the "
-                f"graduated scheme {scheme!r} is not implemented in the interactive tier — use the web tier "
-                f"for graduated classification, or pass scheme=None for a continuous ramp"
+            if clim is not None:
+                opts = {"clim": clim, **opts}
+            return self._graduated_polygons(
+                features, column, scheme=scheme, k=k, cmap=cmap, **opts
             )
         # Continuous ramp: no discrete breaks — clear any recorded from a prior categorical call.
         self.last_breaks = None
@@ -411,6 +524,7 @@ class VectorMixin(_MixinBase):
         v_arr = _masked_to_nan(sv.z.values)[::step, ::step]
         return x, y, u_arr, v_arr
 
+    @_skips_off_limb
     def vectorfield(
         self,
         u: Any,
@@ -447,6 +561,7 @@ class VectorMixin(_MixinBase):
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
+    @_skips_off_limb
     def streamlines(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
     ) -> Self:
@@ -524,13 +639,15 @@ class VectorMixin(_MixinBase):
         )
         return self.add_element(element)
 
+    @_skips_off_limb
     def trimesh(
         self,
         data: Any,
         *,
         value_column: Optional[str] = None,
         rasterize: Any = "auto",
-        rasterize_threshold: int = 50_000,
+        big_data_threshold: Optional[int] = None,
+        rasterize_threshold: Optional[int] = None,
         cmap: str = "viridis",
         **opts: Any,
     ) -> Self:
@@ -544,13 +661,15 @@ class VectorMixin(_MixinBase):
         - a **point** ``FeatureCollection``: Delaunay-triangulated locally with ``matplotlib.tri``
           (matplotlib is not a forbidden GIS engine), mirroring the static ``tri*`` path.
 
-        Above ``rasterize_threshold`` faces the mesh auto-``rasterize``s to a density image (logged).
+        Above ``big_data_threshold`` faces the mesh auto-``rasterize``s to a density image (logged).
 
         Args:
             data: A UGRID-mesh object or a point ``FeatureCollection`` (reprojected via pyramids).
             value_column: Node-value column (for the FeatureCollection path) driving the colour.
             rasterize: ``"auto"`` (default) rasterizes above the threshold; ``True``/``False`` force it.
-            rasterize_threshold: Face count above which ``"auto"`` rasterizes.
+            big_data_threshold: Face count above which ``"auto"`` rasterizes; ``None`` (default) uses
+                the map's ``big_data_threshold`` attribute (#250).
+            rasterize_threshold: **Deprecated** alias of ``big_data_threshold``.
             cmap: Colormap name.
             **opts: Extra HoloViews style options applied to the element.
 
@@ -558,15 +677,18 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         gv, hv = _require_holoviz()
+        threshold = self._resolve_big_data_threshold(
+            big_data_threshold, rasterize_threshold
+        )
         nodes, simplices, vdims = self._mesh_inputs(data, value_column)
         trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))
         n_faces = len(simplices)
-        if rasterize is True or (rasterize == "auto" and n_faces > rasterize_threshold):
+        if rasterize is True or (rasterize == "auto" and n_faces > threshold):
             from loguru import logger
 
             if rasterize == "auto":
                 logger.info(
-                    f"trimesh: {n_faces:,} faces exceed rasterize_threshold={rasterize_threshold:,}"
+                    f"trimesh: {n_faces:,} faces exceed big_data_threshold={threshold:,}"
                     " — rasterizing the mesh to a density image"
                 )
             return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
@@ -613,6 +735,7 @@ class VectorMixin(_MixinBase):
             return nodes, simplices, [value_column]
         return gv.Points((x, y), crs=crs), simplices, []
 
+    @_skips_off_limb
     def hexbin(
         self,
         features: Any,
@@ -673,6 +796,7 @@ class VectorMixin(_MixinBase):
         )
         return self.add_element(element)
 
+    @_skips_off_limb
     def kde(
         self,
         features: Any,
@@ -704,6 +828,7 @@ class VectorMixin(_MixinBase):
         )
         return self.add_element(element)
 
+    @_skips_off_limb
     def graph(
         self,
         nodes: Any,

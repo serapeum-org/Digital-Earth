@@ -4,6 +4,8 @@ Gated on the optional ``3d`` extra (pyvista). Covers arrow glyphs from a (u, v, 
 into 3-D prisms (uniform + per-feature height + colour-by-attribute), and the MultiPolygon ring reader.
 """
 
+import logging
+
 import numpy as np
 import pytest
 
@@ -11,6 +13,7 @@ pv = pytest.importorskip("pyvista")
 gpd = pytest.importorskip("geopandas")
 from shapely.geometry import MultiPolygon, Polygon
 
+from digitalearth.base.crs import OffLimbError
 from digitalearth.three_d import Scene3D
 from digitalearth.three_d.vector import MAGNITUDE, VALUE, _exterior_rings, _extrude_ring
 
@@ -97,13 +100,44 @@ def test_vectors_length_mismatch_raises():
     scene.close()
 
 
-def test_extruded_polygons_empty_raises():
-    """extruded_polygons() rejects an empty geometry set."""
+def test_extruded_polygons_empty_skips_and_warns(caplog):
+    """C7: an empty geometry set is skipped with a warning, not raised, on a default scene.
+
+    Args:
+        caplog: Captures the warning the skipped layer logs.
+
+    Test scenario:
+        A 3-D scene is usually composed of several layers, so one of them having nothing to extrude must not
+        take the others with it. The layer is dropped, nothing is registered, and a WARNING names both the
+        layer and the reason so the absence is not silent.
+    """
     empty = gpd.GeoDataFrame({"pop": []}, geometry=[])
     scene = Scene3D(off_screen=True)
-    with pytest.raises(ValueError, match="no polygon"):
-        scene.extruded_polygons(empty)
+    with caplog.at_level(logging.WARNING):
+        assert scene.extruded_polygons(empty) is None, (
+            "a skipped layer returns None rather than an actor"
+        )
     scene.close()
+    assert not scene.layers, "a skipped layer must not be registered"
+    assert "extruded_polygons" in caplog.text and "no polygon" in caplog.text, (
+        f"the warning must name the layer and the reason, got {caplog.text!r}"
+    )
+
+
+def test_extruded_polygons_empty_raises_under_strict():
+    """C7: `strict=True` turns the skipped-layer warning back into an OffLimbError.
+
+    Test scenario:
+        A pipeline that would rather fail than ship a map with a missing layer opts in with `strict=True`,
+        and gets the shared `OffLimbError` the 2-D tiers raise for "none of the data could be placed".
+    """
+    empty = gpd.GeoDataFrame({"pop": []}, geometry=[])
+    scene = Scene3D(off_screen=True, strict=True)
+    try:
+        with pytest.raises(OffLimbError, match="no polygon"):
+            scene.extruded_polygons(empty)
+    finally:
+        scene.close()
 
 
 def test_extruded_polygons_rejects_non_polygon():

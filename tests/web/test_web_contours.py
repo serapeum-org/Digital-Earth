@@ -100,30 +100,59 @@ class TestTracingIsPyramids:
 class TestWhatItRefuses:
     """Both failures produce an error that names what the caller actually wrote."""
 
-    @pytest.mark.parametrize(
-        "kwargs",
-        [{}, {"interval": 10, "levels": [1.0]}],
-    )
-    def test_exactly_one_of_interval_or_levels(self, dataset, kwargs):
-        """pyramids requires one of the two; saying so here names the argument, not its internals.
+    def test_both_interval_and_levels_is_an_error(self, dataset):
+        """pyramids takes one of the two; saying so here names the argument, not its internals.
 
         Args:
             dataset: The shared pyramids raster fixture.
-            kwargs: Neither given, or both.
         """
         web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match="exactly one"):
-            web_map.contours(dataset, **kwargs)
+        with pytest.raises(ValueError, match="at most one"):
+            web_map.contours(dataset, interval=10, levels=[1.0])
 
-    def test_an_interval_coarser_than_the_data_says_so(self, dataset):
+    def test_neither_and_no_autostyle_levels_names_both_arguments(self, dataset):
+        """With neither given, `auto_style` is consulted — and an unknown variable has no levels (C6).
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            The fixture's variable is not one the style library knows, so nothing can be resolved and the
+            caller is asked for `interval=`/`levels=` rather than handed a guessed set.
+        """
+        web_map = WebMap().basemap()
+        with pytest.raises(ValueError, match=r"needs interval= or levels="):
+            web_map.contours(dataset)
+
+    def test_an_interval_coarser_than_the_data_skips_and_warns(
+        self, dataset, warning_log
+    ):
         """The fixture tops out near 88, so a 1000-unit interval crosses no level at all.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            warning_log: The tier's loguru warnings.
 
         Test scenario:
             pyramids writes the level attribute only when it writes a feature, so an empty trace reached
             the vector builder as "column 'level' not found" — an error about the wrong thing entirely.
+            Under C7 an empty trace is a skip: no layer, a warning that names the interval, and the rest
+            of the chain still draws.
         """
         web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match="traced nothing"):
+        before = len(web_map.layers)
+        assert web_map.contours(dataset, interval=1000) is web_map
+        assert len(web_map.layers) == before, "an empty trace still added a layer"
+        assert any("nothing was traced" in line for line in warning_log), warning_log
+
+    def test_strict_raises_on_an_empty_trace(self, dataset):
+        """`strict=True` turns the skip back into the error it used to be (C7).
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+        """
+        web_map = WebMap(strict=True).basemap()
+        with pytest.raises(ValueError, match="nothing was traced"):
             web_map.contours(dataset, interval=1000)
 
 

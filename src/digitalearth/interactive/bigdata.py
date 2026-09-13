@@ -306,7 +306,7 @@ def _route_through_rasterize(kind: str, n_features: int, threshold: int) -> bool
     if n_features <= threshold:
         return False
     logger.info(
-        f"{kind}: {n_features:,} features exceed rasterize_threshold={threshold:,} — "
+        f"{kind}: {n_features:,} features exceed big_data_threshold={threshold:,} — "
         "auto-routing through Datashader (pass rasterize=False to force raw glyphs)"
     )
     return True

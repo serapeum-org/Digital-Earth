@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pyramids.feature import FeatureCollection
 
+from digitalearth.ops.batch import load_input
 from digitalearth.ops.cli import _load, _parse_crs, _plot_kwargs, build_parser, main
 
 
@@ -27,6 +28,41 @@ class TestParseCrs:
 
 class TestLoad:
     """Tests for the _load raster-then-vector loader."""
+
+    def test_plot_and_batch_share_one_loader(self):
+        """``cli._load`` is ``batch.load_input`` itself, not a second copy of it (#229).
+
+        Test scenario:
+            The two subcommands drifted apart because each opened its inputs its own way; identity here is
+            what stops that happening again.
+        """
+        assert _load is load_input, (
+            "cli._load must be the batch loader, not a private duplicate"
+        )
+
+    def test_batch_subcommand_renders_a_vector_file(self, tmp_path):
+        """``digitalearth batch <vector>`` writes an image, as ``digitalearth plot`` already did (#229).
+
+        Test scenario:
+            The reported repro: batch on tests/data/points.geojson used to raise a bare GDAL RuntimeError.
+        """
+        code = main(
+            [
+                "batch",
+                "tests/data/points.geojson",
+                "-o",
+                str(tmp_path),
+                "--crs",
+                "4326",
+                "--no-colorbar",
+            ]
+        )
+        written = sorted(tmp_path.glob("*.png"))
+        assert code == 0, (
+            f"batch should succeed on a vector input, got exit code {code}"
+        )
+        assert len(written) == 1, f"expected one image, got {written}"
+        assert written[0].stat().st_size > 0, "the written image must not be empty"
 
     def test_loads_raster(self, tmp_path, dataset):
         """A raster path loads as a pyramids Dataset (the primary path)."""

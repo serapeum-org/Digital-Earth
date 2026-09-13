@@ -67,7 +67,7 @@ class WebMap(
             >>> from pyramids.dataset import Dataset                  # doctest: +SKIP
             >>> dem = Dataset.read_file("examples/data/acc4000.tif")  # doctest: +SKIP
             >>> WebMap().add_raster(dem).basemap().save("map.html")   # doctest: +SKIP
-            'map.html'
+            PosixPath('map.html')
 
             ```
 

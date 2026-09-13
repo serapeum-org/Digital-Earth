@@ -20,11 +20,19 @@ import re
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.basemaps import (
+    DEFAULT_BASEMAP_PROVIDER,
     KEYED_BASEMAP_NAMES,
     get_keyed_basemap,
     is_keyed_basemap,
 )
-from digitalearth.web.base import _require_layer_api, _require_maplibre
+from digitalearth.web.base import (
+    _require_layer_api,
+    _require_maplibre,
+    deprecated_alias,
+)
+
+# TODO(#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
+# collision belongs to the Core contract, not here.
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
 _BASEMAP_PROVIDERS = {
@@ -314,6 +322,7 @@ class DecorationMixin(_MixinBase):
         tile_size: int = 256,
         opacity: float = 1.0,
         max_zoom: Optional[int] = None,
+        bounds: Optional[Any] = None,
     ) -> Self:
         """Add a raster XYZ/WMTS tile layer **beneath** the data (recipe W1).
 
@@ -325,10 +334,18 @@ class DecorationMixin(_MixinBase):
             max_zoom: The deepest zoom the service serves. Past it MapLibre over-zooms the last real
                 tiles instead of requesting levels that do not exist; ``None`` leaves the source
                 unbounded.
+            bounds: ``(west, south, east, north)`` in lon/lat that the service actually covers, passed
+                to the MapLibre source's ``bounds``. It is a **declaration**, not a check: the map stays
+                pannable everywhere, and MapLibre simply stops requesting tiles outside the box instead
+                of collecting 404s across the rest of the world. ``None`` means global.
 
         Returns:
             The same map instance, so builder calls chain; the basemap is registered as an underlay so
             data drawn before or after it still renders on top.
+
+        Raises:
+            ValueError: when ``bounds`` is not four numbers — MapLibre silently ignores a malformed
+                ``bounds``, so the coverage would quietly go undeclared.
         """
         Layer, LayerType = _require_layer_api()
         src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
@@ -341,6 +358,13 @@ class DecorationMixin(_MixinBase):
             source["attribution"] = attribution
         if max_zoom is not None:
             source["maxzoom"] = int(max_zoom)
+        if bounds is not None:
+            box = [float(value) for value in bounds]
+            if len(box) != 4:
+                raise ValueError(
+                    f"tiles(bounds=...) takes (west, south, east, north) in lon/lat; got {bounds!r}"
+                )
+            source["bounds"] = box
         layer = Layer(
             id=layer_id,
             type=LayerType.RASTER,
@@ -356,7 +380,7 @@ class DecorationMixin(_MixinBase):
 
     def basemap(
         self,
-        provider: str = "CartoDark",
+        provider: str = DEFAULT_BASEMAP_PROVIDER,
         *,
         opacity: float = 1.0,
         api_key: Optional[str] = None,
@@ -369,12 +393,15 @@ class DecorationMixin(_MixinBase):
         the viewer starts, not where they stay, and refusing a NICFI basemap because the first view sits
         outside the tropics would block a map the viewer can simply pan into. The static tier renders one
         fixed extent, where an out-of-coverage basemap is a dead end rather than a scroll away, which is
-        why the guard lives there.
+        why the guard lives there. What a keyed preset's coverage *does* do here is reach the MapLibre
+        source as its ``bounds``, so the engine stops asking for tiles the service does not have.
 
         Args:
-            provider: A token-free basemap name — ``"CartoDark"``, ``"CartoLight"``, ``"CartoVoyager"`` or
+            provider: A token-free basemap name — ``"CartoLight"``, ``"CartoDark"``, ``"CartoVoyager"`` or
                 ``"OSM"`` (case-insensitive) — or a **keyed** preset name such as ``"Planet.NICFI"`` (see
                 :mod:`digitalearth.base.basemaps`), whose credential is read from the environment.
+                Defaults to ``digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER``, the one constant the
+                interactive tier reads too, so an unqualified basemap looks the same on both.
             opacity: Basemap opacity in ``[0, 1]``.
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
@@ -409,6 +436,7 @@ class DecorationMixin(_MixinBase):
                 attribution=keyed.attribution,
                 opacity=opacity,
                 max_zoom=keyed.max_zoom,
+                bounds=keyed.bounds,
             )
         if api_key is not None:
             # Dropping it silently would leave a caller believing they had authenticated.
@@ -450,7 +478,10 @@ class DecorationMixin(_MixinBase):
         gradient bar with its end values.
 
         Args:
-            title: Heading above the key. ``None`` uses the classified column's name.
+            title: Heading above the key. ``None`` uses the classified column's name, followed by the
+                units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them
+                for the raster the classification came from. A title given here always wins, and a unit
+                is never guessed: without one the heading is the bare column name, as it always was.
             position: One of the four MapLibre corners.
             labels: Explicit row labels, replacing the derived ones — for units, or for renaming
                 categories. Ignored for a continuous ramp, which has no rows.
@@ -484,7 +515,13 @@ class DecorationMixin(_MixinBase):
                 "legend() has nothing to describe: no classified layer has been added yet. Add a "
                 "choropleth (or any builder given column=...) first."
             )
-        heading = title if title is not None else spec.get("column") or ""
+        if title is not None:
+            heading = title
+        else:
+            heading = spec.get("column") or ""
+            units = spec.get("units")
+            if heading and units:
+                heading = f"{heading} ({units})"
         head = (
             f'<div style="font-weight:600;margin-bottom:4px">{_text(heading)}</div>'
             if heading
@@ -583,11 +620,12 @@ class DecorationMixin(_MixinBase):
         lat: float,
         string: str,
         *,
-        size: float = 14.0,
+        text_size: float = 14.0,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
         name: Optional[str] = None,
+        size: Optional[float] = None,
     ) -> Self:
         """Place a single line of text at a coordinate.
 
@@ -598,11 +636,13 @@ class DecorationMixin(_MixinBase):
             lon: Longitude in the display CRS' lon/lat.
             lat: Latitude.
             string: The text to draw.
-            size: Text size in pixels.
+            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
+                visual size of a marker everywhere else in the package.
             color: Text colour.
             halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
             name: What a layer switcher calls this annotation; ``None`` uses its generated id.
+            size: **Deprecated** spelling of ``text_size``; forwarded unchanged.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -619,6 +659,8 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.labels: label many features from a column.
         """
         Layer, LayerType = _require_layer_api()
+        if size is not None:
+            text_size = deprecated_alias("text_size", "size", size)
         src_id, layer_id = self._uid("text-src"), self._layer_id("text", name)
         source = {
             "type": "geojson",
@@ -634,7 +676,7 @@ class DecorationMixin(_MixinBase):
             source=src_id,
             layout={
                 "text-field": ["get", "text"],
-                "text-size": float(size),
+                "text-size": float(text_size),
                 "text-allow-overlap": True,
             },
             paint={

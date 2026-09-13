@@ -125,6 +125,53 @@ jobs:
         run: |
           pixi run -e dev doctests
 
+  # The visual-regression net (#228): every other test under tests/static/ asserts on artist counts, norms
+  # and axis limits, all of which pass just as happily when the figure comes out a grey rectangle. This job
+  # is the one that looks at the pixels — `test-images` runs `pytest -m mpl --mpl`, which compares each
+  # returned Figure against the PNG committed under tests/baseline/ within the RMS tolerance configured as
+  # `mpl-default-tolerance` in pyproject.toml.
+  #
+  # One runner, not the 3-OS x 3-Python matrix, and deliberately the dev env: an image comparison is only as
+  # stable as the rasteriser underneath it, so the baselines are pinned to one matplotlib + freetype + Agg
+  # combination (pixi.lock's) rather than compared across every leg. The runner is windows-latest because
+  # that is the OS the committed baselines were generated on — freetype hints glyphs differently per
+  # platform, so a maintainer who regenerates them elsewhere (`pixi run -e dev test-images-generate`) must
+  # move this job's `runs-on` to match, or the whole set turns red on text antialiasing alone.
+  #
+  # `main` deselects these tests (`-m 'not mpl'`), so this job is their only coverage.
+  image-baselines:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      # No fetch-depth: 0 — this job reads the working tree only, never history.
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+          version: v0.73.0
+
+      - name: Compare the rendered figures against the baselines
+        # The summary + results path are a CI-only delta appended to the task rather than baked into it:
+        # locally a failure is read from the terminal, here the only way to see *what* moved is the report
+        # uploaded by the next step (baseline, result and diff image per failing figure).
+        run: >
+          pixi run -e dev test-images
+          --mpl-generate-summary=html
+          --mpl-results-path=mpl-results
+
+      - name: Upload the image-comparison report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpl-results
+          path: mpl-results
+          if-no-files-found: ignore
+
   # The notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env, minus the two
   # network-heavy notebooks the step below names. Without this job nothing in CI executes those notebooks at
   # all: the tier jobs below each run only their own tier's task, and the docs build renders with

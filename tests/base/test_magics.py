@@ -233,3 +233,88 @@ class TestAutoStyleIntegration:
     def test_unknown_field_uses_default(self):
         """A wholly unknown field falls back to the default colormap."""
         assert auto_style(_source("mystery_variable"))["cmap"] == "viridis"
+
+
+def _netcdf_with_identity(standard_name, units, variable="var123"):
+    """Build an in-memory NetCDF whose one variable declares a CF identity.
+
+    Args:
+        standard_name: The CF ``standard_name`` attribute to write on the variable.
+        units: The CF ``units`` attribute to write on the variable.
+        variable: The variable's (deliberately opaque) name.
+
+    Returns:
+        pyramids.netcdf.NetCDF: the container, with the attributes readable through ``meta_data``.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+    from pyramids.netcdf import NetCDF
+
+    geo = GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326)
+    nc = NetCDF.from_array(
+        np.ones((1, 4, 5), "float32"), geo_ref=geo, variable_name=variable
+    )
+    band = Dataset.from_array(
+        np.ones((4, 5), "float32"), geo_ref=geo, no_data_value=-9999
+    )
+    attrs = {}
+    if standard_name is not None:
+        attrs["standard_name"] = standard_name
+    if units is not None:
+        attrs["units"] = units
+    nc.set_variable(variable, band, attrs=attrs)
+    return nc
+
+
+class TestIdentityFromRealInputs:
+    """Regression tests for #231 — the matcher's standard_name / units steps were unreachable in practice.
+
+    The two integration tests above hand ``auto_style`` a ``Source`` built by hand with the metadata already
+    in it, so they passed over a path no real file reached: no extractor wrote ``standard_name``, and
+    ``_from_netcdf`` wrote no ``units`` either — on the one input type where CF metadata actually lives.
+    These build the ``Source`` with ``get_source``, from a NetCDF that declares the identity itself.
+    """
+
+    def test_netcdf_standard_name_resolves_the_colormap(self):
+        """An opaque variable name styled by its CF standard_name, straight off the file.
+
+        Test scenario:
+            The reported repro: a variable called ``var123`` carrying
+            ``standard_name: air_temperature`` fell through to viridis.
+        """
+        from digitalearth.base.sources import get_source
+
+        src = get_source(_netcdf_with_identity("air_temperature", "K"))
+        style = auto_style(src)
+        assert src.metadata("standard_name") == "air_temperature", (
+            f"the extractor must carry the CF standard_name, got {src.metadata('standard_name')!r}"
+        )
+        assert style["cmap"] == "coolwarm" and style["magics_name"] == "t2m", (
+            f"expected the temperature style, got {style.get('cmap')!r}"
+        )
+
+    def test_netcdf_units_reach_the_source(self):
+        """``Source.units`` is populated from the variable's CF ``units``.
+
+        Test scenario:
+            ``_from_raster`` set units from ``band_units`` but ``_from_netcdf`` set none, so the matcher's
+            units fallback was dead exactly where CF units live.
+        """
+        from digitalearth.base.sources import get_source
+
+        src = get_source(_netcdf_with_identity(None, "gpm"))
+        assert src.units == "gpm", (
+            f"expected the CF units on the Source, got {src.units!r}"
+        )
+
+    def test_netcdf_units_alone_resolve_a_style(self):
+        """With no name and no standard_name to go on, the units step now has something to match.
+
+        Test scenario:
+            ``gpm`` is geopotential height's unit; matching it is the matcher's last-resort step.
+        """
+        from digitalearth.base.sources import get_source
+
+        style = auto_style(get_source(_netcdf_with_identity(None, "gpm")))
+        assert style["magics_name"] == "z", (
+            f"the units fallback should have resolved geopotential, got {style.get('magics_name')!r}"
+        )

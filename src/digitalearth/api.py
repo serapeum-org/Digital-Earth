@@ -4,15 +4,133 @@
 ``Map``, optionally decorate (basemap/coastlines/domain), and add a colorbar — returning the finished
 ``Map`` so callers can further tweak or ``save`` it. Module-level functions (``contourf``, ``imshow``,
 ``scatter``, ``choropleth``, …) mirror the ``Map`` methods for a terse functional API.
+
+**Decoration is best-effort, not error-proof.** A basemap or coastline overlay needs assets this process may
+not be able to reach, so those steps tolerate *unavailability* — ``OSError`` and its network subclasses
+(``ConnectionError``, ``urllib``'s ``URLError``), and ``ImportError`` when the optional tiles/reference extra
+is not installed — and log a warning naming the step, so a bare figure is never silent. Everything else
+propagates: a ``ValueError``/``TypeError`` out of these steps is the caller being told what to fix (a missing
+credential, an empty extent, an unknown preset), and swallowing it left ``quickmap`` returning an
+undecorated figure with no explanation.
+
+**A parameter the chosen backend cannot honour is an error, not a no-op.** The four backends are not the same
+map: only the matplotlib one has an extent setter, only the 2-D ones have a display CRS, and the 3-D scene
+projects nothing at all. ``quickmap`` used to accept every keyword for every backend and quietly drop the ones
+that did not apply, so ``quickmap(ds, backend="web", domain="europe")`` returned a world map with no hint that
+the domain had been ignored. Now each such parameter is checked against
+:data:`BACKEND_CAPABILITIES` and refused by name — see :func:`_reject_unsupported`. Everything a backend *does*
+support is forwarded to it.
 """
 
-from typing import Any, Optional
+import logging
+from typing import Any
 
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
 from digitalearth.base.types import PlottableData
 from digitalearth.static import Map
+
+logger = logging.getLogger(__name__)
+
+#: What "the decoration could not be fetched" actually looks like. ``ConnectionError`` and
+#: ``urllib.error.URLError`` are both ``OSError`` subclasses, so cleopatra's tile/reference failures land
+#: here; ``ImportError`` covers the optional extras those helpers import lazily.
+UNAVAILABLE = (OSError, ImportError)
+
+#: What "this layer cannot carry a colorbar" looks like: an outline-only artist has no ``cmap``
+#: (``AttributeError``), a non-mappable one is refused by matplotlib (``TypeError``), and cleopatra raises
+#: ``ValueError`` when it cannot find an axes to steal space from.
+UNMAPPABLE = (AttributeError, TypeError, ValueError)
+
+
+class _Unset:
+    """Sentinel type for "the caller did not pass this keyword"."""
+
+    def __repr__(self) -> str:
+        """Return the placeholder spelling used in signatures and messages."""
+        return "<unset>"
+
+
+#: "Not passed." Needed because every one of the checked parameters has a meaningful default — ``crs=3857``
+#: and ``colorbar=True`` in particular — so the default value cannot itself signal absence: without this,
+#: ``quickmap(ds, backend="3d")`` would be refused for a ``crs`` the caller never asked for.
+_UNSET = _Unset()
+
+#: Which of ``quickmap``'s map-shaped parameters each backend can actually honour. Anything a caller passes
+#: that is not listed for their backend is refused by name rather than dropped (:func:`_reject_unsupported`).
+#:
+#: * ``matplotlib`` is the only tier with an extent setter, so it is the only one that takes ``domain``.
+#: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
+#:   colorbar toggle.
+#: * ``3d`` has no display CRS at all (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs` is ``None``
+#:   and says so) and no coastline or extent concept; its scalar bar is the ``colorbar`` toggle.
+#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
+#:   coastline layer and no colorbar — its key is ``WebMap.legend``, a different thing with a different
+#:   arity, and wiring ``colorbar=`` to it is deliberately left to the ``colorbar``/``legend`` rename
+#:   (TODO(#254)) rather than guessed at here.
+BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
+    "matplotlib": frozenset({"crs", "domain", "coastlines", "colorbar"}),
+    "interactive": frozenset({"crs", "coastlines", "colorbar"}),
+    "3d": frozenset({"colorbar"}),
+    "web": frozenset({"crs"}),
+}
+
+#: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
+#: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
+#: ``crs`` and ``colorbar`` are absent on purpose: every value of those is a choice, ``colorbar=False``
+#: (suppress the bar) just as much as ``colorbar=True``.
+_INERT: dict[str, Any] = {"domain": None, "coastlines": False}
+
+
+def _reject_unsupported(backend: str, **passed: Any) -> None:
+    """Refuse any keyword the chosen ``backend`` cannot honour, naming the parameter and the backend.
+
+    Args:
+        backend: The backend name ``quickmap`` was called with; already validated against
+            :data:`BACKEND_CAPABILITIES`.
+        **passed: The checked parameters as the caller left them — :data:`_UNSET` for the ones they never
+            named.
+
+    Raises:
+        ValueError: for the first parameter that was actually requested and that ``backend`` cannot honour.
+            The message names both, so the caller learns which half to change.
+
+    Examples:
+        - A domain means nothing to the web tier, and saying so beats returning a world map:
+            ```python
+            >>> from digitalearth.api import _reject_unsupported, _UNSET
+            >>> try:
+            ...     _reject_unsupported("web", domain="europe", crs=_UNSET)
+            ... except ValueError as error:
+            ...     print(str(error).split(";")[0])
+            domain= is not supported by backend='web'
+
+            ```
+        - A parameter left at a value that asks for nothing is not a dropped request, so it passes:
+            ```python
+            >>> from digitalearth.api import _reject_unsupported, _UNSET
+            >>> _reject_unsupported("3d", domain=None, coastlines=False, crs=_UNSET) is None
+            True
+
+            ```
+    """
+    supported = BACKEND_CAPABILITIES[backend]
+    for name, value in passed.items():
+        if value is _UNSET or name in supported:
+            continue
+        if name in _INERT and value == _INERT[name]:
+            continue  # they asked for nothing, so nothing was dropped
+        honoured = ", ".join(
+            repr(other)
+            for other in sorted(BACKEND_CAPABILITIES)
+            if name in BACKEND_CAPABILITIES[other]
+        )
+        raise ValueError(
+            f"{name}= is not supported by backend={backend!r}; it is honoured by {honoured} — "
+            f"drop the argument, or pick one of those backends"
+        )
+
 
 __all__ = [
     "quickmap",
@@ -30,6 +148,49 @@ __all__ = [
     "kde",
     "sankey",
 ]
+
+
+def _best_effort(step: str, call, *args, **kwargs) -> Any:
+    """Run one best-effort decoration step, tolerating only its unavailability.
+
+    Args:
+        step: Human-readable name of the step, used in the warning (e.g. ``"basemap"``).
+        call: The bound method to run (e.g. ``scene.basemap``).
+        *args: Positional arguments for ``call``.
+        **kwargs: Keyword arguments for ``call``.
+
+    Returns:
+        Whatever ``call`` returned, or ``None`` when the assets it needs were unreachable.
+
+    Raises:
+        Exception: anything that is not an unavailability (see :data:`UNAVAILABLE`) — in particular the
+            ``ValueError``/``TypeError`` family that tells the caller what to fix.
+    """
+    try:
+        return call(*args, **kwargs)
+    except UNAVAILABLE as error:
+        logger.warning(
+            "quickmap: %s skipped — %s: %s", step, type(error).__name__, error
+        )
+        return None
+
+
+def _add_colorbar(scene: Map) -> Any:
+    """Add a colorbar to ``scene``, tolerating only a layer that cannot carry one.
+
+    Args:
+        scene: The :class:`Map` whose last layer should get a colorbar.
+
+    Returns:
+        The created colorbar, or ``None`` when the layer is outline-only / unmappable.
+    """
+    try:
+        return scene.colorbar()
+    except UNMAPPABLE as error:
+        logger.warning(
+            "quickmap: colorbar skipped — %s: %s", type(error).__name__, error
+        )
+        return None
 
 
 def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
@@ -75,12 +236,12 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
 def quickmap(
     data: PlottableData,
     *,
-    crs: Any = 3857,
+    crs: Any = _UNSET,
     kind: str = "auto",
-    domain: Any = None,
-    basemap: bool = False,
-    coastlines: bool = False,
-    colorbar: bool = True,
+    domain: Any = _UNSET,
+    basemap: bool | str | Any = False,
+    coastlines: Any = _UNSET,
+    colorbar: Any = _UNSET,
     backend: str = "matplotlib",
     **kwargs,
 ) -> Any:
@@ -88,29 +249,39 @@ def quickmap(
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
-        crs: Display CRS for the map.
+        crs: Display CRS for the map (``backend="matplotlib"``/``"interactive"``, where it defaults to
+            ``3857``, and ``"web"``, which accepts only ``4326``). ``backend="3d"`` has no display CRS, so
+            passing it there is refused rather than ignored — reproject with pyramids before plotting.
         kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
-        domain: Optional named region / bbox to set the extent (``backend="matplotlib"`` only — the
-            interactive backend has no extent setter and ignores it).
-        basemap: When True, add an XYZ-tile basemap (best-effort; ignored if tiles are unreachable).
-        coastlines: When True, overlay coastlines (best-effort; ignored if unreachable).
-        colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable).
+        domain: Optional named region / bbox to set the extent. ``backend="matplotlib"`` only — it is the one
+            tier with a fixed extent to set — and passing it to any other backend is refused by name.
+        basemap: The basemap to draw beneath the data: ``False`` for none, ``True`` for the backend's
+            default source, or the source itself — a cleopatra provider name, an ``xyzservices``
+            ``TileProvider``, or a **keyed** preset name such as ``"Planet.NICFI"`` — forwarded to the
+            backend's basemap method. Unreachable tiles are tolerated and warned about; a request the
+            backend cannot satisfy (an unknown preset, a missing credential) is raised. Every backend
+            supports it.
+        coastlines: When True, overlay coastlines (tolerated and warned about if the assets are
+            unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
+            backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
+        colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable);
+            defaults to ``True``. Not supported by ``backend="web"``, whose key is ``WebMap.legend``.
         backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
             extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
             extra); ``"web"`` returns a :class:`~digitalearth.web.map.WebMap` (MapLibre + deck.gl; needs the
-            ``web`` extra) — all fed from the same input-type dispatch. ``crs``/``kind``/``domain``/
-            ``coastlines`` apply to the 2-D matplotlib/interactive backends only; the ``"3d"`` and ``"web"``
-            backends ignore them (the web backend normalises data to lon/lat itself).
+            ``web`` extra) — all fed from the same input-type dispatch. Which of the arguments above each one
+            honours is :data:`BACKEND_CAPABILITIES`; anything else you pass it is refused, not dropped.
         **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
-            ``z_exaggeration``/``height``/``point_size`` for ``backend="3d"``).
+            ``z_exaggeration``/``height``/``size`` for ``backend="3d"``).
 
     Returns:
         The decorated :class:`Map`, an :class:`InteractiveMap` when ``backend="interactive"``, a
         :class:`Scene3D` when ``backend="3d"``, or a :class:`WebMap` when ``backend="web"``.
 
     Raises:
-        ValueError: for an unknown ``backend``.
+        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``coastlines``/``colorbar`` the
+            chosen backend cannot honour — the message names both the parameter and the backend.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -139,13 +310,38 @@ def quickmap(
             1
 
             ```
+        - A parameter the backend cannot honour is refused by name, instead of being silently dropped:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.api import quickmap
+            >>> ds = Dataset.read_file("examples/data/acc4000.tif")
+            >>> try:
+            ...     quickmap(ds, backend="3d", crs=4326)
+            ... except ValueError as error:
+            ...     print(str(error).split(";")[0])
+            crs= is not supported by backend='3d'
+
+            ```
     """
+    if backend not in BACKEND_CAPABILITIES:
+        raise ValueError(
+            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
+            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
+        )
+    # Refuse before anything is built, so a rejected call never leaves a half-made figure or VTK plotter.
+    _reject_unsupported(
+        backend, crs=crs, domain=domain, coastlines=coastlines, colorbar=colorbar
+    )
+    # Past the gate, fill in the defaults the surviving backends expect.
+    colorbar = True if colorbar is _UNSET else colorbar
+    coastlines = False if coastlines is _UNSET else coastlines
+    domain = None if domain is _UNSET else domain
     if backend == "3d":
         return _quickmap_3d(data, colorbar=colorbar, **kwargs)
     if backend == "interactive":
         return _quickmap_interactive(
             data,
-            crs=crs,
+            crs=3857 if crs is _UNSET else crs,
             kind=kind,
             basemap=basemap,
             coastlines=coastlines,
@@ -153,24 +349,15 @@ def quickmap(
             **kwargs,
         )
     if backend == "web":
-        return _quickmap_web(data, basemap=basemap, **kwargs)
-    if backend != "matplotlib":
-        raise ValueError(
-            f"unknown backend {backend!r}; choose 'matplotlib' (static), 'interactive' (HoloViz), "
-            f"'3d' (PyVista), or 'web' (MapLibre + deck.gl)"
-        )
-    scene = Map(crs=crs, domain=domain)
+        return _quickmap_web(data, crs=crs, basemap=basemap, **kwargs)
+    scene = Map(crs=3857 if crs is _UNSET else crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
-        try:
-            scene.coastlines()
-        except Exception:  # network/data unavailable — decoration is best-effort
-            pass
+        _best_effort("coastlines", scene.coastlines)
     if basemap:
-        try:
-            scene.basemap()
-        except Exception:  # tile servers unavailable — decoration is best-effort
-            pass
+        # `True` means "the backend's default source"; anything else names the source and is forwarded, so a
+        # keyed preset reaches Map.basemap instead of being silently reduced to the default.
+        _best_effort("basemap", scene.basemap, _basemap_source(basemap))
     if domain is not None:
         scene.set_domain()
     if (
@@ -179,11 +366,21 @@ def quickmap(
         and scene.layers[-1][1] is not None
         and not _last_layer_is_categorical(scene)
     ):
-        try:
-            scene.colorbar()
-        except Exception:  # outline-only / unmappable layer
-            pass
+        _add_colorbar(scene)
     return scene
+
+
+def _basemap_source(basemap: Any) -> Any:
+    """Translate the ``basemap`` argument into the source a backend's basemap method takes.
+
+    Args:
+        basemap: The ``quickmap`` argument — ``True`` for the backend default, or a provider name /
+            ``TileProvider`` / keyed preset name.
+
+    Returns:
+        ``None`` (the backend's own default) for a plain ``True``, else ``basemap`` unchanged.
+    """
+    return None if basemap is True else basemap
 
 
 def quickplot(data: PlottableData, **kwargs) -> Any:
@@ -196,7 +393,7 @@ def _quickmap_interactive(
     *,
     crs: Any,
     kind: str,
-    basemap: bool,
+    basemap: bool | str | Any,
     coastlines: bool,
     colorbar: bool = True,
     **kwargs,
@@ -212,7 +409,8 @@ def _quickmap_interactive(
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
         crs: Display CRS for the interactive map.
         kind: Raster renderer (``"auto"`` → ``image``; or ``contourf``/``contour``/``pcolormesh``).
-        basemap: When True, add a tile basemap.
+        basemap: ``True`` for the backend's default tile source, or the source itself (provider name or
+            keyed preset), forwarded to ``InteractiveMap.tiles``.
         coastlines: When True, overlay a coastline.
         colorbar: When False, drop the colorbar the builder draws by default (mirrors the
             matplotlib backend's ``colorbar`` toggle); ``True`` leaves the builder default in place.
@@ -257,36 +455,47 @@ def _quickmap_interactive(
     ):  # builders draw a colorbar by default; drop it on the data layer
         scene.colorbar(False)
     if basemap:
-        scene.tiles()
+        source = _basemap_source(basemap)
+        scene.tiles() if source is None else scene.tiles(source)
     if coastlines:
         scene.coastlines()
     return scene
 
 
-def _quickmap_web(data: PlottableData, *, basemap: bool = False, **kwargs) -> Any:
+def _quickmap_web(
+    data: PlottableData,
+    *,
+    crs: Any = _UNSET,
+    basemap: bool | str | Any = False,
+    **kwargs,
+) -> Any:
     """Build a finished ``WebMap`` from ``data`` (the ``backend="web"`` path, DX.1).
 
     Dispatches by input type, mirroring :func:`_draw`: a polygon ``FeatureCollection`` with a ``column``
     becomes a ``choropleth`` (else outline ``polygons``); other vectors become ``points``; a raster
     ``Dataset`` becomes ``add_raster``. The ``WebMap`` import is lazy so the core ``api`` works without the
-    ``web`` extra. The web tier normalises data to lon/lat itself, so the matplotlib-oriented
-    ``crs``/``kind``/``domain``/``coastlines`` kwargs do not apply here.
+    ``web`` extra. The web tier normalises data to lon/lat itself, so the matplotlib-oriented ``kind`` /
+    ``domain`` / ``coastlines`` kwargs have no counterpart here and :func:`_reject_unsupported` refuses them
+    upstream. ``crs`` **is** forwarded: ``WebMap`` carries one and validates it, so a CRS it cannot place
+    inline is reported by the tier that knows why, rather than dropped here.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
-        basemap: When True, add a dark tile basemap beneath the data.
+        crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
+        basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
+            or keyed preset), forwarded to ``WebMap.basemap``.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
         The built :class:`~digitalearth.web.map.WebMap`.
 
     Raises:
-        ValueError: if ``data`` is an empty ``FeatureCollection``.
+        ValueError: if ``data`` is an empty ``FeatureCollection``, or if ``WebMap`` refuses ``crs``.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
     from digitalearth.web import WebMap
 
-    scene = WebMap()
+    scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
     if isinstance(data, FeatureCollection):
         if len(data) == 0:
             raise ValueError(
@@ -305,7 +514,8 @@ def _quickmap_web(data: PlottableData, *, basemap: bool = False, **kwargs) -> An
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
     if basemap:
-        scene.basemap()
+        source = _basemap_source(basemap)
+        scene.basemap() if source is None else scene.basemap(source)
     return scene
 
 
@@ -317,7 +527,9 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
     given); a polygon ``FeatureCollection`` becomes ``extruded_polygons`` (extruded by, and coloured by,
     ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. The
     map-only kwargs (``crs``/``kind``/``domain``/``basemap``/``coastlines``) have no 3-D analogue and are
-    not accepted here.
+    not accepted here — ``crs``/``domain``/``coastlines`` are refused by name in :func:`quickmap` before this
+    is reached, since :attr:`~digitalearth.three_d.base.Scene3DBase.display_crs` records that this tier
+    projects nothing.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
@@ -398,9 +610,10 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
     """Add an aggregated colorbar to ``scene`` when requested and a mappable layer exists; return ``scene``.
 
     The shared tail of the one-call wrappers: a colorbar is added only when ``colorbar`` is true and a layer
-    was drawn, and an outline-only / unmappable layer (which cannot carry a colorbar) is swallowed rather
-    than raised. A categorical fill is skipped too — it keys itself with a swatch legend, and a colorbar over
-    its integer class codes would be a meaningless second key (see :func:`_last_layer_is_categorical`).
+    was drawn, and an outline-only / unmappable layer (which cannot carry a colorbar) is warned about rather
+    than raised (see :data:`UNMAPPABLE`; anything else propagates). A categorical fill is skipped too — it
+    keys itself with a swatch legend, and a colorbar over its integer class codes would be a meaningless
+    second key (see :func:`_last_layer_is_categorical`).
 
     Args:
         scene: The :class:`Map` a wrapper has already drawn on.
@@ -410,10 +623,7 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
         The same ``scene`` (so wrappers can ``return _finish(...)``).
     """
     if colorbar and scene.layers and not _last_layer_is_categorical(scene):
-        try:
-            scene.colorbar()
-        except Exception:  # outline-only / unmappable layer
-            pass
+        _add_colorbar(scene)
     return scene
 
 
@@ -453,7 +663,7 @@ def choropleth(data: PlottableData, column: str, **kwargs) -> Map:
     return quickmap(data, column=column, **kwargs)
 
 
-def voronoi(data: PlottableData, column: Optional[str] = None, **kwargs) -> Map:
+def voronoi(data: PlottableData, column: str | None = None, **kwargs) -> Map:
     """Quick-draw the Voronoi diagram of a point FeatureCollection; returns the finished Map.
 
     With ``column`` the cells are filled and coloured by that value (a colorbar is added); without it the cell
@@ -465,7 +675,7 @@ def voronoi(data: PlottableData, column: Optional[str] = None, **kwargs) -> Map:
 
 
 def cartogram(
-    data: PlottableData, scale: str, column: Optional[str] = None, **kwargs
+    data: PlottableData, scale: str, column: str | None = None, **kwargs
 ) -> Map:
     """Quick-draw a cartogram (polygons scaled by ``scale``); returns the finished Map.
 
@@ -477,7 +687,7 @@ def cartogram(
     return _finish(scene, colorbar=column is not None)
 
 
-def quadtree(data: PlottableData, column: Optional[str] = None, **kwargs) -> Map:
+def quadtree(data: PlottableData, column: str | None = None, **kwargs) -> Map:
     """Quick-draw a quadtree choropleth of a point FeatureCollection; returns the finished Map.
 
     Cells are coloured by an aggregate of ``column`` (or point count when ``None``) and a colorbar is added.
@@ -500,8 +710,8 @@ def kde(data: PlottableData, **kwargs) -> Map:
 
 def sankey(
     data: PlottableData,
-    column: Optional[str] = None,
-    scale: Optional[str] = None,
+    column: str | None = None,
+    scale: str | None = None,
     **kwargs,
 ) -> Map:
     """Quick-draw a spatial flow / Sankey map of a line FeatureCollection; returns the finished Map.

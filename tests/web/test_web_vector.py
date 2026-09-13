@@ -190,7 +190,9 @@ class TestVectorBuildersNeedEngine:
             crs=4326,
         )
         with pytest.raises(ValueError, match="cannot classify column 'pop'"):
-            WebMap().choropleth(gdf, column="pop")
+            # An explicit scheme: `choropleth` is a continuous ramp by default now (C4), and a ramp over
+            # a constant column has a range to widen rather than classes to cut.
+            WebMap().choropleth(gdf, column="pop", scheme="quantiles")
 
     def test_points_lines_polygons_chain(self, points_gdf, polygons_gdf):
         m = WebMap()

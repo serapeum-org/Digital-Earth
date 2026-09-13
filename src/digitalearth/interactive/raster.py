@@ -25,7 +25,11 @@ from digitalearth.base.stretch import (
     require_three_bands,
     stretch_to_unit,
 )
-from digitalearth.interactive.base import _masked_to_nan, _require_holoviz
+from digitalearth.interactive.base import (
+    _masked_to_nan,
+    _require_holoviz,
+    _skips_off_limb,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
@@ -49,12 +53,29 @@ class RasterMixin(_MixinBase):
         Returns:
             holoviews.Image: the raster as a plain HoloViews image in the display CRS.
         """
+        return self._image_from_source(
+            self._to_display_source(data, band=band), vname=vname
+        )
+
+    def _image_from_source(self, src: Any, *, vname: Optional[str] = None) -> Any:
+        """Build the I1 image from an already display-CRS :class:`Source`.
+
+        Split out of :meth:`_image_element` so a builder that also needs the source itself — for the
+        autostyle ``cmap``/``levels``/``units`` lookup (#230) — reprojects once instead of twice.
+
+        Args:
+            src: The display-CRS source.
+            vname: Value-dimension name; defaults to the source's variable/z name.
+
+        Returns:
+            holoviews.Image: the raster as a plain HoloViews image in the display CRS.
+        """
         gv, hv = _require_holoviz()
-        src = self._to_display_source(data, band=band)
         arr = _masked_to_nan(src.z.values)
         name = vname or self._vdim_name(src)
         return self._raster_element(src.x.values, src.y.values, arr, name)
 
+    @_skips_off_limb
     def image(
         self,
         data: Any,
@@ -64,6 +85,7 @@ class RasterMixin(_MixinBase):
         clim: Optional[Tuple[float, float]] = None,
         alpha: float = 1.0,
         colorbar: bool = True,
+        clabel: Optional[str] = None,
         **opts: Any,
     ) -> Self:
         """Add a colour-mapped raster layer with hover readout (interactive ``imshow``).
@@ -77,6 +99,8 @@ class RasterMixin(_MixinBase):
             clim: Optional ``(vmin, vmax)`` colour limits; ``None`` auto-scales.
             alpha: Layer opacity in ``[0, 1]``.
             colorbar: Whether to draw a colorbar.
+            clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
+                ``autostyle.auto_style`` (#230) and leaves the colorbar unlabelled when it knows none.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -95,23 +119,21 @@ class RasterMixin(_MixinBase):
             This map (chainable).
         """
         src = self._to_display_source(data, band=band)
-        arr = _masked_to_nan(src.z.values)
-        element = self._raster_element(
-            src.x.values, src.y.values, arr, self._vdim_name(src)
-        )
         element = self._styled(
-            element,
+            self._image_from_source(src),
             common={
                 "cmap": self._auto_cmap(src, cmap),
                 "clim": clim,
                 "alpha": alpha,
                 "colorbar": colorbar,
+                "clabel": self._auto_clabel(src, clabel),
                 **opts,
             },
             bokeh={"tools": ["hover"]},
         )
         return self.add_element(element)
 
+    @_skips_off_limb
     def rgb(
         self,
         data: Any,
@@ -170,8 +192,15 @@ class RasterMixin(_MixinBase):
         )
         return self.add_element(self._styled(element, common=opts or None))
 
+    @_skips_off_limb
     def quadmesh(
-        self, data: Any, *, band: int = 1, cmap: Optional[str] = None, **opts: Any
+        self,
+        data: Any,
+        *,
+        band: int = 1,
+        cmap: Optional[str] = None,
+        clabel: Optional[str] = None,
+        **opts: Any,
     ) -> Self:
         """Add a quadrilateral-mesh raster layer (handles non-uniform / curvilinear coordinates).
 
@@ -183,6 +212,8 @@ class RasterMixin(_MixinBase):
             band: 1-based band to render.
             cmap: Colormap name; ``None`` (default) resolves it from the variable via
                 ``autostyle.auto_style`` (DI.12) — consistent with :meth:`image`.
+            clabel: Colorbar label; ``None`` (default) takes the variable's ``units`` from
+                ``autostyle.auto_style`` (#230), as :meth:`image` does.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -208,11 +239,16 @@ class RasterMixin(_MixinBase):
         )
         element = self._styled(
             element,
-            common={"cmap": self._auto_cmap(src, cmap), **opts},
+            common={
+                "cmap": self._auto_cmap(src, cmap),
+                "clabel": self._auto_clabel(src, clabel),
+                **opts,
+            },
             bokeh={"tools": ["hover"]},
         )
         return self.add_element(element)
 
+    @_skips_off_limb
     def contours(
         self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
     ) -> Self:
@@ -221,7 +257,8 @@ class RasterMixin(_MixinBase):
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to contour.
-            levels: Contour levels — an int (count) or explicit sequence; ``None`` uses 10.
+            levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
+                variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -241,6 +278,7 @@ class RasterMixin(_MixinBase):
         """
         return self._contour_layer(data, band=band, levels=levels, filled=False, **opts)
 
+    @_skips_off_limb
     def filled_contours(
         self, data: Any, *, band: int = 1, levels: Any = None, **opts: Any
     ) -> Self:
@@ -249,7 +287,8 @@ class RasterMixin(_MixinBase):
         Args:
             data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
             band: 1-based band to contour.
-            levels: Contour levels — an int (count) or explicit sequence; ``None`` uses 10.
+            levels: Contour levels — an int (count) or explicit sequence; ``None`` takes the
+                variable's canonical levels from ``autostyle.auto_style`` (#230), falling back to 10.
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -271,13 +310,19 @@ class RasterMixin(_MixinBase):
     def _contour_layer(
         self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
     ) -> Self:
-        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer."""
+        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
+
+        A caller's ``levels`` always wins; ``None`` consults ``autostyle.auto_style`` for the variable's
+        canonical contour levels (#230) before falling back to the tier's 10.
+        """
         gv, hv = _require_holoviz()
         from holoviews.operation import contours as contour_op
 
+        src = self._to_display_source(data, band=band)
+        resolved = self._auto_levels(src, levels)
         element = contour_op(
-            self._image_element(data, band=band),
-            levels=10 if levels is None else levels,
+            self._image_from_source(src),
+            levels=10 if resolved is None else resolved,
             filled=filled,
         )
         element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
@@ -334,6 +379,7 @@ class RasterMixin(_MixinBase):
             self.contours(member, band=band, **member_opts)
         return self
 
+    @_skips_off_limb
     def large_image(
         self,
         dataset: Any,
@@ -358,7 +404,8 @@ class RasterMixin(_MixinBase):
             max_pixels: Pixel budget per rendered frame; the canvas is sized to stay under it.
             dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream (needs a live server);
                 ``False`` renders one decimated ``preview`` frame (deterministic — what tests assert).
-            cmap: Colormap; ``None`` resolves from the variable via autostyle.
+            cmap: Colormap; ``None`` (default) resolves from the band's variable name via
+                ``autostyle.auto_style`` (#249), with ``"viridis"`` behind the lookup as the fallback.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
@@ -379,6 +426,9 @@ class RasterMixin(_MixinBase):
                 ".preview); upgrade pyramids or use image() for a small raster"
             )
         ds = reproject(dataset, self.crs) if self._needs_reproject(dataset) else dataset
+        # Resolved once, from the band's name only: reading the array to build a full Source would
+        # defeat the whole point of a windowed reader.
+        cmap = self._auto_cmap_for_band(ds, band, cmap)
         side = max(64, int(np.sqrt(max_pixels)))
         read_band = (
             band - 1
@@ -407,7 +457,7 @@ class RasterMixin(_MixinBase):
                 )
                 bounds = (bbox[0], bbox[1], bbox[2], bbox[3])
             image = hv.Image(arr, bounds=bounds) if bounds else hv.Image(arr)
-            return image.opts(cmap=cmap or "viridis", colorbar=True, **opts)
+            return image.opts(cmap=cmap, colorbar=True, **opts)
 
         if not dynamic:
             return self.add_element(_frame())

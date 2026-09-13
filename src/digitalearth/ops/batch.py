@@ -17,9 +17,48 @@ from pyramids.dataset import Dataset
 from digitalearth.api import quickmap
 from digitalearth.static import Map
 
-__all__ = ["Batch"]
+__all__ = ["Batch", "load_input"]
 
 logger = logging.getLogger(__name__)
+
+
+def load_input(path: Any) -> Any:
+    """Load a raster path as a pyramids ``Dataset``, falling back to a vector ``FeatureCollection``.
+
+    The single loader behind both CLI subcommands: ``digitalearth plot`` and ``digitalearth batch`` open a
+    path the same way, so a file one accepts is never rejected by the other. It lives here (rather than in
+    :mod:`digitalearth.ops.cli`) because :meth:`Batch.render_one` is the lower layer — the CLI re-exports it.
+
+    Args:
+        path: A filesystem path (``str``/``Path``) to a raster or vector file.
+
+    Returns:
+        The pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector) the path opened as.
+
+    Raises:
+        Exception: the vector read's error, **chained** from the raster read's error (``raise ... from``),
+            when the path is neither — so neither cause is hidden behind the other.
+
+    Examples:
+        - A vector path opens as a ``FeatureCollection``, not a raster:
+            ```python
+            >>> from digitalearth.ops.batch import load_input
+            >>> type(load_input("tests/data/points.geojson")).__name__
+            'FeatureCollection'
+
+            ```
+    """
+    try:
+        return Dataset.read_file(str(path))
+    except (
+        Exception
+    ) as raster_error:  # not a raster pyramids can open — try it as vector
+        from pyramids.feature import FeatureCollection
+
+        try:
+            return FeatureCollection.read_file(str(path))
+        except Exception as vector_error:
+            raise vector_error from raster_error
 
 
 def _default_namer(item: Any, index: int) -> str:
@@ -74,7 +113,8 @@ class Batch:
         """Render a single input to a :class:`Map` (without saving).
 
         Args:
-            item: A raster/vector path (``str``/``Path``, read via pyramids ``Dataset.read_file``) or an
+            item: A raster/vector path (``str``/``Path``, opened by :func:`load_input`, which reads a
+                raster via ``Dataset.read_file`` and falls back to ``FeatureCollection.read_file``) or an
                 already-loaded pyramids object (``Dataset``/``FeatureCollection``), passed through as-is.
             **overrides: Plot options for this item, merged over (and overriding) the batch ``defaults``.
 
@@ -95,7 +135,7 @@ class Batch:
 
                 ```
         """
-        data = Dataset.read_file(str(item)) if isinstance(item, (str, Path)) else item
+        data = load_input(item) if isinstance(item, (str, Path)) else item
         return self.plotter(data, **{**self.defaults, **overrides})
 
     def run(

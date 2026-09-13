@@ -11,16 +11,299 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 :data:`pyvista.OFF_SCREEN`, so the same code renders interactively on a desktop and headless in CI.
 """
 
+import logging
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import Any, Self, Union
 
 import numpy as np
 import pyvista as pv
 
+from digitalearth.base.crs import OffLimbError
+from digitalearth.base.sources import Source
+
+logger = logging.getLogger(__name__)
+
 #: Anything acceptable as an output destination.
 Destination = Union[str, "os.PathLike[str]"]
+
+#: Suffixes :meth:`Scene3DBase.save` renders as a raster frame. PyVista writes the format the suffix names —
+#: ``.tif`` really is a TIFF — so this is "a rendered frame", not "a PNG".
+IMAGE_SUFFIXES: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
+
+#: Suffixes :meth:`Scene3DBase.save` exports the *scene* to, mapped to the :class:`pyvista.Plotter` method that
+#: writes each. ``.html`` is dispatched separately because it routes through :meth:`Scene3DBase.export_html`,
+#: which normalises the suffix and guards the VTK build. ``.glb`` is deliberately absent: VTK's glTF exporter
+#: writes the JSON flavour, so a ``.glb`` name would promise a binary container it does not produce.
+SCENE_EXPORTERS: dict[str, str] = {
+    ".gltf": "export_gltf",
+    ".obj": "export_obj",
+    ".vrml": "export_vrml",
+    ".wrl": "export_vrml",
+    ".vtksz": "export_vtksz",
+}
+
+
+def deprecated_alias(
+    new_value: Any, old_value: Any, *, new: str, old: str, caller: str, default: Any
+) -> Any:
+    """Resolve a renamed keyword, accepting the old spelling for one release with a warning.
+
+    The shape every rename in this tier uses: the new parameter keeps the real default, the old one defaults
+    to ``None`` as a "was it passed?" sentinel, and this function decides which value wins. Passing the old
+    name still works and forwards to the new behaviour; passing **both** is a contradiction the caller has to
+    resolve, so it raises rather than silently preferring one.
+
+    Args:
+        new_value: What the caller passed (or the sentinel) for the new parameter name.
+        old_value: What the caller passed for the deprecated name, or ``None`` when they did not.
+        new: The new parameter's name, for the warning and the error message.
+        old: The deprecated parameter's name.
+        caller: The public method the keywords were passed to, named in both messages.
+        default: The new parameter's real default — returned when neither name was given, and the value
+            ``new_value`` is compared against to tell "not passed" from "passed the default on purpose".
+
+    Returns:
+        The value to use: the old one (with a :class:`DeprecationWarning`) when only it was given, else the
+        new one.
+
+    Raises:
+        ValueError: when both names were passed, since they would name the same thing twice.
+
+    Examples:
+        - The old name still works, and says what to write instead:
+            ```python
+            >>> import warnings
+            >>> from digitalearth.three_d.base import deprecated_alias
+            >>> with warnings.catch_warnings(record=True) as caught:
+            ...     warnings.simplefilter("always")
+            ...     value = deprecated_alias(
+            ...         None, 10.0, new="fps", old="framerate", caller="orbit()", default=3.0
+            ...     )
+            >>> value, "fps" in str(caught[0].message)
+            (10.0, True)
+
+            ```
+        - Neither name given yields the default, with no warning:
+            ```python
+            >>> from digitalearth.three_d.base import deprecated_alias
+            >>> deprecated_alias(None, None, new="size", old="point_size", caller="point_cloud()", default=5.0)
+            5.0
+
+            ```
+    """
+    if old_value is None:
+        return default if new_value is None else new_value
+    if new_value is not None:
+        raise ValueError(
+            f"{caller} got both {new}= and the deprecated {old}=; pass only {new}="
+        )
+    warnings.warn(
+        f"{caller}: {old}= is deprecated and will be removed in a future release; use {new}= instead",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return old_value
+
+
+def classified_scalars(
+    values: Any, *, scheme: Any | None, k: int, cmap: Any
+) -> dict[str, Any]:
+    """Turn a value column into the ``scalars``/``cmap`` keywords that colour a PyVista layer.
+
+    The 3-D counterpart of the classification the other tiers apply to a choropleth, and deliberately the
+    same computation: a graduated ``scheme`` gets its class edges from ``cleopatra.styling.styles.classify``
+    (pure-numpy quantiles / equal-interval / Fisher-Jenks) and ``scheme="categorical"`` its colours from
+    :func:`digitalearth.base.symbology.categorical_colors`, so one ``scheme``/``k``/``cmap`` triple paints the
+    same classes here as on a static, interactive or web map.
+
+    What differs is only how the result is handed to the engine. VTK has no notion of class breaks: it maps a
+    scalar range through a lookup table. So a classified layer is rendered by replacing the values with their
+    **class index** and handing PyVista a table of exactly that many colours — ``clim`` set to
+    ``(-0.5, n - 0.5)`` so index *i* lands in the middle of the *i*-th colour. The picture is a flat-filled
+    classified layer, which is what the scheme asked for.
+
+    Args:
+        values: The per-feature values to colour by; coerced to float for the graduated schemes, taken as-is
+            (labels or codes) for ``"categorical"``.
+        scheme: ``None`` for a continuous ramp over the raw values (the default everywhere);
+            ``"categorical"`` for one colour per distinct value; any other
+            ``cleopatra.styling.styles.classify`` scheme name (``"quantiles"``, ``"equal_interval"``,
+            ``"fisher_jenks"``, …) — or an explicit sequence of class edges — for graduated colouring.
+        k: Number of classes for the graduated schemes; ignored when ``scheme`` is ``None`` or
+            ``"categorical"``.
+        cmap: Colormap name for the ramp / classes. For ``"categorical"`` it is resolved through
+            :func:`~digitalearth.base.symbology.resolve_categorical_cmap`, which swaps a continuous default
+            for a qualitative one.
+
+    Returns:
+        dict: keyword arguments to splat into :meth:`pyvista.Plotter.add_mesh` /
+        :meth:`pyvista.Plotter.add_points` — always ``scalars`` and ``cmap``, plus ``clim`` and ``n_colors``
+        when the layer was classified.
+
+    Raises:
+        ValueError: when the column cannot be classified — an unknown scheme, a constant column with no
+            spread to split, ``k`` below 1, or (for ``"categorical"``) no non-null values. The message names
+            the scheme and ``k`` so the caller can see which of those it was.
+
+    Examples:
+        - No scheme is a continuous ramp: the values reach the engine unchanged:
+            ```python
+            >>> from digitalearth.three_d.base import classified_scalars
+            >>> style = classified_scalars([1.0, 5.0, 9.0], scheme=None, k=5, cmap="viridis")
+            >>> sorted(style), [float(v) for v in style["scalars"]]
+            (['cmap', 'scalars'], [1.0, 5.0, 9.0])
+
+            ```
+        - A graduated scheme replaces the values with class indices and supplies one colour per class:
+            ```python
+            >>> from digitalearth.three_d.base import classified_scalars
+            >>> style = classified_scalars(
+            ...     [1.0, 2.0, 3.0, 40.0], scheme="quantiles", k=2, cmap="viridis"
+            ... )
+            >>> style["n_colors"], len(style["cmap"]), style["clim"]
+            (2, 2, (-0.5, 1.5))
+            >>> sorted(set(int(v) for v in style["scalars"]))
+            [0, 1]
+
+            ```
+        - A categorical scheme gives every distinct value its own colour:
+            ```python
+            >>> from digitalearth.three_d.base import classified_scalars
+            >>> style = classified_scalars(
+            ...     ["a", "b", "a", "c"], scheme="categorical", k=5, cmap="tab10"
+            ... )
+            >>> style["n_colors"], [int(v) for v in style["scalars"]]
+            (3, [0, 1, 0, 2])
+
+            ```
+    """
+    from digitalearth.base.symbology import (
+        categorical_colors,
+        resolve_categorical_cmap,
+    )
+
+    if scheme is None:
+        return {"scalars": np.asarray(values, dtype="float64"), "cmap": cmap}
+
+    if isinstance(scheme, str) and scheme.lower() == "categorical":
+        categories, colours = categorical_colors(
+            values, cmap=resolve_categorical_cmap(cmap)
+        )
+        index = {category: position for position, category in enumerate(categories)}
+        codes = np.array([index.get(value, 0) for value in values], dtype="int64")
+        return _discrete_style(codes, colours)
+
+    from cleopatra.styling.styles import classify
+
+    numbers = np.asarray(values, dtype="float64")
+    try:
+        edges, _ = classify(numbers, scheme, k)
+    except Exception as error:  # unknown scheme, constant column, k < 1 …
+        raise ValueError(
+            f"cannot classify values (scheme={scheme!r}, k={k}): {error}"
+        ) from error
+    # `edges` bounds the classes, so it holds one more entry than there are classes; digitize against the
+    # interior edges to land every value in 0 .. n_classes - 1 (clip catches the closed upper bound).
+    n_classes = max(len(edges) - 1, 1)
+    codes = np.clip(np.digitize(numbers, np.asarray(edges)[1:-1]), 0, n_classes - 1)
+    return _discrete_style(codes, _sample_cmap(cmap, n_classes))
+
+
+def _sample_cmap(cmap: Any, n: int) -> list[str]:
+    """Sample ``cmap`` at ``n`` evenly-spaced points, as hex colours.
+
+    Args:
+        cmap: A matplotlib colormap name, or an already-built sequence of colours (returned as a list).
+        n: How many colours to draw — one per class.
+
+    Returns:
+        list[str]: ``n`` ``#rrggbb`` colours, in ramp order.
+    """
+    if not isinstance(cmap, str):
+        return list(cmap)
+    from matplotlib import colormaps
+    from matplotlib.colors import to_hex
+
+    colormap = colormaps[cmap]
+    # One point per class, spread across the whole ramp — for n == 1 that is the middle of it, since
+    # linspace(0, 1, 1) would otherwise pin the single class to the ramp's dark end.
+    positions = [0.5] if n == 1 else np.linspace(0.0, 1.0, n)
+    return [to_hex(colormap(position)) for position in positions]
+
+
+def _discrete_style(codes: np.ndarray, colours: list[str]) -> dict[str, Any]:
+    """Build the add_mesh keywords that paint integer ``codes`` with one flat colour each.
+
+    Args:
+        codes: Per-feature class index, ``0 .. len(colours) - 1``.
+        colours: One colour per class, in class order.
+
+    Returns:
+        dict: ``scalars``/``cmap``/``clim``/``n_colors`` for :meth:`pyvista.Plotter.add_mesh`. ``clim`` is
+        half-open around the integers so each index sits at the centre of its colour band rather than on the
+        boundary between two.
+    """
+    return {
+        "scalars": codes,
+        "cmap": colours,
+        "clim": (-0.5, len(colours) - 0.5),
+        "n_colors": len(colours),
+    }
+
+
+def supported_destinations() -> str:
+    """Return the "use one of these suffixes" sentence :meth:`Scene3DBase.save` raises with.
+
+    Kept next to :data:`IMAGE_SUFFIXES` / :data:`SCENE_EXPORTERS` so the error text and the dispatch table
+    cannot drift apart.
+
+    Returns:
+        The supported suffixes, split into the two families ``save`` dispatches.
+
+    Examples:
+        ```python
+        >>> from digitalearth.three_d.base import supported_destinations
+        >>> supported_destinations().startswith("use a raster-frame suffix")
+        True
+
+        ```
+    """
+    frames = " ".join(IMAGE_SUFFIXES)
+    exports = " ".join([".html", *sorted(SCENE_EXPORTERS)])
+    return f"use a raster-frame suffix ({frames}) or a scene-export suffix ({exports})"
+
+
+def is_geographic_crs(crs: Any) -> bool | None:
+    """Return whether ``crs`` is a geographic (lon/lat) CRS, as pyramids reads it.
+
+    CRS interpretation goes through pyramids, the GIS engine — nothing is inferred from coordinate magnitudes
+    here. An unresolvable CRS is reported as "unknown" (``None``) rather than guessed at, so a caller can tell
+    "definitely projected" apart from "no CRS to go on".
+
+    Args:
+        crs: An EPSG code (anything ``int()`` accepts), or ``None``/an unparseable value for "no CRS".
+
+    Returns:
+        ``True`` for a geographic CRS, ``False`` for a projected one, ``None`` when it cannot be resolved.
+
+    Examples:
+        - WGS84 is geographic, Web Mercator is projected, and a missing CRS is simply unknown:
+            ```python
+            >>> from digitalearth.three_d.base import is_geographic_crs
+            >>> is_geographic_crs(4326), is_geographic_crs(3857), is_geographic_crs(None)
+            (True, False, None)
+
+            ```
+    """
+    try:
+        from pyramids.base.crs import sr_from_epsg
+
+        return bool(sr_from_epsg(int(crs)).IsGeographic())
+    except Exception:  # noqa: BLE001 — any CRS-resolution failure means "unknown", never "projected".
+        return None
 
 
 def house_theme() -> pv.themes.Theme:
@@ -125,15 +408,28 @@ def _require_one_vtk_build() -> None:
 class Scene3DBase:
     """Core single-:class:`pyvista.Plotter` host: layer registry + render/export lifecycle.
 
+    **This tier has no display CRS.** A 2-D map reprojects everything it draws into one display CRS and
+    places it on a flat axes; a 3-D scene has no such thing. Coordinates go into the plotter as the numbers
+    pyramids handed over, in whatever CRS the data is already in, and the camera — not a projection — decides
+    what the viewer sees. :attr:`display_crs` is ``None`` to say so in code, which is what lets
+    :func:`digitalearth.api.quickmap` refuse ``crs=`` for ``backend="3d"`` with a real reason instead of
+    accepting the argument and quietly ignoring it. Reproject **before** handing data here if you need a
+    particular CRS — that is pyramids' job (``Dataset.to_crs``), not this scene's.
+
     Args:
         off_screen: Render without opening a window. ``None`` (default) follows :data:`pyvista.OFF_SCREEN`.
         window_size: Render window size in pixels (``(width, height)``).
         theme: A PyVista theme to apply. ``None`` uses :func:`house_theme`.
+        strict: How a layer with nothing to draw is handled. ``False`` (default) skips it with a warning
+            naming the layer and why, so one empty layer never kills a composed scene; ``True`` raises
+            :class:`~digitalearth.base.crs.OffLimbError` instead.
         **plotter_kwargs: Forwarded to :class:`pyvista.Plotter`.
 
     Attributes:
         plotter: The wrapped :class:`pyvista.Plotter`.
         layers: Registered ``(mesh, actor)`` pairs, in add order.
+        strict: Whether an empty layer raises rather than being skipped (see ``strict`` above).
+        display_crs: Always ``None`` — this tier projects nothing (see the paragraph above).
 
     Examples:
         - Build a scene, stack two meshes on its single plotter, and read the layer registry back:
@@ -175,11 +471,18 @@ class Scene3DBase:
             capability mixins, and is the class to use directly.
     """
 
+    #: The CRS this tier displays in — ``None``, because it displays in none. Declared rather than left
+    #: implicit so callers and :func:`digitalearth.api.quickmap` can *read* the absence: a 3-D scene places
+    #: coordinates as given and lets the camera do the projecting, so there is no display CRS for a ``crs=``
+    #: argument to set. The 2-D tiers carry a real CRS on the same attribute name.
+    display_crs: None = None
+
     def __init__(
         self,
         off_screen: bool | None = None,
         window_size: tuple[int, int] = (1024, 768),
         theme: pv.themes.Theme | None = None,
+        strict: bool = False,
         **plotter_kwargs: Any,
     ):
         self.plotter: pv.Plotter = pv.Plotter(
@@ -189,6 +492,109 @@ class Scene3DBase:
             **plotter_kwargs,
         )
         self.layers: list[tuple[Any, Any]] = []
+        #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
+        self.strict: bool = strict
+
+    def _skip_empty(self, layer: str, reason: str) -> None:
+        """Report that ``layer`` drew nothing, by warning (default) or raising (``strict=True``).
+
+        A 3-D scene is usually composed from several layers, and one of them having nothing to place — an
+        all-nodata DEM tile, a feature collection whose geometries carry no rings, an empty point table — is
+        not a reason to lose the other layers. So the default is to skip it and say so at ``WARNING``, which
+        is visible without configuring logging; otherwise the only symptom is a missing layer.
+
+        ``strict=True`` is for pipelines where a silently absent layer is worse than a failure: it raises
+        :class:`~digitalearth.base.crs.OffLimbError`, the same type the 2-D tiers use for "none of the data
+        could be placed".
+
+        Args:
+            layer: The public method that drew nothing, named in the warning / error.
+            reason: Why there was nothing to draw, phrased to complete "``layer``: ``reason``".
+
+        Raises:
+            OffLimbError: when the scene was constructed with ``strict=True``.
+        """
+        if self.strict:
+            raise OffLimbError(f"{layer}: {reason}")
+        logger.warning("%s: %s — nothing drawn", layer, reason)
+
+    @property
+    def vertical_exaggeration(self) -> float:
+        """The vertical (z) scale the whole scene is rendered at (``1.0`` = true scale).
+
+        Exaggeration is a property of the **view**, never of the geometry. PyVista applies it as a renderer
+        transform (:meth:`pyvista.Plotter.set_scale`), which scales every actor — including ones added after it
+        is set — so one scene has exactly one exaggeration, the value can be read back, and changing it costs a
+        camera reset rather than a mesh rebuild. :meth:`digitalearth.three_d.Scene3D.terrain`'s
+        ``z_exaggeration`` argument sets this.
+
+        Returns:
+            float: the current z scale.
+
+        Examples:
+            - A fresh scene renders at true scale; the value set reads straight back:
+                ```python
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> scene.vertical_exaggeration
+                1.0
+                >>> scene.vertical_exaggeration = 4.0
+                >>> scene.vertical_exaggeration
+                4.0
+                >>> scene.close()
+
+                ```
+            - It is the view that stretches, not the mesh — and a layer added afterwards is stretched too:
+                ```python
+                >>> import pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> scene.vertical_exaggeration = 4.0
+                >>> sphere = pv.Sphere()
+                >>> actor = scene.add_mesh(sphere)
+                >>> round(sphere.bounds[5] - sphere.bounds[4], 3)
+                1.0
+                >>> round(actor.scale[2], 3)
+                4.0
+                >>> scene.close()
+
+                ```
+        """
+        return float(self.plotter.renderer.scale[2])
+
+    @vertical_exaggeration.setter
+    def vertical_exaggeration(self, factor: float) -> None:
+        """Set the scene's vertical (z) view scale.
+
+        Args:
+            factor: The z scale to render at (``1.0`` = true scale, ``>1`` accentuates relief).
+        """
+        self.plotter.set_scale(zscale=float(factor), render=False)
+
+    def _auto_cmap(
+        self, source: Source, cmap: str | None, fallback: str = "viridis"
+    ) -> str:
+        """Resolve a colormap: the caller's ``cmap`` if given, else the autostyle default.
+
+        Mirrors the ``interactive`` and ``web`` tiers' ``_auto_cmap`` (and the static ``Map``'s ``auto_style``
+        call), so a variable is drawn in the same colours whichever tier renders it — the same
+        :func:`digitalearth.base.autostyle.auto_style` variable→style lookup, including the ECMWF-Magics match.
+        ``fallback`` is the tier's own last-resort literal, and sits *behind* the lookup: it is reached only
+        when ``auto_style`` yields no colormap at all.
+
+        Args:
+            source: The :class:`~digitalearth.base.sources.Source` whose variable drives the lookup.
+            cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
+            fallback: Colormap to fall back on when the lookup yields none.
+
+        Returns:
+            The colormap name to use.
+        """
+        if cmap is not None:
+            return cmap
+        from digitalearth.base.autostyle import auto_style
+
+        return auto_style(source).get("cmap") or fallback
 
     def _add_actor(self, mesh: Any, actor: Any) -> Any:
         """Register a rendered ``mesh`` and its ``actor``, returning the actor.
@@ -337,7 +743,7 @@ class Scene3DBase:
                 ```
 
         See Also:
-            save: dispatches here for any path that is not ``*.html``.
+            save: dispatches here for the raster-frame suffixes (:data:`IMAGE_SUFFIXES`).
         """
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
 
@@ -360,8 +766,8 @@ class Scene3DBase:
                 ``.html``; a name with no suffix gains one. Replacement is :meth:`pathlib.Path.with_suffix`,
                 matching what ``trame-pyvista`` does, so a dotted stem loses its last segment
                 (``report.v2`` becomes ``report.html``). Note :meth:`save` dispatches only on a literal
-                ``.html`` suffix, so ``save(\"x.htm\")`` writes a PNG while ``export_html(\"x.htm\")``
-                writes ``x.html``.
+                ``.html`` suffix, so ``save(\"x.htm\")`` raises on the unknown suffix while
+                ``export_html(\"x.htm\")`` writes ``x.html``.
 
         Returns:
             The ``.html`` path written, as a string.
@@ -412,22 +818,49 @@ class Scene3DBase:
             component.export_html(destination)
         return destination
 
-    def save(self, path: Destination, **kwargs: Any) -> np.ndarray | None:
-        """Save the scene — a PNG screenshot, or interactive HTML when ``path`` ends in ``.html``.
+    def save(self, path: Destination, **kwargs: Any) -> Path:
+        """Save the scene, dispatching on ``path``'s suffix — a rendered frame, or a scene export.
 
-        The HTML branch delegates to :meth:`export_html` — see there for why a heavy scene is better served by
-        :meth:`digitalearth.three_d.Scene3D.orbit`, and for the ``.html`` suffix normalisation it applies.
+        Two families share the one entry point, and the suffix decides which:
+
+        - ``.html`` → :meth:`export_html`, a self-contained interactive page (see there for why a heavy scene
+          is better served by :meth:`digitalearth.three_d.Scene3D.orbit`, and for the suffix normalisation it
+          applies).
+        - :data:`IMAGE_SUFFIXES` (``.png`` ``.jpg`` ``.jpeg`` ``.bmp`` ``.tif`` ``.tiff``) →
+          :meth:`screenshot`, a rendered raster frame **in the format the suffix names** — ``.tif`` writes a
+          TIFF, not a PNG.
+        - :data:`SCENE_EXPORTERS` (``.gltf`` ``.obj`` ``.vrml`` ``.wrl`` ``.vtksz``) → the matching
+          :class:`pyvista.Plotter` scene exporter, which writes the geometry itself rather than a picture of
+          it.
+        - anything else — **including a path with no suffix at all** — raises. A format is never invented on
+          the caller's behalf, so ``save("scene")`` no longer quietly writes ``scene.png``.
+
+        The suffix match is case-insensitive throughout (``SCENE.HTML`` exports a page).
+
+        **It returns the path it wrote**, like every other tier's ``save()``, so a caller can chain on the
+        result without rebuilding the filename — and ``.html`` returns the *normalised* name, which is not
+        always the one passed in. It used to return the RGB frame for a raster suffix and ``None`` for an
+        export, which made the return type depend on the suffix and gave the one branch that produced a
+        useful value no counterpart on the others. That frame is still available, from :meth:`screenshot`,
+        which is now the only way to get it.
 
         Args:
-            path: Output file. ``*.html`` exports an interactive page; anything else saves a PNG screenshot.
-            **kwargs: Forwarded to :meth:`screenshot` for the PNG path (ignored for HTML).
+            path: Output file, as a string or ``os.PathLike``. Its suffix selects the branch.
+            **kwargs: Forwarded to the branch that runs — :meth:`screenshot` for a raster frame, the
+                ``pyvista.Plotter`` exporter for a scene export (e.g. ``inline_data=False`` for ``.gltf``);
+                ignored for HTML.
 
         Returns:
-            Optional[numpy.ndarray]: the rendered ``(H, W, 3)`` RGB frame for the PNG path, or ``None`` for the
-            HTML path (which writes an interactive page rather than a raster frame).
+            pathlib.Path: the file that was written — ``path`` itself for every branch but ``.html``, which
+            returns the suffix-normalised name :meth:`export_html` actually wrote.
+
+        Raises:
+            ValueError: when ``path`` has no suffix, or one outside the dispatch table; the message names both
+                families' supported suffixes. Also when the installed pyvista lacks the exporter a supported
+                scene suffix needs.
 
         Examples:
-            - A raster suffix screenshots, returning the frame that was written:
+            - A raster suffix screenshots, and hands back the path it wrote — not the frame:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
@@ -435,36 +868,88 @@ class Scene3DBase:
                 ...     scene = Scene3DBase(off_screen=True, window_size=(200, 150))
                 ...     _ = scene.add_mesh(pv.Sphere())
                 ...     out = os.path.join(folder, "scene.png")
-                ...     frame = scene.save(out)
+                ...     written = scene.save(out)
                 ...     scene.close()
-                ...     frame.shape[-1], os.path.getsize(out) > 0
-                (3, True)
+                ...     written.name, written.is_file()
+                ('scene.png', True)
 
                 ```
-            - An ``.html`` suffix exports an interactive page instead, and returns ``None`` rather than a frame.
-              The match is case-insensitive, and :meth:`export_html` normalises the suffix it writes, so
-              ``SCENE.HTML`` lands as ``SCENE.html``:
+            - A scene-export suffix writes the geometry through PyVista's own exporter, and returns its path
+              the same way:
                 ```python
                 >>> import os, tempfile, pyvista as pv
                 >>> from digitalearth.three_d.base import Scene3DBase
                 >>> with tempfile.TemporaryDirectory() as folder:
                 ...     scene = Scene3DBase(off_screen=True)
                 ...     _ = scene.add_mesh(pv.Sphere())
-                ...     returned = scene.save(os.path.join(folder, "SCENE.HTML"))
+                ...     written = scene.save(os.path.join(folder, "scene.gltf"))
                 ...     scene.close()
-                ...     returned is None, sorted(os.listdir(folder))
-                (True, ['SCENE.html'])
+                ...     written.suffix, written.stat().st_size > 0
+                ('.gltf', True)
+
+                ```
+            - An ``.html`` suffix exports an interactive page instead. The match is case-insensitive, and
+              :meth:`export_html` normalises the suffix it writes — so ``SCENE.HTML`` lands as ``SCENE.html``
+              and the returned path is the normalised one, not the name that was passed:
+                ```python
+                >>> import os, tempfile, pyvista as pv
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> with tempfile.TemporaryDirectory() as folder:
+                ...     scene = Scene3DBase(off_screen=True)
+                ...     _ = scene.add_mesh(pv.Sphere())
+                ...     written = scene.save(os.path.join(folder, "SCENE.HTML"))
+                ...     scene.close()
+                ...     written.name, sorted(os.listdir(folder))
+                ('SCENE.html', ['SCENE.html'])
+
+                ```
+            - A suffix-less destination is an error, not a silent ``.png``:
+                ```python
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> try:
+                ...     scene.save("scene")
+                ... except ValueError as error:
+                ...     print(str(error).split(";")[0])
+                ... finally:
+                ...     scene.close()
+                save() cannot infer a format from 'scene': it has no suffix
 
                 ```
 
         See Also:
-            screenshot: the raster branch, and where ``**kwargs`` end up.
-            export_html: the interactive branch.
+            screenshot: the raster-frame branch, where its ``**kwargs`` end up, and the only method that
+                returns the rendered array.
+            export_html: the interactive-page branch.
         """
-        if str(path).lower().endswith(".html"):
-            self.export_html(path)
-            return None
-        return self.screenshot(path=path, **kwargs)
+        suffix = Path(str(path)).suffix.lower()
+        if suffix == ".html":
+            # export_html normalises the suffix it writes, so report the name it actually produced rather
+            # than the one that was asked for.
+            return Path(self.export_html(path))
+        if suffix in IMAGE_SUFFIXES:
+            self.screenshot(path=path, **kwargs)
+            return Path(str(path))
+        exporter_name = SCENE_EXPORTERS.get(suffix)
+        if exporter_name is not None:
+            # Guarded with getattr rather than assumed: the exporter set is a pyvista capability, and a
+            # version that lacks one must say so plainly instead of failing on a missing attribute.
+            exporter = getattr(self.plotter, exporter_name, None)
+            if exporter is None:
+                raise ValueError(
+                    f"the installed pyvista ({pv.__version__}) has no Plotter.{exporter_name}, so {suffix!r} "
+                    f"cannot be exported; {supported_destinations()}"
+                )
+            exporter(str(path), **kwargs)
+            return Path(str(path))
+        reason = (
+            "it has no suffix"
+            if not suffix
+            else f"{suffix!r} is not a format it can write"
+        )
+        raise ValueError(
+            f"save() cannot infer a format from {str(path)!r}: {reason}; {supported_destinations()}"
+        )
 
     def show(self, **kwargs: Any) -> Any:
         """Display the scene interactively (or render a frame off-screen).

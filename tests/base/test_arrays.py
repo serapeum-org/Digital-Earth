@@ -34,10 +34,23 @@ class _FakeDataset:
         self.no_data_value = no_data_value
         self.requested_band = None
 
-    def read_array(self, band=0):
-        """Record the requested 0-based band index and return the stored array."""
+    def read_array(self, band=0, masked=False):
+        """Record the requested 0-based band index and return the stored array.
+
+        ``masked=True`` returns a masked array built from the requested band's own sentinel, the way
+        pyramids builds one — that is the call :func:`read_masked_band` makes, and the reason the sentinel
+        never has to be compared against a value here.
+        """
         self.requested_band = band
-        return self._array
+        if not masked:
+            return self._array
+        try:
+            nodata = self.no_data_value[band]
+        except (IndexError, TypeError, KeyError):
+            nodata = None
+        if nodata is None:
+            return np.ma.asarray(self._array)
+        return np.ma.masked_equal(self._array, nodata)
 
 
 class TestRingRuns:
@@ -527,3 +540,70 @@ class TestReadMaskedBand:
         )
         out = read_masked_band(ds, band=1)
         assert out.shape == (2, 3), f"shape changed: {out.shape}"
+
+
+class TestReadMaskedBandOnPackedData:
+    """Regression tests for #234 — a CF-packed band's nodata was never masked.
+
+    ``read_array`` unpacks ``scale_factor``/``add_offset`` to physical units while ``no_data_value`` stays a
+    stored sentinel, so the old ``arr == nodata`` comparison matched nothing: a stored ``-9999`` reads as
+    ``-98.49`` at ``scale=0.01, offset=1.5``. These tests use a genuinely packed band, which is the only
+    shape that tells the two readings apart.
+    """
+
+    @staticmethod
+    def _packed_dataset():
+        """Build a 2x2 int16 raster packed at ``scale=0.01, offset=1.5`` with a stored ``-9999`` nodata cell.
+
+        Returns:
+            pyramids.dataset.Dataset: the packed raster, whose physical values are
+            ``[[2.5, 3.5], [4.5, -98.49]]`` and whose last cell is nodata.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        ds = Dataset.from_array(
+            np.array([[100, 200], [300, -9999]], dtype="int16"),
+            geo_ref=GeoReference(top_left_corner=(0, 0), cell_size=1.0, epsg=4326),
+            no_data_value=-9999,
+        )
+        ds.scale, ds.offset = [0.01], [1.5]
+        return ds
+
+    def test_packed_nodata_cell_is_nan(self):
+        """The nodata cell of a packed band comes back NaN, not as its unpacked sentinel.
+
+        Test scenario:
+            Before the fix this cell held -98.49 — the stored sentinel run through the packing recipe — and
+            every downstream statistic, colour scale and colorbar counted it as data.
+        """
+        out = read_masked_band(self._packed_dataset(), band=1)
+        assert np.isnan(out[1, 1]), (
+            f"the packed band's nodata cell should be NaN, got {out[1, 1]!r}"
+        )
+
+    def test_packed_real_values_stay_physical(self):
+        """The surviving cells keep their unpacked (physical) values.
+
+        Test scenario:
+            Masking through pyramids must not cost the unpacking — the values are the ones ``read_array``
+            reports, only with the masked cell nulled.
+        """
+        out = read_masked_band(self._packed_dataset(), band=1)
+        np.testing.assert_allclose(
+            [out[0, 0], out[0, 1], out[1, 0]],
+            [2.5, 3.5, 4.5],
+            err_msg=f"physical values changed: {out}",
+        )
+
+    def test_matches_pyramids_own_masked_read(self):
+        """The result equals ``read_array(masked=True)`` filled with NaN — the upstream-prescribed reading.
+
+        Test scenario:
+            Pins the helper to pyramids' own answer rather than to a hand-rolled mask, which is the whole
+            point of the change.
+        """
+        ds = self._packed_dataset()
+        expected = np.ma.filled(
+            ds.read_array(band=0, masked=True).astype("float64"), np.nan
+        )
+        np.testing.assert_array_equal(read_masked_band(ds, band=1), expected)

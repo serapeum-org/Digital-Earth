@@ -61,13 +61,19 @@ class RasterMixin(_MixinBase):
                 every frame showing at once — including in a saved page, which carries no slider.
 
         Returns:
-            This map (chainable).
+            This map (chainable). When the band cannot be placed — it lies outside what the display CRS
+            can show, or its corners will not express as lon/lat — nothing is added: the layer is skipped
+            with a warning, or the error is raised when the map was built with ``strict=True``.
         """
         import numpy as np
 
         Layer, LayerType = _require_layer_api()
-        source = self._to_display_source(data, band=band)
+        source = self._display_source_or_skip(data, band=band, layer="add_raster")
+        if source is None:
+            return self
         cmap_name = self._auto_cmap(source, cmap)
+        # Carried for a key built from this band's values (see `_auto_units`); `None` when unknown.
+        self.last_units = self._auto_units(source, None)
 
         values = source.z.values
         if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:
@@ -84,10 +90,12 @@ class RasterMixin(_MixinBase):
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
         coordinates = self._lonlat_corners(source)
         if coordinates is None:
-            raise ValueError(
+            self._skipped(
+                "add_raster",
                 "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
-                "needs; reproject the dataset, or set a lon/lat display CRS"
+                "needs; reproject the dataset so its extent is representable",
             )
+            return self
         # Already lon/lat, so the framing takes them as they are.
         self._note_lonlat_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
@@ -140,7 +148,9 @@ class RasterMixin(_MixinBase):
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
 
         Returns:
-            The same map instance, so builder calls chain.
+            The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
+            in the display CRS, or with corners that will not express as lon/lat — is skipped with a
+            warning instead, unless the map was built with ``strict=True``.
 
         Raises:
             ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when
@@ -165,7 +175,9 @@ class RasterMixin(_MixinBase):
 
         Layer, LayerType = _require_layer_api()
         require_three_bands("rgb_composite", bands)
-        data = self._to_display_raster(dataset)
+        data = self._display_raster_or_skip(dataset, layer="rgb_composite")
+        if data is None:
+            return self
         stack = get_stack(data, bands, mask=mask_nodata)
         pixels = int(stack.size // max(stack.shape[-1], 1))
         if pixels > _LARGE_RASTER_PIXELS:
@@ -185,10 +197,12 @@ class RasterMixin(_MixinBase):
         url = self._composite_png_datauri(stretch_to_unit(stack, limits))
         coordinates = self._lonlat_corners(source)
         if coordinates is None:
-            raise ValueError(
+            self._skipped(
+                "rgb_composite",
                 "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
-                "needs; reproject the dataset, or set a lon/lat display CRS"
+                "needs; reproject the dataset so its extent is representable",
             )
+            return self
         # Already lon/lat, so the framing takes them as they are.
         self._note_lonlat_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])

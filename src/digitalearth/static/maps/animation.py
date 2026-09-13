@@ -13,7 +13,8 @@ from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from digitalearth.base.arrays import finite, read_masked_band
-from digitalearth.base.sources import get_stack
+from digitalearth.base.autostyle import auto_style
+from digitalearth.base.sources import get_source, get_stack
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -23,9 +24,14 @@ from digitalearth.base.stretch import (
 from digitalearth.static import projections
 from digitalearth.static.animation import save_animation
 from digitalearth.static.maps.base import OffLimbError
+from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP
 
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
+
+#: Frames per second every animation entry point defaults to, so ``animate`` and ``rotate`` (and the other
+#: backends' animations) play a clip built with defaults at the same speed.
+DEFAULT_FPS = 3.0
 
 
 def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
@@ -170,7 +176,7 @@ class AnimationMixin(_MixinBase):
 
         def _f(i: int) -> None:
             self.ax.clear()
-            self.layers = []
+            self._reset_layers()
             self._framed = False
             draw_one(i)
             if self.globe:
@@ -253,10 +259,10 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
-        anim = getattr(self, "_animation", None)
+        anim = self._animation
         if anim is None:
             raise RuntimeError("no animation to save; call animate() or rotate() first")
-        rate = getattr(self, "_animation_fps", None) if fps is None else fps
+        rate = self._animation_fps if fps is None else fps
         return save_animation(anim, path, fps=rate, gif=gif, **kwargs)
 
     def _stack_clim(
@@ -551,18 +557,61 @@ class AnimationMixin(_MixinBase):
         finally:
             self.crs = original
 
-    def _animation_colorbar(self, opts: dict, label: Optional[str]) -> Any:
+    def _frame_style(self, datasets: Sequence[Any], band: int) -> dict:
+        """Resolve the per-variable style (``cmap``/``levels``/``units``) the frames will be drawn with.
+
+        The frames resolve theirs one at a time inside
+        :meth:`~digitalearth.static.maps.raster.RasterMixin._field`; the persistent colorbar is built once,
+        before any frame is drawn, so it has to look the same style up here or it would key a ``viridis``
+        bar to frames drawn in whatever colormap the variable actually selects.
+
+        Args:
+            datasets: The animation's frames; the first readable one carries the variable metadata (every
+                frame of an animation is the same variable).
+            band: 1-based band the animation draws.
+
+        Returns:
+            The :func:`~digitalearth.base.autostyle.auto_style` dict for the animated variable, or an empty
+            dict when no frame could be read.
+        """
+        for dataset in datasets:
+            # An unreadable frame is the next frame's problem, not the colorbar's: styling is decoration,
+            # and refusing to build the bar would fail an animation that renders perfectly well.
+            try:
+                return auto_style(get_source(dataset, band=band))
+            except Exception:  # noqa: BLE001 - any read failure just moves on to the next frame
+                continue
+        return {}
+
+    def _animation_colorbar(
+        self, opts: dict, label: Optional[str], style: Optional[dict] = None
+    ) -> Any:
         """Add one static colorbar for an animation from the already-resolved ``cmap``/``vmin``/``vmax``.
 
         The colorbar lives on its own figure axes (not the data axes that each frame clears), so it persists
         across frames. Call :meth:`_resolve_animation_clim` first so ``opts`` has the shared clim.
+
+        Args:
+            opts: The render options every frame is drawn with; the resolved ``cmap`` is written back into
+                it so the frames and this bar cannot disagree.
+            label: Caller-supplied colorbar label, or ``None`` to fall back to the variable's ``units``.
+            style: The variable's :func:`~digitalearth.base.autostyle.auto_style` dict, when one was
+                resolved — the source of both the default colormap and the fallback label.
+
+        Returns:
+            The created ``matplotlib.colorbar.Colorbar``.
         """
-        cmap = opts.setdefault("cmap", "viridis")
+        style = style or {}
+        if opts.get("cmap") is None:
+            opts["cmap"] = style.get("cmap") or DEFAULT_FIELD_CMAP
         mappable = ScalarMappable(
-            norm=Normalize(vmin=opts.get("vmin"), vmax=opts.get("vmax")), cmap=cmap
+            norm=Normalize(vmin=opts.get("vmin"), vmax=opts.get("vmax")),
+            cmap=opts["cmap"],
         )
         mappable.set_array([])
         cbar = self.fig.colorbar(mappable, ax=self.ax)
+        if label is None:
+            label = style.get("units")  # the variable's own units (T6.2)
         if label is not None:
             cbar.set_label(label)
         return cbar
@@ -619,7 +668,8 @@ class AnimationMixin(_MixinBase):
             return
         self._resolve_animation_clim(datasets, opts, views=views)
         if colorbar:
-            self._animation_colorbar(opts, cbar_label)
+            style = self._frame_style(datasets, _animated_band(opts))
+            self._animation_colorbar(opts, cbar_label, style)
 
     def _draw_animation_frame(
         self,
@@ -653,7 +703,7 @@ class AnimationMixin(_MixinBase):
         stack: Any,
         *,
         kind: str = "imshow",
-        fps: float = 3.0,
+        fps: float = DEFAULT_FPS,
         titles: Optional[Sequence[str]] = None,
         ocean: bool = False,
         coastlines: bool = False,
@@ -685,7 +735,8 @@ class AnimationMixin(_MixinBase):
                 ``"contour"`` / ``"pcolormesh"`` / ``"block"``) or a true/false-colour composite
                 (``"rgb_composite"`` / ``"hsv_composite"``, which take ``bands=(r, g, b)`` through
                 ``**kwargs`` to pick their channels).
-            fps: Frames per second (sets the inter-frame interval).
+            fps: Frames per second (sets the inter-frame interval). Defaults to :data:`DEFAULT_FPS`, the one
+                rate every animation entry point — here, :meth:`rotate`, and the other backends — starts from.
             titles: Optional per-frame titles; must match the stack length when given.
             ocean: When True, fill the ocean disc behind each frame (globe maps only).
             coastlines: When True, overlay coastlines each frame (best-effort; ignored if unreachable).
@@ -793,7 +844,7 @@ class AnimationMixin(_MixinBase):
         *,
         lat: float = 15.0,
         n_frames: int = 24,
-        fps: float = 8.0,
+        fps: float = DEFAULT_FPS,
         lon0: float = -180.0,
         kind: str = "imshow",
         ocean: bool = False,
@@ -820,7 +871,8 @@ class AnimationMixin(_MixinBase):
             dataset: The pyramids ``Dataset`` to spin (reprojected per frame).
             lat: Centre latitude of every orthographic view.
             n_frames: Number of frames spanning the full 360-degree turn.
-            fps: Frames per second.
+            fps: Frames per second. Defaults to :data:`DEFAULT_FPS` — the same rate :meth:`animate` starts
+                from, so a rotation and a stack animation built with defaults play at one speed.
             lon0: Starting centre longitude.
             kind: The method used to draw the data — a scalar field (``"imshow"`` / ``"contourf"`` /
                 ``"pcolormesh"`` / ``"contour"`` / ``"block"``) or a composite (``"rgb_composite"`` /

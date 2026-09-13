@@ -171,20 +171,20 @@ def test_quickmap_colorbar_false(dataset):
     assert len(m.fig.axes) == 1
 
 
-def test_quickmap_swallows_decoration_failures(dataset, mocker):
-    """When coastlines/basemap/colorbar raise, quickmap swallows the errors and still returns the map."""
-    mocker.patch.object(Map, "coastlines", side_effect=RuntimeError("no net"))
-    mocker.patch.object(Map, "basemap", side_effect=RuntimeError("no tiles"))
-    mocker.patch.object(Map, "colorbar", side_effect=RuntimeError("bad mappable"))
+def test_quickmap_warns_on_decoration_failures(dataset, mocker):
+    """When coastlines/basemap/colorbar fail for an expected reason, quickmap warns and still returns."""
+    mocker.patch.object(Map, "coastlines", side_effect=ConnectionError("no net"))
+    mocker.patch.object(Map, "basemap", side_effect=ConnectionError("no tiles"))
+    mocker.patch.object(Map, "colorbar", side_effect=ValueError("bad mappable"))
     m = qp.quickmap(
         dataset, crs=dataset.epsg, coastlines=True, basemap=True, colorbar=True
     )
     assert m.layers
 
 
-def test_module_grid_cells_swallows_colorbar_failure(dataset, mocker):
-    """grid_cells still returns a map when its colorbar fails."""
-    mocker.patch.object(Map, "colorbar", side_effect=RuntimeError("bad mappable"))
+def test_module_grid_cells_warns_on_colorbar_failure(dataset, mocker):
+    """grid_cells still returns a map when its colorbar fails for an expected reason."""
+    mocker.patch.object(Map, "colorbar", side_effect=ValueError("bad mappable"))
     m = qp.grid_cells(dataset, crs=dataset.epsg)
     assert m.layers
 
@@ -252,3 +252,179 @@ class TestFinish:
         out = qp._finish(scene, colorbar=True)
         assert scene.colorbar_calls == 1, "colorbar() should have been attempted once"
         assert out is scene, "the scene must be returned despite the swallowed error"
+
+
+class TestBackendCapabilityRefusal:
+    """C11 — ``quickmap`` refuses a parameter the chosen backend cannot honour, instead of dropping it.
+
+    The four backends are not the same map. Only the matplotlib one has a fixed extent to set, only the 2-D
+    ones have a display CRS or a coastline layer, and the web tier keys itself with a legend rather than a
+    colorbar. ``quickmap`` used to take every keyword for every backend and quietly discard the ones that did
+    not apply, so ``quickmap(ds, backend="web", domain="europe")`` returned a world map with no hint that the
+    domain had gone nowhere. Each such parameter is now checked against
+    :data:`digitalearth.api.BACKEND_CAPABILITIES` and refused by name.
+
+    These tests deliberately do not build a scene where they can avoid it: the refusal happens before the
+    backend is imported, which is what lets them run without the ``3d``/``web``/``interactive`` extras.
+    """
+
+    @pytest.mark.parametrize(
+        ("backend", "parameter", "value"),
+        [
+            ("3d", "crs", 4326),
+            ("3d", "domain", "europe"),
+            ("3d", "coastlines", True),
+            ("web", "domain", "europe"),
+            ("web", "coastlines", True),
+            ("web", "colorbar", False),
+            ("interactive", "domain", "europe"),
+        ],
+    )
+    def test_an_unsupported_parameter_names_itself_and_the_backend(
+        self, dataset, backend, parameter, value
+    ):
+        """Every unsupported (backend, parameter) pair raises a ValueError naming both.
+
+        Args:
+            dataset: The raster to draw (never actually drawn — the refusal comes first).
+            backend: The backend that cannot honour the parameter.
+            parameter: The parameter it cannot honour.
+            value: A value that genuinely requests something.
+
+        Test scenario:
+            A caller who gets a plain map back has no way to tell a dropped argument from one that had no
+            visible effect. The message has to carry both halves so they know which one to change.
+        """
+        with pytest.raises(ValueError) as raised:
+            qp.quickmap(dataset, backend=backend, **{parameter: value})
+        message = str(raised.value)
+        assert f"{parameter}= is not supported" in message, (
+            f"the error must name the parameter, got {message!r}"
+        )
+        assert f"backend={backend!r}" in message, (
+            f"the error must name the backend, got {message!r}"
+        )
+
+    @pytest.mark.parametrize(
+        ("backend", "parameter"),
+        [("3d", "domain"), ("3d", "coastlines"), ("web", "coastlines")],
+    )
+    def test_a_parameter_that_asks_for_nothing_is_not_a_dropped_request(
+        self, dataset, backend, parameter, mocker
+    ):
+        """``domain=None`` / ``coastlines=False`` pass anywhere: nothing was requested, so nothing was lost.
+
+        Args:
+            dataset: The raster to draw.
+            backend: The backend that cannot honour the parameter.
+            parameter: The parameter, passed at its inert value.
+            mocker: Stubs the backend builder so no optional extra is needed.
+
+        Test scenario:
+            The rule is about *dropped requests*, not about the presence of a keyword. Refusing an explicit
+            ``coastlines=False`` on the web tier would be pedantry — there were no coastlines to lose — and
+            would break callers who pass one kwargs dict through to whichever backend they picked.
+        """
+        builder = mocker.patch.object(
+            qp, "_quickmap_3d" if backend == "3d" else "_quickmap_web"
+        )
+        inert = {"domain": None, "coastlines": False}[parameter]
+        qp.quickmap(dataset, backend=backend, **{parameter: inert})
+        assert builder.called, (
+            "an inert value must not stop the call reaching the backend"
+        )
+
+    def test_an_unset_parameter_is_never_refused(self, dataset, mocker):
+        """A backend is not refused a parameter its caller never named.
+
+        Args:
+            dataset: The raster to draw.
+            mocker: Stubs the 3-D builder so pyvista is not needed.
+
+        Test scenario:
+            ``crs`` and ``colorbar`` carry real defaults (``3857`` and ``True``), so the default value cannot
+            double as "not passed". Without a separate sentinel, the plainest call there is —
+            ``quickmap(ds, backend="3d")`` — would be refused for a CRS nobody asked for.
+        """
+        builder = mocker.patch.object(qp, "_quickmap_3d")
+        qp.quickmap(dataset, backend="3d")
+        assert builder.called, "a bare backend='3d' call must not be refused"
+
+    def test_the_refusal_precedes_building_anything(self, dataset, mocker):
+        """Nothing is constructed before the check, so a refused call leaks no figure or plotter.
+
+        Args:
+            dataset: The raster to draw.
+            mocker: Watches the 3-D backend builder.
+
+        Test scenario:
+            A ``Scene3D`` opens a VTK render window in its constructor and a ``Map`` opens a matplotlib
+            figure. Checking first is what keeps every rejected call free of a resource nobody will close.
+        """
+        three_d = mocker.patch.object(qp, "_quickmap_3d")
+        with pytest.raises(ValueError, match="crs="):
+            qp.quickmap(dataset, backend="3d", crs=4326)
+        assert not three_d.called, "a refused call must not reach the backend builder"
+
+    def test_every_backend_has_a_capability_entry(self):
+        """The dispatcher and the capability table name the same backends.
+
+        Test scenario:
+            The table is what the unknown-backend check now reads, so a backend added to one and not the
+            other would either be unreachable or escape the parameter check entirely.
+        """
+        assert set(qp.BACKEND_CAPABILITIES) == {
+            "matplotlib",
+            "interactive",
+            "3d",
+            "web",
+        }, f"unexpected backend set: {sorted(qp.BACKEND_CAPABILITIES)}"
+
+    def test_an_unknown_backend_still_names_the_real_ones(self, dataset):
+        """An unrecognised backend raises before the capability lookup, listing the four that exist.
+
+        Args:
+            dataset: The raster to draw.
+
+        Test scenario:
+            Routing the unknown-backend check through the capability table must not turn a clear error into
+            a ``KeyError`` from inside the refusal helper.
+        """
+        with pytest.raises(ValueError, match="unknown backend"):
+            qp.quickmap(dataset, backend="opengl")
+
+    def test_matplotlib_honours_all_four(self, dataset):
+        """The default backend takes every checked parameter, exactly as it did before.
+
+        Args:
+            dataset: The raster to draw.
+
+        Test scenario:
+            C11 is about the tiers that *cannot* honour a parameter. The static tier can honour all four, so
+            the guard must be invisible to it — this is the regression that would catch an over-fire.
+        """
+        m = qp.quickmap(
+            dataset, crs=3857, domain="europe", coastlines=False, colorbar=False
+        )
+        assert len(m.fig.axes) == 1, (
+            "colorbar=False must still suppress the colorbar axes"
+        )
+        assert m.layers, "the data layer must still be drawn"
+
+    def test_web_receives_the_crs_it_was_given(self, dataset, mocker):
+        """``crs=`` is forwarded to the web tier rather than dropped — it has one, and validates it.
+
+        Args:
+            dataset: The raster to draw.
+            mocker: Stubs ``_quickmap_web`` so the ``web`` extra is not needed.
+
+        Test scenario:
+            The web tier carries its own ``crs`` and refuses anything but 4326, explaining why inline data
+            can only be placed in lon/lat. Forwarding lets that tier answer; dropping the argument here, as
+            the old code did, was exactly the silent failure C11 exists to remove.
+        """
+        forward = mocker.patch.object(qp, "_quickmap_web")
+        qp.quickmap(dataset, backend="web", crs=4326)
+        assert forward.call_args.kwargs["crs"] == 4326, (
+            f"crs must reach the web builder, got {forward.call_args!r}"
+        )

@@ -16,13 +16,22 @@ Unlike the 3-D tier, the engine import is **lazy**: ``import digitalearth.intera
 ``interactive`` extra installed; only calling a builder/render method raises an actionable ``ImportError``.
 """
 
-from functools import reduce
+import warnings
+from functools import reduce, wraps
 from operator import mul
-from typing import Any, List, Optional, Self
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional, Self
 
-from digitalearth.base.crs import reproject
+from loguru import logger
+
+from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+
+#: Default row/face count above which a vector builder auto-routes through Datashader (#250). One number
+#: for the whole tier: the map carries it as an attribute, and every big-data builder takes a per-call
+#: override of the same name, so a map configured once keeps the setting for every later layer.
+DEFAULT_BIG_DATA_THRESHOLD = 50_000
 
 #: The pip extra / pixi env that provides the HoloViz engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -75,6 +84,42 @@ def _masked_to_nan(values: Any) -> Any:
     return np.asarray(values)
 
 
+def _skips_off_limb(builder: Callable) -> Callable:
+    """Wrap a layer builder so data the display CRS cannot place skips the layer instead of raising (#257).
+
+    The cross-tier rule: a layer whose data lands nowhere in the display CRS is **skipped with a warning
+    naming the layer**, and the rest of the map still renders — unless the map was built with
+    ``strict=True``, in which case the :class:`~digitalearth.base.crs.OffLimbError` propagates. The guard
+    sits on the builder rather than on the reprojection choke point so the log line can name the public
+    method the caller actually invoked.
+
+    Args:
+        builder: A ``-> Self`` builder method whose body may reproject through pyramids.
+
+    Returns:
+        The same method, with an off-limb reprojection turned into a skipped layer.
+    """
+
+    @wraps(builder)
+    def guarded(self: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run the builder, answering an off-limb reprojection with a skipped layer.
+
+        Args:
+            self: The composed map the builder is bound to.
+            *args: The builder's positional arguments.
+            **kwargs: The builder's keyword arguments.
+
+        Returns:
+            Whatever the builder returns, or the map itself when the layer was skipped.
+        """
+        try:
+            return builder(self, *args, **kwargs)
+        except OffLimbError as error:
+            return self._skip_off_limb(builder.__name__, error)
+
+    return guarded
+
+
 class InteractiveMapBase:
     """Core host: ordered HoloViews-element registry + display CRS + render/save lifecycle.
 
@@ -86,6 +131,12 @@ class InteractiveMapBase:
         tiles: Optional tile-provider name drawn beneath the data layers (resolved by the
             decoration mixin at render time), or ``None`` for no basemap.
         title: Plot title.
+        strict: How a layer whose data the display CRS cannot place is answered (#257). ``False``
+            (default) skips that layer with a warning and carries on; ``True`` re-raises the
+            :class:`~digitalearth.base.crs.OffLimbError` instead.
+        big_data_threshold: Row/face count above which a vector builder auto-routes through Datashader
+            (#250). Set once here and every later layer on this map honours it; each builder also takes
+            a per-call ``big_data_threshold=`` override.
 
     Attributes:
         layers: Registered HoloViews/GeoViews elements, in add (= overlay) order.
@@ -113,6 +164,19 @@ class InteractiveMapBase:
             True
 
             ```
+        - Off-limb data is skipped by default, and the big-data cutoff is a plain attribute:
+            ```python
+            >>> from digitalearth.interactive.base import InteractiveMapBase
+            >>> m = InteractiveMapBase()
+            >>> m.strict
+            False
+            >>> m.big_data_threshold
+            50000
+            >>> m.big_data_threshold = 1_000  # every later layer honours it
+            >>> m.big_data_threshold
+            1000
+
+            ```
 
     See Also:
         digitalearth.interactive.map.InteractiveMap: the public composition of this base
@@ -127,10 +191,16 @@ class InteractiveMapBase:
         height: int = 500,
         tiles: Optional[str] = None,
         title: str = "",
+        strict: bool = False,
+        big_data_threshold: int = DEFAULT_BIG_DATA_THRESHOLD,
     ):
         self.crs = crs
         self.width = width
         self.height = height
+        # Off-limb policy (#257): skip-and-warn by default, raise under strict.
+        self.strict = strict
+        # Big-data cutoff (#250): the map-wide default every builder's per-call override falls back to.
+        self.big_data_threshold = big_data_threshold
         # Stored privately: the public name `tiles` is the DecorationMixin builder method.
         self._tiles_provider = tiles
         self.title = title
@@ -142,6 +212,11 @@ class InteractiveMapBase:
         # (web-tier parity). None until a categorical choropleth runs; the continuous ramp resets it to None.
         self.last_breaks: Optional[List[Any]] = None
         self.layers: List[Any] = []
+        # Style record written by `_styled`, keyed by `id()` of the element it returned (the object the
+        # builders register, so the key stays alive for as long as the layer does). Read back through the
+        # public `style_of` / `layer_styles` accessors — the tier owns its styling state instead of
+        # delegating it to HoloViews' global option Store.
+        self._styles: Dict[int, dict] = {}
 
     def _raster_element(self, x: Any, y: Any, arr: Any, name: str) -> Any:
         """Build the raster element: plain ``hv.Image`` (Bokeh path) or ``gv.Image`` under a projection.
@@ -244,6 +319,114 @@ class InteractiveMapBase:
             data = reproject(data, self.crs)
         return get_source(data, band=band)
 
+    def _skip_off_limb(self, layer: str, error: OffLimbError) -> Self:
+        """Answer a layer whose data the display CRS cannot place: skip it, or raise under ``strict``.
+
+        The default is a **warning**, not a debug line: unlike the static tier there is no clipped globe
+        here — the display CRS is Web Mercator or another unclipped projection — so a warp that places
+        *none* of the data almost always means the source's CRS or geo-transform is wrong, and the only
+        other symptom would be a layer that silently never appears.
+
+        Args:
+            layer: The public builder that drew nothing, named in the log line.
+            error: The off-limb error the reprojection raised.
+
+        Returns:
+            The same map instance, so the skipped call still chains.
+
+        Raises:
+            OffLimbError: when the map was built with ``strict=True``.
+        """
+        if self.strict:
+            raise error
+        logger.warning(
+            f"{layer}: none of the data could be placed in crs={self.crs!r}, so the layer was skipped "
+            f"({error}). Build the map with InteractiveMap(strict=True) to raise instead."
+        )
+        return self
+
+    def _resolve_big_data_threshold(
+        self,
+        big_data_threshold: Optional[int] = None,
+        rasterize_threshold: Optional[int] = None,
+    ) -> int:
+        """Resolve a builder's big-data cutoff: per-call value, else the map's attribute (#250).
+
+        ``rasterize_threshold`` is the tier's **deprecated** spelling of the same number, kept working for
+        one release so no caller breaks; it is honoured only when ``big_data_threshold`` is absent.
+
+        Args:
+            big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
+            rasterize_threshold: The deprecated alias of ``big_data_threshold``.
+
+        Returns:
+            The row/face count above which the calling builder routes through Datashader.
+
+        Warns:
+            DeprecationWarning: when ``rasterize_threshold`` is passed.
+        """
+        if rasterize_threshold is not None:
+            warnings.warn(
+                "rasterize_threshold= is deprecated and will be removed in a future release; use "
+                "big_data_threshold= (or set the map's big_data_threshold attribute) instead",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            if big_data_threshold is None:
+                return rasterize_threshold
+        if big_data_threshold is not None:
+            return big_data_threshold
+        return self.big_data_threshold
+
+    def _auto_style(self, source: Source) -> Dict[str, Any]:
+        """Return the :func:`~digitalearth.base.autostyle.auto_style` record for ``source``.
+
+        The tier's single autostyle lookup — the same variable→style table (incl. the ECMWF-Magics match)
+        the static ``Map`` consults, so a recognised field is coloured, contoured and labelled the same way
+        on every tier. Imported lazily so importing the tier never pulls the style library in.
+
+        Args:
+            source: The display-CRS source whose variable drives the lookup.
+
+        Returns:
+            dict: the style record — always a ``cmap``, plus ``levels`` / ``units`` for a recognised field.
+        """
+        from digitalearth.base.autostyle import auto_style
+
+        return auto_style(source)
+
+    def _auto_levels(self, source: Source, levels: Any) -> Any:
+        """Resolve contour levels: the caller's ``levels`` if given, else the autostyle levels (#230).
+
+        Args:
+            source: The display-CRS source whose variable drives the lookup.
+            levels: The caller-supplied level count / edges, or ``None`` to auto-resolve.
+
+        Returns:
+            The levels to contour with, or ``None`` when the variable is unrecognised (the caller then
+            applies its own fallback).
+        """
+        if levels is not None:
+            return levels
+        return self._auto_style(source).get("levels")
+
+    def _auto_clabel(self, source: Source, clabel: Optional[str]) -> Optional[str]:
+        """Resolve the colorbar label: the caller's ``clabel`` if given, else the autostyle units (#230).
+
+        Never guesses: an unrecognised variable carries no units, and the colorbar is then left unlabelled
+        exactly as before.
+
+        Args:
+            source: The display-CRS source whose variable drives the lookup.
+            clabel: The caller-supplied colorbar label, or ``None`` to auto-resolve.
+
+        Returns:
+            The colorbar label, or ``None`` when neither the caller nor the style library supplies one.
+        """
+        if clabel is not None:
+            return clabel
+        return self._auto_style(source).get("units")
+
     def _auto_cmap(self, source: Source, cmap: Optional[str]) -> str:
         """Resolve a colormap: the caller's ``cmap`` if given, else the autostyle default (DI.12).
 
@@ -260,9 +443,34 @@ class InteractiveMapBase:
         """
         if cmap is not None:
             return cmap
-        from digitalearth.base.autostyle import auto_style
+        return self._auto_style(source).get("cmap", "viridis")
 
-        return auto_style(source).get("cmap", "viridis")
+    def _auto_cmap_for_band(self, dataset: Any, band: int, cmap: Optional[str]) -> str:
+        """Resolve a colormap from a raster band's **name**, without reading the band (#249).
+
+        The windowed reader (:meth:`~digitalearth.interactive.raster.RasterMixin.large_image`) must not
+        materialise the array just to style it, so the autostyle lookup is fed a metadata-only
+        :class:`Source`: :func:`~digitalearth.base.autostyle.auto_style` reads the variable name (and CF
+        attributes), never the values, so a 1×1 placeholder array is enough to drive it.
+
+        Args:
+            dataset: A pyramids ``Dataset`` whose ``band_names`` name the variable.
+            band: The 1-based band being rendered.
+            cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
+
+        Returns:
+            The colormap name to use.
+        """
+        if cmap is not None:
+            return cmap
+        import numpy as np
+
+        names = list(getattr(dataset, "band_names", None) or [])
+        variable = names[band - 1] if 1 <= band <= len(names) else ""
+        placeholder = get_source(
+            np.zeros((1, 1)), metadata={"variable": variable or ""}
+        )
+        return self._auto_cmap(placeholder, None)
 
     @staticmethod
     def _vdim_name(source: Source) -> str:
@@ -288,6 +496,10 @@ class InteractiveMapBase:
         the Bokeh-only frame (``width``/``height``/``tools``/``title``) is recorded for the Bokeh
         backend specifically, so the matplotlib save path ignores it instead of erroring.
 
+        The applied options are also **recorded on the map**, keyed by the returned element, so a caller can
+        read a layer's styling back through :meth:`style_of` / :attr:`layer_styles` instead of reaching into
+        HoloViews' global option ``Store`` (which is where ``.opts()`` alone would leave them).
+
         Args:
             element: The HoloViews/GeoViews element to style.
             common: Backend-agnostic options; ``None``-valued entries are dropped.
@@ -296,7 +508,7 @@ class InteractiveMapBase:
         Returns:
             The styled element.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()  # called for its actionable ImportError; no module name is needed here
         common = {
             key: value for key, value in (common or {}).items() if value is not None
         }
@@ -306,7 +518,58 @@ class InteractiveMapBase:
         if self.title:
             frame["title"] = self.title
         frame.update(bokeh or {})
-        return element.opts(backend="bokeh", **frame)
+        element = element.opts(backend="bokeh", **frame)
+        self._styles[id(element)] = {"common": dict(common), "bokeh": dict(frame)}
+        return element
+
+    def style_of(self, layer: Any) -> dict:
+        """Return the style options :meth:`_styled` applied to ``layer``.
+
+        The public read-back for the tier's styling: ``.opts()`` writes into HoloViews' global option
+        ``Store`` and returns nothing a caller can inspect, so every builder's styling is recorded here as
+        it is applied. The result is the *requested* styling, which is what a dashboard override has to be
+        merged over; the resolved, HoloViews-side view of the same values stays available through
+        ``holoviews.Store.lookup_options(backend, element, group)``.
+
+        Args:
+            layer: A registered layer — either the element itself, or its integer index in
+                :attr:`layers` (negative indices count from the end).
+
+        Returns:
+            dict: ``{"common": {...}, "bokeh": {...}}`` — the backend-agnostic options and the Bokeh-only
+            frame. Both are empty for a layer that never went through :meth:`_styled` (a tile basemap, a
+            Natural-Earth feature, a raw element passed to :meth:`add_element`).
+
+        Raises:
+            IndexError: when ``layer`` is an integer outside the registered layer range.
+
+        Examples:
+            - A builder's styling is readable straight off the map:
+                ```python
+                >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem, cmap="magma", alpha=0.5)    # doctest: +SKIP
+                >>> m.style_of(0)["common"]["cmap"]                             # doctest: +SKIP
+                'magma'
+
+                ```
+        """
+        element = self.layers[layer] if isinstance(layer, int) else layer
+        recorded = self._styles.get(id(element))
+        if recorded is None:
+            return {"common": {}, "bokeh": {}}
+        return {"common": dict(recorded["common"]), "bokeh": dict(recorded["bokeh"])}
+
+    @property
+    def layer_styles(self) -> List[dict]:
+        """The recorded style of every registered layer, in add (= overlay) order.
+
+        Returns:
+            list: one ``{"common": {...}, "bokeh": {...}}`` dict per entry of :attr:`layers`, as
+            :meth:`style_of` returns it.
+        """
+        return [self.style_of(layer) for layer in self.layers]
 
     def _require_web_mercator(self, method: str) -> None:
         """Raise when a Web-Mercator-only decoration is requested on a non-3857 map.
@@ -377,17 +640,18 @@ class InteractiveMapBase:
             obj = obj.opts(projection=self._projection, backend="matplotlib")
         return obj
 
-    def save(self, path: str, **kwargs: Any) -> str:
+    def save(self, path: Any, **kwargs: Any) -> Path:
         """Save the composed map — interactive HTML (Bokeh) or a raster via the matplotlib backend.
 
         Args:
-            path: Output file. ``*.html`` writes a self-contained interactive Bokeh page; any other
-                suffix (``.png``/``.svg``/…) renders through HoloViews' matplotlib backend (headless,
-                no browser/selenium needed).
+            path: Output file (``str`` or ``pathlib.Path``). ``*.html`` writes a self-contained
+                interactive Bokeh page; any other suffix (``.png``/``.svg``/…) renders through
+                HoloViews' matplotlib backend (headless, no browser/selenium needed).
             **kwargs: Forwarded to :func:`holoviews.save` (e.g. ``fmt``, ``dpi``).
 
         Returns:
-            The ``path`` written.
+            pathlib.Path: the file written — every tier's ``save`` returns a ``Path`` (#248), so the
+            result can be opened, moved or asserted on without re-wrapping it.
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
@@ -399,10 +663,10 @@ class InteractiveMapBase:
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP
                 >>> m = InteractiveMap().add_element(hv.Points([(0, 0)]))    # doctest: +SKIP
-                >>> m.save("map.html")                                       # doctest: +SKIP
+                >>> m.save("map.html").name                                  # doctest: +SKIP
                 'map.html'
-                >>> m.save("map.png")                                        # doctest: +SKIP
-                'map.png'
+                >>> m.save("map.png").suffix                                 # doctest: +SKIP
+                '.png'
 
                 ```
         """
@@ -410,7 +674,7 @@ class InteractiveMapBase:
         obj = self.render()
         backend = "bokeh" if str(path).lower().endswith(".html") else "matplotlib"
         hv.save(obj, path, backend=backend, **kwargs)
-        return str(path)
+        return Path(path)
 
     def show(self) -> Any:
         """Render the map and display it inline when IPython is available.

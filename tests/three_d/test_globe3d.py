@@ -8,6 +8,7 @@ import builtins
 
 import numpy as np
 import pytest
+from pyramids.dataset import Dataset, GeoReference
 
 pv = pytest.importorskip("pyvista")
 
@@ -49,6 +50,105 @@ def test_globe_missing_geovista_raises_actionable_error(monkeypatch):
     scene.close()
 
 
+def _utm_raster() -> Dataset:
+    """Build an ordinary projected (UTM 33N) raster — the input globe() used to refuse.
+
+    Returns:
+        A pyramids ``Dataset`` in EPSG:32633.
+    """
+    return Dataset.from_array(
+        np.ones((20, 20), "float32"),
+        geo_ref=GeoReference(
+            geo=(400000.0, 100.0, 0.0, 5700000.0, 0.0, -100.0), epsg=32633
+        ),
+    )
+
+
+class TestGeographicSource:
+    """Tests for GlobeMixin._to_geographic_source — the globe's pyramids reprojection choke point."""
+
+    def test_a_projected_dataset_is_reprojected_through_pyramids(self):
+        """A UTM Dataset is warped to EPSG:4326 instead of being rejected.
+
+        Test scenario:
+            Regression guard: globe() used to raise "the coordinates look projected" for any ordinary
+            projected raster, telling the caller to run the very `Dataset.to_crs(4326)` the other three tiers
+            run for them. The extracted source must now be geographic, with lon/lat-range coordinates.
+        """
+        scene = Scene3D(off_screen=True)
+        try:
+            source = scene._to_geographic_source(_utm_raster())
+        finally:
+            scene.close()
+        assert source.crs == 4326, (
+            "The source must come back in the globe's geographic CRS"
+        )
+        assert float(np.nanmax(np.abs(source.x.values))) <= 360.0, (
+            "x must be longitudes after the warp"
+        )
+        assert float(np.nanmax(np.abs(source.y.values))) <= 90.0, (
+            "y must be latitudes after the warp"
+        )
+
+    def test_an_already_geographic_dataset_is_not_warped(self):
+        """Geographic input passes through untouched — no needless resampling.
+
+        Test scenario:
+            Reprojection is asked for only when pyramids reports the CRS as projected, so an EPSG:4326 raster
+            must reach extraction as the very object it was handed.
+        """
+        dataset = Dataset.from_array(
+            np.ones((6, 6), "float32"),
+            geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 0.0, 0.0, -1.0), epsg=4326),
+        )
+        calls = []
+        original = dataset.to_crs
+
+        def spy(*args, **kwargs):
+            calls.append(args)
+            return original(*args, **kwargs)
+
+        dataset.to_crs = spy
+        scene = Scene3D(off_screen=True)
+        try:
+            source = scene._to_geographic_source(dataset)
+        finally:
+            scene.close()
+        assert calls == [], "An already-geographic dataset must not be reprojected"
+        assert source.crs == 4326, "It is still extracted as a geographic source"
+
+    def test_a_source_in_a_projected_crs_is_named_by_its_epsg(self):
+        """A bare Source cannot be reprojected, so it is refused — by its CRS, not by coordinate magnitude.
+
+        Test scenario:
+            `get_source(utm_dataset).crs` is 32633, which is decisive evidence; the error must quote that code
+            rather than inferring "projected" from how large the numbers are.
+        """
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(ValueError, match="EPSG:32633"):
+                scene._to_geographic_source(get_source(_utm_raster()))
+        finally:
+            scene.close()
+
+    def test_a_crs_less_projected_source_still_raises(self):
+        """With no CRS to reproject from, the coordinate-range guard is still the last resort.
+
+        Test scenario:
+            A raw numpy source carries no CRS, so nothing can be warped; metre-scale coordinates must raise
+            the actionable "reproject in pyramids first" error rather than silently mis-placing the field.
+        """
+        source = get_source(
+            np.zeros((5, 5)), x=np.linspace(0, 5e5, 5), y=np.linspace(0, 5e5, 5)
+        )
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(ValueError, match="to_crs"):
+                scene._to_geographic_source(source)
+        finally:
+            scene.close()
+
+
 # --- real-render tests below need geovista installed ---
 geovista = pytest.importorskip("geovista")
 
@@ -78,8 +178,13 @@ def test_globe_accepts_a_source_directly():
     scene.close()
 
 
-def test_globe_rejects_projected_coordinates():
-    """globe() raises a clear error when coordinates look projected (not lon/lat)."""
+def test_globe_rejects_a_crs_less_projected_source():
+    """globe() raises a clear error for input it cannot reproject: a Source with no CRS and projected coords.
+
+    Projected *datasets* are reprojected through pyramids now (see ``TestGeographicSource``); this covers what
+    is left — a bare ``Source`` carrying no CRS at all, where the coordinate range is the only evidence and
+    the caller really must reproject upstream.
+    """
     proj = get_source(
         np.zeros((5, 5)), x=np.linspace(0, 5e5, 5), y=np.linspace(0, 5e5, 5)
     )
@@ -87,3 +192,44 @@ def test_globe_rejects_projected_coordinates():
     with pytest.raises(ValueError, match="to_crs"):
         scene.globe(proj, coastlines=False)
     scene.close()
+
+
+def test_globe_renders_a_projected_dataset():
+    """A projected Dataset renders on the globe, reprojected to EPSG:4326 on the way in.
+
+    The end-to-end version of ``TestGeographicSource``: the whole call must succeed and register a layer where
+    it used to raise.
+    """
+    scene = Scene3D(off_screen=True)
+    actor = scene.globe(_utm_raster(), coastlines=False)
+    assert actor is not None and len(scene.layers) == 1
+    scene.close()
+
+
+def test_globe_resolves_an_unspecified_cmap_through_auto_style():
+    """globe() colours a named variable the way the other three tiers do, instead of always `viridis`.
+
+    Regression guard for the cross-tier divergence: the colormap came from a hard-coded ``cmap="viridis"``
+    default that ignored the ``Source`` the method had just built.
+    """
+    from digitalearth.base.autostyle import auto_style
+
+    dataset = Dataset.from_array(
+        np.ones((19, 37), "float32"),
+        geo_ref=GeoReference(geo=(-180.0, 10.0, 0.0, 90.0, 0.0, -10.0), epsg=4326),
+    )
+    dataset.band_names = ["t2m"]
+    captured = {}
+    scene = Scene3D(off_screen=True)
+    original = scene.add_mesh
+
+    def recorder(mesh, **kwargs):
+        captured.update(kwargs)
+        return original(mesh, **kwargs)
+
+    scene.add_mesh = recorder
+    try:
+        scene.globe(dataset, coastlines=False)
+    finally:
+        scene.close()
+    assert captured["cmap"] == auto_style(get_source(dataset))["cmap"] == "coolwarm"

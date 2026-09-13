@@ -20,11 +20,13 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
-from typing import Any, List, Optional, Self, Tuple
+import warnings
+from typing import Any, Dict, List, Optional, Self, Tuple
 
+from loguru import logger
 from pyramids.base.crs import reproject_coordinates
 
-from digitalearth.base.crs import reproject
+from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
@@ -56,6 +58,67 @@ _STYLE_ALIASES = {
     "positron": "positron",
     "voyager": "voyager",
 }
+
+#: The only display CRS that places inline data correctly (see :meth:`WebMapBase._validate_display_crs`),
+#: with the spellings a caller may write it as.
+DISPLAY_CRS = 4326
+_DISPLAY_CRS_SPELLINGS = frozenset(
+    {4326, "4326", "EPSG:4326", "epsg:4326", "Epsg:4326"}
+)
+
+#: The feature count above which a vector builder auto-routes to a GPU deck.gl layer, unless the map or
+#: the call overrides it (see :attr:`WebMapBase.big_data_threshold`).
+DEFAULT_BIG_DATA_THRESHOLD = 50_000
+
+
+def deprecated_alias(new: str, old: str, value: Any, *, convert: Any = None) -> Any:
+    """Warn that ``old`` is a deprecated spelling of ``new`` and return the value to use instead.
+
+    The one place the tier's renames are announced, so every alias warns in the same words and a caller
+    who greps for the new name finds it in the message. The alias is *converted* rather than reinterpreted
+    when ``convert`` is given — web's ``duration=`` (seconds per frame) becomes ``fps`` that way, so an old
+    call keeps producing the animation it always did.
+
+    Args:
+        new: The parameter name that replaces ``old``.
+        old: The deprecated parameter name the caller passed.
+        value: What the caller passed for ``old``.
+        convert: Optional callable turning the old value into the new parameter's units; ``None`` passes
+            the value through unchanged.
+
+    Returns:
+        The value to use for ``new``.
+
+    Examples:
+        - A pure rename forwards the value as it came:
+            ```python
+            >>> import warnings
+            >>> from digitalearth.web.base import deprecated_alias
+            >>> with warnings.catch_warnings(record=True) as caught:
+            ...     warnings.simplefilter("always")
+            ...     deprecated_alias("size", "radius", 8.0)
+            8.0
+            >>> issubclass(caught[0].category, DeprecationWarning)
+            True
+
+            ```
+        - A unit change is converted, never reinterpreted:
+            ```python
+            >>> import warnings
+            >>> from digitalearth.web.base import deprecated_alias
+            >>> with warnings.catch_warnings():
+            ...     warnings.simplefilter("ignore")
+            ...     deprecated_alias("fps", "duration", 0.5, convert=lambda d: 1.0 / d)
+            2.0
+
+            ```
+    """
+    warnings.warn(
+        f"{old}= is deprecated and will be removed in a future release; use {new}= instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
+    return value if convert is None else convert(value)
 
 
 def _patch_maplibre_html_encoding() -> None:
@@ -304,10 +367,19 @@ class WebMapBase:
         zoom: Initial zoom level.
         style: Basemap style — a short alias (``"dark"``/``"light"``/``"voyager"``), a style URL, or a
             MapLibre style ``dict`` (see :func:`_resolve_style`).
-        crs: The EPSG the data is normalised to before it is handed to MapLibre. Default ``4326`` —
-            MapLibre ingests GeoJSON/image-source coordinates as lon/lat (WGS84) and renders Web
-            Mercator itself, so ``4326`` is the only value that places inline data correctly.
+        crs: The EPSG the data is normalised to before it is handed to MapLibre. **EPSG:4326 is the only
+            accepted value** and anything else raises: MapLibre ingests GeoJSON and image-source
+            coordinates as lon/lat (WGS84) degrees and renders Web Mercator itself, so data normalised to
+            any other CRS is handed to the engine as if its metres were degrees and lands somewhere near
+            null island. ``"EPSG:4326"`` and ``"4326"`` are accepted spellings and normalise to the int.
         height: Widget height in pixels (``None`` keeps the MapLibre default).
+        strict: How a layer that cannot be placed is reported. ``False`` (the default) skips it with a
+            warning naming the layer and why, so one unplaceable layer does not lose the rest of the map;
+            ``True`` re-raises instead, which is what a pipeline that must not ship a silently
+            incomplete map wants.
+
+    Raises:
+        ValueError: when ``crs`` is not EPSG:4326 (see :meth:`_validate_display_crs`).
 
     Attributes:
         layers: Registered layers, in add (= draw) order. A layer is either a ``maplibre`` ``Layer``/spec
@@ -333,6 +405,16 @@ class WebMapBase:
             (4326, 2)
 
             ```
+        - Any other display CRS is refused rather than mis-placing the data:
+            ```python
+            >>> from digitalearth.web.base import WebMapBase
+            >>> try:
+            ...     WebMapBase(crs=3857)
+            ... except ValueError as err:
+            ...     print(str(err).split(";")[0])
+            the web tier renders in EPSG:4326 only, but crs=3857 was given
+
+            ```
 
     See Also:
         digitalearth.web.map.WebMap: the public composition of this base with the capability mixins.
@@ -344,8 +426,9 @@ class WebMapBase:
         center: Optional[Any] = None,
         zoom: Any = _UNSET,
         style: Any = "dark",
-        crs: int = 4326,
+        crs: Any = DISPLAY_CRS,
         height: Optional[int] = 500,
+        strict: bool = False,
     ):
         self.center = center
         #: Whether the caller named a view of their own. Tracked from the sentinel rather than the value,
@@ -353,8 +436,10 @@ class WebMapBase:
         self._view_chosen = center is not None or zoom is not _UNSET
         self.zoom = _DEFAULT_ZOOM if zoom is _UNSET else zoom
         self.style = style
-        self.crs = crs
+        self.crs = self._validate_display_crs(crs)
         self.height = height
+        #: Whether an unplaceable layer raises (``True``) or is skipped with a warning (``False``).
+        self.strict = bool(strict)
         self.layers: List[Any] = []
         #: Monotonic counter handing out unique source/layer ids (see :meth:`_uid`).
         self._id_counter = 0
@@ -376,8 +461,14 @@ class WebMapBase:
         self.last_legend: Optional[dict] = None
         #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
         self._deck_layers: Optional[List[dict]] = None
-        #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never silent).
-        self.big_data_threshold = 50_000
+        #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never
+        #: silent). Set it once and every subsequent layer on this map honours it; a single builder call
+        #: can override it with its own ``big_data_threshold=`` without changing the map's setting.
+        self.big_data_threshold = DEFAULT_BIG_DATA_THRESHOLD
+        #: The ``units`` hint :func:`~digitalearth.base.autostyle.auto_style` resolved for the most
+        #: recently auto-styled raster, or ``None``. Carried so a key built from that raster's values can
+        #: say what they are measured in (see :meth:`_auto_units`).
+        self.last_units: Optional[str] = None
         #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
         #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
         self._data_bounds: Optional[List[float]] = None
@@ -398,6 +489,100 @@ class WebMapBase:
         #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
         #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
         self._temporal: Optional[dict] = None
+
+    @staticmethod
+    def _validate_display_crs(crs: Any) -> int:
+        """Return ``crs`` normalised to ``4326``, raising for any other display CRS.
+
+        The tier's display CRS is *declared*, not assumed. MapLibre places a GeoJSON source and an image
+        source by lon/lat degrees, so data normalised to anything else is read as degrees anyway: a
+        Web-Mercator frame whose easting is 500 000 m is drawn 500 000 degrees east, which MapLibre wraps
+        to somewhere meaningless rather than reporting. Refusing the value is the only way a caller finds
+        out, so a non-4326 ``crs`` is an error here instead of a wrong map later.
+
+        Args:
+            crs: The display CRS as the caller wrote it — ``4326``, ``"EPSG:4326"`` or ``"4326"``.
+
+        Returns:
+            ``4326``, whatever spelling arrived, so the reproject helpers can compare it as an int.
+
+        Raises:
+            ValueError: for any other CRS, naming what was passed and what to do instead.
+        """
+        if crs in _DISPLAY_CRS_SPELLINGS:
+            return DISPLAY_CRS
+        raise ValueError(
+            f"the web tier renders in EPSG:{DISPLAY_CRS} only, but crs={crs!r} was given; MapLibre "
+            f"places GeoJSON and image sources by lon/lat degrees, so data in another CRS would be "
+            f"drawn in the wrong place. Leave crs at its default and let the tier reproject through "
+            f"pyramids, or use the static tier, which renders any projection."
+        )
+
+    def _skipped(
+        self, layer: str, reason: str, error: Optional[Exception] = None
+    ) -> None:
+        """Skip a layer that cannot be placed — warn and carry on, or re-raise under ``strict``.
+
+        The tier's one answer to "there is nothing renderable here": data behind the limb of the display
+        CRS, corners that will not express as lon/lat, a contour trace that found no level. One
+        unplaceable layer used to lose the whole map, which is the wrong default for a builder chain that
+        may have a dozen layers in it — but a pipeline that must not publish a half-drawn map sets
+        ``strict=True`` on the map and gets the exception back.
+
+        Args:
+            layer: The public builder that drew nothing, named in the log line.
+            reason: Why it drew nothing, in the same line.
+            error: The exception behind it, re-raised verbatim under ``strict``; ``None`` raises a
+                :class:`ValueError` carrying ``reason``.
+
+        Raises:
+            Exception: ``error`` (or a ``ValueError`` built from ``reason``) when the map is ``strict``.
+        """
+        if self.strict:
+            raise error if error is not None else ValueError(f"{layer}: {reason}")
+        logger.warning("{}: {} — the layer was skipped", layer, reason)
+
+    def _display_source_or_skip(
+        self, data: Any, *, layer: str, band: int = 1
+    ) -> Optional[Source]:
+        """Return :meth:`_to_display_source`'s result, or ``None`` when the data cannot be placed.
+
+        Args:
+            data: A pyramids ``Dataset`` / ``Source`` / array, as :meth:`_to_display_source` takes it.
+            layer: The calling builder's name, quoted in the warning.
+            band: 1-based band to extract.
+
+        Returns:
+            The display-CRS :class:`Source`, or ``None`` when the warp placed none of the data and the
+            map is not ``strict``.
+
+        Raises:
+            OffLimbError: when the data lies outside the display CRS and the map is ``strict``.
+        """
+        try:
+            return self._to_display_source(data, band=band)
+        except OffLimbError as error:
+            self._skipped(layer, str(error), error)
+            return None
+
+    def _display_raster_or_skip(self, dataset: Any, *, layer: str) -> Optional[Any]:
+        """Return :meth:`_to_display_raster`'s result, or ``None`` when the data cannot be placed.
+
+        Args:
+            dataset: A pyramids ``Dataset``.
+            layer: The calling builder's name, quoted in the warning.
+
+        Returns:
+            The dataset in the display CRS, or ``None`` when it is off-limb and the map is not ``strict``.
+
+        Raises:
+            OffLimbError: when the data lies outside the display CRS and the map is ``strict``.
+        """
+        try:
+            return self._to_display_raster(dataset)
+        except OffLimbError as error:
+            self._skipped(layer, str(error), error)
+            return None
 
     def _noted(self, gdf: Any) -> Any:
         """Record a display-CRS frame's extent, then return the frame unchanged.
@@ -1113,12 +1298,33 @@ class WebMapBase:
         self._underlay_count += 1
         return self
 
+    @staticmethod
+    def _style_for(source: Any) -> Dict[str, Any]:
+        """Return the autostyle parameters for ``source`` (``cmap``, and sometimes ``levels``/``units``).
+
+        The tier's single entry into :func:`digitalearth.base.autostyle.auto_style` — the same
+        variable→style lookup the static and interactive tiers use, ECMWF-Magics match included — so one
+        variable is drawn the same way whichever tier renders it. The three readers below take one key
+        each; going through here means they all see one lookup's answer.
+
+        Args:
+            source: The display-CRS :class:`Source` whose variable drives the lookup.
+
+        Returns:
+            The style dict; always carries ``cmap``, and carries ``levels``/``units`` for a recognised
+            operational field.
+        """
+        from digitalearth.base.autostyle import auto_style
+
+        return auto_style(source)
+
     def _auto_cmap(self, source: Any, cmap: Optional[str]) -> str:
         """Resolve a colormap name: the caller's ``cmap`` if given, else the autostyle default.
 
         Mirrors the interactive tier's ``_auto_cmap`` so a variable looks the same across tiers (the same
         ``digitalearth.base.autostyle`` variable→style lookup, incl. the ECMWF-Magics match); falls back to
-        ``"viridis"`` for an unrecognised field.
+        ``"viridis"`` for an unrecognised field — which is also what the autostyle library's ``default``
+        group carries, so the literal here only covers a library that answered with no colormap at all.
 
         Args:
             source: The display-CRS :class:`Source` whose variable drives the lookup.
@@ -1129,9 +1335,43 @@ class WebMapBase:
         """
         if cmap is not None:
             return cmap
-        from digitalearth.base.autostyle import auto_style
+        return self._style_for(source).get("cmap", "viridis")
 
-        return auto_style(source).get("cmap", "viridis")
+    def _auto_levels(self, source: Any, levels: Optional[Any]) -> Optional[Any]:
+        """Resolve contour levels: the caller's ``levels`` if given, else the autostyle ones.
+
+        A recognised operational field (mean sea-level pressure, 2-m temperature, …) carries the contour
+        levels its community draws it with, and until now the tier read only ``cmap`` from the same
+        lookup and made the caller supply them again.
+
+        Args:
+            source: The display-CRS :class:`Source` whose variable drives the lookup.
+            levels: The caller-supplied levels, or ``None`` to auto-resolve.
+
+        Returns:
+            The levels to contour at, or ``None`` when the caller gave none and the variable is not one
+            the library knows — a guessed set of levels would be worse than asking for them.
+        """
+        if levels is not None:
+            return levels
+        resolved = self._style_for(source).get("levels")
+        return list(resolved) if resolved else None
+
+    def _auto_units(self, source: Any, units: Optional[str]) -> Optional[str]:
+        """Resolve the units a key labels values with: the caller's if given, else the autostyle hint.
+
+        Args:
+            source: The display-CRS :class:`Source` whose variable drives the lookup.
+            units: The caller-supplied units, or ``None`` to auto-resolve.
+
+        Returns:
+            The units string, or ``None`` when neither the caller nor the library names one — the label
+            is then built exactly as it was before, never with a guessed unit.
+        """
+        if units is not None:
+            return units
+        resolved = self._style_for(source).get("units")
+        return str(resolved) if resolved else None
 
     @staticmethod
     def _cmap_hex(cmap: str, n: int) -> List[str]:
@@ -1261,12 +1501,12 @@ class WebMapBase:
         title: str = DEFAULT_TITLE,
         offline: bool = False,
         **kwargs: Any,
-    ) -> str:
-        """Save the map — a standalone HTML page or a PNG snapshot — and return ``path`` (DW.6).
+    ) -> pathlib.Path:
+        """Save the map — a standalone HTML page or a PNG snapshot — and return its path (DW.6).
 
         The output kind is ``fmt`` if given, else inferred from the suffix: ``.png`` renders a snapshot,
-        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.to_gif`, which needs
-        a temporal map and a headless browser), anything else writes the HTML page.
+        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.animate`, which
+        needs a temporal map and a headless browser), anything else writes the HTML page.
         HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
         cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
         the map state and widget JS but references ``maplibre-gl`` from a CDN; ``offline=True`` inlines the
@@ -1281,7 +1521,8 @@ class WebMapBase:
             **kwargs: Forwarded to ``MapWidget.to_html`` (HTML) or the PNG renderer.
 
         Returns:
-            The ``path`` written.
+            The :class:`pathlib.Path` written — the same type every tier's ``save`` returns, so a caller
+            can go straight on to ``.stat()``/``.read_text()`` without re-wrapping a string.
 
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
@@ -1289,14 +1530,15 @@ class WebMapBase:
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
         kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
         if kind == "gif":
-            return self.to_gif(path, title=title, **kwargs)
+            return self.animate(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)
         if offline:
             html = self._inline_offline_assets(html)
-        pathlib.Path(path).write_text(html, encoding="utf-8")
-        return str(path)
+        out = pathlib.Path(path)
+        out.write_text(html, encoding="utf-8")
+        return out
 
     def show(self) -> Any:
         """Render the map and display it inline when IPython is available.

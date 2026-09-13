@@ -1,0 +1,704 @@
+"""The web tier's half of the cross-backend contract (Wave 0, batch B).
+
+One class per contract point, each proving the tier behaves the way every other tier does — and, for each
+rename, that the old spelling still works **and** warns, so no caller is broken in this batch:
+
+* **C1** ``save()`` returns :class:`pathlib.Path`;
+* **C2** ``animate(fps=3.0)`` is canonical, ``to_gif`` and ``duration=`` deprecated (``duration`` converted);
+* **C3** ``size`` is marker size, ``text_size`` is text size, ``radius``/``point_size`` deprecated;
+* **C4** ``scheme=None`` (continuous) with ``k=5`` wherever a layer classifies;
+* **C5** ``cmap=None`` resolves through ``auto_style``;
+* **C6** ``auto_style``'s ``levels`` and ``units`` are consumed, never guessed;
+* **C7** an unplaceable layer is skipped with a warning, and raises only under ``strict=True``;
+* **C8** ``big_data_threshold`` as an instance attribute **and** a per-call override;
+* **C9** the basemap default comes from ``base/basemaps.py``;
+* **C10** a keyed provider's coverage reaches the MapLibre source's ``bounds``;
+* **C13** the display CRS is EPSG:4326 and anything else is refused.
+
+Engine-dependent tests ``importorskip`` maplibre, so this file runs whole in the ``web`` env
+(``pixi run -e web test-web``).
+"""
+
+import inspect
+import pathlib
+import warnings
+
+import numpy as np
+import pytest
+
+from digitalearth.base.crs import OffLimbError
+from digitalearth.base.sources.dimension import DimensionInfo
+from digitalearth.base.sources.source import Source
+from digitalearth.web import WebMap
+from digitalearth.web.base import DEFAULT_BIG_DATA_THRESHOLD, DISPLAY_CRS
+from digitalearth.web.decoration import DEFAULT_BASEMAP_PROVIDER
+from digitalearth.web.export import DEFAULT_FPS
+
+
+def _source(variable: str) -> Source:
+    """Build a minimal display-CRS source whose variable drives the autostyle lookup.
+
+    Args:
+        variable: The variable name recorded in the source metadata.
+
+    Returns:
+        A 2x2 :class:`Source` carrying that variable.
+    """
+    return Source(
+        DimensionInfo(np.zeros((2, 2)), "z"),
+        DimensionInfo(np.array([0.0, 1.0]), "x"),
+        DimensionInfo(np.array([1.0, 0.0]), "y"),
+        crs=DISPLAY_CRS,
+        metadata={"variable": variable},
+    )
+
+
+def _points_frame(count: int):
+    """Build a small point frame in lon/lat.
+
+    Args:
+        count: How many points to place.
+
+    Returns:
+        A GeoDataFrame of ``count`` points with a ``value`` column.
+    """
+    gpd = pytest.importorskip("geopandas")
+    from shapely.geometry import Point
+
+    return gpd.GeoDataFrame(
+        {"value": [float(i) for i in range(count)]},
+        geometry=[Point(float(i) / 10.0, 0.0) for i in range(count)],
+        crs=DISPLAY_CRS,
+    )
+
+
+def _polygon_frame():
+    """Build a three-polygon frame with a spread ``pop`` column.
+
+    Returns:
+        A GeoDataFrame of triangles in lon/lat.
+    """
+    gpd = pytest.importorskip("geopandas")
+    from shapely.geometry import Polygon
+
+    return gpd.GeoDataFrame(
+        {"pop": [1.0, 5.0, 9.0]},
+        geometry=[Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)],
+        crs=DISPLAY_CRS,
+    )
+
+
+def _paint(web_map, key):
+    """Return a paint property from the map's most recently registered layer.
+
+    Args:
+        web_map: The map whose layers are replayed.
+        key: The MapLibre paint property to read.
+
+    Returns:
+        The property's value on the last registered layer.
+    """
+    return _last_layer(web_map).paint[key]
+
+
+def _layout(web_map, key):
+    """Return a layout property from the map's most recently registered layer.
+
+    Args:
+        web_map: The map whose layers are replayed.
+        key: The MapLibre layout property to read.
+
+    Returns:
+        The property's value on the last registered layer.
+    """
+    return _last_layer(web_map).layout[key]
+
+
+def _last_layer(web_map):
+    """Replay the map's layers against a recorder and return the last MapLibre layer registered.
+
+    Args:
+        web_map: The map whose layers are replayed.
+
+    Returns:
+        The last ``maplibre`` ``Layer`` object the registry built.
+    """
+    built = []
+
+    class Recorder:
+        """Stands in for the MapLibre widget, recording the layers a registry entry builds."""
+
+        def add_source(self, src_id, source):
+            """Ignore the source; only the layer is under test."""
+
+        def add_layer(self, layer):
+            """Record the built layer."""
+            built.append(layer)
+
+    for apply in web_map.layers:
+        apply(Recorder())
+    assert built, "no layer was registered"
+    return built[-1]
+
+
+def _sources_of(web_map) -> list:
+    """Replay a map's registered layers against a recorder and return the source specs.
+
+    Args:
+        web_map: The map whose layers are replayed.
+
+    Returns:
+        Every source spec the layers registered, in registration order.
+    """
+    specs = []
+
+    class Recorder:
+        """Stands in for the MapLibre widget, recording what a layer registers."""
+
+        def add_source(self, src_id, source):
+            """Record the source spec."""
+            specs.append(source)
+
+        def add_layer(self, layer):
+            """Ignore the layer; only the source is under test."""
+
+    for apply in web_map.layers:
+        apply(Recorder())
+    return specs
+
+
+class TestC1SaveReturnsAPath:
+    """Every tier's ``save`` hands back the :class:`pathlib.Path` it wrote."""
+
+    def test_saving_html_returns_the_path_object(self, tmp_path):
+        """A string return made a caller re-wrap it before they could stat or read it.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+        """
+        pytest.importorskip("maplibre")
+        out = tmp_path / "m.html"
+        written = WebMap().basemap().save(str(out))
+        assert isinstance(written, pathlib.Path), type(written)
+        assert written == out and written.stat().st_size > 1_000
+
+
+class TestC2FrameRateIsFps:
+    """``fps`` is the rate on every tier; ``to_gif`` and ``duration=`` survive as deprecated spellings."""
+
+    def test_the_default_frame_rate_is_the_shared_one(self):
+        """One default across the package, so a series animates at one speed whoever renders it."""
+        assert DEFAULT_FPS == 3.0
+        assert inspect.signature(WebMap.animate).parameters["fps"].default == 3.0
+
+    def test_duration_is_converted_to_fps_and_warns(self, monkeypatch, tmp_path):
+        """``duration`` is seconds per frame, so it *converts* — reinterpreting it would double the speed.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for the GIF encoder.
+            tmp_path: pytest's per-test directory.
+        """
+        recorded = {}
+
+        def fake_write(frames, path, *, duration, loop):
+            """Record the per-frame hold the encoder was handed."""
+            recorded["duration"] = duration
+            pathlib.Path(path).write_bytes(b"GIF89a")
+
+        from digitalearth.web import export as web_export
+
+        monkeypatch.setattr(web_export, "_write_gif", fake_write)
+        monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
+        monkeypatch.setattr(
+            WebMap, "_frame_png", lambda self, path, visible, title: path
+        )
+
+        out = tmp_path / "series.gif"
+        with pytest.warns(DeprecationWarning, match="duration= is deprecated"):
+            WebMap().animate(str(out), duration=0.5)
+        assert recorded["duration"] == pytest.approx(0.5), (
+            "duration=0.5 must mean fps=2, i.e. the same half-second hold it always did"
+        )
+
+    def test_fps_sets_the_hold_directly(self, monkeypatch, tmp_path):
+        """The canonical spelling is the inverse of the hold the encoder wants.
+
+        Args:
+            monkeypatch: pytest's patcher.
+            tmp_path: pytest's per-test directory.
+        """
+        recorded = {}
+
+        def fake_write(frames, path, *, duration, loop):
+            """Record the per-frame hold the encoder was handed."""
+            recorded["duration"] = duration
+            pathlib.Path(path).write_bytes(b"GIF89a")
+
+        from digitalearth.web import export as web_export
+
+        monkeypatch.setattr(web_export, "_write_gif", fake_write)
+        monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
+        monkeypatch.setattr(
+            WebMap, "_frame_png", lambda self, path, visible, title: path
+        )
+
+        WebMap().animate(str(tmp_path / "series.gif"), fps=4.0)
+        assert recorded["duration"] == pytest.approx(0.25)
+
+    def test_to_gif_still_works_and_warns(self, monkeypatch, tmp_path):
+        """The old name keeps working for one release, and says what replaces it.
+
+        Args:
+            monkeypatch: pytest's patcher.
+            tmp_path: pytest's per-test directory.
+        """
+        seen = {}
+
+        def fake_animate(self, path, **kwargs):
+            """Stand in for the real animation, recording that it was reached."""
+            seen["path"] = path
+            return pathlib.Path(path)
+
+        monkeypatch.setattr(WebMap, "animate", fake_animate)
+        out = tmp_path / "series.gif"
+        with pytest.warns(DeprecationWarning, match="use WebMap.animate"):
+            assert WebMap().to_gif(str(out)) == out
+        assert seen["path"] == str(out)
+
+    @pytest.mark.parametrize("kwargs", [{"fps": 0}, {"duration": 0}])
+    def test_a_non_positive_rate_is_refused(self, kwargs, tmp_path):
+        """A zero rate has no frame to hold, and would divide by zero on the way to the encoder.
+
+        Args:
+            kwargs: The offending rate, in either spelling.
+            tmp_path: pytest's per-test directory.
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            with pytest.raises(ValueError, match="must be positive"):
+                WebMap().animate(str(tmp_path / "series.gif"), **kwargs)
+
+
+class TestC3SizeIsMarkerSizeAndTextSizeIsText:
+    """``size`` means one thing — the visual size of a marker — so text got its own name."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip without the web extra."""
+        pytest.importorskip("maplibre")
+
+    def test_points_size_is_the_circle_radius(self):
+        """``size`` reaches MapLibre's ``circle-radius``, which is what a marker's size is there."""
+        m = WebMap().points(_points_frame(3), size=9.0)
+        assert _paint(m, "circle-radius") == 9.0
+
+    def test_points_radius_still_works_and_warns(self):
+        """The old spelling forwards unchanged, so an existing call renders identically."""
+        with pytest.warns(DeprecationWarning, match="radius= is deprecated"):
+            m = WebMap().points(_points_frame(3), radius=9.0)
+        assert _paint(m, "circle-radius") == 9.0
+
+    def test_labels_take_text_size(self):
+        """A label's size is text, not a marker, so it is named for what it scales."""
+        frame = _points_frame(2)
+        frame["name"] = ["a", "b"]
+        m = WebMap().labels(frame, "name", text_size=21.0)
+        assert _layout(m, "text-size") == 21.0
+
+    def test_labels_size_still_works_and_warns(self):
+        """#211 shipped ``size`` for text; it keeps working while it is deprecated."""
+        frame = _points_frame(2)
+        frame["name"] = ["a", "b"]
+        with pytest.warns(DeprecationWarning, match="use text_size="):
+            m = WebMap().labels(frame, "name", size=21.0)
+        assert _layout(m, "text-size") == 21.0
+
+    def test_text_annotation_takes_text_size(self):
+        """The single-coordinate annotation is text too, and follows the same rename."""
+        m = WebMap().text(4.9, 52.4, "Amsterdam", text_size=18.0)
+        assert _layout(m, "text-size") == 18.0
+
+    def test_text_annotation_size_still_works_and_warns(self):
+        """And its old spelling warns rather than silently doing nothing."""
+        with pytest.warns(DeprecationWarning, match="use text_size="):
+            m = WebMap().text(4.9, 52.4, "Amsterdam", size=18.0)
+        assert _layout(m, "text-size") == 18.0
+
+    def test_deck_scatter_takes_size(self):
+        """The GPU path a large points layer routes to takes the same word."""
+        m = WebMap().deck_scatter(_points_frame(3), size=7.0)
+        assert m._deck_layers[0]["getPointRadius"] == 7.0
+
+    def test_deck_scatter_radius_still_works_and_warns(self):
+        """Its old spelling forwards unchanged."""
+        with pytest.warns(DeprecationWarning, match="radius= is deprecated"):
+            m = WebMap().deck_scatter(_points_frame(3), radius=7.0)
+        assert m._deck_layers[0]["getPointRadius"] == 7.0
+
+    def test_point_cloud_takes_size(self):
+        """A 3-D point is a marker as much as a 2-D one."""
+        m = WebMap().point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], size=4.0)
+        assert m._deck_layers[0]["pointSize"] == 4.0
+
+    def test_point_cloud_point_size_still_works_and_warns(self):
+        """``point_size`` was the third spelling of one idea; it is deprecated, not dropped."""
+        with pytest.warns(DeprecationWarning, match="point_size= is deprecated"):
+            m = WebMap().point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], point_size=4.0)
+        assert m._deck_layers[0]["pointSize"] == 4.0
+
+
+class TestC4SchemeAndK:
+    """``scheme=None`` means a continuous ramp, and ``k=5`` is the class count when a scheme is given."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip without the web extra."""
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize(
+        "builder", ["points", "lines", "polygons", "choropleth", "timeslider"]
+    )
+    def test_every_classifying_builder_defaults_to_a_continuous_ramp(self, builder):
+        """The web ``choropleth`` was the odd one out at ``"quantiles"``; now the whole tier agrees.
+
+        Args:
+            builder: The builder whose signature is inspected.
+        """
+        params = inspect.signature(getattr(WebMap, builder)).parameters
+        assert params["scheme"].default is None, builder
+        assert params["k"].default == 5, builder
+
+    def test_choropleth_without_a_scheme_is_continuous(self):
+        """The default now colours by a ramp, which is what the static and interactive tiers draw."""
+        m = WebMap().choropleth(_polygon_frame(), column="pop")
+        assert m.last_legend["kind"] == "continuous", m.last_legend
+
+    def test_a_named_scheme_still_classifies_into_k_classes(self):
+        """Changing the default must not change what a scheme computes."""
+        m = WebMap().choropleth(_polygon_frame(), column="pop", scheme="quantiles", k=3)
+        assert m.last_legend["kind"] == "graduated"
+        assert len(m.last_legend["colors"]) == 3, m.last_legend
+
+
+class TestC5CmapResolvesThroughAutostyle:
+    """``cmap=None`` is a lookup, never a bare literal in the signature."""
+
+    @pytest.mark.parametrize("builder", ["add_raster", "contours"])
+    def test_the_raster_builders_default_to_none(self, builder):
+        """A string default would hide the variable's own colormap behind a generic one.
+
+        Args:
+            builder: The raster builder whose signature is inspected.
+        """
+        assert (
+            inspect.signature(getattr(WebMap, builder)).parameters["cmap"].default
+            is None
+        )
+
+    def test_a_known_variable_picks_up_its_colormap(self):
+        """The same lookup the static and interactive tiers use, so one field looks the same."""
+        assert WebMap()._auto_cmap(_source("t2m"), None) == "coolwarm"
+
+    def test_an_unknown_variable_falls_back_behind_the_lookup(self):
+        """The old literal moved behind ``auto_style`` rather than in front of it."""
+        assert WebMap()._auto_cmap(_source("mystery"), None) == "viridis"
+
+    def test_a_caller_supplied_colormap_always_wins(self):
+        """The lookup is a default, not an override."""
+        assert WebMap()._auto_cmap(_source("t2m"), "magma") == "magma"
+
+
+class TestC6LevelsAndUnitsAreConsumed:
+    """``auto_style`` carries more than a colormap, and the tier now reads the rest of it."""
+
+    def test_levels_come_from_the_library_when_the_caller_gave_none(self):
+        """An operational field carries the levels its community draws it with."""
+        levels = WebMap()._auto_levels(_source("msl"), None)
+        assert levels and levels[0] == 960, levels
+
+    def test_caller_supplied_levels_win(self):
+        """A caller who named levels gets exactly those."""
+        assert WebMap()._auto_levels(_source("msl"), [1.0, 2.0]) == [1.0, 2.0]
+
+    def test_an_unknown_variable_yields_no_levels(self):
+        """A guessed set of levels would be worse than asking the caller for them."""
+        assert WebMap()._auto_levels(_source("mystery"), None) is None
+
+    def test_units_come_from_the_library_when_the_caller_gave_none(self):
+        """The units hint is what lets a key say what its numbers are measured in."""
+        assert WebMap()._auto_units(_source("msl"), None) == "hPa"
+
+    def test_an_unknown_variable_yields_no_units(self):
+        """Never guess a unit: without one the label is built exactly as it was before."""
+        assert WebMap()._auto_units(_source("mystery"), None) is None
+
+    def test_contours_trace_the_library_levels_when_none_were_given(self, monkeypatch):
+        """``contours()`` used to demand ``interval=``/``levels=``; a known field now supplies them.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for pyramids' contour tracer.
+        """
+        pytest.importorskip("maplibre")
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import LineString
+
+        recorded = {}
+
+        class FakeRaster:
+            """A raster whose only job is to record how it was asked to contour."""
+
+            @staticmethod
+            def contour(**kwargs):
+                """Record the trace request and hand back one drawable contour."""
+                recorded.update(kwargs)
+                return gpd.GeoDataFrame(
+                    {"level": [960.0, 1000.0]},
+                    geometry=[
+                        LineString([(0, 0), (1, 1)]),
+                        LineString([(0, 1), (1, 2)]),
+                    ],
+                    crs=DISPLAY_CRS,
+                )
+
+        monkeypatch.setattr(
+            WebMap, "_display_raster_or_skip", lambda self, dataset, layer: FakeRaster()
+        )
+        monkeypatch.setattr(
+            WebMap, "_to_display_source", lambda self, data, band=1: _source("msl")
+        )
+        WebMap().contours(object())
+        assert recorded["fixed_levels"][0] == 960, recorded
+        assert recorded["interval"] is None, recorded
+
+    def test_the_legend_labels_the_column_with_its_units(self, monkeypatch):
+        """A key of pressure contours that does not say ``hPa`` makes the reader guess.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for pyramids' contour tracer.
+        """
+        pytest.importorskip("maplibre")
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import LineString
+
+        class FakeRaster:
+            """A raster that traces two levels, enough for a continuous key."""
+
+            @staticmethod
+            def contour(**kwargs):
+                """Return two contours carrying their level."""
+                return gpd.GeoDataFrame(
+                    {"level": [960.0, 1000.0]},
+                    geometry=[
+                        LineString([(0, 0), (1, 1)]),
+                        LineString([(0, 1), (1, 2)]),
+                    ],
+                    crs=DISPLAY_CRS,
+                )
+
+        monkeypatch.setattr(
+            WebMap, "_display_raster_or_skip", lambda self, dataset, layer: FakeRaster()
+        )
+        monkeypatch.setattr(
+            WebMap, "_to_display_source", lambda self, data, band=1: _source("msl")
+        )
+        m = WebMap().contours(object()).legend()
+        assert "level (hPa)" in m._panels["legend"][0], m._panels["legend"][0]
+
+    def test_a_caller_supplied_title_still_wins(self, monkeypatch):
+        """The units fill a gap; they never override what the caller wrote.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        pytest.importorskip("maplibre")
+        m = WebMap().choropleth(_polygon_frame(), column="pop")
+        m.last_legend["units"] = "hPa"
+        m.legend(title="Population")
+        assert "Population" in m._panels["legend"][0]
+        assert "hPa" not in m._panels["legend"][0]
+
+    def test_a_classification_without_units_is_labelled_as_before(self):
+        """No unit in the library means the bare column name, exactly as it always was."""
+        pytest.importorskip("maplibre")
+        m = WebMap().choropleth(_polygon_frame(), column="pop").legend()
+        assert ">pop<" in m._panels["legend"][0], m._panels["legend"][0]
+
+
+class TestC7OffLimbSkipsAndWarns:
+    """Data the display CRS cannot place is a skipped layer, not a lost map."""
+
+    def test_strict_defaults_to_off(self):
+        """Skipping is the default because a builder chain may have a dozen layers in it."""
+        assert inspect.signature(WebMap.__init__).parameters["strict"].default is False
+        assert WebMap().strict is False
+
+    def test_an_off_limb_raster_is_skipped_with_a_warning(
+        self, monkeypatch, warning_log
+    ):
+        """The layer goes, the map stays, and the log says which layer and why.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for an off-limb warp.
+            warning_log: The tier's loguru warnings.
+        """
+        pytest.importorskip("maplibre")
+
+        def _off_limb(self, data, band=1):
+            """Behave like a warp that placed none of the data."""
+            raise OffLimbError("the data lies outside what 4326 can show")
+
+        monkeypatch.setattr(WebMap, "_to_display_source", _off_limb)
+        m = WebMap().basemap()
+        before = len(m.layers)
+        assert m.add_raster(object()) is m, "the builder must stay chainable"
+        assert len(m.layers) == before
+        assert any("add_raster" in line for line in warning_log), warning_log
+
+    def test_strict_re_raises_the_off_limb_error(self, monkeypatch):
+        """``strict=True`` is for a pipeline that must not publish a map with a layer missing.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        pytest.importorskip("maplibre")
+
+        def _off_limb(self, data, band=1):
+            """Behave like a warp that placed none of the data."""
+            raise OffLimbError("the data lies outside what 4326 can show")
+
+        monkeypatch.setattr(WebMap, "_to_display_source", _off_limb)
+        with pytest.raises(OffLimbError):
+            WebMap(strict=True).add_raster(object())
+
+
+class TestC8TheBigDataCutoff:
+    """One name, two reaches: the map's attribute and a single call's override."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip without the web extra."""
+        pytest.importorskip("maplibre")
+
+    def test_the_default_is_the_shared_one(self):
+        """The cutoff is a documented number, not a literal buried in the router."""
+        assert DEFAULT_BIG_DATA_THRESHOLD == 50_000
+        assert WebMap().big_data_threshold == 50_000
+
+    def test_the_attribute_moves_the_cutoff_for_every_later_layer(self):
+        """Setting it once is how a caller changes the whole map, not one builder at a time."""
+        m = WebMap()
+        m.big_data_threshold = 2
+        m.points(_points_frame(5)).points(_points_frame(5))
+        assert m.layer_ids == [], "both layers should have routed to deck.gl"
+        assert len(m._deck_layers) == 2, m._deck_layers
+
+    def test_a_per_call_override_moves_it_for_that_call_only(self):
+        """The same name per call, so a caller does not have to learn a second one."""
+        m = WebMap()
+        m.points(_points_frame(5), big_data_threshold=2)
+        assert m.layer_ids == [], "the overridden call should have routed to deck.gl"
+        m.points(_points_frame(5))
+        assert m.layer_ids, "the map's own threshold was left at 50 000"
+        assert m.big_data_threshold == 50_000, "the override leaked onto the map"
+
+    def test_polygons_honour_the_override_too(self):
+        """Both routed builders take it, or the override would depend on the geometry kind."""
+        m = WebMap()
+        m.polygons(_polygon_frame(), big_data_threshold=1)
+        assert m.layer_ids == [] and m._deck_layers, "polygons ignored the override"
+
+    def test_a_negative_threshold_is_refused(self):
+        """A cutoff below zero routes an empty layer, which is never what the caller meant."""
+        with pytest.raises(ValueError, match="must not be negative"):
+            WebMap().points(_points_frame(3), big_data_threshold=-1)
+
+
+class TestC9TheBasemapDefaultIsShared:
+    """The default provider is one constant, not a literal per tier."""
+
+    def test_basemap_defaults_to_the_shared_constant(self):
+        """``CartoDark`` was hard-coded here while the interactive tier hard-coded ``CartoLight``."""
+        default = inspect.signature(WebMap.basemap).parameters["provider"].default
+        assert default == DEFAULT_BASEMAP_PROVIDER
+
+    def test_the_constant_comes_from_base_basemaps(self):
+        """It lives in ``base/`` because both tiers read it; this fails if the tier re-hard-codes it."""
+        from digitalearth.base import basemaps
+
+        shared = getattr(basemaps, "DEFAULT_BASEMAP_PROVIDER", None)
+        if shared is None:
+            pytest.skip(
+                "base/basemaps.py does not declare DEFAULT_BASEMAP_PROVIDER yet"
+            )
+        assert DEFAULT_BASEMAP_PROVIDER == shared
+
+    def test_the_default_provider_resolves_to_a_real_tile_source(self):
+        """A default that is not one of the known names would raise on every bare ``basemap()``."""
+        pytest.importorskip("maplibre")
+        assert WebMap().basemap().layers, "the default provider added no basemap"
+
+
+class TestC10KeyedCoverageReachesTheSource:
+    """Where a keyed provider declares its coverage, MapLibre is told."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self, monkeypatch):
+        """Skip without the web extra, and supply a credential that is not a real key.
+
+        Args:
+            monkeypatch: pytest's environment patcher.
+        """
+        pytest.importorskip("maplibre")
+        monkeypatch.setenv("PLANET_API_KEY", "FAKE-KEY-NOT-REAL")
+
+    def test_a_keyed_presets_bounds_become_the_source_bounds(self):
+        """NICFI covers the tropics; without this MapLibre asks for tiles across the whole world."""
+        from digitalearth.base.basemaps import get_keyed_basemap
+
+        expected = list(get_keyed_basemap("Planet.NICFI", date="2024-01").bounds)
+        source = _sources_of(
+            WebMap().basemap("Planet.NICFI", preset={"date": "2024-01"})
+        )[0]
+        assert source["bounds"] == expected, source
+
+    def test_a_global_provider_declares_no_bounds(self):
+        """Declaring a box for a global source would clamp a basemap that covers everything."""
+        source = _sources_of(WebMap().basemap("OSM"))[0]
+        assert "bounds" not in source, source
+
+    def test_a_malformed_bounds_is_refused(self):
+        """MapLibre ignores a malformed ``bounds``, so the coverage would go quietly undeclared."""
+        with pytest.raises(ValueError, match="west, south, east, north"):
+            WebMap().tiles("https://a/{z}/{x}/{y}.png", bounds=(1.0, 2.0, 3.0))
+
+
+class TestC13TheDisplayCrsIsDeclared:
+    """Inline data is placed by lon/lat degrees, so 4326 is the only display CRS that works."""
+
+    def test_the_default_is_4326(self):
+        """The tier has always reprojected to lon/lat; now it says so."""
+        assert WebMap().crs == 4326
+
+    @pytest.mark.parametrize("spelling", [4326, "4326", "EPSG:4326"])
+    def test_the_accepted_spellings_normalise_to_the_int(self, spelling):
+        """``_needs_reproject`` compares against an int, so the spelling is normalised on the way in.
+
+        Args:
+            spelling: One of the accepted ways to write EPSG:4326.
+        """
+        assert WebMap(crs=spelling).crs == 4326
+
+    @pytest.mark.parametrize("crs", [3857, "EPSG:3857", "ESRI:54009"])
+    def test_any_other_crs_is_refused_with_a_clear_error(self, crs):
+        """Silently mis-placing the data was the alternative, and it looks like a rendering bug.
+
+        Args:
+            crs: A display CRS MapLibre cannot place inline data in.
+        """
+        with pytest.raises(ValueError, match="renders in EPSG:4326 only"):
+            WebMap(crs=crs)
+
+    def test_the_error_says_what_to_do_instead(self):
+        """An error that only says no leaves the caller to guess which tier can project."""
+        with pytest.raises(ValueError, match="static tier"):
+            WebMap(crs=3857)
