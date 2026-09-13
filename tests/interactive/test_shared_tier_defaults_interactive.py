@@ -21,7 +21,7 @@ from digitalearth.interactive import InteractiveMap  # noqa: E402
 CARTO_LIGHT = "light_all"
 
 
-@pytest.fixture()
+@pytest.fixture
 def point_fc():
     """The repo's point fixture as a pyramids ``FeatureCollection`` (EPSG:32618, numeric ``fid``)."""
     from pyramids.feature import FeatureCollection
@@ -83,5 +83,6 @@ class TestTheBigDataCutoffIsTheSharedOne:
             This tier accepted ``big_data_threshold=-1`` and quietly routed every layer through Datashader,
             while the web tier raised on the same call. The builder is where a user meets it.
         """
+        fresh_map = InteractiveMap()
         with pytest.raises(ValueError, match="must not be negative"):
-            InteractiveMap().points(point_fc, big_data_threshold=-1)
+            fresh_map.points(point_fc, big_data_threshold=-1)

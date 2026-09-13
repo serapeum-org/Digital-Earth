@@ -140,8 +140,11 @@ class TestQuickplotBackend:
             quickmap(dataset, crs=dataset.epsg, backend="interactive", kind="bogus")
         message = str(excinfo.value)
         assert "kind='bogus'" in message, message
-        assert "'contourf'" in message and "'image'" not in message.split(";")[0], (
-            message
+        assert "'contourf'" in message, (
+            f"the message must list the renderers this tier does have: {message}"
+        )
+        assert "'image'" not in message.split(";")[0], (
+            f"the refused kind must not be excused as 'image': {message}"
         )
 
     @pytest.mark.parametrize(

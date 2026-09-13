@@ -233,7 +233,10 @@ class TestGraduatedPoints:
             uses for polygons, which is what makes the edges — and so the legend — agree between the two.
         """
         m.points(point_fc, value_column="fid", scheme="quantiles", k=3)
-        assert m.last_breaks is not None and len(m.last_breaks) == 4, (
+        assert m.last_breaks is not None, (
+            f"a classified layer must record its edges, got {m.last_breaks!r}"
+        )
+        assert len(m.last_breaks) == 4, (
             f"3 classes must record 4 edges, got {m.last_breaks!r}"
         )
         assert all(isinstance(edge, float) for edge in m.last_breaks), (
@@ -260,11 +263,11 @@ class TestGraduatedPoints:
 class TestGraduatedChoropleth:
     """#245 — graduated schemes classify here too, matching the web tier's classifier."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def m(self) -> InteractiveMap:
         return InteractiveMap()
 
-    @pytest.fixture()
+    @pytest.fixture
     def polygon_fc(self):
         from pyramids.feature import FeatureCollection
 
@@ -281,7 +284,10 @@ class TestGraduatedChoropleth:
         )
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
-        assert isinstance(style["cmap"], list) and len(style["cmap"]) == 5, (
+        assert isinstance(style["cmap"], list), (
+            f"a graduated layer needs a list of flat colours: {style['cmap']}"
+        )
+        assert len(style["cmap"]) == 5, (
             f"one flat colour per class expected: {style['cmap']}"
         )
         assert len(plot["color_levels"]) == 6, (
@@ -304,16 +310,18 @@ class TestGraduatedChoropleth:
     @pytest.mark.parametrize("scheme", ["equal_interval", "fisher_jenks"])
     def test_other_schemes_classify_too(self, m, polygon_fc, scheme):
         m.choropleth(polygon_fc, "fid", scheme=scheme, k=4)
-        assert m.last_breaks is not None and len(m.last_breaks) == 5, (
+        assert m.last_breaks is not None, (
+            f"{scheme} must record its class edges: {m.last_breaks}"
+        )
+        assert len(m.last_breaks) == 5, (
             f"{scheme} must produce k+1 edges: {m.last_breaks}"
         )
 
     def test_k_controls_the_class_count(self, m, polygon_fc):
         m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3)
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
-        assert len(style["cmap"]) == 3 and len(m.last_breaks) == 4, (
-            f"k=3 must give 3 colours and 4 edges: {style['cmap']}, {m.last_breaks}"
-        )
+        assert len(style["cmap"]) == 3, f"k=3 must give 3 colours: {style['cmap']}"
+        assert len(m.last_breaks) == 4, f"k=3 must give 4 edges: {m.last_breaks}"
 
     def test_explicit_clim_reaches_a_graduated_layer(self, m, polygon_fc):
         """``clim=`` is forwarded on the graduated path, and a caller's own opts still win over it.
@@ -376,7 +384,12 @@ class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
         with pytest.raises(ValueError) as excinfo:
             m.points(point_fc, scheme="quantiles", k=2)
         message = str(excinfo.value)
-        assert "value_column=" in message and "scheme=" in message, message
+        assert "value_column=" in message, (
+            f"the message must name the half the caller has to add: {message}"
+        )
+        assert "scheme=" in message, (
+            f"the message must name the request that was refused: {message}"
+        )
         assert not m.layers, "nothing may be drawn when the request was refused"
 
     def test_a_categorical_scheme_colours_points_by_distinct_value(self, m, point_fc):

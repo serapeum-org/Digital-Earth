@@ -211,7 +211,7 @@ class TestLayerControlAndTable:
 class TestBasemapWidgetIsWired:
     """#244 — the basemap widgets actually change the map (dashboard *and* layer control)."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def multi(self, dataset, point_fc):
         return InteractiveMap().image(dataset).points(point_fc)
 
@@ -221,7 +221,8 @@ class TestBasemapWidgetIsWired:
         osm = m._render_with_overrides({"basemap": "OSM"})
         dark_tiles = [e for e in dark if type(e).__name__ in ("WMTS", "Tiles")]
         osm_tiles = [e for e in osm if type(e).__name__ in ("WMTS", "Tiles")]
-        assert dark_tiles and osm_tiles, "a basemap value must add a tile layer"
+        assert dark_tiles, "the CartoDark value must add a tile layer"
+        assert osm_tiles, "the OSM value must add a tile layer"
         assert dark_tiles[0].data != osm_tiles[0].data, (
             f"the provider must change the tile source: {dark_tiles[0].data}"
         )
@@ -265,8 +266,12 @@ class TestBasemapWidgetIsWired:
         """The bound view really composes the chosen provider under the visible layers."""
         out = multi._compose_visible_layers(["0: Image"], op=0.5, basemap="OSM")
         tiles = [e for e in out if type(e).__name__ in ("WMTS", "Tiles")]
-        assert tiles and "openstreetmap" in tiles[0].data.lower(), (
-            f"the layer-control basemap must reach the overlay: {[type(e).__name__ for e in out]}"
+        assert tiles, (
+            "the layer-control basemap must reach the overlay: "
+            f"{[type(e).__name__ for e in out]}"
+        )
+        assert "openstreetmap" in tiles[0].data.lower(), (
+            f"the chosen provider must be the one composed: {tiles[0].data}"
         )
 
     def test_unprompted_switch_follows_the_display_crs(self, dataset, point_fc):
@@ -348,7 +353,7 @@ class TestBasemapWidgetIsWired:
 class TestBothOverridePathsRestyleTheSameElements:
     """M13 — the dashboard's overrides and the layer control's slider cover one element set, not two."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def mixed(self, dataset) -> InteractiveMap:
         """A map carrying one of each element type an override reaches: ``Image``, ``QuadMesh``, ``RGB``."""
         return (
@@ -439,7 +444,7 @@ class TestBothOverridePathsRestyleTheSameElements:
 class TestInertFlagsAreRefused:
     """#242 / #243 — flags that are not implemented are refused, not silently ignored."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def multi(self, dataset, point_fc):
         return InteractiveMap().image(dataset).points(point_fc)
 
@@ -462,8 +467,9 @@ class TestInertFlagsAreRefused:
 
     def test_attribute_table_linked_true_raises(self, point_fc):
         """#243 — ``linked=True`` is refused (two-way linking needs link_selections)."""
+        fresh_map = InteractiveMap()
         with pytest.raises(NotImplementedError, match="linked"):
-            InteractiveMap().attribute_table(point_fc, linked=True)
+            fresh_map.attribute_table(point_fc, linked=True)
 
     def test_attribute_table_linked_defaults_to_false(self, point_fc):
         """The default must not promise linking, and must still return the read-only table."""
@@ -474,9 +480,10 @@ class TestInertFlagsAreRefused:
             f"linked must default to False, got {default.default!r}"
         )
         table = InteractiveMap().attribute_table(point_fc)
-        assert isinstance(table, pn.widgets.Tabulator) and table.disabled, (
-            "the unlinked table stays a read-only Tabulator"
+        assert isinstance(table, pn.widgets.Tabulator), (
+            f"the unlinked table must stay a Tabulator, got {type(table)}"
         )
+        assert table.disabled, "the unlinked table must stay read-only"
 
 
 class TestOverridesMergeOverRecordedStyle:

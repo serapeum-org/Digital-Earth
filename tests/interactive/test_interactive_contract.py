@@ -35,13 +35,13 @@ hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
 
 
-@pytest.fixture()
+@pytest.fixture
 def point_fc():
     """The point fixture as a pyramids FeatureCollection (EPSG:32618, numeric 'fid')."""
     from pyramids.feature import FeatureCollection
@@ -49,7 +49,7 @@ def point_fc():
     return FeatureCollection.read_file("tests/data/points.geojson")
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygon_fc(point_fc):
     """A polygon FeatureCollection built by buffering the point fixture (same CRS, 'fid' column)."""
     fc = point_fc.copy()
@@ -57,7 +57,7 @@ def polygon_fc(point_fc):
     return fc
 
 
-@pytest.fixture()
+@pytest.fixture
 def off_limb(monkeypatch):
     """Make every reprojection report the data as off-limb.
 
@@ -118,7 +118,8 @@ class TestSaveReturnsPath:
         assert isinstance(written, pathlib.Path), (
             f"expected a Path, got {type(written)}"
         )
-        assert written == out and written.exists(), written
+        assert written == out, f"expected the path it was handed, got {written}"
+        assert written.exists(), f"the writer must leave a file behind: {written}"
 
     def test_save_animation_and_save_app_agree(self, m, dataset, tmp_path):
         """The tier's other two writers hand back the ``Path`` they wrote, so the rule has no exceptions.
@@ -150,7 +151,10 @@ class TestSaveReturnsPath:
             assert isinstance(actual, pathlib.Path), (
                 f"{expected.name}: expected a Path, got {type(actual)}"
             )
-            assert actual == expected and actual.exists(), actual
+            assert actual == expected, (
+                f"{expected.name}: expected that path back, got {actual}"
+            )
+            assert actual.exists(), f"{expected.name}: nothing written at {actual}"
 
 
 class TestFrameRate:
@@ -235,7 +239,8 @@ class TestClassification:
         """A non-``None`` scheme classifies into exactly ``k`` flat classes."""
         m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3)
         cmap = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
-        assert isinstance(cmap, list) and len(cmap) == 3, cmap
+        assert isinstance(cmap, list), f"a classified cmap must be a list, got {cmap}"
+        assert len(cmap) == 3, f"k=3 must give 3 flat classes, got {cmap}"
 
 
 class TestAutoCmap:
@@ -386,8 +391,9 @@ class TestOffLimbIsSkipped:
             dataset: The raster fixture.
             off_limb: Makes the reprojection report the data as off-limb.
         """
+        strict_map = InteractiveMap(strict=True)
         with pytest.raises(OffLimbError):
-            InteractiveMap(strict=True).image(dataset)
+            strict_map.image(dataset)
 
     def test_a_vector_builder_is_guarded_too(self, point_fc, off_limb):
         """The policy is the tier's, not one builder's — a vector layer skips the same way.
@@ -499,8 +505,9 @@ class TestDeprecatedAliases:
             polygon_fc: The polygon fixture (``polygons``).
         """
         data = polygon_fc if builder == "polygons" else point_fc
+        build = getattr(InteractiveMap(), builder)
         with pytest.warns(DeprecationWarning, match="big_data_threshold"):
-            getattr(InteractiveMap(), builder)(data, rasterize_threshold=10_000)
+            build(data, rasterize_threshold=10_000)
 
     def test_the_new_name_does_not_warn(self, m, point_fc):
         """Passing only the new name is silent — otherwise the warning trains users to ignore it."""
