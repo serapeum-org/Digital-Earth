@@ -159,6 +159,34 @@ def test_interactive_basemap_branches_reach_the_tier(
     )
 
 
+@pytest.mark.parametrize(
+    ("basemap", "expected_args"),
+    [(True, ()), ("cartodark", ("cartodark",))],
+)
+def test_web_basemap_branches_reach_the_tier(dataset, mocker, basemap, expected_args):
+    """``basemap=True`` asks for the web tier's default; a named provider is forwarded unchanged.
+
+    Args:
+        dataset: The raster to draw.
+        mocker: Patches the basemap and raster builders so no engine or network is needed.
+        basemap: The spelling under test.
+        expected_args: What ``WebMap.basemap`` must be called with.
+
+    Test scenario:
+        The web dispatcher's two spellings used to share one line, so running either counted as covering
+        both. They are different calls: ``True`` means "whatever the tier defaults to", a name means that
+        provider, and collapsing a named provider to the default draws a different map with nothing to show
+        for it. This is the web counterpart of the interactive check above.
+    """
+    web = pytest.importorskip("digitalearth.web")
+    tiles = mocker.patch.object(web.WebMap, "basemap")
+    mocker.patch.object(web.WebMap, "add_raster")
+    qp.quickplot(dataset, backend="web", basemap=basemap)
+    assert tiles.call_args.args == expected_args, (
+        f"basemap={basemap!r} must call basemap{expected_args}, got {tiles.call_args!r}"
+    )
+
+
 def test_quickmap_decorations_best_effort(dataset):
     """coastlines/basemap flags run without raising even if data/tiles are unreachable."""
     m = qp.quickmap(dataset, crs=3857, coastlines=True, basemap=True)
