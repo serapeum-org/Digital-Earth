@@ -40,28 +40,12 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 class RasterMixin(_MixinBase):
     """Raster builders (DI.1a): colour-mapped fields, composites and ensemble spaghetti."""
 
-    def _image_element(
-        self, data: Any, *, band: int = 1, vname: Optional[str] = None
-    ) -> Any:
-        """Build a display-CRS ``hv.Image`` from ``data`` (the shared I1 recipe).
-
-        Args:
-            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source`` (anything the extractor accepts).
-            band: 1-based band to read.
-            vname: Value-dimension name; defaults to the source's variable/z name.
-
-        Returns:
-            holoviews.Image: the raster as a plain HoloViews image in the display CRS.
-        """
-        return self._image_from_source(
-            self._to_display_source(data, band=band), vname=vname
-        )
-
     def _image_from_source(self, src: Any, *, vname: Optional[str] = None) -> Any:
         """Build the I1 image from an already display-CRS :class:`Source`.
 
-        Split out of :meth:`_image_element` so a builder that also needs the source itself — for the
-        autostyle ``cmap``/``levels``/``units`` lookup (#230) — reprojects once instead of twice.
+        Takes an already-reprojected source rather than the raw data, so a builder that also needs the
+        source itself — for the autostyle ``cmap``/``levels``/``units`` lookup (#230) — reprojects once
+        instead of twice.
 
         Args:
             src: The display-CRS source.

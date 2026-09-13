@@ -31,8 +31,10 @@ class TestImage:
             f"expected hv.Image, got {type(m.layers[0])}"
         )
 
-    def test_image_element_builds_the_element_without_registering_it(self, m, dataset):
-        """``_image_element`` is the shared I1 recipe: reproject to the display CRS, then build the image.
+    def test_image_from_source_builds_the_element_without_registering_it(
+        self, m, dataset
+    ):
+        """``_image_from_source`` is the shared I1 recipe: reproject once, then build the image.
 
         Args:
             m: The map under test.
@@ -43,9 +45,24 @@ class TestImage:
             same element ``image()`` registers — and hand it back without touching the map's layer list,
             which is what lets a builder compose one before deciding whether to add it.
         """
-        element = m._image_element(dataset)
+        element = m._image_from_source(m._to_display_source(dataset))
         assert isinstance(element, hv.Image), f"expected hv.Image, got {type(element)}"
         assert m.layers == [], "building an element must not register a layer"
+
+    def test_the_data_taking_wrapper_is_gone(self, m):
+        """The recipe has one spelling: ``_image_element`` lost its last caller and was removed.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            ``_image_element`` survived the ``_image_from_source`` split with no caller anywhere in
+            ``src/``, which leaves a second, unused spelling of the recipe reading as a supported seam.
+            Pinning the deletion is what stops it drifting back in.
+        """
+        assert not hasattr(m, "_image_element"), (
+            "_image_element is dead — _image_from_source is the one recipe seam"
+        )
 
     def test_image_is_plain_hv_not_gv(self, m, dataset):
         """Option A: pre-reprojected coordinates must NOT carry a GeoViews CRS (no re-projection)."""
