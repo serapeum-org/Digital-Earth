@@ -893,10 +893,10 @@ class TestC9TheBasemapDefaultIsShared:
         from digitalearth.base import basemaps
 
         shared = getattr(basemaps, "DEFAULT_BASEMAP_PROVIDER", None)
-        if shared is None:
-            pytest.skip(
-                "base/basemaps.py does not declare DEFAULT_BASEMAP_PROVIDER yet"
-            )
+        assert shared is not None, (
+            "base/basemaps.py must declare DEFAULT_BASEMAP_PROVIDER — it is the one place the tiers agree on "
+            "a default, and skipping here would let its removal pass as a green run"
+        )
         assert DEFAULT_BASEMAP_PROVIDER == shared
 
     def test_the_default_provider_resolves_to_a_real_tile_source(self):
