@@ -120,18 +120,37 @@ class TestSaveReturnsPath:
         )
         assert written == out and written.exists(), written
 
-    def test_save_animation_and_save_app_agree(self):
-        """The tier's other two writers return ``Path`` too, so the rule has no exceptions here.
+    def test_save_animation_and_save_app_agree(self, m, dataset, tmp_path):
+        """The tier's other two writers hand back the ``Path`` they wrote, so the rule has no exceptions.
+
+        Args:
+            m: A fresh Web-Mercator map (the ``save_app`` subject, once it carries a layer).
+            dataset: The raster fixture, stacked into a two-step cube for the animation writer.
+            tmp_path: pytest's per-test directory.
 
         Test scenario:
-            Asserted on the annotations rather than by writing three files: exporting a GIF and an
-            embedded Panel app takes seconds each and is already covered by the animation/dashboard
-            suites, which now compare against a ``Path``.
+            This used to compare ``inspect.signature(...).return_annotation`` against ``Path``, which an
+            implementation returning the ``str`` it was handed passes unchanged — leaving C1 proven
+            behaviourally for exactly one of the tier's writers. Both are called for real here; the
+            animation goes out as the scrubber HTML, the cheap writer down the same return path as the
+            GIF.
         """
-        for method in (InteractiveMap.save, InteractiveMap.save_animation):
-            assert inspect.signature(method).return_annotation is pathlib.Path, method
-        app = inspect.signature(InteractiveMap.save_app).return_annotation
-        assert app is pathlib.Path, app
+        from pyramids.dataset.collection import DatasetCollection
+
+        cube = DatasetCollection.from_files(["examples/data/acc4000.tif"] * 2)
+        written = {
+            tmp_path / "anim.html": InteractiveMap()
+            .timecube(cube)
+            .save_animation(str(tmp_path / "anim.html")),
+            tmp_path / "app.html": m.image(dataset).save_app(
+                str(tmp_path / "app.html"), widgets=("cmap",)
+            ),
+        }
+        for expected, actual in written.items():
+            assert isinstance(actual, pathlib.Path), (
+                f"{expected.name}: expected a Path, got {type(actual)}"
+            )
+            assert actual == expected and actual.exists(), actual
 
 
 class TestFrameRate:
@@ -526,19 +545,20 @@ class TestBasemapDefault:
         assert default == interactive_decoration.DEFAULT_BASEMAP_PROVIDER, default
 
     def test_the_constant_comes_from_base(self):
-        """The tier reads ``base.basemaps.DEFAULT_BASEMAP_PROVIDER`` when that module declares it.
+        """The tier reads ``base.basemaps.DEFAULT_BASEMAP_PROVIDER``, which must exist to be read.
 
         Test scenario:
-            The constant lands in ``base/`` in the same batch, so the import here is defensive. Once it
-            exists the two must be the same object — a diverged local copy is the bug this catches.
+            This skipped when ``base/`` did not declare the constant, which was defensive while it was
+            landing and is a hole now that it has: deleting the constant would turn the guard green by
+            skipping rather than red. A missing constant is the bug, so it is asserted, not skipped.
         """
         from digitalearth.base import basemaps
 
         shared = getattr(basemaps, "DEFAULT_BASEMAP_PROVIDER", None)
-        if shared is None:
-            pytest.skip(
-                "base.basemaps.DEFAULT_BASEMAP_PROVIDER has not landed yet (#247)"
-            )
+        assert shared is not None, (
+            "base/basemaps.py must declare DEFAULT_BASEMAP_PROVIDER — it is the one cross-tier default "
+            "(#247) this tier imports"
+        )
         assert interactive_decoration.DEFAULT_BASEMAP_PROVIDER is shared
 
     def test_the_dashboard_offers_the_default_first(self):
