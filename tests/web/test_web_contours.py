@@ -174,8 +174,9 @@ class TestTheIntervalCarriesItsAnchor:
             explicit levels have no spacing to anchor. Silently dropping an argument the caller wrote is the
             failure this signature change removes: the only way to say ``base`` now is beside a spacing.
         """
+        scene = WebMap()
         with pytest.raises(TypeError) as excinfo:
-            WebMap().contours(dataset, levels=[100, 200], base=50)
+            scene.contours(dataset, levels=[100, 200], base=50)
         assert "base" in str(excinfo.value), (
             f"the error must name the argument that no longer exists, got {excinfo.value}"
         )
@@ -204,8 +205,9 @@ class TestTheIntervalCarriesItsAnchor:
             Python makes ``True`` an ``int``, so a plain number check would quietly contour every 1 unit --
             an enormous trace from what was obviously meant as a switch.
         """
+        scene = WebMap()
         with pytest.raises(TypeError, match="number or a ContourInterval"):
-            WebMap().contours(dataset, interval=True)
+            scene.contours(dataset, interval=True)
 
 
 class TestWhatItRefuses:
