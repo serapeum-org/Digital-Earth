@@ -868,6 +868,10 @@ class VectorMixin(_MixinBase):
             scheme: A cleopatra classification scheme (``"quantiles"``, ``"equal_interval"``,
                 ``"fisher_jenks"``, …) or an explicit edge sequence for graduated colouring;
                 ``"categorical"`` for distinct-value colouring; ``None`` (the default) for a continuous ramp.
+                Under either classification a feature whose ``column`` value is missing falls outside every
+                class, and is painted the shared neutral
+                :data:`~digitalearth.base.symbology.MISSING_COLOR` rather than the lowest class — the same
+                colour every other tier gives an unclassifiable feature.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap name.
             opacity: Fill opacity in ``[0, 1]``.

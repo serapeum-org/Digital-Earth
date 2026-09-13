@@ -359,6 +359,12 @@ class VectorMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            _alias_caller: Which method a ``DeprecationWarning`` raised on the way through names.
+                Defaults to ``"Map.grid_points()"``; :meth:`point_cloud` passes its own name, so the
+                warning blames the method the caller actually wrote.
+            _alias_depth: How many stack frames sit between that warning and the caller's line.
+                Defaults to ``5`` for a direct call; :meth:`point_cloud` passes ``6``, the one extra
+                frame its delegation adds.
             **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options. ``size``
                 sets the marker size (the cross-backend spelling); cleopatra's ``point_size``
                 is its deprecated alias, accepted with a ``DeprecationWarning`` for one
@@ -404,6 +410,14 @@ class VectorMixin(_MixinBase):
 
     def point_cloud(self, dataset: Any, **opts) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
+
+        A ``DeprecationWarning`` raised on the way through (cleopatra's ``point_size=`` instead of
+        ``size=``) names ``Map.point_cloud()`` and points at the caller's own line, rather than at the
+        method this delegates to.
+
+        Args:
+            dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
+            **opts: Styling kwargs, forwarded to :meth:`grid_points` unchanged.
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
@@ -780,7 +794,10 @@ class VectorMixin(_MixinBase):
                 name — ``k`` does not apply, and ``vmin``/``vmax``/``levels``/``color_scale`` are ignored),
                 keyed by a swatch legend rather than a colorbar. Spelled the same way, with the same
                 default, on every backend: ``scheme=None`` is a continuous ramp everywhere, so the same
-                call classifies identically on all four tiers.
+                call classifies identically on all four tiers. Either kind of classification leaves a
+                missing value (``NaN``/``None``/``pd.NA``) outside every class, so those features are
+                drawn a neutral grey — not dropped, and not painted as the lowest class. A continuous
+                ramp has no classes and is left to matplotlib.
             k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
                 ``"categorical"``).
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. For a categorical scheme, ``cmap`` should
@@ -789,8 +806,7 @@ class VectorMixin(_MixinBase):
                 sampled at evenly-spaced points so the categories stay distinct; a perceptual
                 ``ListedColormap`` (``"viridis"``, ``"plasma"``) is accepted but reads poorly (its first
                 *n* of 256 entries are near-identical shades). The colours are identical to the
-                web/interactive tiers either way. Missing values (``NaN``/``None``/``pd.NA``) are drawn a
-                neutral grey, not dropped.
+                web/interactive tiers either way.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).

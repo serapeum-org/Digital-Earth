@@ -772,9 +772,26 @@ def _method(name: str):
         return quickmap(data, kind=name, **kwargs)
 
     _fn.__name__ = name
-    _fn.__doc__ = (
-        f"Quick-draw ``data`` with :meth:`Map.{name}` and return the finished Map."
-    )
+    _fn.__doc__ = f"""Quick-draw ``data`` with :meth:`Map.{name}` and return the finished Map.
+
+    The wrapper *is* the renderer choice: it calls :func:`quickmap` with ``kind={name!r}`` on the caller's
+    behalf, so everything else :func:`quickmap` accepts is written here unchanged.
+
+    Args:
+        data: A pyramids ``Dataset`` or ``FeatureCollection`` to draw.
+        **kwargs: Forwarded to :func:`quickmap` (``crs``, ``domain``, ``basemap``, ``coastlines``,
+            ``colorbar``, ``backend``, plus styling kwargs). ``kind`` is not among them — this wrapper
+            supplies it.
+
+    Returns:
+        The finished map :func:`quickmap` built.
+
+    Raises:
+        ValueError: when ``backend=`` names a backend that has no renderer selector, since the
+            {name!r} renderer is this wrapper's own injection rather than something the caller
+            asked for; the message names the backends that do honour it, and points at
+            :func:`quickmap` for the chosen one.
+    """
     return _fn
 
 

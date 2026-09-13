@@ -368,6 +368,11 @@ class ExportMixin(_MixinBase):
                 reason of its own.
             ImportError: when no headless browser is installed to render the frames.
 
+        Warns:
+            DeprecationWarning: always, naming :meth:`animate` as the spelling to move to; and a second
+                time when the deprecated ``duration=`` is passed instead of ``fps=``. Both are raised
+                from this frame, so both point at the caller's own line.
+
         Examples:
             - The old name still does the work, but says it is going away first. There is no series
               to animate here, so the call raises straight after warning — the warning is the part
