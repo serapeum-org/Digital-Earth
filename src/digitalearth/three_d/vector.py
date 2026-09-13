@@ -234,13 +234,22 @@ class VectorMixin(_MixinBase):
         heights = gdf[height].to_numpy() if isinstance(height, str) else None
         colours = gdf[column].to_numpy() if column else None
 
+        # Classify once, per feature, *before* building the prisms. The per-cell array is then filled
+        # straight from the result, so a label column ("categorical") and a column carrying NaN both work:
+        # neither survives a round-trip through float(), which is what re-keying the raw values required.
+        style: dict[str, Any] = {}
+        scalars = None
+        if colours is not None:
+            style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
+            scalars = np.asarray(style.pop("scalars"), dtype=float)
+
         prisms: list[pv.PolyData] = []
         for i, geom in enumerate(geoms):
             h = float(heights[i]) if heights is not None else float(height)
             for ring in _exterior_rings(geom):
                 prism = _extrude_ring(ring, h)
-                if colours is not None:
-                    prism.cell_data[VALUE] = np.full(prism.n_cells, float(colours[i]))
+                if scalars is not None:
+                    prism.cell_data[VALUE] = np.full(prism.n_cells, scalars[i])
                 prisms.append(prism)
 
         if not prisms:
@@ -249,13 +258,4 @@ class VectorMixin(_MixinBase):
         merged = pv.MultiBlock(prisms).combine()
         if colours is None:
             return self.add_mesh(merged, scalars=None, cmap=cmap, **kwargs)
-        # Classify against the per-feature column, then push each prism's class code onto its cells — the
-        # per-cell VALUE array was filled with the raw value above, so it is re-keyed here rather than
-        # classified cell-by-cell (which would re-derive the same breaks from a longer, duplicated array).
-        style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
-        codes = style.pop("scalars")
-        raw_to_code = {float(raw): code for raw, code in zip(colours, codes)}
-        merged.cell_data[VALUE] = np.array(
-            [raw_to_code[float(value)] for value in merged.cell_data[VALUE]]
-        )
         return self.add_mesh(merged, scalars=VALUE, **style, **kwargs)

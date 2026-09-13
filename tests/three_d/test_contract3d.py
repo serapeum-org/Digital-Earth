@@ -372,6 +372,49 @@ class TestC4SchemeAndK:
             "classification must colour the prisms without flattening their heights"
         )
 
+    def test_extruded_polygons_classify_a_label_column(self, scene):
+        """``scheme="categorical"`` colours the string labels the method documents.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The docstring offers a label column as the categorical case, so a column of strings must reach
+            the classifier intact. It previously did not: the per-cell array was filled with ``float(raw)``
+            before classification, which cannot represent a label, so the documented call raised
+            ``ValueError: could not convert string to float``.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Polygon
+
+        squares = [Polygon([(x, 0), (x + 1, 0), (x + 1, 1), (x, 1)]) for x in range(3)]
+        gdf = gpd.GeoDataFrame({"kind": ["park", "road", "park"]}, geometry=squares)
+        scene.extruded_polygons(gdf, height=1.0, column="kind", scheme="categorical")
+        mesh = scene.layers[0][0]
+        assert sorted({int(v) for v in mesh.cell_data["value"]}) == [0, 1], (
+            "two distinct labels must become two class codes, not a float conversion error"
+        )
+
+    def test_extruded_polygons_tolerate_a_missing_value(self, scene):
+        """A column carrying ``NaN`` extrudes instead of raising ``KeyError``.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Missing values are ordinary in feature data and rendered on the previous release. Re-keying the
+            per-cell array through ``{float(raw): code}`` broke that, because ``NaN`` never equals itself and
+            so can never be found in the mapping. The classifier is now applied once per feature instead.
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Polygon
+
+        squares = [Polygon([(x, 0), (x + 1, 0), (x + 1, 1), (x, 1)]) for x in range(3)]
+        gdf = gpd.GeoDataFrame({"pop": [1.0, float("nan"), 3.0]}, geometry=squares)
+        scene.extruded_polygons(gdf, height=1.0, column="pop")
+        mesh = scene.layers[0][0]
+        assert mesh.n_cells > 0, "a column with a missing value must still extrude its prisms"
+
     def test_an_unusable_scheme_is_reported_by_name(self, scene):
         """A scheme that cannot classify the values raises, naming the scheme and ``k``.
 
