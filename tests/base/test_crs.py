@@ -206,6 +206,45 @@ class TestDeclaredCrs:
         )
 
 
+class TestPlacedNowhereIsUnreadable:
+    """An extent that cannot be read answers nothing, rather than reporting off-limb."""
+
+    def test_an_object_with_no_extent_is_not_called_off_limb(self):
+        """A value with no ``total_bounds`` is not off-limb — it is simply not a collection.
+
+        Test scenario:
+            The check exists to catch data that warped to nowhere. Anything it cannot read must fall through
+            silently, because inventing an off-limb report for an unreadable object would refuse layers that
+            were never the subject of the rule.
+        """
+        from digitalearth.base.crs import _placed_nowhere
+
+        assert _placed_nowhere(object()) is False, (
+            "an object with no total_bounds must not be reported as off-limb"
+        )
+
+    def test_an_extent_that_raises_is_not_called_off_limb(self):
+        """An extent whose access raises is treated the same way as one that is absent.
+
+        Test scenario:
+            ``total_bounds`` is a property on a real collection and can raise for a malformed frame; the
+            guard must answer "nothing to say" rather than turn an unrelated failure into an OffLimbError.
+        """
+        from digitalearth.base.crs import _placed_nowhere
+
+        class Exploding:
+            """A stand-in whose extent cannot be read."""
+
+            @property
+            def total_bounds(self):
+                """Raise, as a malformed collection's extent would."""
+                raise RuntimeError("malformed frame")
+
+        assert _placed_nowhere(Exploding()) is False, (
+            "an unreadable extent must not be reported as off-limb"
+        )
+
+
 class TestReprojectOffLimb:
     """Tests for reproject — the one signal both data families reach when nothing lands in view."""
 

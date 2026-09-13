@@ -130,6 +130,35 @@ def test_quickmap_with_domain(dataset):
     assert m.ax.get_xlim()[1] > 1e6  # reprojected Europe bbox in metres
 
 
+@pytest.mark.parametrize(
+    ("basemap", "expected_args"),
+    [(True, ()), ("CartoDark", ("CartoDark",))],
+)
+def test_interactive_basemap_branches_reach_the_tier(
+    dataset, mocker, basemap, expected_args
+):
+    """``basemap=True`` asks for the tier's default; a named source is forwarded unchanged.
+
+    Args:
+        dataset: The raster to draw.
+        mocker: Patches the tile builder so no engine or network is needed.
+        basemap: The spelling under test.
+        expected_args: What the tile builder must be called with.
+
+    Test scenario:
+        The two spellings take different branches — ``True`` means "the backend's default", a name means that
+        source — and only one was covered. Reducing a named preset such as ``"Planet.NICFI"`` to the default
+        would silently draw the wrong map, which is exactly the kind of failure that leaves no trace.
+    """
+    interactive = pytest.importorskip("digitalearth.interactive")
+    tiles = mocker.patch.object(interactive.InteractiveMap, "tiles")
+    mocker.patch.object(interactive.InteractiveMap, "image")
+    qp.quickmap(dataset, backend="interactive", basemap=basemap)
+    assert tiles.call_args.args == expected_args, (
+        f"basemap={basemap!r} must call tiles{expected_args}, got {tiles.call_args!r}"
+    )
+
+
 def test_quickmap_decorations_best_effort(dataset):
     """coastlines/basemap flags run without raising even if data/tiles are unreachable."""
     m = qp.quickmap(dataset, crs=3857, coastlines=True, basemap=True)

@@ -131,6 +131,25 @@ def _resolve_threshold(tier: str, threshold: int) -> int:
 class TestM4TheBasemapDefaultReachesEveryTier:
     """The shared provider constant is read by all three tile-drawing tiers, static included."""
 
+    def test_an_unknown_source_passes_through_untouched(self):
+        """A source the shared table does not name is handed on as given.
+
+        Test scenario:
+            The resolver exists to give the four cross-tier names one meaning, not to become a gatekeeper.
+            An ``xyzservices`` provider object, a raw URL template or a provider name cleopatra knows and
+            this table does not must reach the tier unchanged — otherwise adding the shared default would
+            have quietly narrowed what ``basemap()`` accepts.
+        """
+        from digitalearth.static.maps.decoration import _resolve_tile_source
+
+        sentinel = object()
+        assert _resolve_tile_source(sentinel) is sentinel, (
+            "a non-string source must pass through the resolver untouched"
+        )
+        assert _resolve_tile_source("Stamen.Terrain") == "Stamen.Terrain", (
+            "a provider name this table does not carry must pass through unchanged"
+        )
+
     def test_the_static_tier_resolves_the_shared_default(self):
         """``basemap()`` with no argument means the shared provider, not cleopatra's own.
 

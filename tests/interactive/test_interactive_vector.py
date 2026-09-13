@@ -217,6 +217,46 @@ class TestRasterVectorCompose:
         )
 
 
+class TestGraduatedPoints:
+    """``points(scheme=...)`` classifies through the same path a classified polygon layer uses."""
+
+    def test_a_classified_point_layer_records_its_breaks(self, m, point_fc):
+        """``points(value_column=, scheme=)`` colours by class and records the edges on ``last_breaks``.
+
+        Args:
+            m: The map under test.
+            point_fc: A point ``FeatureCollection`` fixture.
+
+        Test scenario:
+            The tier took neither ``scheme`` nor ``k`` while the web tier took both, so a classified point
+            layer was impossible here and routine there. It now goes through the one classifier this tier
+            uses for polygons, which is what makes the edges — and so the legend — agree between the two.
+        """
+        m.points(point_fc, value_column="fid", scheme="quantiles", k=3)
+        assert m.last_breaks is not None and len(m.last_breaks) == 4, (
+            f"3 classes must record 4 edges, got {m.last_breaks!r}"
+        )
+        assert all(isinstance(edge, float) for edge in m.last_breaks), (
+            f"the edges must be plain floats for the legend to render, got {m.last_breaks!r}"
+        )
+
+    def test_no_scheme_leaves_the_points_on_a_continuous_ramp(self, m, point_fc):
+        """``scheme=None`` keeps the previous behaviour: one colour dimension, no class edges.
+
+        Args:
+            m: The map under test.
+            point_fc: A point ``FeatureCollection`` fixture.
+
+        Test scenario:
+            The classification is opt-in on every tier, so the default must not start binning a column that
+            a caller expects to read as a continuous ramp.
+        """
+        m.points(point_fc, value_column="fid")
+        assert not m.last_breaks, (
+            f"an unclassified layer must record no breaks, got {m.last_breaks!r}"
+        )
+
+
 class TestGraduatedChoropleth:
     """#245 — graduated schemes classify here too, matching the web tier's classifier."""
 
