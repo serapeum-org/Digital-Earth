@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/web_map/" class="md-tabs__link">
+        <a href="../../../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3235,6 +3235,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/web_map/" class="md-nav__link">
         
   
@@ -4633,7 +4661,7 @@ scene.close()
 <span class="n">zz</span> <span class="o">=</span> <span class="n">elevation</span> <span class="o">/</span> <span class="mf">111_320.0</span> <span class="o">*</span> <span class="mf">8.0</span>
 <span class="n">pts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">([</span><span class="n">xx</span><span class="o">.</span><span class="n">ravel</span><span class="p">()[</span><span class="n">finite</span><span class="p">],</span> <span class="n">yy</span><span class="o">.</span><span class="n">ravel</span><span class="p">()[</span><span class="n">finite</span><span class="p">],</span> <span class="n">zz</span><span class="p">])</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">elevation</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">elevation</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'DEM as a coloured point cloud (eye-dome lighting)'</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
@@ -4647,7 +4675,7 @@ elevation = arr.ravel()[finite]
 zz = elevation / 111_320.0 * 8.0
 pts = np.column_stack([xx.ravel()[finite], yy.ravel()[finite], zz])
 scene = Scene3D(off_screen=True)
-scene.point_cloud(pts, values=elevation, point_size=3.0, cmap='viridis')
+scene.point_cloud(pts, values=elevation, size=3.0, cmap='viridis')
 show(scene, 'DEM as a coloured point cloud (eye-dome lighting)')
 scene.close()
 </div>
@@ -5019,7 +5047,7 @@ scene.close()
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">terrain</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">z_exaggeration</span><span class="o">=</span><span class="mf">8.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
 <span class="n">gif</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span> <span class="o">/</span> <span class="s1">'lisbon_orbit.gif'</span><span class="p">)</span>  <span class="c1"># temp dir: no repo artifact</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">orbit</span><span class="p">(</span><span class="n">gif</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">framerate</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">orbit</span><span class="p">(</span><span class="n">gif</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'orbit GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
 <span class="n">display</span><span class="p">(</span><span class="n">IPyImage</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">gif</span><span class="p">))</span>
@@ -5029,7 +5057,7 @@ from IPython.display import Image as IPyImage, display
 scene = Scene3D(off_screen=True)
 scene.terrain(dem, z_exaggeration=8.0, cmap='terrain')
 gif = str(Path(tempfile.mkdtemp()) / 'lisbon_orbit.gif')  # temp dir: no repo artifact
-scene.orbit(gif, n_frames=12, framerate=12)
+scene.orbit(gif, n_frames=12, fps=12)
 scene.close()
 print('orbit GIF bytes:', os.path.getsize(gif))
 display(IPyImage(filename=gif))

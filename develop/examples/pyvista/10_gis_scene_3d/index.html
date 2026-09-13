@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/web_map/" class="md-tabs__link">
+        <a href="../../../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3213,6 +3213,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/web_map/" class="md-nav__link">
         
   
@@ -4659,7 +4687,7 @@ overlap check — raster bbox x: [3982925, 4457980] | gauges x: [4072239, 438368
     <span class="n">s</span><span class="o">.</span><span class="n">terrain</span><span class="p">(</span><span class="n">acc</span><span class="p">,</span> <span class="n">z_exaggeration</span><span class="o">=</span><span class="n">zexag</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'YlGnBu'</span><span class="p">,</span> <span class="n">show_scalar_bar</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="n">s</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">lines_to_tubes</span><span class="p">(</span><span class="n">river</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="mf">3_500.0</span><span class="p">,</span> <span class="n">z</span><span class="o">=</span><span class="mf">5_000.0</span><span class="p">),</span> <span class="n">color</span><span class="o">=</span><span class="s1">'navy'</span><span class="p">)</span>
     <span class="n">s</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">stems</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">'dimgray'</span><span class="p">)</span>
-    <span class="n">s</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">tops</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">vals</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">24.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">,</span>
+    <span class="n">s</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">tops</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">vals</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">24.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">,</span>
                   <span class="n">scalar_bar_args</span><span class="o">=</span><span class="p">{</span><span class="s1">'title'</span><span class="p">:</span> <span class="s1">'MAE'</span><span class="p">})</span>
     <span class="n">s</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">add_axes</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">s</span>
@@ -4673,7 +4701,7 @@ def build_scene(zexag):
     s.terrain(acc, z_exaggeration=zexag, cmap='YlGnBu', show_scalar_bar=False)
     s.add_mesh(lines_to_tubes(river, radius=3_500.0, z=5_000.0), color='navy')
     s.add_mesh(stems, color='dimgray')
-    s.point_cloud(tops, values=vals, point_size=24.0, cmap='turbo',
+    s.point_cloud(tops, values=vals, size=24.0, cmap='turbo',
                   scalar_bar_args={'title': 'MAE'})
     s.plotter.add_axes()
     return s
@@ -4794,7 +4822,7 @@ scene.close()</div>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">build_scene</span><span class="p">(</span><span class="n">zexag</span><span class="o">=</span><span class="mf">12.0</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">view_isometric</span><span class="p">()</span>
 <span class="n">gif</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span> <span class="o">/</span> <span class="s1">'rhine_orbit.gif'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">orbit</span><span class="p">(</span><span class="n">gif</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> <span class="n">framerate</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">orbit</span><span class="p">(</span><span class="n">gif</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'orbit GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
 <span class="n">display</span><span class="p">(</span><span class="n">IPyImage</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">gif</span><span class="p">))</span>
@@ -4804,7 +4832,7 @@ from IPython.display import Image as IPyImage, display
 scene = build_scene(zexag=12.0)
 scene.plotter.view_isometric()
 gif = str(Path(tempfile.mkdtemp()) / 'rhine_orbit.gif')
-scene.orbit(gif, n_frames=18, framerate=12)
+scene.orbit(gif, n_frames=18, fps=12)
 scene.close()
 print('orbit GIF bytes:', os.path.getsize(gif))
 display(IPyImage(filename=gif))</div>
