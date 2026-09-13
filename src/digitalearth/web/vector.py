@@ -271,6 +271,7 @@ class VectorMixin(_MixinBase):
         band: int = 1,
         filled: bool = False,
         cmap: Optional[str] = None,
+        units: Optional[str] = None,
         color: Optional[str] = None,
         width: float = 1.5,
         opacity: float = 1.0,
@@ -300,6 +301,11 @@ class VectorMixin(_MixinBase):
             filled: Draw filled bands between successive levels instead of lines.
             cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the
                 band's variable.
+            units: What the contoured values are measured in, which the key names in parentheses after the
+                column. ``None`` (the default) takes the variable's units from
+                :func:`~digitalearth.base.autostyle.auto_style`, and leaves the heading bare when it
+                carries none — a unit is never guessed. Pass one to correct a band the library
+                mis-identifies, or to name the units of a variable it does not know.
             color: A single colour for every contour, overriding ``cmap``. Use it when the levels are
                 labelled rather than colour-coded.
             width: Line width in pixels; ignored when ``filled``.
@@ -347,7 +353,7 @@ class VectorMixin(_MixinBase):
                     f"({source.metadata('variable')!r}) is not one auto_style carries levels for."
                 )
         # Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.
-        self.last_units = self._auto_units(source, None)
+        self.last_units = self._auto_units(source, units)
         features = data.contour(
             interval=interval,
             fixed_levels=list(levels) if levels is not None else None,

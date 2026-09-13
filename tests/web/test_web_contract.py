@@ -564,6 +564,83 @@ class TestC6LevelsAndUnitsAreConsumed:
         """Never guess a unit: without one the label is built exactly as it was before."""
         assert WebMap()._auto_units(_source("mystery"), None) is None
 
+    @pytest.mark.parametrize("builder", ["add_raster", "contours"])
+    def test_the_raster_builders_expose_the_units_override(self, builder):
+        """The caller half of ``_auto_units`` is a real argument, not dead code (review L3).
+
+        Args:
+            builder: The raster builder whose signature is inspected.
+
+        Test scenario:
+            ``_auto_cmap`` and ``_auto_levels`` each sit behind a public ``cmap=``/``levels=``; ``units``
+            had no such parameter, so the branch honouring a caller's value could never be reached from
+            outside the class. Both builders now take it, defaulting to ``None`` (auto-resolve).
+        """
+        parameter = inspect.signature(getattr(WebMap, builder)).parameters["units"]
+        assert parameter.default is None, (
+            f"{builder}(units=) must default to the autostyle lookup, got {parameter.default!r}"
+        )
+        assert parameter.kind is inspect.Parameter.KEYWORD_ONLY, (
+            f"{builder}(units=) must be keyword-only like the rest of the styling arguments"
+        )
+
+    def test_add_raster_records_the_caller_supplied_unit(self, dataset):
+        """``add_raster(units=)`` reaches ``last_units``, so a key built from the band can name it.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            The autostyle hint is canonical rather than measured, so a band in something else needs a way
+            to say so. Nothing consumed the caller's unit before this, because nothing could pass one.
+        """
+        pytest.importorskip("maplibre")
+        assert WebMap().add_raster(dataset, units="Pa").last_units == "Pa"
+
+    def test_a_caller_supplied_unit_replaces_the_library_one_in_the_key(
+        self, monkeypatch
+    ):
+        """``contours(units=)`` wins over the library hint all the way through to the legend heading.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for pyramids' contour tracer.
+
+        Test scenario:
+            The same field as the test above, whose library hint is ``hPa``. Correcting it through
+            ``legend(title=...)`` would mean rewriting the whole heading, throwing away the ``level``
+            column name the builder derived; the argument corrects only the unit.
+        """
+        pytest.importorskip("maplibre")
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import LineString
+
+        class FakeRaster:
+            """A raster that traces two levels, enough for a continuous key."""
+
+            @staticmethod
+            def contour(**kwargs):
+                """Return two contours carrying their level."""
+                return gpd.GeoDataFrame(
+                    {"level": [960.0, 1000.0]},
+                    geometry=[
+                        LineString([(0, 0), (1, 1)]),
+                        LineString([(0, 1), (1, 2)]),
+                    ],
+                    crs=DISPLAY_CRS,
+                )
+
+        monkeypatch.setattr(
+            WebMap, "_display_raster_or_skip", lambda self, dataset, layer: FakeRaster()
+        )
+        monkeypatch.setattr(
+            WebMap, "_to_display_source", lambda self, data, band=1: _source("msl")
+        )
+        m = WebMap().contours(object(), units="Pa").legend()
+        assert "level (Pa)" in m._panels["legend"][0], m._panels["legend"][0]
+        assert "hPa" not in m._panels["legend"][0], (
+            "the library hint must not survive an override"
+        )
+
     def test_contours_trace_the_library_levels_when_none_were_given(self, monkeypatch):
         """``contours()`` used to demand ``interval=``/``levels=``; a known field now supplies them.
 

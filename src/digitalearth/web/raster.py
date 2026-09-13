@@ -35,6 +35,7 @@ class RasterMixin(_MixinBase):
         *,
         band: int = 1,
         cmap: Optional[str] = None,
+        units: Optional[str] = None,
         opacity: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
@@ -52,6 +53,12 @@ class RasterMixin(_MixinBase):
             data: A pyramids ``Dataset`` (or anything ``get_source`` accepts).
             band: 1-based band to draw.
             cmap: matplotlib colormap name; ``None`` resolves the autostyle default for the variable.
+            units: What the band's values are measured in, recorded as
+                :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
+                ``None`` (the default) takes the variable's units from
+                :func:`~digitalearth.base.autostyle.auto_style`, and leaves them unknown when it carries
+                none — a unit is never guessed. Pass one to correct a band the library mis-identifies, or
+                to name the units of a variable it does not know.
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
@@ -117,7 +124,7 @@ class RasterMixin(_MixinBase):
             return self
         cmap_name = self._auto_cmap(source, cmap)
         # Carried for a key built from this band's values (see `_auto_units`); `None` when unknown.
-        self.last_units = self._auto_units(source, None)
+        self.last_units = self._auto_units(source, units)
 
         values = source.z.values
         if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:

@@ -429,9 +429,10 @@ class WebMapBase:
         #: silent). Set it once and every subsequent layer on this map honours it; a single builder call
         #: can override it with its own ``big_data_threshold=`` without changing the map's setting.
         self.big_data_threshold = DEFAULT_BIG_DATA_THRESHOLD
-        #: The ``units`` hint :func:`~digitalearth.base.autostyle.auto_style` resolved for the most
-        #: recently auto-styled raster, or ``None``. Carried so a key built from that raster's values can
-        #: say what they are measured in (see :meth:`_auto_units`).
+        #: What the most recently drawn raster's values are measured in, or ``None``: the caller's
+        #: ``add_raster(units=)`` / ``contours(units=)`` when they named one, else the
+        #: :func:`~digitalearth.base.autostyle.auto_style` hint. Carried so a key built from that raster's
+        #: values can say what they are measured in (see :meth:`_auto_units`).
         self.last_units: Optional[str] = None
         #: Lon/lat extent of everything added so far, unioned as layers arrive (see :meth:`_note_bounds`).
         #: Used to frame the map when the caller gave neither ``center`` nor ``zoom``.
@@ -1323,6 +1324,12 @@ class WebMapBase:
 
     def _auto_units(self, source: Any, units: Optional[str]) -> Optional[str]:
         """Resolve the units a key labels values with: the caller's if given, else the autostyle hint.
+
+        The same three-way contract as :meth:`_auto_cmap` and :meth:`_auto_levels`, and like theirs the
+        caller's half is a real public argument — ``add_raster(units=)`` and ``contours(units=)``. The
+        library's hint is canonical rather than measured (it says ``"hPa"`` for mean sea-level pressure),
+        so a band that is genuinely in something else needs a way to say so that does not also throw away
+        the column name ``legend()`` derives; that is what the argument is for (review L3).
 
         Args:
             source: The display-CRS :class:`Source` whose variable drives the lookup.
