@@ -39,6 +39,7 @@ class RasterMixin(_MixinBase):
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         visible: bool = True,
+        name: Optional[str] = None,
     ) -> Self:
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
@@ -54,6 +55,7 @@ class RasterMixin(_MixinBase):
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible. ``False`` builds it hidden, which is how
                 :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks time steps without
                 every frame showing at once — including in a saved page, which carries no slider.
@@ -80,9 +82,18 @@ class RasterMixin(_MixinBase):
         ):  # ascending y → flip so PNG row 0 is the northern edge
             values = values[::-1]
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
-        coordinates = self._image_coordinates(source.x.values, source.y.values)
+        coordinates = self._lonlat_corners(source)
+        if coordinates is None:
+            raise ValueError(
+                "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
+                "needs; reproject the dataset, or set a lon/lat display CRS"
+            )
+        # Already lon/lat, so the framing takes them as they are.
+        self._note_lonlat_bounds(
+            (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
+        )
 
-        src_id, layer_id = self._uid("raster-src"), self._uid("raster")
+        src_id, layer_id = self._uid("raster-src"), self._layer_id("raster", name)
         spec = {"type": "image", "url": url, "coordinates": coordinates}
         layer = Layer(
             id=layer_id,
@@ -96,8 +107,165 @@ class RasterMixin(_MixinBase):
             widget.add_source(src_id, spec)
             widget.add_layer(layer)
 
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
+        self._index_layer(layer_id, name)
         return self.add_layer(apply)
+
+    def rgb_composite(
+        self,
+        dataset: Any,
+        bands: Any = (1, 2, 3),
+        *,
+        mask_nodata: bool = True,
+        limits: Optional[Any] = None,
+        opacity: float = 1.0,
+        visible: bool = True,
+        name: Optional[str] = None,
+    ) -> Self:
+        """Overlay three bands as a true- or false-colour image (recipe W1).
+
+        Satellite imagery is a headline use of a web map, and the tier could only draw one band through a
+        colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code
+        the static tier's ``rgb_composite`` uses — so the same three bands look the same on both tiers.
+
+        Args:
+            dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).
+            bands: The three 1-based band numbers, in red-green-blue order.
+            mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.
+            limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this
+                image; pass a fixed set to keep a series comparable across frames.
+            opacity: Raster layer opacity in ``[0, 1]``.
+            visible: Whether the layer starts visible, which is what a layer switcher toggles.
+            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+
+        Returns:
+            The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when
+                the composite has no finite pixels to draw.
+
+        Examples:
+            - A true-colour composite from a Landsat-ordered dataset:
+                ```python
+                >>> from digitalearth.web import WebMap                       # doctest: +SKIP
+                >>> WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP
+
+                ```
+
+        See Also:
+            digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.
+            digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.
+        """
+        import numpy as np
+
+        from digitalearth.base.sources import get_stack
+        from digitalearth.base.stretch import require_three_bands, stretch_to_unit
+
+        Layer, LayerType = _require_layer_api()
+        require_three_bands("rgb_composite", bands)
+        data = self._to_display_raster(dataset)
+        stack = get_stack(data, bands, mask=mask_nodata)
+        pixels = int(stack.size // max(stack.shape[-1], 1))
+        if pixels > _LARGE_RASTER_PIXELS:
+            logger.warning(
+                "rgb_composite: inlining a {}-pixel composite as a data-URI image source bloats the page; "
+                "for large rasters serve COG/XYZ tiles from pyramids instead",
+                pixels,
+            )
+        # `data` is already in the display CRS; warping `dataset` again here would repeat a multi-second
+        # GDAL warp and take the placement from a second, independent reprojection of the same pixels.
+        source = self._to_display_source(data, band=int(bands[0]))
+        y = np.asarray(source.y.values, dtype=float)
+        if (
+            y.size > 1 and y[0] < y[-1]
+        ):  # ascending y → flip so PNG row 0 is the north edge
+            stack = stack[::-1]
+        url = self._composite_png_datauri(stretch_to_unit(stack, limits))
+        coordinates = self._lonlat_corners(source)
+        if coordinates is None:
+            raise ValueError(
+                "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
+                "needs; reproject the dataset, or set a lon/lat display CRS"
+            )
+        # Already lon/lat, so the framing takes them as they are.
+        self._note_lonlat_bounds(
+            (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
+        )
+        src_id, layer_id = self._uid("rgb-src"), self._layer_id("rgb", name)
+        spec = {"type": "image", "url": url, "coordinates": coordinates}
+        layer = Layer(
+            id=layer_id,
+            type=LayerType.RASTER,
+            source=src_id,
+            paint={"raster-opacity": float(opacity)},
+            layout={"visibility": "visible" if visible else "none"},
+        )
+
+        def apply(widget: Any) -> None:
+            widget.add_source(src_id, spec)
+            widget.add_layer(layer)
+
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._last_layer_id = layer_id
+        self._index_layer(layer_id, name)
+        return self.add_layer(apply)
+
+    @staticmethod
+    def _composite_png_datauri(unit_stack: Any) -> str:
+        """Encode a stretched ``(rows, cols, 3)`` stack as a ``data:image/png;base64,`` URI.
+
+        Args:
+            unit_stack: Channel values already stretched to ``[0, 1]``; NaN marks NoData.
+
+        Returns:
+            The PNG data-URI string.
+
+        Raises:
+            ValueError: when no pixel is finite in all three channels — there is nothing to draw, and an
+                empty image would look like a rendering failure instead of an empty input.
+        """
+        import base64
+        import io
+
+        import numpy as np
+        from matplotlib import image as mpimage
+
+        stack = np.asarray(unit_stack, dtype=float)
+        valid = np.isfinite(stack).all(axis=-1)
+        if not valid.any():
+            raise ValueError(
+                "rgb_composite got a stack with no pixel finite in all three bands"
+            )
+        rgba = np.zeros(stack.shape[:2] + (4,), dtype=float)
+        rgba[..., :3] = np.clip(np.where(np.isfinite(stack), stack, 0.0), 0.0, 1.0)
+        rgba[..., 3] = valid.astype(float)  # NoData in any channel → transparent
+        buffer = io.BytesIO()
+        mpimage.imsave(buffer, (rgba * 255).astype("uint8"), format="png")
+        return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+    def _lonlat_corners(self, source: Any) -> Optional[list]:
+        """Return a raster's corner coordinates as the lon/lat an image source is placed by.
+
+        MapLibre positions an ``image`` source with ``[[lng, lat], …]``, so a display CRS that is not
+        lon/lat has to be converted — otherwise the map frames on the right degrees while the image sits in
+        metre-space a long way off.
+
+        Args:
+            source: The display-CRS source whose ``x``/``y`` coordinate arrays give the corners.
+
+        Returns:
+            ``[TL, TR, BR, BL]`` in lon/lat, or ``None`` when the corners cannot be converted.
+        """
+        corners = self._image_coordinates(source.x.values, source.y.values)
+        west, north = corners[0]
+        east, south = corners[2]
+        converted = self._as_lonlat(west, south, east, north)
+        if converted is None:
+            return None
+        west, south, east, north = converted
+        return [[west, north], [east, north], [east, south], [west, south]]
 
     @staticmethod
     def _image_coordinates(x: Any, y: Any) -> List[List[float]]:
