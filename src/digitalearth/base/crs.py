@@ -144,7 +144,8 @@ def is_geographic(crs: Any) -> Optional[bool]:
         return None
     try:
         return bool(crs_from_user_input(crs).is_geographic)
-    except Exception:  # noqa: BLE001 — any CRS-resolution failure means "unknown", never "projected".
+    # Any CRS-resolution failure means "unknown", never "projected".
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -186,7 +187,8 @@ def authority_code(crs: Any) -> Optional[int]:
     """
     try:
         return crs_from_user_input(crs).to_epsg()
-    except Exception:  # noqa: BLE001 — any CRS-resolution failure means "no code to name", never a guess.
+    # Any CRS-resolution failure means "no code to name", never a guess.
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -256,7 +258,8 @@ def _placed_nowhere(data: Any) -> bool:
     try:
         bounds = getattr(data, "total_bounds", None)
         values = None if bounds is None else np.asarray(bounds, dtype="float64")
-    except Exception:  # noqa: BLE001 — an unreadable extent answers nothing; never invent an off-limb report.
+    # An unreadable extent answers nothing; never invent an off-limb report.
+    except Exception:  # noqa: BLE001
         return False
     if values is None:
         return False
