@@ -558,6 +558,54 @@ class TestTimeSliderRasterStack:
         )
         assert any("could not be placed" in line for line in warning_log), warning_log
 
+    def test_an_abandoned_series_leaves_the_framing_state_where_it_found_it(
+        self, raster_stack, dataset, monkeypatch, warning_log
+    ):
+        """The unwind puts back the extent and the units the discarded frames moved (review L12).
+
+        Args:
+            raster_stack: The 3-member collection the slider is built from (a Dutch extent).
+            dataset: The shared pyramids raster fixture, whose extent is a continent away from the stack's.
+            monkeypatch: pytest's patcher, making the second member's corners unrepresentable.
+            warning_log: The tier's loguru warnings.
+
+        Test scenario:
+            ``remove_layer`` takes the abandoned frames off the map but only clears the running extent when
+            the *last* layer goes, so a stack added on top of an existing layer kept the discarded frames'
+            corners in it — and ``last_units`` went on describing a frame that is no longer drawn. A later
+            ``fit_bounds()`` then framed on data the map does not show, halfway to nothing between the two.
+        """
+        m = WebMap().add_raster(dataset, units="mm")
+        bounds_before = list(m._data_bounds)
+        assert m.last_units == "mm", (
+            "the surviving layer's units set the state to restore"
+        )
+
+        placements = []
+        original = WebMap._lonlat_corners
+
+        def _second_member_has_no_corners(self, source):
+            """Place every member but the second, whose corners are reported unrepresentable."""
+            placements.append(source)
+            return None if len(placements) == 2 else original(self, source)
+
+        monkeypatch.setattr(WebMap, "_lonlat_corners", _second_member_has_no_corners)
+        m.timeslider(raster_stack)
+
+        assert len(m.layer_ids) == 1, (
+            f"only the pre-existing layer may survive, got {m.layer_ids}"
+        )
+        assert m._data_bounds == bounds_before, (
+            "the abandoned frames must not leave the running extent widened"
+        )
+        assert m.last_units == "mm", (
+            "last_units must describe a layer that is still drawn, not a discarded frame"
+        )
+        assert m.fit_bounds()._fit["bounds"] == bounds_before, (
+            "fit_bounds() must frame the surviving layer, not data that was rolled back"
+        )
+        assert any("could not be placed" in line for line in warning_log), warning_log
+
     def test_unhashable_labels_get_the_actionable_message(self, raster_stack):
         """A list-valued label fails with the builder's own error, not a bare ``set()`` TypeError.
 

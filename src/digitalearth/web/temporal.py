@@ -282,6 +282,15 @@ class TemporalMixin(_MixinBase):
         step_names = [
             str(value) for value in (labels if labels is not None else range(count))
         ]
+        # Snapshotted before the first frame is built, so the unwind below can put back the derived state
+        # the discarded frames moved. `remove_layer` takes the layers off the map but leaves the running
+        # extent widened — it only clears it when the *last* layer goes, so a stack added on top of an
+        # existing layer kept the abandoned frames' corners — and leaves `last_units` describing a frame
+        # that is no longer drawn. A later `fit_bounds()` then framed on data the map does not show (L12).
+        bounds_before = (
+            list(self._data_bounds) if self._data_bounds is not None else None
+        )
+        units_before = self.last_units
         layer_ids: List[str] = []
         for index, member in enumerate(members):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
@@ -303,6 +312,8 @@ class TemporalMixin(_MixinBase):
                 # side would leave a slider with a hole in it, so the steps already built are unwound.
                 for built in layer_ids:
                     self.remove_layer(built)
+                self._data_bounds = bounds_before
+                self.last_units = units_before
                 self._skipped(
                     "timeslider",
                     f"step {step_names[index]!r} could not be placed, so the series was abandoned",
