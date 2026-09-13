@@ -20,12 +20,14 @@ from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
+from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.base.deprecation import renamed_parameter
 
-#: Frames per second every tier's animation entry point defaults to, so one ``fps`` means one speed whichever
-#: backend rendered the clip. The 3-D tier used to default to 12 (orbit) and 8 (animate) — two speeds in one
-#: tier, and neither matching the other tiers.
-DEFAULT_FPS: float = 3.0
+# `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
+# defaults to lives in `digitalearth.base.animation`, so one `fps` means one speed whichever backend rendered
+# the clip. This tier used to default to 12 (orbit) and 8 (animate) — two speeds in one tier, and neither
+# matching the others. It stays importable from this module because that is where this tier's callers and
+# tests already reach for it.
 
 #: An up vector: three floats, as a sequence or a numpy array. numpy is the natural way to spell one and
 #: is not a ``typing.Sequence``, so both are accepted rather than adding to the mypy arg-type baseline.
@@ -221,8 +223,9 @@ class AnimationMixin(_MixinBase):
                 pyvista silently
                 clamps a smaller value to 3, so fewer used to "work" and produce a three-frame clip; this
                 rejects it instead, which is a narrowing of what the argument accepted before.
-            fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one speed
-                shared with every other tier's animation entry point; this method used to default to ``12``.
+            fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one
+                speed shared with every other tier's animation entry point, declared once in
+                :mod:`digitalearth.base.animation`; this method used to default to ``12``.
             factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
                 Must be positive and finite. Anything :func:`float` accepts is taken, so ``"0.9"`` works as
                 well as ``0.9``.
@@ -356,8 +359,9 @@ class AnimationMixin(_MixinBase):
             frames: Iterable of per-frame states passed one at a time to ``update``.
             path: Output file. A video suffix writes a movie; anything else a GIF.
             update: Callback ``(scene, frame) -> None`` that updates the scene before each frame is captured.
-            fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one speed
-                shared with every other tier's animation entry point; this method used to default to ``8``.
+            fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one
+                speed shared with every other tier's animation entry point, declared once in
+                :mod:`digitalearth.base.animation`; this method used to default to ``8``.
             framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
                 removed in a future release and forwards the value unchanged. Passing both is a
                 ``TypeError``.

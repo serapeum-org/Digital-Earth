@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from loguru import logger
 
+from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import _require_layer_api
 
@@ -355,7 +356,9 @@ class BigDataMixin(_MixinBase):
         }
         return self._add_deck_layer(layer)
 
-    def _threshold(self, big_data_threshold: Optional[int] = None) -> int:
+    def _threshold(
+        self, big_data_threshold: Optional[int] = None, *, caller: str = "WebMap"
+    ) -> int:
         """Resolve the feature count that routes a layer to the GPU: the call's, else the map's.
 
         The two ways of setting it are deliberately the same name: assigning
@@ -363,8 +366,14 @@ class BigDataMixin(_MixinBase):
         every layer that follows, while passing ``big_data_threshold=`` to one builder moves it for that
         call alone and leaves the map's setting untouched.
 
+        A per-call cutoff is checked by :func:`~digitalearth.base.bigdata.validate_big_data_threshold`, the
+        shared guard the interactive tier applies too — so a negative cutoff is refused identically on both
+        rather than raising here and routing every layer, empty ones included, there.
+
         Args:
             big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
+            caller: The builder the keyword was written on, named in the error so the message points at the
+                call rather than at this helper.
 
         Returns:
             The feature count above which a builder auto-routes to a deck.gl layer.
@@ -375,11 +384,7 @@ class BigDataMixin(_MixinBase):
         """
         if big_data_threshold is None:
             return int(self.big_data_threshold)
-        if int(big_data_threshold) < 0:
-            raise ValueError(
-                f"big_data_threshold must not be negative; got {big_data_threshold!r}"
-            )
-        return int(big_data_threshold)
+        return validate_big_data_threshold(big_data_threshold, caller=caller)
 
     def _route_big(
         self, gdf: Any, kind: str, *, threshold: Optional[int] = None
@@ -396,7 +401,7 @@ class BigDataMixin(_MixinBase):
             route to a GPU layer); ``False`` otherwise. The decision is logged when it fires (the M2
             "never silent" rule).
         """
-        limit = self._threshold(threshold)
+        limit = self._threshold(threshold, caller=f"WebMap.{kind}()")
         n = len(gdf)
         if n > limit:
             logger.info(

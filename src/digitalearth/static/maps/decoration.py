@@ -20,6 +20,7 @@ from matplotlib.collections import PolyCollection
 from pyramids.base.crs import reproject_coordinates
 
 from digitalearth.base.basemaps import (
+    DEFAULT_BASEMAP_PROVIDER,
     PRESET_KEYWORDS,
     KeyedTileSource,
     get_keyed_basemap,
@@ -33,6 +34,21 @@ logger = logging.getLogger(__name__)
 #: Natural-Earth layers that ``cleopatra.basemap.reference`` renders as filled polygons (vs. line layers); used to
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
 _POLYGON_LAYERS = frozenset({"land", "ocean", "lakes"})
+
+#: The cross-tier basemap names — :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them —
+#: keyed by their lower-cased spelling, mapped to the ``xyzservices`` dot-path
+#: ``cleopatra.basemap.tiles.get_provider`` resolves. Each tier names these four token-free basemaps the same
+#: way and translates to its own engine's spelling (GeoViews' ``tile_sources`` on the interactive tier, a URL
+#: template on the web tier); this is the static tier's half of that. Without it a shared name reached
+#: ``add_tiles`` as an unknown provider, and ``basemap()`` with no argument fell through to cleopatra's own
+#: default (``OpenStreetMap.Mapnik``) — which is how the one backend that needs no extra ended up drawing a
+#: different basemap from the other two (#247).
+_SHARED_PROVIDERS = {
+    "cartolight": "CartoDB.Positron",
+    "cartodark": "CartoDB.DarkMatter",
+    "cartovoyager": "CartoDB.Voyager",
+    "osm": "OpenStreetMap.Mapnik",
+}
 
 #: Colormap a raster backdrop falls back to when neither the caller nor ``auto_style`` names one — the
 #: hypsometric look a relief/imagery backdrop is usually wanted in. It sits *behind* the lookup rather than
@@ -179,6 +195,45 @@ def _keyed_tile_provider(keyed: "KeyedTileSource", api_key: Optional[str]) -> An
         attribution=keyed.attribution,
         max_zoom=keyed.max_zoom,
     )
+
+
+def _resolve_tile_source(source: Any) -> Any:
+    """Resolve an unnamed or cross-tier-named basemap into the provider ``add_tiles`` understands.
+
+    Two translations, both of them the static tier's side of the one-basemap-per-name contract (#247).
+    ``None`` means "the caller named none", which is
+    :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` and not cleopatra's own fallback. And a
+    shared name such as ``"CartoLight"`` is spelled as the ``xyzservices`` path that resolves to the very
+    tiles the other tiers request for it. Anything else — an ``xyzservices`` path, a ``TileProvider``, a
+    URL — is handed on untouched.
+
+    Args:
+        source: The ``source`` a caller passed to :meth:`DecorationMixin.basemap`, already known not to be a
+            keyed preset.
+
+    Returns:
+        The provider name or object to hand ``cleopatra.basemap.tiles.add_tiles``.
+
+    Examples:
+        - No source at all resolves to the shared default, in this engine's spelling:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _resolve_tile_source
+            >>> _resolve_tile_source(None)
+            'CartoDB.Positron'
+
+            ```
+        - A shared name is translated case-insensitively, and anything else passes through:
+            ```python
+            >>> from digitalearth.static.maps.decoration import _resolve_tile_source
+            >>> (_resolve_tile_source("cartodark"), _resolve_tile_source("Esri.WorldImagery"))
+            ('CartoDB.DarkMatter', 'Esri.WorldImagery')
+
+            ```
+    """
+    name = DEFAULT_BASEMAP_PROVIDER if source is None else source
+    if isinstance(name, str):
+        return _SHARED_PROVIDERS.get(name.lower(), name)
+    return name
 
 
 class DecorationMixin(_MixinBase):
@@ -578,15 +633,20 @@ class DecorationMixin(_MixinBase):
     ) -> Any:
         """Add an XYZ-tile basemap to the axes via ``cleopatra.basemap.tiles.add_tiles`` in the display CRS.
 
-        ``source`` is passed through to cleopatra unchanged — a provider name, an
-        ``xyzservices.TileProvider``, or ``None`` for its default — with one addition: the name of a
-        **keyed** basemap preset (see :mod:`digitalearth.base.basemaps`) is resolved here into a configured
-        provider, with its credential read from the environment and its coverage checked against the map's
-        domain first.
+        ``source`` is passed through to cleopatra unchanged — a provider name or an
+        ``xyzservices.TileProvider`` — with two additions. The name of a **keyed** basemap preset (see
+        :mod:`digitalearth.base.basemaps`) is resolved here into a configured provider, with its credential
+        read from the environment and its coverage checked against the map's domain first. And the four
+        cross-tier basemap names (:data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them)
+        are translated into the ``xyzservices`` paths that request the same tiles the interactive and web
+        tiers do — including when ``source`` is omitted, which means the shared default here just as it does
+        there, rather than cleopatra's own ``OpenStreetMap.Mapnik`` (#247).
 
         Args:
-            source: A cleopatra provider name, an ``xyzservices.TileProvider``, ``None``, or a keyed preset
-                name such as ``"Planet.NICFI"``.
+            source: A cleopatra/``xyzservices`` provider name, an ``xyzservices.TileProvider``, one of the
+                cross-tier names (``"CartoLight"``/``"CartoDark"``/``"CartoVoyager"``/``"OSM"``), a keyed
+                preset name such as ``"Planet.NICFI"``, or ``None`` for
+                :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER`.
             api_key: Credential for a keyed preset; ``None`` reads the preset's environment variable.
             preset: The keyed preset's own keywords, as a dict (for NICFI: ``date``, ``flavour``,
                 ``mosaic``). A dict rather than loose keywords because ``**kwargs`` here belongs to
@@ -635,7 +695,9 @@ class DecorationMixin(_MixinBase):
                     f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
                     f"only to a keyed preset such as 'Planet.NICFI'"
                 )
-            return add_tiles(self.ax, source=source, crs=self.crs, **kwargs)
+            return add_tiles(
+                self.ax, source=_resolve_tile_source(source), crs=self.crs, **kwargs
+            )
 
         keyed = get_keyed_basemap(str(source), **(preset or {}))
         keyed.check_bounds(self._coverage_extent())

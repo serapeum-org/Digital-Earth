@@ -13,6 +13,7 @@ from matplotlib.animation import FuncAnimation
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
+from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.base.arrays import finite, read_masked_band
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.sources import get_source, get_stack
@@ -42,9 +43,11 @@ _CLIM_SCAN_CAP = 24
 #: this package, not an unreadable frame, and must reach the caller instead of being reported as "no style".
 UNREADABLE_FRAME = (OSError, RuntimeError, TypeError, ValueError)
 
-#: Frames per second every animation entry point defaults to, so ``animate`` and ``rotate`` (and the other
-#: backends' animations) play a clip built with defaults at the same speed.
-DEFAULT_FPS = 3.0
+# `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
+# defaults to lives in `digitalearth.base.animation`, so `animate`/`rotate` play a clip built with defaults at
+# the same speed as the interactive, 3-D and web tiers. It stays importable from this module because that is
+# where this tier's callers and tests already reach for it. Not to be confused with
+# `digitalearth.static.animation.FALLBACK_SAVE_FPS`, the rate the *encoder* assumes for a clip of unknown rate.
 
 
 def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
@@ -894,7 +897,9 @@ class AnimationMixin(_MixinBase):
             lat: Centre latitude of every orthographic view.
             n_frames: Number of frames spanning the full 360-degree turn.
             fps: Frames per second. Defaults to :data:`DEFAULT_FPS` — the same rate :meth:`animate` starts
-                from, so a rotation and a stack animation built with defaults play at one speed.
+                from, so a rotation and a stack animation built with defaults play at one speed. This method
+                used to default to ``8.0``; a call that names no rate now renders slower, and ``fps=8.0``
+                restores the previous speed.
             lon0: Starting centre longitude.
             kind: The method used to draw the data — a scalar field (``"imshow"`` / ``"contourf"`` /
                 ``"pcolormesh"`` / ``"contour"`` / ``"block"``) or a composite (``"rgb_composite"`` /

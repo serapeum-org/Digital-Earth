@@ -35,6 +35,11 @@ What lives here:
   ``declared_crs`` (an input's own code or definition) and ``is_geographic``, which asks pyramids to
   interpret a CRS in any spelling a ``Source`` may carry — so no tier re-invents that with string
   parsing or coordinate magnitudes.
+* :mod:`~digitalearth.base.animation` — ``DEFAULT_FPS``, the one frame rate every tier's animation entry
+  point starts from, so a clip built with defaults plays at the same speed whichever backend rendered it.
+* :mod:`~digitalearth.base.bigdata` — ``DEFAULT_BIG_DATA_THRESHOLD`` and the guard that validates a per-call
+  override, so a vector layer changes rendering strategy at the same size — and refuses the same nonsense
+  cutoff — on every tier that has a big-data path.
 * :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
 * :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend
   shares, so a true-colour render is identical across tiers and a sequence of frames can be frozen on

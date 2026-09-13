@@ -23,15 +23,21 @@ from typing import Any, Callable, Dict, List, Optional, Self
 
 from loguru import logger
 
+from digitalearth.base.bigdata import (
+    DEFAULT_BIG_DATA_THRESHOLD,
+    validate_big_data_threshold,
+)
 from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
-#: Default row/face count above which a vector builder auto-routes through Datashader (#250). One number
-#: for the whole tier: the map carries it as an attribute, and every big-data builder takes a per-call
-#: override of the same name, so a map configured once keeps the setting for every later layer.
-DEFAULT_BIG_DATA_THRESHOLD = 50_000
+# `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
+# vector builder auto-routes to its tier's big-data renderer (#250) lives in `digitalearth.base.bigdata`, so
+# this tier and the web tier cut over at the same size. One number for the whole tier either way: the map
+# carries it as an attribute, and every big-data builder takes a per-call override of the same name, so a map
+# configured once keeps the setting for every later layer. It stays importable from this module because that
+# is where this tier's callers and tests already reach for it.
 
 #: The pip extra / pixi env that provides the HoloViz engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -383,6 +389,10 @@ class InteractiveMapBase:
         :func:`~digitalearth.base.deprecation.renamed_parameter` — the one rename rule every backend shares,
         so this tier refuses two spellings of one cutoff exactly as static, web and 3-D do.
 
+        A per-call cutoff is checked by :func:`~digitalearth.base.bigdata.validate_big_data_threshold`, the
+        shared guard the web tier applies too — so a negative cutoff is refused identically on both rather
+        than raising on one tier and routing every layer, empty ones included, on the other.
+
         Args:
             big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
             rasterize_threshold: The deprecated alias of ``big_data_threshold``.
@@ -394,6 +404,7 @@ class InteractiveMapBase:
         Raises:
             TypeError: if both spellings are passed — they name one cutoff, so two values for it cannot
                 both be honoured.
+            ValueError: when the per-call cutoff is negative.
 
         Warns:
             DeprecationWarning: when ``rasterize_threshold`` is passed.
@@ -409,7 +420,9 @@ class InteractiveMapBase:
             # instead of the notebook cell that wrote the deprecated keyword.
             stacklevel=5,
         )
-        return self.big_data_threshold if threshold is None else threshold
+        if threshold is None:
+            return int(self.big_data_threshold)
+        return validate_big_data_threshold(threshold, caller=caller)
 
     def _auto_style(self, source: Source) -> Dict[str, Any]:
         """Return the :func:`~digitalearth.base.autostyle.auto_style` record for ``source``.

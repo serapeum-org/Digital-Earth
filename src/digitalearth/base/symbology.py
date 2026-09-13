@@ -4,7 +4,7 @@ Graduated / continuous classification lives upstream in ``cleopatra.styling.styl
 module is the **categorical** counterpart: map each distinct value of a field to a colour from a qualitative
 colormap, to colour by an unordered attribute (land-use class, region name, …).
 
-This module has two distinct jobs, with **different scopes** — do not conflate them:
+This module has three distinct jobs, with **different scopes** — do not conflate the first two:
 
 1. :func:`resolve_categorical_cmap` — the **cmap sentinel, shared by all three tiers** (static, interactive,
    web). Every tier resolves ``cmap`` through it before colouring, so one ``cmap`` cannot mean two different
@@ -20,6 +20,12 @@ This module has two distinct jobs, with **different scopes** — do not conflate
    first-seen) is **independently reimplemented** here (:func:`_categories`) and in cleopatra's
    ``styles.categorize``, kept in agreement by ``tests/base/test_symbology.py::test_matches_cleopatra_categorize``
    — not shared code, so a change on either side must be mirrored (the test is what catches a drift).
+3. :func:`sample_cmap` — the **graduated** counterpart of that compiler, for every tier that has to hand a
+   renderer literal colours rather than a colormap object: a colormap name plus a class count become ``n``
+   evenly-spaced ``#rrggbb`` stops. The interactive tier feeds them to a HoloViews ``cmap`` list, the web tier
+   to a MapLibre ``["step", …]`` paint expression and the 3-D tier to a PyVista lookup table — none of which
+   can consume a matplotlib mappable. Each tier used to carry its own copy of the sampling, so "the same
+   ``column``/``scheme``/``k`` colours identically everywhere" rested on three functions staying in step.
 """
 
 from typing import Any, List, Tuple
@@ -33,6 +39,7 @@ __all__ = [
     "is_null",
     "nulls_to_none",
     "resolve_categorical_cmap",
+    "sample_cmap",
 ]
 
 #: Default qualitative colormap for categorical symbology (10 distinct hues; cycled if more categories).
@@ -280,3 +287,59 @@ def categorical_colors(
         base_colors = [colormap(x) for x in np.linspace(0.0, 1.0, n)]
     colors = [to_hex(base_colors[i % len(base_colors)]) for i in range(n)]
     return categories, colors
+
+
+def sample_cmap(cmap: Any, n: int) -> List[str]:
+    """Sample ``cmap`` at ``n`` evenly-spaced stops and return them as hex colour strings.
+
+    The colour side of graduated symbology, shared by every tier that has to hand its renderer literal
+    colours: a colormap name becomes the concrete ``#rrggbb`` strings a HoloViews ``cmap`` list, a MapLibre
+    ``["step", …]`` expression or a PyVista lookup table needs — one per class. matplotlib is imported lazily
+    (only when a builder actually classifies something), so importing a tier stays engine-free.
+
+    An already-built sequence of colours is returned as a plain list, untouched. That is what lets a caller
+    pass either spelling of ``cmap`` down one code path, rather than branching before every call.
+
+    Args:
+        cmap: A matplotlib colormap name, or an already-built sequence of colours.
+        n: How many colours to draw — one per class (``>= 1``). Ignored for a sequence of colours, which is
+            taken as given.
+
+    Returns:
+        list[str]: ``n`` ``#rrggbb`` colours in ramp order, or ``cmap`` itself as a list when it already was
+        a sequence of colours.
+
+    Examples:
+        - One colour per class, spanning the whole ramp:
+            ```python
+            >>> from digitalearth.base.symbology import sample_cmap
+            >>> sample_cmap("viridis", 3)
+            ['#440154', '#21918c', '#fde725']
+
+            ```
+        - A single class takes the ramp's middle, not its dark end — one dark-purple polygon reads as
+          missing data rather than as a category:
+            ```python
+            >>> from digitalearth.base.symbology import sample_cmap
+            >>> sample_cmap("viridis", 1)
+            ['#21918c']
+
+            ```
+        - An explicit list of colours is honoured as written:
+            ```python
+            >>> from digitalearth.base.symbology import sample_cmap
+            >>> sample_cmap(["#ff0000", "#00ff00"], 2)
+            ['#ff0000', '#00ff00']
+
+            ```
+    """
+    if not isinstance(cmap, str):
+        return list(cmap)
+    from matplotlib import colormaps
+    from matplotlib.colors import to_hex
+
+    colormap = colormaps[cmap]
+    # One stop per class, spread across the whole ramp — for n == 1 that is the middle of it, since
+    # linspace(0, 1, 1) would otherwise pin the single class to the ramp's dark end.
+    stops = [0.5] if n == 1 else list(np.linspace(0.0, 1.0, n))
+    return [to_hex(colormap(stop)) for stop in stops]

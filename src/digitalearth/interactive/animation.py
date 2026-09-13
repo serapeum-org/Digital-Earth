@@ -10,6 +10,7 @@ matplotlib backend or a client-side **scrubber** HTML that animates offline with
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -66,12 +67,13 @@ class AnimationMixin(_MixinBase):
         keys = list(dmap.kdims[0].values)
         return hv.HoloMap({key: dmap[key] for key in keys}, kdims=dmap.kdims)
 
-    def play(self, *, fps: float = 3.0, loop: bool = True) -> Any:
+    def play(self, *, fps: float = DEFAULT_FPS, loop: bool = True) -> Any:
         """Wrap the time cube in a Panel layout with an auto-advancing ``Player`` widget.
 
         Args:
-            fps: Playback frames per second (the Player interval). ``3.0`` is the shared cross-tier
-                default (#256), so the same animation plays at the same speed on every backend.
+            fps: Playback frames per second (the Player interval). Defaults to
+                :data:`~digitalearth.base.animation.DEFAULT_FPS`, the one rate every tier reads (#256), so
+                the same animation plays at the same speed on every backend.
             loop: Loop at the end (``True``) or stop (``False``).
 
         Returns:
@@ -131,7 +133,9 @@ class AnimationMixin(_MixinBase):
         view = pn.bind(lambda value: dmap[value], player)
         return pn.Column(pn.panel(view), player)
 
-    def save_animation(self, path: Any, *, fps: float = 3.0, **kwargs: Any) -> Path:
+    def save_animation(
+        self, path: Any, *, fps: float = DEFAULT_FPS, **kwargs: Any
+    ) -> Path:
         """Export the time cube as a GIF/MP4 (matplotlib backend) or a scrubber HTML.
 
         ``.gif``/``.mp4`` materialise the DynamicMap to a finite ``HoloMap`` and render via the
@@ -140,7 +144,8 @@ class AnimationMixin(_MixinBase):
 
         Args:
             path: Output file (``.gif`` / ``.mp4`` / ``.html``), as ``str`` or ``pathlib.Path``.
-            fps: Frames per second; ``3.0`` is the shared cross-tier default (#256).
+            fps: Frames per second. Defaults to :data:`~digitalearth.base.animation.DEFAULT_FPS`, the
+                one rate every tier reads (#256).
             **kwargs: Forwarded to :func:`holoviews.save`.
 
         Returns:

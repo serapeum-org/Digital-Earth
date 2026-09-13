@@ -22,12 +22,14 @@ import tempfile
 import warnings
 from typing import TYPE_CHECKING, Any, Optional
 
+from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import DEFAULT_TITLE
 
-#: Frames per second every tier's animation entry point defaults to, so one number means one speed
-#: whichever backend renders the series.
-DEFAULT_FPS = 3.0
+# `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
+# defaults to lives in `digitalearth.base.animation`, so one number means one speed whichever backend renders
+# the series. It stays importable from this module because that is where this tier's callers and tests already
+# reach for it.
 
 
 def _fps_from_duration(seconds: Any) -> float:
@@ -246,9 +248,11 @@ class ExportMixin(_MixinBase):
         Args:
             path: Where to write the GIF.
             fps: Frames per second — the rate every tier's animation entry point takes, with the same
-                default (:data:`DEFAULT_FPS`, ``3.0``, when omitted; the signature's ``None`` is the
-                "not passed" sentinel the deprecated spelling is resolved against), so one number
-                means one speed across the whole package.
+                default (:data:`DEFAULT_FPS`, ``3.0``, declared once in :mod:`digitalearth.base.animation`;
+                the signature's ``None`` is the "not passed" sentinel the deprecated spelling is resolved
+                against), so one number means one speed across the whole package. This entry point used to
+                be spelled ``duration=0.8`` (one frame held 0.8 s, i.e. 1.25 fps); a call that names no rate
+                now renders faster, and ``fps=1.25`` restores the previous speed.
             loop: How many times to repeat; ``0`` loops forever.
             title: HTML document title used while rendering.
             duration: **Deprecated** spelling of the frame rate, in seconds held per frame. Passing

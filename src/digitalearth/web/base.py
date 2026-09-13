@@ -25,9 +25,13 @@ from typing import Any, Dict, List, Optional, Self, Tuple
 from loguru import logger
 from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.bigdata import (
+    DEFAULT_BIG_DATA_THRESHOLD as _SHARED_BIG_DATA_THRESHOLD,
+)
 from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.base.symbology import sample_cmap
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
 #: point, so a page, a PNG snapshot and an animation frame are titled alike.
@@ -67,7 +71,8 @@ _DISPLAY_CRS_SPELLINGS = frozenset(
 
 #: The feature count above which a vector builder auto-routes to a GPU deck.gl layer, unless the map or
 #: the call overrides it (see :attr:`WebMapBase.big_data_threshold`).
-DEFAULT_BIG_DATA_THRESHOLD = 50_000
+#: Re-exported from :mod:`digitalearth.base.bigdata` so the tiers cannot drift apart on the number.
+DEFAULT_BIG_DATA_THRESHOLD = _SHARED_BIG_DATA_THRESHOLD
 
 
 def _patch_maplibre_html_encoding() -> None:
@@ -1348,9 +1353,9 @@ class WebMapBase:
     def _cmap_hex(cmap: str, n: int) -> List[str]:
         """Sample ``cmap`` at ``n`` evenly spaced stops and return hex colour strings.
 
-        The colour side of symbology — turning a matplotlib colormap name into the concrete ``#rrggbb``
-        strings a MapLibre paint expression needs. matplotlib is imported lazily (only when a builder
-        actually colours something), so importing the tier stays engine-free.
+        Delegates to :func:`~digitalearth.base.symbology.sample_cmap`, the one sampler every tier uses, so a
+        graduated web layer and the same layer on another backend cannot land on different colours. Kept as a
+        method because the vector builders call it through ``self``.
 
         Args:
             cmap: A matplotlib colormap name.
@@ -1359,13 +1364,7 @@ class WebMapBase:
         Returns:
             A list of ``n`` ``#rrggbb`` hex strings spanning the colormap.
         """
-        import numpy as np
-        from matplotlib import colormaps
-        from matplotlib.colors import to_hex
-
-        colormap = colormaps[cmap]
-        stops = [0.5] if n == 1 else list(np.linspace(0.0, 1.0, n))
-        return [to_hex(colormap(s)) for s in stops]
+        return sample_cmap(cmap, n)
 
     def _map_options(self) -> dict:
         """Build the ``MapOptions`` kwargs from the display config (drops an unset ``center``)."""

@@ -15,9 +15,10 @@ matplotlib backend (a static PNG via ``save``); it logs that it is not interacti
 producing an empty Bokeh layer.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Self, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
@@ -28,31 +29,6 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
-
-
-def _cmap_hex(cmap: str, n: int) -> List[str]:
-    """Sample ``cmap`` at ``n`` evenly spaced stops and return hex colour strings.
-
-    The colour side of graduated symbology — a colormap name becomes the concrete ``#rrggbb`` strings a
-    HoloViews ``cmap`` list needs, one per class. matplotlib is imported lazily (only when a builder
-    actually classifies something), so importing the tier stays engine-free. This mirrors the web tier's
-    ``WebMapBase._cmap_hex`` stop-for-stop, so a ``column``/``scheme``/``k`` triple colours identically on
-    both tiers; the shared ``Scale`` vocabulary (DE-12) is where the two collapse into one.
-
-    Args:
-        cmap: A matplotlib colormap name.
-        n: Number of colours to sample (>= 1).
-
-    Returns:
-        list: ``n`` ``#rrggbb`` hex strings spanning the colormap.
-    """
-    import numpy as np
-    from matplotlib import colormaps
-    from matplotlib.colors import to_hex
-
-    colormap = colormaps[cmap]
-    stops = [0.5] if n == 1 else list(np.linspace(0.0, 1.0, n))
-    return [to_hex(colormap(stop)) for stop in stops]
 
 
 class VectorMixin(_MixinBase):
@@ -131,6 +107,8 @@ class VectorMixin(_MixinBase):
         features: Any,
         *,
         value_column: Optional[str] = None,
+        scheme: Optional[Any] = None,
+        k: int = 5,
         size: float = 6.0,
         cmap: str = "viridis",
         rasterize: Any = "auto",
@@ -144,6 +122,11 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` of point geometries; reprojected to the
                 display CRS through pyramids when needed.
             value_column: Optional numeric column colouring the points (also shown on hover).
+            scheme: Optional classification scheme for ``value_column`` — ``None`` (the default) is a
+                continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts it into ``k``
+                classes. Spelled and computed the same way on every tier that classifies.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None``.
             size: Marker size in screen pixels — the one thing ``size`` ever means on any tier (#251).
             cmap: Colormap used when ``value_column`` is given.
             rasterize: ``"auto"`` (default) routes through Datashader above
@@ -197,7 +180,13 @@ class VectorMixin(_MixinBase):
             "Points", gdf, vdims=[value_column] if value_column else None
         )
         common: dict = {"size": size, **opts}
-        if value_column:
+        if value_column and scheme is not None:
+            classified = self._graduated_style(
+                gdf, value_column, scheme=scheme, k=k, cmap=cmap
+            )
+            common.update(classified)
+            self.last_breaks = list(classified["color_levels"])
+        elif value_column:
             common.update({"color": value_column, "cmap": cmap, "colorbar": True})
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
@@ -390,6 +379,46 @@ class VectorMixin(_MixinBase):
         self.last_breaks = list(categories)
         return self.add_element(element)
 
+    def _graduated_style(
+        self, gdf: Any, column: str, *, scheme: Any, k: int, cmap: str
+    ) -> dict:
+        """Classify ``column`` and return the HoloViews options that draw it as flat classes.
+
+        The one classification path in this tier, shared by :meth:`points` and :meth:`choropleth`, so a
+        classified point layer and a classified polygon layer cannot land on different class edges. It is a
+        thin adapter over ``cleopatra.styling.styles.classify`` — the **same** classifier the web and static
+        tiers call — whose edges become HoloViews ``color_levels`` alongside a per-class ``cmap`` list, which
+        is what makes Bokeh draw flat classes instead of interpolating the ramp.
+
+        Args:
+            gdf: The already-reprojected GeoDataFrame carrying ``column``.
+            column: The numeric attribute to classify and colour by.
+            scheme: A named scheme or an explicit sequence of class edges.
+            k: Number of classes for a named scheme.
+            cmap: Colormap sampled once per class.
+
+        Returns:
+            dict: the ``color`` / ``cmap`` / ``color_levels`` / ``colorbar`` options for the element.
+
+        Raises:
+            ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
+                wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
+        """
+        from cleopatra.styling.styles import classify
+
+        try:
+            edges, _ = classify(gdf[column].to_numpy(), scheme, k)
+        except ValueError as err:  # constant column, unknown scheme, k < 1, …
+            raise ValueError(
+                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
+            ) from err
+        return {
+            "color": column,
+            "cmap": sample_cmap(cmap, len(edges) - 1),
+            "color_levels": [float(edge) for edge in edges],
+            "colorbar": True,
+        }
+
     def _graduated_polygons(
         self,
         features: Any,
@@ -424,26 +453,13 @@ class VectorMixin(_MixinBase):
             ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
                 wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
         """
-        from cleopatra.styling.styles import classify
-
         gdf = self._display_gdf(features)
-        try:
-            edges, _ = classify(gdf[column].to_numpy(), scheme, k)
-        except ValueError as err:  # constant column, unknown scheme, k < 1, …
-            raise ValueError(
-                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
-            ) from err
-        colors = _cmap_hex(cmap, len(edges) - 1)
+        classified = self._graduated_style(gdf, column, scheme=scheme, k=k, cmap=cmap)
         element = self._vector_element("Polygons", gdf, vdims=[column])
-        common = {
-            "color": column,
-            "cmap": colors,
-            "color_levels": [float(edge) for edge in edges],
-            "colorbar": True,
-            **opts,
-        }
-        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        self.last_breaks = [float(edge) for edge in edges]
+        element = self._styled(
+            element, common={**classified, **opts}, bokeh={"tools": ["hover"]}
+        )
+        self.last_breaks = list(classified["color_levels"])
         return self.add_element(element)
 
     @_skips_off_limb

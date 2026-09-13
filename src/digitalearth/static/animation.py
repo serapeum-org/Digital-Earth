@@ -27,8 +27,13 @@ from cleopatra.glyphs.base.animation import save_animation as _cleopatra_save_an
 #: palette is built from unsubsampled colour (see the module docstring).
 FULL_CHROMA_PIX_FMT = "yuv444p"
 
-#: Frames per second used when neither the caller nor the scene supplies one.
-DEFAULT_FPS = 12.0
+#: Frames per second the *encoder* assumes when neither the caller nor the scene supplies a rate — a
+#: save-time fallback for a clip whose own rate is unknown, and a deliberately brisk one because a file
+#: written without a stated rate is a preview rather than a scientific sequence. This is **not** the rate an
+#: animation entry point defaults to: that is :data:`digitalearth.base.animation.DEFAULT_FPS` (``3.0``), which
+#: every tier reads and which ``Map.animate``/``Map.rotate`` pass down here. Both used to carry the same name,
+#: which read as one number declared twice with two different values.
+FALLBACK_SAVE_FPS = 12.0
 
 #: Formats cleopatra writes with Pillow rather than ffmpeg. They ignore ``pix_fmt``, so the full-chroma
 #: intermediate this module promises cannot be delivered for them — which makes them unfit to derive a GIF
@@ -93,7 +98,8 @@ def save_animation(
     Args:
         anim: The matplotlib ``FuncAnimation`` to save.
         path: Output path. The extension picks the format — ``gif``, ``mp4``, ``mov``, ``avi`` or ``webp``.
-        fps: Frames per second. Defaults to :data:`DEFAULT_FPS`; callers that know the scene's own rate
+        fps: Frames per second. Defaults to :data:`FALLBACK_SAVE_FPS`; callers that know the scene's own
+            rate
             (``Map.animate(fps=...)``) pass it through so the file matches what was previewed.
         gif: When given, a second output path to derive a GIF at, by reading the frames back off ``path``
             instead of re-rendering them. ``path`` must be one of :data:`VIDEO_SUFFIXES` — the ffmpeg-written
@@ -127,7 +133,7 @@ def save_animation(
 
             ```
     """
-    rate = _encoder_fps(DEFAULT_FPS if fps is None else fps)
+    rate = _encoder_fps(FALLBACK_SAVE_FPS if fps is None else fps)
     video_path = os.fspath(path)
     if gif is None:
         _cleopatra_save_animation(anim, video_path, fps=rate, **kwargs)
@@ -165,4 +171,9 @@ def save_animation(
     return video_path, gif_path
 
 
-__all__ = ["save_animation", "FULL_CHROMA_PIX_FMT", "DEFAULT_FPS", "VIDEO_SUFFIXES"]
+__all__ = [
+    "save_animation",
+    "FULL_CHROMA_PIX_FMT",
+    "FALLBACK_SAVE_FPS",
+    "VIDEO_SUFFIXES",
+]
