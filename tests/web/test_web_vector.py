@@ -420,8 +420,9 @@ class TestAContinuousRampNeedsSomethingToScale:
         """
         import numpy as np
 
+        web_map = WebMap()
         with pytest.raises(ValueError, match="no finite values to colour"):
-            WebMap()._color_expr(np.full(4, np.nan), "depth", None, 5, "viridis")
+            web_map._color_expr(np.full(4, np.nan), "depth", None, 5, "viridis")
 
 
 class TestForcedBigPolygonsBehaveLikeForcedBigPoints:
