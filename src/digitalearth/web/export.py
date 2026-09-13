@@ -242,9 +242,6 @@ class ExportMixin(_MixinBase):
     def _temporal_frames(self) -> list:
         """Return the visible-layer set for each time step, oldest first.
 
-        Args:
-            None.
-
         Returns:
             One list of layer ids per step — the layers that must be visible in that frame.
 
