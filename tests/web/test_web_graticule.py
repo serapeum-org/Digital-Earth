@@ -177,3 +177,49 @@ class TestTheGridOnTheMap:
         web_map = WebMap().basemap()
         with pytest.raises(ValueError, match="greater than 0"):
             web_map.graticule(spacing=bad)
+
+
+class TestTheHiddenGraticuleHidesItsLabels:
+    """Round-1 M1 shipped this fix untested; the degree numbers are the visible half."""
+
+    def test_hiding_the_grid_hides_the_degree_labels(self):
+        """Otherwise the numbers float over the map with nothing to annotate.
+
+        Test scenario:
+            The line layer and the symbol layer are separate MapLibre layers, so `visible=False` has to
+            reach both — the switcher and `remove_layer` only ever see the line layer.
+        """
+        from digitalearth.web import WebMap
+
+        payload = _payload(WebMap().basemap().graticule(visible=False).to_html())
+        assert payload.count('"visibility": "none"') == 2, (
+            "the grid is hidden but its labels are not"
+        )
+
+    def test_a_visible_grid_hides_nothing(self):
+        """The default must not write a visibility property that was never asked for."""
+        from digitalearth.web import WebMap
+
+        assert '"visibility": "none"' not in _payload(
+            WebMap().basemap().graticule().to_html()
+        )
+
+    def test_two_graticules_keep_their_call_order(self):
+        """Both land in the reference band, and the second should draw over the first.
+
+        Test scenario:
+            Inserting each at the band's start reversed them, so a fine grid added after a coarse one
+            ended up underneath it.
+        """
+        import re
+
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .graticule(spacing=30.0, name="coarse")
+            .graticule(spacing=10.0, name="fine", labels=False)
+        )
+        ids = re.findall(r'\["addLayer", \[\{"id": "([^"]+)"', _payload(m.to_html()))
+        assert ids.index("coarse") < ids.index("fine"), ids

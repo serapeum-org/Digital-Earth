@@ -257,3 +257,56 @@ class TestAnAnnotationDoesNotDecideTheView:
             .text(-170.0, -80.0, "far away")
         )
         assert m._map_view()["bounds"] == [4.0, 51.0, 7.0, 53.0], m._map_view()
+
+
+class TestRasterPlacementAndFramingAgree:
+    """M5: the image source is positioned in lon/lat, so the framing must be the same numbers."""
+
+    @pytest.fixture(autouse=True)
+    def _need_pyramids(self):
+        """Skip when pyramids is absent."""
+        pytest.importorskip("pyramids")
+
+    @pytest.mark.parametrize("crs", [4326, 3857])
+    def test_the_corners_and_the_view_are_the_same_degrees(self, dataset, crs):
+        """A projected display CRS framed on degrees while placing the image in metres.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            crs: The display CRS.
+        """
+        import re
+
+        from digitalearth.web import WebMap
+
+        payload = _payload(WebMap(crs=crs).add_raster(dataset).to_html())
+        corners = re.search(r'"coordinates": \[\[([-\d.]+), ([-\d.]+)\]', payload)
+        view = re.search(r'"fitBounds", \[\[([-\d.]+), ([-\d.]+)', payload)
+        assert corners and view, payload[-400:]
+        assert abs(float(corners.group(1)) - float(view.group(1))) < 0.01, (
+            f"west differs between placement and framing at crs={crs}"
+        )
+        assert -180.0 <= float(corners.group(1)) <= 180.0, "corners are not lon/lat"
+
+
+class TestTheViewChoiceIsRemembered:
+    """N7: an explicit `zoom=2` is a choice, not the absence of one."""
+
+    def test_an_explicit_default_zoom_still_counts_as_chosen(self, boxes):
+        """Comparing by value cannot tell the caller's 2 from the default 2.
+
+        Args:
+            boxes: The fixture frame.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap(zoom=2).basemap().choropleth(boxes, column="pop")
+        assert m._map_view() is None, "an explicitly-set view was overridden"
+
+    def test_a_wrong_length_extent_names_the_argument(self):
+        """A tuple-unpacking traceback points at the code, not at the call."""
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap()
+        with pytest.raises(ValueError, match="west, south, east, north"):
+            web_map.fit_bounds((1.0, 2.0, 3.0))

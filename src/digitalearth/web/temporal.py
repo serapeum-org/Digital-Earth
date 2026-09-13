@@ -341,35 +341,34 @@ class TemporalMixin(_MixinBase):
                 total_pixels,
             )
 
-    def _add_temporal_export_control(self) -> None:
-        """Give a saved page a way to reach every time step.
+    def _temporal_switcher(self) -> Optional[dict]:
+        """Return the step picker a saved page needs, or ``None`` when this map is not a series.
 
         ``render`` wraps the map in an ``ipywidgets`` slider, which exists only in a live kernel:
         ``to_html`` serialises the map alone, so a shared page showed one frozen frame and no way to move.
-        Every step is already in the page as its own layer, so a layer switcher over those makes them all
+        Every step is already in the page as its own layer, so a switcher over those makes them all
         reachable — a step picker rather than a scrubber, but the difference between a usable artifact and
-        a screenshot.
+        a screenshot. The steps carry their time labels as their layer ids, because the switcher captions
+        each row with the id.
 
-        Only the raster (layer-stack) mode is covered. The vector mode draws one layer and moves a MapLibre
+        Returns only the raster (layer-stack) form. The vector form draws one layer and moves a MapLibre
         filter across it, so its steps are not separately addressable, and a true in-page slider cannot be
-        built at all: py-maplibregl's standalone template keeps the map object local to its own closure
+        built at all: py-maplibregl's standalone template keeps the map object inside its own closure
         (``window._maplibreWidget`` is set on the Shiny path only), so injected markup has nothing to drive.
+
+        Returns:
+            The switcher request, or ``None``.
         """
         config = self._temporal
         if not config or config.get("mode") != "raster":
-            return
-        if config.get("export_control_added"):
-            return  # render() and save() both build the widget; the control is added once, not per build
-        if self._has_layer_switcher:
-            return  # the caller added their own; a second identical panel in the same corner is a bug
-        # Only the steps still on the map: remove_layer() prunes the config, but a caller can also drop a
-        # step layer directly, and a render-time helper must not raise about state it merely observes.
-        live = set(self.layer_ids)
-        layer_ids = [i for i in (config.get("layer_ids") or []) if i in live]
-        if len(layer_ids) < 2:
-            return  # one step is not a series; a switcher over it would be noise
-        self.layer_control(layer_ids=layer_ids)
-        config["export_control_added"] = True
+            return None
+        return {
+            "layer_ids": list(config.get("layer_ids") or []),
+            "theme": "default",
+            "position": "top-right",
+            # One step is not a series; a picker over it would be noise.
+            "minimum": 2,
+        }
 
     def _wrap_temporal(self, widget: Any) -> Any:
         """Wrap the map ``widget`` in a slider composite that reveals one time step at a time.

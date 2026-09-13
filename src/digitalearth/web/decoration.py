@@ -463,8 +463,6 @@ class DecorationMixin(_MixinBase):
                 "legend() has nothing to describe: no classified layer has been added yet. Add a "
                 "choropleth (or any builder given column=...) first."
             )
-        from maplibre.controls import InfoBoxControl
-
         heading = title if title is not None else spec.get("column") or ""
         head = (
             f'<div style="font-weight:600;margin-bottom:4px">{_text(heading)}</div>'
@@ -474,16 +472,10 @@ class DecorationMixin(_MixinBase):
         rows = _legend_rows(
             spec["kind"], list(spec["values"]), list(spec["colors"]), labels
         )
-        control = InfoBoxControl(
-            content=f"<div>{head}{rows}</div>",
-            css_text=_PANEL_CSS,
-            position=position,
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_control(control, position)
-
-        return self.add_layer(layer=apply)
+        # One panel per kind: a second legend replaces the first rather than stacking an identical box
+        # in the same corner, and it is built into the widget rather than appended as a layer.
+        self._panels["legend"] = (f"<div>{head}{rows}</div>", position)
+        return self
 
     def layer_control(
         self,
@@ -504,6 +496,20 @@ class DecorationMixin(_MixinBase):
                 (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from
                 the switch without hiding them from the map.
             theme: ``"default"`` or ``"simple"`` — py-maplibregl's two switcher styles.
+
+        Note:
+            A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
+            Builders that draw more than one layer — ``cluster`` (bubbles, counts, loose points) and
+            ``graticule`` (lines, degree labels) — are listed once, under their main layer, so toggling a
+            cluster hides its bubbles while the count labels remain. ``remove_layer`` does take the whole
+            group. Hiding the parts together needs a control py-maplibregl does not ship.
+
+        Note:
+            A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
+            Builders that draw more than one layer — ``cluster`` (bubbles, counts, loose points) and
+            ``graticule`` (lines, degree labels) — are listed once, under their main layer, so toggling a
+            cluster hides its bubbles while the count labels remain. ``remove_layer`` does take the whole
+            group. Hiding the parts together needs a control py-maplibregl does not ship.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -547,15 +553,15 @@ class DecorationMixin(_MixinBase):
                 f"layer_control() was given {unknown}, which are not on this map; its layers are "
                 f"{available}"
             )
-        from maplibre.controls import LayerSwitcherControl
-
-        control = LayerSwitcherControl(layer_ids=wanted, theme=theme)
-
-        def apply(widget: Any) -> None:
-            widget.add_control(control, position)
-
-        self._has_layer_switcher = True
-        return self.add_layer(layer=apply)
+        # Held as a request, not appended as a layer: the live layers are resolved when the widget is
+        # built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling
+        # this twice replaces the request rather than stacking a second identical panel.
+        self._switcher = {
+            "layer_ids": wanted,
+            "theme": theme,
+            "position": position,
+        }
+        return self
 
     def text(
         self,
@@ -667,19 +673,11 @@ class DecorationMixin(_MixinBase):
         """
         _require_maplibre()
         _check_position(position)
-        from maplibre.controls import InfoBoxControl
-
         body = f'<div style="font-weight:600;font-size:15px">{_text(heading)}</div>'
         if subtitle:
             body += f'<div style="opacity:.75;margin-top:2px">{_text(subtitle)}</div>'
-        control = InfoBoxControl(
-            content=f"<div>{body}</div>", css_text=_PANEL_CSS, position=position
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_control(control, position)
-
-        return self.add_layer(layer=apply)
+        self._panels["title"] = (f"<div>{body}</div>", position)
+        return self
 
     def graticule(
         self,

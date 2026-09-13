@@ -82,9 +82,14 @@ class RasterMixin(_MixinBase):
         ):  # ascending y → flip so PNG row 0 is the northern edge
             values = values[::-1]
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
-        coordinates = self._image_coordinates(source.x.values, source.y.values)
-        # [TL, TR, BR, BL] -> (west, south, east, north), so a raster frames the map like a vector layer.
-        self._note_bounds(
+        coordinates = self._lonlat_corners(source)
+        if coordinates is None:
+            raise ValueError(
+                "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
+                "needs; reproject the dataset, or set a lon/lat display CRS"
+            )
+        # Already lon/lat, so the framing takes them as they are.
+        self._note_lonlat_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
         )
 
@@ -178,8 +183,14 @@ class RasterMixin(_MixinBase):
         ):  # ascending y → flip so PNG row 0 is the north edge
             stack = stack[::-1]
         url = self._composite_png_datauri(stretch_to_unit(stack, limits))
-        coordinates = self._image_coordinates(source.x.values, source.y.values)
-        self._note_bounds(
+        coordinates = self._lonlat_corners(source)
+        if coordinates is None:
+            raise ValueError(
+                "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
+                "needs; reproject the dataset, or set a lon/lat display CRS"
+            )
+        # Already lon/lat, so the framing takes them as they are.
+        self._note_lonlat_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
         )
         src_id, layer_id = self._uid("rgb-src"), self._layer_id("rgb", name)
@@ -233,6 +244,28 @@ class RasterMixin(_MixinBase):
         buffer = io.BytesIO()
         mpimage.imsave(buffer, (rgba * 255).astype("uint8"), format="png")
         return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+
+    def _lonlat_corners(self, source: Any) -> Optional[list]:
+        """Return a raster's corner coordinates as the lon/lat an image source is placed by.
+
+        MapLibre positions an ``image`` source with ``[[lng, lat], …]``, so a display CRS that is not
+        lon/lat has to be converted — otherwise the map frames on the right degrees while the image sits in
+        metre-space a long way off.
+
+        Args:
+            source: The display-CRS source whose ``x``/``y`` coordinate arrays give the corners.
+
+        Returns:
+            ``[TL, TR, BR, BL]`` in lon/lat, or ``None`` when the corners cannot be converted.
+        """
+        corners = self._image_coordinates(source.x.values, source.y.values)
+        west, north = corners[0]
+        east, south = corners[2]
+        converted = self._as_lonlat(west, south, east, north)
+        if converted is None:
+            return None
+        west, south, east, north = converted
+        return [[west, north], [east, north], [east, south], [west, south]]
 
     @staticmethod
     def _image_coordinates(x: Any, y: Any) -> List[List[float]]:

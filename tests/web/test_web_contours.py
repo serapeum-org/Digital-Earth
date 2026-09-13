@@ -125,3 +125,25 @@ class TestWhatItRefuses:
         web_map = WebMap().basemap()
         with pytest.raises(ValueError, match="traced nothing"):
             web_map.contours(dataset, interval=1000)
+
+
+class TestHiddenContoursHideTheirLabels:
+    """Round-1 M1 asked for this on both builders; only the graticule half was done."""
+
+    def test_hiding_the_contours_hides_the_level_labels(self, dataset):
+        """Level numbers with no contour under them is not a map.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .contours(dataset, interval=10, labels=True, visible=False)
+        )
+        payload = _payload(m.to_html())
+        assert payload.count('"visibility": "none"') == 2, (
+            "the contours are hidden but their labels are not"
+        )

@@ -47,13 +47,18 @@ are refused there rather than silently dropped.
 
 ## Drawing order
 
-Layers sit in three bands, regardless of the order you call the builders in:
+Layers sit in three bands, and a later call cannot slip under an earlier band:
 
-1. **basemaps** — `basemap()`, `tiles()`
-2. **reference** — `graticule()`
-3. **data** — everything else, in call order
+1. **basemaps** — `basemap()`, `tiles()` (`add_underlay`)
+2. **reference** — `graticule()` (`add_reference`)
+3. **data** — everything else (`add_layer`)
 
-That is why `.basemap().graticule()` works: a reference grid belongs over the ground and under the data.
+Within a band, layers keep the order you added them in. That is why `.basemap().graticule()` works: a
+reference grid belongs over the ground and under the data, which neither end of a flat list can express.
+
+A builder that draws several MapLibre layers — `cluster` (bubbles, counts, loose points) and `graticule`
+(lines, degree labels) — appears once in `layer_ids`, under its main layer. `remove_layer` takes the whole
+group; the layer switcher toggles only that main layer, because that is what py-maplibregl's control does.
 
 ## Sharing a page safely
 

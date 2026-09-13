@@ -359,7 +359,8 @@ class VectorMixin(_MixinBase):
                 visible=visible,
             )
         if labels:
-            return self.labels(features, attribute)
+            # Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.
+            return self.labels(features, attribute, visible=visible)
         return self
 
     def _vector_layer(
@@ -470,9 +471,10 @@ class VectorMixin(_MixinBase):
                 # setLayoutProperty, which cannot reach it, so it has no registry entry to name or hide.
                 # Dropping these silently would change the API contract at 50 000 features.
                 raise ValueError(
-                    "points(big=True) renders a deck.gl overlay, which the layer registry cannot "
-                    "address — so name= and visible= cannot be honoured. Pass big=False to keep a "
-                    "MapLibre layer, or drop those arguments."
+                    f"points() is rendering {len(gdf)} features as a deck.gl overlay"
+                    f"{'' if big else ' (over the ' + str(self.big_data_threshold) + '-feature threshold)'}"
+                    ", which the layer registry cannot address — so name= and visible= cannot be "
+                    "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
             return self.deck_scatter(gdf, radius=radius)
         paint: dict = {"circle-radius": float(radius), "circle-opacity": float(opacity)}
@@ -583,9 +585,10 @@ class VectorMixin(_MixinBase):
                 # setLayoutProperty, which cannot reach it, so it has no registry entry to name or hide.
                 # Dropping these silently would change the API contract at 50 000 features.
                 raise ValueError(
-                    "polygons(big=True) renders a deck.gl overlay, which the layer registry cannot "
-                    "address — so name= and visible= cannot be honoured. Pass big=False to keep a "
-                    "MapLibre layer, or drop those arguments."
+                    f"polygons() is rendering {len(gdf)} features as a deck.gl overlay"
+                    f"{'' if big else ' (over the ' + str(self.big_data_threshold) + '-feature threshold)'}"
+                    ", which the layer registry cannot address — so name= and visible= cannot be "
+                    "honoured. Pass big=False to force a MapLibre layer, or drop those arguments."
                 )
             return self.deck_polygons(gdf)
         paint: dict = {

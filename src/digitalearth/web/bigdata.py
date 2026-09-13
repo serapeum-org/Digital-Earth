@@ -122,6 +122,7 @@ class BigDataMixin(_MixinBase):
             widget.add_source(src_id, gdf)
             widget.add_layer(layer)
 
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
         self._index_layer(layer_id, None)
         return self.add_layer(layer=apply)
@@ -194,9 +195,10 @@ class BigDataMixin(_MixinBase):
             widget.add_layer(count)
             widget.add_layer(unclustered)
 
+        # One closure adds the bubbles, their counts and the loose points, so tagging it with the
+        # indexed id removes all three together — they are one thing to a viewer.
+        apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
         self._last_layer_id = unclustered.id
-        # The bubbles, their counts and the loose points are one thing to a viewer, so the switcher gets
-        # the entry that carries them: toggling the source layer is what turns the cluster display off.
         self._index_layer(clusters.id, None)
         return self.add_layer(layer=apply)
 

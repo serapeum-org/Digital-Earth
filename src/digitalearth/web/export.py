@@ -157,9 +157,10 @@ class ExportMixin(_MixinBase):
         Args:
             path: Output ``*.png`` file.
             title: HTML document title.
-            **kwargs: Reserved for headless-browser options, and not forwarded to ``to_html``. The one
-                recognised key is ``widget``: a pre-built map widget to render instead of building a fresh
-                one, which is how :meth:`to_gif` renders a frame with one step visible.
+            **kwargs: Reserved for headless-browser options, and not forwarded to ``to_html``. Two keys
+                are recognised: ``widget``, a pre-built map widget to render instead of building a fresh
+                one (how :meth:`to_gif` renders a frame with one step visible), and ``kind``, the export
+                name quoted in the missing-browser error so a GIF failure does not talk about PNG.
 
         Returns:
             The ``path`` written.

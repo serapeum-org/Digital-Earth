@@ -338,3 +338,182 @@ class TestRemovingAStepKeepsTheMapRenderable:
         for layer_id in list(m.layer_ids)[:2]:
             m.remove_layer(layer_id)
         assert m._temporal is None, m._temporal
+
+
+def _emitted_layer_ids(html):
+    """Return the layer ids the page actually adds, in order.
+
+    Args:
+        html: A page from ``to_html``.
+
+    Returns:
+        The ids from the emitted ``addLayer`` calls.
+    """
+    import re
+
+    return re.findall(r'\["addLayer", \[\{"id": "([^"]+)"', _payload(html))
+
+
+class TestRemovalReachesThePage:
+    """A removal that only updates the index leaves the layer drawn and unreachable."""
+
+    @pytest.mark.parametrize("builder", ["points", "heatmap", "cluster"])
+    def test_every_indexed_builder_is_really_removable(self, points, builder):
+        """`remove_layer` filters `self.layers` on an attribute each builder has to set.
+
+        Args:
+            points: The fixture points.
+            builder: The builder under test.
+
+        Test scenario:
+            heatmap, cluster and extrusion joined the registry without setting it, so removal reported
+            success, dropped the entry from `layer_ids`, and left the layer on the map — neither
+            removable nor switchable. Asserting `layer_ids` alone passes while that is true, so this
+            asserts the emitted addLayer ids.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap()
+        getattr(m, builder)(points)
+        assert m.layer_ids, f"{builder} is not in the registry"
+        before = _emitted_layer_ids(m.to_html())
+        m.remove_layer(m.layer_ids[0])
+        after = _emitted_layer_ids(m.to_html())
+        assert len(after) < len(before), f"{builder} survived removal: {after}"
+        assert m.layer_ids == []
+
+    def test_a_cluster_removes_all_three_of_its_layers(self, points):
+        """Bubbles, counts and loose points are one entry, so they go together.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().cluster(points)
+        m.remove_layer(m.layer_ids[0])
+        assert _emitted_layer_ids(m.to_html()) == ["tiles-2"], _emitted_layer_ids(
+            m.to_html()
+        )
+
+
+class TestTheSwitcherFollowsTheLiveLayers:
+    """The control is resolved when the widget is built, not when it was asked for."""
+
+    def test_a_removed_layer_leaves_no_dead_row(self, points, polygons):
+        """A row naming a removed layer logs an error in the browser and toggles nothing.
+
+        Args:
+            points: The fixture points.
+            polygons: The fixture frame.
+        """
+        import re
+
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .points(points, name="A")
+            .polygons(polygons, column="pop", name="B")
+            .layer_control()
+        )
+        m.remove_layer("A")
+        rows = re.search(r'"layerIds": (\[[^\]]*\])', _payload(m.to_html()))
+        assert rows.group(1) == '["B"]', rows.group(1)
+
+    def test_asking_twice_does_not_stack_two_switchers(self, points):
+        """Two identical panels in one corner is a bug, not a feature.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().points(points, name="A").layer_control().layer_control()
+        assert _payload(m.to_html()).count('"LayerSwitcherControl"') == 1
+
+    def test_a_caller_switcher_replaces_the_automatic_one(self, raster_stack):
+        """A temporal map that also asks for a switcher gets one, not two.
+
+        Args:
+            raster_stack: A 3-member collection.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack).layer_control()
+        assert _payload(m.to_html()).count('"LayerSwitcherControl"') == 1
+
+    def test_an_export_after_a_render_carries_no_picker(self, raster_stack):
+        """The notebook path — look at the map, then export it — is the likely one.
+
+        Args:
+            raster_stack: A 3-member collection.
+
+        Test scenario:
+            While the control was materialised into the layer list, `with_controls=False` could only skip
+            adding it again; a render had already put it there, so every GIF frame kept it.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack)
+        m._build_map_widget()
+        exported = m._build_map_widget(with_controls=False).to_html()
+        assert exported[exported.rfind("var data = ") :].count('"addControl"') == 0
+
+
+class TestIdsAreAllocatedOnce:
+    """A caller name and a generated id come out of the same allocator."""
+
+    def test_a_name_shaped_like_a_generated_id_does_not_collide(self, points):
+        """Two layers sharing a MapLibre id makes addLayer drop the second with a console error.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            `line-1` and `fill-3` are plausible names for reaches or basins, so this is reachable.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .points(points, name="circle-5")
+            .points(points)
+            .points(points)
+        )
+        assert len(m.layer_ids) == len(set(m.layer_ids)), m.layer_ids
+        emitted = _emitted_layer_ids(m.to_html())
+        assert len(emitted) == len(set(emitted)), emitted
+
+
+class TestTheDeckRefusalNamesTheRealCause:
+    """M7: the message blamed a `big=True` the caller may never have passed."""
+
+    def test_the_threshold_route_says_so(self, points, monkeypatch):
+        """Crossing the threshold is the surprising route, so the error has to name it.
+
+        Args:
+            points: The fixture points.
+            monkeypatch: pytest's patcher, used to lower the threshold rather than build 50 000 features.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap()
+        monkeypatch.setattr(web_map, "big_data_threshold", 1)
+        with pytest.raises(ValueError, match="threshold"):
+            web_map.points(points, name="Cities")
+
+    def test_the_explicit_route_does_not_mention_a_threshold(self, points):
+        """`big=True` is the caller's own choice, so the threshold is irrelevant to them.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap()
+        with pytest.raises(ValueError, match="deck.gl overlay") as err:
+            web_map.polygons(points, big=True, name="Cities")
+        assert "threshold" not in str(err.value), str(err.value)

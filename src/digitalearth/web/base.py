@@ -32,9 +32,10 @@ from digitalearth.base.sources.source import Source
 #: point, so a page, a PNG snapshot and an animation frame are titled alike.
 DEFAULT_TITLE = "Digital-Earth map"
 
-#: The constructor's zoom when the caller expresses no preference. A map still on it is taken to have no
-#: chosen view, so the data's own extent may frame it.
+#: The constructor's zoom when the caller expresses no preference, and the sentinel that says so. A value
+#: comparison cannot distinguish an explicit ``zoom=2`` from the default, and passing it is a choice.
 _DEFAULT_ZOOM = 2
+_UNSET = object()
 
 #: The pip extra / pixi env that provides the MapLibre + deck.gl engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -341,19 +342,25 @@ class WebMapBase:
         self,
         *,
         center: Optional[Any] = None,
-        zoom: int = _DEFAULT_ZOOM,
+        zoom: Any = _UNSET,
         style: Any = "dark",
         crs: int = 4326,
         height: Optional[int] = 500,
     ):
         self.center = center
-        self.zoom = zoom
+        #: Whether the caller named a view of their own. Tracked from the sentinel rather than the value,
+        #: because an explicit ``zoom=2`` is a choice and equals the default.
+        self._view_chosen = center is not None or zoom is not _UNSET
+        self.zoom = _DEFAULT_ZOOM if zoom is _UNSET else zoom
         self.style = style
         self.crs = crs
         self.height = height
         self.layers: List[Any] = []
         #: Monotonic counter handing out unique source/layer ids (see :meth:`_uid`).
         self._id_counter = 0
+        #: Every id this map has minted, named or generated. Both allocators reserve from it, so a caller
+        #: name shaped like a generated id (``"circle-5"``) cannot later be handed out a second time.
+        self._issued_ids: set = set()
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
         #: Every data layer added, in order, as ``(id, label)``. The id addresses the layer in MapLibre;
@@ -378,8 +385,15 @@ class WebMapBase:
         self._fit: Optional[dict] = None
         #: How many layers sit in the basemap band, so :meth:`add_reference` can insert just above them.
         self._underlay_count = 0
-        #: Whether the caller added their own layer switcher, so the temporal one does not stack on it.
-        self._has_layer_switcher = False
+        #: How many sit in the reference band, so two of them keep the order they were added in.
+        self._reference_count = 0
+        #: The floating panels — legend and title — as ``{kind: (content, position)}``. Held as state so
+        #: calling either twice replaces it rather than stacking two identical boxes in one corner.
+        self._panels: dict = {}
+        #: The caller's ``layer_control`` request, resolved against the live layers when the widget is
+        #: built. Held as state rather than appended to :attr:`layers` so that removing a layer cannot
+        #: strand a dead row in a saved page, and so an export can leave the control out entirely.
+        self._switcher: Optional[dict] = None
         #: Time-slider config set by ``timeslider`` (``None`` = no temporal control); read by ``render``.
         #: ``mode`` selects the wiring: ``"vector"`` carries ``layer_id`` and filters one layer by
         #: ``kdim``; ``"raster"`` carries ``layer_ids`` and swaps their visibility. Both carry ``times``.
@@ -400,7 +414,15 @@ class WebMapBase:
         self._note_bounds(getattr(gdf, "total_bounds", None))
         return gdf
 
-    def _note_bounds(self, bounds: Any) -> None:
+    def _note_lonlat_bounds(self, bounds: Any) -> None:
+        """Union an extent that is already lon/lat into the running data extent.
+
+        Args:
+            bounds: ``(west, south, east, north)`` in degrees.
+        """
+        self._note_bounds(bounds, already_lonlat=True)
+
+    def _note_bounds(self, bounds: Any, *, already_lonlat: bool = False) -> None:
         """Union a layer's lon/lat extent into the running data extent.
 
         Called by the builders' shared choke points — :meth:`_display_gdf` for vector data and
@@ -411,6 +433,8 @@ class WebMapBase:
                 here when that is not already what it is — ``fitBounds`` takes degrees, and ``WebMap(crs=)``
                 is a supported public setting. ``None`` is ignored, as is a non-finite value: an empty
                 frame reports ``inf`` bounds, and one unusable layer must not decide where the map looks.
+            already_lonlat: Set by callers that hold degrees already — the raster builders, whose corners
+                have to be lon/lat anyway because that is how MapLibre places an image source.
         """
         if bounds is None:
             return
@@ -420,10 +444,11 @@ class WebMapBase:
             return
         if not all(math.isfinite(value) for value in (west, south, east, north)):
             return
-        converted = self._as_lonlat(west, south, east, north)
-        if converted is None:
-            return
-        west, south, east, north = converted
+        if not already_lonlat:
+            converted = self._as_lonlat(west, south, east, north)
+            if converted is None:
+                return
+            west, south, east, north = converted
         if self._data_bounds is None:
             self._data_bounds = [west, south, east, north]
             return
@@ -504,7 +529,12 @@ class WebMapBase:
                     "Add the data first, or pass bounds=(west, south, east, north)."
                 )
             bounds = list(self._data_bounds)
-        west, south, east, north = (float(value) for value in bounds)
+        values = [float(value) for value in bounds]
+        if len(values) != 4:
+            raise ValueError(
+                f"fit_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
+            )
+        west, south, east, north = values
         self._fit = {
             "bounds": [west, south, east, north],
             # Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a
@@ -513,6 +543,36 @@ class WebMapBase:
             "animate": bool(animate),
         }
         return self
+
+    def _switcher_request(self) -> Optional[dict]:
+        """Return the layer switcher to add to the widget being built, or ``None`` for no switcher.
+
+        Resolved here rather than when ``layer_control()`` was called, because the set of layers can change
+        afterwards: a row naming a removed layer survives into the saved page, where clicking it logs an
+        error and toggles nothing.
+
+        Returns:
+            The control's ``layer_ids``, ``theme`` and ``position``, or ``None``.
+        """
+        request = self._switcher
+        if request is None:
+            request = self._temporal_switcher()
+        if request is None:
+            return None
+        live = [i for i in request["layer_ids"] if i in set(self.layer_ids)]
+        if len(live) < request.get("minimum", 1):
+            return None
+        return {**request, "layer_ids": live}
+
+    def _temporal_switcher(self) -> Optional[dict]:
+        """Return the automatic step picker for a temporal map, if this map is one.
+
+        Overridden in :mod:`digitalearth.web.temporal`; the base map has no time dimension.
+
+        Returns:
+            ``None``.
+        """
+        return None
 
     def _map_view(self) -> Optional[dict]:
         """Return the framing to apply to the built widget, or ``None`` to leave the view alone.
@@ -529,8 +589,7 @@ class WebMapBase:
         bounds = self._data_bounds
         if bounds is not None and bounds[0] == bounds[2] and bounds[1] == bounds[3]:
             return None  # a single point is not an extent; framing on it means maximum zoom
-        chose_view = self.center is not None or self.zoom != _DEFAULT_ZOOM
-        if chose_view or self._data_bounds is None:
+        if self._view_chosen or self._data_bounds is None:
             return None
         return {"bounds": list(self._data_bounds), "padding": 20, "animate": False}
 
@@ -632,16 +691,15 @@ class WebMapBase:
         """
         if not name:
             return self._uid(prefix)
-        taken = set(self.layer_ids)
-        if name not in taken:
+        if name not in self._issued_ids:
+            self._issued_ids.add(name)
             return name
-        for suffix in range(2, len(taken) + 3):
-            candidate = f"{name}-{suffix}"
-            if candidate not in taken:
-                return candidate
-        return self._uid(
-            prefix
-        )  # pragma: no cover - unreachable while the loop bound exceeds len(taken)
+        suffix = 2
+        while f"{name}-{suffix}" in self._issued_ids:
+            suffix += 1
+        candidate = f"{name}-{suffix}"
+        self._issued_ids.add(candidate)
+        return candidate
 
     def _uid(self, prefix: str) -> str:
         """Return a per-map-unique id like ``"fill-3"`` for a MapLibre source/layer.
@@ -654,7 +712,14 @@ class WebMapBase:
             collide on a MapLibre source/layer id.
         """
         self._id_counter += 1
-        return f"{prefix}-{self._id_counter}"
+        candidate = f"{prefix}-{self._id_counter}"
+        while candidate in self._issued_ids:
+            # A caller name can look exactly like a generated id, and two layers sharing a MapLibre id
+            # makes addLayer drop the second one with only a console error.
+            self._id_counter += 1
+            candidate = f"{prefix}-{self._id_counter}"
+        self._issued_ids.add(candidate)
+        return candidate
 
     def add_layer(self, layer: Any) -> Self:
         """Register ``layer`` and return ``self`` (chainable).
@@ -1022,7 +1087,8 @@ class WebMapBase:
         Returns:
             This map (chainable).
         """
-        self.layers.insert(self._underlay_count, layer)
+        self.layers.insert(self._underlay_count + self._reference_count, layer)
+        self._reference_count += 1
         return self
 
     def add_underlay(self, layer: Any) -> Self:
@@ -1125,18 +1191,38 @@ class WebMapBase:
             ImportError: when the ``web`` extra is not installed.
         """
         MapOptions, MapWidget = _require_maplibre()
-        add_temporal_control = getattr(self, "_add_temporal_export_control", None)
-        if with_controls and add_temporal_control is not None:
-            add_temporal_control()
         kwargs: dict = {"map_options": MapOptions(**self._map_options())}
         if self.height is not None:
             kwargs["height"] = int(self.height)
         widget = MapWidget(**kwargs)
         for layer in self.layers:
             self._apply_layer(widget, layer)
+        if self._panels:
+            from maplibre.controls import InfoBoxControl
+
+            # Imported here, not at module scope: decoration imports base, so the other direction has to
+            # wait until it is needed.
+            from digitalearth.web.decoration import _PANEL_CSS
+
+            for content, position in self._panels.values():
+                widget.add_control(
+                    InfoBoxControl(
+                        content=content, css_text=_PANEL_CSS, position=position
+                    ),
+                    position,
+                )
+        switcher = self._switcher_request() if with_controls else None
+        if switcher is not None:
+            from maplibre.controls import LayerSwitcherControl
+
+            widget.add_control(
+                LayerSwitcherControl(
+                    layer_ids=switcher["layer_ids"], theme=switcher["theme"]
+                ),
+                switcher["position"],
+            )
         view = self._map_view()
         if view is not None:
-            # After the layers, so a builder that adds to the extent while applying is included.
             widget.fit_bounds(
                 view["bounds"], padding=view["padding"], animate=view["animate"]
             )
@@ -1172,7 +1258,9 @@ class WebMapBase:
     ) -> str:
         """Save the map — a standalone HTML page or a PNG snapshot — and return ``path`` (DW.6).
 
-        The output kind is ``fmt`` if given, else inferred from the suffix (``.png`` → PNG, otherwise HTML).
+        The output kind is ``fmt`` if given, else inferred from the suffix: ``.png`` renders a snapshot,
+        ``.gif`` runs the animation export (:meth:`~digitalearth.web.export.ExportMixin.to_gif`, which needs
+        a temporal map and a headless browser), anything else writes the HTML page.
         HTML is serialised via ``MapWidget.to_html`` and written as UTF-8 ourselves — sidestepping maplibre's
         cp1252-on-Windows writer bug (see :func:`_patch_maplibre_html_encoding`). By default the page embeds
         the map state and widget JS but references ``maplibre-gl`` from a CDN; ``offline=True`` inlines the
@@ -1181,7 +1269,7 @@ class WebMapBase:
 
         Args:
             path: Output file (``*.html`` or ``*.png``).
-            fmt: Force the format (``"html"`` / ``"png"``); ``None`` infers it from ``path``.
+            fmt: Force the format (``"html"`` / ``"png"`` / ``"gif"``); ``None`` infers it from ``path``.
             title: HTML document title.
             offline: When True (HTML only), inline the ``maplibre-gl`` JS/CSS so the page opens offline.
             **kwargs: Forwarded to ``MapWidget.to_html`` (HTML) or the PNG renderer.
