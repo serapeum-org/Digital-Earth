@@ -64,6 +64,24 @@ def _utm_raster() -> Dataset:
     )
 
 
+def _projected_source_near_the_origin(crs):
+    """A Web-Mercator field whose metres are small enough to pass for lon/lat, in a given CRS spelling.
+
+    Args:
+        crs: How the caller spelled the source's CRS (an EPSG int, ``"EPSG:<code>"``, proj4, ...).
+
+    Returns:
+        A :class:`~digitalearth.base.sources.Source` in that CRS whose coordinates the magnitude fallback
+        cannot tell from degrees — so only reading the CRS can refuse it.
+    """
+    return get_source(
+        np.zeros((5, 7)),
+        x=np.linspace(-300.0, 300.0, 7),
+        y=np.linspace(-80.0, 80.0, 5),
+        crs=crs,
+    )
+
+
 class TestGeographicSource:
     """Tests for GlobeMixin._to_geographic_source — the globe's pyramids reprojection choke point."""
 
@@ -131,6 +149,88 @@ class TestGeographicSource:
         finally:
             scene.close()
 
+    @pytest.mark.parametrize(
+        "crs, named",
+        [
+            (3857, "EPSG:3857"),
+            ("EPSG:3857", "EPSG:3857"),
+            ("epsg:3857", "EPSG:3857"),
+            ("+proj=ortho +lat_0=53 +lon_0=4", "proj=ortho"),
+        ],
+    )
+    def test_a_projected_source_is_refused_however_its_crs_is_spelled(self, crs, named):
+        """Every spelling the ``Source.crs`` contract blesses is read, not just the bare EPSG int.
+
+        Test scenario:
+            The reported defect: the CRS reader ran ``int(crs)``, so ``"EPSG:3857"`` — a spelling the
+            contract explicitly allows — resolved to "unknown" and fell through to the coordinate-magnitude
+            guard, which accepts Web-Mercator metres near the origin as degrees. The source was then draped
+            on the sphere as if it were lon/lat.
+        """
+        scene = Scene3D(off_screen=True)
+        try:
+            with pytest.raises(ValueError, match="projected") as raised:
+                scene._to_geographic_source(_projected_source_near_the_origin(crs))
+        finally:
+            scene.close()
+        assert named in str(raised.value), (
+            f"the refusal should name the CRS as {named!r}, got {raised.value}"
+        )
+
+    def test_the_warp_names_the_crs_it_warped_to(self, monkeypatch):
+        """The globe passes ``crs=`` to ``get_source`` after warping, instead of re-deriving it.
+
+        Test scenario:
+            ``crs=`` exists so a caller that has already placed the data says where it put it (#235). This
+            is the globe's end of that contract: after ``Dataset.to_crs(4326)`` the extraction is told the
+            display CRS, so the source is geographic by construction rather than by a second lookup that a
+            code-less projection would answer with ``None``.
+        """
+        seen = {}
+        original = globe_mod.get_source
+
+        def spy(data, **kwargs):
+            seen.update(kwargs)
+            return original(data, **kwargs)
+
+        monkeypatch.setattr(globe_mod, "get_source", spy)
+        scene = Scene3D(off_screen=True)
+        try:
+            source = scene._to_geographic_source(_utm_raster())
+        finally:
+            scene.close()
+        assert seen.get("crs") == globe_mod.GEOGRAPHIC_EPSG, (
+            f"the warped extraction must be told the CRS it was warped to, got {seen.get('crs')!r}"
+        )
+        assert source.crs == globe_mod.GEOGRAPHIC_EPSG, (
+            f"and the source must report it, got {source.crs!r}"
+        )
+
+    def test_an_unwarped_input_is_not_told_a_crs_it_is_not_in(self, monkeypatch):
+        """Input that was never warped keeps deriving its own CRS — the globe must not assert one.
+
+        Test scenario:
+            The complement of the wiring above: claiming EPSG:4326 for a raw array that declares no CRS
+            would silence the coordinate-range guard, the only check such input has.
+        """
+        seen = {}
+        original = globe_mod.get_source
+
+        def spy(data, **kwargs):
+            seen.update(kwargs)
+            return original(data, **kwargs)
+
+        monkeypatch.setattr(globe_mod, "get_source", spy)
+        scene = Scene3D(off_screen=True)
+        try:
+            source = scene._to_geographic_source(np.zeros((4, 4)))
+        finally:
+            scene.close()
+        assert seen.get("crs") is None, (
+            f"an unwarped input must not be handed a CRS, got {seen.get('crs')!r}"
+        )
+        assert source.crs is None, "so its CRS stays genuinely unknown"
+
     def test_a_crs_less_projected_source_still_raises(self):
         """With no CRS to reproject from, the coordinate-range guard is still the last resort.
 
@@ -192,6 +292,23 @@ def test_globe_rejects_a_crs_less_projected_source():
     with pytest.raises(ValueError, match="to_crs"):
         scene.globe(proj, coastlines=False)
     scene.close()
+
+
+def test_globe_refuses_a_projected_source_spelled_with_its_authority_prefix():
+    """globe() refuses a projected ``Source`` spelled ``"EPSG:<code>"`` instead of draping it on the sphere.
+
+    The end-to-end reproduction of the defect: a Web-Mercator source whose coordinates are small enough to
+    look like degrees was accepted and rendered, because the ``"EPSG:3857"`` spelling read as "no CRS".
+    """
+    scene = Scene3D(off_screen=True)
+    try:
+        with pytest.raises(ValueError, match="EPSG:3857"):
+            scene.globe(
+                _projected_source_near_the_origin("EPSG:3857"), coastlines=False
+            )
+        assert len(scene.layers) == 0, "nothing may be drawn for a refused source"
+    finally:
+        scene.close()
 
 
 def test_globe_renders_a_projected_dataset():

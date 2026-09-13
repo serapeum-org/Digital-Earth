@@ -1,14 +1,17 @@
-"""Tiny CRS helper — the best-effort EPSG lookup, and the shared "nothing landed on the view" signal.
+"""Tiny CRS helpers — the code/definition lookups, the geographic test, and the "nothing landed" signal.
 
-Both are engine-neutral: the lookup reads a CRS off whatever pyramids hands over, and the reprojection
-guard is a string match on what GDAL says plus an exception type. Every backend warps to a display CRS,
-so every backend can hit the same failure, and they answer it the same way.
+All of them are engine-neutral: the lookups read a CRS off whatever pyramids hands over, the geographic
+test asks **pyramids** to interpret it (never coordinate magnitudes, never string parsing here), and the
+reprojection guard is a string match on what GDAL says plus an exception type. Every backend warps to a
+display CRS, so every backend can hit the same questions, and they answer them the same way.
 """
 
 import re
 from typing import Any, Optional
 
-__all__ = ["source_epsg"]
+from pyramids.base.crs import crs_from_user_input
+
+__all__ = ["declared_crs", "is_geographic", "source_epsg"]
 
 
 def source_epsg(features: Any, default: Optional[int] = None) -> Optional[int]:
@@ -34,6 +37,102 @@ def source_epsg(features: Any, default: Optional[int] = None) -> Optional[int]:
         if code is not None:
             return code
     return default
+
+
+def declared_crs(data: Any) -> Any:
+    """The CRS an input says its coordinates are in: its EPSG code, else its projection definition.
+
+    The reader behind :attr:`~digitalearth.base.sources.Source.crs` when no caller names one. pyramids
+    reports ``epsg is None`` for a projection carrying no authority code — exactly what a warp into an
+    orthographic display CRS produces — so falling back to the definition keeps the answer able to say
+    where the coordinates live instead of claiming the CRS is unknown.
+
+    Args:
+        data: A pyramids ``Dataset``/``NetCDF`` (duck-typed by ``epsg`` / ``crs``).
+
+    Returns:
+        The EPSG integer, the projection definition (WKT), or ``None`` when the input declares no CRS
+        at all — the one case that genuinely means "unknown".
+
+    Examples:
+        - A coded raster answers with its code:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.base.crs import declared_crs
+            >>> declared_crs(Dataset.read_file("examples/data/acc4000.tif"))
+            32618
+
+            ```
+        - Anything declaring no CRS at all is unknown:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.crs import declared_crs
+            >>> declared_crs(np.zeros((2, 2))) is None
+            True
+
+            ```
+    """
+    epsg = getattr(data, "epsg", None)
+    if epsg is not None:
+        return epsg
+    return getattr(data, "crs", None) or None
+
+
+def is_geographic(crs: Any) -> Optional[bool]:
+    """Whether ``crs`` is a geographic (lon/lat) CRS — in **every** spelling the ``Source`` contract allows.
+
+    The CRS is interpreted by pyramids (``crs_from_user_input``), the GIS engine, so each of the forms
+    :attr:`~digitalearth.base.sources.Source.crs` may carry reads the same way: an EPSG ``int``, an
+    ``"EPSG:<code>"`` string in either case, a proj4 string, or a WKT definition. Nothing is inferred from
+    coordinate magnitudes and nothing is parsed out of the string here — a reader that only understood the
+    ``int`` spelling answered "unknown" for a projected CRS written ``"EPSG:3857"``, which let
+    :meth:`digitalearth.three_d.globe.GlobeMixin.globe` drape Web-Mercator metres on a sphere.
+
+    An unreadable CRS is reported as "unknown" (``None``) rather than guessed at, so a caller can tell
+    "definitely projected" apart from "no CRS to go on" and answer the two differently.
+
+    Args:
+        crs: A CRS in any form pyramids accepts, or ``None``/an unreadable value for "no CRS".
+
+    Returns:
+        ``True`` for a geographic CRS, ``False`` for a projected one, ``None`` when it cannot be resolved.
+
+    Examples:
+        - Every spelling of one code answers alike, and a projected CRS is known to be projected:
+            ```python
+            >>> from digitalearth.base.crs import is_geographic
+            >>> is_geographic(4326), is_geographic("EPSG:4326"), is_geographic("epsg:4326")
+            (True, True, True)
+            >>> is_geographic(3857), is_geographic("EPSG:3857")
+            (False, False)
+
+            ```
+        - A projection with no authority code is read from its definition rather than refused:
+            ```python
+            >>> from digitalearth.base.crs import is_geographic
+            >>> is_geographic("+proj=ortho +lat_0=53 +lon_0=4")
+            False
+            >>> is_geographic("+proj=longlat +datum=WGS84 +no_defs")
+            True
+
+            ```
+        - Anything that is not a readable CRS is "unknown", never "projected":
+            ```python
+            >>> from digitalearth.base.crs import is_geographic
+            >>> is_geographic(None) is None, is_geographic("not-a-crs") is None
+            (True, True)
+
+            ```
+
+    See Also:
+        declared_crs: what to feed this for a pyramids input that has not been warped by the caller.
+    """
+    if crs is None or isinstance(crs, bool):
+        return None
+    try:
+        return bool(crs_from_user_input(crs).is_geographic)
+    except Exception:  # noqa: BLE001 — any CRS-resolution failure means "unknown", never "projected".
+        return None
 
 
 #: GDAL's complaint when a warp cannot place the data in the target CRS. It fires as soon as too few

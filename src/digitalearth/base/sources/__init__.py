@@ -46,6 +46,13 @@ def get_source(
             a caller that has warped the data into a display CRS, since a projection with no authority code
             cannot be recovered from the warped dataset. ``None`` (the default) derives it from the input.
 
+            Every tier's display-CRS choke point is such a caller: the 3-D tier's
+            ``GlobeMixin._to_geographic_source`` names the CRS it warped to, and the static, interactive and
+            web tiers' ``_prepare`` / ``_to_display_source`` must name theirs the same way — an orthographic
+            display CRS has no authority code to re-derive from the warped dataset, which is the defect the
+            parameter exists to close (#235). Passing a CRS that is **not** the one the coordinates are in is
+            the one misuse: the value is trusted, never verified.
+
     Returns:
         Source: the uniform wrapper the glyph wiring consumes.
 

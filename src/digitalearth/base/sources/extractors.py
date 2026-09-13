@@ -26,7 +26,7 @@ from pandas.api.types import is_bool_dtype, is_numeric_dtype
 from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import read_masked_band
-from digitalearth.base.crs import source_epsg
+from digitalearth.base.crs import declared_crs, source_epsg
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
 from digitalearth.base.types import PlottableData, RasterLike
@@ -80,7 +80,8 @@ def extract(
         crs: The CRS ``data``'s coordinates are already in, stored on the ``Source`` verbatim. Pass it when
             the caller has warped the data: pyramids reports ``epsg is None`` for a projection with no
             authority code (an orthographic globe, say), so re-deriving the address from the warped dataset
-            would lose it. ``None`` (the default) derives the CRS from the input.
+            would lose it. ``None`` (the default) derives the CRS from the input. The callers expected to
+            pass it are the tiers' display-CRS choke points — see ``get_source`` for the list.
 
     Returns:
         Source: the uniform wrapper the glyph wiring consumes.
@@ -216,25 +217,6 @@ def _identity(*mappings: Any) -> dict:
     return {}
 
 
-def _raster_crs(ds: Any) -> Any:
-    """The CRS a pyramids raster's coordinates are in: its EPSG code, else its projection definition.
-
-    pyramids reports ``epsg is None`` for a projection carrying no authority code — exactly what a warp into
-    an orthographic display CRS produces — so falling back to the WKT keeps the ``Source`` able to say where
-    its coordinates live instead of claiming the CRS is unknown.
-
-    Args:
-        ds: A pyramids ``Dataset``/``NetCDF`` (duck-typed by ``epsg`` / ``crs``).
-
-    Returns:
-        The EPSG integer, the projection WKT, or ``None`` when the input declares no CRS at all.
-    """
-    epsg = getattr(ds, "epsg", None)
-    if epsg is not None:
-        return epsg
-    return getattr(ds, "crs", None) or None
-
-
 def _features_crs(fc: Any) -> Any:
     """The CRS a vector frame's coordinates are in: its EPSG code, else its projection definition.
 
@@ -285,7 +267,7 @@ def _from_raster(
         z=_axis(z, "z", units),
         x=_axis(ds.x, "x"),  # 1-D cell-centre coords, length == columns
         y=_axis(ds.y, "y"),  # 1-D cell-centre coords, length == rows
-        crs=crs if crs is not None else _raster_crs(ds),
+        crs=crs if crs is not None else declared_crs(ds),
         units=units,
         metadata={
             "kind": "raster",
@@ -363,7 +345,7 @@ def _from_netcdf(
         z=_axis(z, "z", units),
         x=_axis(nc.lon, "x"),
         y=_axis(nc.lat, "y"),
-        crs=crs if crs is not None else _raster_crs(nc),
+        crs=crs if crs is not None else declared_crs(nc),
         units=units,
         metadata={
             "kind": "raster",

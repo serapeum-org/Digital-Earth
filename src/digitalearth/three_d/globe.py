@@ -15,9 +15,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from digitalearth.base.crs import reproject
+from digitalearth.base.crs import declared_crs, is_geographic, reproject
 from digitalearth.base.sources import Source, get_source
-from digitalearth.three_d.base import is_geographic_crs
 
 #: Fallback scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field (used only if the mesh
 #: exposes no active scalars). Prefer ``mesh.active_scalars_name`` so the binding tracks geovista's own choice.
@@ -52,12 +51,31 @@ def _check_geographic(lon: np.ndarray, lat: np.ndarray) -> None:
         )
 
 
+def _name_crs(src: Source) -> str:
+    """Name a source's CRS the way its owner spelled it, so the refusal quotes something recognisable.
+
+    ``Source.crs`` may be an EPSG ``int``, an ``"EPSG:<code>"`` string or a proj4/WKT definition, so the code
+    cannot simply be interpolated behind a hardcoded ``EPSG:`` prefix — that printed ``EPSG:EPSG:3857`` for
+    the string spelling and ``EPSG:+proj=...`` for a definition.
+
+    Args:
+        src: The source whose CRS is being reported.
+
+    Returns:
+        ``"EPSG:<code>"`` when the CRS has an authority code, else the definition as given.
+    """
+    return f"EPSG:{src.epsg}" if src.epsg is not None else f"{src.crs!r}"
+
+
 def _require_geographic(src: Source) -> None:
     """Raise unless ``src`` is a geographic lon/lat field, ready to drape on a sphere.
 
     Splits the two failure modes that used to be one coordinate-magnitude test: a source whose CRS pyramids
-    can read is judged by that CRS (and a projected one is named by its EPSG code), while a source with no CRS
-    falls through to :func:`_check_geographic`, the only evidence left.
+    can read is judged by that CRS (and a projected one is named by its code or definition), while a source
+    with no CRS falls through to :func:`_check_geographic`, the only evidence left. The CRS is read by
+    :func:`~digitalearth.base.crs.is_geographic`, which understands **every** spelling ``Source.crs`` may
+    carry — a reader that understood only the ``int`` spelling called ``"EPSG:3857"`` "unknown" and let a
+    Web-Mercator source through to the coordinate guard, which accepts small metre coordinates as lon/lat.
 
     Args:
         src: The extracted source about to be draped.
@@ -65,14 +83,14 @@ def _require_geographic(src: Source) -> None:
     Raises:
         ValueError: if the source carries a projected CRS, or carries none and its coordinates look projected.
     """
-    geographic = is_geographic_crs(src.crs)
+    geographic = is_geographic(src.crs)
     if geographic is True:
         return
     if geographic is False:
         raise ValueError(
-            f"globe() expects geographic lon/lat data, but this source is in EPSG:{src.crs}, a projected CRS. "
-            "A pyramids Dataset is reprojected for you; a bare Source cannot be, so reproject it in pyramids "
-            "first, e.g. dataset.to_crs(4326), then call globe()."
+            f"globe() expects geographic lon/lat data, but this source is in {_name_crs(src)}, a projected "
+            "CRS. A pyramids Dataset is reprojected for you; a bare Source cannot be, so reproject it in "
+            "pyramids first, e.g. dataset.to_crs(4326), then call globe()."
         )
     _check_geographic(
         np.asarray(src.x.values, dtype="float64"),
@@ -127,11 +145,16 @@ class GlobeMixin(_MixinBase):
         """Reproject ``data`` to EPSG:4326 through pyramids and extract it as a lon/lat :class:`Source`.
 
         The globe's display-CRS choke point, mirroring the interactive tier's ``_to_display_source``: anything
-        that exposes pyramids' ``to_crs``/``epsg`` and is not already geographic is warped by
+        that exposes pyramids' ``to_crs`` and whose declared CRS
+        (:func:`~digitalearth.base.crs.declared_crs`) is not already geographic is warped by
         :func:`digitalearth.base.crs.reproject` (i.e. ``Dataset.to_crs(4326)``, plus the shared
         :class:`~digitalearth.base.crs.OffLimbError` translation). **No reprojection is implemented here** — a
         CRS pyramids cannot read is left alone rather than guessed at, and validated by
         :func:`_require_geographic` instead.
+
+        When the warp does run, the CRS it warped to is passed to ``get_source(..., crs=...)`` rather than
+        re-derived from the result: the extracted source is then the globe's CRS by construction, which is
+        exactly the contract :attr:`digitalearth.base.sources.Source.crs` states.
 
         Args:
             data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts),
@@ -145,13 +168,21 @@ class GlobeMixin(_MixinBase):
         Raises:
             ValueError: if the result is not geographic — see :func:`_require_geographic`.
         """
+        warped = False
         if (
             not isinstance(data, Source)
             and hasattr(data, "to_crs")
-            and is_geographic_crs(getattr(data, "epsg", None)) is False
+            and is_geographic(declared_crs(data)) is False
         ):
             data = reproject(data, GEOGRAPHIC_EPSG)
-        src = data if isinstance(data, Source) else get_source(data, band=band)
+            warped = True
+        if isinstance(data, Source):
+            src = data
+        else:
+            # Name the CRS we warped to rather than re-deriving it from the warped dataset: this is the
+            # caller the ``crs=`` contract is written for (a warp's own CRS is the one the coordinates are
+            # in, and pyramids cannot always report a code for it).
+            src = get_source(data, band=band, crs=GEOGRAPHIC_EPSG if warped else None)
         _require_geographic(src)
         return src
 
