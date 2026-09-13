@@ -222,7 +222,7 @@ class RasterMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> grid = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> InteractiveMap().quadmesh(grid).save("mesh.html")           # doctest: +SKIP
+                >>> InteractiveMap().quadmesh(grid).save("mesh.html").name      # doctest: +SKIP
                 'mesh.html'
 
                 ```
@@ -297,7 +297,8 @@ class RasterMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> InteractiveMap().filled_contours(dem, levels=5).save("b.html")  # doctest: +SKIP
+                >>> m = InteractiveMap().filled_contours(dem, levels=5)         # doctest: +SKIP
+                >>> m.save("b.html").name                                      # doctest: +SKIP
                 'b.html'
 
                 ```
@@ -412,8 +413,47 @@ class RasterMixin(_MixinBase):
             This map (chainable).
 
         Raises:
+            ValueError: when ``band`` is below 1 (the tier's band numbering is 1-based, like GDAL).
             AttributeError: when ``dataset`` lacks the pyramids COG/overview read surface
                 (``read_part``/``preview``) — file a pyramids issue rather than reaching around it.
+
+        Examples:
+            - ``dynamic=False`` reads one decimated ``preview`` frame — deterministic, and the one
+              form that works with no live server behind it. A raster already under the pixel
+              budget comes back whole, so the budget only ever *caps* what is materialised:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> (dem.rows, dem.columns)                                    # doctest: +SKIP
+                (13, 14)
+                >>> m = InteractiveMap().large_image(dem, dynamic=False)       # doctest: +SKIP
+                >>> m.layers[0].dimension_values(2, flat=False).shape          # doctest: +SKIP
+                (13, 14)
+
+                ```
+            - The default ``dynamic=True`` registers a viewport-driven layer instead, carrying the
+              one stream that re-reads the window from the axes ranges on every pan/zoom:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().large_image(dem)                      # doctest: +SKIP
+                >>> len(m.layers[0].streams)                                   # doctest: +SKIP
+                1
+                >>> sorted(m.layers[0].streams[0].contents)                    # doctest: +SKIP
+                ['x_range', 'y_range']
+
+                ```
+            - A raster without pyramids' windowed-read surface is refused by name, rather than
+              being quietly read whole:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     InteractiveMap().large_image(object())
+                ... except AttributeError as error:
+                ...     print(str(error).split(" (")[0])
+                large_image needs pyramids' COG/overview read surface
+
+                ```
         """
         import numpy as np
 

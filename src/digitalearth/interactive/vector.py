@@ -150,7 +150,9 @@ class VectorMixin(_MixinBase):
                 ``big_data_threshold`` rows — logged, never silent; ``True``/``False`` force it.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
                 (default) uses the map's ``big_data_threshold`` attribute (#250).
-            rasterize_threshold: **Deprecated** alias of ``big_data_threshold``.
+            rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
+                number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
+                for one release, and honoured only when ``big_data_threshold`` is absent (#250).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -167,6 +169,10 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Warns:
+            DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
+                ``big_data_threshold=``.
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
@@ -206,7 +212,7 @@ class VectorMixin(_MixinBase):
                 >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> reaches = FeatureCollection.read_file("reaches.geojson")    # doctest: +SKIP
-                >>> InteractiveMap().path(reaches).save("reaches.html")         # doctest: +SKIP
+                >>> InteractiveMap().path(reaches).save("reaches.html").name    # doctest: +SKIP
                 'reaches.html'
 
                 ```
@@ -244,22 +250,35 @@ class VectorMixin(_MixinBase):
                 Polygon datashading needs the optional ``spatialpandas`` package.
             big_data_threshold: Row count above which ``"auto"`` switches to Datashader; ``None``
                 (default) uses the map's ``big_data_threshold`` attribute (#250).
-            rasterize_threshold: **Deprecated** alias of ``big_data_threshold``.
+            rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
+                number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
+                for one release, and honoured only when ``big_data_threshold`` is absent (#250).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
             - Outline catchment polygons over a basemap:
                 ```python
-                >>> from pyramids.feature import FeatureCollection              # doctest: +SKIP
-                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
-                >>> basins = FeatureCollection.read_file("basins.geojson")      # doctest: +SKIP
-                >>> InteractiveMap().polygons(basins).tiles().save("m.html")    # doctest: +SKIP
+                >>> from pyramids.feature import FeatureCollection                # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> basins = FeatureCollection.read_file("basins.geojson")        # doctest: +SKIP
+                >>> InteractiveMap().polygons(basins).tiles().save("m.html").name  # doctest: +SKIP
                 'm.html'
 
                 ```
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ImportError: when the layer routes through Datashader (``rasterize=True``, or
+                ``"auto"`` above the threshold) and ``spatialpandas`` is not installed. It is
+                datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
+                which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
+                rather than failing deeper inside datashader.
+
+        Warns:
+            DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
+                ``big_data_threshold=``.
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
@@ -669,12 +688,64 @@ class VectorMixin(_MixinBase):
             rasterize: ``"auto"`` (default) rasterizes above the threshold; ``True``/``False`` force it.
             big_data_threshold: Face count above which ``"auto"`` rasterizes; ``None`` (default) uses
                 the map's ``big_data_threshold`` attribute (#250).
-            rasterize_threshold: **Deprecated** alias of ``big_data_threshold``.
+            rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
+                number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
+                for one release, and honoured only when ``big_data_threshold`` is absent (#250).
             cmap: Colormap name.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Warns:
+            DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
+                ``big_data_threshold=``.
+
+        Examples:
+            - Delaunay-triangulate scattered points; the nodes carry the value column:
+                ```python
+                >>> from pyramids.feature import FeatureCollection                # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> m = InteractiveMap().trimesh(fc, value_column="fid")          # doctest: +SKIP
+                >>> len(m.layers[0].nodes) == len(fc)                             # doctest: +SKIP
+                True
+                >>> [d.name for d in m.layers[0].nodes.vdims]                     # doctest: +SKIP
+                ['fid']
+
+                ```
+            - A UGRID mesh brings its own connectivity, so nothing is triangulated locally — its
+              four nodes and two faces come through as they are:
+                ```python
+                >>> import numpy as np                                            # doctest: +SKIP
+                >>> from pyramids.netcdf.ugrid import Connectivity, Mesh2d        # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> mesh = Mesh2d(                                                # doctest: +SKIP
+                ...     node_x=np.array([0.0, 1.0, 0.5, 1.5]),
+                ...     node_y=np.array([0.0, 0.0, 1.0, 1.0]),
+                ...     face_node_connectivity=Connectivity(
+                ...         data=np.array([[0, 1, 2], [1, 3, 2]]),
+                ...         fill_value=-1,
+                ...         cf_role="face_node_connectivity",
+                ...         original_start_index=0,
+                ...     ),
+                ... )
+                >>> len(InteractiveMap().trimesh(mesh).layers[0].nodes)           # doctest: +SKIP
+                4
+
+                ```
+            - Lowering the cutoff routes the same mesh through Datashader instead, and the
+              density image is styled (and recorded) with the ``cmap`` that was asked for:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> m = InteractiveMap()                                          # doctest: +SKIP
+                >>> m = m.trimesh(fc, big_data_threshold=1, cmap="magma")         # doctest: +SKIP
+                >>> m.layer_styles[0]["common"]["cmap"]                           # doctest: +SKIP
+                'magma'
+                >>> m.layer_styles[0]["common"]["colorbar"]                       # doctest: +SKIP
+                True
+
+                ```
         """
         gv, hv = _require_holoviz()
         threshold = self._resolve_big_data_threshold(

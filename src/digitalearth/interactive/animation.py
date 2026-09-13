@@ -80,6 +80,41 @@ class AnimationMixin(_MixinBase):
         Raises:
             ValueError: when no ``timecube`` layer has been added.
             ImportError: when the ``interactive`` extra (which provides panel) is absent.
+
+        Examples:
+            - Play a time cube at the shared default speed; the player steps through the cube's
+              own time keys, not a frame index:
+                ```python
+                >>> from pyramids.dataset.collection import DatasetCollection     # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> cube = DatasetCollection.from_files(["jan.tif", "feb.tif"])   # doctest: +SKIP
+                >>> app = InteractiveMap().timecube(cube).play()                  # doctest: +SKIP
+                >>> app[1].value == app[1].options[0]   # starts on step one  # doctest: +SKIP
+                True
+
+                ```
+            - ``fps`` is the playback rate, translated into the Player's millisecond interval —
+              two frames a second is a 500 ms step:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> m = InteractiveMap().timecube(cube)                          # doctest: +SKIP
+                >>> app = m.play(fps=2.0, loop=False)                            # doctest: +SKIP
+                >>> app[1].interval                                               # doctest: +SKIP
+                500
+                >>> app[1].loop_policy                                            # doctest: +SKIP
+                'once'
+
+                ```
+            - Playback needs a time cube; anything else is refused rather than played empty:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> try:                                                          # doctest: +SKIP
+                ...     InteractiveMap().play()
+                ... except ValueError as error:
+                ...     print(str(error).split(" — ")[0])
+                no time cube to animate
+
+                ```
         """
         import panel as pn
 
@@ -114,6 +149,43 @@ InteractiveMapBase.save` (#248).
 
         Raises:
             ValueError: when no ``timecube`` layer has been added.
+
+        Examples:
+            - Export a GIF; the returned ``Path`` can be inspected or moved without re-wrapping it
+              (#248 — this used to come back as a bare ``str``):
+                ```python
+                >>> from pyramids.dataset.collection import DatasetCollection     # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> cube = DatasetCollection.from_files(["jan.tif", "feb.tif"])   # doctest: +SKIP
+                >>> m = InteractiveMap().timecube(cube)                          # doctest: +SKIP
+                >>> out = m.save_animation("rain.gif")                           # doctest: +SKIP
+                >>> out.suffix, out.exists()                                      # doctest: +SKIP
+                ('.gif', True)
+
+                ```
+            - The suffix picks the writer: ``.html`` is the client-side scrubber, which needs no
+              server and no ffmpeg, and ``fps`` sets its playback rate:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> out = InteractiveMap().timecube(cube).save_animation(         # doctest: +SKIP
+                ...     "rain.html", fps=8.0
+                ... )
+                >>> out.name                                                      # doctest: +SKIP
+                'rain.html'
+                >>> "<html" in out.read_text(encoding="utf-8")[:200].lower()      # doctest: +SKIP
+                True
+
+                ```
+            - Exporting needs a time cube, same as :meth:`play`:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> try:                                                          # doctest: +SKIP
+                ...     InteractiveMap().save_animation("nothing.gif")
+                ... except ValueError as error:
+                ...     print(str(error).split(" — ")[0])
+                no time cube to animate
+
+                ```
         """
         gv, hv = _require_holoviz()
         holomap = self._to_holomap(self._time_dynamicmap())

@@ -199,7 +199,8 @@ class VectorMixin(_MixinBase):
                 that collide, which is what keeps a dense layer readable.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
-            size: **Deprecated** spelling of ``text_size``; forwarded unchanged.
+            size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``size=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
@@ -486,10 +487,64 @@ class VectorMixin(_MixinBase):
                 way to change it for every layer at once.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
-            radius: **Deprecated** spelling of ``size``; forwarded unchanged.
+            radius: **Deprecated** spelling of ``size``; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``radius=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+            KeyError: when ``column`` names no feature attribute — a MapLibre expression
+                reading a property that is not there colours nothing, with no error to explain
+                the blank layer.
+            ValueError: when the layer routes to a GPU deck.gl overlay — through ``big=True``,
+                or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
+                as well. A deck overlay is not a MapLibre style layer, so the registry cannot
+                address it to rename or hide it, and honouring those arguments silently would
+                be a promise the saved page does not keep. Pass ``big=False`` to force
+                per-feature circles instead.
+
+        Examples:
+            - Fixed-colour circles, addressable afterwards by the name they were given. Every
+              block below needs the ``web`` extra, so all of them are skipped where MapLibre is
+              absent; the values shown are what the ``web`` environment returns:
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Point               # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     {"pop": [10.0, 20.0, 30.0]},
+                ...     geometry=[Point(0, 0), Point(1, 1), Point(2, 2)], crs=4326,
+                ... )
+                >>> WebMap().points(gdf, size=8.0, name="s").layer_ids  # doctest: +SKIP
+                ['s']
+
+                ```
+            - Naming a ``column`` colours by it. With no ``scheme`` that is a continuous ramp, and
+              the key the call recorded says which of the two it was:
+                ```python
+                >>> m = WebMap().points(gdf, column="pop")           # doctest: +SKIP
+                >>> m.last_legend["kind"], m.last_legend["column"]   # doctest: +SKIP
+                ('continuous', 'pop')
+                >>> m.last_breaks                                    # doctest: +SKIP
+                [10.0, 15.0, 20.0, 25.0, 30.0]
+
+                ```
+            - A ``scheme`` classifies that same column into ``k`` graduated classes instead,
+              and the key then carries one colour per class:
+                ```python
+                >>> m = WebMap().points(                             # doctest: +SKIP
+                ...     gdf, column="pop", scheme="quantiles", k=3,
+                ... )
+                >>> m.last_legend["kind"], len(m.last_legend["colors"])  # doctest: +SKIP
+                ('graduated', 3)
+
+                ```
+
+        See Also:
+            digitalearth.web.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
+            digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
         Layer, LayerType = _require_layer_api()
         if radius is not None:
@@ -561,6 +616,46 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+            KeyError: when ``column`` names no feature attribute.
+
+        Examples:
+            - A fixed-colour network (needs the ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import LineString          # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     {"flow": [1.0, 5.0]},
+                ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(1, 1), (2, 0)])],
+                ...     crs=4326,
+                ... )
+                >>> m = WebMap().lines(gdf, color="#ffcc00", width=3.0)  # doctest: +SKIP
+                >>> m.layer_ids                                      # doctest: +SKIP
+                ['line-2']
+
+                ```
+            - Colouring by a column is a continuous ramp unless a ``scheme`` is named, and the
+              sample points the ramp was built from are readable back off the map:
+                ```python
+                >>> m = WebMap().lines(gdf, column="flow", cmap="plasma")  # doctest: +SKIP
+                >>> m.last_legend["kind"], m.last_breaks             # doctest: +SKIP
+                ('continuous', [1.0, 2.0, 3.0, 4.0, 5.0])
+
+                ```
+            - With no ``column`` there is nothing to key, so no classification is recorded and a
+              legend built afterwards has nothing to draw from:
+                ```python
+                >>> m = WebMap().lines(gdf)                          # doctest: +SKIP
+                >>> m.last_legend, m.last_breaks                     # doctest: +SKIP
+                (None, None)
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="lines")
@@ -614,6 +709,58 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+            KeyError: when ``column`` names no feature attribute.
+            ValueError: when the layer routes to a GPU deck.gl overlay — through ``big=True``,
+                or by crossing ``big_data_threshold`` — and ``name`` or ``visible`` was passed
+                as well. A deck overlay is not a MapLibre style layer, so the registry cannot
+                address it to rename or hide it, and honouring those arguments silently would
+                be a promise the saved page does not keep. Pass ``big=False`` to force
+                per-feature fills instead.
+
+        Examples:
+            - A flat fill in one colour, named so the switcher can list it (needs the ``web``
+              extra, so the block is skipped without it):
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Polygon             # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     {"pop": [10.0, 30.0]},
+                ...     geometry=[Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                ...               Polygon([(2, 0), (3, 0), (3, 1), (2, 1)])],
+                ...     crs=4326,
+                ... )
+                >>> m = WebMap().polygons(gdf, color="#cc4444", name="p")  # doctest: +SKIP
+                >>> m.layer_ids                                      # doctest: +SKIP
+                ['p']
+
+                ```
+            - Naming a ``column`` colours by it — continuously, unless a ``scheme`` is given. For a
+              thematic map prefer :meth:`choropleth`, which is this same fill with the
+              classification spelled out in its signature:
+                ```python
+                >>> m = WebMap().polygons(gdf, column="pop")         # doctest: +SKIP
+                >>> m.last_legend["kind"], m.last_breaks             # doctest: +SKIP
+                ('continuous', [10.0, 15.0, 20.0, 25.0, 30.0])
+
+                ```
+            - Forcing the GPU path while also asking for ``name``/``visible`` is refused,
+              rather than accepted and then quietly dropped from the saved page:
+                ```python
+                >>> try:                                             # doctest: +SKIP
+                ...     WebMap().polygons(gdf, big=True, name="p")
+                ... except ValueError as error:
+                ...     print(str(error).split(",")[0])
+                polygons() is rendering 2 features as a deck.gl overlay
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.choropleth: the thematic build of this fill.
+            digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="polygons")
@@ -698,6 +845,51 @@ class VectorMixin(_MixinBase):
         Raises:
             KeyError: when ``column`` is not a feature attribute.
             ValueError: propagated from the classifier (unknown scheme, constant data, …).
+
+        Examples:
+            - The default is a **continuous** ramp: no ``scheme``, no classes, and ``last_breaks``
+              carries the sample points the ramp was built from rather than class edges (needs the
+              ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Polygon             # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     {"pop": [10.0, 30.0], "zone": ["urban", "rural"]},
+                ...     geometry=[Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                ...               Polygon([(2, 0), (3, 0), (3, 1), (2, 1)])],
+                ...     crs=4326,
+                ... )
+                >>> m = WebMap().choropleth(gdf, "pop")              # doctest: +SKIP
+                >>> m.last_legend["kind"], m.last_breaks             # doctest: +SKIP
+                ('continuous', [10.0, 15.0, 20.0, 25.0, 30.0])
+
+                ```
+            - Naming a scheme classifies instead, and the breaks become the ``k`` class edges the
+              MapLibre ``step`` expression was compiled from:
+                ```python
+                >>> m = WebMap().choropleth(                         # doctest: +SKIP
+                ...     gdf, "pop", scheme="equal_interval", k=2,
+                ... )
+                >>> m.last_legend["kind"], m.last_breaks             # doctest: +SKIP
+                ('graduated', [10.0, 20.0, 30.0])
+
+                ```
+            - ``scheme="categorical"`` colours an unordered attribute by distinct value, and
+              the key then lists the values it matched rather than numeric edges:
+                ```python
+                >>> m = WebMap().choropleth(                         # doctest: +SKIP
+                ...     gdf, "zone", scheme="categorical", name="zones",
+                ... )
+                >>> m.last_legend["values"], m.layer_ids             # doctest: +SKIP
+                (['rural', 'urban'], ['zones'])
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.legend: draws the key from ``last_legend``.
+            digitalearth.web.vector.VectorMixin.polygons: the same fill layer without the thematic
+                classification.
         """
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="choropleth")

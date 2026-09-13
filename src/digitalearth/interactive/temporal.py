@@ -122,7 +122,8 @@ class TemporalMixin(_MixinBase):
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dc = DatasetCollection.from_files(["a.tif", "b.tif"])      # doctest: +SKIP
                 >>> stamps = [dt.datetime(2020, 1, 1), dt.datetime(2020, 1, 2)]  # doctest: +SKIP
-                >>> InteractiveMap().timecube(dc, labels=stamps).save("t.html")  # doctest: +SKIP
+                >>> m = InteractiveMap().timecube(dc, labels=stamps)          # doctest: +SKIP
+                >>> m.save("t.html").name                                     # doctest: +SKIP
                 't.html'
 
                 ```

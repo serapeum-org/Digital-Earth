@@ -234,7 +234,8 @@ class AnimationMixin(_MixinBase):
                 view of a sheet.
             viewup: Up vector for the path and the camera alike, as three floats. ``None`` leaves pyvista's
                 default.
-            framerate: Deprecated alias of ``fps``; passing it warns and forwards. Passing both raises.
+            framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
+                removed in a future release and forwards the value unchanged. Passing both raises.
             **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path`, whose signature names what it
                 accepts — ``step`` and ``focus`` are the useful ones here. It takes no ``**kwargs``, so a
                 keyword it does not name raises :class:`TypeError`; ``factor`` and ``shift`` are not among
@@ -355,7 +356,8 @@ class AnimationMixin(_MixinBase):
             update: Callback ``(scene, frame) -> None`` that updates the scene before each frame is captured.
             fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one speed
                 shared with every other tier's animation entry point; this method used to default to ``8``.
-            framerate: Deprecated alias of ``fps``; passing it warns and forwards. Passing both raises.
+            framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
+                removed in a future release and forwards the value unchanged. Passing both raises.
 
         Returns:
             The ``path`` written.

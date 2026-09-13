@@ -197,10 +197,62 @@ class ThreeDMixin(_MixinBase):
             z_column: Elevation column for a GeoDataFrame input (0 when omitted).
             color: RGB point colour (0-255 per channel).
             size: Point size in pixels — the same ``size`` that means marker size on every tier.
-            point_size: **Deprecated** spelling of ``size``; forwarded unchanged.
+            point_size: **Deprecated** spelling of ``size``; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``point_size=`` will be removed in a future release.
 
         Returns:
             This map (chainable).
+
+        Raises:
+            TypeError: when ``points`` is a raster. The full vector guard would be too strict
+                here — a bare ``(N, 2|3)`` coordinate array is a valid input — so only a raster
+                is refused.
+
+        Examples:
+            - An ``(N, 3)`` xyz table becomes deck.gl positions verbatim, in lon/lat/height order
+              (needs the ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> xyz = np.array([[0.0, 0.0, 5.0], [1.0, 1.0, 9.0]])  # doctest: +SKIP
+                >>> m = WebMap().point_cloud(xyz, size=3.0)          # doctest: +SKIP
+                >>> m._deck_layers[0]["pointSize"]                   # doctest: +SKIP
+                3.0
+                >>> m._deck_layers[0]["data"]                        # doctest: +SKIP
+                [{'position': [0.0, 0.0, 5.0]}, {'position': [1.0, 1.0, 9.0]}]
+
+                ```
+            - A GeoDataFrame is reprojected to lon/lat first, and ``z_column`` supplies the
+              height — omit it and every point sits flat at ``z = 0``:
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Point               # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     {"h": [12.0, 30.0]},
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> m = WebMap().point_cloud(gdf, z_column="h")      # doctest: +SKIP
+                >>> m._deck_layers[0]["data"]                        # doctest: +SKIP
+                [{'position': [0.0, 0.0, 12.0]}, {'position': [1.0, 1.0, 30.0]}]
+
+                ```
+            - The old ``point_size=`` spelling still lands on ``size``, after saying it is going
+              away:
+                ```python
+                >>> import warnings                                  # doctest: +SKIP
+                >>> with warnings.catch_warnings(record=True) as caught:  # doctest: +SKIP
+                ...     warnings.simplefilter("always")
+                ...     m = WebMap().point_cloud(xyz, point_size=6.0)
+                >>> m._deck_layers[0]["pointSize"]                   # doctest: +SKIP
+                6.0
+                >>> caught[0].category.__name__                      # doctest: +SKIP
+                'DeprecationWarning'
+
+                ```
+
+        See Also:
+            digitalearth.web.threed.ThreeDMixin.tiles_3d: streams a prebuilt 3-D tileset instead.
+            digitalearth.three_d.Scene3D.point_cloud: the PyVista tier's desktop counterpart.
         """
         _require_layer_api()
         if point_size is not None:

@@ -225,9 +225,10 @@ class ExportMixin(_MixinBase):
                 default, so one number means one speed across the whole package.
             loop: How many times to repeat; ``0`` loops forever.
             title: HTML document title used while rendering.
-            duration: **Deprecated** spelling of the frame rate, in seconds held per frame. It is
-                *converted* (``fps = 1 / duration``), never reinterpreted, so an old call produces the
-                animation it always did.
+            duration: **Deprecated** spelling of the frame rate, in seconds held per frame. Passing
+                it warns that ``duration=`` will be removed in a future release and to write
+                ``fps=`` instead. It is *converted* (``fps = 1 / duration``), never
+                reinterpreted, so an old call produces the animation it always did.
 
         Returns:
             The :class:`pathlib.Path` written.
@@ -277,6 +278,46 @@ class ExportMixin(_MixinBase):
 
         Returns:
             The :class:`pathlib.Path` written.
+
+        Raises:
+            ValueError: whatever :meth:`animate` raises — no time series, fewer than two
+                steps, or a non-positive rate. The ``DeprecationWarning`` is emitted first
+                either way, so an old call is told to move even when it then fails for a
+                reason of its own.
+            ImportError: when no headless browser is installed to render the frames.
+
+        Examples:
+            - The old name still does the work, but says it is going away first. There is no series
+              to animate here, so the call raises straight after warning — the warning is the part
+              this example is about, and it needs no engine to show:
+                ```python
+                >>> import warnings
+                >>> from digitalearth.web import WebMap
+                >>> with warnings.catch_warnings(record=True) as caught:
+                ...     warnings.simplefilter("always")
+                ...     try:
+                ...         WebMap().to_gif("steps.gif")
+                ...     except ValueError as error:
+                ...         print(str(error).split(";")[0])
+                animate() needs a raster time series with at least two steps
+                >>> print(caught[0].category.__name__)
+                DeprecationWarning
+                >>> print(str(caught[0].message).split(";")[0])
+                WebMap.to_gif() is deprecated and will be removed in a future release
+
+                ```
+            - The message names its own replacement, so the migration is a rename and nothing
+              else — same arguments, same GIF, no warning:
+                ```python
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> m = WebMap().basemap().timeslider(stack)         # doctest: +SKIP
+                >>> m.animate("steps.gif", fps=5).name               # doctest: +SKIP
+                'steps.gif'
+
+                ```
+
+        See Also:
+            animate: the method this forwards to, and the name to write in new code.
         """
         warnings.warn(
             "WebMap.to_gif() is deprecated and will be removed in a future release; use "

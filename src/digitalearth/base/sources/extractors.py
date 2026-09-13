@@ -87,6 +87,60 @@ def extract(
 
     Raises:
         TypeError: if ``data`` is not a supported type.
+
+    Examples:
+        - A raster comes back as a 2-D grid with 1-D cell-centre axes and the band's identity:
+            ```python
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.base.sources import extract
+            >>> src = extract(Dataset.read_file("examples/data/acc4000.tif"))
+            >>> src.z.values.shape
+            (13, 14)
+            >>> (src.x.values.size, src.y.values.size)
+            (14, 13)
+            >>> src.metadata("kind")
+            'raster'
+            >>> src.epsg
+            32618
+
+            ```
+        - A vector collection comes back point-shaped: 1-D coordinates, and ``z`` is the first
+            numeric non-geometry column (the variable it names is recorded in the metadata):
+            ```python
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.base.sources import extract
+            >>> src = extract(FeatureCollection.read_file("tests/data/points.geojson"))
+            >>> src.metadata("kind")
+            'vector'
+            >>> src.metadata("variable")
+            'fid'
+            >>> src.x.values.ndim, src.z.values.shape == src.x.values.shape
+            (1, True)
+
+            ```
+        - A raw numpy array is supported too, with pixel-index axes and a deliberately unknown
+            CRS — and ``crs=`` is stored verbatim when the caller has already placed the data:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import extract
+            >>> extract(np.zeros((2, 3))).x.values.tolist()
+            [0.0, 1.0, 2.0]
+            >>> extract(np.zeros((2, 3))).crs is None
+            True
+            >>> extract(np.zeros((2, 3)), crs="+proj=ortho +lat_0=53").epsg is None
+            True
+
+            ```
+        - Anything else is refused by type name rather than half-extracted:
+            ```python
+            >>> from digitalearth.base.sources import extract
+            >>> try:
+            ...     extract("examples/data/acc4000.tif")
+            ... except TypeError as error:
+            ...     print(error)
+            cannot build a Source from str
+
+            ```
     """
     # Local imports: keep optional/heavier pyramids submodules out of import time.
     from pyramids.dataset.collection import DatasetCollection

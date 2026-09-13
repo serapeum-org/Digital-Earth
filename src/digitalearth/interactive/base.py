@@ -194,6 +194,31 @@ class InteractiveMapBase:
         strict: bool = False,
         big_data_threshold: int = DEFAULT_BIG_DATA_THRESHOLD,
     ):
+        """Set up an empty map: display CRS, Bokeh frame, and the two tier-wide policies.
+
+        Nothing here touches HoloViz — construction is deliberately engine-free, so a map can be
+        built (and its configuration read back) without the ``interactive`` extra installed; the
+        lazy import fires on the first builder/render call instead.
+
+        Both policy arguments are stored as **plain public attributes**, so a map configured once
+        keeps the setting for every later layer, and either can be changed after construction.
+
+        Args:
+            crs: Display CRS as an EPSG integer. Default ``3857`` (Web Mercator — the only CRS
+                Bokeh tile basemaps render); ``4326`` gives a non-tiled Plate-Carrée map.
+            width: Frame width in pixels for the rendered Bokeh plot.
+            height: Frame height in pixels for the rendered Bokeh plot.
+            tiles: Tile-provider name drawn beneath the data layers, applied once at render time,
+                or ``None`` for no basemap. Stored privately because the public ``tiles`` name is
+                the decoration mixin's builder method.
+            title: Plot title, applied to every styled element's Bokeh frame.
+            strict: How a layer whose data the display CRS cannot place is answered (#257).
+                ``False`` (default) skips that layer with a warning; ``True`` re-raises the
+                :class:`~digitalearth.base.crs.OffLimbError`.
+            big_data_threshold: Row/face count above which a vector builder auto-routes through
+                Datashader (#250). Every big-data builder takes a per-call override of the same
+                name that falls back to this value.
+        """
         self.crs = crs
         self.width = width
         self.height = height
@@ -565,9 +590,47 @@ class InteractiveMapBase:
     def layer_styles(self) -> List[dict]:
         """The recorded style of every registered layer, in add (= overlay) order.
 
+        The whole-map view of :meth:`style_of`: one entry per layer, positionally aligned with
+        :attr:`layers`, so the styling a builder *requested* can be read back off the map
+        instead of being looked up in HoloViews' global option ``Store``. This is what the
+        dashboard's widget overrides are merged over.
+
         Returns:
             list: one ``{"common": {...}, "bokeh": {...}}`` dict per entry of :attr:`layers`, as
             :meth:`style_of` returns it.
+
+        Examples:
+            - There is exactly one entry per layer, and a layer that never went through the styling
+              path records nothing (the registry does not inspect what it is handed):
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_element("raster-layer").add_element("vector-layer")
+                >>> len(m.layer_styles) == len(m.layers)
+                True
+                >>> m.layer_styles
+                [{'common': {}, 'bokeh': {}}, {'common': {}, 'bokeh': {}}]
+
+                ```
+            - An empty map has no styles to report:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().layer_styles
+                []
+
+                ```
+            - With the engine installed, each builder's requested options show up in add order:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem, cmap="magma", alpha=0.5)   # doctest: +SKIP
+                >>> [style["common"]["cmap"] for style in m.layer_styles]      # doctest: +SKIP
+                ['magma']
+
+                ```
+
+        See Also:
+            style_of: the same record for one layer, by element or by index.
         """
         return [self.style_of(layer) for layer in self.layers]
 

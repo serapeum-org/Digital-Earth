@@ -64,6 +64,50 @@ class RasterMixin(_MixinBase):
             This map (chainable). When the band cannot be placed — it lies outside what the display CRS
             can show, or its corners will not express as lon/lat — nothing is added: the layer is skipped
             with a warning, or the error is raised when the map was built with ``strict=True``.
+
+        Raises:
+            OffLimbError: only when the map was built with ``strict=True`` and the band cannot be
+                placed; by default that layer is skipped with a warning instead, so one unplaceable
+                raster does not cost the map the layers around it.
+
+        Examples:
+            - Colour-map a band and address the layer afterwards by the name it was given (needs
+              the ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> src = get_source(                                # doctest: +SKIP
+                ...     np.arange(12.0).reshape(3, 4),
+                ...     x=np.array([0.0, 1.0, 2.0, 3.0]),
+                ...     y=np.array([2.0, 1.0, 0.0]),
+                ... )
+                >>> m = WebMap().add_raster(src, cmap="viridis", name="dem")  # doctest: +SKIP
+                >>> m.layer_ids, len(m.layers)                       # doctest: +SKIP
+                (['dem'], 1)
+
+                ```
+            - The band also hands the map its extent, so the view frames itself and
+              :meth:`~digitalearth.web.base.WebMapBase.fit_bounds` has something to frame on;
+              on an empty map the same call raises instead:
+                ```python
+                >>> m.fit_bounds() is m                              # doctest: +SKIP
+                True
+
+                ```
+            - ``visible=False`` builds the layer hidden, which is how
+              :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks one layer per time
+              step without every frame showing at once — in a saved page too, which has no slider:
+                ```python
+                >>> m = WebMap().add_raster(src, visible=False, name="t0")  # doctest: +SKIP
+                >>> m.layer_ids                                      # doctest: +SKIP
+                ['t0']
+
+                ```
+
+        See Also:
+            digitalearth.web.raster.RasterMixin.rgb_composite: the three-band composite path.
+            digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
         """
         import numpy as np
 

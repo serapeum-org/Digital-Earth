@@ -430,6 +430,21 @@ class WebMapBase:
         height: Optional[int] = 500,
         strict: bool = False,
     ):
+        """Record the display configuration and open the empty layer / decoration registries.
+
+        Every argument is described on the class itself, which is where a reader of the public
+        :class:`~digitalearth.web.map.WebMap` meets them; this only validates the display CRS
+        and opens the state the builders fill in. Nothing is drawn and nothing is imported from
+        MapLibre here — the widget is built on demand by :meth:`render` / :meth:`save` — so a
+        map can be composed, and its configuration read back, in an environment with no engine
+        installed. It is also why the view is tracked as *whether* one was asked for rather than
+        by its value alone: an explicit ``zoom=2`` equals the default, and only the sentinel
+        tells the two apart when :meth:`_map_view` decides whether to frame on the data instead.
+
+        Raises:
+            ValueError: when ``crs`` is not EPSG:4326 — see :meth:`_validate_display_crs` for
+                why a display CRS MapLibre would read as degrees is refused, not mis-placed.
+        """
         self.center = center
         #: Whether the caller named a view of their own. Tracked from the sentinel rather than the value,
         #: because an explicit ``zoom=2`` is a choice and equals the default.
@@ -1526,6 +1541,46 @@ class WebMapBase:
 
         Raises:
             ImportError: when the ``web`` extra is not installed (or, for PNG, no headless browser is present).
+            ValueError: propagated from :meth:`~digitalearth.web.export.ExportMixin.animate` for a
+                ``.gif`` destination on a map that carries no renderable time series.
+
+        Examples:
+            - Write a standalone page and carry straight on from the path that comes back, instead
+              of rebuilding the filename (needs the ``web`` extra, hence skipped here):
+                ```python
+                >>> import pathlib, tempfile                         # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> out = pathlib.Path(tempfile.mkdtemp()) / "m.html"  # doctest: +SKIP
+                >>> written = WebMap(center=(8.0, 47.0)).save(out)   # doctest: +SKIP
+                >>> written == out, written.stat().st_size > 0       # doctest: +SKIP
+                (True, True)
+
+                ```
+            - ``title`` reaches the document itself, so a saved map is recognisable in a browser
+              tab rather than opening as one more "Digital-Earth map":
+                ```python
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> page = WebMap().save("rain.html", title="Rain")  # doctest: +SKIP
+                >>> "<title>Rain</title>" in page.read_text("utf-8")  # doctest: +SKIP
+                True
+
+                ```
+            - The suffix, not a flag, picks the branch: ``.gif`` hands the call to
+              :meth:`~digitalearth.web.export.ExportMixin.animate`, which says so when the map has
+              nothing to animate. That dispatch needs no engine, so it runs here:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> try:
+                ...     WebMap().save("frames.gif")
+                ... except ValueError as error:
+                ...     print(str(error).split(";")[0])
+                animate() needs a raster time series with at least two steps
+
+                ```
+
+        See Also:
+            digitalearth.web.export.ExportMixin.animate: the ``.gif`` branch.
+            render: the in-notebook counterpart — the same widget, without writing a file.
         """
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
         kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()

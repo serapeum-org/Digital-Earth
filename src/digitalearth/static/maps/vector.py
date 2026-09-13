@@ -268,15 +268,23 @@ class VectorMixin(_MixinBase):
                 ``DeprecationWarning``) for one release.
             **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``k``, ``size``,
                 ``size_limits``, ``size_scale``, ``size_legend``, ``size_legend_values``, …).
+                ``size`` is the marker's visual size, spelled the same way on every backend;
+                cleopatra's own ``point_size`` is the deprecated spelling of it, still
+                accepted (with a ``DeprecationWarning``) for one release, and passing both
+                is a ``TypeError``.
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
 
         Raises:
-            TypeError: if both ``column`` and the deprecated ``scale`` are passed.
+            TypeError: if both ``column`` and the deprecated ``scale`` are passed, or both
+                ``size`` and the deprecated ``point_size`` — each pair names one parameter,
+                so preferring one silently would drop the other.
 
         Warns:
-            DeprecationWarning: when ``scale=`` is used instead of ``column=``.
+            DeprecationWarning: when ``scale=`` is used instead of ``column=``, or when cleopatra's
+                ``point_size=`` is used instead of ``size=``. Both old spellings keep working
+                for one release.
         """
         column = _renamed_kwarg("scale", scale, "column", column)
         fc = self._vector_input(
@@ -304,7 +312,10 @@ class VectorMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset`` (reprojected to the display CRS first).
-            **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options.
+            **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options. ``size``
+                sets the marker size (the cross-backend spelling); cleopatra's ``point_size``
+                is its deprecated alias, accepted with a ``DeprecationWarning`` for one
+                release, and passing both raises.
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).

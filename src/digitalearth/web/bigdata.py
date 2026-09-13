@@ -241,10 +241,57 @@ class BigDataMixin(_MixinBase):
             size: Point radius in pixels — the same ``size`` that means marker size on every tier, and the
                 same number :meth:`~digitalearth.web.vector.VectorMixin.points` hands down when it routes
                 a large layer here.
-            radius: **Deprecated** spelling of ``size``; forwarded unchanged.
+            radius: **Deprecated** spelling of ``size``; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``radius=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when ``features`` is a raster rather than a vector layer.
+
+        Examples:
+            - Build the overlay and read back the spec that will be handed to deck.gl (needs the
+              ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Point               # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> m = WebMap().deck_scatter(gdf, size=7.0)         # doctest: +SKIP
+                >>> layer = m._deck_layers[0]                        # doctest: +SKIP
+                >>> layer["@@type"], layer["getPointRadius"]         # doctest: +SKIP
+                ('GeoJsonLayer', 7.0)
+
+                ```
+            - A deck overlay is drawn but is **not** a MapLibre style layer, so it never enters the
+              registry a switcher toggles — which is why
+              :meth:`~digitalearth.web.vector.VectorMixin.points` refuses ``name``/``visible`` when
+              it routes a large table here:
+                ```python
+                >>> m.layer_ids                                      # doctest: +SKIP
+                []
+
+                ```
+            - The old ``radius=`` spelling still lands on ``size``, after saying it is going away:
+                ```python
+                >>> import warnings                                  # doctest: +SKIP
+                >>> with warnings.catch_warnings(record=True) as caught:  # doctest: +SKIP
+                ...     warnings.simplefilter("always")
+                ...     m = WebMap().deck_scatter(gdf, radius=4.0)
+                >>> m._deck_layers[0]["getPointRadius"]              # doctest: +SKIP
+                4.0
+                >>> caught[0].category.__name__                      # doctest: +SKIP
+                'DeprecationWarning'
+
+                ```
+
+        See Also:
+            digitalearth.web.vector.VectorMixin.points: the per-feature path, which routes
+                here above ``big_data_threshold``.
+            digitalearth.web.bigdata.BigDataMixin.deck_polygons: the polygon counterpart.
         """
         from maplibre.sources import geopandas_to_geojson
 

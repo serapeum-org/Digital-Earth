@@ -375,7 +375,48 @@ class DashboardMixin(_MixinBase):
 
         Raises:
             ValueError: when there are no layers to control.
-            NotImplementedError: when ``reorder=True`` is passed.
+            NotImplementedError: when ``reorder=True`` is passed — reordering is not implemented,
+                and the flag is refused rather than accepted and ignored (roadmap IN-1; the static
+                twin is #216).
+
+        Examples:
+            - One toggle per registered layer, labelled by index and element type, in add order:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).points(fc)                 # doctest: +SKIP
+                >>> panel = m.layer_control()                                  # doctest: +SKIP
+                >>> panel[0][0].options                                        # doctest: +SKIP
+                ['0: Image', '1: Points']
+
+                ```
+            - ``reorder=True`` is refused outright: the registry has no stable per-layer handle to
+              reorder by, and silently ignoring the flag was how the control looked inert:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem)                            # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     m.layer_control(reorder=True)
+                ... except NotImplementedError as error:
+                ...     print(str(error).split(" — ")[0])
+                layer_control(reorder=True) is not implemented
+
+                ```
+            - On a Web-Mercator map the controls are toggles + opacity + basemap; on any other
+              display CRS the basemap switch is dropped (and logged) rather than drawn misaligned:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> mercator = InteractiveMap().image(dem).layer_control()     # doctest: +SKIP
+                >>> len(mercator[0])                                           # doctest: +SKIP
+                3
+                >>> other = InteractiveMap(crs=4326).image(dem)                 # doctest: +SKIP
+                >>> len(other.layer_control()[0])                              # doctest: +SKIP
+                2
+
+                ```
         """
         gv, hv = _require_holoviz()
         pn = _require_panel()
@@ -471,13 +512,51 @@ class DashboardMixin(_MixinBase):
         Args:
             features: A pyramids ``FeatureCollection`` (or GeoDataFrame) whose non-geometry columns
                 populate the table.
-            linked: Must stay ``False``; ``True`` raises ``NotImplementedError``.
+            linked: Must stay ``False``; ``True`` raises ``NotImplementedError``. It used to
+                default to ``True`` and do nothing, which read as "linking is on" when no
+                selection was ever shared with the map.
 
         Returns:
-            A ``panel.widgets.Tabulator`` of the attribute columns.
+            A ``panel.widgets.Tabulator`` of the attribute columns — paginated, and ``disabled`` so
+            the view cannot be edited into disagreeing with the data on the map.
 
         Raises:
-            NotImplementedError: when ``linked=True`` is passed.
+            NotImplementedError: when ``linked=True`` is passed — two-way selection linking
+                is not implemented (roadmap IN-5 / DE-13), and the flag is refused rather
+                than accepted and ignored.
+
+        Examples:
+            - The geometry column is dropped; what is left is the attributes, unchanged:
+                ```python
+                >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> table = InteractiveMap().attribute_table(fc)               # doctest: +SKIP
+                >>> list(table.value.columns)                                  # doctest: +SKIP
+                ['fid']
+                >>> len(table.value) == len(fc)                                # doctest: +SKIP
+                True
+
+                ```
+            - The view is read-only by construction — a viewer cannot edit a cell into disagreeing
+              with the map:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> InteractiveMap().attribute_table(fc).disabled              # doctest: +SKIP
+                True
+
+                ```
+            - ``linked=True`` is refused: nothing shares a selection with the map's elements yet,
+              and the table is ``disabled``, so it could not emit one either:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     InteractiveMap().attribute_table(fc, linked=True)
+                ... except NotImplementedError as error:
+                ...     print(str(error).split(" — ")[0])
+                attribute_table(linked=True) is not implemented
+
+                ```
         """
         if linked:
             raise NotImplementedError(

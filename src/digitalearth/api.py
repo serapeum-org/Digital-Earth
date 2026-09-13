@@ -668,6 +668,47 @@ def voronoi(data: PlottableData, column: str | None = None, **kwargs) -> Map:
 
     With ``column`` the cells are filled and coloured by that value (a colorbar is added); without it the cell
     outlines are drawn. ``clip`` and styling kwargs are forwarded to :meth:`Map.voronoi`.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of point geometries.
+        column: Numeric column whose value colours each cell, or ``None`` (default) for
+            outlines only — which is also what decides whether a colorbar is added.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else is forwarded to
+            :meth:`Map.voronoi` (``clip``, ``cmap``, ``scheme``, ``k``, …).
+
+    Returns:
+        The finished :class:`Map`, with the cells registered as its single layer.
+
+    Examples:
+        - Outlines only: one layer, and a single axes, because there is nothing to key:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import voronoi
+            >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+            >>> m = voronoi(fc, crs=fc.epsg)
+            >>> len(m.layers)
+            1
+            >>> len(m.fig.axes)
+            1
+
+            ```
+        - Naming a column fills the cells and adds the colorbar axes alongside the map:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import voronoi
+            >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+            >>> m = voronoi(fc, column="fid", crs=fc.epsg)
+            >>> len(m.fig.axes)
+            2
+
+            ```
+
+    See Also:
+        digitalearth.static.maps.vector.VectorMixin.voronoi: the ``Map`` method this wraps.
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.voronoi(data, column=column, **kwargs)
@@ -681,6 +722,52 @@ def cartogram(
 
     With ``column`` the scaled polygons are filled and coloured by that value (a colorbar is added); without it
     the outlines are drawn. ``limits`` and styling kwargs are forwarded to :meth:`Map.cartogram`.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of polygon geometries.
+        scale: Numeric column whose value **sizes** each polygon — it is scaled about its own
+            centroid by a factor normalised across the layer. Required, and distinct from
+            ``column``: this one distorts area, ``column`` only colours.
+        column: Numeric column whose value colours each scaled polygon, or ``None``
+            (default) for outlines only — which also decides whether a colorbar is added.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else is forwarded to
+            :meth:`Map.cartogram` (``limits``, ``cmap``, ``scheme``, ``k``, …).
+
+    Returns:
+        The finished :class:`Map`, with the scaled polygons registered as its single layer.
+
+    Examples:
+        - Size the polygons by a column and draw their outlines — one layer, one axes:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import cartogram
+            >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+            >>> fc["geometry"] = fc.geometry.buffer(500.0)
+            >>> m = cartogram(fc, scale="fid", crs=fc.epsg)
+            >>> len(m.layers)
+            1
+            >>> len(m.fig.axes)
+            1
+
+            ```
+        - Size *and* colour by the same column: the fill is keyed by the colorbar axes:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import cartogram
+            >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+            >>> fc["geometry"] = fc.geometry.buffer(500.0)
+            >>> m = cartogram(fc, scale="fid", column="fid", crs=fc.epsg)
+            >>> len(m.fig.axes)
+            2
+
+            ```
+
+    See Also:
+        digitalearth.static.maps.vector.VectorMixin.cartogram: the ``Map`` method this wraps.
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.cartogram(data, scale=scale, column=column, **kwargs)
@@ -692,6 +779,49 @@ def quadtree(data: PlottableData, column: str | None = None, **kwargs) -> Map:
 
     Cells are coloured by an aggregate of ``column`` (or point count when ``None``) and a colorbar is added.
     ``agg``/``nmax``/``nmin``/``clip`` and styling kwargs are forwarded to :meth:`Map.quadtree`.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of point geometries.
+        column: Numeric column aggregated per cell, or ``None`` (default) to colour by point count.
+            Unlike the other wrappers here, it does **not** decide the colorbar — a quadtree
+            is always a filled choropleth, so the bar is always drawn.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else is forwarded to
+            :meth:`Map.quadtree` (``agg``, ``nmax``, ``nmin``, ``clip``, ``cmap``, ``scheme``,
+            ``k``, …).
+
+    Returns:
+        The finished :class:`Map`, with the aggregated cells registered as its single layer.
+
+    Examples:
+        - Without a column the cells carry density; ``nmax`` sets how finely the box splits:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import quadtree
+            >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+            >>> m = quadtree(fc, crs=fc.epsg, nmax=1)
+            >>> len(m.layers)
+            1
+            >>> len(m.fig.axes)  # always filled, so always keyed
+            2
+
+            ```
+        - With a column the cells carry an aggregate of it instead of a count:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import quadtree
+            >>> fc = FeatureCollection.read_file("tests/data/points.geojson")
+            >>> m = quadtree(fc, column="fid", agg="max", crs=fc.epsg, nmax=1)
+            >>> len(m.fig.axes)
+            2
+
+            ```
+
+    See Also:
+        digitalearth.static.maps.vector.VectorMixin.quadtree: the ``Map`` method this wraps.
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.quadtree(data, column=column, **kwargs)
@@ -718,6 +848,62 @@ def sankey(
 
     ``column`` colours each path and ``scale`` sets its width (both optional); styling kwargs are forwarded to
     :meth:`Map.sankey`. A colorbar is added when ``column`` is given.
+
+    Args:
+        data: A pyramids ``FeatureCollection`` of ``LineString``/``MultiLineString`` geometries; a
+            MultiLineString contributes one path per part.
+        column: Numeric column whose value **colours** each path, or ``None`` (default) for
+            one colour — which is also what decides whether a colorbar is added.
+        scale: Numeric column whose value sets each path's **line width**, or ``None``
+            (default) for a uniform width. Independent of ``column``: either, both, neither.
+        **kwargs: ``crs`` sets the display CRS (default ``3857``); everything else is forwarded to
+            :meth:`Map.sankey` (``width_limits``, ``width_scale``, ``cmap``, ``size_legend``, …).
+
+    Returns:
+        The finished :class:`Map`, with the flow paths registered as its single layer.
+
+    Examples:
+        - Bare paths at a uniform width: nothing is encoded, so nothing is keyed:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import LineString
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import sankey
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"flow": [1.0, 2.0]},
+            ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(0, 1), (1, 2)])],
+            ...     crs="EPSG:4326",
+            ... )
+            >>> m = sankey(FeatureCollection(gdf), crs=4326)
+            >>> len(m.layers)
+            1
+            >>> len(m.fig.axes)
+            1
+
+            ```
+        - Colour by one column and widen by another (the same one here) — colour gets the bar:
+            ```python
+            >>> import matplotlib
+            >>> matplotlib.use("Agg")
+            >>> import geopandas as gpd
+            >>> from shapely.geometry import LineString
+            >>> from pyramids.feature import FeatureCollection
+            >>> from digitalearth.api import sankey
+            >>> gdf = gpd.GeoDataFrame(
+            ...     {"flow": [1.0, 2.0]},
+            ...     geometry=[LineString([(0, 0), (1, 1)]), LineString([(0, 1), (1, 2)])],
+            ...     crs="EPSG:4326",
+            ... )
+            >>> m = sankey(FeatureCollection(gdf), column="flow", scale="flow", crs=4326)
+            >>> len(m.fig.axes)
+            2
+
+            ```
+
+    See Also:
+        digitalearth.static.maps.vector.VectorMixin.sankey: the ``Map`` method this wraps.
     """
     scene = Map(crs=kwargs.pop("crs", 3857))
     scene.sankey(data, column=column, scale=scale, **kwargs)

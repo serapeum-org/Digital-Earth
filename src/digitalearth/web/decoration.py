@@ -346,6 +346,52 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when ``bounds`` is not four numbers — MapLibre silently ignores a malformed
                 ``bounds``, so the coverage would quietly go undeclared.
+
+        Examples:
+            - Put an XYZ service on the ground. It draws, but it is not a *data* layer, so it
+              never shows up in the registry a layer switcher lists (needs the ``web`` extra, so
+              the block is skipped without it):
+                ```python
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> m = WebMap().tiles(                              # doctest: +SKIP
+                ...     "https://tile.example.org/{z}/{x}/{y}.png",
+                ...     attribution="© Example", max_zoom=12,
+                ... )
+                >>> len(m.layers), m.layer_ids                       # doctest: +SKIP
+                (1, [])
+
+                ```
+            - Call order does not decide draw order: tiles added *after* the data still land
+              beneath it, because this registers an underlay instead of appending on top:
+                ```python
+                >>> import geopandas as gpd                          # doctest: +SKIP
+                >>> from shapely.geometry import Point               # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(                          # doctest: +SKIP
+                ...     geometry=[Point(0, 0), Point(1, 1)], crs=4326,
+                ... )
+                >>> m = WebMap().points(gdf, name="sites")           # doctest: +SKIP
+                >>> data_layer = m.layers[0]                         # doctest: +SKIP
+                >>> m = m.tiles("https://t.example.org/{z}/{x}/{y}.png")  # doctest: +SKIP
+                >>> m.layers[0] is data_layer, m.layers[-1] is data_layer  # doctest: +SKIP
+                (False, True)
+
+                ```
+            - A malformed coverage box is refused rather than dropped: MapLibre would ignore it
+              without a word, and the service would go on collecting 404s across the rest of the
+              world:
+                ```python
+                >>> try:                                             # doctest: +SKIP
+                ...     WebMap().tiles("https://t.example.org/{z}/{x}/{y}.png", bounds=(0, 0, 1))
+                ... except ValueError as error:
+                ...     print(str(error).split(";")[0])
+                tiles(bounds=...) takes (west, south, east, north) in lon/lat
+
+                ```
+
+        See Also:
+            digitalearth.web.decoration.DecorationMixin.basemap: the named-provider wrapper.
+            digitalearth.web.base.WebMapBase.add_underlay: the registration that keeps it at the
+                bottom of the stack.
         """
         Layer, LayerType = _require_layer_api()
         src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
@@ -642,7 +688,8 @@ class DecorationMixin(_MixinBase):
             halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
             name: What a layer switcher calls this annotation; ``None`` uses its generated id.
-            size: **Deprecated** spelling of ``text_size``; forwarded unchanged.
+            size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``size=`` will be removed in a future release.
 
         Returns:
             The same map instance, so builder calls chain.

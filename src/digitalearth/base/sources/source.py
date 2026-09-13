@@ -105,6 +105,45 @@ class Source:
           at all. It never means "there was a CRS but no code for it"; that case yields the definition.
 
         Use :attr:`epsg` for the separate code-or-``None`` question.
+
+        Returns:
+            The CRS exactly as it was supplied or derived: an EPSG ``int``, an ``"EPSG:<code>"`` /
+            proj4 / WKT ``str``, or ``None`` when the CRS is genuinely unknown.
+
+        Examples:
+            - A caller that warps into a display CRS stores that CRS verbatim, code and all:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> Source(None, axis, axis, crs=3857).crs
+                3857
+
+                ```
+            - A projection with no authority code keeps its **definition** here — this is the case
+              ``None`` is never used for, because the coordinates do have an address:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> src = Source(None, axis, axis, crs="+proj=ortho +lat_0=53 +lon_0=4")
+                >>> src.crs
+                '+proj=ortho +lat_0=53 +lon_0=4'
+                >>> src.epsg is None
+                True
+
+                ```
+            - ``None`` is reserved for a genuinely unknown CRS — a raw numpy array declares none:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> get_source(np.zeros((2, 3))).crs is None
+                True
+
+                ```
+
+        See Also:
+            epsg: the narrower question — the authority code, or ``None`` when there is none.
         """
         return self._crs
 

@@ -130,7 +130,8 @@ class PointCloudMixin(_MixinBase):
             render_points_as_spheres: Draw points as shaded spheres (cleaner than flat dots).
             eye_dome_lighting: Enable depth-cueing eye-dome lighting (recommended for dense clouds).
             cmap: Colormap used when the cloud is coloured by a scalar.
-            point_size: Deprecated alias of ``size``; passing it warns and forwards. Passing both raises.
+            point_size: **Deprecated** alias of ``size``; passing it warns that ``point_size=`` will be
+                removed in a future release and forwards the value unchanged. Passing both raises.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`.
 
         Returns:

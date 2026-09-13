@@ -448,6 +448,34 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when the display CRS is not Web Mercator.
+
+        Examples:
+            - Name the layer instead of spelling out a ``features`` flag:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> len(InteractiveMap().land().layers)                        # doctest: +SKIP
+                1
+
+                ```
+            - Land is an **underlay**: it is inserted at the front of the registry, so a data layer
+              added before it still ends up drawn on top:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).land()                     # doctest: +SKIP
+                >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
+                ['Land', 'Image']
+
+                ```
+            - A finer Natural-Earth scale is one argument, and style options ride along:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().land(resolution="50m", alpha=0.3)     # doctest: +SKIP
+                >>> len(m.layers)                                              # doctest: +SKIP
+                1
+
+                ```
         """
         return self.features(land=True, resolution=resolution, **opts)
 
@@ -463,6 +491,34 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when the display CRS is not Web Mercator.
+
+        Examples:
+            - Name the layer instead of spelling out a ``features`` flag:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> len(InteractiveMap().ocean().layers)                       # doctest: +SKIP
+                1
+
+                ```
+            - Ocean is an **underlay** too, so it sits beneath data added before it — a background
+              for a land-only raster rather than a mask over it:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).ocean()                    # doctest: +SKIP
+                >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
+                ['Ocean', 'Image']
+
+                ```
+            - The two underlays compose, each new one going in front of the last:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().ocean().land()                        # doctest: +SKIP
+                >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
+                ['Land', 'Ocean']
+
+                ```
         """
         return self.features(ocean=True, resolution=resolution, **opts)
 
@@ -478,6 +534,33 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when the display CRS is not Web Mercator.
+
+        Examples:
+            - Name the layer instead of spelling out a ``features`` flag:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> len(InteractiveMap().lakes().layers)                       # doctest: +SKIP
+                1
+
+                ```
+            - Lakes are an **overlay**: appended after the data, so inland water reads on top of
+              the raster instead of being hidden by it:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).lakes()                    # doctest: +SKIP
+                >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
+                ['Image', 'Lakes']
+
+                ```
+            - Chain the named layers to build the hydrography context in one line:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> len(InteractiveMap().lakes().rivers().coastlines().layers)  # doctest: +SKIP
+                3
+
+                ```
         """
         return self.features(lakes=True, resolution=resolution, **opts)
 
@@ -493,6 +576,34 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when the display CRS is not Web Mercator.
+
+        Examples:
+            - Name the layer instead of spelling out a ``features`` flag:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> len(InteractiveMap().rivers().layers)                      # doctest: +SKIP
+                1
+
+                ```
+            - Rivers are an **overlay**: appended after the data, so the centerlines are drawn over
+              the raster they describe:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).rivers(resolution="50m")   # doctest: +SKIP
+                >>> [layer.group for layer in m.layers]                        # doctest: +SKIP
+                ['Image', 'Rivers']
+
+                ```
+            - Style options reach the element, so the centerlines can be toned down:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().rivers(line_width=0.5, alpha=0.6)     # doctest: +SKIP
+                >>> len(m.layers)                                              # doctest: +SKIP
+                1
+
+                ```
         """
         return self.features(rivers=True, resolution=resolution, **opts)
 
@@ -600,7 +711,8 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> InteractiveMap().image(dem).colorbar(False).save("m.html")  # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).colorbar(False)             # doctest: +SKIP
+                >>> m.save("m.html").name                                      # doctest: +SKIP
                 'm.html'
 
                 ```
@@ -630,7 +742,8 @@ class DecorationMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                        # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")        # doctest: +SKIP
-                >>> InteractiveMap().contours(dem).legend(False).save("m.html")  # doctest: +SKIP
+                >>> m = InteractiveMap().contours(dem).legend(False)            # doctest: +SKIP
+                >>> m.save("m.html").name                                      # doctest: +SKIP
                 'm.html'
 
                 ```
