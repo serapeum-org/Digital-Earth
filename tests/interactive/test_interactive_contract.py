@@ -7,7 +7,9 @@ signature- and behaviour-level rather than render-level — the point is that ``
 static / web / three_d.
 
 Every rename in the batch keeps its old spelling working for one release, so each deprecated alias is
-tested twice: that it still does its job, and that it warns while doing it.
+tested three ways: that it still does its job, that it warns while doing it, and that passing it
+alongside the new spelling is a ``TypeError`` naming both — the one answer all four tiers give, from
+:func:`~digitalearth.base.deprecation.renamed_parameter`.
 
 Runs in the ``interactive`` pixi env (``pixi run -e interactive test-interactive``).
 """
@@ -486,6 +488,33 @@ class TestDeprecatedAliases:
         with warnings.catch_warnings():
             warnings.simplefilter("error", DeprecationWarning)
             m.points(point_fc, big_data_threshold=10_000)
+
+    @pytest.mark.parametrize("builder", ["points", "polygons", "trimesh"])
+    def test_both_spellings_at_once_is_refused(self, builder, point_fc, polygon_fc):
+        """Both spellings of the cutoff at once is a ``TypeError`` naming both, on every builder.
+
+        Args:
+            builder: The builder called with the contradictory pair.
+            point_fc: The point fixture (``points``/``trimesh``).
+            polygon_fc: The polygon fixture (``polygons``).
+
+        Test scenario:
+            This tier used to resolve the pair silently in favour of the new name, which meant a caller who
+            set both got one of their two numbers honoured and no hint that the other was dropped. All four
+            tiers now refuse it through the shared
+            :func:`~digitalearth.base.deprecation.renamed_parameter`, and the message names both spellings
+            plus the one to keep.
+        """
+        data = polygon_fc if builder == "polygons" else point_fc
+        with pytest.raises(TypeError) as excinfo:
+            getattr(InteractiveMap(), builder)(
+                data, big_data_threshold=10_000, rasterize_threshold=1
+            )
+        message = str(excinfo.value)
+        assert "both big_data_threshold= and the deprecated rasterize_threshold=" in (
+            message
+        ), message
+        assert "pass only big_data_threshold=" in message, message
 
 
 class TestBasemapDefault:

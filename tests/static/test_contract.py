@@ -269,17 +269,35 @@ class TestMarkerSizeAndColumn:
             "point_size= no longer sets the size"
         )
 
-    def test_both_spellings_at_once_is_refused(self, points_fc):
-        """Passing the old and new spelling together is an error, not a silent preference.
+    @pytest.mark.parametrize(
+        "kwargs, new_name, old_name",
+        [
+            ({"column": "fid", "scale": "fid"}, "column", "scale"),
+            ({"size": 20, "point_size": 77}, "size", "point_size"),
+        ],
+    )
+    def test_both_spellings_at_once_is_refused(
+        self, points_fc, kwargs, new_name, old_name
+    ):
+        """Passing the old and new spelling together is a ``TypeError``, not a silent preference.
 
         Args:
             points_fc: The committed point fixture.
+            kwargs: The contradictory call, one renamed parameter per case.
+            new_name: The spelling the caller should keep.
+            old_name: The deprecated spelling they should drop.
 
         Test scenario:
-            They are one parameter, so two values for it cannot both be honoured.
+            They are one parameter, so two values for it cannot both be honoured — and this is the one
+            answer all four tiers give, from the shared
+            :func:`~digitalearth.base.deprecation.renamed_parameter`. The message has to name both
+            spellings and the one to keep, or the caller cannot tell which of their two keywords to delete.
         """
-        with pytest.raises(TypeError, match="not both"):
-            Map(crs=points_fc.epsg).scatter(points_fc, column="fid", scale="fid")
+        with pytest.raises(TypeError) as excinfo:
+            Map(crs=points_fc.epsg).scatter(points_fc, **kwargs)
+        message = str(excinfo.value)
+        assert f"{new_name}=" in message and f"{old_name}=" in message, message
+        assert f"pass only {new_name}=" in message, message
 
 
 class TestClassification:

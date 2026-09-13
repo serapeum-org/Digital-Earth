@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
 
-from digitalearth.three_d.base import deprecated_alias
+from digitalearth.base.deprecation import renamed_parameter
 
 #: Frames per second every tier's animation entry point defaults to, so one ``fps`` means one speed whichever
 #: backend rendered the clip. The 3-D tier used to default to 12 (orbit) and 8 (animate) — two speeds in one
@@ -235,7 +235,8 @@ class AnimationMixin(_MixinBase):
             viewup: Up vector for the path and the camera alike, as three floats. ``None`` leaves pyvista's
                 default.
             framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
-                removed in a future release and forwards the value unchanged. Passing both raises.
+                removed in a future release and forwards the value unchanged. Passing both is a
+                ``TypeError``.
             **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path`, whose signature names what it
                 accepts — ``step`` and ``focus`` are the useful ones here. It takes no ``**kwargs``, so a
                 keyword it does not name raises :class:`TypeError`; ``factor`` and ``shift`` are not among
@@ -246,16 +247,17 @@ class AnimationMixin(_MixinBase):
             The ``path`` written.
 
         Raises:
-            ValueError: If both ``fps`` and the deprecated ``framerate`` are given, ``factor`` is not a
-                positive finite number, ``shift`` is not a finite number,
+            ValueError: If ``factor`` is not a positive finite number, ``shift`` is not a finite number,
                 ``n_frames`` is not a whole number of at least 3, or ``viewup`` is not three finite numbers
                 with a direction (a zero vector gives none). Non-numeric values are rejected here too, by
                 name — numpy's own message for them names neither the argument nor this method. Also if
                 ``threaded=True`` is passed: :meth:`pyvista.Plotter.orbit_on_path` returns
                 before its render thread has written a frame, so the writer here would already be closed and
                 no file would be produced — drive that method yourself for a background render.
-            TypeError: If ``orbit_kwargs`` carries a keyword ``orbit_on_path`` does not name; it takes no
-                ``**kwargs`` of its own. The frame writer is still closed when this happens.
+            TypeError: If both ``fps`` and the deprecated ``framerate`` are given — they name one rate, so
+                neither can be silently preferred. Also if ``orbit_kwargs`` carries a keyword
+                ``orbit_on_path`` does not name; it takes no ``**kwargs`` of its own. The frame writer is
+                still closed when either happens.
 
         Examples:
             - Orbit a terrain scene to a GIF (needs the ``3d`` extra for imageio):
@@ -292,12 +294,12 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
-        fps = deprecated_alias(
-            fps,
-            framerate,
+        fps = renamed_parameter(
             new="fps",
+            value=fps,
             old="framerate",
-            caller="orbit()",
+            alias=framerate,
+            caller="Scene3D.orbit()",
             default=DEFAULT_FPS,
         )
         factor = _finite_number(factor, "factor (orbit radius)")
@@ -357,13 +359,15 @@ class AnimationMixin(_MixinBase):
             fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one speed
                 shared with every other tier's animation entry point; this method used to default to ``8``.
             framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
-                removed in a future release and forwards the value unchanged. Passing both raises.
+                removed in a future release and forwards the value unchanged. Passing both is a
+                ``TypeError``.
 
         Returns:
             The ``path`` written.
 
         Raises:
-            ValueError: If both ``fps`` and the deprecated ``framerate`` are given.
+            TypeError: If both ``fps`` and the deprecated ``framerate`` are given — they name one rate, so
+                neither can be silently preferred.
 
         Examples:
             - Animate a growing terrain over three frames:
@@ -385,12 +389,12 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
-        fps = deprecated_alias(
-            fps,
-            framerate,
+        fps = renamed_parameter(
             new="fps",
+            value=fps,
             old="framerate",
-            caller="animate()",
+            alias=framerate,
+            caller="Scene3D.animate()",
             default=DEFAULT_FPS,
         )
         _open_writer(self.plotter, path, fps)

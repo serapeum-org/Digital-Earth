@@ -5,7 +5,6 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
-import warnings
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -21,6 +20,7 @@ from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.sources import get_source
 from digitalearth.base.symbology import (
     MISSING_COLOR,
@@ -35,45 +35,7 @@ from digitalearth.static.render_compat import relocate_flat_style
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
 
-def _renamed_kwarg(
-    old: str, old_value: Any, new: str, new_value: Any, *, stacklevel: int = 3
-) -> Any:
-    """Resolve a renamed keyword argument, warning when the old spelling was the one used.
-
-    The old spelling keeps working for one release: it is accepted, warned about by name, and forwarded as
-    the new one. Passing both is refused rather than silently preferring one.
-
-    Args:
-        old: The deprecated parameter name, for the warning and the error.
-        old_value: What was passed under the old name (``None`` means "not passed").
-        new: The parameter name that replaces it.
-        new_value: What was passed under the new name (``None`` means "not passed").
-        stacklevel: Frames to skip so the warning points at the caller that used the old spelling.
-
-    Returns:
-        The value to use — ``new_value`` unless only the old spelling was given.
-
-    Raises:
-        TypeError: if both spellings were passed, since they name one parameter.
-
-    Warns:
-        DeprecationWarning: when ``old_value`` was passed, naming the replacement.
-    """
-    if old_value is None:
-        return new_value
-    if new_value is not None:
-        raise TypeError(
-            f"pass either {new}= or the deprecated {old}=, not both (they are the same parameter)"
-        )
-    warnings.warn(
-        f"{old}= is deprecated and will be removed in a future release; use {new}= instead",
-        DeprecationWarning,
-        stacklevel=stacklevel,
-    )
-    return old_value
-
-
-def _resolve_marker_size(opts: dict, plot_style: dict) -> None:
+def _resolve_marker_size(opts: dict, plot_style: dict, caller: str) -> None:
     """Fold a ``size=`` marker size into the ``point_size`` cleopatra's point glyphs take (in place).
 
     ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static
@@ -87,6 +49,7 @@ def _resolve_marker_size(opts: dict, plot_style: dict) -> None:
         opts: The glyph constructor kwargs, mutated in place: the resolved size becomes ``point_size``.
         plot_style: The relocated ``plot()`` kwargs, mutated in place: a ``point_size`` meant for this
             glyph is taken back out of it.
+        caller: The layer method the kwargs were written on, named in the warning and the error.
 
     Raises:
         TypeError: if both ``size`` and ``point_size`` are passed.
@@ -94,12 +57,13 @@ def _resolve_marker_size(opts: dict, plot_style: dict) -> None:
     Warns:
         DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
     """
-    size = _renamed_kwarg(
-        "point_size",
-        plot_style.pop("point_size", None),
-        "size",
-        opts.pop("size", None),
-        stacklevel=4,  # _renamed_kwarg -> here -> the layer method -> its caller
+    size = renamed_parameter(
+        new="size",
+        value=opts.pop("size", None),
+        old="point_size",
+        alias=plot_style.pop("point_size", None),
+        caller=caller,
+        stacklevel=4,  # renamed_parameter -> here -> the layer method -> its caller
     )
     if size is not None:
         opts["point_size"] = size
@@ -286,7 +250,9 @@ class VectorMixin(_MixinBase):
                 ``point_size=`` is used instead of ``size=``. Both old spellings keep working
                 for one release.
         """
-        column = _renamed_kwarg("scale", scale, "column", column)
+        column = renamed_parameter(
+            new="column", value=column, old="scale", alias=scale, caller="Map.scatter()"
+        )
         fc = self._vector_input(
             features, name="scatter"
         )  # empty-guard; any geometry (centroid fallback) OK
@@ -295,7 +261,9 @@ class VectorMixin(_MixinBase):
         sizes = np.asarray(fc[column], dtype=float) if column is not None else None
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
-        _resolve_marker_size(opts, plot_style)  # `size` -> cleopatra's `point_size`
+        _resolve_marker_size(
+            opts, plot_style, "Map.scatter()"
+        )  # `size` -> cleopatra's `point_size`
         glyph = ScatterGlyph(
             src.x.values,
             src.y.values,
@@ -347,7 +315,9 @@ class VectorMixin(_MixinBase):
         z = xyz.iloc[:, 2].to_numpy()
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
-        _resolve_marker_size(opts, plot_style)  # `size` -> cleopatra's `point_size`
+        _resolve_marker_size(
+            opts, plot_style, "Map.grid_points()"
+        )  # `size` -> cleopatra's `point_size`
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", **plot_style)
 

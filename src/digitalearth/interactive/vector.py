@@ -152,7 +152,8 @@ class VectorMixin(_MixinBase):
                 (default) uses the map's ``big_data_threshold`` attribute (#250).
             rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
-                for one release, and honoured only when ``big_data_threshold`` is absent (#250).
+                for one release; passing it together with ``big_data_threshold`` is a
+                ``TypeError``, since they name one cutoff (#250).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -170,6 +171,10 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
 
+        Raises:
+            TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
+                are passed — two values for one cutoff, so neither can be silently preferred.
+
         Warns:
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
                 ``big_data_threshold=``.
@@ -177,7 +182,7 @@ class VectorMixin(_MixinBase):
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold
+            big_data_threshold, rasterize_threshold, caller="InteractiveMap.points()"
         )
         gdf = self._display_gdf(features)
         if rasterize is True or (
@@ -252,7 +257,8 @@ class VectorMixin(_MixinBase):
                 (default) uses the map's ``big_data_threshold`` attribute (#250).
             rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
-                for one release, and honoured only when ``big_data_threshold`` is absent (#250).
+                for one release; passing it together with ``big_data_threshold`` is a
+                ``TypeError``, since they name one cutoff (#250).
             **opts: Extra HoloViews style options applied to the element.
 
         Examples:
@@ -275,6 +281,8 @@ class VectorMixin(_MixinBase):
                 datashader's own polygon backend, not a Digital-Earth dependency, so the tier says
                 which package to install — or to pass ``rasterize=False`` and draw raw glyphs —
                 rather than failing deeper inside datashader.
+            TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
+                are passed — two values for one cutoff, so neither can be silently preferred.
 
         Warns:
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
@@ -283,7 +291,7 @@ class VectorMixin(_MixinBase):
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold
+            big_data_threshold, rasterize_threshold, caller="InteractiveMap.polygons()"
         )
         gdf = self._display_gdf(features)
         if rasterize is True or (
@@ -690,12 +698,17 @@ class VectorMixin(_MixinBase):
                 the map's ``big_data_threshold`` attribute (#250).
             rasterize_threshold: **Deprecated** spelling of ``big_data_threshold`` — the same
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
-                for one release, and honoured only when ``big_data_threshold`` is absent (#250).
+                for one release; passing it together with ``big_data_threshold`` is a
+                ``TypeError``, since they name one cutoff (#250).
             cmap: Colormap name.
             **opts: Extra HoloViews style options applied to the element.
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
+                are passed — two values for one cutoff, so neither can be silently preferred.
 
         Warns:
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
@@ -749,7 +762,7 @@ class VectorMixin(_MixinBase):
         """
         gv, hv = _require_holoviz()
         threshold = self._resolve_big_data_threshold(
-            big_data_threshold, rasterize_threshold
+            big_data_threshold, rasterize_threshold, caller="InteractiveMap.trimesh()"
         )
         nodes, simplices, vdims = self._mesh_inputs(data, value_column)
         trimesh = gv.TriMesh((simplices, nodes), crs=gv.util.process_crs(self.crs))

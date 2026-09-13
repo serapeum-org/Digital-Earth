@@ -16,7 +16,6 @@ Unlike the 3-D tier, the engine import is **lazy**: ``import digitalearth.intera
 ``interactive`` extra installed; only calling a builder/render method raises an actionable ``ImportError``.
 """
 
-import warnings
 from functools import reduce, wraps
 from operator import mul
 from pathlib import Path
@@ -25,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Self
 from loguru import logger
 
 from digitalearth.base.crs import OffLimbError, reproject
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
@@ -374,34 +374,42 @@ class InteractiveMapBase:
         self,
         big_data_threshold: Optional[int] = None,
         rasterize_threshold: Optional[int] = None,
+        *,
+        caller: str,
     ) -> int:
         """Resolve a builder's big-data cutoff: per-call value, else the map's attribute (#250).
 
-        ``rasterize_threshold`` is the tier's **deprecated** spelling of the same number, kept working for
-        one release so no caller breaks; it is honoured only when ``big_data_threshold`` is absent.
+        ``rasterize_threshold`` is the tier's **deprecated** spelling of the same number, resolved through
+        :func:`~digitalearth.base.deprecation.renamed_parameter` — the one rename rule every backend shares,
+        so this tier refuses two spellings of one cutoff exactly as static, web and 3-D do.
 
         Args:
             big_data_threshold: The per-call override, or ``None`` to use the map's attribute.
             rasterize_threshold: The deprecated alias of ``big_data_threshold``.
+            caller: The builder the keywords were written on, named in the warning and the error.
 
         Returns:
             The row/face count above which the calling builder routes through Datashader.
 
+        Raises:
+            TypeError: if both spellings are passed — they name one cutoff, so two values for it cannot
+                both be honoured.
+
         Warns:
             DeprecationWarning: when ``rasterize_threshold`` is passed.
         """
-        if rasterize_threshold is not None:
-            warnings.warn(
-                "rasterize_threshold= is deprecated and will be removed in a future release; use "
-                "big_data_threshold= (or set the map's big_data_threshold attribute) instead",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            if big_data_threshold is None:
-                return rasterize_threshold
-        if big_data_threshold is not None:
-            return big_data_threshold
-        return self.big_data_threshold
+        threshold = renamed_parameter(
+            new="big_data_threshold",
+            value=big_data_threshold,
+            old="rasterize_threshold",
+            alias=rasterize_threshold,
+            caller=caller,
+            # renamed_parameter -> here -> the builder -> @_skips_off_limb's wrapper -> its caller.
+            # The wrapper is the frame the old inline warning stopped at, so it named this module
+            # instead of the notebook cell that wrote the deprecated keyword.
+            stacklevel=5,
+        )
+        return self.big_data_threshold if threshold is None else threshold
 
     def _auto_style(self, source: Source) -> Dict[str, Any]:
         """Return the :func:`~digitalearth.base.autostyle.auto_style` record for ``source``.

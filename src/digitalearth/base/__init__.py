@@ -28,6 +28,9 @@ What lives here:
   variable, attribution, coverage) every backend resolves by name, plus ``DEFAULT_BASEMAP_PROVIDER``, the
   one provider every tier falls back to when the caller named none. Pure data: it emits a URL with the
   tile placeholders intact and constructs no engine object.
+* :mod:`~digitalearth.base.deprecation` — ``renamed_parameter``, the single rule for a renamed keyword: the
+  old spelling keeps working with a ``DeprecationWarning``, and passing both spellings is a ``TypeError``.
+  Every backend resolves its renames through it, so the four tiers cannot drift apart on the contract again.
 * :mod:`~digitalearth.base.crs` — the best-effort EPSG lookup.
 * :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
 * :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend

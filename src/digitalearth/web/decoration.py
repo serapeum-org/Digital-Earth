@@ -25,11 +25,8 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
-from digitalearth.web.base import (
-    _require_layer_api,
-    _require_maplibre,
-    deprecated_alias,
-)
+from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 # TODO(#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
 # collision belongs to the Core contract, not here.
@@ -666,7 +663,7 @@ class DecorationMixin(_MixinBase):
         lat: float,
         string: str,
         *,
-        text_size: float = 14.0,
+        text_size: Optional[float] = None,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
@@ -682,8 +679,9 @@ class DecorationMixin(_MixinBase):
             lon: Longitude in the display CRS' lon/lat.
             lat: Latitude.
             string: The text to draw.
-            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
-                visual size of a marker everywhere else in the package.
+            text_size: Text size in pixels (``14.0`` when omitted — the signature's ``None`` is the
+                "not passed" sentinel the deprecated spelling is resolved against). Named for the text
+                rather than ``size``, which means the visual size of a marker everywhere else.
             color: Text colour.
             halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
@@ -693,6 +691,10 @@ class DecorationMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one
+                parameter, so preferring either would silently drop the other.
 
         Examples:
             - Mark a place:
@@ -706,8 +708,14 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.labels: label many features from a column.
         """
         Layer, LayerType = _require_layer_api()
-        if size is not None:
-            text_size = deprecated_alias("text_size", "size", size)
+        text_size = renamed_parameter(
+            new="text_size",
+            value=text_size,
+            old="size",
+            alias=size,
+            caller="WebMap.text()",
+            default=14.0,
+        )
         src_id, layer_id = self._uid("text-src"), self._layer_id("text", name)
         source = {
             "type": "geojson",

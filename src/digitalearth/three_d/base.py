@@ -14,7 +14,6 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 import logging
 import os
 import sys
-import warnings
 from pathlib import Path
 from typing import Any, Self, Union
 
@@ -44,68 +43,6 @@ SCENE_EXPORTERS: dict[str, str] = {
     ".wrl": "export_vrml",
     ".vtksz": "export_vtksz",
 }
-
-
-def deprecated_alias(
-    new_value: Any, old_value: Any, *, new: str, old: str, caller: str, default: Any
-) -> Any:
-    """Resolve a renamed keyword, accepting the old spelling for one release with a warning.
-
-    The shape every rename in this tier uses: the new parameter keeps the real default, the old one defaults
-    to ``None`` as a "was it passed?" sentinel, and this function decides which value wins. Passing the old
-    name still works and forwards to the new behaviour; passing **both** is a contradiction the caller has to
-    resolve, so it raises rather than silently preferring one.
-
-    Args:
-        new_value: What the caller passed (or the sentinel) for the new parameter name.
-        old_value: What the caller passed for the deprecated name, or ``None`` when they did not.
-        new: The new parameter's name, for the warning and the error message.
-        old: The deprecated parameter's name.
-        caller: The public method the keywords were passed to, named in both messages.
-        default: The new parameter's real default — returned when neither name was given, and the value
-            ``new_value`` is compared against to tell "not passed" from "passed the default on purpose".
-
-    Returns:
-        The value to use: the old one (with a :class:`DeprecationWarning`) when only it was given, else the
-        new one.
-
-    Raises:
-        ValueError: when both names were passed, since they would name the same thing twice.
-
-    Examples:
-        - The old name still works, and says what to write instead:
-            ```python
-            >>> import warnings
-            >>> from digitalearth.three_d.base import deprecated_alias
-            >>> with warnings.catch_warnings(record=True) as caught:
-            ...     warnings.simplefilter("always")
-            ...     value = deprecated_alias(
-            ...         None, 10.0, new="fps", old="framerate", caller="orbit()", default=3.0
-            ...     )
-            >>> value, "fps" in str(caught[0].message)
-            (10.0, True)
-
-            ```
-        - Neither name given yields the default, with no warning:
-            ```python
-            >>> from digitalearth.three_d.base import deprecated_alias
-            >>> deprecated_alias(None, None, new="size", old="point_size", caller="point_cloud()", default=5.0)
-            5.0
-
-            ```
-    """
-    if old_value is None:
-        return default if new_value is None else new_value
-    if new_value is not None:
-        raise ValueError(
-            f"{caller} got both {new}= and the deprecated {old}=; pass only {new}="
-        )
-    warnings.warn(
-        f"{caller}: {old}= is deprecated and will be removed in a future release; use {new}= instead",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return old_value
 
 
 def classified_scalars(

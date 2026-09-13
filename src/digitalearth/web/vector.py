@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
-from digitalearth.web.base import _require_layer_api, deprecated_alias
+from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.web.base import _require_layer_api
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
@@ -168,7 +169,7 @@ class VectorMixin(_MixinBase):
         features: Any,
         column: str,
         *,
-        text_size: float = 12.0,
+        text_size: Optional[float] = None,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
@@ -188,8 +189,9 @@ class VectorMixin(_MixinBase):
             features: A pyramids ``FeatureCollection`` or GeoDataFrame; points label at the point, lines
                 and polygons at a placement MapLibre picks.
             column: The property to read the text from.
-            text_size: Text size in pixels. Named for the text rather than ``size``, which means the
-                visual size of a marker everywhere else in the package.
+            text_size: Text size in pixels (``12.0`` when omitted — the signature's ``None`` is the
+                "not passed" sentinel the deprecated spelling is resolved against). Named for the text
+                rather than ``size``, which means the visual size of a marker everywhere else.
             color: Text colour.
             halo_color: Colour of the outline drawn behind the glyphs, which is what keeps a label legible
                 over imagery.
@@ -206,7 +208,8 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when ``features`` is not a vector layer.
+            TypeError: when ``features`` is not a vector layer, or when both ``text_size`` and the
+                deprecated ``size`` are passed — they name one parameter.
             KeyError: when ``column`` is not one of its properties — a MapLibre expression reading a
                 missing property renders nothing at all, with no error to explain the empty map.
 
@@ -222,8 +225,14 @@ class VectorMixin(_MixinBase):
             digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
         """
         _, LayerType = _require_layer_api()
-        if size is not None:
-            text_size = deprecated_alias("text_size", "size", size)
+        text_size = renamed_parameter(
+            new="text_size",
+            value=text_size,
+            old="size",
+            alias=size,
+            caller="WebMap.labels()",
+            default=12.0,
+        )
         gdf = self._display_gdf(features, method="labels")
         if column not in getattr(gdf, "columns", []):
             raise KeyError(
@@ -458,7 +467,7 @@ class VectorMixin(_MixinBase):
         scheme: Optional[Any] = None,
         k: int = 5,
         cmap: str = "viridis",
-        size: float = 5.0,
+        size: Optional[float] = None,
         color: str = "#3388ff",
         opacity: float = 0.9,
         big: Optional[bool] = None,
@@ -477,7 +486,9 @@ class VectorMixin(_MixinBase):
                 ``None`` (the default) is a continuous ramp; a scheme means ``k`` graduated classes.
             k: Number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
-            size: Circle radius in pixels — the same ``size`` that means marker size on every tier.
+            size: Circle radius in pixels (``5.0`` when omitted — the signature's ``None`` is the
+                "not passed" sentinel the deprecated spelling is resolved against). The same ``size``
+                that means marker size on every tier.
             color: Fixed circle colour used when ``column`` is ``None``.
             opacity: Circle fill opacity in ``[0, 1]``.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
@@ -494,7 +505,8 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            TypeError: when ``features`` is a raster rather than a vector layer.
+            TypeError: when ``features`` is a raster rather than a vector layer, or when both ``size``
+                and the deprecated ``radius`` are passed — they name one parameter.
             KeyError: when ``column`` names no feature attribute — a MapLibre expression
                 reading a property that is not there colours nothing, with no error to explain
                 the blank layer.
@@ -547,8 +559,14 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
         Layer, LayerType = _require_layer_api()
-        if radius is not None:
-            size = deprecated_alias("size", "radius", radius)
+        size = renamed_parameter(
+            new="size",
+            value=size,
+            old="radius",
+            alias=radius,
+            caller="WebMap.points()",
+            default=5.0,
+        )
         gdf = self._display_gdf(features, method="points")
         # Auto-route to a GPU deck.gl layer only when there is no per-feature symbology to preserve; a forced
         # big=True with a column still routes but warns that the deck path drops the colouring (M1).

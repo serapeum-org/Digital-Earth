@@ -20,7 +20,6 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
-import warnings
 from typing import Any, Dict, List, Optional, Self, Tuple
 
 from loguru import logger
@@ -69,56 +68,6 @@ _DISPLAY_CRS_SPELLINGS = frozenset(
 #: The feature count above which a vector builder auto-routes to a GPU deck.gl layer, unless the map or
 #: the call overrides it (see :attr:`WebMapBase.big_data_threshold`).
 DEFAULT_BIG_DATA_THRESHOLD = 50_000
-
-
-def deprecated_alias(new: str, old: str, value: Any, *, convert: Any = None) -> Any:
-    """Warn that ``old`` is a deprecated spelling of ``new`` and return the value to use instead.
-
-    The one place the tier's renames are announced, so every alias warns in the same words and a caller
-    who greps for the new name finds it in the message. The alias is *converted* rather than reinterpreted
-    when ``convert`` is given — web's ``duration=`` (seconds per frame) becomes ``fps`` that way, so an old
-    call keeps producing the animation it always did.
-
-    Args:
-        new: The parameter name that replaces ``old``.
-        old: The deprecated parameter name the caller passed.
-        value: What the caller passed for ``old``.
-        convert: Optional callable turning the old value into the new parameter's units; ``None`` passes
-            the value through unchanged.
-
-    Returns:
-        The value to use for ``new``.
-
-    Examples:
-        - A pure rename forwards the value as it came:
-            ```python
-            >>> import warnings
-            >>> from digitalearth.web.base import deprecated_alias
-            >>> with warnings.catch_warnings(record=True) as caught:
-            ...     warnings.simplefilter("always")
-            ...     deprecated_alias("size", "radius", 8.0)
-            8.0
-            >>> issubclass(caught[0].category, DeprecationWarning)
-            True
-
-            ```
-        - A unit change is converted, never reinterpreted:
-            ```python
-            >>> import warnings
-            >>> from digitalearth.web.base import deprecated_alias
-            >>> with warnings.catch_warnings():
-            ...     warnings.simplefilter("ignore")
-            ...     deprecated_alias("fps", "duration", 0.5, convert=lambda d: 1.0 / d)
-            2.0
-
-            ```
-    """
-    warnings.warn(
-        f"{old}= is deprecated and will be removed in a future release; use {new}= instead.",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    return value if convert is None else convert(value)
 
 
 def _patch_maplibre_html_encoding() -> None:

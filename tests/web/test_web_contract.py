@@ -1,7 +1,10 @@
 """The web tier's half of the cross-backend contract (Wave 0, batch B).
 
 One class per contract point, each proving the tier behaves the way every other tier does — and, for each
-rename, that the old spelling still works **and** warns, so no caller is broken in this batch:
+rename, that the old spelling still works **and** warns, so no caller is broken in this batch, **and**
+that passing both spellings at once is a ``TypeError`` naming both (the shared
+:func:`~digitalearth.base.deprecation.renamed_parameter` rule; this tier used to prefer the old one
+silently):
 
 * **C1** ``save()`` returns :class:`pathlib.Path`;
 * **C2** ``animate(fps=3.0)`` is canonical, ``to_gif`` and ``duration=`` deprecated (``duration`` converted);
@@ -70,6 +73,20 @@ def _points_frame(count: int):
         geometry=[Point(float(i) / 10.0, 0.0) for i in range(count)],
         crs=DISPLAY_CRS,
     )
+
+
+def _labelled_frame(count: int):
+    """Build a point frame carrying a ``name`` column, ready to label.
+
+    Args:
+        count: How many points to place.
+
+    Returns:
+        A GeoDataFrame of ``count`` points with ``value`` and ``name`` columns.
+    """
+    frame = _points_frame(count)
+    frame["name"] = [f"p{index}" for index in range(count)]
+    return frame
 
 
 def _polygon_frame():
@@ -186,10 +203,58 @@ class TestC1SaveReturnsAPath:
 class TestC2FrameRateIsFps:
     """``fps`` is the rate on every tier; ``to_gif`` and ``duration=`` survive as deprecated spellings."""
 
-    def test_the_default_frame_rate_is_the_shared_one(self):
-        """One default across the package, so a series animates at one speed whoever renders it."""
+    def test_the_default_frame_rate_is_the_shared_one(self, monkeypatch, tmp_path):
+        """One default across the package, so a series animates at one speed whoever renders it.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for the GIF encoder.
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            The signature default is the ``None`` "not passed" sentinel the deprecated ``duration=`` is
+            resolved against (the same shape the 3-D tier uses), so the effective default is asserted where
+            it is actually applied: at the encoder.
+        """
         assert DEFAULT_FPS == 3.0
-        assert inspect.signature(WebMap.animate).parameters["fps"].default == 3.0
+        assert inspect.signature(WebMap.animate).parameters["fps"].default is None, (
+            "fps must default to the not-passed sentinel so both spellings can be told apart"
+        )
+        recorded = {}
+
+        def fake_write(frames, path, *, duration, loop):
+            """Record the per-frame hold the encoder was handed."""
+            recorded["duration"] = duration
+            pathlib.Path(path).write_bytes(b"GIF89a")
+
+        from digitalearth.web import export as web_export
+
+        monkeypatch.setattr(web_export, "_write_gif", fake_write)
+        monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
+        monkeypatch.setattr(
+            WebMap, "_frame_png", lambda self, path, visible, title: path
+        )
+        WebMap().animate(str(tmp_path / "series.gif"))
+        assert recorded["duration"] == pytest.approx(1.0 / DEFAULT_FPS), (
+            "omitting fps must animate at the shared default rate"
+        )
+
+    def test_both_spellings_of_the_rate_at_once_is_refused(self, tmp_path):
+        """``fps`` and the deprecated ``duration`` together is a ``TypeError`` naming both.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+
+        Test scenario:
+            This tier used to resolve every alias silently in favour of the **old** spelling, so a caller
+            who migrated to ``fps=`` but left ``duration=`` behind got the stale value and no warning that
+            their new keyword was ignored. It is now the same ``TypeError`` static, interactive and 3-D
+            raise, from the shared :func:`~digitalearth.base.deprecation.renamed_parameter`.
+        """
+        with pytest.raises(TypeError) as excinfo:
+            WebMap().animate(str(tmp_path / "series.gif"), fps=4.0, duration=0.5)
+        message = str(excinfo.value)
+        assert "both fps= and the deprecated duration=" in message, message
+        assert "pass only fps=" in message, message
 
     def test_duration_is_converted_to_fps_and_warns(self, monkeypatch, tmp_path):
         """``duration`` is seconds per frame, so it *converts* — reinterpreting it would double the speed.
@@ -345,6 +410,61 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
         with pytest.warns(DeprecationWarning, match="point_size= is deprecated"):
             m = WebMap().point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], point_size=4.0)
         assert m._deck_layers[0]["pointSize"] == 4.0
+
+    @pytest.mark.parametrize(
+        "call, new_name, old_name",
+        [
+            (
+                lambda: WebMap().points(_points_frame(3), size=9.0, radius=7.0),
+                "size",
+                "radius",
+            ),
+            (
+                lambda: WebMap().labels(
+                    _labelled_frame(2), "name", text_size=21.0, size=9.0
+                ),
+                "text_size",
+                "size",
+            ),
+            (
+                lambda: WebMap().text(4.9, 52.4, "Amsterdam", text_size=18.0, size=9.0),
+                "text_size",
+                "size",
+            ),
+            (
+                lambda: WebMap().deck_scatter(_points_frame(3), size=7.0, radius=9.0),
+                "size",
+                "radius",
+            ),
+            (
+                lambda: WebMap().point_cloud(
+                    [[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], size=4.0, point_size=8.0
+                ),
+                "size",
+                "point_size",
+            ),
+        ],
+        ids=["points", "labels", "text", "deck_scatter", "point_cloud"],
+    )
+    def test_both_spellings_at_once_is_refused(self, call, new_name, old_name):
+        """Every renamed size keyword refuses its pair, naming both and the one to keep.
+
+        Args:
+            call: A builder call that sets one parameter under both of its spellings.
+            new_name: The spelling the caller should keep.
+            old_name: The deprecated spelling they should drop.
+
+        Test scenario:
+            This tier used to prefer the **old** spelling whenever both were given — silently, so a caller
+            who had already migrated saw their new keyword overwritten by the one they forgot to delete.
+            All four tiers now raise the same ``TypeError`` from
+            :func:`~digitalearth.base.deprecation.renamed_parameter`.
+        """
+        with pytest.raises(TypeError) as excinfo:
+            call()
+        message = str(excinfo.value)
+        assert f"both {new_name}= and the deprecated {old_name}=" in message, message
+        assert f"pass only {new_name}=" in message, message
 
 
 class TestC4SchemeAndK:

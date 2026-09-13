@@ -16,7 +16,8 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
-from digitalearth.web.base import _require_layer_api, deprecated_alias
+from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.web.base import _require_layer_api
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
 #: needs a served ``raster-dem`` tile source, so the default is hosted tiles; to use your own DEM, encode it to
@@ -186,7 +187,7 @@ class ThreeDMixin(_MixinBase):
         *,
         z_column: Optional[str] = None,
         color: Sequence[int] = (255, 140, 0),
-        size: float = 2.0,
+        size: Optional[float] = None,
         point_size: Optional[float] = None,
     ) -> Self:
         """Render a 3-D point cloud as a deck.gl ``PointCloudLayer`` (recipe W5).
@@ -196,7 +197,9 @@ class ThreeDMixin(_MixinBase):
                 ``(N, 2|3)`` coordinate array.
             z_column: Elevation column for a GeoDataFrame input (0 when omitted).
             color: RGB point colour (0-255 per channel).
-            size: Point size in pixels — the same ``size`` that means marker size on every tier.
+            size: Point size in pixels (``2.0`` when omitted — the signature's ``None`` is the "not
+                passed" sentinel the deprecated spelling is resolved against). The same ``size`` that
+                means marker size on every tier.
             point_size: **Deprecated** spelling of ``size``; forwarded unchanged, after a
                 ``DeprecationWarning`` that ``point_size=`` will be removed in a future release.
 
@@ -206,7 +209,8 @@ class ThreeDMixin(_MixinBase):
         Raises:
             TypeError: when ``points`` is a raster. The full vector guard would be too strict
                 here — a bare ``(N, 2|3)`` coordinate array is a valid input — so only a raster
-                is refused.
+                is refused. Also when both ``size`` and the deprecated ``point_size`` are passed,
+                since they name one parameter.
 
         Examples:
             - An ``(N, 3)`` xyz table becomes deck.gl positions verbatim, in lon/lat/height order
@@ -255,8 +259,14 @@ class ThreeDMixin(_MixinBase):
             digitalearth.three_d.Scene3D.point_cloud: the PyVista tier's desktop counterpart.
         """
         _require_layer_api()
-        if point_size is not None:
-            size = deprecated_alias("size", "point_size", point_size)
+        size = renamed_parameter(
+            new="size",
+            value=size,
+            old="point_size",
+            alias=point_size,
+            caller="WebMap.point_cloud()",
+            default=2.0,
+        )
         # point_cloud also accepts a raw sequence of xyz triples, so the full vector guard would be too
         # strict here; reject only a raster, which would otherwise die inside `_point_cloud_data`.
         self._reject_raster(points, "point_cloud")

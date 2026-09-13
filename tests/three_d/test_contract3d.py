@@ -14,7 +14,9 @@ of them fails here rather than in a user's notebook:
 * **C7** — a layer with nothing to draw is skipped with a warning, or raises under ``strict=True``.
 * **C13** — this tier declares that it has no display CRS.
 
-Every deprecated alias is tested twice over: that it still works, and that it warns.
+Every deprecated alias is tested three ways over: that it still works, that it warns while it does,
+and that passing it alongside the new spelling is a ``TypeError`` naming both — the one answer all
+four tiers give, from :func:`~digitalearth.base.deprecation.renamed_parameter`.
 """
 
 import logging
@@ -183,7 +185,7 @@ class TestC2Fps:
         )
 
     def test_both_spellings_at_once_is_refused(self, scene, tmp_path):
-        """Passing ``fps`` and ``framerate`` together raises rather than silently picking one.
+        """Passing ``fps`` and ``framerate`` together is a ``TypeError`` naming both.
 
         Args:
             scene: The scene under test.
@@ -191,9 +193,11 @@ class TestC2Fps:
 
         Test scenario:
             The two name the same thing, so a call that sets both is a contradiction only the caller can
-            resolve. Preferring one of them would hide a real mistake.
+            resolve. Preferring one of them would hide a real mistake. ``TypeError`` is what Python itself
+            raises for an argument given twice, and it is now the one answer all four tiers give (the tier
+            used to raise ``ValueError`` here while web silently preferred the old spelling).
         """
-        with pytest.raises(ValueError, match="both fps= and the deprecated framerate="):
+        with pytest.raises(TypeError) as excinfo:
             scene.animate(
                 [1.0],
                 str(tmp_path / "a.gif"),
@@ -201,6 +205,9 @@ class TestC2Fps:
                 fps=4.0,
                 framerate=9.0,
             )
+        message = str(excinfo.value)
+        assert "both fps= and the deprecated framerate=" in message, message
+        assert "pass only fps=" in message, message
 
 
 class TestC3Size:
@@ -238,18 +245,20 @@ class TestC3Size:
         )
 
     def test_both_spellings_at_once_is_refused(self, scene):
-        """Passing ``size`` and ``point_size`` together raises rather than picking one.
+        """Passing ``size`` and ``point_size`` together is a ``TypeError`` naming both.
 
         Args:
             scene: The scene under test.
 
         Test scenario:
-            As with ``fps``/``framerate``: two names for one thing, set to two values, is a caller error.
+            As with ``fps``/``framerate``: two names for one thing, set to two values, is a caller error,
+            and every tier now reports it the same way.
         """
-        with pytest.raises(
-            ValueError, match="both size= and the deprecated point_size="
-        ):
+        with pytest.raises(TypeError) as excinfo:
             scene.point_cloud(_points(), size=4.0, point_size=8.0)
+        message = str(excinfo.value)
+        assert "both size= and the deprecated point_size=" in message, message
+        assert "pass only size=" in message, message
 
 
 class TestC4SchemeAndK:
@@ -413,7 +422,9 @@ class TestC4SchemeAndK:
         gdf = gpd.GeoDataFrame({"pop": [1.0, float("nan"), 3.0]}, geometry=squares)
         scene.extruded_polygons(gdf, height=1.0, column="pop")
         mesh = scene.layers[0][0]
-        assert mesh.n_cells > 0, "a column with a missing value must still extrude its prisms"
+        assert mesh.n_cells > 0, (
+            "a column with a missing value must still extrude its prisms"
+        )
 
     def test_an_unusable_scheme_is_reported_by_name(self, scene):
         """A scheme that cannot classify the values raises, naming the scheme and ``k``.

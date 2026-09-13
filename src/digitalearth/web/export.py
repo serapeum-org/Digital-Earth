@@ -22,11 +22,35 @@ import tempfile
 import warnings
 from typing import TYPE_CHECKING, Any, Optional
 
-from digitalearth.web.base import DEFAULT_TITLE, deprecated_alias
+from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.web.base import DEFAULT_TITLE
 
 #: Frames per second every tier's animation entry point defaults to, so one number means one speed
 #: whichever backend renders the series.
 DEFAULT_FPS = 3.0
+
+
+def _fps_from_duration(seconds: Any) -> float:
+    """Convert the deprecated ``duration=`` (seconds held per frame) into the ``fps`` it means.
+
+    The rename is a unit change, not a spelling change, so the value is *converted* rather than
+    reinterpreted: ``duration=0.5`` has always meant a half-second hold, i.e. two frames a second, and it
+    still does. The positivity check lives here rather than at the call site so it runs after the
+    both-spellings guard in :func:`~digitalearth.base.deprecation.renamed_parameter` — a contradictory call
+    is a ``TypeError`` about the two names, not a complaint about one of the values.
+
+    Args:
+        seconds: Seconds to hold each frame, as the caller wrote it.
+
+    Returns:
+        The equivalent frames per second.
+
+    Raises:
+        ValueError: when ``seconds`` is not positive — a zero hold has no rate, and would divide by zero.
+    """
+    if float(seconds) <= 0:
+        raise ValueError(f"duration= must be positive; got {seconds!r}")
+    return 1.0 / float(seconds)
 
 
 def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
@@ -205,7 +229,7 @@ class ExportMixin(_MixinBase):
         self,
         path: str,
         *,
-        fps: float = DEFAULT_FPS,
+        fps: Optional[float] = None,
         loop: int = 0,
         title: str = DEFAULT_TITLE,
         duration: Optional[float] = None,
@@ -222,7 +246,9 @@ class ExportMixin(_MixinBase):
         Args:
             path: Where to write the GIF.
             fps: Frames per second — the rate every tier's animation entry point takes, with the same
-                default, so one number means one speed across the whole package.
+                default (:data:`DEFAULT_FPS`, ``3.0``, when omitted; the signature's ``None`` is the
+                "not passed" sentinel the deprecated spelling is resolved against), so one number
+                means one speed across the whole package.
             loop: How many times to repeat; ``0`` loops forever.
             title: HTML document title used while rendering.
             duration: **Deprecated** spelling of the frame rate, in seconds held per frame. Passing
@@ -234,6 +260,8 @@ class ExportMixin(_MixinBase):
             The :class:`pathlib.Path` written.
 
         Raises:
+            TypeError: when both ``fps`` and the deprecated ``duration`` are passed — one rate, two
+                spellings, so neither can be silently preferred.
             ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` /
                 ``duration`` is not positive — a zero rate has no frame to hold.
             ImportError: when no headless browser is installed — the same gated dependency the PNG
@@ -251,12 +279,15 @@ class ExportMixin(_MixinBase):
             digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
             digitalearth.web.export.ExportMixin.to_gif: the deprecated name of this method.
         """
-        if duration is not None:
-            if float(duration) <= 0:
-                raise ValueError(f"duration= must be positive; got {duration!r}")
-            fps = deprecated_alias(
-                "fps", "duration", float(duration), convert=lambda d: 1.0 / d
-            )
+        fps = renamed_parameter(
+            new="fps",
+            value=fps,
+            old="duration",
+            alias=duration,
+            caller="WebMap.animate()",
+            default=DEFAULT_FPS,
+            convert=_fps_from_duration,
+        )
         if float(fps) <= 0:
             raise ValueError(f"fps= must be positive; got {fps!r}")
         frames = self._temporal_frames()
