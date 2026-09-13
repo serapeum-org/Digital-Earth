@@ -281,7 +281,7 @@ class DashboardMixin(_MixinBase):
         Raises:
             ValueError: when the display CRS is not Web Mercator, or the provider name is unknown.
         """
-        gv, hv = _require_holoviz()
+        _, hv = _require_holoviz()
         self._require_web_mercator(context)
         # A sibling-mixin call: _build_tiles lives on DecorationMixin, which the composed InteractiveMap
         # supplies. The TYPE_CHECKING base above carries the shared state only, not the sibling mixins.
