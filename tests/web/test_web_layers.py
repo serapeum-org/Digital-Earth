@@ -487,6 +487,28 @@ class TestIdsAreAllocatedOnce:
         emitted = _emitted_layer_ids(m.to_html())
         assert len(emitted) == len(set(emitted)), emitted
 
+    def test_a_third_collision_gets_a_third_suffix(self, polygons, points):
+        """Three layers sharing a name must come out as three distinct, addressable ids.
+
+        Args:
+            polygons: The fixture frame.
+            points: The fixture points.
+
+        Test scenario:
+            Two colliding names were covered; three were not, and `Layer-2` already being taken is the
+            only state the suffix search exists for — a loop that never advanced would still have passed.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(polygons, column="pop", name="Layer")
+            .points(points, name="Layer")
+            .points(points, name="Layer")
+        )
+        assert m.layer_ids == ["Layer", "Layer-2", "Layer-3"], m.layer_ids
+
 
 class TestTheDeckRefusalNamesTheRealCause:
     """M7: the message blamed a `big=True` the caller may never have passed."""

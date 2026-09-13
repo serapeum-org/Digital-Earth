@@ -81,3 +81,107 @@ class TestAddRasterNeedsEngine:
         out = tmp_path / "raster.html"
         WebMap().add_raster(dataset, opacity=0.7).basemap("CartoLight").save(str(out))
         assert out.stat().st_size > 1_000
+
+
+def _source_with(y_values, values):
+    """Build a stand-in display source exposing the coordinate and value arrays `add_raster` reads.
+
+    Args:
+        y_values: The y coordinates, ascending or descending.
+        values: The 2-D band array, in the row order the source reports.
+
+    Returns:
+        An object with `.x.values`, `.y.values` and `.z.values`.
+    """
+    axis = type("Axis", (), {})
+    x, y, z = axis(), axis(), axis()
+    x.values = np.array([0.0, 1.0])
+    y.values = np.asarray(y_values, dtype=float)
+    z.values = np.asarray(values, dtype=float)
+    return type("Source", (), {"x": x, "y": y, "z": z})()
+
+
+class TestAddRasterDrawsNorthFirst:
+    """PNG row 0 is the northern edge, so a source whose rows run south-first has to be flipped.
+
+    `rgb_composite` has this test; `add_raster` — the older and far more used builder — did not, and an
+    upside-down overlay is silently plausible: it still lines up with its bounding box.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize(
+        "y_values, flipped", [([1.0, 0.0], False), ([0.0, 1.0], True)]
+    )
+    def test_rows_are_ordered_north_first(
+        self, dataset, monkeypatch, y_values, flipped
+    ):
+        """An ascending y means row 0 is the south edge, which draws the image upside down.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher, used to hand the builder a source with a chosen y order.
+            y_values: The coordinate order the source reports.
+            flipped: Whether the band should be reversed before encoding.
+
+        Test scenario:
+            The pixels handed to the encoder are compared against the orientation that *should* be drawn,
+            so the test fails both when the flip is missing and when it happens for a north-up source.
+        """
+        band = np.array([[1.0, 2.0], [3.0, 4.0]])
+        source = _source_with(y_values, band)
+        monkeypatch.setattr(
+            WebMap, "_to_display_source", lambda self, data, band=1: source
+        )
+
+        captured = {}
+        encoder = WebMap._rgba_png_datauri
+
+        def spy(values, cmap_name, vmin=None, vmax=None):
+            """Record the array handed to the encoder, then encode it normally."""
+            captured["values"] = np.array(values, copy=True)
+            return encoder(values, cmap_name, vmin=vmin, vmax=vmax)
+
+        monkeypatch.setattr(WebMap, "_rgba_png_datauri", staticmethod(spy))
+        WebMap().basemap().add_raster(dataset, cmap="viridis")
+
+        expected = band[::-1] if flipped else band
+        assert np.allclose(captured["values"], expected), (
+            f"rows are not north-first for y={y_values}"
+        )
+
+
+class TestARasterThatCannotBeGeoreferencedIsRefused:
+    """A MapLibre image source is positioned by four lon/lat corners; there is no drawing it without them."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize("builder", ["add_raster", "rgb_composite"])
+    def test_unconvertible_corners_raise_rather_than_guess(
+        self, dataset, monkeypatch, builder
+    ):
+        """Falling back to the projected numbers would place the image somewhere off the planet.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher.
+            builder: The raster builder under test.
+
+        Test scenario:
+            `_as_lonlat` answers `None` for a CRS that cannot be resolved or a reprojection that comes
+            back non-finite; both builders must stop there with an actionable message.
+        """
+        monkeypatch.setattr(WebMap, "_as_lonlat", lambda self, *bounds: None)
+        m = WebMap().basemap()
+        call = {
+            "add_raster": lambda: m.add_raster(dataset),
+            "rgb_composite": lambda: m.rgb_composite(dataset, bands=(1, 1, 1)),
+        }
+        with pytest.raises(ValueError, match="cannot be expressed in lon/lat"):
+            call[builder]()

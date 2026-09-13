@@ -406,3 +406,71 @@ class TestVectorBuilderRasterGuard:
         """
         m = WebMap().point_cloud([(0.0, 0.0, 1.0), (1.0, 1.0, 2.0)])
         assert m.layers, "a raw xyz sequence must still register a layer"
+
+
+class TestAContinuousRampNeedsSomethingToScale:
+    """A column with nothing finite in it cannot produce stops, and must say so."""
+
+    def test_an_all_nan_column_is_refused(self):
+        """Scaling over NaN would compile `NaN` stops into the paint expression.
+
+        Test scenario:
+            MapLibre accepts such a layer and draws nothing, so the failure surfaces as a blank map
+            rather than as an error about the data.
+        """
+        import numpy as np
+
+        with pytest.raises(ValueError, match="no finite values to colour"):
+            WebMap()._color_expr(np.full(4, np.nan), "depth", None, 5, "viridis")
+
+
+class TestForcedBigPolygonsBehaveLikeForcedBigPoints:
+    """`big=True` routes to deck.gl, which carries no per-feature symbology and no registry entry.
+
+    The points half of this was covered; the polygons half compiled the same two branches and was not,
+    so a caller could have lost their choropleth colouring to a silent deck route.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _capture():
+        """Attach a loguru sink for warnings.
+
+        Returns:
+            `(records, sink_id)` — the list the sink fills, and the handle to remove it afterwards.
+        """
+        from loguru import logger
+
+        records = []
+        return records, logger.add(records.append, level="WARNING")
+
+    def test_a_forced_route_warns_that_the_colouring_is_dropped(self, polygons_gdf):
+        """Losing a choropleth's classes to a routing decision must not be silent.
+
+        Args:
+            polygons_gdf: The fixture frame.
+        """
+        from loguru import logger
+
+        records, sink = self._capture()
+        try:
+            m = WebMap().polygons(polygons_gdf, column="pop", big=True)
+        finally:
+            logger.remove(sink)
+        assert any("styling is dropped" in str(record) for record in records), records
+        assert m.layer_ids == [], "a deck overlay is not a addressable MapLibre layer"
+
+    def test_a_forced_route_still_draws(self, polygons_gdf, tmp_path):
+        """The warning is not a refusal — the features still have to reach the page.
+
+        Args:
+            polygons_gdf: The fixture frame.
+            tmp_path: pytest's per-test directory.
+        """
+        out = tmp_path / "deck.html"
+        WebMap().basemap().polygons(polygons_gdf, big=True).save(str(out))
+        assert out.stat().st_size > 1_000, "the forced deck route wrote nothing"
