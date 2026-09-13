@@ -4,19 +4,75 @@ The cleopatra glyph is already tested upstream, so these cover the half Digital-
 into an equirectangular texture at the right lon/lat, and mapping lon/lat back onto the drawn sphere.
 """
 
+import copy
+import pickle
 import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from cleopatra.styling.colors import resolve_colormap
+from matplotlib import colors as mcolors
+from matplotlib.animation import PillowWriter
 from matplotlib.colors import Normalize
+from matplotlib.path import Path
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from pyramids.dataset import Dataset, GeoReference
 from pyramids.feature import FeatureCollection
 from shapely.geometry import Point, Polygon
 
 from digitalearth.static import TexturedGlobe
-from digitalearth.static.textured_globe import _cull_per_point, _texture_axes
+from digitalearth.static.textured_globe import (
+    _clip_ring,
+    _interior_is_left,
+    _limb_arc,
+    _limb_point,
+    _lonlat_to_body,
+    _root_figure,
+    _texture_axes,
+)
+
+
+class _AxesOfOlderMatplotlib:
+    """An axes whose ``get_figure`` takes no ``root`` argument, as matplotlib's did before 3.10."""
+
+    def __init__(self, figure):
+        """Hold the figure this stand-in belongs to.
+
+        Args:
+            figure: The figure or sub-figure to report.
+        """
+        self._figure = figure
+
+    def get_figure(self):
+        """The figure this axes is on.
+
+        Returns:
+            The figure given to the constructor.
+        """
+        return self._figure
+
+
+def _drawn(scatter, values: str = "sizes") -> np.ndarray:
+    """Render the scatter's figure and return the values its painted markers were drawn with.
+
+    A globe scatter keeps every point and paints the far-side ones at size zero, then puts the caller's
+    sizes back once the render is over. What each visible marker was drawn with is therefore its own
+    entry, taken for the points the render actually showed.
+
+    Args:
+        scatter: A scatter returned by ``TexturedGlobe.points``.
+        values: ``"sizes"`` for marker sizes, ``"widths"`` for marker edge widths.
+
+    Returns:
+        np.ndarray: one value per painted marker, in the order the points were given.
+    """
+    scatter.axes.get_figure().canvas.draw()
+    asked = scatter.get_sizes() if values == "sizes" else scatter.get_linewidths()
+    per_point = np.resize(
+        np.atleast_1d(np.asarray(asked, dtype=float)), scatter._shown.size
+    )
+    return per_point[scatter._shown]
 
 
 @pytest.fixture(scope="module")
@@ -52,19 +108,6 @@ class TestTextureAxes:
         _, lon = _texture_axes(5, 9)
         assert lon[0] == -180.0, f"column 0 should be -180, got {lon[0]}"
         assert lon[-1] == 180.0, f"the last column should be +180, got {lon[-1]}"
-
-
-class TestCullPerPoint:
-    """Which scatter arguments are treated as one-value-per-point."""
-
-    def test_a_shorter_sequence_is_left_alone(self):
-        """Only a sequence matching the point count is per-point; anything else is the caller's business."""
-        keep = np.array([True, False, True])
-        assert _cull_per_point({"s": [1, 2]}, keep)["s"] == [1, 2]
-
-    def test_an_unknown_keyword_is_left_alone(self):
-        keep = np.array([True, False])
-        assert _cull_per_point({"zorder": [1, 2]}, keep)["zorder"] == [1, 2]
 
 
 class TestFromDataset:
@@ -633,95 +676,89 @@ class TestPoints:
         """A point behind the globe must not be drawn through it."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([180.0], lat=[0.0], hide_far_side=True)
-        assert len(collection.get_offsets()) == 0
+        assert _drawn(collection).size == 0, "a far-side marker should not be drawn"
 
     def test_far_side_points_are_kept_when_asked(self, globe):
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([180.0], lat=[0.0], hide_far_side=False)
-        assert len(collection.get_offsets()) == 1
+        assert _drawn(collection).size == 1, "hide_far_side=False should draw it"
 
-    def test_per_point_colours_are_culled_with_their_points(self, globe):
-        """Dropping a far-side point must drop its colour too, or the arrays desynchronise."""
+    def test_per_point_colours_stay_with_their_points(self, globe):
+        """The colour array is never cut down to the visible points, so it cannot fall out of step."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points(
             [0.0, 180.0], lat=[0.0, 0.0], c=[1.0, 2.0], hide_far_side=True
         )
-        assert len(collection.get_offsets()) == 1
+        assert _drawn(collection).size == 1, "only the near-side marker should be drawn"
+        assert list(collection.get_array()) == [1.0, 2.0], (
+            f"the colour values should stay whole, got {list(collection.get_array())}"
+        )
 
     @pytest.mark.parametrize(
         "key, values, expected",
         [
-            pytest.param("s", [10, 20, 30, 40], [10, 30, 40], id="s"),
+            pytest.param("s", [10.0, 20.0, 30.0, 40.0], [10.0, 30.0, 40.0], id="s"),
             pytest.param(
                 "linewidths", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="linewidths"
             ),
-            pytest.param("alpha", [0.1, 0.2, 0.3, 0.4], [0.1, 0.3, 0.4], id="alpha"),
-            pytest.param("c", [1.0, 2.0, 3.0, 4.0], [1.0, 3.0, 4.0], id="c"),
-            pytest.param(
-                "linestyles", ["-", "--", ":", "-."], ["-", ":", "-."], id="linestyles"
-            ),
         ],
     )
-    def test_per_point_values_are_culled_to_the_kept_points(
-        self, globe, key, values, expected
-    ):
-        """Assert the surviving values, not the point count: a count passes even with the cull removed."""
-        globe.draw(elev=0.0, azim=0.0)
-        culled = _cull_per_point({key: values}, np.array([True, False, True, True]))
-        assert list(np.asarray(culled[key])) == list(np.asarray(expected)), (
-            f"{key} should keep {expected}, got {list(np.asarray(culled[key]))}"
-        )
+    def test_the_hidden_point_is_the_one_masked(self, globe, key, values, expected):
+        """The far-side mask zeroes the hidden point's own value, not a neighbour's.
 
-    def test_a_far_side_point_does_not_shift_the_linewidths(self, globe):
-        """End to end: the second point is hidden, so its width must not land on the third."""
+        Args:
+            key: The per-point argument under test.
+            values: One value per point; the second point is on the far side.
+            expected: The values that must survive.
+
+        Test scenario:
+            Compared as a multiset, since matplotlib reorders markers by depth: if the mask landed on the
+            wrong point, the hidden value would survive and a visible one would vanish.
+        """
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points(
-            [0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, linewidths=[1.0, 2.0, 3.0, 4.0]
+            [0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, **{key: values}
         )
-        assert list(np.atleast_1d(collection.get_linewidths())) == [1.0, 3.0, 4.0]
+        kept = list(_drawn(collection, "sizes" if key == "s" else "widths"))
+        assert kept == expected, f"{key} should keep {expected}, got {kept}"
 
     @pytest.mark.parametrize(
         "colour",
         [[1.0, 0.0, 0.0, 1.0], (1.0, 0.0, 0.0, 1.0), np.array([1.0, 0.0, 0.0, 1.0])],
         ids=["list", "tuple", "ndarray"],
     )
-    def test_a_single_rgba_colour_survives_the_cull_whatever_its_container(
+    def test_a_single_rgba_colour_is_one_colour_whatever_its_container(
         self, globe, colour
     ):
-        """Culling a 4-element red to 3 elements renders magenta, silently and in any container type."""
+        """A 4-element red is one colour for every point, not four values to map, in any container."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, color=colour)
         assert np.allclose(collection.get_facecolors()[0], [1.0, 0.0, 0.0, 1.0]), (
-            f"expected red, got {collection.get_facecolors()[0]} (magenta means the RGBA was culled)"
+            f"expected red, got {collection.get_facecolors()[0]}"
         )
 
-    def test_c_is_culled_even_as_a_four_element_sequence(self, globe):
-        """matplotlib value-maps a length-matching `c`, so it is per-point data, not one RGBA colour."""
-        culled = _cull_per_point(
-            {"c": (0.1, 0.2, 0.3, 0.4)}, np.array([True, False, True, True])
+    def test_a_length_matching_c_is_value_mapped_whole(self, globe):
+        """matplotlib value-maps a `c` whose length matches the point count; all four values survive."""
+        globe.draw(elev=0.0, azim=0.0)
+        collection = globe.points(
+            [0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, c=(0.1, 0.2, 0.3, 0.4)
         )
-        assert list(np.asarray(culled["c"])) == [0.1, 0.3, 0.4]
-
-    def test_a_sized_but_unindexable_value_is_left_alone(self, globe):
-        """A set has a length but cannot be sliced; it must be passed through, not crash the cull."""
-        culled = _cull_per_point(
-            {"s": {1, 2, 3, 4}}, np.array([True, False, True, True])
+        assert list(np.round(collection.get_array(), 2)) == [0.1, 0.2, 0.3, 0.4], (
+            f"c should be kept whole, got {list(collection.get_array())}"
         )
-        assert culled["s"] == {1, 2, 3, 4}
 
-    def test_a_value_with_no_length_is_left_alone(self, globe):
-        """An arbitrary object with no len() is a scalar as far as the cull is concerned."""
-        sentinel = object()
-        culled = _cull_per_point({"s": sentinel}, np.array([True, False]))
-        assert culled["s"] is sentinel
-
-    def test_a_pandas_series_is_culled(self, globe):
-        """Colours often come straight from a dataframe column."""
+    def test_a_pandas_series_colours_every_point(self, globe):
+        """Colours often come straight from a dataframe column; the scale spans the whole column."""
         pd = pytest.importorskip("pandas")
-        culled = _cull_per_point(
-            {"c": pd.Series([1.0, 2.0, 3.0, 4.0])}, np.array([True, False, True, True])
+        globe.draw(elev=0.0, azim=0.0)
+        collection = globe.points(
+            [0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, c=pd.Series([1.0, 2.0, 3.0, 4.0])
         )
-        assert list(np.asarray(culled["c"])) == [1.0, 3.0, 4.0]
+        collection.axes.get_figure().canvas.draw()
+        assert (collection.norm.vmin, collection.norm.vmax) == (1.0, 4.0), (
+            f"the colour scale should span the column, got "
+            f"{(collection.norm.vmin, collection.norm.vmax)}"
+        )
 
     @pytest.mark.parametrize(
         "kwargs",
@@ -730,11 +767,11 @@ class TestPoints:
             pytest.param({"s": 30}, id="scalar-size"),
         ],
     )
-    def test_scalar_arguments_pass_through_unculled(self, globe, kwargs):
-        """A single colour or size applies to every point; slicing it would change what was asked for."""
+    def test_scalar_arguments_apply_to_every_near_side_point(self, globe, kwargs):
+        """A single colour or size applies to every point; only the far-side one goes undrawn."""
         globe.draw(elev=0.0, azim=0.0)
         collection = globe.points([0.0, 180.0, 10.0, 20.0], lat=[0.0] * 4, **kwargs)
-        assert len(collection.get_offsets()) == 3, (
+        assert _drawn(collection).size == 3, (
             f"{kwargs} should still draw the 3 near-side points"
         )
 
@@ -811,6 +848,1305 @@ class TestPoints:
         globe.draw()
         with pytest.raises(ValueError, match="FeatureCollection"):
             globe.points(object())
+
+
+class TestOverlaysFollowTheSpin:
+    """Overlays turn with the sphere, stay on their own axes, and stay valid artists (#164)."""
+
+    @staticmethod
+    def _offsets(scatter):
+        """The scatter's world-space coordinates as an ``(N, 3)`` array.
+
+        Args:
+            scatter: A scatter returned by ``TexturedGlobe.points``.
+
+        Returns:
+            np.ndarray: its ``(N, 3)`` offsets.
+        """
+        return np.asarray(scatter._offsets3d, dtype=float).T
+
+    @staticmethod
+    def _overlays_on(ax, globe):
+        """Every collection on the axes other than a sphere surface.
+
+        Counting these, rather than what the globe keeps track of, is what catches a copy left behind. A
+        sphere is the exact ``Poly3DCollection`` ``plot_surface`` makes — every panel a globe is drawn on
+        has its own, so it is matched by type rather than against the glyph's most recent surface.
+
+        Args:
+            ax: The axes to inspect.
+            globe: The globe drawn on it.
+
+        Returns:
+            list: the overlay collections on ``ax``.
+        """
+        return [c for c in ax.collections if type(c) is not Poly3DCollection]
+
+    @staticmethod
+    def _axes():
+        """A fresh 3-D axes on its own small figure.
+
+        Returns:
+            Axes3D: the axes.
+        """
+        return plt.figure(figsize=(3, 3)).add_subplot(projection="3d")
+
+    def test_points_added_after_animate_turn_to_each_frames_spin(
+        self, globe, mocker, tmp_path
+    ):
+        """Every rendered frame turns the overlay to the spin the sphere is drawn at.
+
+        Test scenario:
+            The defect was that animate() recorded only the start spin, so markers added afterwards stayed
+            frozen while the sphere turned. Four frames over one revolution must turn the overlay through
+            0, 90, 180 and 270 degrees. Consecutive repeats are collapsed: matplotlib primes the first
+            frame before its save loop.
+        """
+        globe.animate(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
+        globe.points([120.0, 130.0], lat=[10.0, -10.0], s=20, c="red")
+        spy = mocker.spy(TexturedGlobe, "_turn_overlays")
+        globe._animation.save(str(tmp_path / "spin.gif"), writer=PillowWriter(fps=2))
+        spins = [call.args[2] for call in spy.call_args_list]
+        stepped = [s for i, s in enumerate(spins) if i == 0 or s != spins[i - 1]]
+        assert stepped == [0.0, 90.0, 180.0, 270.0], (
+            f"the overlay should turn to each frame's spin, got {spins}"
+        )
+        globe.close()
+
+    def test_a_marker_stays_on_the_ground_it_was_placed_on(self, globe):
+        """After a turn each marker sits exactly where the surface point under it has moved to.
+
+        Test scenario:
+            Checked at 45 degrees on a tilted globe. At 180 degrees turning either way lands in the same
+            place, which is how an overlay turning the wrong way once passed every placement test.
+        """
+        lon, lat = [30.0, -60.0], [10.0, -25.0]
+        ax = self._axes()
+        globe.draw(ax, spin=0.0)
+        scatter = globe.points(lon, lat=lat, hide_far_side=False)
+        globe.draw(ax, spin=45.0)
+        ax.get_figure().canvas.draw()
+        expected = globe.project(lon, lat, spin=45.0, altitude=0.01)
+        assert np.allclose(self._offsets(scatter), expected), (
+            f"the markers should sit on the ground at spin 45, got {self._offsets(scatter).tolist()} "
+            f"instead of {expected.tolist()}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_after_an_animation_a_marker_sits_on_the_last_frames_ground(
+        self, globe, tmp_path
+    ):
+        """The last rendered frame leaves each marker on the ground at that frame's spin.
+
+        Test scenario:
+            Three frames over a revolution end at 240 degrees, a spin where the two directions of turn
+            disagree.
+        """
+        globe.animate(n_frames=3, interval=100, figsize=(3, 3), start_spin=0.0)
+        scatter = globe.points([30.0], lat=[10.0], hide_far_side=False)
+        globe._animation.save(str(tmp_path / "ground.gif"), writer=PillowWriter(fps=2))
+        expected = globe.project([30.0], [10.0], spin=240.0, altitude=0.01)
+        assert np.allclose(self._offsets(scatter), expected), (
+            f"the marker should sit on the ground at spin 240, got {self._offsets(scatter).tolist()}"
+        )
+        globe.close()
+
+    def test_the_returned_artist_is_the_one_that_moves(self, globe, tmp_path):
+        """The scatter points() returned is still on the axes after the animation, and has turned.
+
+        Test scenario:
+            The overlay is one persistent artist, so the caller's handle is live for the whole animation.
+        """
+        globe.animate(n_frames=2, interval=100, figsize=(3, 3), start_spin=0.0)
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        start = self._offsets(scatter)
+        globe._animation.save(str(tmp_path / "half.gif"), writer=PillowWriter(fps=2))
+        assert scatter in globe.ax.collections, (
+            "the returned artist should still be drawn"
+        )
+        assert not np.allclose(self._offsets(scatter), start), (
+            f"a half turn should move the marker, but it stayed at {start.tolist()}"
+        )
+        globe.close()
+
+    def test_frames_do_not_stack_copies_of_an_overlay(self, globe, tmp_path):
+        """After eight frames the axes holds exactly one overlay collection.
+
+        Test scenario:
+            Counts every collection on the axes other than the sphere, not only the ones the globe tracks,
+            so an implementation that left a copy behind each frame would fail here.
+        """
+        globe.animate(n_frames=8, interval=100, figsize=(3, 3))
+        globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        globe._animation.save(str(tmp_path / "stack.gif"), writer=PillowWriter(fps=2))
+        overlays = self._overlays_on(globe.ax, globe)
+        assert len(overlays) == 1, (
+            f"expected one overlay collection, got {len(overlays)}"
+        )
+        globe.close()
+
+    def test_an_explicit_spin_pins_the_overlay(self, globe, tmp_path):
+        """points(spin=...) opts out of following the globe.
+
+        Test scenario:
+            Driving the rotation by hand is the documented escape hatch, so a caller who names a spin must
+            keep the markers exactly there while the sphere turns beneath them.
+        """
+        globe.animate(n_frames=4, interval=100, figsize=(3, 3), start_spin=0.0)
+        scatter = globe.points(
+            [120.0], lat=[0.0], spin=0.0, s=20, c="red", hide_far_side=False
+        )
+        pinned = self._offsets(scatter)
+        globe._animation.save(str(tmp_path / "pinned.gif"), writer=PillowWriter(fps=2))
+        assert globe._overlays == [], "a pinned overlay should not be registered"
+        assert np.allclose(self._offsets(scatter), pinned), (
+            "a pinned overlay should not move when the globe turns"
+        )
+        globe.close()
+
+    def test_points_added_before_animate_on_the_same_axes_follow(self, globe, tmp_path):
+        """draw(ax) then points() then animate(ax) turns the markers with the sphere.
+
+        Test scenario:
+            The overlay belongs to the axes it was drawn on, so an animation on that same axes turns it.
+        """
+        ax = self._axes()
+        globe.draw(ax)
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        start = self._offsets(scatter)
+        globe.animate(ax, n_frames=2, interval=100, start_spin=0.0)
+        globe._animation.save(str(tmp_path / "before.gif"), writer=PillowWriter(fps=2))
+        assert not np.allclose(self._offsets(scatter), start), (
+            "an overlay added before animate() on the same axes should follow the rotation"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_bare_animate_keeps_the_overlays_of_the_globe_it_owns(
+        self, globe, tmp_path
+    ):
+        """draw, decorate, then animate() carries the overlays into the animation.
+
+        Test scenario:
+            Every overlay method needs a drawn globe, so this is the natural order to write. Opening a
+            fresh figure for the animation dropped them all silently, which is the failure #164 is about.
+        """
+        globe.draw(figsize=(3, 3))
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        globe.animate(n_frames=2, interval=100, start_spin=0.0)
+        globe._animation.save(str(tmp_path / "kept.gif"), writer=PillowWriter(fps=2))
+        assert scatter in globe.ax.collections, (
+            "the marker should still be on the animated globe"
+        )
+        assert globe._overlays == [scatter], "it should still be following the globe"
+        globe.close()
+
+    def test_drawing_onto_another_axes_leaves_the_overlays_behind(self, globe):
+        """Handing the globe a different axes starts clean there, and closes the figure it leaves.
+
+        Test scenario:
+            The overlay belongs to the axes it was drawn on, so it neither follows the globe to a caller's
+            axes nor keeps the old figure alive.
+        """
+        globe.draw(figsize=(3, 3))
+        globe.points([120.0], lat=[0.0], hide_far_side=False)
+        ax = self._axes()
+        globe.draw(ax, spin=10.0)
+        assert self._overlays_on(ax, globe) == [], (
+            "the new axes should start without overlays"
+        )
+        assert globe._overlays == [], (
+            "an overlay on a closed figure should be forgotten"
+        )
+        plt.close(ax.get_figure())
+
+    def test_redrawing_at_a_new_spin_turns_the_overlay(self, globe):
+        """A draw() at another spin on the same axes turns an overlay already on it.
+
+        Test scenario:
+            draw() turns the sphere for the same reason animate() does, so the overlay turns with it.
+        """
+        ax = self._axes()
+        globe.draw(ax, spin=0.0)
+        scatter = globe.points([120.0], lat=[0.0], s=20, c="red", hide_far_side=False)
+        start = self._offsets(scatter)
+        globe.draw(ax, spin=90.0)
+        ax.get_figure().canvas.draw()
+        assert scatter._spin == 90.0, (
+            f"the overlay should be at spin 90, got {scatter._spin}"
+        )
+        assert not np.allclose(self._offsets(scatter), start), (
+            "redrawing at a new spin should move the overlay with the sphere"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_bare_redraw_resizes_the_figure_it_keeps(self, globe):
+        """figsize on a redraw resizes the figure the globe owns rather than opening another.
+
+        Test scenario:
+            The globe carries on where it is, so the only way to honour a new figsize is to resize that
+            figure.
+        """
+        fig, _ = globe.draw(figsize=(3.0, 3.0))
+        globe.draw(figsize=(5.0, 4.0), spin=10.0)
+        assert globe.fig is fig, "the globe should still be on the figure it owns"
+        assert tuple(fig.get_size_inches()) == (5.0, 4.0), (
+            f"the figure should have been resized, got {tuple(fig.get_size_inches())}"
+        )
+        globe.close()
+
+    def test_the_root_figure_is_found_on_older_matplotlib(self, flat_texture):
+        """An axes whose get_figure takes no root argument still resolves to the top-level figure.
+
+        Test scenario:
+            matplotlib gained get_figure(root=...) in 3.10, and this project supports 3.8 upwards; there
+            the sub-figure's own .figure is the root.
+        """
+        figure = plt.figure(figsize=(3, 3))
+        panel = figure.subfigures(1, 1)
+        assert _root_figure(_AxesOfOlderMatplotlib(panel)) is figure, (
+            "a sub-figure's root should be the figure that owns the canvas"
+        )
+        assert _root_figure(_AxesOfOlderMatplotlib(figure)) is figure, (
+            "a plain figure is its own root"
+        )
+        plt.close(figure)
+
+    def test_a_bare_redraw_turns_the_overlays_it_already_has(self, globe):
+        """draw(spin=...) with no axes turns the globe where it is, overlays and all.
+
+        Test scenario:
+            This is the documented way to turn a decorated globe, so it must not open a new figure and
+            leave the overlays on the one it closes.
+        """
+        globe.draw(figsize=(3, 3))
+        scatter = globe.points([120.0], lat=[0.0], hide_far_side=False)
+        first = globe.ax
+        globe.draw(spin=90.0)
+        assert globe.ax is first, "a bare redraw should stay on the axes the globe owns"
+        assert scatter._spin == 90.0, "the overlay should have turned with it"
+        globe.close()
+
+    def test_each_panel_of_a_contact_sheet_keeps_its_own_overlay(self, globe):
+        """Turning one panel moves only that panel's overlay, and no panel loses or gains one.
+
+        Test scenario:
+            Three panels drawn at three spins, each given a marker. Redrawing the last panel used to strip
+            the first two and stack three copies on the third.
+        """
+        fig = plt.figure(figsize=(6, 2))
+        axes = [fig.add_subplot(1, 3, i + 1, projection="3d") for i in range(3)]
+        for ax, spin in zip(axes, (0.0, 90.0, 180.0)):
+            globe.draw(ax, spin=spin)
+            globe.points([0.0], lat=[0.0], hide_far_side=False)
+        globe.draw(axes[2], spin=250.0)
+        counts = [len(self._overlays_on(ax, globe)) for ax in axes]
+        assert counts == [1, 1, 1], (
+            f"every panel should keep exactly one overlay, got {counts}"
+        )
+        spins = [self._overlays_on(ax, globe)[0]._spin for ax in axes]
+        assert spins == [0.0, 90.0, 250.0], (
+            f"only the redrawn panel should turn, got {spins}"
+        )
+        plt.close(fig)
+
+    def test_a_redraw_loop_that_clears_the_axes_keeps_one_overlay(self, globe):
+        """A hand-written loop of clear, draw and points leaves one marker set per frame.
+
+        Test scenario:
+            ax.clear() takes the previous frame's scatter off the axes, so it has to be forgotten rather
+            than turned and brought back — otherwise every frame adds one more copy.
+        """
+        ax = self._axes()
+        for spin in np.arange(0.0, 360.0, 30.0):
+            ax.clear()
+            globe.draw(ax, spin=float(spin))
+            globe.points([0.0], lat=[0.0], hide_far_side=False)
+        overlays = self._overlays_on(ax, globe)
+        assert len(overlays) == 1, (
+            f"expected one scatter on the axes, got {len(overlays)}"
+        )
+        assert len(globe._overlays) == 1, (
+            f"expected one registered overlay, got {len(globe._overlays)}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_value_keeps_its_colour_as_the_globe_turns(self, globe):
+        """The colour scale spans every point's value at every spin.
+
+        Test scenario:
+            Thirty-six equator stations valued 0..35 with no vmin/vmax. Fitting the scale to whichever
+            stations face the camera made one value change colour frame to frame.
+        """
+        ax = self._axes()
+        globe.draw(ax, spin=0.0)
+        scatter = globe.points(
+            np.linspace(-175.0, 175.0, 36), lat=np.zeros(36), c=np.arange(36.0)
+        )
+        scales = []
+        for spin in (0.0, 90.0, 180.0):
+            globe.draw(ax, spin=spin)
+            ax.get_figure().canvas.draw()
+            scales.append((float(scatter.norm.vmin), float(scatter.norm.vmax)))
+        assert scales == [(0.0, 35.0)] * 3, (
+            f"the colour scale should not move, got {scales}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_removing_the_returned_artist_is_final(self, globe):
+        """An overlay the caller removed stays removed when the globe turns.
+
+        Test scenario:
+            Its artist has left the axes, so the next draw forgets it rather than restoring it.
+        """
+        ax = self._axes()
+        globe.draw(ax, spin=0.0)
+        scatter = globe.points([0.0], lat=[0.0])
+        scatter.remove()
+        globe.draw(ax, spin=10.0)
+        assert scatter not in ax.collections, "a removed overlay should not come back"
+        assert globe._overlays == [], "a removed overlay should be forgotten"
+        plt.close(ax.get_figure())
+
+    def test_restyling_the_returned_artist_survives_a_turn(self, globe):
+        """A size set on the returned artist is kept, with the far-side mask applied on top of it.
+
+        Test scenario:
+            The mask rewrites sizes on every render, so it must start from what the caller asked for.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0, spin=0.0)
+        scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, s=10)
+        scatter.set_sizes([80.0])
+        globe.draw(ax, elev=0.0, azim=0.0, spin=5.0)
+        assert list(_drawn(scatter)) == [80.0, 80.0], (
+            f"the two near-side markers should keep the new size, got {list(_drawn(scatter))}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_restyled_edge_width_survives_the_mask(self, globe):
+        """An edge width set on the returned artist is kept for the markers that show.
+
+        Test scenario:
+            The far-side mask zeroes hidden markers' edges on every render; it must apply over the width
+            the caller set, not over the one the scatter was created with.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0, spin=0.0)
+        scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, linewidths=1.0)
+        scatter.set_linewidth(3.0)
+        globe.draw(ax, elev=0.0, azim=0.0, spin=5.0)
+        widths = list(_drawn(scatter, "widths"))
+        assert widths == [3.0, 3.0], (
+            f"the two near-side markers should keep the new width, got {widths}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_close_forgets_the_overlays(self, globe):
+        """close() drops every overlay, so a later draw on any axes starts clean."""
+        globe.draw(figsize=(3, 3))
+        globe.points([0.0], lat=[0.0])
+        globe.close()
+        assert globe._overlays == [], "close() should forget the overlays"
+        ax = self._axes()
+        globe.draw(ax, spin=10.0)
+        assert self._overlays_on(ax, globe) == [], (
+            "nothing should be brought back after close()"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_camera_move_re_decides_which_side_shows(self, globe):
+        """Visibility is decided at draw time, against the camera the axes has then.
+
+        Test scenario:
+            A marker at lon 0 faces a camera at azim 0 and is hidden from one at azim 180 — the same
+            thing a mouse drag of the 3-D axes does, with no call into the globe in between.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0)
+        scatter = globe.points([0.0], lat=[0.0], s=40)
+        assert _drawn(scatter).size == 1, "the marker should show from the front"
+        ax.view_init(elev=0.0, azim=180.0)
+        assert _drawn(scatter).size == 0, (
+            "the marker should hide once the camera goes round"
+        )
+        plt.close(ax.get_figure())
+
+    @pytest.mark.parametrize(
+        "setter, values",
+        [("set_sizes", "sizes"), ("set_linewidth", "widths")],
+        ids=["sizes", "widths"],
+    )
+    def test_clearing_a_style_falls_back_to_matplotlibs_default(
+        self, globe, setter, values
+    ):
+        """Passing None asks matplotlib for its default, which the mask must not turn into NaN.
+
+        Args:
+            setter: The setter the caller clears the style with.
+            values: Which drawn values that setter governs.
+
+        Test scenario:
+            The mask re-applies the remembered style on every render, so remembering the raw None left
+            every marker at a NaN size or edge and they silently vanished.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0)
+        scatter = globe.points([0.0, 10.0, 180.0], lat=[0.0] * 3, s=40, linewidths=1.0)
+        getattr(scatter, setter)(None)
+        drawn = _drawn(scatter, values)
+        assert np.isfinite(drawn).all(), (
+            f"clearing {setter} should leave no NaN, got {list(drawn)}"
+        )
+        assert (drawn > 0).all(), (
+            f"clearing {setter} should fall back to a real default, got {list(drawn)}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_a_legend_built_after_a_render_shows_the_marker_as_asked(self, globe):
+        """A legend made once the figure has been drawn takes the caller's size and edge, not the mask.
+
+        Test scenario:
+            matplotlib's legend handler reads the sizes and edge widths straight off the artist. While a
+            render is under way those hold the far-side mask, which would size the legend's marker from a
+            zero — half what was asked here — and leave it with no edge.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0)
+        globe.points(
+            [0.0, 10.0, 180.0], lat=[0.0] * 3, s=40, linewidths=1.0, label="sites"
+        )
+        ax.get_figure().canvas.draw()
+        handle = ax.legend().legend_handles[0]
+        assert list(np.atleast_1d(handle.get_sizes())) == [40.0], (
+            f"the legend marker should be the size asked for, got {handle.get_sizes()}"
+        )
+        assert list(np.atleast_1d(handle.get_linewidths())) == [1.0], (
+            f"the legend marker should keep its edge, got {handle.get_linewidths()}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_the_callers_axes_keeps_its_depth_sort(self, globe):
+        """Drawing a globe with overlays leaves the caller's axes depth-sorting its artists.
+
+        Test scenario:
+            Switching computed_zorder off would reorder every artist the caller drew on the axes; the
+            overlays sort in front of the sphere by depth instead.
+        """
+        ax = self._axes()
+        globe.draw(ax)
+        globe.points([0.0], lat=[0.0])
+        assert ax.computed_zorder is True, (
+            "the caller's axes should keep matplotlib's depth sort"
+        )
+        plt.close(ax.get_figure())
+
+    def test_an_overlay_near_the_limb_sorts_in_front_of_the_sphere(self, globe):
+        """A near-side overlay reports a depth nearer than the sphere's, however close to the limb.
+
+        Test scenario:
+            matplotlib ranks each collection by one representative depth; a marker near the limb would
+            rank behind the sphere's front pole and be painted over. The overlay reports a nearer one.
+        """
+        ax = self._axes()
+        globe.draw(ax, elev=0.0, azim=0.0)
+        scatter = globe.points([80.0], lat=[0.0])
+        ax.get_figure().canvas.draw()
+        surface = globe.glyph.surface.do_3d_projection()
+        overlay = scatter.do_3d_projection()
+        assert overlay < surface, (
+            f"the overlay should sort nearer than the sphere, got {overlay} vs {surface}"
+        )
+        plt.close(ax.get_figure())
+
+    def test_an_overlay_does_not_drag_the_texture_into_a_saved_figure(self):
+        """Adding an overlay barely changes what a pickle of the figure costs.
+
+        Test scenario:
+            An overlay places itself through a transform. Holding the drawing glyph's own method kept its
+            whole texture alive and serialisable with the artist, taking a saved figure from about 1 MB to
+            134 MB at the default texture size.
+        """
+        globe = TexturedGlobe(
+            np.zeros((360, 720, 3), dtype=np.uint8), n_lon=24, n_lat=12
+        )
+        fig, _ = globe.draw(figsize=(3, 3))
+        bare = len(pickle.dumps(fig))
+        globe.points([0.0], lat=[0.0])
+        grown = len(pickle.dumps(fig)) - bare
+        assert grown < 1024 * 1024, (
+            f"one overlay should not add megabytes to a saved figure, it added {grown / 2**20:.0f} MB"
+        )
+        globe.close()
+
+    def test_a_fresh_globe_survives_pickling_and_copying(self, flat_texture):
+        """A globe carries no closures, so it pickles, and a copy turns its own overlays.
+
+        Test scenario:
+            Batch rendering hands globes to worker processes; a copy must be independent of the original.
+        """
+        globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4)
+        for clone in (pickle.loads(pickle.dumps(globe)), copy.deepcopy(globe)):
+            ax = self._axes()
+            clone.draw(ax, spin=0.0)
+            scatter = clone.points([0.0], lat=[0.0])
+            clone.draw(ax, spin=45.0)
+            assert scatter._spin == 45.0, "a copy's overlay should follow the copy"
+            assert globe._overlays == [], "the original should be untouched by its copy"
+            plt.close(ax.get_figure())
+
+    def test_a_globe_with_no_overlays_is_untouched(self, globe, tmp_path):
+        """A bare globe animates with nothing but its surface on the axes."""
+        globe.animate(n_frames=3, interval=100, figsize=(3, 3))
+        globe._animation.save(str(tmp_path / "bare.gif"), writer=PillowWriter(fps=2))
+        assert self._overlays_on(globe.ax, globe) == [], "no overlay should appear"
+        globe.close()
+
+
+class TestReferenceGeography:
+    """coastlines / borders / land on the 3-D globe, matching the 2-D Map spelling (#165)."""
+
+    @pytest.fixture
+    def drawn(self, flat_texture):
+        """A globe with no tilt, drawn face-on, so the visible hemisphere is exactly |lon| < 90.
+
+        Returns:
+            TexturedGlobe: drawn at elev 0 / azim 0 with the polar axis upright.
+        """
+        globe = TexturedGlobe(flat_texture, n_lon=24, n_lat=12, tilt_deg=0.0)
+        globe.draw(elev=0.0, azim=0.0, figsize=(3, 3))
+        yield globe
+        globe.close()
+
+    @staticmethod
+    def _arc(lon_from, lon_to, lat=0.0, n=61):
+        """A lon/lat polyline along one parallel.
+
+        Args:
+            lon_from: Starting longitude in degrees.
+            lon_to: Ending longitude in degrees.
+            lat: The parallel to run along.
+            n: Vertex count.
+
+        Returns:
+            np.ndarray: an ``(n, 2)`` lon/lat array shaped like natural_earth's parts.
+        """
+        lon = np.linspace(lon_from, lon_to, n)
+        return np.column_stack([lon, np.full(n, lat)])
+
+    @staticmethod
+    def _ring(west, east, south, north, start=0):
+        """A closed lon/lat rectangle, shaped like a natural_earth polygon part.
+
+        Args:
+            west: Western longitude.
+            east: Eastern longitude.
+            south: Southern latitude.
+            north: Northern latitude.
+            start: How many vertices to roll the ring by before closing it, to move its seam.
+
+        Returns:
+            np.ndarray: an ``(N, 2)`` closed ring.
+        """
+        lon = np.r_[
+            np.linspace(west, east, 25),
+            np.full(25, east),
+            np.linspace(east, west, 25),
+            np.full(25, west),
+        ]
+        lat = np.r_[
+            np.full(25, south),
+            np.linspace(south, north, 25),
+            np.full(25, north),
+            np.linspace(north, south, 25),
+        ]
+        ring = np.roll(np.column_stack([lon, lat]), -start, axis=0)
+        return np.vstack([ring, ring[:1]])
+
+    @staticmethod
+    def _lonlat(world):
+        """Back from world space to lon/lat degrees, for a globe with no tilt at spin 0.
+
+        Args:
+            world: ``(N, 3)`` world-space points.
+
+        Returns:
+            tuple: longitude and latitude arrays, in degrees.
+        """
+        radius = np.linalg.norm(world, axis=1)
+        return (
+            np.degrees(np.arctan2(world[:, 1], world[:, 0])),
+            np.degrees(np.arcsin(world[:, 2] / radius)),
+        )
+
+    def _patch(self, mocker, parts):
+        """Serve ``parts`` in place of the Natural-Earth download.
+
+        Args:
+            mocker: The pytest-mock fixture.
+            parts: The lon/lat arrays natural_earth should return.
+        """
+        mocker.patch(
+            "digitalearth.static.textured_globe.natural_earth", return_value=parts
+        )
+
+    def test_the_globe_offers_the_layers_the_flat_map_does(self):
+        """TexturedGlobe answers coastlines/borders/land, as Map already did."""
+        missing = [
+            name
+            for name in ("coastlines", "borders", "land")
+            if not hasattr(TexturedGlobe, name)
+        ]
+        assert missing == [], (
+            f"TexturedGlobe should offer these layers, missing {missing}"
+        )
+
+    def test_a_line_crossing_the_limb_is_split_into_near_side_arcs(self, drawn, mocker):
+        """A polyline running off the visible hemisphere is broken rather than drawn through the planet.
+
+        Test scenario:
+            A parallel running east from 60 degrees round to 300 leaves the visible hemisphere at 90 and
+            re-enters it at 270, so it must come back as two arcs with every vertex facing the camera (or
+            sitting exactly on the limb, where each arc now ends).
+        """
+        self._patch(mocker, [self._arc(60.0, 300.0)])
+        segments = drawn.coastlines()._near_side_segments()
+        assert len(segments) == 2, (
+            f"a line crossing the far side should split in two, got {len(segments)}"
+        )
+        for segment in segments:
+            depth = segment @ np.array([1.0, 0.0, 0.0])
+            assert depth.min() >= -1e-9, (
+                f"no vertex should be behind the limb, min depth {depth.min()}"
+            )
+
+    def test_each_arc_is_carried_out_to_the_limb(self, drawn, mocker):
+        """An arc ends on the horizon, not one vertex short of it, as a land fill does.
+
+        Test scenario:
+            A parallel from 0 to 150 degrees leaves the visible side at 90; the arc's last vertex must lie
+            on the limb plane, not at the last visible data vertex some degrees inside it. Twelve vertices
+            keep every data vertex off the limb itself, where the check would pass without the crossing.
+        """
+        self._patch(mocker, [self._arc(0.0, 150.0, n=12)])
+        (segment,) = drawn.coastlines()._near_side_segments()
+        assert abs(float(segment[-1] @ np.array([1.0, 0.0, 0.0]))) < 1e-9, (
+            f"the arc should end on the limb, depth {float(segment[-1] @ np.array([1.0, 0.0, 0.0]))}"
+        )
+
+    def test_a_layer_entirely_on_the_far_side_draws_nothing(self, drawn, mocker):
+        """Geography behind the globe produces no arcs."""
+        self._patch(mocker, [self._arc(170.0, 190.0)])
+        assert drawn.coastlines()._near_side_segments() == [], (
+            "a hidden layer should draw no arcs"
+        )
+
+    @pytest.mark.parametrize("start", [0, 60], ids=["seam-visible", "seam-hidden"])
+    def test_a_land_ring_stays_inside_its_polygon_or_on_the_limb(self, drawn, start):
+        """A clipped ring's every vertex lies inside the land it outlines, wherever the ring's seam falls.
+
+        Args:
+            start: How far to roll the ring, putting its first vertex on the near side (0) or far side (60).
+
+        Test scenario:
+            A rectangle over 60..120 east crosses the limb at 90. A ring starting on a visible vertex used
+            to be split at its seam and each half closed out to the horizon, adding a spur of vertices
+            south of the polygon; every vertex must lie within the rectangle, clipped at the limb.
+        """
+        world = drawn.project(
+            *self._ring(60.0, 120.0, -20.0, 20.0, start).T, altitude=0.001
+        )
+        (face,) = _clip_ring(world, np.array([1.0, 0.0, 0.0]))
+        lon, lat = self._lonlat(face)
+        assert np.allclose(np.linalg.norm(face, axis=1), 1.001), (
+            "the face should stay on one shell"
+        )
+        assert lon.min() >= 60.0 - 1e-6, (
+            f"longitudes should start at 60, got {lon.min()}"
+        )
+        assert lon.max() <= 90.0 + 1e-6, (
+            f"longitudes should stop at the limb, got {lon.max()}"
+        )
+        # a limb crossing sits on the chord between two vertices of a parallel, a few hundredths of a
+        # degree off it; the spur this guards against overshot the polygon by nearly three degrees
+        assert lat.min() >= -20.1, (
+            f"latitudes should stay north of -20, got {lat.min()}"
+        )
+        assert lat.max() <= 20.1, f"latitudes should stay south of 20, got {lat.max()}"
+
+    @pytest.mark.parametrize("layer", ["coastlines", "land"])
+    def test_a_layer_with_no_usable_parts_draws_nothing(self, drawn, mocker, layer):
+        """A layer whose source has no drawable parts is added and renders as nothing.
+
+        Args:
+            layer: The layer method under test.
+
+        Test scenario:
+            A part needs two vertices to be a line or a ring; a source offering only shorter ones (or
+            none) must not break the render.
+        """
+        self._patch(mocker, [np.array([[0.0, 0.0]])])
+        overlay = getattr(drawn, layer)()
+        drawn.fig.canvas.draw()
+        pieces = (
+            overlay._near_side_faces()
+            if layer == "land"
+            else overlay._near_side_segments()
+        )
+        assert pieces == [], (
+            f"{layer} should have nothing to draw, got {len(pieces)} pieces"
+        )
+
+    def test_a_degenerate_land_ring_is_skipped(self, drawn, mocker):
+        """A land ring too short to enclose anything is dropped without disturbing its neighbours.
+
+        Test scenario:
+            A two-vertex sliver sits beside a proper rectangle; only the rectangle becomes a face.
+        """
+        sliver = np.array([[10.0, 0.0], [12.0, 1.0]])
+        self._patch(mocker, [sliver, self._ring(-40.0, 40.0, -20.0, 20.0)])
+        faces = drawn.land()._near_side_faces()
+        assert len(faces) == 1, (
+            f"only the rectangle should become a face, got {len(faces)}"
+        )
+
+    def test_a_long_land_ring_does_not_pad_every_face(self, drawn, mocker):
+        """Rendering one very long ring beside many short ones stays within a few megabytes.
+
+        Test scenario:
+            matplotlib 3.11's Poly3DCollection pads every face to the longest, so 300 small islands next to
+            one 20 000-vertex coast would cost ~150 MB per frame there. The fill projects its own faces, so
+            the render's peak allocation must stay far below that.
+        """
+        tracemalloc = pytest.importorskip("tracemalloc")
+        angle = np.linspace(0.0, 2.0 * np.pi, 20_000)
+        coast = np.column_stack([20.0 * np.cos(angle), 20.0 * np.sin(angle)])
+        islands = [
+            np.array(
+                [[lon, -60.0], [lon + 1.0, -60.0], [lon + 1.0, -59.0], [lon, -59.0]]
+            )
+            for lon in np.linspace(-80.0, 80.0, 300)
+        ]
+        self._patch(mocker, [coast, *islands])
+        drawn.land()
+        drawn.fig.canvas.draw()
+        tracemalloc.start()
+        drawn.fig.canvas.draw()
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert peak < 40 * 1024 * 1024, (
+            f"one render should stay small, peaked at {peak / 2**20:.0f} MB"
+        )
+
+    def test_a_land_layer_with_nothing_in_view_has_no_faces(self, drawn, mocker):
+        """land() still returns its collection, which simply has nothing to fill at this camera."""
+        self._patch(mocker, [self._ring(160.0, 200.0, -10.0, 10.0)])
+        patch = drawn.land()
+        assert patch in drawn.ax.collections, "the fill should be on the axes"
+        assert patch._near_side_faces() == [], "no face should face the camera"
+
+    def test_the_layers_follow_the_globe_as_it_turns(self, drawn, mocker):
+        """A reference layer is registered, and a redraw at a new spin moves it.
+
+        Test scenario:
+            The sibling of the overlay fix: geography added to a turning globe has to turn with it.
+        """
+        self._patch(mocker, [self._arc(-20.0, 20.0)])
+        lines = drawn.coastlines()
+        assert drawn._overlays == [lines], (
+            "a reference layer should register to follow the globe"
+        )
+        (before,) = lines._near_side_segments()
+        drawn.draw(drawn.ax, elev=0.0, azim=0.0, spin=45.0)
+        (after,) = lines._near_side_segments()
+        assert before.shape == after.shape, (
+            "this arc stays wholly visible at 45 degrees"
+        )
+        assert not np.allclose(before, after), (
+            "the layer should move when the globe turns"
+        )
+        plt.close(
+            drawn.fig
+        )  # drawing onto the globe's own axes hands the figure to the caller
+
+    def test_a_coastline_stays_on_the_ground_it_traces(self, drawn, mocker):
+        """After a turn a coastline's vertices are exactly the turned surface points.
+
+        Test scenario:
+            A wholly visible arc, turned 45 degrees: every vertex must equal the projection of its lon/lat
+            at that spin, not merely have moved.
+        """
+        arc = self._arc(-20.0, 20.0)
+        self._patch(mocker, [arc])
+        lines = drawn.coastlines()
+        drawn.draw(drawn.ax, elev=0.0, azim=0.0, spin=45.0)
+        (segment,) = lines._near_side_segments()
+        expected = drawn.project(arc[:, 0], arc[:, 1], spin=45.0, altitude=0.002)
+        assert np.allclose(segment, expected), (
+            "the coastline should trace the ground at spin 45"
+        )
+        plt.close(drawn.fig)
+
+    def test_a_land_fill_stays_on_the_ground_it_covers(self, drawn, mocker):
+        """After a turn a wholly visible land ring's face is exactly the turned surface ring.
+
+        Test scenario:
+            The same check for the fill layer, on a small ring well inside the visible hemisphere.
+        """
+        ring = np.array(
+            [
+                [-10.0, -5.0],
+                [10.0, -5.0],
+                [15.0, 5.0],
+                [0.0, 12.0],
+                [-15.0, 5.0],
+                [-10.0, -5.0],
+            ]
+        )
+        self._patch(mocker, [ring])
+        fill = drawn.land()
+        drawn.draw(drawn.ax, elev=0.0, azim=0.0, spin=30.0)
+        (face,) = fill._near_side_faces()
+        expected = drawn.project(ring[:-1, 0], ring[:-1, 1], spin=30.0, altitude=0.001)
+        assert np.allclose(face, expected), (
+            "the fill should cover the ground at spin 30"
+        )
+        plt.close(drawn.fig)
+
+    def test_a_pinned_layer_stays_where_it_was_put(self, drawn, mocker):
+        """Naming a spin opts the layer out of following, exactly as it does for points()."""
+        self._patch(mocker, [self._arc(-60.0, 60.0)])
+        drawn.coastlines(spin=0.0)
+        assert drawn._overlays == [], "a pinned layer should not be registered"
+
+    def test_fill_lines_and_points_sort_in_that_order_in_front_of_the_sphere(
+        self, drawn, mocker
+    ):
+        """Each layer kind reports a depth nearer than the one it should be drawn over.
+
+        Test scenario:
+            matplotlib paints collections far to near, so fill must rank nearer than the sphere, lines
+            nearer than fill, and markers nearest.
+        """
+        self._patch(mocker, [self._ring(-40.0, 40.0, -20.0, 20.0)])
+        fill = drawn.land()
+        self._patch(mocker, [self._arc(-60.0, 60.0)])
+        lines = drawn.coastlines()
+        markers = drawn.points([0.0], lat=[0.0])
+        drawn.fig.canvas.draw()
+        depths = [
+            artist.do_3d_projection()
+            for artist in (drawn.glyph.surface, fill, lines, markers)
+        ]
+        assert depths == sorted(depths, reverse=True), (
+            f"expected sphere > fill > lines > markers in depth, got {depths}"
+        )
+
+    def test_a_layer_near_the_limb_is_actually_painted(self, mocker):
+        """A coastline hugging the horizon shows in the rendered image, not behind the planet.
+
+        Test scenario:
+            The pixel-level check behind the depth ordering: a red arc near the limb on a blue globe has
+            to leave red pixels in the saved figure.
+        """
+        texture = np.zeros((45, 90, 3), dtype=np.uint8)
+        texture[:] = (0, 40, 120)
+        globe = TexturedGlobe(texture, n_lon=90, n_lat=45, tilt_deg=0.0)
+        fig, _ = globe.draw(elev=0.0, azim=0.0, figsize=(3, 3))
+        self._patch(mocker, [self._arc(60.0, 85.0, lat=-30.0)])
+        globe.coastlines(color="red", linewidth=2.0)
+        fig.canvas.draw()
+        image = np.asarray(fig.canvas.buffer_rgba())[:, :, :3].astype(int)
+        red = (image[:, :, 0] > 150) & (image[:, :, 1] < 90) & (image[:, :, 2] < 90)
+        assert red.sum() > 0, "the arc near the limb should be visible"
+        globe.close()
+
+    def test_styling_reaches_the_collection(self, drawn, mocker):
+        """Layer styling is forwarded to matplotlib, over each layer's defaults."""
+        self._patch(mocker, [self._arc(-60.0, 60.0)])
+        lines = drawn.borders(color="white", linewidth=1.5)
+        assert mcolors.to_hex(lines.get_color()[0]) == "#ffffff", (
+            f"colour should be forwarded, got {lines.get_color()[0]}"
+        )
+        assert float(lines.get_linewidth()[0]) == 1.5, (
+            f"linewidth should be forwarded, got {lines.get_linewidth()}"
+        )
+
+    @pytest.mark.parametrize(
+        "spelling",
+        [
+            pytest.param({"linewidth": 1.2}, id="linewidth"),
+            pytest.param({"lw": 1.2}, id="lw"),
+            pytest.param({"linewidths": 1.2}, id="linewidths"),
+        ],
+    )
+    def test_a_line_width_reaches_the_layer_however_it_is_spelled(
+        self, drawn, mocker, spelling
+    ):
+        """Every spelling matplotlib takes for a line width changes the width.
+
+        Args:
+            spelling: The caller's styling.
+
+        Test scenario:
+            A collection's plural ``linewidths`` arrived beside the layer's own ``linewidth`` default
+            rather than replacing it, so it was silently ignored and the line stayed at 0.5.
+        """
+        self._patch(mocker, [self._arc(-60.0, 60.0)])
+        lines = drawn.coastlines(**spelling)
+        assert float(lines.get_linewidth()[0]) == 1.2, (
+            f"{spelling} should set the width, got {lines.get_linewidth()}"
+        )
+
+    @pytest.mark.parametrize(
+        "layer, kwargs, reader, expected",
+        [
+            pytest.param(
+                "coastlines", {"c": "white"}, "get_color", "#ffffff", id="line-colour"
+            ),
+            pytest.param(
+                "coastlines",
+                {"colors": "white"},
+                "get_color",
+                "#ffffff",
+                id="line-colours",
+            ),
+            pytest.param(
+                "land", {"fc": "red"}, "get_facecolor", "#ff0000", id="fill-facecolour"
+            ),
+            pytest.param(
+                "land", {"ec": "blue"}, "get_edgecolor", "#0000ff", id="fill-edgecolour"
+            ),
+        ],
+    )
+    def test_a_colour_reaches_the_layer_however_it_is_spelled(
+        self, drawn, mocker, layer, kwargs, reader, expected
+    ):
+        """matplotlib's short colour names reach the layer instead of colliding with its defaults.
+
+        Args:
+            layer: The layer method under test.
+            kwargs: The caller's styling.
+            reader: The getter that reads it back.
+            expected: The colour it should be.
+        """
+        self._patch(mocker, [self._ring(-40.0, 40.0, -20.0, 20.0)])
+        overlay = getattr(drawn, layer)(**kwargs)
+        drawn.fig.canvas.draw()
+        assert mcolors.to_hex(getattr(overlay, reader)()[0]) == expected, (
+            f"{kwargs} should reach the layer, got {getattr(overlay, reader)()[0]}"
+        )
+
+    @pytest.mark.parametrize("layer", ["coastlines", "land"])
+    def test_zorder_is_taken_but_the_depth_sort_decides(self, drawn, mocker, layer):
+        """zorder is accepted for parity with Map, and the axes' depth sort still owns the order.
+
+        Args:
+            layer: The layer method under test.
+
+        Test scenario:
+            Passing it used to raise; it is taken now, but a 3-D axes reassigns every collection's zorder
+            from the depth sort when it draws, so the layer stays between the sphere and the markers.
+        """
+        self._patch(mocker, [self._ring(-40.0, 40.0, -20.0, 20.0)])
+        overlay = getattr(drawn, layer)(zorder=50)
+        markers = drawn.points([0.0], lat=[0.0])
+        drawn.fig.canvas.draw()
+        assert overlay.get_zorder() != 50, (
+            "the axes' depth sort should have taken the order over"
+        )
+        assert (
+            drawn.glyph.surface.get_zorder()
+            < overlay.get_zorder()
+            < markers.get_zorder()
+        ), (
+            f"the layer should sit between sphere and markers, got "
+            f"{drawn.glyph.surface.get_zorder()}, {overlay.get_zorder()}, {markers.get_zorder()}"
+        )
+
+    @pytest.mark.parametrize("layer", ["coastlines", "borders", "land"])
+    def test_a_layer_needs_a_drawn_globe(self, flat_texture, layer):
+        """Asking for geography before draw() is refused, since there is no axes to add it to.
+
+        Args:
+            layer: The reference layer method under test.
+        """
+        globe = TexturedGlobe(flat_texture, n_lon=8, n_lat=4)
+        add_layer = getattr(globe, layer)
+        with pytest.raises(RuntimeError, match="draw"):
+            add_layer()
+
+
+class TestOverlayGeometryHelpers:
+    """The small geometry helpers the overlay layers are built from, including their degenerate cases."""
+
+    def test_limb_point_lands_on_the_limb_at_the_rings_radius(self):
+        """The crossing between a visible and a hidden vertex sits on the limb, same shell.
+
+        Test scenario:
+            With the camera down +x, a vertex at 45 degrees east of the limb and its neighbour 45
+            degrees behind it must cross exactly at the limb plane, keeping the ring's radius.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        radius = 1.01
+        inside = radius * np.array([np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+        outside = radius * np.array([-np.cos(np.pi / 4), np.sin(np.pi / 4), 0.0])
+        crossing = _limb_point(inside, outside, view)
+        assert abs(float(crossing @ view)) < 1e-12, (
+            f"the crossing should sit on the limb, depth {float(crossing @ view)}"
+        )
+        assert np.isclose(np.linalg.norm(crossing), radius), (
+            f"the crossing should keep the ring's radius, got {np.linalg.norm(crossing)}"
+        )
+
+    def test_limb_point_falls_back_when_the_chord_runs_through_the_centre(self):
+        """A chord straight down the view axis has no limb direction, so the visible end is kept.
+
+        Test scenario:
+            Both vertices lie on the view axis, so their crossing is the sphere's centre and there is
+            no tangential direction to push it out along. Returning the visible vertex keeps the ring
+            finite instead of emitting a zero vector.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        inside = np.array([0.5, 0.0, 0.0])
+        crossing = _limb_point(inside, np.array([-0.5, 0.0, 0.0]), view)
+        assert np.allclose(crossing, inside), (
+            f"expected the visible vertex back, got {crossing}"
+        )
+
+    def test_limb_point_handles_two_vertices_at_the_same_depth(self):
+        """Neighbours at equal depth give no interpolation span, and the visible one is used.
+
+        Test scenario:
+            The zero-span branch: the crossing cannot be interpolated, so the near-side vertex is
+            projected onto the limb rather than dividing by zero.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        inside = np.array([0.5, 0.5, 0.0])
+        crossing = _limb_point(inside, np.array([0.5, -0.5, 0.0]), view)
+        assert abs(float(crossing @ view)) < 1e-12, (
+            f"the fallback should still land on the limb, depth {float(crossing @ view)}"
+        )
+
+    def test_limb_arc_walks_the_short_way_round(self):
+        """The closing arc stays on the limb and spans the shorter of the two ways round.
+
+        Test scenario:
+            From 0 to 90 degrees around the limb, every sampled point must sit on the limb plane at
+            the same radius, and the arc must not take the 270-degree route.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        start = np.array([0.0, 1.0, 0.0])
+        arc = _limb_arc(start, np.array([0.0, 0.0, 1.0]), view)
+        assert len(arc) > 0, "a quarter turn should be sampled, not skipped"
+        assert np.allclose(arc @ view, 0.0, atol=1e-12), (
+            "every arc point should lie on the limb"
+        )
+        assert np.allclose(np.linalg.norm(arc, axis=1), 1.0), (
+            "the arc should keep its radius"
+        )
+        assert arc[0][1] > arc[-1][1], (
+            "the arc should run from the start toward the end"
+        )
+
+    def test_limb_arc_is_empty_when_it_starts_where_it_ends(self):
+        """A ring that leaves and rejoins the limb at one point has no arc to add.
+
+        Test scenario:
+            Sampling a zero-length arc used to emit dozens of copies of one point into the ring.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        point = np.array([0.0, 1.0, 0.0])
+        assert _limb_arc(point, point.copy(), view).shape == (0, 3), (
+            "a zero-length arc should add no points"
+        )
+
+    def test_clip_ring_accepts_a_ring_without_its_closing_repeat(self):
+        """An open ring is clipped the same way, with nothing to strip first.
+
+        Test scenario:
+            A three-vertex ring with one vertex behind the limb: the face keeps the two visible vertices
+            and gains the two limb crossings either side of the hidden one.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        ring = np.array([[1.0, 0.0, 0.0], [0.6, 0.8, 0.0], [-0.6, 0.0, 0.8]])
+        (face,) = _clip_ring(ring, view)
+        assert len(face) > 0, "a ring with visible vertices should clip to a face"
+        assert len(face) > 4, (
+            f"two vertices plus the crossings and the limb arc, got {len(face)}"
+        )
+        assert (face @ view >= -1e-9).all(), (
+            "no vertex of the face should be behind the limb"
+        )
+
+    def test_clip_ring_of_a_hidden_ring_has_no_faces(self):
+        """A ring wholly behind the globe clips to nothing."""
+        view = np.array([1.0, 0.0, 0.0])
+        ring = np.array([[-1.0, 0.0, 0.0], [-0.8, 0.6, 0.0], [-0.8, 0.0, 0.6]])
+        assert _clip_ring(ring, view) == [], "a hidden ring should clip to no faces"
+
+    @pytest.mark.parametrize(
+        "ring",
+        [
+            pytest.param([[1.0, 0.0, 0.0], [0.8, 0.6, 0.0]], id="two-vertices"),
+            pytest.param(
+                [[1.0, 0.0, 0.0], [0.8, 0.6, 0.0], [1.0, 0.0, 0.0]], id="closed-pair"
+            ),
+        ],
+    )
+    def test_clip_ring_of_a_degenerate_ring_has_no_faces(self, ring):
+        """Fewer than three distinct vertices enclose nothing, visible or not.
+
+        Args:
+            ring: A ring too short to enclose an area, with or without its closing repeat.
+        """
+        assert _clip_ring(np.array(ring), np.array([1.0, 0.0, 0.0])) == [], (
+            "a degenerate ring should clip to no faces"
+        )
+
+    @staticmethod
+    def _lonlat_ring(lon, lat):
+        """A closed lon/lat ring and the world-space points it places to, at spin 0 with no tilt.
+
+        Args:
+            lon: Longitudes in degrees.
+            lat: Latitudes in degrees, parallel to ``lon``.
+
+        Returns:
+            tuple: the ``(N, 2)`` lon/lat ring and its ``(N, 3)`` unit-sphere points.
+        """
+        ring = np.column_stack([np.asarray(lon, float), np.asarray(lat, float)])
+        ring = np.vstack([ring, ring[:1]])
+        return ring, _lonlat_to_body(ring[:, 0], ring[:, 1])
+
+    def test_two_arms_of_one_ring_stay_two_pieces(self):
+        """A ring passing behind the globe and showing at both edges fills each edge, not the sea between.
+
+        Test scenario:
+            A band from 60 degrees east round the far side to 60 degrees west shows only near the two
+            edges of the disc. Joining each visible stretch to the next in the ring's order instead
+            spans the whole near side — 97% of the disc filled where 3% is land.
+        """
+        lon = np.r_[
+            np.linspace(60, 300, 61),
+            np.full(6, 300.0),
+            np.linspace(300, 60, 61),
+            np.full(6, 60.0),
+        ]
+        lat = np.r_[
+            np.full(61, -10.0),
+            np.linspace(-10, 10, 6),
+            np.full(61, 10.0),
+            np.linspace(10, -10, 6),
+        ]
+        ring, world = self._lonlat_ring(lon, lat)
+        faces = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
+        assert len(faces) == 2, (
+            f"the two visible arms should stay two faces, got {len(faces)}"
+        )
+        for face in faces:
+            spread = np.degrees(np.arctan2(face[:, 1], face[:, 0]))
+            assert spread.max() - spread.min() < 45.0, (
+                "each face should hug its own edge of the disc, not reach across it"
+            )
+
+    def test_a_bay_across_the_limb_is_not_filled_in(self):
+        """A ring whose bay opens behind the globe keeps the bay empty.
+
+        Test scenario:
+            The counterpart of the two arms: here the two visible stretches are the shores of one bay, so
+            they belong to a single face that goes round the bay — closing each stretch on itself would
+            fill it.
+        """
+        lon = np.r_[
+            np.linspace(-80, 100, 46),
+            np.full(6, 100.0),
+            np.linspace(100, 80, 6),
+            np.full(6, 80.0),
+            np.linspace(80, 100, 6),
+            np.full(6, 100.0),
+            np.linspace(100, -80, 46),
+            np.full(11, -80.0),
+        ]
+        lat = np.r_[
+            np.full(46, -40.0),
+            np.linspace(-40, -10, 6),
+            np.full(6, -10.0),
+            np.linspace(-10, 10, 6),
+            np.full(6, 10.0),
+            np.linspace(10, 40, 6),
+            np.full(46, 40.0),
+            np.linspace(40, -40, 11),
+        ]
+        ring, world = self._lonlat_ring(lon, lat)
+        faces = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
+        assert len(faces) == 1, f"the two shores belong to one face, got {len(faces)}"
+        inside_bay = _lonlat_to_body(np.array([85.0]), np.array([0.0]))[0]
+        flat = np.column_stack([faces[0][:, 1], faces[0][:, 2]])
+        assert not Path(flat).contains_point((inside_bay[1], inside_bay[2])), (
+            "the bay should be left unfilled"
+        )
+
+    @pytest.mark.parametrize(
+        "reverse", [False, True], ids=["anticlockwise", "clockwise"]
+    )
+    def test_a_ring_is_clipped_the_same_whichever_way_it_is_wound(self, reverse):
+        """Reversing a ring's vertex order does not change the land it covers.
+
+        Args:
+            reverse: Whether to store the ring the other way round.
+
+        Test scenario:
+            Natural Earth stores rings both ways. The winding decides which way round the horizon a
+            clipped ring closes, so reading it wrong fills the sea instead of the land.
+        """
+        lon = np.r_[np.linspace(60, 120, 13), np.linspace(120, 60, 13)]
+        lat = np.r_[np.full(13, -20.0), np.full(13, 20.0)]
+        if reverse:
+            lon, lat = lon[::-1], lat[::-1]
+        ring, world = self._lonlat_ring(lon, lat)
+        (face,) = _clip_ring(world, np.array([1.0, 0.0, 0.0]), _interior_is_left(ring))
+        longitudes = np.degrees(np.arctan2(face[:, 1], face[:, 0]))
+        assert longitudes.min() >= 60.0 - 1e-6, (
+            f"the face should start at 60 east, got {longitudes.min()}"
+        )
+        assert longitudes.max() <= 90.0 + 1e-6, (
+            f"the face should stop at the limb, got {longitudes.max()}"
+        )
+
+    def test_clip_ring_does_not_depend_on_where_the_ring_starts(self):
+        """Rolling a ring's seam round does not change the face it clips to.
+
+        Test scenario:
+            The same polygon, stored starting on a visible vertex and on a hidden one, must enclose the
+            same region: the same set of vertices, allowing for the order they come in.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        lon = np.deg2rad(np.r_[np.linspace(60, 120, 13), np.linspace(120, 60, 13)])
+        lat = np.deg2rad(np.r_[np.full(13, -20.0), np.full(13, 20.0)])
+        ring = np.column_stack(
+            [np.cos(lat) * np.cos(lon), np.cos(lat) * np.sin(lon), np.sin(lat)]
+        )
+        faces = [
+            _clip_ring(np.vstack([rolled, rolled[:1]]), view)[0]
+            for rolled in (ring, np.roll(ring, -13, axis=0))
+        ]
+        assert faces[0].shape == faces[1].shape, (
+            f"both seams should give the same face, got {faces[0].shape} and {faces[1].shape}"
+        )
+        assert np.allclose(np.sort(faces[0], axis=0), np.sort(faces[1], axis=0)), (
+            "both seams should give the same vertices"
+        )
+
+    def test_limb_arc_is_empty_when_the_start_faces_the_camera(self):
+        """A start point on the view axis has no limb direction, so no arc is produced.
+
+        Test scenario:
+            The degenerate branch: the cross product that builds the arc's basis vanishes, and
+            returning nothing lets the ring close on its own vertices rather than on NaNs.
+        """
+        view = np.array([1.0, 0.0, 0.0])
+        arc = _limb_arc(view.copy(), np.array([0.0, 1.0, 0.0]), view)
+        assert arc.shape == (0, 3), f"expected no arc points, got {arc.shape}"
 
 
 class TestRenderLifecycle:
@@ -931,6 +2267,21 @@ class TestRenderLifecycle:
             f"expected 1 open figure, got {len(plt.get_fignums())}"
         )
 
+    def test_an_animation_in_a_subfigure_can_be_saved(self, globe, tmp_path):
+        """A globe animated on an axes inside a sub-figure still writes a GIF.
+
+        Test scenario:
+            The animation has to be built on the figure that owns the canvas. Built on the sub-figure, the
+            writer reached for savefig, which a SubFigure does not have, and the save failed.
+        """
+        figure = plt.figure(figsize=(3, 3))
+        panel = figure.subfigures(1, 1)
+        globe.animate(panel.add_subplot(projection="3d"), n_frames=2, interval=100)
+        out = tmp_path / "subfigure.gif"
+        globe.save_animation(str(out), fps=2)
+        assert out.stat().st_size > 0, "the animation should have been written"
+        plt.close(figure)
+
     def test_close_is_safe_before_drawing_and_twice(self, globe):
         globe.close()
         globe.draw()
@@ -944,6 +2295,26 @@ class TestRenderLifecycle:
             globe.draw()
             assert len(plt.get_fignums()) == 1
         assert plt.get_fignums() == [], "leaving the block should close the figure"
+
+    def test_turning_a_decorated_globe_still_closes_its_own_figure(self, flat_texture):
+        """Redrawing a globe — bare or on its own axes — leaves it owning its figure.
+
+        Test scenario:
+            Turning an already-decorated globe used to hand its own figure to "the caller", so close()
+            and the context manager stopped releasing it and a loop leaked one figure per globe.
+        """
+        plt.close("all")
+        with TexturedGlobe(flat_texture, n_lon=8, n_lat=4) as globe:
+            globe.draw()
+            globe.points([0.0], lat=[0.0])
+            globe.draw(spin=30.0)
+            globe.draw(globe.ax, spin=60.0)
+            assert len(plt.get_fignums()) == 1, (
+                "the globe should still be on one figure"
+            )
+        assert plt.get_fignums() == [], (
+            "leaving the block should close the globe's figure"
+        )
 
     def test_the_context_manager_propagates_errors(self, flat_texture):
         """It must not swallow an exception raised inside the block, and must still close the figure."""
@@ -979,6 +2350,16 @@ class TestRenderLifecycle:
         """interval=0 used to raise ZeroDivisionError from the frame-rate bookkeeping."""
         with pytest.raises(ValueError, match="positive number of milliseconds"):
             globe.animate(n_frames=2, interval=0)
+
+    @pytest.mark.parametrize("frames", [0, -3], ids=["zero", "negative"])
+    def test_an_animation_with_no_frames_is_refused(self, globe, frames):
+        """A rotation has to have at least one frame to show.
+
+        Args:
+            frames: A frame count below one.
+        """
+        with pytest.raises(ValueError, match="n_frames must be at least 1"):
+            globe.animate(n_frames=frames, interval=100)
 
     def test_saving_before_drawing_is_refused(self, globe, tmp_path):
         with pytest.raises(RuntimeError, match="draw"):
