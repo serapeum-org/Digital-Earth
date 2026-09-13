@@ -275,6 +275,27 @@ class TestGraduatedChoropleth:
             f"k=3 must give 3 colours and 4 edges: {style['cmap']}, {m.last_breaks}"
         )
 
+    def test_explicit_clim_reaches_a_graduated_layer(self, m, polygon_fc):
+        """``clim=`` is forwarded on the graduated path, and a caller's own opts still win over it.
+
+        Args:
+            m: The map under test.
+            polygon_fc: The buffered point fixture, classified on ``fid``.
+
+        Test scenario:
+            A caller pinning the colour limits — to hold one scale across several maps — passes ``clim``
+            the same way on every path. The graduated branch builds its own style dict, so the limits
+            have to be merged into it rather than dropped on the way to the classifier.
+        """
+        m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3, clim=(0.0, 10.0))
+        options = {
+            **hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs,
+            **hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs,
+        }
+        assert options.get("clim") == (0.0, 10.0), (
+            f"clim must reach the graduated layer, got {options.get('clim')!r}"
+        )
+
     def test_unknown_scheme_errors_with_context(self, m, polygon_fc):
         """An unclassifiable request names the column, the scheme and k (web-tier parity)."""
         with pytest.raises(ValueError, match=r"cannot classify column 'fid'"):

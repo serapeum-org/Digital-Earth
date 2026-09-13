@@ -494,6 +494,70 @@ class TestTimeSliderRasterStack:
             "a failed stack must not leave half its layers registered"
         )
 
+    def test_an_off_limb_stack_is_skipped_rather_than_half_built(
+        self, raster_stack, monkeypatch, warning_log
+    ):
+        """A stack the display CRS cannot place drops the whole slider and leaves the map as it was.
+
+        Args:
+            raster_stack: The 3-member collection the slider would have been built from.
+            monkeypatch: pytest's patcher, standing in for a warp that placed none of the data.
+            warning_log: The tier's loguru warnings.
+
+        Test scenario:
+            Both the drawability check and the colour-range scan read every member before any layer is
+            added, so an off-limb stack is skipped whole. A series missing frames is not a series, which
+            is why part of the slider is never built in place of all of it.
+        """
+        from digitalearth.base.crs import OffLimbError
+
+        def _off_limb(self, data, band=1):
+            """Behave like a warp that placed none of the data."""
+            raise OffLimbError("the data lies outside what 4326 can show")
+
+        monkeypatch.setattr(WebMap, "_to_display_source", _off_limb)
+        m = WebMap()
+        assert m.timeslider(raster_stack) is m, "the builder must stay chainable"
+        assert m.layers == [], "an off-limb stack must leave the map untouched"
+        assert m._temporal_times() == [], (
+            "no slider may be recorded for a stack that was never drawn"
+        )
+        assert any("timeslider" in line for line in warning_log), warning_log
+
+    def test_a_member_that_cannot_be_placed_unwinds_the_steps_already_built(
+        self, raster_stack, monkeypatch, warning_log
+    ):
+        """A step ``add_raster`` cannot place takes the steps already built down with it.
+
+        Args:
+            raster_stack: The 3-member collection the slider is built from.
+            monkeypatch: pytest's patcher, making the second member's corners unrepresentable.
+            warning_log: The tier's loguru warnings.
+
+        Test scenario:
+            ``add_raster`` skips a member whose corners will not express as the lon/lat a MapLibre image
+            source is placed by. Keeping the frames either side would leave a slider with a hole in it,
+            so the series is abandoned and the layers already registered are removed again.
+        """
+        placements = []
+        original = WebMap._lonlat_corners
+
+        def _second_member_has_no_corners(self, source):
+            """Place every member but the second, whose corners are reported unrepresentable."""
+            placements.append(source)
+            return None if len(placements) == 2 else original(self, source)
+
+        monkeypatch.setattr(WebMap, "_lonlat_corners", _second_member_has_no_corners)
+        m = WebMap()
+        assert m.timeslider(raster_stack) is m, "the builder must stay chainable"
+        assert m.layers == [], (
+            "an abandoned series must not leave its earlier steps registered"
+        )
+        assert m._temporal_times() == [], (
+            "no slider may be recorded for an abandoned series"
+        )
+        assert any("could not be placed" in line for line in warning_log), warning_log
+
     def test_unhashable_labels_get_the_actionable_message(self, raster_stack):
         """A list-valued label fails with the builder's own error, not a bare ``set()`` TypeError.
 

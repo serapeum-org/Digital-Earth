@@ -428,6 +428,18 @@ class TestC6LevelsAndUnitsAreConsumed:
         """The units hint is what lets a key say what its numbers are measured in."""
         assert WebMap()._auto_units(_source("msl"), None) == "hPa"
 
+    def test_caller_supplied_units_win(self):
+        """A caller who named the units gets exactly those, library hint or not.
+
+        Test scenario:
+            The autostyle hint fills a gap; it never overwrites a unit the caller wrote. That is the same
+            rule ``_auto_levels`` and ``_auto_cmap`` follow, so a key labelled by hand keeps its label
+            even for a variable the library happens to know.
+        """
+        assert WebMap()._auto_units(_source("msl"), "kPa") == "kPa", (
+            "a caller-supplied unit must win over the library's own"
+        )
+
     def test_an_unknown_variable_yields_no_units(self):
         """Never guess a unit: without one the label is built exactly as it was before."""
         assert WebMap()._auto_units(_source("mystery"), None) is None
@@ -553,6 +565,64 @@ class TestC7OffLimbSkipsAndWarns:
         assert m.add_raster(object()) is m, "the builder must stay chainable"
         assert len(m.layers) == before
         assert any("add_raster" in line for line in warning_log), warning_log
+
+    def test_an_off_limb_composite_is_skipped_with_a_warning(
+        self, monkeypatch, warning_log
+    ):
+        """A composite whose dataset cannot be placed is dropped, and the log names the builder.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for a warp that placed none of the data.
+            warning_log: The tier's loguru warnings.
+
+        Test scenario:
+            ``rgb_composite`` needs the dataset itself rather than one band, so it goes through the
+            raster-shaped guard instead of the source-shaped one. Without its own guard an off-limb
+            composite raised where the very same data drawn as a single band would have been skipped.
+        """
+        pytest.importorskip("maplibre")
+
+        def _off_limb(self, dataset):
+            """Behave like a warp that placed none of the data."""
+            raise OffLimbError("the data lies outside what 4326 can show")
+
+        monkeypatch.setattr(WebMap, "_to_display_raster", _off_limb)
+        m = WebMap().basemap()
+        before = len(m.layers)
+        assert m.rgb_composite(object(), bands=(3, 2, 1)) is m, (
+            "the builder must stay chainable"
+        )
+        assert len(m.layers) == before, "an off-limb composite must add no layer"
+        assert any("rgb_composite" in line for line in warning_log), warning_log
+
+    def test_an_off_limb_contour_layer_is_skipped_with_a_warning(
+        self, monkeypatch, warning_log
+    ):
+        """Contours over data the display CRS cannot place are skipped, not traced.
+
+        Args:
+            monkeypatch: pytest's patcher, standing in for a warp that placed none of the data.
+            warning_log: The tier's loguru warnings.
+
+        Test scenario:
+            ``contours`` reads the dataset through the same raster-shaped guard the composites use, so it
+            has to answer an unplaceable input the way every other builder does — a skipped layer and a
+            warning naming it, with the rest of the chain still drawable.
+        """
+        pytest.importorskip("maplibre")
+
+        def _off_limb(self, dataset):
+            """Behave like a warp that placed none of the data."""
+            raise OffLimbError("the data lies outside what 4326 can show")
+
+        monkeypatch.setattr(WebMap, "_to_display_raster", _off_limb)
+        m = WebMap().basemap()
+        before = len(m.layers)
+        assert m.contours(object(), interval=100.0) is m, (
+            "the builder must stay chainable"
+        )
+        assert len(m.layers) == before, "an off-limb contour layer must add no layer"
+        assert any("contours" in line for line in warning_log), warning_log
 
     def test_strict_re_raises_the_off_limb_error(self, monkeypatch):
         """``strict=True`` is for a pipeline that must not publish a map with a layer missing.

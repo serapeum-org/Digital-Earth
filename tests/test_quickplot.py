@@ -393,6 +393,24 @@ class TestBackendCapabilityRefusal:
         with pytest.raises(ValueError, match="unknown backend"):
             qp.quickmap(dataset, backend="opengl")
 
+    def test_the_not_passed_sentinel_reads_as_unset(self):
+        """The "not passed" sentinel spells itself ``<unset>`` wherever a default is rendered.
+
+        Test scenario:
+            ``help(quickmap)``, the rendered signature and every IDE hint print a default with ``repr``.
+            Without a spelling of its own the sentinel shows as ``<digitalearth.api._Unset object at
+            0x...>``, which reads as an implementation leak rather than as "leave this one alone".
+        """
+        import inspect
+
+        rendered = str(inspect.signature(qp.quickmap))
+        assert repr(qp._UNSET) == "<unset>", (
+            f"the sentinel must spell itself <unset>, got {qp._UNSET!r}"
+        )
+        assert "<unset>" in rendered, (
+            f"the rendered signature must show <unset> for a sentinel default, got {rendered!r}"
+        )
+
     def test_matplotlib_honours_all_four(self, dataset):
         """The default backend takes every checked parameter, exactly as it did before.
 

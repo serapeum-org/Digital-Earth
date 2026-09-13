@@ -573,6 +573,39 @@ class TestKeyedBasemapCoverage:
         assert figure.x_range.bounds is None, figure.x_range.bounds
         assert figure.y_range.bounds is None, figure.y_range.bounds
 
+    def test_a_keyed_provider_with_no_coverage_declares_nothing(self, m, monkeypatch):
+        """A keyed service that covers the world leaves the ranges free — no invented limit.
+
+        Args:
+            m: The map under test.
+            monkeypatch: pytest's patcher, registering a global keyed preset beside the tropics one.
+
+        Test scenario:
+            ``bounds`` is optional on a keyed source: a worldwide service simply declares none. Turning
+            that absence into a reprojected box would clamp the map to nothing, so the coverage hook is
+            skipped entirely rather than fed an empty extent.
+        """
+        from digitalearth.base.basemaps import KEYED_BASEMAPS, KeyedTileSource
+
+        def _global_service() -> KeyedTileSource:
+            """A keyed service covering the whole world, and therefore declaring no bounds."""
+            return KeyedTileSource(
+                name="Example.Global",
+                url_template="https://tiles.example/{z}/{x}/{y}.png?api_key={api_key}",
+                attribution="© Example",
+                credential_env="PLANET_API_KEY",
+            )
+
+        monkeypatch.setitem(KEYED_BASEMAPS, "example.global", _global_service)
+        m.tiles("Example.Global")
+        figure = hv.render(m.layers[0])
+        assert figure.x_range.bounds is None, (
+            f"a global service must not limit panning, got {figure.x_range.bounds}"
+        )
+        assert figure.y_range.bounds is None, (
+            f"a global service must not limit panning, got {figure.y_range.bounds}"
+        )
+
     def test_the_map_is_not_refused_for_opening_outside_coverage(self, m, dataset):
         """Coverage is declared, never validated: a pannable map outside the box still builds.
 

@@ -123,6 +123,25 @@ def test_dimension_info_dataclass():
     np.testing.assert_array_equal(di.values, [1.0, 2.0])
 
 
+def _netcdf_container():
+    """Build a one-variable pyramids ``NetCDF`` from the committed test raster.
+
+    Returns:
+        A ``NetCDF`` holding a single ``acc`` variable whose attribute list declares no ``units``.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+    from pyramids.netcdf import NetCDF
+
+    ds = Dataset.read_file("examples/data/acc4000.tif")
+    values = ds.read_array(band=0).astype("float32")[np.newaxis, ...]
+    return NetCDF.from_array(
+        values,
+        geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg),
+        no_data_value=ds.no_data_value[0],
+        variable_name="acc",
+    )
+
+
 class TestExtractorHelpers:
     """Tests for the private helpers in digitalearth.base.sources.extractors."""
 
@@ -168,6 +187,77 @@ class TestExtractorHelpers:
 
         with pytest.raises(ValueError, match="no variables"):
             _from_netcdf(_StubNetCDF(), None, None)
+
+    def test_attr_answers_none_for_anything_that_is_not_a_mapping(self):
+        """A CF lookup handed something that is not an attribute mapping answers ``None``.
+
+        Test scenario:
+            The identity lookups are fed whatever a driver reports as metadata — ``None`` from a container
+            carrying none, a bare string from one that reports it as text. Both have to mean "no such
+            attribute" rather than fail on the ``.items()`` call the mapping branch makes.
+        """
+        from digitalearth.base.sources.extractors import _attr
+
+        assert _attr(None, "units") is None, (
+            "a container with no metadata mapping declares no units"
+        )
+        assert _attr("units=mm", "units") is None, (
+            "a non-mapping metadata blob must not be parsed for attributes"
+        )
+
+    def test_variable_attributes_is_empty_without_variable_metadata(self):
+        """A container exposing no per-variable metadata reports no attributes at all.
+
+        Test scenario:
+            ``_variable_attributes`` reaches ``meta_data.variables`` through ``getattr``, so a container
+            with neither must answer with an empty mapping — the CF lookups then simply find nothing,
+            instead of the extractor failing on data it can still read values from.
+        """
+        from digitalearth.base.sources.extractors import _variable_attributes
+
+        class _NoMetadata:
+            """A container that exposes values but no ``meta_data``."""
+
+        assert _variable_attributes(_NoMetadata(), "acc") == {}, (
+            "a container with no meta_data must report no attributes"
+        )
+
+    def test_variable_attributes_is_empty_for_a_variable_it_does_not_describe(self):
+        """Asking for a variable the container's metadata does not list yields no attributes.
+
+        Test scenario:
+            The lookup walks the container's per-variable metadata by name. A name that is not in it has
+            to fall out with an empty mapping rather than hand back whichever variable happened to be
+            last, which would label the source with another variable's units.
+        """
+        from digitalearth.base.sources.extractors import _variable_attributes
+
+        assert _variable_attributes(_netcdf_container(), "no_such_variable") == {}, (
+            "an unlisted variable must report no attributes"
+        )
+
+    def test_the_cf_unit_slot_fills_in_for_a_missing_units_attribute(self):
+        """A variable's CF units reach the ``Source`` from the unit slot, not the attribute list.
+
+        Test scenario:
+            GDAL normalises a CF ``units`` attribute onto the variable's own unit and drops it from the
+            attribute list, so reading the attribute list alone left the source unitless for exactly the
+            input type CF units live in.
+        """
+        from dataclasses import replace
+
+        nc = _netcdf_container()
+        metadata = nc.meta_data
+        variables = dict(metadata.variables)
+        variables["acc"] = replace(variables["acc"], unit="m3/s")
+        nc.meta_data = replace(metadata, variables=variables)
+        assert "units" not in variables["acc"].attributes, (
+            "the case under test is a unit slot with no units attribute beside it"
+        )
+        source = get_source(nc)
+        assert source.units == "m3/s", (
+            f"expected the unit slot to be read, got {source.units!r}"
+        )
 
 
 @pytest.mark.parametrize("dtype", ["string", "boolean"])
@@ -477,6 +567,58 @@ class TestSourceCrsContract:
         """
         assert get_source(np.zeros((2, 2))).crs is None, (
             "a bare numpy array has no CRS, so None is the right answer there"
+        )
+
+    def test_a_frame_declaring_no_crs_reports_an_unknown_one(self):
+        """A vector frame with no CRS at all is the unknown case, not a code-less projection.
+
+        Test scenario:
+            The vector fallback goes EPSG code, then CRS definition. A frame carrying neither has to end
+            at ``None`` rather than at whatever the ``crs`` attribute happened to hold, which is what
+            keeps ``None`` meaning "genuinely unknown" for vectors as well as for raw arrays.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"value": [1.0, 2.0]},
+            geometry=[Point(0.0, 0.0), Point(1.0, 1.0)],
+            crs=None,
+        )
+        source = get_source(FeatureCollection(frame))
+        assert source.crs is None, (
+            f"a CRS-less frame must report None, got {source.crs!r}"
+        )
+
+    def test_an_authority_prefixed_crs_string_still_answers_its_code(self):
+        """``crs="EPSG:3857"`` answers the code question the same way ``crs=3857`` does.
+
+        Test scenario:
+            A caller that warped the data names the CRS however their stack spells it, and the authority
+            prefix is the common spelling. Stripping it is what stops ``epsg`` reporting ``None`` for a
+            CRS that plainly has a code, while ``crs`` keeps the spelling it was given.
+        """
+        source = get_source(np.zeros((2, 2)), crs="EPSG:3857")
+        assert source.epsg == 3857, f"expected the code 3857, got {source.epsg!r}"
+        assert source.crs == "EPSG:3857", (
+            f"crs must keep the spelling it was given, got {source.crs!r}"
+        )
+
+    def test_epsg_is_none_when_there_is_no_code_to_report(self):
+        """An unknown CRS has no code, and a boolean is never mistaken for one.
+
+        Test scenario:
+            ``epsg`` narrows ``crs`` to "is there an authority code". ``None`` has none; ``True`` is an
+            ``int`` subclass in Python, so without the boolean guard a stray flag would be reported as
+            the EPSG code 1.
+        """
+        assert get_source(np.zeros((2, 2))).epsg is None, (
+            "a bare numpy array has no CRS, so it has no EPSG code either"
+        )
+        axis = DimensionInfo(np.array([0.0]), "x")
+        assert Source(None, axis, axis, crs=True).epsg is None, (
+            "a boolean must not be read as the EPSG code 1"
         )
 
 

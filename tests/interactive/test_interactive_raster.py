@@ -31,6 +31,22 @@ class TestImage:
             f"expected hv.Image, got {type(m.layers[0])}"
         )
 
+    def test_image_element_builds_the_element_without_registering_it(self, m, dataset):
+        """``_image_element`` is the shared I1 recipe: reproject to the display CRS, then build the image.
+
+        Args:
+            m: The map under test.
+            dataset: The raster fixture.
+
+        Test scenario:
+            The recipe is the seam every raster builder reprojects through, so it has to hand back the
+            same element ``image()`` registers — and hand it back without touching the map's layer list,
+            which is what lets a builder compose one before deciding whether to add it.
+        """
+        element = m._image_element(dataset)
+        assert isinstance(element, hv.Image), f"expected hv.Image, got {type(element)}"
+        assert m.layers == [], "building an element must not register a layer"
+
     def test_image_is_plain_hv_not_gv(self, m, dataset):
         """Option A: pre-reprojected coordinates must NOT carry a GeoViews CRS (no re-projection)."""
         import geoviews as gv

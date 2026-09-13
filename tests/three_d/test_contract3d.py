@@ -307,6 +307,25 @@ class TestC4SchemeAndK:
             "the 3-D tier must bin against cleopatra's own class edges"
         )
 
+    def test_an_explicit_colour_list_is_used_as_given(self):
+        """A ``cmap`` that is already a list of colours becomes the class table unchanged.
+
+        Test scenario:
+            ``cmap`` is a colormap *name* on every tier, but a caller who has already chosen the exact
+            per-class colours — to match a published legend — hands the list itself. Sampling that would
+            need a matplotlib colormap lookup and fail on the one input that needs no sampling at all.
+        """
+        colours = ["#ff0000", "#00ff00"]
+        style = classified_scalars(
+            [1.0, 2.0, 3.0, 40.0], scheme="quantiles", k=2, cmap=colours
+        )
+        assert style["cmap"] == colours, (
+            f"the colours must be used as given, got {style['cmap']}"
+        )
+        assert style["n_colors"] == 2, (
+            f"one colour per class expected, got {style['n_colors']}"
+        )
+
     def test_a_categorical_scheme_gives_each_value_its_own_colour(self, scene):
         """``scheme="categorical"`` colours by distinct value rather than by range.
 
