@@ -274,9 +274,12 @@ class TestBackendCapabilityRefusal:
             ("3d", "crs", 4326),
             ("3d", "domain", "europe"),
             ("3d", "coastlines", True),
+            ("3d", "basemap", True),
+            ("3d", "kind", "contourf"),
             ("web", "domain", "europe"),
             ("web", "coastlines", True),
             ("web", "colorbar", False),
+            ("web", "kind", "contourf"),
             ("interactive", "domain", "europe"),
         ],
     )
@@ -307,7 +310,14 @@ class TestBackendCapabilityRefusal:
 
     @pytest.mark.parametrize(
         ("backend", "parameter"),
-        [("3d", "domain"), ("3d", "coastlines"), ("web", "coastlines")],
+        [
+            ("3d", "domain"),
+            ("3d", "coastlines"),
+            ("3d", "basemap"),
+            ("3d", "kind"),
+            ("web", "coastlines"),
+            ("web", "kind"),
+        ],
     )
     def test_a_parameter_that_asks_for_nothing_is_not_a_dropped_request(
         self, dataset, backend, parameter, mocker
@@ -328,7 +338,9 @@ class TestBackendCapabilityRefusal:
         builder = mocker.patch.object(
             qp, "_quickmap_3d" if backend == "3d" else "_quickmap_web"
         )
-        inert = {"domain": None, "coastlines": False}[parameter]
+        inert = {"domain": None, "coastlines": False, "basemap": False, "kind": "auto"}[
+            parameter
+        ]
         qp.quickmap(dataset, backend=backend, **{parameter: inert})
         assert builder.called, (
             "an inert value must not stop the call reaching the backend"

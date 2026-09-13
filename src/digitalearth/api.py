@@ -70,17 +70,22 @@ _UNSET = _Unset()
 #:   arity, and wiring ``colorbar=`` to it is deliberately left to the ``colorbar``/``legend`` rename
 #:   (TODO(#254)) rather than guessed at here.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
-    "matplotlib": frozenset({"crs", "domain", "coastlines", "colorbar"}),
-    "interactive": frozenset({"crs", "coastlines", "colorbar"}),
+    "matplotlib": frozenset({"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}),
+    "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
     "3d": frozenset({"colorbar"}),
-    "web": frozenset({"crs"}),
+    "web": frozenset({"crs", "basemap"}),
 }
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
 #: ``crs`` and ``colorbar`` are absent on purpose: every value of those is a choice, ``colorbar=False``
 #: (suppress the bar) just as much as ``colorbar=True``.
-_INERT: dict[str, Any] = {"domain": None, "coastlines": False}
+_INERT: dict[str, Any] = {
+    "domain": None,
+    "coastlines": False,
+    "kind": "auto",
+    "basemap": False,
+}
 
 
 def _reject_unsupported(backend: str, **passed: Any) -> None:
@@ -253,14 +258,18 @@ def quickmap(
             ``3857``, and ``"web"``, which accepts only ``4326``). ``backend="3d"`` has no display CRS, so
             passing it there is refused rather than ignored — reproject with pyramids before plotting.
         kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
+            ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
+            tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
+            nothing) is accepted anywhere.
         domain: Optional named region / bbox to set the extent. ``backend="matplotlib"`` only — it is the one
             tier with a fixed extent to set — and passing it to any other backend is refused by name.
         basemap: The basemap to draw beneath the data: ``False`` for none, ``True`` for the backend's
             default source, or the source itself — a cleopatra provider name, an ``xyzservices``
             ``TileProvider``, or a **keyed** preset name such as ``"Planet.NICFI"`` — forwarded to the
             backend's basemap method. Unreachable tiles are tolerated and warned about; a request the
-            backend cannot satisfy (an unknown preset, a missing credential) is raised. Every backend
-            supports it.
+            backend cannot satisfy (an unknown preset, a missing credential) is raised. Honoured by
+            ``"matplotlib"``, ``"interactive"`` and ``"web"``; ``backend="3d"`` has no basemap, so asking for
+            one there is refused rather than ignored, while ``basemap=False`` is accepted anywhere.
         coastlines: When True, overlay coastlines (tolerated and warned about if the assets are
             unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
             backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
@@ -330,7 +339,13 @@ def quickmap(
         )
     # Refuse before anything is built, so a rejected call never leaves a half-made figure or VTK plotter.
     _reject_unsupported(
-        backend, crs=crs, domain=domain, coastlines=coastlines, colorbar=colorbar
+        backend,
+        crs=crs,
+        kind=kind,
+        domain=domain,
+        basemap=basemap,
+        coastlines=coastlines,
+        colorbar=colorbar,
     )
     # Past the gate, fill in the defaults the surviving backends expect.
     colorbar = True if colorbar is _UNSET else colorbar
