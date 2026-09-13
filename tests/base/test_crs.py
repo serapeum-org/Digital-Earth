@@ -1,10 +1,43 @@
-"""Tests for the engine-neutral CRS readers: source_epsg, declared_crs and is_geographic."""
+"""Tests for the engine-neutral CRS layer: the readers, and the off-limb signal ``reproject`` raises.
 
+The readers are ``source_epsg``, ``declared_crs``, ``is_geographic`` and ``authority_code``. ``reproject`` is
+tested here on **real** off-limb geometry rather than a patched warp, because the vector half of the contract
+is precisely that nothing raises on its own: geopandas warps an unplaceable geometry to ``inf`` and reports
+success, so only real data proves the guard reads it.
+"""
+
+import geopandas as gpd
 import numpy as np
 import pytest
 from pyramids.dataset import Dataset, GeoReference
+from pyramids.feature import FeatureCollection
+from shapely.geometry import Point
 
-from digitalearth.base.crs import declared_crs, is_geographic, source_epsg
+from digitalearth.base.crs import (
+    OffLimbError,
+    authority_code,
+    declared_crs,
+    is_geographic,
+    reproject,
+    source_epsg,
+)
+
+#: An orthographic projection centred on the Gulf of Guinea — everything past a quarter turn from (0, 0) is
+#: behind its limb, which is what makes "visible" and "hidden" fixtures a matter of longitude alone.
+ATLANTIC = "+proj=ortho +lat_0=0 +lon_0=0"
+
+
+def _points(*lonlat):
+    """A lon/lat ``FeatureCollection`` of the given points.
+
+    Args:
+        *lonlat: One ``(lon, lat)`` pair per point.
+
+    Returns:
+        pyramids.feature.FeatureCollection: the points, in EPSG:4326.
+    """
+    geometry = [Point(lon, lat) for lon, lat in lonlat]
+    return FeatureCollection(gpd.GeoDataFrame(geometry=geometry, crs=4326))
 
 
 class _FakeCRS:
@@ -171,3 +204,100 @@ class TestDeclaredCrs:
         assert declared_crs(np.zeros((2, 2))) is None, (
             "a bare numpy array declares no CRS"
         )
+
+
+class TestReprojectOffLimb:
+    """Tests for reproject — the one signal both data families reach when nothing lands in view."""
+
+    def test_a_vector_layer_behind_the_limb_is_reported_off_limb(self):
+        """Real off-limb geometry raises, without anything monkeypatched.
+
+        Test scenario:
+            The raster half of the contract is GDAL raising and the wording being translated. The vector
+            half has no exception to translate: geopandas warps every unplaceable point to ``(inf, inf)``
+            and calls that a success, so a guard reading only exceptions could never fire for a vector
+            layer — and the decorator every vector builder carries would have meant nothing.
+        """
+        with pytest.raises(OffLimbError, match="finite coordinate"):
+            reproject(_points((175.0, 5.0), (170.0, 10.0)), ATLANTIC)
+
+    def test_a_visible_vector_layer_comes_back_warped(self):
+        """Geometry the projection can place is returned, with a finite extent.
+
+        Test scenario:
+            The guard must not cost the ordinary case anything: the same call on the near side returns the
+            warped layer rather than raising.
+        """
+        warped = reproject(_points((0.0, 0.0), (5.0, 5.0)), ATLANTIC)
+        assert np.isfinite(np.asarray(warped.total_bounds, dtype="float64")).all(), (
+            f"a visible layer must warp to a finite extent, got {warped.total_bounds}"
+        )
+
+    def test_a_partly_hidden_vector_layer_is_not_off_limb(self):
+        """A layer with even one placeable geometry is returned, not skipped.
+
+        Test scenario:
+            "Off-limb" means *nothing* landed, exactly as it does for a raster — a warp that hides half the
+            points still has something to draw, and reporting it as empty would drop the visible half.
+        """
+        warped = reproject(_points((0.0, 0.0), (175.0, 5.0)), ATLANTIC)
+        assert np.isfinite(np.asarray(warped.total_bounds, dtype="float64")).any(), (
+            f"the visible point must survive, got {warped.total_bounds}"
+        )
+
+    def test_an_empty_layer_is_not_blamed_on_the_projection(self):
+        """An empty collection warps to an empty one instead of being called off-limb.
+
+        Test scenario:
+            An empty layer has a non-finite extent too (``total_bounds`` is all-NaN), so a guard reading the
+            output alone would accuse the projection of hiding data that was never there. The input's own
+            extent is what tells the two apart.
+        """
+        warped = reproject(_points(), ATLANTIC)
+        assert len(warped) == 0, f"an empty layer must stay empty, got {len(warped)}"
+
+    def test_a_raster_off_the_limb_still_reports_gdal_s_case(self):
+        """The raster half is untouched: GDAL's refusal is still translated, in its own wording.
+
+        Test scenario:
+            The two readings share one exception type, so the raster message has to stay distinguishable —
+            it is what tells a maintainer which half of the guard fired.
+        """
+        raster = Dataset.from_array(
+            np.ones((20, 20), "float32"),
+            geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+        )
+        with pytest.raises(OffLimbError, match="too few sample points"):
+            reproject(raster, "+proj=ortho +lat_0=15 +lon_0=-175")
+
+
+class TestAuthorityCode:
+    """Tests for authority_code — the EPSG code read out of a definition, by pyramids."""
+
+    def test_a_definition_is_read_down_to_its_authority_block(self):
+        """WKT carrying an authority block answers with that code.
+
+        Test scenario:
+            ``declared_crs`` hands a warped dataset's WKT on to ``Source``, so the code-or-None question is
+            regularly asked of a full definition rather than an ``"EPSG:<code>"`` string.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        assert authority_code(crs_from_user_input(3857).to_wkt()) == 3857, (
+            "Web Mercator as WKT still names EPSG:3857"
+        )
+
+    @pytest.mark.parametrize(
+        "crs", ["+proj=ortho +lat_0=53 +lon_0=4", "not-a-crs", "", None]
+    )
+    def test_anything_without_a_code_is_none(self, crs):
+        """A code-less projection, and anything unreadable, answer ``None``.
+
+        Args:
+            crs: The CRS under test.
+
+        Test scenario:
+            ``None`` has to keep meaning "no code to name" — the reader may not guess one for a projection
+            that genuinely has none, nor raise on input it cannot parse.
+        """
+        assert authority_code(crs) is None, f"{crs!r} names no authority code"
