@@ -45,11 +45,15 @@ __all__ = [
 #: Default qualitative colormap for categorical symbology (10 distinct hues; cycled if more categories).
 _DEFAULT_CATEGORICAL_CMAP = "tab10"
 
-#: Neutral colour for a feature whose category is missing (``NaN``/``None``/``pd.NA``). Shared by all three
-#: tiers — the web tier's ``["match", …]`` fallback, the interactive tier's dict-cmap fallback, and the static
-#: tier's colormap "bad" colour — so missing data reads as *missing* rather than as absent, identically
-#: everywhere. Keep this a single constant: two tiers spelling the same idea differently is exactly how the
-#: ``cmap`` sentinels drifted apart.
+#: Neutral colour for a feature whose value is missing (``NaN``/``None``/``pd.NA``). Shared by every tier —
+#: the web tier's ``["match", …]`` fallback, the interactive tier's dict-cmap fallback, the static tier's
+#: colormap "bad" colour and the 3-D tier's lookup-table NaN colour — so missing data reads as *missing*
+#: rather than as absent, identically everywhere. Keep this a single constant: two tiers spelling the same
+#: idea differently is exactly how the ``cmap`` sentinels drifted apart.
+#:
+#: The rule is **classified layers**, not categorical ones: a graduated scheme puts a missing value outside
+#: every class exactly as a categorical one does, so it is painted with this colour too. A *continuous* ramp
+#: has no classes and is left to the renderer — no tier repaints it.
 MISSING_COLOR = "#cccccc"
 
 #: The continuous-colour default ``choropleth`` carries in its signature (right for graduated/continuous,

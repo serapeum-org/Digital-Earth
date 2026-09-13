@@ -123,6 +123,53 @@ def test_categorical_missing_values_are_drawn_neutral(polygons):
     ]
 
 
+def test_graduated_missing_values_are_drawn_neutral(polygons):
+    """A missing value under a *graduated* scheme is neutral too, not invisible (M1).
+
+    Test scenario:
+        The 3-D tier lifted ``NaN`` out of the ramp onto ``MISSING_COLOR`` (``classified_scalars``) while
+        the other tiers were left as they were, so the same column read as "missing" on one tier and as
+        nothing at all here — the cross-tier divergence the shared constant exists to prevent, pointing the
+        other way. A classified scheme puts ``NaN`` outside every class exactly as a categorical one does,
+        so it is painted the same neutral colour.
+    """
+    fc = polygons.copy()
+    values = [float(index) for index in range(len(fc))]
+    values[0] = float("nan")
+    fc["graded"] = values
+    m = Map(crs=fc.epsg)
+    pc = m.choropleth(fc, column="graded", scheme="quantiles", k=3)
+    pc.update_scalarmappable()  # resolve the value array into facecolors
+    facecolors = pc.get_facecolors()
+    assert to_hex(facecolors[0]) == MISSING_COLOR, (
+        "a graduated layer's missing value must be neutral, not the ramp's lowest class"
+    )
+    assert facecolors[0][3] > 0, (
+        "and must be visible at all (the default bad colour is fully transparent)"
+    )
+
+
+def test_a_continuous_ramp_leaves_a_missing_value_to_the_renderer(polygons):
+    """The neutral colour is the *classified* rule, and deliberately stops there.
+
+    Test scenario:
+        A continuous ramp has no classes for a value to fall outside of, and no tier repaints it — the web
+        tier's ``["interpolate", …]`` and the interactive colorbar both leave a null to the renderer. Pinning
+        that here keeps the scope of the classified rule explicit, and keeps ``grid_cells``' nodata cells
+        (a continuous render) drawing as they always have.
+    """
+    fc = polygons.copy()
+    values = [float(index) for index in range(len(fc))]
+    values[0] = float("nan")
+    fc["graded"] = values
+    m = Map(crs=fc.epsg)
+    pc = m.choropleth(fc, column="graded")
+    pc.update_scalarmappable()
+    assert pc.get_facecolors()[0][3] == 0.0, (
+        "a continuous ramp keeps matplotlib's transparent 'bad' colour; only classes are repainted"
+    )
+
+
 @pytest.mark.parametrize(
     "dtype", ["object", "string"], ids=["object-None", "nullable-pdNA"]
 )

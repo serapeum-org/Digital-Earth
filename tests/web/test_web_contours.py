@@ -9,6 +9,7 @@ Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the
 
 import pytest
 
+from digitalearth.base.crs import OffLimbError
 from digitalearth.web import WebMap
 
 
@@ -148,11 +149,15 @@ class TestWhatItRefuses:
     def test_strict_raises_on_an_empty_trace(self, dataset):
         """`strict=True` turns the skip back into the error it used to be (C7).
 
+        It is an ``OffLimbError``, the one type every tier raises under ``strict`` (M6): "no level lies
+        within the data" is the same "there is nothing renderable here" the other tiers signal that way,
+        and a pipeline written to ``except OffLimbError`` used to miss this tier's bare ``ValueError``.
+
         Args:
             dataset: The shared pyramids raster fixture.
         """
         web_map = WebMap(strict=True).basemap()
-        with pytest.raises(ValueError, match="nothing was traced"):
+        with pytest.raises(OffLimbError, match="nothing was traced"):
             web_map.contours(dataset, interval=1000)
 
 

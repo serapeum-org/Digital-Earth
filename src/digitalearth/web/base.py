@@ -329,8 +329,9 @@ class WebMapBase:
         height: Widget height in pixels (``None`` keeps the MapLibre default).
         strict: How a layer that cannot be placed is reported. ``False`` (the default) skips it with a
             warning naming the layer and why, so one unplaceable layer does not lose the rest of the map;
-            ``True`` re-raises instead, which is what a pipeline that must not ship a silently
-            incomplete map wants.
+            ``True`` raises instead — always an :class:`~digitalearth.base.crs.OffLimbError`, the same type
+            the static, interactive and 3-D tiers raise, so one ``except`` clause covers a pipeline that
+            must not ship a silently incomplete map whichever backend drew it.
 
     Raises:
         ValueError: when ``crs`` is not EPSG:4326 (see :meth:`_validate_display_crs`).
@@ -502,14 +503,21 @@ class WebMapBase:
         Args:
             layer: The public builder that drew nothing, named in the log line.
             reason: Why it drew nothing, in the same line.
-            error: The exception behind it, re-raised verbatim under ``strict``; ``None`` raises a
-                :class:`ValueError` carrying ``reason``.
+            error: The exception behind it, re-raised verbatim under ``strict``; ``None`` raises an
+                :class:`~digitalearth.base.crs.OffLimbError` carrying ``reason``.
 
         Raises:
-            Exception: ``error`` (or a ``ValueError`` built from ``reason``) when the map is ``strict``.
+            Exception: ``error`` when the map is ``strict`` and one was given, else an
+                :class:`~digitalearth.base.crs.OffLimbError` built from ``reason``. The reasons this tier
+                skips for without an exception behind them — corners that will not express as lon/lat, a
+                contour trace with no level in range, a time step that cannot be placed — are the same
+                "there is nothing renderable here" the other three tiers signal with ``OffLimbError``, so
+                they raise it too: ``except OffLimbError`` around a strict map catches every tier's answer,
+                which is the whole point of a shared policy. Note it derives from ``RuntimeError``, so an
+                ``except ValueError`` written against the old behaviour no longer catches these.
         """
         if self.strict:
-            raise error if error is not None else ValueError(f"{layer}: {reason}")
+            raise error if error is not None else OffLimbError(f"{layer}: {reason}")
         logger.warning("{}: {} — the layer was skipped", layer, reason)
 
     def _display_source_or_skip(
@@ -1201,9 +1209,11 @@ class WebMapBase:
         place date-like columns are made JSON-safe (:meth:`_json_safe`) before the frame reaches
         ``add_source``. A pyramids ``FeatureCollection`` *is* a ``geopandas`` GeoDataFrame (the form
         ``maplibre.Map.add_source`` accepts
-        for vector data), so it is reprojected through pyramids (``to_crs``) when needed and returned as-is; a
-        bare GeoDataFrame is reprojected via its own ``to_crs``. No shapely/geopandas-as-engine import —
-        pyramids owns the reprojection and the GeoDataFrame type.
+        for vector data), so it is reprojected through pyramids when needed and returned as-is; a bare
+        GeoDataFrame in another CRS is reprojected the same way. No shapely/geopandas-as-engine import —
+        pyramids owns the reprojection and the GeoDataFrame type. Both reprojections go through
+        :meth:`_placed`, so a warp that can place none of the geometry reaches the tier's off-limb policy
+        instead of quietly producing a frame of ``inf`` coordinates.
 
         Args:
             features: A pyramids ``FeatureCollection`` or a GeoDataFrame.
@@ -1216,9 +1226,11 @@ class WebMapBase:
 
         Raises:
             TypeError: when ``features`` is not a vector layer.
+            OffLimbError: when the warp places none of the geometry and the map is ``strict``.
 
         See Also:
             digitalearth.web.base.WebMapBase._require_vector: the input guard applied first.
+            digitalearth.web.base.WebMapBase._placed: the reprojection, and the off-limb report.
             digitalearth.web.base.WebMapBase._json_safe: the date encoding applied to the result.
         """
         self._require_vector(features, method)
@@ -1226,14 +1238,41 @@ class WebMapBase:
             features, "to_crs"
         ):  # pyramids FeatureCollection (a GeoDataFrame)
             if self._needs_reproject(features):
-                features = features.to_crs(self.crs)
+                features = self._placed(features, method=method)
             return self._noted(self._json_safe(features))
         crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
         if (
             crs_epsg is not None and crs_epsg != self.crs
         ):  # a bare GeoDataFrame in another CRS
-            return self._noted(self._json_safe(features.to_crs(self.crs)))
+            return self._noted(self._json_safe(self._placed(features, method=method)))
         return self._noted(self._json_safe(features))
+
+    def _placed(self, features: Any, *, method: str) -> Any:
+        """Warp ``features`` to the display CRS, reporting a warp that placed none of the geometry.
+
+        The vector half of the tier's off-limb policy. A vector warp does not raise when it can place
+        nothing — it hands back ``inf`` coordinates and says nothing — so the reprojection goes through
+        the shared :func:`~digitalearth.base.crs.reproject`, which reads the result and reports it, rather
+        than through ``to_crs`` directly. Calling ``to_crs`` here is what kept this tier (and the static
+        one) outside a contract the module docstring of ``base/crs.py`` says covers every backend.
+
+        Args:
+            features: A pyramids ``FeatureCollection`` or a GeoDataFrame, in any CRS.
+            method: The calling builder's name, quoted in the warning.
+
+        Returns:
+            The display-CRS frame. When the warp placed nothing and the map is not ``strict`` the warning
+            is logged and the frame is handed back as the warp produced it — the layer draws nothing
+            either way, and the builders read values off the frame the geometry came with.
+
+        Raises:
+            OffLimbError: when the warp placed none of the geometry and the map is ``strict``.
+        """
+        try:
+            return reproject(features, self.crs)
+        except OffLimbError as error:
+            self._skipped(method, str(error), error)  # raises under strict
+            return features.to_crs(self.crs)
 
     def add_reference(self, layer: Any) -> Self:
         """Register ``layer`` above the basemaps but below the data, and return ``self``.

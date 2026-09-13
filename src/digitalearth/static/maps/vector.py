@@ -5,7 +5,8 @@ unstructured triangulations (tricontour/tricontourf/tripcolor), kernel density, 
 vector field (quiver/barbs/streamplot/quiverkey) — all wired onto the matching cleopatra glyphs.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
+from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
 from cleopatra.glyphs.gridded.mesh_glyph import MeshGlyph
@@ -20,6 +21,7 @@ from shapely import MultiPoint, box, voronoi_polygons
 from shapely.affinity import scale as affine_scale
 
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
+from digitalearth.base.crs import reproject
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.sources import get_source
 from digitalearth.base.symbology import (
@@ -35,7 +37,9 @@ from digitalearth.static.render_compat import relocate_flat_style
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
 
-def _resolve_marker_size(opts: dict, plot_style: dict, caller: str) -> None:
+def _resolve_marker_size(
+    opts: dict, plot_style: dict, caller: str, *, depth: int = 5
+) -> None:
     """Fold a ``size=`` marker size into the ``point_size`` cleopatra's point glyphs take (in place).
 
     ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static
@@ -50,6 +54,10 @@ def _resolve_marker_size(opts: dict, plot_style: dict, caller: str) -> None:
         plot_style: The relocated ``plot()`` kwargs, mutated in place: a ``point_size`` meant for this
             glyph is taken back out of it.
         caller: The layer method the kwargs were written on, named in the warning and the error.
+        depth: How many frames sit between here and the user's call. The default counts
+            ``renamed_parameter`` -> here -> the layer method -> ``guarded`` -> the caller; an alias that
+            delegates to another builder adds one more, so it passes ``depth=6``. Measured rather than
+            assumed: a wrong value blames a line inside this file instead of the user's own.
 
     Raises:
         TypeError: if both ``size`` and ``point_size`` are passed.
@@ -63,20 +71,22 @@ def _resolve_marker_size(opts: dict, plot_style: dict, caller: str) -> None:
         old="point_size",
         alias=plot_style.pop("point_size", None),
         caller=caller,
-        stacklevel=4,  # renamed_parameter -> here -> the layer method -> its caller
+        stacklevel=depth,
     )
     if size is not None:
         opts["point_size"] = size
 
 
 def _draw_missing_neutral(artist: Any) -> None:
-    """Colour a categorical layer's missing values neutral instead of invisible.
+    """Colour a classified layer's missing values neutral instead of invisible.
 
-    cleopatra maps a missing category to ``NaN`` in the class codes, and a ``ListedColormap``'s default "bad"
-    colour is fully transparent — so a feature whose attribute is missing is drawn as *nothing*, making it
-    indistinguishable from a feature that was never in the collection. The web and interactive tiers both draw
-    :data:`~digitalearth.base.symbology.MISSING_COLOR` there; this matches them, so missing data reads as missing on
-    all three tiers.
+    cleopatra maps a missing category to ``NaN`` in the class codes, and a colormap's default "bad" colour is
+    fully transparent — so a feature whose attribute is missing is drawn as *nothing*, making it
+    indistinguishable from a feature that was never in the collection. The same is true of a **graduated**
+    scheme, whose ``NaN`` never falls in a class either: the 3-D tier lifts it onto
+    :data:`~digitalearth.base.symbology.MISSING_COLOR` (``classified_scalars``), and this does the same here,
+    so one classified column reads the same way whichever tier draws it. A *continuous* ramp is left alone —
+    it has no classes, and nothing on any tier repaints it.
 
     ``with_extremes`` returns a *new* colormap rather than mutating in place, which matters: the glyph's may be
     a colormap registered globally under a name, and setting the bad colour on that instance would leak this
@@ -86,6 +96,46 @@ def _draw_missing_neutral(artist: Any) -> None:
         artist: The rendered mappable (a ``PolyCollection``) whose colormap gets the neutral "bad" colour.
     """
     artist.set_cmap(artist.get_cmap().with_extremes(bad=MISSING_COLOR))
+
+
+def _skips_off_limb(builder: Callable) -> Callable:
+    """Wrap a vector builder so data the display CRS cannot place skips the layer instead of raising (#257).
+
+    The raster builders answer an off-limb warp inline (``except OffLimbError: self._skipped_off_limb(kind)``)
+    because each of them reprojects at its own point in its own body. The validating vector builders all
+    reproject in one place — :meth:`VectorMixin._vector_input` — so the same answer is written once, here, and
+    covers the whole body: the warp that places no geometry, and the value/geometry work that follows it.
+
+    Args:
+        builder: A vector layer method whose body reprojects through :func:`~digitalearth.base.crs.reproject`.
+
+    Returns:
+        The same method, with an off-limb reprojection turned into a skipped layer (``None``) — or, under
+        ``strict=True``, into an :class:`~digitalearth.base.crs.OffLimbError` naming the layer.
+    """
+
+    @wraps(builder)
+    def guarded(self: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run the builder, answering an off-limb reprojection with a skipped layer.
+
+        Args:
+            self: The composed ``Map`` the builder is bound to.
+            *args: The builder's positional arguments.
+            **kwargs: The builder's keyword arguments.
+
+        Returns:
+            Whatever the builder returns, or ``None`` when the layer was skipped.
+
+        Raises:
+            OffLimbError: when the map was built with ``strict=True``.
+        """
+        try:
+            return builder(self, *args, **kwargs)
+        except OffLimbError:
+            self._skipped_off_limb(builder.__name__)
+            return None
+
+    return guarded
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -125,6 +175,12 @@ class VectorMixin(_MixinBase):
         :attr:`crs`, raises on an empty collection, and — when ``geom_types`` is given — requires every
         geometry to be one of those types.
 
+        Reprojection goes through the shared :func:`~digitalearth.base.crs.reproject` helper rather than
+        calling ``to_crs`` directly: a vector warp does not raise when it places nothing, it hands back
+        ``inf`` coordinates, and only that helper reads the result and reports it. Calling ``to_crs`` here
+        is what kept the off-limb contract off this tier — the one tier with a clipped globe to be behind,
+        and so the one where a layer really can land nowhere.
+
         Args:
             features: A pyramids ``FeatureCollection`` (reprojected to the display CRS).
             geom_types: Allowed shapely ``geom_type`` names (e.g. ``("Point",)``); ``None`` skips the check.
@@ -135,9 +191,11 @@ class VectorMixin(_MixinBase):
             The reprojected GeoDataFrame.
 
         Raises:
+            OffLimbError: when the warp places none of the geometry in the display CRS. The public builders
+                wrap it with :func:`_skips_off_limb`, so the layer is skipped (or raised under ``strict``).
             ValueError: if the collection is empty, or a geometry is not one of ``geom_types``.
         """
-        gdf = features.to_crs(self.crs)
+        gdf = reproject(features, self.crs)
         if len(gdf) == 0:
             raise ValueError(f"{name} got an empty FeatureCollection (nothing to draw)")
         if (
@@ -178,6 +236,9 @@ class VectorMixin(_MixinBase):
         # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
         # edges as `scheme`, which must never be stringified into this comparison.
         categorical = isinstance(scheme, str) and scheme.lower() == "categorical"
+        # Any scheme — categorical or graduated — puts a missing value outside every class, so it is the
+        # classified layers (not the continuous ramp) that need the neutral "bad" colour.
+        classified = scheme is not None
         opts.setdefault(
             "add_colorbar", categorical
         )  # the Scene owns the colorbar; the glyph owns the legend
@@ -205,12 +266,13 @@ class VectorMixin(_MixinBase):
                 polygons, values=values, ax=self.ax, fig=self.fig, **opts
             )
             artist = self._render_glyph(glyph, artist="plot", **plot_style)
-            if categorical:
+            if classified:
                 _draw_missing_neutral(artist)
             return artist
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
 
+    @_skips_off_limb
     def scatter(
         self,
         features: Any,
@@ -239,6 +301,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The scatter ``PathCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             TypeError: if both ``size_column`` and the deprecated ``scale`` are passed, or both
@@ -283,7 +347,14 @@ class VectorMixin(_MixinBase):
         )
         return self._render_glyph(glyph, artist="plot", **plot_style)
 
-    def grid_points(self, dataset: Any, **opts) -> Any:
+    def grid_points(
+        self,
+        dataset: Any,
+        *,
+        _alias_caller: str = "Map.grid_points()",
+        _alias_depth: int = 5,
+        **opts,
+    ) -> Any:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
 
         Args:
@@ -323,8 +394,10 @@ class VectorMixin(_MixinBase):
         z = xyz.iloc[:, 2].to_numpy()
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+        # The caller and frame depth are parameters because :meth:`point_cloud` delegates here: a
+        # deprecation warning must name the method the user actually called, and point at their line.
         _resolve_marker_size(
-            opts, plot_style, "Map.grid_points()"
+            opts, plot_style, _alias_caller, depth=_alias_depth
         )  # `size` -> cleopatra's `point_size`
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", **plot_style)
@@ -337,7 +410,12 @@ class VectorMixin(_MixinBase):
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
         """
-        return self.grid_points(dataset, **opts)
+        return self.grid_points(
+            dataset,
+            _alias_caller="Map.point_cloud()",
+            _alias_depth=6,  # one frame further out than grid_points: this alias delegates to it
+            **opts,
+        )
 
     def grid_cells(self, dataset: Any, band: int = 1, **opts) -> Any:
         """Draw raster cells as value-coloured polygons (pyramids ``get_cell_polygons`` → ``PolygonGlyph``).
@@ -515,7 +593,7 @@ class VectorMixin(_MixinBase):
                 xyz.iloc[:, 1].to_numpy(),
                 xyz.iloc[:, 2].to_numpy(),
             )
-        src = get_source(data.to_crs(self.crs))
+        src = get_source(reproject(data, self.crs))
         if src.z is None:
             raise ValueError("FeatureCollection has no numeric value column to contour")
         return src.x.values, src.y.values, src.z.values
@@ -678,6 +756,7 @@ class VectorMixin(_MixinBase):
             return kept, None
         return kept, np.asarray(values)[keep]
 
+    @_skips_off_limb
     def choropleth(
         self,
         features: Any,
@@ -715,6 +794,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Examples:
             - Colour buffered point features by their ``fid`` column and count the drawn polygons:
@@ -759,6 +840,7 @@ class VectorMixin(_MixinBase):
             opts["scheme"], opts["k"] = scheme, k
         return self._polygon_layer(polygons, values, **opts)
 
+    @_skips_off_limb
     def shapes(self, features: Any, **opts) -> Any:
         """Draw polygon outlines without fill (pyramids ``FeatureCollection`` → ``PolygonGlyph`` outline mode).
 
@@ -768,6 +850,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
         """
         gdf = self._vector_input(
             features,
@@ -824,6 +908,7 @@ class VectorMixin(_MixinBase):
             values = np.asarray(values)[mask]
         return xs[mask], ys[mask], values
 
+    @_skips_off_limb
     def voronoi(
         self, features: Any, column: Optional[str] = None, *, clip: Any = None, **opts
     ) -> Any:
@@ -848,6 +933,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries.
@@ -917,6 +1004,7 @@ class VectorMixin(_MixinBase):
             return lo + (values - vmin) * (hi - lo) / (vmax - vmin)
         return np.full(values.shape, (lo + hi) / 2.0)
 
+    @_skips_off_limb
     def cartogram(
         self,
         features: Any,
@@ -945,6 +1033,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: if ``features`` contains non-polygon geometry.
@@ -1047,6 +1137,7 @@ class VectorMixin(_MixinBase):
                 stack.append((qx0, qy0, qx1, qy1, qidx, depth + 1))
         return out
 
+    @_skips_off_limb
     def quadtree(
         self,
         features: Any,
@@ -1080,6 +1171,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries, or ``agg`` is an unknown name.
@@ -1201,6 +1294,7 @@ class VectorMixin(_MixinBase):
             return None
         return MplPath(np.asarray(verts), codes)
 
+    @_skips_off_limb
     def kde(self, features: Any, *, clip: Any = None, **opts) -> Any:
         """2-D kernel-density (isochrone) plot of a point ``FeatureCollection`` (pyramids points → ``KDEGlyph``).
 
@@ -1216,6 +1310,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The contour set (``QuadContourSet``) registered as a Scene layer.
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: if ``features`` is not all single ``Point`` geometries.
@@ -1257,6 +1353,7 @@ class VectorMixin(_MixinBase):
         )
         return self._render_glyph(glyph, artist="plot", **plot_style)
 
+    @_skips_off_limb
     def sankey(
         self,
         features: Any,
@@ -1279,6 +1376,8 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The ``LineCollection`` (registered as a Scene layer).
+            ``None`` instead when the data lies entirely outside what the display CRS shows:
+            an off-limb draw renders an empty frame rather than raising.
 
         Raises:
             ValueError: if ``features`` contains non-line geometry.

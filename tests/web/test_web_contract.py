@@ -837,6 +837,79 @@ class TestC7OffLimbSkipsAndWarns:
         with pytest.raises(OffLimbError):
             WebMap(strict=True).add_raster(object())
 
+    @staticmethod
+    def _off_limb_features():
+        """A FeatureCollection whose orthographic coordinates lie off the projection's disc.
+
+        Every coordinate is outside what an orthographic CRS can invert, so the warp into the tier's
+        lon/lat display CRS really does hand back infinities — the condition the contract turns on, driven
+        here rather than monkeypatched, because a patched ``reproject`` cannot notice a builder that never
+        calls it (which is exactly what this tier did).
+
+        Returns:
+            FeatureCollection: point geometries carrying a numeric ``v``.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        ortho = "+proj=ortho +lat_0=0 +lon_0=0 +datum=WGS84 +units=m +no_defs"
+        return FeatureCollection(
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0]},
+                geometry=[Point(5e7, 5e7), Point(6e7, 6e7)],
+                crs=ortho,
+            )
+        )
+
+    def test_an_off_limb_vector_layer_reaches_the_policy(self, warning_log):
+        """A vector warp that places nothing is announced, naming the builder (H3).
+
+        Test scenario:
+            ``_display_gdf`` called ``to_crs`` directly, and a vector warp does not raise when it places
+            nothing — it returns ``inf`` coordinates and says so nowhere. The layer was built from those
+            infinities in silence, so the tier's whole skip-and-warn policy never applied to vector data.
+        """
+        pytest.importorskip("maplibre")
+        m = WebMap().basemap()
+        m.points(self._off_limb_features())
+        assert any("points" in line for line in warning_log), (
+            f"the skip has to name the builder; got {warning_log!r}"
+        )
+
+    def test_strict_raises_off_limb_for_a_vector_layer(self):
+        """Under ``strict=True`` the same vector warp raises, as it already did for a raster (H3)."""
+        pytest.importorskip("maplibre")
+        with pytest.raises(OffLimbError):
+            WebMap(strict=True).points(self._off_limb_features())
+
+    def test_a_skip_with_no_exception_behind_it_still_raises_off_limb(self):
+        """Every strict refusal is one type, whatever the reason behind it (M6).
+
+        Test scenario:
+            Four builders skip for reasons that carry no exception — corners that will not express as
+            lon/lat (twice), a contour trace with no level in range, an unplaceable time step. Under
+            ``strict`` they raised a bare ``ValueError`` while the other three tiers raised ``OffLimbError``,
+            so ``except OffLimbError`` around a strict map silently missed them.
+        """
+        with pytest.raises(OffLimbError, match="add_raster: nothing to place"):
+            WebMap(strict=True)._skipped("add_raster", "nothing to place")
+
+    def test_the_shared_exception_type_is_not_a_value_error(self):
+        """Naming the change: ``OffLimbError`` derives from ``RuntimeError``, so it is not a ``ValueError``.
+
+        Test scenario:
+            A caller who wrote ``except ValueError`` against this tier's old bare raise no longer catches
+            these four skips. That break is the point — one type across the tiers — and it is pinned here
+            so the base class cannot drift back without this saying so.
+        """
+        assert issubclass(OffLimbError, RuntimeError), (
+            "the shared signal is a RuntimeError on every tier"
+        )
+        assert not issubclass(OffLimbError, ValueError), (
+            "an `except ValueError` no longer catches the web tier's strict refusals"
+        )
+
 
 class TestC8TheBigDataCutoff:
     """One name, two reaches: the map's attribute and a single call's override."""

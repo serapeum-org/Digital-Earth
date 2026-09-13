@@ -10,6 +10,7 @@ import base64
 import numpy as np
 import pytest
 
+from digitalearth.base.crs import OffLimbError
 from digitalearth.web import WebMap
 
 _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -228,5 +229,6 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
         """
         monkeypatch.setattr(WebMap, "_as_lonlat", lambda self, *bounds: None)
         m = WebMap(strict=True).basemap()
-        with pytest.raises(ValueError, match="cannot be expressed in lon/lat"):
+        # OffLimbError, not a bare ValueError: one exception type across the four tiers (M6).
+        with pytest.raises(OffLimbError, match="cannot be expressed in lon/lat"):
             self._call(m, builder, dataset)
