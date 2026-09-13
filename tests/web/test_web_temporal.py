@@ -953,3 +953,39 @@ class TestASavedTemporalMapIsSteppable:
 
         payload = self._payload(WebMap().basemap().add_raster(dataset).to_html())
         assert "LayerSwitcherControl" not in payload
+
+
+class TestASingleStepGetsNoSwitcher:
+    """The export control is for a *series*; one step is not one."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    def test_one_member_adds_no_control(self, tmp_path):
+        """A switcher listing a single layer is noise, and implies steps that are not there.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+        """
+        import numpy as np
+        from pyramids.base.georeference import GeoReference
+        from pyramids.dataset import Dataset
+        from pyramids.dataset.collection import DatasetCollection
+
+        from digitalearth.web import WebMap
+
+        geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+        _, xx = np.mgrid[0:8, 0:9]
+        path = tmp_path / "only.tif"
+        Dataset.from_array(
+            (xx / 10.0).astype("float32"), geo_ref=geo_ref, no_data_value=-9999.0
+        ).to_file(str(path))
+
+        m = WebMap().basemap().timeslider(DatasetCollection.from_files([str(path)]))
+        html = m.to_html()
+        payload = html[html.rfind("var data = ") :]
+        assert "LayerSwitcherControl" not in payload, (
+            "a one-step stack got a step picker"
+        )

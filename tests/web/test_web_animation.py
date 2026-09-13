@@ -217,3 +217,186 @@ class TestSaveDispatch:
         out = tmp_path / "out.html"
         WebMap().basemap().save(str(out))
         assert out.read_text(encoding="utf-8").lstrip().startswith("<")
+
+
+class TestTheAnimationOrchestration:
+    """`to_gif` drives the step visibility, renders each frame and encodes them.
+
+    The screenshot itself needs a headless browser, which is deliberately not a declared dependency — so
+    only that one step is faked here. Everything around it is the real code: the frame enumeration, the
+    per-frame visibility, the temporary directory, and the encode.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _fake_renderer(seen):
+        """Return a stand-in for ``_render_png`` that records its widget and writes a real PNG.
+
+        Args:
+            seen: A list the stand-in appends one record to per frame.
+
+        Returns:
+            A function with ``_render_png``'s signature.
+        """
+
+        def render(self, path, *, title="", **kwargs):
+            """Write a 4x4 PNG and record which layers the handed-in widget left visible."""
+            widget = kwargs.get("widget")
+            calls = getattr(widget, "_visibility_calls", None)
+            seen.append({"path": str(path), "title": title, "visibility": calls})
+            shade = len(seen) * 40
+            Image.fromarray(np.full((4, 4, 3), shade, dtype="uint8")).save(path)
+            return str(path)
+
+        return render
+
+    @pytest.fixture
+    def spy_widget(self, monkeypatch):
+        """Make built widgets record their ``set_visibility`` calls.
+
+        Args:
+            monkeypatch: pytest's patcher.
+
+        Returns:
+            None; the recording is read off each widget as ``_visibility_calls``.
+        """
+        from digitalearth.web import WebMap
+
+        original = WebMap._build_map_widget
+
+        def build(self):
+            """Build the real widget, then wrap its visibility setter to record calls."""
+            widget = original(self)
+            widget._visibility_calls = {}
+            inner = widget.set_visibility
+
+            def set_visibility(layer_id, visible=True):
+                """Record the call, then apply it."""
+                widget._visibility_calls[layer_id] = visible
+                return inner(layer_id, visible)
+
+            widget.set_visibility = set_visibility
+            return widget
+
+        monkeypatch.setattr(WebMap, "_build_map_widget", build)
+
+    def test_it_writes_one_frame_per_step(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """Three steps must produce a three-frame GIF, not one frame or four.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+        """
+        from digitalearth.web import WebMap
+
+        seen = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
+        out = tmp_path / "series.gif"
+        m = WebMap().basemap().timeslider(raster_stack)
+        m.to_gif(str(out))
+
+        assert len(seen) == 3, f"expected one frame per step, rendered {len(seen)}"
+        with Image.open(out) as animation:
+            assert animation.n_frames == 3, animation.n_frames
+
+    def test_each_frame_shows_exactly_one_step(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """A frame showing two steps at once is the stack piled up, not an animation.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+        """
+        from digitalearth.web import WebMap
+
+        seen = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
+        m = WebMap().basemap().timeslider(raster_stack)
+        steps = list(m._temporal["layer_ids"])
+        m.to_gif(str(tmp_path / "series.gif"))
+
+        for index, record in enumerate(seen):
+            visible = [layer for layer, shown in record["visibility"].items() if shown]
+            assert visible == [steps[index]], (
+                f"frame {index} showed {visible}, expected only {steps[index]}"
+            )
+
+    def test_it_returns_the_path_and_leaves_no_temporary_files(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """The frames live in a TemporaryDirectory that has to be gone afterwards.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+
+        Test scenario:
+            An unclosed frame keeps a Windows handle on that directory, so cleanup failing is the
+            symptom this guards.
+        """
+        from digitalearth.web import WebMap
+
+        seen = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
+        out = tmp_path / "series.gif"
+        m = WebMap().basemap().timeslider(raster_stack)
+
+        assert m.to_gif(str(out)) == str(out)
+        assert out.exists()
+        for record in seen:
+            assert not pathlib.Path(record["path"]).exists(), (
+                "a frame outlived its directory"
+            )
+
+    def test_the_title_reaches_every_frame(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """Each frame is its own rendered page, so the title has to be passed through per frame.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+        """
+        from digitalearth.web import WebMap
+
+        seen = []
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer(seen))
+        m = WebMap().basemap().timeslider(raster_stack)
+        m.to_gif(str(tmp_path / "series.gif"), title="Rainfall")
+
+        assert {record["title"] for record in seen} == {"Rainfall"}, seen
+
+    def test_save_with_a_gif_suffix_runs_the_real_animation(
+        self, raster_stack, tmp_path, monkeypatch, spy_widget
+    ):
+        """The dispatch test elsewhere fakes `to_gif`; this one runs it for real through `save`.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+            tmp_path: pytest's per-test directory.
+            monkeypatch: pytest's patcher.
+            spy_widget: Records each widget's visibility calls.
+        """
+        from digitalearth.web import WebMap
+
+        monkeypatch.setattr(WebMap, "_render_png", self._fake_renderer([]))
+        out = tmp_path / "viasave.gif"
+        WebMap().basemap().timeslider(raster_stack).save(str(out))
+
+        with Image.open(out) as animation:
+            assert animation.n_frames == 3, animation.n_frames

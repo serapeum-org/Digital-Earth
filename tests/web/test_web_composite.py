@@ -146,6 +146,142 @@ class TestTheCompositeOnTheMap:
         uri = m._composite_png_datauri(expected)
         m.basemap().rgb_composite(dataset, bands=bands)
         html = m.to_html()
-        assert uri.split(",", 1)[1][:64] in html, (
+        # The whole base64 payload, not a prefix: a PNG's first bytes are the header and the IHDR
+        # dimensions, which two different images of the same size share.
+        assert uri.split(",", 1)[1] in html, (
             "the drawn composite is not the shared stretch"
+        )
+
+
+def _source_with(y_values):
+    """Build a stand-in source exposing only the coordinate arrays the raster builders read.
+
+    Args:
+        y_values: The y coordinates, ascending or descending.
+
+    Returns:
+        An object with ``.x.values`` and ``.y.values``.
+    """
+    import numpy as np
+
+    axis = type("Axis", (), {})
+    x, y = axis(), axis()
+    x.values = np.array([0.0, 1.0])
+    y.values = np.asarray(y_values, dtype=float)
+    return type("Source", (), {"x": x, "y": y})()
+
+
+class TestTheCompositeSizeWarning:
+    """The inline data-URI path has a ceiling, and a caller past it needs to hear about it."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _capture():
+        """Attach a loguru sink for warnings.
+
+        Returns:
+            ``(records, sink_id)`` — the list the sink fills, and the handle to remove it afterwards.
+        """
+        from loguru import logger
+
+        records = []
+        return records, logger.add(records.append, level="WARNING")
+
+    def test_an_oversized_composite_warns(self, dataset, monkeypatch):
+        """The warning is all that stands between a caller and a hundreds-of-MB page.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher, used to lower the ceiling rather than build a huge raster.
+
+        Test scenario:
+            Three bands inline as three times the data of one, so the check is on the stack's size.
+        """
+        from loguru import logger
+
+        from digitalearth.web import raster as raster_module
+
+        monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        records, sink_id = self._capture()
+        try:
+            WebMap().basemap().rgb_composite(dataset, bands=(1, 1, 1))
+        finally:
+            logger.remove(sink_id)
+        assert any("rgb_composite" in str(r) for r in records), records
+
+    def test_a_small_composite_stays_quiet(self, dataset):
+        """A warning on every composite would train the caller to ignore it.
+
+        Args:
+            dataset: The shared pyramids raster fixture, far below the ceiling.
+        """
+        from loguru import logger
+
+        records, sink_id = self._capture()
+        try:
+            WebMap().basemap().rgb_composite(dataset, bands=(1, 1, 1))
+        finally:
+            logger.remove(sink_id)
+        assert not [r for r in records if "rgb_composite" in str(r)], records
+
+
+class TestNorthUpOrientation:
+    """PNG row 0 is the northern edge, so a source whose rows run south-first has to be flipped."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @pytest.mark.parametrize(
+        "y_values, flipped",
+        [([1.0, 0.0], False), ([0.0, 1.0], True)],
+    )
+    def test_rows_are_ordered_north_first(
+        self, dataset, monkeypatch, y_values, flipped
+    ):
+        """An ascending y means row 0 is the south edge, which renders the image upside down.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher, used to hand the builder a source with a chosen y order.
+            y_values: The coordinate order the source reports.
+            flipped: Whether the stack should be reversed before encoding.
+
+        Test scenario:
+            The encoded pixels are compared against the orientation that *should* be drawn, so the test
+            fails both when the flip is missing and when it happens for a north-up source.
+        """
+        import numpy as np
+
+        from digitalearth.base.sources import get_stack
+        from digitalearth.base.stretch import stretch_to_unit
+
+        source = _source_with(y_values)
+        monkeypatch.setattr(
+            WebMap, "_to_display_source", lambda self, data, band=1: source
+        )
+
+        captured = {}
+        encoder = WebMap._composite_png_datauri
+
+        def spy(unit_stack):
+            """Record the stack handed to the encoder, then encode it normally."""
+            captured["stack"] = np.array(unit_stack, copy=True)
+            return encoder(unit_stack)
+
+        monkeypatch.setattr(WebMap, "_composite_png_datauri", staticmethod(spy))
+
+        m = WebMap()
+        stack = stretch_to_unit(
+            get_stack(m._to_display_raster(dataset), (1, 1, 1), mask=True)
+        )
+        m.basemap().rgb_composite(dataset, bands=(1, 1, 1))
+        expected = stack[::-1] if flipped else stack
+        assert np.allclose(captured["stack"], expected, equal_nan=True), (
+            f"rows are not north-first for y={y_values}"
         )
