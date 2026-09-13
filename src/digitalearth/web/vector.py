@@ -19,6 +19,11 @@ from loguru import logger
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import _require_layer_api
 
+#: Flat colour a vector layer falls back on when the caller pins neither `color=` nor a value column.
+#: The builders repeat it as a parameter default so it shows in a rendered signature; this is the name
+#: the internals use when they have to supply it themselves.
+CONTOUR_COLOR = "#3388ff"
+
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.web.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
@@ -273,6 +278,89 @@ class VectorMixin(_MixinBase):
             layout=layout,
         )
 
+    def _contour_levels(
+        self, source: Any, *, interval: Optional[float], levels: Optional[Any]
+    ) -> Optional[Any]:
+        """Settle which iso-values `contours` traces, refusing the two ways of asking that cannot combine.
+
+        Args:
+            source: The display-CRS `Source` for the band being traced, consulted for an auto-style default.
+            interval: The caller's spacing between levels, or `None`.
+            levels: The caller's explicit level list, or `None` to fall back on the variable's own levels.
+
+        Returns:
+            The levels to trace, or `None` when `interval` decides the spacing instead.
+
+        Raises:
+            ValueError: when both `interval` and `levels` were given, or when neither was and the band's
+                variable is not one `auto_style` carries levels for.
+        """
+        if interval is not None:
+            if levels is not None:
+                raise ValueError(
+                    "contours() takes at most one of interval= or levels=; "
+                    f"got interval={interval!r} and levels={levels!r}"
+                )
+            return None
+        resolved = self._auto_levels(source, levels)
+        if resolved is None:
+            raise ValueError(
+                "contours() needs interval= or levels=: neither was given, and the band's variable "
+                f"({source.metadata('variable')!r}) is not one auto_style carries levels for."
+            )
+        return resolved
+
+    def _draw_contour_features(
+        self,
+        features: Any,
+        *,
+        filled: bool,
+        column: Optional[str],
+        cmap: str,
+        color: Optional[str],
+        width: float,
+        opacity: float,
+        name: Optional[str],
+        visible: bool,
+    ) -> None:
+        """Hand the traced features to the polygon or line builder, whichever `filled` asked for.
+
+        Args:
+            features: The `FeatureCollection` pyramids traced.
+            filled: Draw the bands between levels as polygons rather than the levels as lines.
+            column: Attribute to colour by, or `None` when an explicit `color` was given.
+            cmap: Colormap for the classified attribute, already resolved by `_auto_cmap`.
+            color: A single flat colour; `None` takes the tier's default contour blue.
+            width: Line width, used only by the line branch.
+            opacity: Layer opacity in `[0, 1]`.
+            name: What a layer switcher calls the layer.
+            visible: Whether the layer starts visible.
+        """
+        flat = color or CONTOUR_COLOR
+        if filled:
+            self.polygons(
+                features,
+                column=column,
+                scheme=None,
+                cmap=cmap,
+                color=flat,
+                opacity=opacity,
+                name=name,
+                visible=visible,
+            )
+            return
+        self.lines(
+            features,
+            column=column,
+            scheme=None,
+            cmap=cmap,
+            color=flat,
+            width=width,
+            opacity=opacity,
+            name=name,
+            visible=visible,
+        )
+
     def contours(
         self,
         dataset: Any,
@@ -347,23 +435,12 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.
             digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
-        if interval is not None and levels is not None:
-            raise ValueError(
-                "contours() takes at most one of interval= or levels=; "
-                f"got interval={interval!r} and levels={levels!r}"
-            )
         data = self._display_raster_or_skip(dataset, layer="contours")
         if data is None:
             return self
         source = self._to_display_source(data, band=band)
         cmap = self._auto_cmap(source, cmap)
-        if interval is None:
-            levels = self._auto_levels(source, levels)
-            if levels is None:
-                raise ValueError(
-                    "contours() needs interval= or levels=: neither was given, and the band's variable "
-                    f"({source.metadata('variable')!r}) is not one auto_style carries levels for."
-                )
+        levels = self._contour_levels(source, interval=interval, levels=levels)
         # Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.
         self.last_units = self._auto_units(source, units)
         features = data.contour(
@@ -389,29 +466,17 @@ class VectorMixin(_MixinBase):
         # colour and label the lower edge — it is what orders the bands.
         attribute = "level_min" if filled else "level"
         column = None if color else attribute
-        if filled:
-            self.polygons(
-                features,
-                column=column,
-                scheme=None,
-                cmap=cmap,
-                color=color or "#3388ff",
-                opacity=opacity,
-                name=name,
-                visible=visible,
-            )
-        else:
-            self.lines(
-                features,
-                column=column,
-                scheme=None,
-                cmap=cmap,
-                color=color or "#3388ff",
-                width=width,
-                opacity=opacity,
-                name=name,
-                visible=visible,
-            )
+        self._draw_contour_features(
+            features,
+            filled=filled,
+            column=column,
+            cmap=cmap,
+            color=color,
+            width=width,
+            opacity=opacity,
+            name=name,
+            visible=visible,
+        )
         if self.last_units and self.last_legend is not None:
             # The classification the sub-builder just recorded describes this raster's values, so the key
             # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.

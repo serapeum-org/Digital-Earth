@@ -37,6 +37,36 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def _check_slider_labels(labels: Optional[Sequence], count: int) -> None:
+    """Refuse a label sequence the slider could not map back to its frames.
+
+    Args:
+        labels: The caller's per-member labels, or `None` to label by integer index.
+        count: How many members the collection holds.
+
+    Raises:
+        ValueError: when the sequence is the wrong length, holds an unhashable label, or repeats one.
+    """
+    if labels is None:
+        return
+    if len(labels) != count:
+        raise ValueError(
+            f"labels has {len(labels)} entries but the collection has {count} members"
+        )
+    try:
+        unique = len(set(labels))
+    except TypeError as err:  # an unhashable label (a list, a dict, …)
+        raise ValueError(
+            "timeslider labels must be hashable so the slider can map a value back to its frame; "
+            f"got {[type(label).__name__ for label in labels]}"
+        ) from err
+    if unique != count:
+        raise ValueError(
+            "timeslider labels must be unique — duplicate labels collapse the slider and make "
+            "the matching frames unreachable"
+        )
+
+
 class TemporalMixin(_MixinBase):
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
@@ -252,23 +282,7 @@ class TemporalMixin(_MixinBase):
             raise ValueError(
                 "timeslider() needs at least one time step, but the collection is empty"
             )
-        if labels is not None:
-            if len(labels) != count:
-                raise ValueError(
-                    f"labels has {len(labels)} entries but the collection has {count} members"
-                )
-            try:
-                unique = len(set(labels))
-            except TypeError as err:  # an unhashable label (a list, a dict, …)
-                raise ValueError(
-                    "timeslider labels must be hashable so the slider can map a value back to its frame; "
-                    f"got {[type(label).__name__ for label in labels]}"
-                ) from err
-            if unique != count:
-                raise ValueError(
-                    "timeslider labels must be unique — duplicate labels collapse the slider and make "
-                    "the matching frames unreachable"
-                )
+        _check_slider_labels(labels, count)
         try:
             self._check_stack_is_drawable(members, band)
             vmin, vmax = (
