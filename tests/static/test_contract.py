@@ -198,8 +198,8 @@ class TestFrameRateDefault:
 class TestMarkerSizeAndColumn:
     """C3 — ``size`` is a marker's size; the column that varies it is ``column``."""
 
-    def test_column_scales_the_markers(self, points_fc):
-        """scatter(column=...) maps the column's values across ``size_limits``.
+    def test_size_column_scales_the_markers(self, points_fc):
+        """scatter(size_column=...) maps the column's values across ``size_limits``.
 
         Args:
             points_fc: The committed point fixture.
@@ -208,7 +208,7 @@ class TestMarkerSizeAndColumn:
             The parameter renamed from ``scale`` still drives per-point marker area.
         """
         pc = Map(crs=points_fc.epsg).scatter(
-            points_fc, column="fid", size_limits=(20, 200)
+            points_fc, size_column="fid", size_limits=(20, 200)
         )
         sizes = np.asarray(pc.get_sizes())
         assert sizes.min() == pytest.approx(20) and sizes.max() == pytest.approx(200), (
@@ -237,16 +237,16 @@ class TestMarkerSizeAndColumn:
             points_fc: The committed point fixture.
 
         Test scenario:
-            ``scale="fid"`` produces exactly what ``column="fid"`` produces, and warns once.
+            ``scale="fid"`` produces exactly what ``size_column="fid"`` produces, and warns once.
         """
         with pytest.warns(
-            DeprecationWarning, match=r"scale= is deprecated.*use column="
+            DeprecationWarning, match=r"scale= is deprecated.*use size_column="
         ):
             deprecated = Map(crs=points_fc.epsg).scatter(
                 points_fc, scale="fid", size_limits=(20, 200)
             )
         renamed = Map(crs=points_fc.epsg).scatter(
-            points_fc, column="fid", size_limits=(20, 200)
+            points_fc, size_column="fid", size_limits=(20, 200)
         )
         assert np.allclose(deprecated.get_sizes(), renamed.get_sizes()), (
             "the deprecated spelling no longer does what the new one does"
@@ -272,7 +272,7 @@ class TestMarkerSizeAndColumn:
     @pytest.mark.parametrize(
         "kwargs, new_name, old_name",
         [
-            ({"column": "fid", "scale": "fid"}, "column", "scale"),
+            ({"size_column": "fid", "scale": "fid"}, "size_column", "scale"),
             ({"size": 20, "point_size": 77}, "size", "point_size"),
         ],
     )
@@ -709,7 +709,7 @@ def test_no_deprecation_warning_on_the_modern_spellings(points_fc, recwarn):
     """
     with warnings.catch_warnings():
         warnings.simplefilter("always")
-        Map(crs=points_fc.epsg).scatter(points_fc, column="fid", size=30)
+        Map(crs=points_fc.epsg).scatter(points_fc, size_column="fid", size=30)
     assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)], (
         "the modern spellings must not warn"
     )

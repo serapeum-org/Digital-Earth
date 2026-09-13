@@ -215,19 +215,19 @@ class VectorMixin(_MixinBase):
         self,
         features: Any,
         *,
-        column: Optional[str] = None,
+        size_column: Optional[str] = None,
         scale: Optional[str] = None,
         **opts,
     ) -> Any:
-        """Plot a pyramids ``FeatureCollection`` of points, coloured by its value column (``ScatterGlyph``).
+        """Plot a pyramids ``FeatureCollection`` of points, sized by a column (``ScatterGlyph``).
 
         Args:
             features: A pyramids ``FeatureCollection`` (point geometries); reprojected to the display CRS.
-            column: Optional column name whose values set the per-point marker size. Pair it with
+            size_column: Optional column name whose values set the per-point marker size. Pair it with
                 ``size_legend=True`` (and optionally ``size_limits`` / ``size_scale``) to draw a size
                 legend. ``None`` (default) uses a single uniform marker size — set that size with
                 ``size`` (which every backend spells the same way).
-            scale: Deprecated spelling of ``column``; it names a column, not a magnification, and ``size``
+            scale: Deprecated spelling of ``size_column``; it names a column, not a magnification, and ``size``
                 is what sets a marker's visual size on every backend. Still accepted (with a
                 ``DeprecationWarning``) for one release.
             **opts: Styling kwargs forwarded to ``ScatterGlyph`` (``cmap``, ``scheme``, ``k``, ``size``,
@@ -241,24 +241,32 @@ class VectorMixin(_MixinBase):
             The scatter ``PathCollection`` (registered as a Scene layer).
 
         Raises:
-            TypeError: if both ``column`` and the deprecated ``scale`` are passed, or both
+            TypeError: if both ``size_column`` and the deprecated ``scale`` are passed, or both
                 ``size`` and the deprecated ``point_size`` — each pair names one parameter,
                 so preferring one silently would drop the other.
 
         Warns:
-            DeprecationWarning: when ``scale=`` is used instead of ``column=``, or when cleopatra's
+            DeprecationWarning: when ``scale=`` is used instead of ``size_column=``, or when cleopatra's
                 ``point_size=`` is used instead of ``size=``. Both old spellings keep working
                 for one release.
         """
-        column = renamed_parameter(
-            new="column", value=column, old="scale", alias=scale, caller="Map.scatter()"
+        size_column = renamed_parameter(
+            new="size_column",
+            value=size_column,
+            old="scale",
+            alias=scale,
+            caller="Map.scatter()",
         )
         fc = self._vector_input(
             features, name="scatter"
         )  # empty-guard; any geometry (centroid fallback) OK
         src = get_source(fc)
         values = src.z.values if src.z is not None else None
-        sizes = np.asarray(fc[column], dtype=float) if column is not None else None
+        sizes = (
+            np.asarray(fc[size_column], dtype=float)
+            if size_column is not None
+            else None
+        )
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
         plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         _resolve_marker_size(

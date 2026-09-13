@@ -3,7 +3,7 @@
 Complements the per-plot test files (``test_voronoi``/``test_cartogram``/``test_quadtree``/``test_kde``/
 ``test_sankey``/``test_scale_legend``/``test_scheme``) with the scenarios they did not cover: quadtree aggregation
 variants + ``nmin``, Multi-geometry expansion (cartogram/sankey), empty-FeatureCollection and clipped/globe-CRS
-edge cases, the value→size alignment of ``scatter(column=...)``, and direct unit tests of the private helpers.
+edge cases, the value→size alignment of ``scatter(size_column=...)``, and direct unit tests of the private helpers.
 """
 
 import geopandas as gpd
@@ -162,14 +162,14 @@ class TestSankeyMultiLineString:
 
 
 class TestScatterScaleAlignment:
-    """Map.scatter(column=...) maps marker size to the right point (positional alignment)."""
+    """Map.scatter(size_column=...) maps marker size to the right point (positional alignment)."""
 
     def test_sizes_align_with_size_column(self):
         """Per-point marker areas rank-match the size column in row order."""
         pts = [Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)]
         s = [4.0, 1.0, 3.0, 2.0]
         fc = _fc(gpd.GeoDataFrame({"s": s}, geometry=pts, crs="EPSG:32618"))
-        pc = Map(crs=fc.epsg).scatter(fc, column="s", size_limits=(10, 200))
+        pc = Map(crs=fc.epsg).scatter(fc, size_column="s", size_limits=(10, 200))
         sizes = np.asarray(pc.get_sizes())
         assert np.argsort(sizes).tolist() == np.argsort(s).tolist(), (
             "sizes not aligned to size column order"
