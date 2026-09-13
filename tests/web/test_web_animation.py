@@ -268,9 +268,13 @@ class TestTheAnimationOrchestration:
 
         original = WebMap._build_map_widget
 
-        def build(self):
-            """Build the real widget, then wrap its visibility setter to record calls."""
-            widget = original(self)
+        def build(self, *, with_controls=True):
+            """Build the real widget, then wrap its visibility setter to record calls.
+
+            Args:
+                with_controls: Passed through; export paths build frames without the step picker.
+            """
+            widget = original(self, with_controls=with_controls)
             widget._visibility_calls = {}
             inner = widget.set_visibility
 

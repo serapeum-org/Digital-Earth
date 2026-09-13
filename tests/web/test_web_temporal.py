@@ -917,7 +917,7 @@ class TestASavedTemporalMapIsSteppable:
             "no way to change step in the saved page"
         )
         for layer_id in m._temporal["layer_ids"]:
-            assert layer_id in payload, f"step layer {layer_id} is unreachable"
+            assert f'"{layer_id}"' in payload, f"step layer {layer_id} is unreachable"
 
     def test_the_steps_are_labelled_with_their_times(self, raster_stack):
         """A switch listing raster-7/raster-9 tells a viewer nothing about which year it is.
@@ -928,8 +928,10 @@ class TestASavedTemporalMapIsSteppable:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().timeslider(raster_stack, labels=["2020", "2021", "2022"])
-        m.to_html()
-        assert [label for _, label in m._layer_index] == ["2020", "2021", "2022"]
+        payload = self._payload(m.to_html())
+        assert '"layerIds": ["2020", "2021", "2022"]' in payload, (
+            "the step picker captions its rows with the layer ids, so the years must be the ids"
+        )
 
     def test_building_twice_does_not_stack_controls(self, raster_stack):
         """`render` and `save` both build the widget, and a page with three switchers is a bug.

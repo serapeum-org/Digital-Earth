@@ -270,6 +270,9 @@ class TemporalMixin(_MixinBase):
         self._check_stack_is_drawable(members, band)
 
         vmin, vmax = clim if clim is not None else self._global_clim(collection, band)
+        step_names = [
+            str(value) for value in (labels if labels is not None else range(count))
+        ]
         layer_ids: List[str] = []
         for index, member in enumerate(members):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
@@ -282,6 +285,8 @@ class TemporalMixin(_MixinBase):
                 vmin=vmin,
                 vmax=vmax,
                 visible=index == 0,
+                # The switcher captions each row with the layer id, so the step's label has to *be* it.
+                name=step_names[index],
             )
             layer_ids.append(self._last_layer_id)
 
@@ -355,14 +360,14 @@ class TemporalMixin(_MixinBase):
             return
         if config.get("export_control_added"):
             return  # render() and save() both build the widget; the control is added once, not per build
-        layer_ids = list(config.get("layer_ids") or [])
+        if self._has_layer_switcher:
+            return  # the caller added their own; a second identical panel in the same corner is a bug
+        # Only the steps still on the map: remove_layer() prunes the config, but a caller can also drop a
+        # step layer directly, and a render-time helper must not raise about state it merely observes.
+        live = set(self.layer_ids)
+        layer_ids = [i for i in (config.get("layer_ids") or []) if i in live]
         if len(layer_ids) < 2:
             return  # one step is not a series; a switcher over it would be noise
-        times = [str(value) for value in config.get("times") or []]
-        for layer_id, label in zip(layer_ids, times):
-            for index, (existing, _) in enumerate(self._layer_index):
-                if existing == layer_id:
-                    self._layer_index[index] = (existing, label)
         self.layer_control(layer_ids=layer_ids)
         config["export_control_added"] = True
 

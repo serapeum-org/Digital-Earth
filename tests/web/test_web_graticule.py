@@ -112,16 +112,42 @@ class TestTheGridOnTheMap:
         assert "symbol-placement" in with_labels
         assert "symbol-placement" not in without
 
-    def test_it_sits_under_the_data(self):
-        """A grid drawn over a choropleth reads as part of the data."""
+    def test_it_is_drawn_over_the_basemap_and_under_the_data(self, tmp_path):
+        """The band matters in both directions, and only the emitted order proves it.
+
+        Args:
+            tmp_path: pytest's per-test directory, unused but keeps the signature uniform.
+
+        Test scenario:
+            An underlay puts the grid *beneath* the opaque basemap tiles, where it cannot be seen — the
+            method's own docstring example, ``basemap().graticule()``, was exactly that case. Appending it
+            instead would draw it over the data. So the assertion is the order of the emitted addLayer
+            calls: basemap, then graticule, then data.
+        """
+        import json
+        import re
+
+        import geopandas as gpd
+        from shapely.geometry import Point
+
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap()
-        before = len(m.layers)
-        m.graticule()
-        assert len(m.layers) == before + 1
-        assert m.layers[0] is not None, (
-            "the graticule was appended rather than underlaid"
+        points = gpd.GeoDataFrame(
+            {"v": [1]}, geometry=[Point(0.0, 0.0)], crs="EPSG:4326"
+        )
+        payload = _payload(WebMap().basemap().points(points).graticule().to_html())
+        ids = re.findall(r'\["addLayer", \[\{"id": "([^"]+)"', payload)
+        assert ids, payload[-400:]
+        kinds = {"tiles": None, "graticule": None, "circle": None}
+        for position, layer_id in enumerate(ids):
+            for kind in kinds:
+                if layer_id.startswith(kind) and kinds[kind] is None:
+                    kinds[kind] = position
+        assert kinds["tiles"] < kinds["graticule"], (
+            f"the graticule is drawn beneath the basemap: {ids}"
+        )
+        assert kinds["graticule"] < kinds["circle"], (
+            f"the graticule is drawn over the data: {ids}"
         )
 
     def test_it_does_not_decide_where_the_map_looks(self):
@@ -135,8 +161,9 @@ class TestTheGridOnTheMap:
         from digitalearth.web import WebMap
 
         m = WebMap().basemap().graticule()
-        assert len(m.layer_ids) == 1
-        assert m._layer_index[0][1] == "Graticule", m._layer_index
+        assert m.layer_ids == ["Graticule"], m.layer_ids
+        payload = _payload(m.layer_control().to_html())
+        assert '"layerIds": ["Graticule"]' in payload, payload[-300:]
 
     @pytest.mark.parametrize("bad", [0.0, -5.0, 200.0])
     def test_an_impossible_spacing_is_refused(self, bad):

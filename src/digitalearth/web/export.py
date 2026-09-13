@@ -18,6 +18,8 @@ import re
 import tempfile
 from typing import TYPE_CHECKING, Any
 
+from digitalearth.web.base import DEFAULT_TITLE
+
 
 def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
     """Encode PNG frames into an animated GIF.
@@ -52,8 +54,6 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
         loop=int(loop),
     )
 
-
-from digitalearth.web.base import DEFAULT_TITLE
 
 #: CDN asset URLs (js/css) ``to_html`` references, matched for offline inlining.
 _ASSET_RE = re.compile(
@@ -169,8 +169,11 @@ class ExportMixin(_MixinBase):
         # (which would surface unknown-keyword errors from deep inside maplibre). `widget` is the one
         # exception: an animation frame hands in a widget it has already set the step visibility on.
         widget = kwargs.pop("widget", None)
+        kind = kwargs.pop("kind", "PNG")
         _ = kwargs
-        html = (widget or self._build_map_widget()).to_html(title=title)
+        html = (widget or self._build_map_widget(with_controls=False)).to_html(
+            title=title
+        )
         with tempfile.TemporaryDirectory() as tmp:
             html_path = pathlib.Path(tmp) / "map.html"
             html_path.write_text(html, encoding="utf-8")
@@ -182,8 +185,9 @@ class ExportMixin(_MixinBase):
                 except ImportError:
                     continue
         raise ImportError(
-            "PNG export needs a headless browser, which is not part of digitalearth[web]. Install Playwright "
-            "(`pip install playwright && python -m playwright install chromium`) or Selenium + a driver."
+            f"{kind} export needs a headless browser, which is not part of digitalearth[web]. Install "
+            "Playwright (`pip install playwright && python -m playwright install chromium`) or Selenium + "
+            "a driver."
         )
 
     def to_gif(
@@ -228,8 +232,6 @@ class ExportMixin(_MixinBase):
         See Also:
             digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
         """
-        import tempfile
-
         frames = self._temporal_frames()
         with tempfile.TemporaryDirectory() as work:
             images = [
@@ -271,10 +273,10 @@ class ExportMixin(_MixinBase):
         """
         config = self._temporal or {}
         steps = list(config.get("layer_ids") or [])
-        widget = self._build_map_widget()
+        widget = self._build_map_widget(with_controls=False)
         for layer_id in steps:
             widget.set_visibility(layer_id, layer_id in visible)
-        return self._render_png(str(path), title=title, widget=widget)
+        return self._render_png(str(path), title=title, widget=widget, kind="GIF")
 
     @staticmethod
     def _png_via_playwright(url: str, path: str) -> None:

@@ -124,8 +124,12 @@ class TestTheCompositeOnTheMap:
             .basemap()
             .rgb_composite(dataset, bands=(1, 1, 1), name="True colour")
         )
-        assert len(m.layer_ids) == 1
-        assert m._layer_index[0][1] == "True colour"
+        assert m.layer_ids == ["True colour"], m.layer_ids
+        html = m.layer_control().to_html()
+        payload = html[html.rfind("var data = ") :]
+        assert '"layerIds": ["True colour"]' in payload, (
+            "the switcher would caption this row with a generated id"
+        )
 
     def test_the_stretch_matches_the_static_tier(self, dataset):
         """Two tiers that disagree about the same composite would be worse than one lacking it.

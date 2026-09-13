@@ -123,6 +123,7 @@ class BigDataMixin(_MixinBase):
             widget.add_layer(layer)
 
         self._last_layer_id = layer_id
+        self._index_layer(layer_id, None)
         return self.add_layer(layer=apply)
 
     def cluster(
@@ -194,6 +195,9 @@ class BigDataMixin(_MixinBase):
             widget.add_layer(unclustered)
 
         self._last_layer_id = unclustered.id
+        # The bubbles, their counts and the loose points are one thing to a viewer, so the switcher gets
+        # the entry that carries them: toggling the source layer is what turns the cluster display off.
+        self._index_layer(clusters.id, None)
         return self.add_layer(layer=apply)
 
     def _add_deck_layer(self, layer: dict) -> Self:

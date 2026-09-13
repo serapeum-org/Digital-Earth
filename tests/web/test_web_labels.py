@@ -111,7 +111,9 @@ class TestLabelsFromAColumn:
 
         m = WebMap().basemap().points(places).labels(places, "name", name="Names")
         assert len(m.layer_ids) == 2, m.layer_ids
-        assert any("label" in layer_id for layer_id in m.layer_ids), m.layer_ids
+        assert "Names" in m.layer_ids, m.layer_ids
+        payload = _payload(m.layer_control().to_html())
+        assert '"Names"' in payload, "the caller's name never reaches the switcher"
 
 
 class TestASingleAnnotation:

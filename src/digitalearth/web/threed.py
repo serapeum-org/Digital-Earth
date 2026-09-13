@@ -88,6 +88,7 @@ class ThreeDMixin(_MixinBase):
             widget.add_layer(layer)
 
         self._last_layer_id = layer_id
+        self._index_layer(layer_id, None)
         return self.add_layer(layer=apply)
 
     def terrain(

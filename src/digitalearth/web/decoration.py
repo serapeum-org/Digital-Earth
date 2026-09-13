@@ -15,6 +15,7 @@ The ``measure`` tool exposes the drawn geometry for pyramids to compute geodesic
 part).
 """
 
+import html
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.basemaps import (
@@ -52,15 +53,37 @@ _BASEMAP_DISPLAY_NAMES = {
     "osm": "OSM",
 }
 
+#: py-maplibregl's two layer-switcher styles, validated here so a typo is not a pydantic traceback.
+_SWITCHER_THEMES = frozenset({"default", "simple"})
+
 #: The four legal MapLibre control corners.
 _CONTROL_POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right")
 
 
-#: The legend's own styling, kept with the markup that uses it rather than left to the host page.
-_LEGEND_CSS = (
+#: Styling for the small floating panels this tier builds — the legend and the title — kept with the
+#: markup that uses it rather than left to the host page.
+_PANEL_CSS = (
     "background: rgba(255, 255, 255, 0.92); color: #222; padding: 8px 10px; border-radius: 4px; "
     "font: 12px/1.4 system-ui, sans-serif; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); max-width: 220px;"
 )
+
+
+def _text(value: Any) -> str:
+    """Escape a value for the control markup.
+
+    ``InfoBoxControl`` assigns its ``content`` to ``innerHTML``, so every interpolated value is markup
+    until it is escaped — including class values read straight out of a caller's GeoDataFrame column,
+    which is exactly the kind of thing that arrives from a downloaded shapefile. The exported page is
+    meant to be shared, so an unescaped column value is stored XSS in the artifact this tier exists to
+    produce.
+
+    Args:
+        value: Anything destined for the legend or title markup.
+
+    Returns:
+        Its string form with ``&``, ``<``, ``>``, ``"`` and ``'`` escaped.
+    """
+    return html.escape(str(value), quote=True)
 
 
 def _swatch(color: str) -> str:
@@ -74,7 +97,7 @@ def _swatch(color: str) -> str:
     """
     return (
         f'<span style="display:inline-block;width:14px;height:14px;margin-right:6px;'
-        f'vertical-align:-2px;background:{color};border:1px solid rgba(0,0,0,.25)"></span>'
+        f'vertical-align:-2px;background:{_text(color)};border:1px solid rgba(0,0,0,.25)"></span>'
     )
 
 
@@ -109,12 +132,12 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
         labels for a continuous one.
     """
     if kind == "continuous":
-        ramp = ", ".join(colors)
+        ramp = ", ".join(_text(color) for color in colors)
         return (
             f'<div style="height:10px;border-radius:2px;background:linear-gradient(to right,{ramp})"></div>'
             f'<div style="display:flex;justify-content:space-between;margin-top:2px">'
-            f"<span>{_format_number(values[0])}</span>"
-            f"<span>{_format_number(values[-1])}</span></div>"
+            f"<span>{_text(_format_number(values[0]))}</span>"
+            f"<span>{_text(_format_number(values[-1]))}</span></div>"
         )
     if kind == "graduated":
         derived = [
@@ -123,9 +146,14 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
         ]
     else:
         derived = [_format_number(v) for v in values]
+    if labels is not None and len(labels) != len(derived):
+        raise ValueError(
+            f"legend(labels=...) has {len(labels)} entries but the classification has {len(derived)}; "
+            f"zip would drop the difference and leave classes out of the key"
+        )
     text = labels if labels is not None else derived
     return "".join(
-        f'<div style="white-space:nowrap">{_swatch(color)}{label}</div>'
+        f'<div style="white-space:nowrap">{_swatch(color)}{_text(label)}</div>'
         for color, label in zip(colors, text)
     )
 
@@ -439,7 +467,7 @@ class DecorationMixin(_MixinBase):
 
         heading = title if title is not None else spec.get("column") or ""
         head = (
-            f'<div style="font-weight:600;margin-bottom:4px">{heading}</div>'
+            f'<div style="font-weight:600;margin-bottom:4px">{_text(heading)}</div>'
             if heading
             else ""
         )
@@ -448,7 +476,7 @@ class DecorationMixin(_MixinBase):
         )
         control = InfoBoxControl(
             content=f"<div>{head}{rows}</div>",
-            css_text=_LEGEND_CSS,
+            css_text=_PANEL_CSS,
             position=position,
         )
 
@@ -502,6 +530,10 @@ class DecorationMixin(_MixinBase):
         """
         _require_maplibre()
         _check_position(position)
+        if theme not in _SWITCHER_THEMES:
+            raise ValueError(
+                f"layer_control(theme={theme!r}) must be one of {sorted(_SWITCHER_THEMES)}"
+            )
         available = self.layer_ids
         if not available:
             raise ValueError(
@@ -522,6 +554,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
+        self._has_layer_switcher = True
         return self.add_layer(layer=apply)
 
     def text(
@@ -566,7 +599,7 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.labels: label many features from a column.
         """
         Layer, LayerType = _require_layer_api()
-        src_id, layer_id = self._uid("text-src"), self._uid("text")
+        src_id, layer_id = self._uid("text-src"), self._layer_id("text", name)
         source = {
             "type": "geojson",
             "data": {
@@ -635,11 +668,11 @@ class DecorationMixin(_MixinBase):
         _check_position(position)
         from maplibre.controls import InfoBoxControl
 
-        body = f'<div style="font-weight:600;font-size:15px">{heading}</div>'
+        body = f'<div style="font-weight:600;font-size:15px">{_text(heading)}</div>'
         if subtitle:
-            body += f'<div style="opacity:.75;margin-top:2px">{subtitle}</div>'
+            body += f'<div style="opacity:.75;margin-top:2px">{_text(subtitle)}</div>'
         control = InfoBoxControl(
-            content=f"<div>{body}</div>", css_text=_LEGEND_CSS, position=position
+            content=f"<div>{body}</div>", css_text=_PANEL_CSS, position=position
         )
 
         def apply(widget: Any) -> None:
@@ -695,7 +728,8 @@ class DecorationMixin(_MixinBase):
                 f"graticule(spacing={spacing!r}) must be greater than 0 and at most 180 degrees"
             )
         features = _graticule_features(float(spacing))
-        src_id, layer_id = self._uid("graticule-src"), self._uid("graticule")
+        src_id = self._uid("graticule-src")
+        layer_id = self._layer_id("graticule", name or "Graticule")
         source = {"type": "geojson", "data": features}
         line = Layer(
             id=layer_id,
@@ -710,15 +744,19 @@ class DecorationMixin(_MixinBase):
         )
         text = None
         if labels:
+            label_layout: dict = {
+                "text-field": ["get", "label"],
+                "text-size": 10.0,
+                "symbol-placement": "line",
+            }
+            if not visible:
+                # Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.
+                label_layout["visibility"] = "none"
             text = Layer(
                 id=self._uid("graticule-label"),
                 type=LayerType.SYMBOL,
                 source=src_id,
-                layout={
-                    "text-field": ["get", "label"],
-                    "text-size": 10.0,
-                    "symbol-placement": "line",
-                },
+                layout=label_layout,
                 paint={
                     "text-color": color,
                     "text-halo-color": "#000000",
@@ -733,9 +771,11 @@ class DecorationMixin(_MixinBase):
                 widget.add_layer(text)
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._index_layer(layer_id, name or "Graticule")
-        # Reference geography says nothing about where to look, so it does not frame the map.
-        return self.add_underlay(apply)
+        self._index_layer(layer_id, layer_id)
+        # Reference geography says nothing about where to look, so it does not frame the map. It is
+        # added to the reference band: over the basemap (an underlay would be hidden beneath opaque
+        # tiles) and under the data, which it must not obscure.
+        return self.add_reference(apply)
 
     def navigation(
         self,

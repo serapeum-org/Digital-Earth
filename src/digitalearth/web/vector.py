@@ -389,7 +389,8 @@ class VectorMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         Layer, _ = _require_layer_api()
-        src_id, layer_id = self._uid(f"{prefix}-src"), self._uid(prefix)
+        src_id = self._uid(f"{prefix}-src")
+        layer_id = self._layer_id(prefix, name)
         spec_layout = dict(layout) if layout else {}
         if not visible:
             spec_layout["visibility"] = "none"
@@ -463,6 +464,15 @@ class VectorMixin(_MixinBase):
                     "points: big=True routes {} features to a flat deck.gl layer; column={!r} styling is dropped",
                     len(gdf),
                     column,
+                )
+            if name is not None or not visible:
+                # A deck.gl overlay is not a MapLibre style layer: the switcher toggles layers with
+                # setLayoutProperty, which cannot reach it, so it has no registry entry to name or hide.
+                # Dropping these silently would change the API contract at 50 000 features.
+                raise ValueError(
+                    "points(big=True) renders a deck.gl overlay, which the layer registry cannot "
+                    "address — so name= and visible= cannot be honoured. Pass big=False to keep a "
+                    "MapLibre layer, or drop those arguments."
                 )
             return self.deck_scatter(gdf, radius=radius)
         paint: dict = {"circle-radius": float(radius), "circle-opacity": float(opacity)}
@@ -567,6 +577,15 @@ class VectorMixin(_MixinBase):
                     "polygons: big=True routes {} features to a flat deck.gl layer; column={!r} styling is dropped",
                     len(gdf),
                     column,
+                )
+            if name is not None or not visible:
+                # A deck.gl overlay is not a MapLibre style layer: the switcher toggles layers with
+                # setLayoutProperty, which cannot reach it, so it has no registry entry to name or hide.
+                # Dropping these silently would change the API contract at 50 000 features.
+                raise ValueError(
+                    "polygons(big=True) renders a deck.gl overlay, which the layer registry cannot "
+                    "address — so name= and visible= cannot be honoured. Pass big=False to keep a "
+                    "MapLibre layer, or drop those arguments."
                 )
             return self.deck_polygons(gdf)
         paint: dict = {

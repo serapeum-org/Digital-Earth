@@ -88,7 +88,7 @@ class RasterMixin(_MixinBase):
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
         )
 
-        src_id, layer_id = self._uid("raster-src"), self._uid("raster")
+        src_id, layer_id = self._uid("raster-src"), self._layer_id("raster", name)
         spec = {"type": "image", "url": url, "coordinates": coordinates}
         layer = Layer(
             id=layer_id,
@@ -162,13 +162,16 @@ class RasterMixin(_MixinBase):
         require_three_bands("rgb_composite", bands)
         data = self._to_display_raster(dataset)
         stack = get_stack(data, bands, mask=mask_nodata)
-        if stack.size > _LARGE_RASTER_PIXELS * 3:
+        pixels = int(stack.size // max(stack.shape[-1], 1))
+        if pixels > _LARGE_RASTER_PIXELS:
             logger.warning(
                 "rgb_composite: inlining a {}-pixel composite as a data-URI image source bloats the page; "
                 "for large rasters serve COG/XYZ tiles from pyramids instead",
-                stack.size,
+                pixels,
             )
-        source = self._to_display_source(dataset, band=int(bands[0]))
+        # `data` is already in the display CRS; warping `dataset` again here would repeat a multi-second
+        # GDAL warp and take the placement from a second, independent reprojection of the same pixels.
+        source = self._to_display_source(data, band=int(bands[0]))
         y = np.asarray(source.y.values, dtype=float)
         if (
             y.size > 1 and y[0] < y[-1]
@@ -179,7 +182,7 @@ class RasterMixin(_MixinBase):
         self._note_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
         )
-        src_id, layer_id = self._uid("rgb-src"), self._uid("rgb")
+        src_id, layer_id = self._uid("rgb-src"), self._layer_id("rgb", name)
         spec = {"type": "image", "url": url, "coordinates": coordinates}
         layer = Layer(
             id=layer_id,
