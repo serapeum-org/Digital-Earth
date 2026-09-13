@@ -532,10 +532,9 @@ class TestDeprecatedAliases:
             plus the one to keep.
         """
         data = polygon_fc if builder == "polygons" else point_fc
+        build = getattr(InteractiveMap(), builder)
         with pytest.raises(TypeError) as excinfo:
-            getattr(InteractiveMap(), builder)(
-                data, big_data_threshold=10_000, rasterize_threshold=1
-            )
+            build(data, big_data_threshold=10_000, rasterize_threshold=1)
         message = str(excinfo.value)
         assert "both big_data_threshold= and the deprecated rasterize_threshold=" in (
             message
