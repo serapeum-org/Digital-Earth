@@ -699,7 +699,11 @@ class DecorationMixin(_MixinBase):
         saved with ``offline=True`` keeps its grid with no network.
 
         Args:
-            spacing: Degrees between lines. ``10`` gives a readable global grid; ``1`` suits a city.
+            spacing: Degrees between lines. ``10`` gives a readable global grid. The grid is always
+                global — it is not clipped to the view, because a web map is pannable and a grid that
+                stopped at the opening extent would end mid-pan — so a tight spacing is expensive:
+                ``10`` embeds ~43 KiB of GeoJSON, ``1`` embeds ~420 KiB and 521 labels. Prefer the
+                coarsest spacing that reads.
             color: Line colour.
             width: Line width in pixels.
             opacity: Line opacity in ``[0, 1]``; a graticule is reference, so it should sit under the data
@@ -725,6 +729,8 @@ class DecorationMixin(_MixinBase):
         """
         Layer, LayerType = _require_layer_api()
         if spacing <= 0 or spacing > 180:
+            # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,
+            # while anything wider leaves a grid with a single line in it.
             raise ValueError(
                 f"graticule(spacing={spacing!r}) must be greater than 0 and at most 180 degrees"
             )

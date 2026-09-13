@@ -34,7 +34,9 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
         loop: Repeat count; ``0`` loops forever.
 
     Raises:
-        ValueError: when there are no frames to write.
+        ValueError: when there are no frames to write. ``to_gif`` cannot reach this — it refuses a series
+            of fewer than two steps first — but this function is the encoder for any frame list, so it
+            checks rather than writing a GIF with nothing in it.
     """
     from PIL import Image
 

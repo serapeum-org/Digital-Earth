@@ -1,0 +1,87 @@
+# Web maps
+
+`WebMap` renders pyramids rasters and vectors as MapLibre GL JS / deck.gl layers and exports the result as one
+self-contained HTML page.
+
+```python
+from digitalearth.web import WebMap
+
+(
+    WebMap()
+    .basemap()
+    .choropleth(gdf, column="pop", name="Population")
+    .legend(title="People per km²")
+    .layer_control()
+    .title("Population, 2024", subtitle="Source: CBS")
+    .save("map.html")
+)
+```
+
+The map frames itself on the data you gave it, so there is no `center`/`zoom` to work out by hand — pass them
+only when you want a view of your own.
+
+## What this tier is for
+
+Thematic maps, 3-D layers, contours, and sharing the result as one file. It is deliberately **not** a peer of
+the static tier for scientific field rendering: vector/flow fields, unstructured meshes and KDE have no native
+MapLibre primitive and live in `digitalearth.static` and `digitalearth.interactive`.
+
+## Naming layers, and why the name matters
+
+py-maplibregl's layer switcher has no separate label: its JavaScript captions each row with the layer's **id**
+and reads that same string back to toggle it. So a `name=` you pass becomes the layer's id, and that is what a
+viewer reads in the switcher:
+
+```python
+WebMap().basemap().choropleth(gdf, column="pop", name="Population").layer_control()
+# the switcher shows: Population
+```
+
+Without a name a layer gets a generated id (`fill-4`), which is what the switcher would then show. A repeated
+name is suffixed (`Population-2`) because two layers cannot share a MapLibre id. `WebMap.layer_ids` lists them,
+and `remove_layer(id)` drops one.
+
+The big-data path is the exception: past `big_data_threshold` features, `points`/`polygons` render a deck.gl
+overlay, which is not a MapLibre style layer and cannot be reached by the switcher — so `name=` and `visible=`
+are refused there rather than silently dropped.
+
+## Drawing order
+
+Layers sit in three bands, regardless of the order you call the builders in:
+
+1. **basemaps** — `basemap()`, `tiles()`
+2. **reference** — `graticule()`
+3. **data** — everything else, in call order
+
+That is why `.basemap().graticule()` works: a reference grid belongs over the ground and under the data.
+
+## Sharing a page safely
+
+- **A keyed basemap puts its credential in the saved HTML.** See [Keyed basemaps](basemaps.md) — treat such a
+  file as a secret.
+- **Values from your data are escaped** before they reach the legend or the title, so a hostile attribute in a
+  downloaded shapefile cannot inject markup into the page you share.
+
+## Time series
+
+`timeslider(collection)` gives a notebook an `ipywidgets` slider. A **saved** page has no kernel, so it gets a
+step picker instead — the steps are labelled with the times you passed, because those labels become the layer
+ids. `save("out.gif")` writes the steps as an animation, which needs a headless browser (Playwright or
+Selenium); that is deliberately not part of `digitalearth[web]`.
+
+::: digitalearth.web.map.WebMap
+    options:
+      inherited_members: true
+      members:
+        - fit_bounds
+        - layer_ids
+        - layer_control
+        - remove_layer
+        - legend
+        - title
+        - text
+        - labels
+        - graticule
+        - contours
+        - rgb_composite
+        - to_gif

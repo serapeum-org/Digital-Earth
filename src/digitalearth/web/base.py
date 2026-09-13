@@ -20,7 +20,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
-from typing import Any, List, Optional, Self
+from typing import Any, List, Optional, Self, Tuple
 
 from pyramids.base.crs import reproject_coordinates
 
@@ -359,7 +359,7 @@ class WebMapBase:
         #: Every data layer added, in order, as ``(id, label)``. The id addresses the layer in MapLibre;
         #: the label is what a layer switcher shows a viewer. Controls and basemaps are not in here —
         #: they are not things a viewer turns on and off.
-        self._layer_index: List[tuple] = []
+        self._layer_index: List[Tuple[str, str]] = []
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
@@ -466,7 +466,7 @@ class WebMapBase:
         self,
         bounds: Optional[Any] = None,
         *,
-        padding: int = 20,
+        padding: Any = 20,
         animate: bool = False,
     ) -> Self:
         """Frame the map on ``bounds``, or on everything added so far.
@@ -478,7 +478,8 @@ class WebMapBase:
             bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added
                 so far, which is what most callers want and is applied automatically anyway (see
                 :meth:`_map_view`).
-            padding: Pixels of breathing room left around the extent.
+            padding: Breathing room left around the extent — a number of pixels, or MapLibre's
+                per-edge mapping (``{"top": 40, "bottom": 10, ...}``).
             animate: Whether the browser eases into the new view rather than jumping.
 
         Returns:
@@ -506,7 +507,9 @@ class WebMapBase:
         west, south, east, north = (float(value) for value in bounds)
         self._fit = {
             "bounds": [west, south, east, north],
-            "padding": int(padding),
+            # Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a
+            # TypeError about int() rather than about the argument.
+            "padding": padding if isinstance(padding, dict) else int(padding),
             "animate": bool(animate),
         }
         return self
@@ -568,11 +571,12 @@ class WebMapBase:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
                 look exactly like a layer that refused to go away.
         """
-        if layer_id not in self.layer_ids:
+        present = self.layer_ids
+        if layer_id not in present:
             raise KeyError(
-                f"no layer {layer_id!r} on this map; added layers are {self.layer_ids}"
+                f"no layer {layer_id!r} on this map; added layers are {present}"
             )
-        index = self.layer_ids.index(layer_id)
+        index = present.index(layer_id)
         self._layer_index.pop(index)
         self.layers = [
             layer
@@ -733,7 +737,9 @@ class WebMapBase:
             The dataset in the display CRS.
         """
         if hasattr(dataset, "to_crs") and self._needs_reproject(dataset):
-            return dataset.to_crs(self.crs)
+            # Through the tier's own helper, so a dataset that cannot be warped into the display CRS
+            # raises the OffLimbError every other builder raises rather than GDAL's raw RuntimeError.
+            return reproject(dataset, self.crs)
         return dataset
 
     @staticmethod
