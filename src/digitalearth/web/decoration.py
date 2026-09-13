@@ -629,7 +629,8 @@ class DecorationMixin(_MixinBase):
             widget.add_layer(layer)
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._note_bounds((float(lon), float(lat), float(lon), float(lat)))
+        # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
+        # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
         self._index_layer(layer_id, name)
         return self.add_layer(layer=apply)
 

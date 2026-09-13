@@ -201,3 +201,59 @@ class TestTheFramingReachesTheMap:
         assert '"fitBounds"' not in _payload(html), (
             "an explicitly-framed map was re-framed"
         )
+
+
+class TestFramingInANonLonLatDisplayCrs:
+    """M5: `fitBounds` takes degrees, and `WebMap(crs=)` is a supported public setting."""
+
+    def test_a_projected_display_crs_is_converted_before_framing(self, boxes):
+        """Handing metres to `fitBounds` frames the map on nothing, silently.
+
+        Args:
+            boxes: The fixture frame, in EPSG:4326.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap(crs=3857).basemap().choropleth(boxes.to_crs(3857), column="pop")
+        view = m._map_view()
+        assert view is not None, "a projected map lost its framing entirely"
+        west, south, east, north = view["bounds"]
+        assert -180.0 <= west <= 180.0 and -90.0 <= south <= 90.0, view
+        assert round(west) == 4 and round(south) == 51, view
+
+    def test_a_lonlat_display_crs_is_untouched(self, boxes):
+        """The default path must not pay for a reprojection it does not need.
+
+        Args:
+            boxes: The fixture frame.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().choropleth(boxes, column="pop")
+        assert m._map_view()["bounds"] == [4.0, 51.0, 7.0, 53.0]
+
+
+class TestAnAnnotationDoesNotDecideTheView:
+    """M6: `text()` is decoration; a caption should not move the map."""
+
+    def test_a_lone_annotation_does_not_frame_the_map(self):
+        """A zero-area extent resolves to maximum zoom on a point."""
+        from digitalearth.web import WebMap
+
+        assert WebMap().basemap().text(4.9, 52.4, "Amsterdam")._map_view() is None
+
+    def test_an_annotation_does_not_drag_the_extent(self, boxes):
+        """One caption far away used to shrink the data to a speck — the bug fit_bounds cured.
+
+        Args:
+            boxes: The fixture frame, spanning (4, 51, 7, 53).
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(boxes, column="pop")
+            .text(-170.0, -80.0, "far away")
+        )
+        assert m._map_view()["bounds"] == [4.0, 51.0, 7.0, 53.0], m._map_view()

@@ -134,12 +134,17 @@ class TestASingleAnnotation:
         payload = _payload(WebMap().basemap().text(4.9, 52.4, "Amsterdam").to_html())
         assert '"text-allow-overlap": true' in payload
 
-    def test_an_annotation_contributes_to_the_framing(self):
-        """A map whose only content is an annotation should open on it."""
+    def test_an_annotation_does_not_contribute_to_the_framing(self):
+        """Decoration must not decide the view.
+
+        Test scenario:
+            This asserted the opposite when it was written, which encoded the bug: on its own a caption
+            is a zero-area extent, so `fitBounds` resolves it as maximum zoom on a point, and beside real
+            data it drags the extent across the map to reach the caption.
+        """
         from digitalearth.web import WebMap
 
-        m = WebMap().basemap().text(4.9, 52.4, "Amsterdam")
-        assert m._data_bounds == [4.9, 52.4, 4.9, 52.4], m._data_bounds
+        assert WebMap().basemap().text(4.9, 52.4, "Amsterdam")._data_bounds is None
 
 
 class TestTheMapCarriesItsTitle:

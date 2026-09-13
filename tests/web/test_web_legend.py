@@ -191,3 +191,104 @@ class TestTheLegendRefusesWhatItCannotDescribe:
         web_map = WebMap().basemap().choropleth(cells, column="pop")
         with pytest.raises(ValueError):
             web_map.legend(position="middle")
+
+
+class TestNothingInterpolatedIsMarkup:
+    """H3: `InfoBoxControl` assigns its content to `innerHTML`, so every value is markup until escaped."""
+
+    @staticmethod
+    def _control_contents(html):
+        """Return the `content` string of every InfoBoxControl in the page.
+
+        Args:
+            html: A page from ``to_html``.
+
+        Returns:
+            The control contents, as they appear in the call payload.
+        """
+        import re
+
+        return re.findall(
+            r'"InfoBoxControl", \{"content": "(.*?)", "cssText"', _payload(html), re.S
+        )
+
+    def test_a_hostile_category_value_is_escaped(self):
+        """Class values come out of the caller's data — a downloaded shapefile is a realistic source.
+
+        Test scenario:
+            The exported page is meant to be emailed or hosted, so an unescaped column value is stored
+            XSS in the artifact this tier exists to produce.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+
+        from digitalearth.web import WebMap
+
+        hostile = gpd.GeoDataFrame(
+            {"kind": ['<img src=x onerror="alert(1)">', "safe"]},
+            geometry=[
+                Polygon([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
+                Polygon([(2.0, 0.0), (3.0, 0.0), (3.0, 1.0), (2.0, 1.0)]),
+            ],
+            crs="EPSG:4326",
+        )
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(hostile, column="kind", scheme="categorical")
+            .legend()
+        )
+        contents = self._control_contents(m.to_html())
+        assert contents, "no legend control was rendered"
+        assert "<img src=x onerror" not in contents[0], contents[0][:200]
+        assert "&lt;img" in contents[0], contents[0][:200]
+
+    @pytest.mark.parametrize(
+        "kwargs, needle",
+        [
+            ({"title": "<script>alert(1)</script>"}, "&lt;script&gt;"),
+            ({"labels": ["<b>one</b>", "two", "three"]}, "&lt;b&gt;"),
+        ],
+    )
+    def test_caller_strings_are_escaped(self, cells, kwargs, needle):
+        """A title and explicit labels are caller input, and reach the same innerHTML sink.
+
+        Args:
+            cells: The fixture frame.
+            kwargs: The legend argument under test.
+            needle: The escaped form that must appear.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(cells, column="kind", scheme="categorical")
+            .legend(**kwargs)
+        )
+        contents = self._control_contents(m.to_html())
+        assert needle in contents[0], contents[0][:200]
+        assert "<script>" not in contents[0]
+
+    def test_a_title_and_subtitle_are_escaped(self):
+        """`title()` shares the sink, so it shares the rule."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().title("<b>Head</b>", subtitle="<i>Sub</i>")
+        contents = self._control_contents(m.to_html())
+        assert "&lt;b&gt;" in contents[0] and "&lt;i&gt;" in contents[0], contents[0]
+        assert "<b>Head</b>" not in contents[0]
+
+    def test_a_short_labels_list_is_refused(self, cells):
+        """Zipping a short list against the classes silently omits the rest from the key.
+
+        Args:
+            cells: The fixture frame.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = (
+            WebMap().basemap().choropleth(cells, column="kind", scheme="categorical")
+        )
+        with pytest.raises(ValueError, match="entries but the classification"):
+            web_map.legend(labels=["only one"])

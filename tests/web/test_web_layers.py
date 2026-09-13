@@ -45,6 +45,36 @@ def polygons():
     )
 
 
+@pytest.fixture
+def raster_stack(tmp_path):
+    """A 3-member ``DatasetCollection``, one file per step.
+
+    Args:
+        tmp_path: pytest's per-test directory.
+
+    Returns:
+        The collection.
+    """
+    pytest.importorskip("pyramids")
+    import numpy as np
+    from pyramids.base.georeference import GeoReference
+    from pyramids.dataset import Dataset
+    from pyramids.dataset.collection import DatasetCollection
+
+    geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+    paths = []
+    for step in range(3):
+        _, xx = np.mgrid[0:8, 0:9]
+        path = tmp_path / f"step{step}.tif"
+        Dataset.from_array(
+            (10.0 * step + xx / 10.0).astype("float32"),
+            geo_ref=geo_ref,
+            no_data_value=-9999.0,
+        ).to_file(str(path))
+        paths.append(str(path))
+    return DatasetCollection.from_files(paths)
+
+
 def _payload(html):
     """Return the page's call payload — what this map does, not what the library contains.
 
@@ -192,3 +222,119 @@ class TestTheSwitchReachesTheViewer:
         web_map = WebMap().basemap().points(points)
         with pytest.raises(ValueError):
             web_map.layer_control(position="middle")
+
+
+class TestANamedLayerIsAddressableByItsName:
+    """H1: the switcher captions each row with the layer id, so a name has to become the id."""
+
+    def test_the_name_becomes_the_id(self, polygons):
+        """Otherwise the caller's name is stored and never shown anywhere.
+
+        Args:
+            polygons: The fixture frame.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().choropleth(polygons, column="pop", name="Population")
+        assert m.layer_ids == ["Population"], m.layer_ids
+
+    def test_a_repeated_name_is_uniquified(self, polygons, points):
+        """Two layers cannot share a MapLibre id, and the second must still be addressable.
+
+        Args:
+            polygons: The fixture frame.
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(polygons, column="pop", name="Layer")
+            .points(points, name="Layer")
+        )
+        assert m.layer_ids == ["Layer", "Layer-2"], m.layer_ids
+
+    def test_an_unnamed_layer_keeps_a_generated_id(self, points):
+        """The generated ids stay the default, so nothing that worked before changes.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        assert WebMap().basemap().points(points).layer_ids[0].startswith("circle-")
+
+    def test_removing_a_named_layer_works_by_name(self, polygons):
+        """The name is the handle a caller would reach for.
+
+        Args:
+            polygons: The fixture frame.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().choropleth(polygons, column="pop", name="Population")
+        m.remove_layer("Population")
+        assert m.layer_ids == []
+
+
+class TestTheBigDataPathIsHonestAboutTheRegistry:
+    """M7: a deck.gl overlay is not a MapLibre style layer, so the switcher cannot reach it."""
+
+    @pytest.mark.parametrize("kwargs", [{"name": "Cities"}, {"visible": False}])
+    def test_name_and_visible_are_refused_on_the_deck_path(self, points, kwargs):
+        """Crossing the feature threshold must not silently change what the arguments do.
+
+        Args:
+            points: The fixture points.
+            kwargs: The argument the deck path cannot honour.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap()
+        with pytest.raises(ValueError, match="deck.gl overlay"):
+            web_map.points(points, big=True, **kwargs)
+
+    def test_the_maplibre_builders_do_join_the_registry(self, points):
+        """A heatmap or a cluster is a style layer, so a viewer can switch it off.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        assert WebMap().basemap().heatmap(points).layer_ids, (
+            "heatmap is not addressable"
+        )
+        assert WebMap().basemap().cluster(points).layer_ids, (
+            "cluster is not addressable"
+        )
+
+
+class TestRemovingAStepKeepsTheMapRenderable:
+    """H4: the time-slider config outlived the layers it pointed at."""
+
+    def test_a_map_still_renders_after_a_step_is_removed(self, raster_stack):
+        """The failure was a permanently unrenderable map, blaming a method never called.
+
+        Args:
+            raster_stack: A 3-member collection.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack)
+        m.remove_layer(m.layer_ids[0])
+        m.to_html()
+
+    def test_dropping_below_two_steps_ends_the_series(self, raster_stack):
+        """One step is not a series, so the slider config should not survive it.
+
+        Args:
+            raster_stack: A 3-member collection.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack)
+        for layer_id in list(m.layer_ids)[:2]:
+            m.remove_layer(layer_id)
+        assert m._temporal is None, m._temporal
