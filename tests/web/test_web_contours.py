@@ -10,7 +10,7 @@ Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the
 import pytest
 
 from digitalearth.base.crs import OffLimbError
-from digitalearth.web import WebMap
+from digitalearth.web import ContourInterval, WebMap
 
 
 @pytest.fixture(autouse=True)
@@ -96,6 +96,116 @@ class TestTracingIsPyramids:
         """
         m = WebMap().basemap().contours(dataset, interval=10, color="#ff0000")
         assert '"#ff0000"' in _payload(m.to_html())
+
+
+class TestTheIntervalCarriesItsAnchor:
+    """``interval=`` reads as a plain spacing or as a :class:`ContourInterval` that anchors it."""
+
+    @staticmethod
+    def _traced_with(dataset, **kwargs):
+        """Contour ``dataset`` and return the arguments pyramids was handed.
+
+        Args:
+            dataset: The raster fixture to contour.
+            **kwargs: Forwarded to ``contours``.
+
+        Returns:
+            The keyword arguments ``Dataset.contour`` received.
+        """
+        seen = {}
+        original = type(dataset).contour
+
+        def spy(self, **passed):
+            """Record what pyramids was asked for, then trace normally."""
+            seen.update(passed)
+            return original(self, **passed)
+
+        type(dataset).contour = spy
+        try:
+            WebMap().basemap().contours(dataset, **kwargs)
+        finally:
+            type(dataset).contour = original
+        return seen
+
+    def test_a_plain_number_still_means_one_level_every_n(self, dataset):
+        """A bare number is the common spelling and reaches pyramids as spacing anchored at zero.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            Folding ``base`` into the interval must not make the ordinary call more verbose — the spacing
+            is the argument most callers write, and a number can only mean spacing here.
+        """
+        seen = self._traced_with(dataset, interval=50)
+        assert seen["interval"] == 50, (
+            f"the spacing must reach pyramids, got {seen['interval']!r}"
+        )
+        assert seen["base"] == 0.0, (
+            f"a bare spacing anchors at zero, got {seen['base']!r}"
+        )
+
+    def test_an_anchored_interval_offsets_the_levels(self, dataset):
+        """``ContourInterval(spacing, base=)`` carries the anchor through to pyramids.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            ``base`` is the value the spacing counts from, so it decides which iso-values are traced at
+            all. This type is now the only way to say it, so it is the only thing that can carry it down.
+        """
+        seen = self._traced_with(dataset, interval=ContourInterval(50, base=25))
+        assert seen["interval"] == 50, (
+            f"the spacing must survive the type, got {seen['interval']!r}"
+        )
+        assert seen["base"] == 25, (
+            f"the anchor must reach pyramids, got {seen['base']!r}"
+        )
+
+    def test_base_can_no_longer_be_passed_where_it_would_be_dropped(self, dataset):
+        """A loose ``base=`` is refused outright rather than accepted and ignored.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            ``contours(levels=[...], base=50)`` used to be accepted, and pyramids ignored the anchor because
+            explicit levels have no spacing to anchor. Silently dropping an argument the caller wrote is the
+            failure this signature change removes: the only way to say ``base`` now is beside a spacing.
+        """
+        with pytest.raises(TypeError) as excinfo:
+            WebMap().contours(dataset, levels=[100, 200], base=50)
+        assert "base" in str(excinfo.value), (
+            f"the error must name the argument that no longer exists, got {excinfo.value}"
+        )
+
+    @pytest.mark.parametrize("bad", [0, -10, float("nan"), float("inf")])
+    def test_a_spacing_that_traces_nothing_is_refused(self, bad):
+        """A zero, negative or non-finite spacing raises instead of tracing an empty result.
+
+        Args:
+            bad: A spacing that cannot produce levels.
+
+        Test scenario:
+            Each of these reaches pyramids as "no features found", which reports the symptom at the wrong
+            layer. The type refuses it at the point the caller wrote it.
+        """
+        with pytest.raises(ValueError, match="finite and greater than zero"):
+            ContourInterval(bad)
+
+    def test_a_boolean_is_not_a_spacing_of_one(self, dataset):
+        """``interval=True`` is a mis-typed flag, and ``bool`` being an ``int`` must not hide that.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            Python makes ``True`` an ``int``, so a plain number check would quietly contour every 1 unit --
+            an enormous trace from what was obviously meant as a switch.
+        """
+        with pytest.raises(TypeError, match="number or a ContourInterval"):
+            WebMap().contours(dataset, interval=True)
 
 
 class TestWhatItRefuses:

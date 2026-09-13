@@ -12,12 +12,96 @@ polygon map. Colour-by-value compiles into a MapLibre **data-driven paint expres
 cleopatra / matplotlib / numpy are imported lazily inside the methods; importing the tier needs none of them.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Self
+import math
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
 
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import _require_layer_api
+
+
+@dataclass(frozen=True)
+class ContourInterval:
+    """Regularly spaced contour levels: one every `spacing`, anchored at `base`.
+
+    `base` is only meaningful for a regular interval — it is the value the spacing counts from, so
+    `ContourInterval(100, base=50)` traces 50, 150, 250 rather than 0, 100, 200. Pairing the two in one type
+    is what keeps that from being said where it cannot be honoured: an explicit `levels=[...]` list has no
+    spacing to anchor, and a loose `base=` alongside it used to be accepted and silently dropped.
+
+    Attributes:
+        spacing: Distance between successive levels, in the band's own units. Must be finite and positive.
+        base: The value the spacing is anchored to. Defaults to 0.
+
+    Examples:
+        - Trace a level every 100 units, starting from zero:
+            ```python
+            >>> from digitalearth.web.vector import ContourInterval
+            >>> every_hundred = ContourInterval(100)
+            >>> every_hundred.spacing, every_hundred.base
+            (100, 0.0)
+
+            ```
+        - Anchor the same spacing at 50, so the levels land on 50, 150, 250:
+            ```python
+            >>> from digitalearth.web.vector import ContourInterval
+            >>> offset = ContourInterval(100, base=50)
+            >>> offset.base
+            50
+
+            ```
+        - A spacing of zero has no levels to give and is refused:
+            ```python
+            >>> from digitalearth.web.vector import ContourInterval
+            >>> ContourInterval(0)
+            Traceback (most recent call last):
+                ...
+            ValueError: contour spacing must be finite and greater than zero; got 0
+
+            ```
+    """
+
+    spacing: float
+    base: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Refuse a spacing that cannot produce levels.
+
+        Raises:
+            ValueError: when `spacing` is zero, negative, or not finite — each traces nothing, and pyramids
+                reports it as an empty result rather than as the bad argument it was.
+        """
+        if not math.isfinite(self.spacing) or self.spacing <= 0:
+            raise ValueError(
+                f"contour spacing must be finite and greater than zero; got {self.spacing!r}"
+            )
+
+
+def _as_interval(
+    interval: Union[float, ContourInterval, None],
+) -> Optional[ContourInterval]:
+    """Read the `interval=` argument in either spelling, so a plain number keeps meaning "every N".
+
+    Args:
+        interval: A bare spacing, a :class:`ContourInterval` carrying its own `base`, or `None`.
+
+    Returns:
+        The interval as one type, or `None` when the caller gave none.
+
+    Raises:
+        TypeError: when `interval` is neither a real number nor a :class:`ContourInterval`. `bool` is
+            rejected with it: `interval=True` is a mis-typed flag, not a spacing of one.
+    """
+    if interval is None or isinstance(interval, ContourInterval):
+        return interval
+    if isinstance(interval, bool) or not isinstance(interval, (int, float)):
+        raise TypeError(
+            f"contours() takes interval= as a number or a ContourInterval; got {interval!r}"
+        )
+    return ContourInterval(interval)
+
 
 #: Flat colour a vector layer falls back on when the caller pins neither `color=` nor a value column.
 #: The builders repeat it as a parameter default so it shows in a rendered signature; this is the name
@@ -279,13 +363,13 @@ class VectorMixin(_MixinBase):
         )
 
     def _contour_levels(
-        self, source: Any, *, interval: Optional[float], levels: Optional[Any]
+        self, source: Any, *, interval: Optional[ContourInterval], levels: Optional[Any]
     ) -> Optional[Any]:
         """Settle which iso-values `contours` traces, refusing the two ways of asking that cannot combine.
 
         Args:
             source: The display-CRS `Source` for the band being traced, consulted for an auto-style default.
-            interval: The caller's spacing between levels, or `None`.
+            interval: The caller's spacing, already resolved to a `ContourInterval`, or `None`.
             levels: The caller's explicit level list, or `None` to fall back on the variable's own levels.
 
         Returns:
@@ -365,9 +449,8 @@ class VectorMixin(_MixinBase):
         self,
         dataset: Any,
         *,
-        interval: Optional[float] = None,
+        interval: Union[float, ContourInterval, None] = None,
         levels: Optional[Any] = None,
-        base: float = 0.0,
         band: int = 1,
         filled: bool = False,
         cmap: Optional[str] = None,
@@ -389,12 +472,13 @@ class VectorMixin(_MixinBase):
 
         Args:
             dataset: A pyramids ``Dataset``.
-            interval: Spacing between levels, anchored at ``base``. Give at most one of this or ``levels``.
+            interval: Spacing between levels — a number for "one every N", or a
+                :class:`ContourInterval` when the spacing has to be anchored somewhere other than zero.
+                Give at most one of this or ``levels``.
             levels: Explicit levels to contour. Give at most one of this or ``interval``. With neither,
                 the levels come from :func:`~digitalearth.base.autostyle.auto_style` when the band's
                 variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels
                 that field is conventionally drawn with.
-            base: The value a regular ``interval`` is anchored to.
             band: 1-based band to contour, matching
                 :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and
                 this converts, so the same number means the same band everywhere in this tier.
@@ -422,6 +506,7 @@ class VectorMixin(_MixinBase):
             ValueError: when both ``interval`` and ``levels`` are given — pyramids takes exactly one, and
                 saying so here names the argument the caller actually wrote — or when neither is given
                 and the variable is not one ``auto_style`` knows levels for.
+            TypeError: when ``interval`` is neither a number nor a :class:`ContourInterval`.
 
         Examples:
             - Contour a DEM every 100 m:
@@ -435,18 +520,19 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.
             digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
         """
+        spacing = _as_interval(interval)
         data = self._display_raster_or_skip(dataset, layer="contours")
         if data is None:
             return self
         source = self._to_display_source(data, band=band)
         cmap = self._auto_cmap(source, cmap)
-        levels = self._contour_levels(source, interval=interval, levels=levels)
+        levels = self._contour_levels(source, interval=spacing, levels=levels)
         # Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.
         self.last_units = self._auto_units(source, units)
         features = data.contour(
-            interval=interval,
+            interval=spacing.spacing if spacing is not None else None,
             fixed_levels=list(levels) if levels is not None else None,
-            base=base,
+            base=spacing.base if spacing is not None else 0.0,
             band=int(band) - 1,  # pyramids counts bands from 0; this tier counts from 1
             attribute="level",
             polygonize=filled,
@@ -458,7 +544,7 @@ class VectorMixin(_MixinBase):
             self._skipped(
                 "contours",
                 "no level lies within the data, so nothing was traced — check that "
-                f"{'levels=' + repr(levels) if interval is None else 'interval=' + repr(interval)} "
+                f"{'levels=' + repr(levels) if spacing is None else 'interval=' + repr(interval)} "
                 f"suits band {band}'s range",
             )
             return self
