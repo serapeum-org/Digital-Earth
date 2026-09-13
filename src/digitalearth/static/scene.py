@@ -75,6 +75,19 @@ class Scene:
         figsize: Tuple[float, float] = (8, 8),
         strict: bool = False,
     ):
+        """Build the shared figure/axes host that layers render onto.
+
+        Args:
+            ax: An existing axes to draw on. When given, the scene does **not** own the figure and will not
+                close it on exit — pass one to compose a Digital-Earth layer into a figure you are laying out
+                yourself.
+            fig: The figure `ax` belongs to; taken from `ax` when omitted.
+            figsize: Size of the figure created when `ax` is None, in inches.
+            strict: What to do with a layer that has nothing to draw — data entirely outside the view, or a
+                band with no finite values. `False` (the default) skips it with a warning naming the layer,
+                so one bad frame does not abort a batch; `True` raises `OffLimbError` instead, which is what
+                a pipeline that must not publish a map with a layer missing should pass.
+        """
         if ax is None:
             fig, ax = plt.subplots(figsize=figsize)
         self.fig: Figure = fig

@@ -32,6 +32,19 @@ class GeoLayerBase(Scene):
         globe: bool = False,
         strict: bool = False,
     ):
+        """Build the geospatial layer host: a scene plus a display CRS to reproject into.
+
+        Args:
+            crs: Display CRS every layer is reprojected to before drawing (EPSG code or anything pyramids
+                resolves). Defaults to Web Mercator.
+            domain: Optional named region or bbox setting the initial extent.
+            ax: An existing axes to draw on; the scene then does not own the figure.
+            fig: The figure `ax` belongs to; taken from `ax` when omitted.
+            figsize: Size of the figure created when `ax` is None, in inches.
+            globe: Draw on a globe frame rather than a flat projection.
+            strict: Raise `OffLimbError` for a layer with nothing to draw instead of skipping it with a
+                warning. See `Scene.__init__` for the trade-off.
+        """
         super().__init__(ax=ax, fig=fig, figsize=figsize, strict=strict)
         self.crs = crs
         self.domain = domain

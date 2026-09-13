@@ -418,6 +418,17 @@ class Scene3DBase:
         strict: bool = False,
         **plotter_kwargs: Any,
     ):
+        """Build the 3-D scene and the PyVista plotter behind it.
+
+        Args:
+            off_screen: Render without opening a window. `None` follows PyVista's own setting, which is what
+                makes the tier usable in a notebook and in CI without changing the call.
+            window_size: Render size in pixels, used for both the window and `screenshot`.
+            theme: PyVista theme; defaults to the package's document-style theme.
+            strict: Raise `OffLimbError` for a layer with nothing to draw — an empty point table, a DEM with
+                no finite elevation — instead of skipping it with a warning.
+            **plotter_kwargs: Forwarded to `pyvista.Plotter`.
+        """
         self.plotter: pv.Plotter = pv.Plotter(
             off_screen=off_screen,
             window_size=list(window_size),
