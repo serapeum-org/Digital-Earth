@@ -692,8 +692,8 @@ class VectorMixin(_MixinBase):
                 distinct value its own colour (an unordered attribute such as a land-use class or region
                 name — ``k`` does not apply, and ``vmin``/``vmax``/``levels``/``color_scale`` are ignored),
                 keyed by a swatch legend rather than a colorbar. Spelled the same way, with the same
-                default, on every backend — except that the web tier's ``choropleth`` is graduated by
-                default, so pass ``scheme`` explicitly for identical classification across tiers.
+                default, on every backend: ``scheme=None`` is a continuous ramp everywhere, so the same
+                call classifies identically on all four tiers.
             k: Number of classes a named ``scheme`` is cut into (ignored when ``scheme`` is ``None`` or
                 ``"categorical"``).
             **opts: Styling kwargs forwarded to ``PolygonGlyph``. For a categorical scheme, ``cmap`` should
