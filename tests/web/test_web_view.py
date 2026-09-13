@@ -218,8 +218,10 @@ class TestFramingInANonLonLatDisplayCrs:
         view = m._map_view()
         assert view is not None, "a projected map lost its framing entirely"
         west, south, east, north = view["bounds"]
-        assert -180.0 <= west <= 180.0 and -90.0 <= south <= 90.0, view
-        assert round(west) == 4 and round(south) == 51, view
+        assert -180.0 <= west <= 180.0, f"west is not a longitude: {view}"
+        assert -90.0 <= south <= 90.0, f"south is not a latitude: {view}"
+        assert round(west) == 4, f"west is not the Netherlands: {view}"
+        assert round(south) == 51, f"south is not the Netherlands: {view}"
 
     def test_a_lonlat_display_crs_is_untouched(self, boxes):
         """The default path must not pay for a reprojection it does not need.
@@ -282,7 +284,8 @@ class TestRasterPlacementAndFramingAgree:
         payload = _payload(WebMap(crs=crs).add_raster(dataset).to_html())
         corners = re.search(r'"coordinates": \[\[([-\d.]+), ([-\d.]+)\]', payload)
         view = re.search(r'"fitBounds", \[\[([-\d.]+), ([-\d.]+)', payload)
-        assert corners and view, payload[-400:]
+        assert corners is not None, f"the image source has no corners: {payload[-400:]}"
+        assert view is not None, f"the page does not frame itself: {payload[-400:]}"
         assert abs(float(corners.group(1)) - float(view.group(1))) < 0.01, (
             f"west differs between placement and framing at crs={crs}"
         )

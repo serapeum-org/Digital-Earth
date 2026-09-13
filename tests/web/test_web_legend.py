@@ -276,7 +276,10 @@ class TestNothingInterpolatedIsMarkup:
 
         m = WebMap().basemap().title("<b>Head</b>", subtitle="<i>Sub</i>")
         contents = self._control_contents(m.to_html())
-        assert "&lt;b&gt;" in contents[0] and "&lt;i&gt;" in contents[0], contents[0]
+        assert "&lt;b&gt;" in contents[0], f"the heading was not escaped: {contents[0]}"
+        assert "&lt;i&gt;" in contents[0], (
+            f"the subtitle was not escaped: {contents[0]}"
+        )
         assert "<b>Head</b>" not in contents[0]
 
     def test_a_short_labels_list_is_refused(self, cells):
