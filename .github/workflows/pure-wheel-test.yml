@@ -68,7 +68,7 @@ jobs:
           pixi run -e dev python -m zipfile -l dist/*.whl | grep "digitalearth/base/autostyle/library/variables.yml"
 
       - name: Upload wheel artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: wheel
           path: dist/*.whl
@@ -89,12 +89,12 @@ jobs:
           ref: ${{ inputs.branch || github.ref }}
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Download wheel artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: wheel
           path: dist/
@@ -122,4 +122,16 @@ jobs:
         # `import digitalearth` resolves to the INSTALLED wheel, not the source
         # tree. Tests read fixtures via repo-root-relative paths, so run from the
         # checked-out root.
-        run: pytest -vvv -o "pythonpath=" tests/
+        #
+        # `-m 'not mpl'` deselects the visual-regression tests, matching the
+        # `main`/`test-all` pixi tasks. The runner above installs no pytest-mpl
+        # (this job validates the wheel, not the pictures), and without the plugin
+        # `mpl_image_compare` is an inert mark: all 18 figures would be built in
+        # full — two whole-globe orthographic renders among them — and compared
+        # against nothing, asserting nothing and costing runner time. They also
+        # each return their Figure, which is pytest-mpl's protocol but a
+        # PytestReturnNotNoneWarning on the way to becoming a hard error when the
+        # plugin is not there to consume it. Their real coverage is the
+        # `image-baselines` job in tests.yml, which does install pytest-mpl and
+        # runs `--mpl`.
+        run: pytest -vvv -o "pythonpath=" -m 'not mpl' tests/

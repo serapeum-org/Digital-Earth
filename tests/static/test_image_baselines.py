@@ -15,6 +15,17 @@ Running and regenerating:
     - Regenerate them after a deliberate rendering change: ``pixi run -e dev test-images-generate``
       (``pytest -m mpl --mpl-generate-path=tests/baseline``), then review the PNG diff before committing.
 
+Sensitivity:
+    A baseline is only worth its bytes if a real change moves it further than the tolerance. Measured on the
+    pinned stack (each figure re-rendered unchanged, then with one semantic change, RMS against the committed
+    PNG): the unchanged re-render scores exactly **0.0** for all 18, and the weakest real change measured is
+    **3.96** (one of the two shared-colorbar panels going from 6 contour levels to 7). Between them sit a
+    moved point (4.4), a dropped graticule (4.4), a dropped border layer (5.3-5.6) and a dropped colorbar
+    label (7.8-9.3); the colormap swaps run 9.7-68.2 and a reversed RGB band order 94.4. ``test_scatter_points``
+    and ``test_grid_cells`` are the sparsest figures here, so a change confined to them scores lowest — keep
+    that in mind before loosening ``mpl-default-tolerance`` (1, i.e. a quarter of the weakest of those), and
+    prefer a per-figure ``@pytest.mark.mpl_image_compare(tolerance=...)`` to moving the default.
+
 Determinism:
     Every figure is a fixed size in inches at 80 dpi (``_BASELINE``), rendered head-less on Agg
     (``MPLBACKEND=Agg``, set in ``[tool.pytest.ini_options].env``) under matplotlib's ``default`` style, so a
@@ -73,16 +84,34 @@ def point_features():
 
 @pytest.fixture
 def rgb_dataset(dataset):
-    """A three-band raster built from the ``acc4000`` grid (the band scaled three ways).
+    """A three-band raster whose bands carry three genuinely different pictures on one grid.
+
+    ``rgb_composite`` stretches each band independently, so bands that are scalar multiples of one another
+    — the ``[b, 0.5b, 0.25b]`` this fixture used to stack — normalise to the *same* channel and the
+    composite comes out pure greyscale. A baseline built from such a stack scores RMS 0.0 against a
+    reversed band order, an all-identical stack and a re-scaled stretch alike: against every regression the
+    test claims to pin. These three share only the grid and the CRS — the catchment field itself, a
+    west-east ramp and concentric rings about the grid centre — so the channels are independent and the
+    band axis is legible in the pixels.
+
+    The ``acc4000`` sentinel (half its 13x14 cells) is replaced with zero rather than left in: ``from_array``
+    stamps its own nodata on the stack, so the sentinel would otherwise survive into the 2-98 percentile
+    stretch and flatten the one band that carries real data.
 
     Args:
-        dataset: The module's single-band ``acc4000`` raster.
+        dataset: The module's single-band ``acc4000`` raster — the grid, the CRS and the red channel.
 
     Returns:
         Dataset: a 3-band pyramids ``Dataset`` on the same grid and CRS.
     """
-    base = np.nan_to_num(dataset.read_array(band=0).astype("float32"))
-    stack = np.stack([base, base * 0.5, base * 0.25])
+    base = dataset.read_array(band=0).astype("float32")
+    base = np.where(base == np.float32(dataset.no_data_value[0]), np.float32(0.0), base)
+    rows, cols = base.shape
+    y = np.linspace(-1.0, 1.0, rows, dtype="float32")[:, None]
+    x = np.linspace(-1.0, 1.0, cols, dtype="float32")[None, :]
+    ramp = np.broadcast_to(x, base.shape).astype("float32")
+    rings = np.sin(4.0 * np.pi * np.hypot(y, x)).astype("float32")
+    stack = np.stack([base, ramp, rings]).astype("float32")
     return Dataset.from_array(
         arr=stack, geo_ref=GeoReference(geo=dataset.geotransform, epsg=dataset.epsg)
     )
@@ -316,8 +345,15 @@ def test_rgb_composite(rgb_dataset):
 
     Test scenario:
         The composite is the one raster path whose output is an ``(rows, cols, 3)`` array rather than a
-        scalar field through a colormap, so a transposed band axis or a re-scaled stretch is visible only in
-        the pixels.
+        scalar field through a colormap, so a transposed band axis or a moved stretch is visible only in the
+        pixels. Measured against the committed baseline: reversing the band order to ``(3, 2, 1)`` scores
+        RMS 94.4, swapping green and blue 72.5, collapsing the three bands to one repeated band 90.1, and
+        freezing the 2-98 percentile stretch to fixed ``limits`` 7.2 — all far above the tolerance.
+
+        Rescaling a band by a positive scalar is *not* among them, and cannot be: the per-band percentile
+        stretch normalises it away by design, so ``[b, 0.9b, 0.1b]`` is the same picture. That is the
+        contract, not a hole — which is why the fixture's bands are three different pictures rather than one
+        picture scaled three ways.
 
     Returns:
         Figure: the rendered map.
