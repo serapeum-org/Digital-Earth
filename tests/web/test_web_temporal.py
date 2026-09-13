@@ -875,3 +875,119 @@ class TestTemporalTimes:
         assert m._temporal["times"] == [1, 2, 3], (
             f"internal state was mutated: {m._temporal['times']}"
         )
+
+
+class TestASavedTemporalMapIsSteppable:
+    """#187 — `render` wraps the map in a slider that only exists in a live kernel."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    @staticmethod
+    def _payload(html):
+        """Return the page's call payload — what this map does, not what the library contains.
+
+        Args:
+            html: A page from ``to_html``.
+
+        Returns:
+            The substring from ``var data =`` to the end of the page.
+        """
+        marker = html.rfind("var data = ")
+        assert marker != -1, "the exported page carries no call payload"
+        return html[marker:]
+
+    def test_every_step_is_reachable_in_the_saved_page(self, raster_stack):
+        """A shared page used to show one frozen frame with no way to move.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+
+        Test scenario:
+            The frames are already in the page, one layer each — a switcher over them is what makes them
+            reachable without a kernel.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack, labels=["2020", "2021", "2022"])
+        payload = self._payload(m.to_html())
+        assert "LayerSwitcherControl" in payload, (
+            "no way to change step in the saved page"
+        )
+        for layer_id in m._temporal["layer_ids"]:
+            assert f'"{layer_id}"' in payload, f"step layer {layer_id} is unreachable"
+
+    def test_the_steps_are_labelled_with_their_times(self, raster_stack):
+        """A switch listing raster-7/raster-9 tells a viewer nothing about which year it is.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack, labels=["2020", "2021", "2022"])
+        payload = self._payload(m.to_html())
+        assert '"layerIds": ["2020", "2021", "2022"]' in payload, (
+            "the step picker captions its rows with the layer ids, so the years must be the ids"
+        )
+
+    def test_building_twice_does_not_stack_controls(self, raster_stack):
+        """`render` and `save` both build the widget, and a page with three switchers is a bug.
+
+        Args:
+            raster_stack: The 3-member collection fixture.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().timeslider(raster_stack)
+        m.to_html()
+        assert self._payload(m.to_html()).count("LayerSwitcherControl") == 1
+
+    def test_a_map_with_no_time_dimension_gets_no_control(self, dataset):
+        """The switcher is for steps; an ordinary raster map must not sprout one.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+        """
+        from digitalearth.web import WebMap
+
+        payload = self._payload(WebMap().basemap().add_raster(dataset).to_html())
+        assert "LayerSwitcherControl" not in payload
+
+
+class TestASingleStepGetsNoSwitcher:
+    """The export control is for a *series*; one step is not one."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    def test_one_member_adds_no_control(self, tmp_path):
+        """A switcher listing a single layer is noise, and implies steps that are not there.
+
+        Args:
+            tmp_path: pytest's per-test directory.
+        """
+        import numpy as np
+        from pyramids.base.georeference import GeoReference
+        from pyramids.dataset import Dataset
+        from pyramids.dataset.collection import DatasetCollection
+
+        from digitalearth.web import WebMap
+
+        geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+        _, xx = np.mgrid[0:8, 0:9]
+        path = tmp_path / "only.tif"
+        Dataset.from_array(
+            (xx / 10.0).astype("float32"), geo_ref=geo_ref, no_data_value=-9999.0
+        ).to_file(str(path))
+
+        m = WebMap().basemap().timeslider(DatasetCollection.from_files([str(path)]))
+        html = m.to_html()
+        payload = html[html.rfind("var data = ") :]
+        assert "LayerSwitcherControl" not in payload, (
+            "a one-step stack got a step picker"
+        )

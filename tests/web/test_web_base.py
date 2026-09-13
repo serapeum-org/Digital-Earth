@@ -1199,3 +1199,40 @@ class TestDatetimeFramesReachTheMap:
         m = WebMap()
         with pytest.raises(ValueError, match="at least one time step"):
             m.timeslider(frame, kdim="from_date")
+
+
+class TestDisplayRasterReprojection:
+    """``_to_display_raster`` is the reproject choke point the composite and contour paths share."""
+
+    def test_a_dataset_already_in_the_display_crs_is_returned_untouched(self, dataset):
+        """Warping a raster that is already in the display CRS costs a full reprojection for nothing.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            The map takes the dataset's own CRS, so the identity branch is the one exercised — asserted
+            by object identity, which a reprojection could not preserve.
+        """
+        from digitalearth.web import WebMap
+
+        assert WebMap(crs=dataset.epsg)._to_display_raster(dataset) is dataset
+
+    def test_a_dataset_in_another_crs_is_reprojected(self, dataset):
+        """The other half of the branch: a mismatch has to actually warp.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+        """
+        from digitalearth.web import WebMap
+
+        if dataset.epsg == 3857:
+            pytest.skip("fixture is already in the display CRS")
+        assert WebMap(crs=3857)._to_display_raster(dataset) is not dataset
+
+    def test_something_without_a_crs_passes_through(self):
+        """``get_stack`` accepts more than a pyramids Dataset, and those have nothing to reproject."""
+        from digitalearth.web import WebMap
+
+        marker = object()
+        assert WebMap()._to_display_raster(marker) is marker

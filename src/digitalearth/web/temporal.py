@@ -270,6 +270,9 @@ class TemporalMixin(_MixinBase):
         self._check_stack_is_drawable(members, band)
 
         vmin, vmax = clim if clim is not None else self._global_clim(collection, band)
+        step_names = [
+            str(value) for value in (labels if labels is not None else range(count))
+        ]
         layer_ids: List[str] = []
         for index, member in enumerate(members):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
@@ -282,6 +285,8 @@ class TemporalMixin(_MixinBase):
                 vmin=vmin,
                 vmax=vmax,
                 visible=index == 0,
+                # The switcher captions each row with the layer id, so the step's label has to *be* it.
+                name=step_names[index],
             )
             layer_ids.append(self._last_layer_id)
 
@@ -335,6 +340,35 @@ class TemporalMixin(_MixinBase):
                 len(members),
                 total_pixels,
             )
+
+    def _temporal_switcher(self) -> Optional[dict]:
+        """Return the step picker a saved page needs, or ``None`` when this map is not a series.
+
+        ``render`` wraps the map in an ``ipywidgets`` slider, which exists only in a live kernel:
+        ``to_html`` serialises the map alone, so a shared page showed one frozen frame and no way to move.
+        Every step is already in the page as its own layer, so a switcher over those makes them all
+        reachable — a step picker rather than a scrubber, but the difference between a usable artifact and
+        a screenshot. The steps carry their time labels as their layer ids, because the switcher captions
+        each row with the id.
+
+        Returns only the raster (layer-stack) form. The vector form draws one layer and moves a MapLibre
+        filter across it, so its steps are not separately addressable, and a true in-page slider cannot be
+        built at all: py-maplibregl's standalone template keeps the map object inside its own closure
+        (``window._maplibreWidget`` is set on the Shiny path only), so injected markup has nothing to drive.
+
+        Returns:
+            The switcher request, or ``None``.
+        """
+        config = self._temporal
+        if not config or config.get("mode") != "raster":
+            return None
+        return {
+            "layer_ids": list(config.get("layer_ids") or []),
+            "theme": "default",
+            "position": "top-right",
+            # One step is not a series; a picker over it would be noise.
+            "minimum": 2,
+        }
 
     def _wrap_temporal(self, widget: Any) -> Any:
         """Wrap the map ``widget`` in a slider composite that reveals one time step at a time.
