@@ -591,6 +591,29 @@ def _quickmap_interactive(
     return scene
 
 
+def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
+    """Route a vector collection to the web tier's builder for its geometry, mirroring :func:`_draw`.
+
+    Args:
+        scene: The ``WebMap`` being built.
+        data: The ``FeatureCollection`` to draw.
+        kwargs: The caller's remaining styling keywords, forwarded to the chosen builder. A ``column`` is
+            consumed here rather than forwarded, since it is what selects ``choropleth`` over the plain
+            polygon outline.
+
+    Raises:
+        ValueError: if ``data`` is empty — see :func:`_vector_kind`.
+    """
+    if _vector_kind(data, "quickplot") == "polygons":
+        column = kwargs.pop("column", None)
+        if column is not None:
+            scene.choropleth(data, column=column, **kwargs)
+        else:
+            scene.polygons(data, **kwargs)
+        return
+    scene.points(data, **kwargs)
+
+
 def _quickmap_web(
     data: PlottableData,
     *,
@@ -626,25 +649,17 @@ def _quickmap_web(
 
     scene = WebMap() if crs is _UNSET else WebMap(crs=crs)
     if isinstance(data, FeatureCollection):
-        if len(data) == 0:
-            raise ValueError(
-                "quickplot got an empty FeatureCollection (nothing to draw)"
-            )
-        if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
-            column = kwargs.pop("column", None)
-            if column is not None:
-                scene.choropleth(data, column=column, **kwargs)
-            else:
-                scene.polygons(data, **kwargs)
-        else:
-            scene.points(data, **kwargs)
+        _draw_web_vector(scene, data, kwargs)
     elif isinstance(data, Dataset):
         scene.add_raster(data, **kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
     if basemap:
         source = _basemap_source(basemap)
-        scene.basemap() if source is None else scene.basemap(source)
+        if source is None:
+            scene.basemap()
+        else:
+            scene.basemap(source)
     return scene
 
 
