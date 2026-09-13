@@ -20,7 +20,7 @@ from digitalearth.web import WebMap
 HERE = __file__
 
 
-@pytest.fixture()
+@pytest.fixture
 def two_step_map(monkeypatch, tmp_path):
     """A ``WebMap`` whose animation renders two stub frames through a stub encoder.
 
@@ -28,7 +28,7 @@ def two_step_map(monkeypatch, tmp_path):
         monkeypatch: pytest's patcher, standing in for the browser and the GIF encoder.
         tmp_path: pytest's per-test directory.
 
-    Yields:
+    Returns:
         ``(map, out, recorded)`` — the map, the GIF path, and the dict the encoder records its hold in.
     """
     recorded: dict = {}
@@ -43,7 +43,7 @@ def two_step_map(monkeypatch, tmp_path):
     monkeypatch.setattr(web_export, "_write_gif", fake_write)
     monkeypatch.setattr(WebMap, "_temporal_frames", lambda self: [["a"], ["b"]])
     monkeypatch.setattr(WebMap, "_frame_png", lambda self, path, visible, title: path)
-    yield WebMap(), tmp_path / "series.gif", recorded
+    return WebMap(), tmp_path / "series.gif", recorded
 
 
 class TestTheAliasWarningLandsOnTheCallersLine:

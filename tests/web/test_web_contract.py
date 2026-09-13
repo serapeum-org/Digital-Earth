@@ -197,7 +197,10 @@ class TestC1SaveReturnsAPath:
         out = tmp_path / "m.html"
         written = WebMap().basemap().save(str(out))
         assert isinstance(written, pathlib.Path), type(written)
-        assert written == out and written.stat().st_size > 1_000
+        assert written == out, f"save() returned {written}, expected {out}"
+        assert written.stat().st_size > 1_000, (
+            f"the html is only {written.stat().st_size} bytes"
+        )
 
 
 class TestC2FrameRateIsFps:
@@ -250,8 +253,10 @@ class TestC2FrameRateIsFps:
             their new keyword was ignored. It is now the same ``TypeError`` static, interactive and 3-D
             raise, from the shared :func:`~digitalearth.base.deprecation.renamed_parameter`.
         """
+        scene = WebMap()
+        target = str(tmp_path / "series.gif")
         with pytest.raises(TypeError) as excinfo:
-            WebMap().animate(str(tmp_path / "series.gif"), fps=4.0, duration=0.5)
+            scene.animate(target, fps=4.0, duration=0.5)
         message = str(excinfo.value)
         assert "both fps= and the deprecated duration=" in message, message
         assert "pass only fps=" in message, message
@@ -278,9 +283,10 @@ class TestC2FrameRateIsFps:
             WebMap, "_frame_png", lambda self, path, visible, title: path
         )
 
-        out = tmp_path / "series.gif"
+        target = str(tmp_path / "series.gif")
+        scene = WebMap()
         with pytest.warns(DeprecationWarning, match="duration= is deprecated"):
-            WebMap().animate(str(out), duration=0.5)
+            scene.animate(target, duration=0.5)
         assert recorded["duration"] == pytest.approx(0.5), (
             "duration=0.5 must mean fps=2, i.e. the same half-second hold it always did"
         )
@@ -326,9 +332,12 @@ class TestC2FrameRateIsFps:
 
         monkeypatch.setattr(WebMap, "animate", fake_animate)
         out = tmp_path / "series.gif"
+        target = str(out)
+        scene = WebMap()
         with pytest.warns(DeprecationWarning, match="use WebMap.animate"):
-            assert WebMap().to_gif(str(out)) == out
-        assert seen["path"] == str(out)
+            written = scene.to_gif(target)
+        assert written == out
+        assert seen["path"] == target
 
     @pytest.mark.parametrize("kwargs", [{"fps": 0}, {"duration": 0}])
     def test_a_non_positive_rate_is_refused(self, kwargs, tmp_path):
@@ -338,10 +347,12 @@ class TestC2FrameRateIsFps:
             kwargs: The offending rate, in either spelling.
             tmp_path: pytest's per-test directory.
         """
+        scene = WebMap()
+        target = str(tmp_path / "series.gif")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             with pytest.raises(ValueError, match="must be positive"):
-                WebMap().animate(str(tmp_path / "series.gif"), **kwargs)
+                scene.animate(target, **kwargs)
 
 
 class TestC3SizeIsMarkerSizeAndTextSizeIsText:
@@ -359,8 +370,9 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
 
     def test_points_radius_still_works_and_warns(self):
         """The old spelling forwards unchanged, so an existing call renders identically."""
+        scene, frame = WebMap(), _points_frame(3)
         with pytest.warns(DeprecationWarning, match="radius= is deprecated"):
-            m = WebMap().points(_points_frame(3), radius=9.0)
+            m = scene.points(frame, radius=9.0)
         assert _paint(m, "circle-radius") == 9.0
 
     def test_labels_take_text_size(self):
@@ -374,8 +386,9 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
         """#211 shipped ``size`` for text; it keeps working while it is deprecated."""
         frame = _points_frame(2)
         frame["name"] = ["a", "b"]
+        scene = WebMap()
         with pytest.warns(DeprecationWarning, match="use text_size="):
-            m = WebMap().labels(frame, "name", size=21.0)
+            m = scene.labels(frame, "name", size=21.0)
         assert _layout(m, "text-size") == 21.0
 
     def test_text_annotation_takes_text_size(self):
@@ -385,8 +398,9 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
 
     def test_text_annotation_size_still_works_and_warns(self):
         """And its old spelling warns rather than silently doing nothing."""
+        scene = WebMap()
         with pytest.warns(DeprecationWarning, match="use text_size="):
-            m = WebMap().text(4.9, 52.4, "Amsterdam", size=18.0)
+            m = scene.text(4.9, 52.4, "Amsterdam", size=18.0)
         assert _layout(m, "text-size") == 18.0
 
     def test_deck_scatter_takes_size(self):
@@ -396,8 +410,9 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
 
     def test_deck_scatter_radius_still_works_and_warns(self):
         """Its old spelling forwards unchanged."""
+        scene, frame = WebMap(), _points_frame(3)
         with pytest.warns(DeprecationWarning, match="radius= is deprecated"):
-            m = WebMap().deck_scatter(_points_frame(3), radius=7.0)
+            m = scene.deck_scatter(frame, radius=7.0)
         assert m._deck_layers[0]["getPointRadius"] == 7.0
 
     def test_point_cloud_takes_size(self):
@@ -407,8 +422,9 @@ class TestC3SizeIsMarkerSizeAndTextSizeIsText:
 
     def test_point_cloud_point_size_still_works_and_warns(self):
         """``point_size`` was the third spelling of one idea; it is deprecated, not dropped."""
+        scene = WebMap()
         with pytest.warns(DeprecationWarning, match="point_size= is deprecated"):
-            m = WebMap().point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], point_size=4.0)
+            m = scene.point_cloud([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]], point_size=4.0)
         assert m._deck_layers[0]["pointSize"] == 4.0
 
     @pytest.mark.parametrize(
@@ -534,7 +550,8 @@ class TestC6LevelsAndUnitsAreConsumed:
     def test_levels_come_from_the_library_when_the_caller_gave_none(self):
         """An operational field carries the levels its community draws it with."""
         levels = WebMap()._auto_levels(_source("msl"), None)
-        assert levels and levels[0] == 960, levels
+        assert levels, f"msl resolved to no levels at all; got {levels!r}"
+        assert levels[0] == 960, f"the first msl level should be 960; got {levels[0]!r}"
 
     def test_caller_supplied_levels_win(self):
         """A caller who named levels gets exactly those."""
@@ -834,8 +851,10 @@ class TestC7OffLimbSkipsAndWarns:
             raise OffLimbError("the data lies outside what 4326 can show")
 
         monkeypatch.setattr(WebMap, "_to_display_source", _off_limb)
+        scene = WebMap(strict=True)
+        payload = object()
         with pytest.raises(OffLimbError):
-            WebMap(strict=True).add_raster(object())
+            scene.add_raster(payload)
 
     @staticmethod
     def _off_limb_features():
@@ -880,8 +899,10 @@ class TestC7OffLimbSkipsAndWarns:
     def test_strict_raises_off_limb_for_a_vector_layer(self):
         """Under ``strict=True`` the same vector warp raises, as it already did for a raster (H3)."""
         pytest.importorskip("maplibre")
+        scene = WebMap(strict=True)
+        features = self._off_limb_features()
         with pytest.raises(OffLimbError):
-            WebMap(strict=True).points(self._off_limb_features())
+            scene.points(features)
 
     def test_a_skip_with_no_exception_behind_it_still_raises_off_limb(self):
         """Every strict refusal is one type, whatever the reason behind it (M6).
@@ -892,8 +913,9 @@ class TestC7OffLimbSkipsAndWarns:
             ``strict`` they raised a bare ``ValueError`` while the other three tiers raised ``OffLimbError``,
             so ``except OffLimbError`` around a strict map silently missed them.
         """
+        scene = WebMap(strict=True)
         with pytest.raises(OffLimbError, match="add_raster: nothing to place"):
-            WebMap(strict=True)._skipped("add_raster", "nothing to place")
+            scene._skipped("add_raster", "nothing to place")
 
     def test_the_shared_exception_type_is_not_a_value_error(self):
         """Naming the change: ``OffLimbError`` derives from ``RuntimeError``, so it is not a ``ValueError``.
@@ -945,12 +967,18 @@ class TestC8TheBigDataCutoff:
         """Both routed builders take it, or the override would depend on the geometry kind."""
         m = WebMap()
         m.polygons(_polygon_frame(), big_data_threshold=1)
-        assert m.layer_ids == [] and m._deck_layers, "polygons ignored the override"
+        assert m.layer_ids == [], (
+            f"polygons ignored the override; got MapLibre layers {m.layer_ids}"
+        )
+        assert m._deck_layers, (
+            "polygons ignored the override; nothing routed to deck.gl"
+        )
 
     def test_a_negative_threshold_is_refused(self):
         """A cutoff below zero routes an empty layer, which is never what the caller meant."""
+        scene, frame = WebMap(), _points_frame(3)
         with pytest.raises(ValueError, match="must not be negative"):
-            WebMap().points(_points_frame(3), big_data_threshold=-1)
+            scene.points(frame, big_data_threshold=-1)
 
 
 class TestC9TheBasemapDefaultIsShared:
@@ -1008,8 +1036,9 @@ class TestC10KeyedCoverageReachesTheSource:
 
     def test_a_malformed_bounds_is_refused(self):
         """MapLibre ignores a malformed ``bounds``, so the coverage would go quietly undeclared."""
+        scene = WebMap()
         with pytest.raises(ValueError, match="west, south, east, north"):
-            WebMap().tiles("https://a/{z}/{x}/{y}.png", bounds=(1.0, 2.0, 3.0))
+            scene.tiles("https://a/{z}/{x}/{y}.png", bounds=(1.0, 2.0, 3.0))
 
 
 class TestC13TheDisplayCrsIsDeclared:

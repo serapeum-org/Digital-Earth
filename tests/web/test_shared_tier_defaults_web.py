@@ -24,7 +24,7 @@ from digitalearth.web.decoration import _BASEMAP_PROVIDERS  # noqa: E402
 CARTO_LIGHT = "light_all"
 
 
-@pytest.fixture()
+@pytest.fixture
 def points():
     """Three points in lon/lat, the smallest input the vector builders accept."""
     return gpd.GeoDataFrame(
@@ -99,5 +99,6 @@ class TestTheBigDataCutoffIsTheSharedOne:
             The check moved out of this tier into ``base/bigdata.py`` so the interactive tier could apply it
             too; this pins that the move did not soften what the web tier already refused.
         """
+        scene = WebMap()
         with pytest.raises(ValueError, match=r"points\(\): big_data_threshold"):
-            WebMap().points(points, big_data_threshold=-1)
+            scene.points(points, big_data_threshold=-1)
