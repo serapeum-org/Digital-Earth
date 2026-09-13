@@ -16,6 +16,7 @@ part).
 """
 
 import html
+import re
 from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from digitalearth.base.basemaps import (
@@ -86,6 +87,26 @@ def _text(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
 
+#: A CSS colour this tier is willing to put inside a ``style=""`` attribute: a hex value, an rgb()/rgba()
+#: call, or a bare colour keyword. Escaping alone is not enough there — quotes cannot break out, but ``;``
+#: starts a new declaration inside the attribute.
+_SAFE_COLOR = re.compile(r"^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,\s%]+\)|[a-zA-Z]{3,20})$")
+
+
+def _css_color(color: Any) -> str:
+    """Return a colour safe to interpolate into a ``style`` attribute.
+
+    Args:
+        color: The colour a classification produced, or one a caller passed.
+
+    Returns:
+        The colour when it is a plain hex/rgb()/keyword value, else ``"transparent"`` — a swatch that
+        renders wrong is better than one that carries a second CSS declaration into the page.
+    """
+    text = str(color)
+    return text if _SAFE_COLOR.match(text) else "transparent"
+
+
 def _swatch(color: str) -> str:
     """Return the markup for one colour chip.
 
@@ -97,7 +118,7 @@ def _swatch(color: str) -> str:
     """
     return (
         f'<span style="display:inline-block;width:14px;height:14px;margin-right:6px;'
-        f'vertical-align:-2px;background:{_text(color)};border:1px solid rgba(0,0,0,.25)"></span>'
+        f'vertical-align:-2px;background:{_css_color(color)};border:1px solid rgba(0,0,0,.25)"></span>'
     )
 
 
@@ -132,7 +153,7 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
         labels for a continuous one.
     """
     if kind == "continuous":
-        ramp = ", ".join(_text(color) for color in colors)
+        ramp = ", ".join(_css_color(color) for color in colors)
         return (
             f'<div style="height:10px;border-radius:2px;background:linear-gradient(to right,{ramp})"></div>'
             f'<div style="display:flex;justify-content:space-between;margin-top:2px">'

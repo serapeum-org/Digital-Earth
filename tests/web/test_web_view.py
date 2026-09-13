@@ -310,3 +310,42 @@ class TestTheViewChoiceIsRemembered:
         web_map = WebMap().basemap()
         with pytest.raises(ValueError, match="west, south, east, north"):
             web_map.fit_bounds((1.0, 2.0, 3.0))
+
+
+class TestFramingGivesUpRatherThanGuessing:
+    """L5: both ways `_as_lonlat` can fail end in no framing at all, and neither was covered."""
+
+    def test_an_unresolvable_crs_frames_nothing(self, boxes, monkeypatch):
+        """A CRS pyproj cannot resolve leaves the extent unknown, not wrong.
+
+        Args:
+            boxes: The fixture frame.
+            monkeypatch: pytest's patcher.
+        """
+        from digitalearth.web import WebMap, base as web_base
+
+        def _refuse(*args, **kwargs):
+            """Stand in for a CRS pyproj cannot resolve."""
+            raise ValueError("unknown CRS")
+
+        monkeypatch.setattr(web_base, "reproject_coordinates", _refuse)
+        m = WebMap(crs=3857)
+        m._note_bounds((1.0, 2.0, 3.0, 4.0))
+        assert m._data_bounds is None
+
+    def test_a_non_finite_reprojection_frames_nothing(self, monkeypatch):
+        """pyproj answers `inf` for a point outside the projection's domain rather than raising.
+
+        Args:
+            monkeypatch: pytest's patcher.
+        """
+        from digitalearth.web import WebMap, base as web_base
+
+        monkeypatch.setattr(
+            web_base,
+            "reproject_coordinates",
+            lambda xs, ys, **kwargs: ([float("inf"), 1.0], [2.0, 3.0]),
+        )
+        m = WebMap(crs=3857)
+        m._note_bounds((1.0, 2.0, 3.0, 4.0))
+        assert m._data_bounds is None

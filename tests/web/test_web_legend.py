@@ -292,3 +292,67 @@ class TestNothingInterpolatedIsMarkup:
         )
         with pytest.raises(ValueError, match="entries but the classification"):
             web_map.legend(labels=["only one"])
+
+
+class TestTheSwatchColourCannotCarryCss:
+    """L4: escaping stops an attribute break-out, but `;` starts a new declaration inside `style=""`."""
+
+    @pytest.mark.parametrize(
+        "color", ["#1f77b4", "#abc", "rgb(1, 2, 3)", "rgba(1,2,3,0.5)", "red"]
+    )
+    def test_real_colours_pass_through(self, color):
+        """The classifier's own hex values and CSS keywords must render unchanged.
+
+        Args:
+            color: A colour the tier actually produces.
+        """
+        from digitalearth.web.decoration import _css_color
+
+        assert _css_color(color) == color
+
+    @pytest.mark.parametrize(
+        "color", ["red;background:url(x)", 'x"onload=alert(1)', "expression(alert(1))"]
+    )
+    def test_anything_else_becomes_transparent(self, color):
+        """A swatch that renders wrong beats one that smuggles a declaration into the page.
+
+        Args:
+            color: A value that is not a plain colour.
+        """
+        from digitalearth.web.decoration import _css_color
+
+        assert _css_color(color) == "transparent"
+
+
+class TestTheThemeIsValidated:
+    """L8: round-1's theme validation shipped without a test."""
+
+    def test_an_unknown_theme_is_refused(self, cells):
+        """A typo should read like `position`'s error, not a pydantic traceback.
+
+        Args:
+            cells: The fixture frame.
+        """
+        from digitalearth.web import WebMap
+
+        web_map = WebMap().basemap().choropleth(cells, column="pop")
+        with pytest.raises(ValueError, match="must be one of"):
+            web_map.layer_control(theme="fancy")
+
+    @pytest.mark.parametrize("theme", ["default", "simple"])
+    def test_both_real_themes_are_accepted(self, cells, theme):
+        """The guard must not reject the two styles py-maplibregl ships.
+
+        Args:
+            cells: The fixture frame.
+            theme: A supported switcher style.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(cells, column="pop")
+            .layer_control(theme=theme)
+        )
+        assert f'"theme": "{theme}"' in _payload(m.to_html())

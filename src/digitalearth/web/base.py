@@ -626,6 +626,12 @@ class WebMapBase:
         Returns:
             The same map instance, so builder calls chain.
 
+        Note:
+            The running data extent, and the classification a legend describes, are only cleared when the
+            last layer goes. They are "most recent" accessors rather than a model of what is on the map,
+            so after removing one layer of several they still describe the removed one; call
+            :meth:`fit_bounds` or rebuild the legend if that matters.
+
         Raises:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
                 look exactly like a layer that refused to go away.
