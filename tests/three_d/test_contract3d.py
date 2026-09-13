@@ -92,9 +92,8 @@ class TestC1SaveReturnsPath:
         assert isinstance(written, type(tmp_path)), (
             f"save() must return a Path, got {type(written).__name__}"
         )
-        assert written.is_file() and written.stat().st_size > 0, (
-            f"save() returned {written!r}, which is not a written file"
-        )
+        assert written.is_file(), f"save() returned {written!r}, which is not a file"
+        assert written.stat().st_size > 0, f"save() wrote an empty file at {written!r}"
 
     def test_the_frame_moved_to_screenshot(self, scene):
         """The ``np.ndarray`` ``save()`` used to return is still available, from ``screenshot()``.
@@ -108,8 +107,11 @@ class TestC1SaveReturnsPath:
         """
         scene.add_mesh(pv.Sphere())
         frame = scene.screenshot()
-        assert isinstance(frame, np.ndarray) and frame.ndim == 3, (
-            f"screenshot() must return an (H, W, C) array, got {type(frame).__name__}"
+        assert isinstance(frame, np.ndarray), (
+            f"screenshot() must return an array, got {type(frame).__name__}"
+        )
+        assert frame.ndim == 3, (
+            f"screenshot() must return an (H, W, C) array, got {frame.ndim} dimensions"
         )
 
 
@@ -238,8 +240,9 @@ class TestC3Size:
             The old spelling forwards to ``size`` and emits a DeprecationWarning naming the replacement, so
             existing notebooks keep rendering while telling their author what to change.
         """
+        points = _points()
         with pytest.warns(DeprecationWarning, match="size"):
-            actor = scene.point_cloud(_points(), point_size=8.0)
+            actor = scene.point_cloud(points, point_size=8.0)
         assert actor.prop.point_size == pytest.approx(8.0), (
             f"point_size= must forward to size, got {actor.prop.point_size}"
         )
@@ -254,8 +257,9 @@ class TestC3Size:
             As with ``fps``/``framerate``: two names for one thing, set to two values, is a caller error,
             and every tier now reports it the same way.
         """
+        points = _points()
         with pytest.raises(TypeError) as excinfo:
-            scene.point_cloud(_points(), size=4.0, point_size=8.0)
+            scene.point_cloud(points, size=4.0, point_size=8.0)
         message = str(excinfo.value)
         assert "both size= and the deprecated point_size=" in message, message
         assert "pass only size=" in message, message
@@ -541,8 +545,11 @@ class TestC7SkipAndWarn:
                 f"{layer}() must return None when it draws nothing"
             )
         assert not scene.layers, f"{layer}() must not register a layer it skipped"
-        assert layer in caplog.text and reason in caplog.text, (
-            f"the warning must name the layer and the reason, got {caplog.text!r}"
+        assert layer in caplog.text, (
+            f"the warning must name the layer, got {caplog.text!r}"
+        )
+        assert reason in caplog.text, (
+            f"the warning must name the reason {reason!r}, got {caplog.text!r}"
         )
 
     @pytest.mark.parametrize("layer", sorted(EMPTY_LAYERS))
@@ -557,10 +564,12 @@ class TestC7SkipAndWarn:
             scene, and every layer honours it — using the same error type the 2-D tiers raise.
         """
         arguments, reason = self.EMPTY_LAYERS[layer]
+        empty = arguments()
         strict = Scene3D(off_screen=True, strict=True)
         try:
+            method = getattr(strict, layer)
             with pytest.raises(OffLimbError, match=reason):
-                getattr(strict, layer)(*arguments())
+                method(*empty)
         finally:
             strict.close()
 

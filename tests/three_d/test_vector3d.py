@@ -119,8 +119,11 @@ def test_extruded_polygons_empty_skips_and_warns(caplog):
         )
     scene.close()
     assert not scene.layers, "a skipped layer must not be registered"
-    assert "extruded_polygons" in caplog.text and "no polygon" in caplog.text, (
-        f"the warning must name the layer and the reason, got {caplog.text!r}"
+    assert "extruded_polygons" in caplog.text, (
+        f"the warning must name the layer, got {caplog.text!r}"
+    )
+    assert "no polygon" in caplog.text, (
+        f"the warning must name the reason, got {caplog.text!r}"
     )
 
 
@@ -154,7 +157,7 @@ def test_extruded_polygons_rejects_non_polygon():
 class TestClassifiedExtrusionAnswersForItsOwnKeywords:
     """Round-2 review L1/L2/M5 — a classified extrusion must not fail through Python's call machinery."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def squares(self):
         """Two unit squares carrying a numeric column, the minimum a classified extrusion needs.
 
@@ -193,7 +196,12 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
         finally:
             scene.close()
         message = str(excinfo.value)
-        assert f"{keyword}=" in message and "scheme='quantiles'" in message, message
+        assert f"{keyword}=" in message, (
+            f"the refusal must name the keyword {keyword}=, got {message}"
+        )
+        assert "scheme='quantiles'" in message, (
+            f"the refusal must name the scheme that owns it, got {message}"
+        )
 
     def test_the_same_keyword_is_fine_without_a_scheme(self, squares):
         """An unclassified layer has no derived colour range, so the caller's ``clim`` is honoured.
@@ -228,7 +236,12 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
         finally:
             scene.close()
         message = str(excinfo.value)
-        assert "row 1" in message and "'pop'" in message, message
+        assert "row 1" in message, (
+            f"the refusal must name the offending row, got {message}"
+        )
+        assert "'pop'" in message, (
+            f"the refusal must name the height column, got {message}"
+        )
 
     def test_a_nan_uniform_height_is_refused_too(self, squares):
         """A scalar height gets the same check — it reaches the same extrusion.
@@ -252,7 +265,10 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
         scene = Scene3D(off_screen=True)
         try:
             actor = scene.extruded_polygons(squares, height="pop")
-            assert actor is not None and scene.layers[0][0].n_cells > 0
+            assert actor is not None, "a finite height column must return an actor"
+            assert scene.layers[0][0].n_cells > 0, (
+                f"the extrusion must build cells, got {scene.layers[0][0].n_cells}"
+            )
             assert np.isfinite(scene.layers[0][0].points).all(), "no NaN coordinates"
         finally:
             scene.close()
@@ -288,4 +304,7 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
             [1, 2, 3, 4, 50], scheme="quantiles", k=3, cmap=colours
         )
         assert style["cmap"] == colours, style["cmap"]
-        assert style["n_colors"] == 3 and style["clim"] == (-0.5, 2.5), style
+        assert style["n_colors"] == 3, (
+            f"one colour slot per class, got {style['n_colors']}"
+        )
+        assert style["clim"] == (-0.5, 2.5), f"class-index range, got {style['clim']}"

@@ -142,10 +142,11 @@ class TestGeographicSource:
             `get_source(utm_dataset).crs` is 32633, which is decisive evidence; the error must quote that code
             rather than inferring "projected" from how large the numbers are.
         """
+        source = get_source(_utm_raster())
         scene = Scene3D(off_screen=True)
         try:
             with pytest.raises(ValueError, match="EPSG:32633"):
-                scene._to_geographic_source(get_source(_utm_raster()))
+                scene._to_geographic_source(source)
         finally:
             scene.close()
 
@@ -167,10 +168,11 @@ class TestGeographicSource:
             guard, which accepts Web-Mercator metres near the origin as degrees. The source was then draped
             on the sphere as if it were lon/lat.
         """
+        source = _projected_source_near_the_origin(crs)
         scene = Scene3D(off_screen=True)
         try:
             with pytest.raises(ValueError, match="projected") as raised:
-                scene._to_geographic_source(_projected_source_near_the_origin(crs))
+                scene._to_geographic_source(source)
         finally:
             scene.close()
         assert named in str(raised.value), (
@@ -300,12 +302,11 @@ def test_globe_refuses_a_projected_source_spelled_with_its_authority_prefix():
     The end-to-end reproduction of the defect: a Web-Mercator source whose coordinates are small enough to
     look like degrees was accepted and rendered, because the ``"EPSG:3857"`` spelling read as "no CRS".
     """
+    source = _projected_source_near_the_origin("EPSG:3857")
     scene = Scene3D(off_screen=True)
     try:
         with pytest.raises(ValueError, match="EPSG:3857"):
-            scene.globe(
-                _projected_source_near_the_origin("EPSG:3857"), coastlines=False
-            )
+            scene.globe(source, coastlines=False)
         assert len(scene.layers) == 0, "nothing may be drawn for a refused source"
     finally:
         scene.close()
@@ -319,7 +320,8 @@ def test_globe_renders_a_projected_dataset():
     """
     scene = Scene3D(off_screen=True)
     actor = scene.globe(_utm_raster(), coastlines=False)
-    assert actor is not None and len(scene.layers) == 1
+    assert actor is not None, "globe() must return an actor for a projected Dataset"
+    assert len(scene.layers) == 1, f"exactly one layer, got {len(scene.layers)}"
     scene.close()
 
 

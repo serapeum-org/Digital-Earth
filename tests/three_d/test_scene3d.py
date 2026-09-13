@@ -717,9 +717,8 @@ class TestSave:
             )
         finally:
             scene.close()
-        assert out.exists() and out.stat().st_size > 0, (
-            "export_gltf must write the file it was given"
-        )
+        assert out.exists(), f"export_gltf must write the file it was given, {out!r}"
+        assert out.stat().st_size > 0, f"export_gltf must not leave {out!r} empty"
         assert "asset" in json.loads(out.read_text(encoding="utf-8")), (
             "The file must be a glTF document, not a renamed screenshot"
         )
@@ -743,9 +742,8 @@ class TestSave:
             )
         finally:
             scene.close()
-        assert out.exists() and out.stat().st_size > 0, (
-            "export_obj must write the .obj it was given"
-        )
+        assert out.exists(), f"export_obj must write the .obj it was given, {out!r}"
+        assert out.stat().st_size > 0, f"export_obj must not leave {out!r} empty"
 
     def test_a_suffix_less_path_raises_instead_of_inventing_a_png(self, tmp_path):
         """`save("scene")` raises and writes nothing, rather than quietly producing `scene.png`.
