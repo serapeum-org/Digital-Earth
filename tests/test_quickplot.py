@@ -278,7 +278,7 @@ class TestBackendCapabilityRefusal:
             ("3d", "kind", "contourf"),
             ("web", "domain", "europe"),
             ("web", "coastlines", True),
-            ("web", "colorbar", False),
+            ("web", "colorbar", True),
             ("web", "kind", "contourf"),
             ("interactive", "domain", "europe"),
         ],
@@ -317,6 +317,7 @@ class TestBackendCapabilityRefusal:
             ("3d", "kind"),
             ("web", "coastlines"),
             ("web", "kind"),
+            ("web", "colorbar"),
         ],
     )
     def test_a_parameter_that_asks_for_nothing_is_not_a_dropped_request(
@@ -334,13 +335,21 @@ class TestBackendCapabilityRefusal:
             The rule is about *dropped requests*, not about the presence of a keyword. Refusing an explicit
             ``coastlines=False`` on the web tier would be pedantry — there were no coastlines to lose — and
             would break callers who pass one kwargs dict through to whichever backend they picked.
+
+            ``colorbar=False`` is the same shape and was refused anyway until review L9: the web tier draws
+            no colorbar at all, so suppressing one asks for exactly what that tier already does.
+            ``colorbar=True`` there stays a refusal — see the parametrised test above.
         """
         builder = mocker.patch.object(
             qp, "_quickmap_3d" if backend == "3d" else "_quickmap_web"
         )
-        inert = {"domain": None, "coastlines": False, "basemap": False, "kind": "auto"}[
-            parameter
-        ]
+        inert = {
+            "domain": None,
+            "coastlines": False,
+            "basemap": False,
+            "kind": "auto",
+            "colorbar": False,
+        }[parameter]
         qp.quickmap(dataset, backend=backend, **{parameter: inert})
         assert builder.called, (
             "an inert value must not stop the call reaching the backend"
@@ -356,7 +365,8 @@ class TestBackendCapabilityRefusal:
         Test scenario:
             ``crs`` and ``colorbar`` carry real defaults (``3857`` and ``True``), so the default value cannot
             double as "not passed". Without a separate sentinel, the plainest call there is —
-            ``quickmap(ds, backend="3d")`` — would be refused for a CRS nobody asked for.
+            ``quickmap(ds, backend="3d")`` — would be refused for a CRS nobody asked for. ``colorbar``
+            still needs the sentinel after L9: its inert value is ``False``, and its default is ``True``.
         """
         builder = mocker.patch.object(qp, "_quickmap_3d")
         qp.quickmap(dataset, backend="3d")

@@ -80,13 +80,23 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
-#: ``crs`` and ``colorbar`` are absent on purpose: every value of those is a choice, ``colorbar=False``
-#: (suppress the bar) just as much as ``colorbar=True``.
+#:
+#: ``colorbar=False`` is one of them (review L9). The rule here is about *dropped requests*, and what
+#: ``False`` asks for is a map with no colorbar — which is exactly what the one tier that cannot honour the
+#: parameter (``web``) draws anyway. Nothing is lost, so refusing it was pedantry of the same shape as
+#: refusing ``coastlines=False`` there, and it broke the caller who passes one kwargs dict through to
+#: whichever backend they picked. ``colorbar=True`` stays a real request and is still refused by name:
+#: ``web`` keys itself with :meth:`~digitalearth.web.decoration.DecorationMixin.legend`, a different thing
+#: with a different arity (TODO(#254)).
+#:
+#: ``crs`` is absent on purpose and stays absent: it has no value that asks for nothing — every CRS names a
+#: projection to display in, and there is no "no CRS" to pass.
 _INERT: dict[str, Any] = {
     "domain": None,
     "coastlines": False,
     "kind": "auto",
     "basemap": False,
+    "colorbar": False,
 }
 
 
@@ -276,7 +286,9 @@ def quickmap(
             unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
             backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
         colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable);
-            defaults to ``True``. Not supported by ``backend="web"``, whose key is ``WebMap.legend``.
+            defaults to ``True``. ``colorbar=True`` is not supported by ``backend="web"``, whose key is
+            ``WebMap.legend``; ``colorbar=False`` is accepted there, because that tier draws no colorbar to
+            begin with, so suppressing one drops no request.
         backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
             extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
