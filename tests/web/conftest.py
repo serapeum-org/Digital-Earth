@@ -6,11 +6,13 @@ attaches a loguru sink instead, and :func:`warning_log` is that sink, shared so 
 across the tier all read the same.
 """
 
+from collections.abc import Iterator
+
 import pytest
 
 
 @pytest.fixture
-def warning_log() -> list[str]:
+def warning_log() -> Iterator[list[str]]:
     """Collect the tier's loguru warnings for the duration of one test.
 
     Yields:
