@@ -165,7 +165,7 @@ class TestHistogram:
         from types import SimpleNamespace
 
         ds = SimpleNamespace(
-            read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+            read_array=lambda band=0, masked=False: np.array([[1.0, 2.0], [3.0, 4.0]]),
             no_data_value=[None],
         )
         out = charts.as_finite_array(ds)

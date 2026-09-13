@@ -25,9 +25,21 @@ What lives here:
 * :mod:`~digitalearth.base.chartdata` — chart data preparation: a column name or array-like → plottable values.
 * :mod:`~digitalearth.base.arrays` — nodata masking and the finite-value reductions.
 * :mod:`~digitalearth.base.basemaps` — keyed-XYZ basemap definitions (URL template, credential
-  variable, attribution, coverage) every backend resolves by name. Pure data: it emits a URL with the
+  variable, attribution, coverage) every backend resolves by name, plus ``DEFAULT_BASEMAP_PROVIDER``, the
+  one provider every tier falls back to when the caller named none. Pure data: it emits a URL with the
   tile placeholders intact and constructs no engine object.
-* :mod:`~digitalearth.base.crs` — the best-effort EPSG lookup.
+* :mod:`~digitalearth.base.deprecation` — ``renamed_parameter``, the single rule for a renamed keyword: the
+  old spelling keeps working with a ``DeprecationWarning``, and passing both spellings is a ``TypeError``.
+  Every backend resolves its renames through it, so the four tiers cannot drift apart on the contract again.
+* :mod:`~digitalearth.base.crs` — the CRS readers every tier shares: the best-effort EPSG lookup,
+  ``declared_crs`` (an input's own code or definition) and ``is_geographic``, which asks pyramids to
+  interpret a CRS in any spelling a ``Source`` may carry — so no tier re-invents that with string
+  parsing or coordinate magnitudes.
+* :mod:`~digitalearth.base.animation` — ``DEFAULT_FPS``, the one frame rate every tier's animation entry
+  point starts from, so a clip built with defaults plays at the same speed whichever backend rendered it.
+* :mod:`~digitalearth.base.bigdata` — ``DEFAULT_BIG_DATA_THRESHOLD`` and the guard that validates a per-call
+  override, so a vector layer changes rendering strategy at the same size — and refuses the same nonsense
+  cutoff — on every tier that has a big-data path.
 * :mod:`~digitalearth.base.preprocess` — longitude wrapping and the cyclic column for global fields.
 * :mod:`~digitalearth.base.stretch` — the composite contrast stretch: per-channel bounds every backend
   shares, so a true-colour render is identical across tiers and a sequence of frames can be frozen on

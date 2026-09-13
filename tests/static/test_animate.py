@@ -1,5 +1,7 @@
 """Tests for Map.animate / Map.rotate — globe animations over a raster stack and over composites."""
 
+import logging
+
 import numpy as np
 import pytest
 from matplotlib.animation import FuncAnimation, PillowWriter
@@ -8,6 +10,7 @@ from pyramids.dataset import Dataset, GeoReference
 from digitalearth.base.sources import get_stack
 from digitalearth.base.stretch import channel_limits, stretch_to_unit
 from digitalearth.static import Map, projections
+from digitalearth.static.maps import animation
 
 
 def _field(offset: float) -> Dataset:
@@ -471,7 +474,7 @@ class TestAnimate:
         from types import SimpleNamespace
 
         ds = SimpleNamespace(
-            read_array=lambda band=0: np.array([[1.0, 2.0], [3.0, 4.0]]),
+            read_array=lambda band=0, masked=False: np.array([[1.0, 2.0], [3.0, 4.0]]),
             no_data_value=[None],
             epsg=4326,
         )
@@ -482,11 +485,81 @@ class TestAnimate:
         from types import SimpleNamespace
 
         ds = SimpleNamespace(
-            read_array=lambda band=0: np.array([[-9999.0, -9999.0]]),
+            read_array=lambda band=0, masked=False: np.ma.masked_equal(
+                np.array([[-9999.0, -9999.0]]), -9999.0
+            ),
             no_data_value=[-9999.0],
             epsg=4326,
         )
         assert Map(crs=4326)._stack_clim([ds]) == (0.0, 1.0)
+
+    def test_frame_style_skips_a_frame_it_cannot_read(self, stack):
+        """An unreadable frame moves the style lookup on to the next one instead of failing the bar.
+
+        Args:
+            stack: The 3-frame raster stack; its first member supplies the style.
+
+        Test scenario:
+            The persistent colorbar resolves the animated variable's style once, before any frame is
+            drawn. A stack whose leading member cannot be read must still key the bar off one that can,
+            because styling is decoration and refusing it would fail an animation that renders fine.
+        """
+        m = Map(crs=4326, figsize=(4, 4))
+        style = m._frame_style([object(), stack[0]], 1)
+        assert style, (
+            "a readable frame further down the stack must still supply a style"
+        )
+        assert style.get("cmap") == m._frame_style([stack[0]], 1).get("cmap"), (
+            f"the readable frame should have supplied the style, got {style}"
+        )
+
+    def test_frame_style_propagates_a_failure_that_is_not_a_read(
+        self, stack, caplog, monkeypatch
+    ):
+        """A style lookup that breaks for its own reasons surfaces instead of reading as "no style".
+
+        Args:
+            stack: The 3-frame raster stack; its members are perfectly readable.
+            caplog: Captures the warning a genuinely unreadable frame logs.
+            monkeypatch: Replaces the style lookup with one that fails the way a bug does.
+
+        Test scenario:
+            The lookup tolerates a frame it cannot read — a stack member of the wrong type, a band that
+            does not exist, an I/O failure. It must not tolerate anything else: a bug inside the style
+            resolution itself (here an ``AttributeError``, the shape a typo takes) would otherwise be
+            reported as "this stack has no style" and hidden behind a silently default-coloured colorbar,
+            on frames that read fine. The tolerated half is checked alongside it, so narrowing the handler
+            cannot be mistaken for removing it.
+        """
+
+        def broken_style(source):
+            """Fail the way a bug in the style code does, not the way an unreadable frame does."""
+            raise AttributeError("'dict' object has no attribute 'levles'")
+
+        m = Map(crs=4326, figsize=(4, 4))
+        with caplog.at_level(logging.WARNING):
+            assert m._frame_style([object(), stack[0]], 1), (
+                "an unreadable frame must still be skipped for the next one"
+            )
+        assert "unreadable frame skipped" in caplog.text, (
+            f"the skipped frame must be logged with its cause, got {caplog.text!r}"
+        )
+
+        monkeypatch.setattr(animation, "auto_style", broken_style)
+        with pytest.raises(AttributeError, match="levles"):
+            m._frame_style([stack[0]], 1)
+
+    def test_frame_style_is_empty_when_no_frame_can_be_read(self):
+        """A stack with nothing readable in it yields no style at all rather than an exception.
+
+        Test scenario:
+            The style lookup runs before the frames are drawn, so it sees inputs the renderer has not
+            validated yet. With nothing to read it hands back an empty dict and the colorbar falls back
+            to the caller's own cmap and clim.
+        """
+        assert Map(crs=4326, figsize=(4, 4))._frame_style([object()], 1) == {}, (
+            "a stack with no readable frame must yield no style"
+        )
 
     def test_colorbar_without_label(self):
         """A colorbar with no label still adds exactly one colorbar axes."""

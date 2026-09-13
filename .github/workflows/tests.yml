@@ -125,6 +125,70 @@ jobs:
         run: |
           pixi run -e dev doctests
 
+  # The visual-regression net (#228): every other test under tests/static/ asserts on artist counts, norms
+  # and axis limits, all of which pass just as happily when the figure comes out a grey rectangle. This job
+  # is the one that looks at the pixels — `test-images` runs `pytest -m mpl --mpl`, which compares each
+  # returned Figure against the PNG committed under tests/baseline/ within the RMS tolerance configured as
+  # `mpl-default-tolerance` in pyproject.toml.
+  #
+  # One runner, not the 3-OS x 3-Python matrix, and deliberately the dev env: an image comparison is only as
+  # stable as the rasteriser underneath it, so the baselines are pinned to one matplotlib + freetype + Agg
+  # combination (pixi.lock's) rather than compared across every leg. The runner is windows-latest because
+  # that is the OS the committed baselines were generated on — freetype hints glyphs differently per
+  # platform, so a maintainer who regenerates them elsewhere (`pixi run -e dev test-images-generate`) must
+  # move this job's `runs-on` to match, or the whole set turns red on text antialiasing alone.
+  #
+  # `main` deselects these tests (`-m 'not mpl'`), so this job is their only coverage — in both senses: it
+  # is the only leg that runs them, and (since `test-images` carries `--cov`) the only one that reports the
+  # lines they execute. `tests/test_pixi_task_references.py` pins `test-images` to a real `run:` step here,
+  # the same guard the lint/mypy/doctest gates have, so the job cannot be dropped without a red test.
+  image-baselines:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      # Kept from the workflow-level defaults, unlike the other narrowed jobs: codecov-action v5 uses OIDC
+      # for its tokenless upload, and the step below is the only place the 18 rendering paths this job runs
+      # are measured at all (`main` deselects them).
+      id-token: write
+    steps:
+      # No fetch-depth: 0 — this job reads the working tree only, never history.
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Python
+        uses: serapeum-org/github-actions/actions/python-setup/pixi@38c111084f99d5ff5f4a1e63bedce48fe33a10c0 # pixi/v1.2.1
+        with:
+          environments: dev
+          activate-environment: dev
+          cache: true
+          version: v0.73.0
+
+      - name: Compare the rendered figures against the baselines
+        # The summary + results path are a CI-only delta appended to the task rather than baked into it:
+        # locally a failure is read from the terminal, here the only way to see *what* moved is the report
+        # uploaded by the next step (baseline, result and diff image per failing figure).
+        run: >
+          pixi run -e dev test-images
+          --mpl-generate-summary=html
+          --mpl-results-path=mpl-results
+
+      - name: Upload the image-comparison report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mpl-results
+          path: mpl-results
+          if-no-files-found: ignore
+
+      - name: Upload coverage reports to Codecov with GitHub Action
+        # `test-images` carries `--cov=src/digitalearth --cov-report=xml` like every other tier task, so this
+        # is the leg that reports the rendering paths — the globe frame and graticule, the Natural-Earth
+        # overlays, `shared_colorbar`/`grid`, the RGB composite, the KDE surface and the quiver field. Without
+        # it a PR that *adds* these 18 tests reads as a coverage drop, because `main` deselects them on every
+        # other leg. Runs even when the comparison failed: the lines were still executed, and a coverage
+        # report that disappears whenever a figure moves is the one nobody can interpret.
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+
   # The notebook gallery (docs/examples + plots/ + presets/), rendered in the dev env, minus the two
   # network-heavy notebooks the step below names. Without this job nothing in CI executes those notebooks at
   # all: the tier jobs below each run only their own tier's task, and the docs build renders with
@@ -206,7 +270,7 @@ jobs:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
 
@@ -350,6 +414,13 @@ jobs:
         run: |
           pixi run -e interactive test-interactive
 
+      - name: Run the interactive doctests
+        # The `doctests` task ignores interactive/ because those modules import holoviews, which the dev env
+        # does not have. Without this step their doctests would run in no job at all — the same reason the
+        # 3-D tier has its own step.
+        run: |
+          pixi run -e interactive doctests-interactive
+
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 
@@ -397,6 +468,12 @@ jobs:
         # The default py311/312/313 matrix skips these tests, so this is the only coverage for web/.
         run: |
           pixi run -e web test-web
+
+      - name: Run the web doctests
+        # The `doctests` task ignores web/ because those modules import maplibre, which the dev env does not
+        # have. Without this step their doctests would run in no job at all.
+        run: |
+          pixi run -e web doctests-web
 
       - name: Upload coverage reports to Codecov with GitHub Action
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5

@@ -45,7 +45,7 @@ class TestSaveAnimation:
 
     def test_gif_export(self, cube_map, tmp_path):
         out = tmp_path / "anim.gif"
-        assert cube_map.save_animation(str(out), fps=4) == str(out)
+        assert cube_map.save_animation(str(out), fps=4) == out
         assert out.stat().st_size > 1_000, "the GIF should be a non-trivial file"
 
     def test_scrubber_html_export(self, cube_map, tmp_path):

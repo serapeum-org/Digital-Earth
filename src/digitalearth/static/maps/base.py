@@ -30,8 +30,22 @@ class GeoLayerBase(Scene):
         fig: Any = None,
         figsize: Tuple[float, float] = (8, 8),
         globe: bool = False,
+        strict: bool = False,
     ):
-        super().__init__(ax=ax, fig=fig, figsize=figsize)
+        """Build the geospatial layer host: a scene plus a display CRS to reproject into.
+
+        Args:
+            crs: Display CRS every layer is reprojected to before drawing (EPSG code or anything pyramids
+                resolves). Defaults to Web Mercator.
+            domain: Optional named region or bbox setting the initial extent.
+            ax: An existing axes to draw on; the scene then does not own the figure.
+            fig: The figure `ax` belongs to; taken from `ax` when omitted.
+            figsize: Size of the figure created when `ax` is None, in inches.
+            globe: Draw on a globe frame rather than a flat projection.
+            strict: Raise `OffLimbError` for a layer with nothing to draw instead of skipping it with a
+                warning. See `Scene.__init__` for the trade-off.
+        """
+        super().__init__(ax=ax, fig=fig, figsize=figsize, strict=strict)
         self.crs = crs
         self.domain = domain
         self.globe = globe
@@ -41,6 +55,9 @@ class GeoLayerBase(Scene):
         )
         self._animation: Optional[FuncAnimation] = (
             None  # last animate()/rotate() result (kept alive, L3)
+        )
+        self._animation_fps: Optional[float] = (
+            None  # rate the last animate()/rotate() was built at; save_animation's default
         )
         self._framed = False
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
@@ -65,6 +82,10 @@ class GeoLayerBase(Scene):
     def _skipped_off_limb(self, layer: str) -> None:
         """Record that ``layer`` drew nothing because its data is outside the display CRS.
 
+        Under ``strict=True`` (set on the constructor) nothing is recorded: the skip is refused and an
+        :class:`~digitalearth.base.crs.OffLimbError` is raised naming the layer, so a pipeline that must
+        not produce a silently empty figure fails at the layer that would have been dropped.
+
         The severity depends on whether hiding the data is a normal thing for this map to do. On a globe it
         is: a clipped projection shows one hemisphere, and a rotation sweeps past the far side on every
         run, so those skips are logged at debug and stay out of the way. On an unclipped display CRS there
@@ -77,7 +98,15 @@ class GeoLayerBase(Scene):
 
         Args:
             layer: The public layer method that drew nothing, named for the log line.
+
+        Raises:
+            OffLimbError: when this scene was built with ``strict=True``.
         """
+        if self.strict:
+            raise OffLimbError(
+                f"{layer}: none of the data can be placed in {self.crs!r}, so the layer would draw "
+                "nothing (strict=True; pass strict=False to skip it with a warning instead)"
+            )
         if self.globe:
             logger.debug("%s: data lies outside %r; nothing drawn", layer, self.crs)
         else:

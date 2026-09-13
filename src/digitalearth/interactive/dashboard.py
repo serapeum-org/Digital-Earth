@@ -16,12 +16,40 @@ live app must be *served*, not converted. ``save_app`` is the offline path (pre-
 from functools import reduce
 from importlib.util import find_spec
 from operator import mul as _mul
-from typing import TYPE_CHECKING, Any, Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from digitalearth.interactive.base import _require_holoviz
+from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
 
-#: Basemap providers offered by the layer-control basemap switcher.
-_BASEMAP_CHOICES = ["CartoLight", "CartoDark", "OSM", "EsriImagery"]
+#: Basemap providers offered by the basemap switchers — the **one** list behind both the dashboard's
+#: ``"basemap"`` widget and the layer-control switch, so the two cannot offer different providers.
+_BASEMAP_CHOICES = list(
+    dict.fromkeys(
+        [DEFAULT_BASEMAP_PROVIDER, "CartoLight", "CartoDark", "OSM", "EsriImagery"]
+    )
+)
+
+#: Element type names that are a tile basemap — replaced (not stacked under) when a basemap widget picks
+#: a provider, so a map that already carries tiles still responds to the switcher.
+_TILE_TYPES = ("WMTS", "Tiles")
+
+#: Element type names the dashboard's ``cmap``/``alpha`` overrides apply to (the colour-mapped raster
+#: elements). Their recorded style is what an override is merged over.
+_COLOR_MAPPED_TYPES = ("Image", "QuadMesh")
+
+#: Style keys a widget may override on a colour-mapped layer. Anything the builders recorded under these
+#: keys is read back and merged *under* the widget value, so an override never silently drops the rest of
+#: the styling a builder applied.
+_OVERRIDABLE_STYLE = ("cmap", "clim", "alpha")
+
+#: Element type names an override reaches that carry no scalar to colour-map: an ``RGB`` composite is
+#: already three colour channels, so ``cmap``/``clim`` have nothing to act on and only the alpha of the
+#: merged style applies to it. Listing it here is what keeps it from being skipped altogether.
+_ALPHA_ONLY_TYPES = ("RGB",)
+
+#: The subset of :data:`_OVERRIDABLE_STYLE` an :data:`_ALPHA_ONLY_TYPES` element can take.
+_ALPHA_ONLY_STYLE = ("alpha",)
 
 #: Built-in colormaps offered by the dashboard cmap selector.
 _CMAP_CHOICES = [
@@ -86,7 +114,8 @@ class DashboardMixin(_MixinBase):
 
         The returned object is a ``panel.viewable.Viewable``: a sidebar (or inline row) of widgets
         bound to the map's style, beside the live map. Supported widgets: ``"cmap"`` (colormap
-        selector), ``"alpha"`` (opacity slider), ``"basemap"`` (tile-provider selector).
+        selector), ``"alpha"`` (opacity slider), ``"basemap"`` (tile-provider selector, which swaps the
+        tile layer under the map and is available on a Web-Mercator map only).
 
         Args:
             widgets: Which widgets to expose, in order.
@@ -97,7 +126,8 @@ class DashboardMixin(_MixinBase):
             A ``panel.viewable.Viewable`` hosting the map + widgets.
 
         Raises:
-            ValueError: for an unknown widget name.
+            ValueError: for an unknown widget name, or when ``"basemap"`` is requested on a map whose
+                display CRS is not EPSG:3857 (Bokeh renders tiles in Web Mercator only).
 
         Examples:
             - Build a dashboard with colormap + opacity controls:
@@ -149,7 +179,8 @@ class DashboardMixin(_MixinBase):
             map passed to ``pn.bind``.
 
         Raises:
-            ValueError: for an unknown widget name.
+            ValueError: for an unknown widget name, or when ``"basemap"`` is requested on a
+                non-Web-Mercator map (Bokeh renders tiles in EPSG:3857 only).
         """
         controls, bindings = [], {}
         for name in widgets:
@@ -160,9 +191,10 @@ class DashboardMixin(_MixinBase):
                     label="Opacity", start=0.0, end=1.0, value=1.0
                 )
             elif name == "basemap":
-                widget = pn.widgets.Select(
-                    label="Basemap", options=["CartoLight", "CartoDark", "OSM"]
-                )
+                # Refuse rather than draw a misaligned basemap: the widget swaps in a Bokeh tile layer,
+                # which only registers with the data on a Web-Mercator map.
+                self._require_web_mercator("dashboard basemap")
+                widget = pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
             else:
                 raise ValueError(
                     f"unknown dashboard widget {name!r}; choose from 'cmap'/'alpha'/'basemap'"
@@ -171,6 +203,95 @@ class DashboardMixin(_MixinBase):
             bindings[name] = widget
         return controls, bindings
 
+    def _recorded_overridable_style(self) -> dict:
+        """Merge the overridable style the builders recorded for the colour-mapped layers.
+
+        Read back through :meth:`~digitalearth.interactive.base.InteractiveMapBase.style_of`, so a widget
+        override lands *over* the styling the builders applied instead of on top of nothing — a recorded
+        ``clim`` survives a ``cmap`` change, and the widget value is what differs.
+
+        Returns:
+            dict: the ``cmap``/``clim``/``alpha`` entries recorded for the ``Image``/``QuadMesh`` layers.
+        """
+        merged: dict = {}
+        for layer in self.layers:
+            if type(layer).__name__ not in _COLOR_MAPPED_TYPES:
+                continue
+            recorded = self.style_of(layer)["common"]
+            merged.update(
+                {
+                    key: value
+                    for key, value in recorded.items()
+                    if key in _OVERRIDABLE_STYLE
+                }
+            )
+        return merged
+
+    def _restyle(self, obj: Any, merged: dict) -> Any:
+        """Apply ``merged`` to every element type a dashboard widget claims to restyle.
+
+        The single place the widget-to-element mapping is spelled, so the dashboard's ``cmap``/``alpha``
+        overrides and the layer control's opacity slider cannot restyle different element sets: a
+        ``QuadMesh`` that ignored the opacity slider and an ``RGB`` that ignored the colormap selector
+        were the two halves of that drift, each silent while its widget still moved.
+
+        The colour-mapped types take the whole merged style; :data:`_ALPHA_ONLY_TYPES` take its alpha
+        alone, because an ``RGB`` composite is already three colour channels and has no scalar for a
+        ``cmap``/``clim`` to map. HoloViews applies each spec only to the matching elements and tolerates
+        a map carrying none of them, so a vector-only map comes back unchanged rather than raising.
+
+        Args:
+            obj: The composed HoloViews object to restyle.
+            merged: ``cmap``/``clim``/``alpha`` entries — widget values merged over the recorded style.
+
+        Returns:
+            ``obj`` with one opts spec applied per restyled element type.
+        """
+        gv, hv = _require_holoviz()
+        specs = [getattr(hv.opts, name)(**merged) for name in _COLOR_MAPPED_TYPES]
+        alpha_only = {
+            key: value for key, value in merged.items() if key in _ALPHA_ONLY_STYLE
+        }
+        if alpha_only:
+            specs += [
+                getattr(hv.opts, name)(**alpha_only) for name in _ALPHA_ONLY_TYPES
+            ]
+        return obj.opts(*specs)
+
+    def _with_basemap(
+        self, obj: Any, provider: str, *, context: str = "dashboard basemap"
+    ) -> Any:
+        """Compose ``obj`` over the ``provider`` tile layer, replacing any basemap already in it.
+
+        The provider name is resolved through the same
+        :meth:`~digitalearth.interactive.decoration.DecorationMixin._build_tiles` path ``tiles()`` uses, so
+        the widget and the builder agree on provider names. Any tile element already in ``obj`` is dropped
+        first — stacking a second basemap *underneath* the old one is what would make the switcher look
+        inert on a map that already called ``tiles()``.
+
+        Args:
+            obj: The composed HoloViews object to draw over the basemap.
+            provider: A provider name from :data:`_BASEMAP_CHOICES` (or anything ``tiles()`` accepts).
+            context: The requesting entry point, quoted in the Web-Mercator refusal so the message
+                names the widget the caller actually touched.
+
+        Returns:
+            The overlay with the chosen basemap underneath.
+
+        Raises:
+            ValueError: when the display CRS is not Web Mercator, or the provider name is unknown.
+        """
+        _, hv = _require_holoviz()
+        self._require_web_mercator(context)
+        # A sibling-mixin call: _build_tiles lives on DecorationMixin, which the composed InteractiveMap
+        # supplies. The TYPE_CHECKING base above carries the shared state only, not the sibling mixins.
+        tile = self._build_tiles(provider, None).opts(level="underlay")  # type: ignore[attr-defined]
+        elements = list(obj) if isinstance(obj, hv.Overlay) else [obj]
+        data = [
+            element for element in elements if type(element).__name__ not in _TILE_TYPES
+        ]
+        return reduce(_mul, [tile, *data])
+
     def _render_with_overrides(self, values: dict) -> Any:
         """Re-render the composed map, applying widget values as style overrides.
 
@@ -178,21 +299,22 @@ class DashboardMixin(_MixinBase):
             values: Widget values keyed by widget name (``cmap``/``alpha``/``basemap``).
 
         Returns:
-            The composed HoloViews object with the overrides applied.
+            The composed HoloViews object with the overrides applied — every element type
+            :meth:`_restyle` covers redrawn with the widget values merged over their recorded style,
+            over the chosen tile basemap.
         """
-        gv, hv = _require_holoviz()
         obj = self.render()
-        opts: dict = {}
+        overrides: dict = {}
         if values.get("cmap"):
-            opts["cmap"] = values["cmap"]
+            overrides["cmap"] = values["cmap"]
         if values.get("alpha") is not None:
-            opts["alpha"] = values["alpha"]
-        if not opts:
-            return obj
-        # cmap/alpha apply to the colour-mapped element types; HoloViews applies each spec only to
-        # the matching elements and tolerates a map without them (a vector-only map is returned
-        # unchanged), so no error-swallowing wrapper is needed here.
-        return obj.opts(hv.opts.Image(**opts), hv.opts.QuadMesh(**opts))
+            overrides["alpha"] = values["alpha"]
+        if overrides:
+            merged = {**self._recorded_overridable_style(), **overrides}
+            obj = self._restyle(obj, merged)
+        if values.get("basemap"):
+            obj = self._with_basemap(obj, values["basemap"])
+        return obj
 
     def serve(self, **kwargs: Any) -> Any:
         """Mark the dashboard servable for ``panel serve`` and return it.
@@ -207,7 +329,7 @@ class DashboardMixin(_MixinBase):
         app.servable()
         return app
 
-    def save_app(self, path: str, *, embed: bool = True, **kwargs: Any) -> str:
+    def save_app(self, path: Any, *, embed: bool = True, **kwargs: Any) -> Path:
         """Export the dashboard to a standalone HTML file (no server).
 
         Panel's ``embed`` bakes the discrete widget states into the page, so the exported file is
@@ -216,13 +338,13 @@ class DashboardMixin(_MixinBase):
         pyramids-backed app cannot run in WASM/Pyodide (no GDAL in the browser).
 
         Args:
-            path: Destination ``.html`` file.
+            path: Destination ``.html`` file (``str`` or ``pathlib.Path``).
             embed: Bake widget states for offline interactivity (``True``) or export a static
                 snapshot (``False``).
             **kwargs: Forwarded to :meth:`dashboard`.
 
         Returns:
-            The ``path`` written.
+            pathlib.Path: the file written, matching the tier's ``save``/``save_animation`` (#248).
 
         Examples:
             - Export an offline, self-contained dashboard page:
@@ -230,14 +352,14 @@ class DashboardMixin(_MixinBase):
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
-                >>> InteractiveMap().image(dem).save_app("app.html")          # doctest: +SKIP
+                >>> InteractiveMap().image(dem).save_app("app.html").name     # doctest: +SKIP
                 'app.html'
 
                 ```
         """
         app = self.dashboard(**kwargs)
         app.save(path, embed=embed)
-        return str(path)
+        return Path(path)
 
     def cross_tier_pane(self, scene3d: Any, **kwargs: Any) -> Any:
         """Embed an M1 ``Scene3D`` (PyVista) as a Panel pane beside this map (DI.4c).
@@ -266,24 +388,102 @@ class DashboardMixin(_MixinBase):
         return pn.pane.VTK(render_window, **kwargs)
 
     def layer_control(
-        self, *, opacity: bool = True, reorder: bool = True, basemap_switch: bool = True
+        self,
+        *,
+        opacity: bool = True,
+        reorder: bool = False,
+        basemap_switch: Optional[bool] = None,
     ) -> Any:
-        """Build a layer manager: per-layer visibility toggles, opacity sliders, basemap switch (DI.13).
+        """Build a layer manager: per-layer visibility toggles, opacity slider, basemap switch (DI.13).
+
+        The toggle order follows add order. Drag-reorder is **not implemented**: reordering needs a stable
+        handle per layer (roadmap IN-1; the static twin is #216), which the registry does not yet give, so
+        ``reorder=True`` is refused outright rather than accepted and ignored.
+
+        Bokeh renders tiles in EPSG:3857 only, so the basemap switch is Web-Mercator-only — and which
+        way that lands depends on whether it was *asked for*. Left at the ``None`` default the switch
+        is furniture this method offers unprompted, so a non-Mercator map drops it and logs why; passed
+        ``basemap_switch=True`` it is an explicit request, and a non-Mercator map is refused with its
+        CRS named. That is the one policy this module applies to an explicit basemap request — the same
+        answer ``dashboard(widgets=("basemap",))`` gives.
 
         Args:
-            opacity: Include a per-layer opacity slider.
-            reorder: Reserved for drag-reorder (currently the toggle order follows add order).
-            basemap_switch: Include a basemap-provider ``Select``.
+            opacity: Include an opacity slider driving the visible colour-mapped layers.
+            reorder: Must stay ``False``; ``True`` raises ``NotImplementedError``.
+            basemap_switch: Include a basemap-provider ``Select``, bound so picking a provider swaps the
+                tile layer under the map. ``None`` (default) offers it on a Web-Mercator map and drops
+                it (logged) on any other display CRS; ``True`` requires it, so a non-Mercator map
+                raises; ``False`` never builds it.
 
         Returns:
             A ``panel.viewable.Viewable`` whose widgets reactively rebuild the map overlay — toggling
-            a layer hides/shows it; the opacity slider sets its alpha.
+            a layer hides/shows it; the opacity slider sets its alpha; the basemap ``Select`` swaps tiles.
 
         Raises:
-            ValueError: when there are no layers to control.
+            ValueError: when there are no layers to control, or when ``basemap_switch=True`` is passed
+                on a map whose display CRS is not EPSG:3857 (Bokeh renders tiles in Web Mercator only).
+            NotImplementedError: when ``reorder=True`` is passed — reordering is not implemented,
+                and the flag is refused rather than accepted and ignored (roadmap IN-1; the static
+                twin is #216).
+
+        Examples:
+            - One toggle per registered layer, labelled by index and element type, in add order:
+                ```python
+                >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
+                >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> dem = Dataset.read_file("examples/data/acc4000.tif")       # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem).points(fc)                 # doctest: +SKIP
+                >>> panel = m.layer_control()                                  # doctest: +SKIP
+                >>> panel[0][0].options                                        # doctest: +SKIP
+                ['0: Image', '1: Points']
+
+                ```
+            - ``reorder=True`` is refused outright: the registry has no stable per-layer handle to
+              reorder by, and silently ignoring the flag was how the control looked inert:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> m = InteractiveMap().image(dem)                            # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     m.layer_control(reorder=True)
+                ... except NotImplementedError as error:
+                ...     print(str(error).split(" — ")[0])
+                layer_control(reorder=True) is not implemented
+
+                ```
+            - Unprompted, the switch is furniture: on a Web-Mercator map the controls are toggles +
+              opacity + basemap; on any other display CRS it is dropped (and logged) rather than
+              drawn misaligned:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> mercator = InteractiveMap().image(dem).layer_control()     # doctest: +SKIP
+                >>> len(mercator[0])                                           # doctest: +SKIP
+                3
+                >>> other = InteractiveMap(crs=4326).image(dem)                 # doctest: +SKIP
+                >>> len(other.layer_control()[0])                              # doctest: +SKIP
+                2
+
+                ```
+            - Asked for outright, the same condition is refused instead, with the display CRS named:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     other.layer_control(basemap_switch=True)
+                ... except ValueError as error:
+                ...     print(str(error).split(" — ")[0])
+                layer_control basemap() needs the Web-Mercator display CRS (crs=3857)
+
+                ```
         """
         gv, hv = _require_holoviz()
         pn = _require_panel()
+        if reorder:
+            raise NotImplementedError(
+                "layer_control(reorder=True) is not implemented — reordering needs a stable per-layer "
+                "handle (roadmap IN-1; static twin #216) before draw order can be manipulated. Pass reorder=False "
+                "(the default); the toggles follow add order, which you control by the order you build in."
+            )
         if not self.layers:
             raise ValueError(
                 "layer_control() needs at least one layer — add a builder call first"
@@ -298,46 +498,147 @@ class DashboardMixin(_MixinBase):
         )
         if alpha is not None:
             controls.append(alpha)
-        if basemap_switch:
-            controls.append(
-                pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
-            )
+        if basemap_switch is False:
+            basemap = None
+        else:
+            basemap = self._basemap_select(pn, requested=basemap_switch is True)
+        if basemap is not None:
+            controls.append(basemap)
 
         bind_kwargs = {"shown": visible}
         if alpha is not None:
             bind_kwargs["op"] = alpha
+        if basemap is not None:
+            bind_kwargs["basemap"] = basemap
         view = pn.bind(self._compose_visible_layers, **bind_kwargs)
         return pn.Row(pn.Column(*controls), pn.panel(view))
 
-    def _compose_visible_layers(self, shown: list, op: float = 1.0) -> Any:
+    def _basemap_select(self, pn: Any, *, requested: bool) -> Any:
+        """Build the layer-control basemap ``Select``, or ``None`` on a non-Web-Mercator map.
+
+        Args:
+            pn: The imported panel module.
+            requested: Whether the caller asked for the switch outright (``basemap_switch=True``) rather
+                than leaving it at the ``None`` default. An explicit request on a non-Web-Mercator map is
+                refused — the answer ``dashboard(widgets=("basemap",))`` already gives — while an
+                unprompted one is dropped and logged, since nothing was asked for.
+
+        Returns:
+            A ``panel.widgets.Select`` over :data:`_BASEMAP_CHOICES`, or ``None`` when the display CRS is
+            not EPSG:3857 and the switch was not requested — in which case the omission is logged rather
+            than left to be guessed at.
+
+        Raises:
+            ValueError: when ``requested`` is true and the display CRS is not EPSG:3857; the message
+                names the CRS the map actually uses.
+        """
+        if self.crs != 3857:
+            if requested:
+                self._require_web_mercator("layer_control basemap")
+            from loguru import logger
+
+            logger.info(
+                f"layer_control(): basemap switch omitted — Bokeh renders tiles in EPSG:3857 only and "
+                f"this map uses crs={self.crs!r}; build the map with InteractiveMap(crs=3857) for it."
+            )
+            return None
+        return pn.widgets.Select(label="Basemap", options=_BASEMAP_CHOICES)
+
+    def _compose_visible_layers(
+        self, shown: list, op: float = 1.0, basemap: Any = None
+    ) -> Any:
         """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
+
+        The opacity is merged over the style the builders recorded for those layers (read back through
+        :meth:`~digitalearth.interactive.base.InteractiveMapBase.style_of`), so hiding and re-showing a
+        layer cannot quietly drop its ``cmap``/``clim``.
 
         Args:
             shown: The ``"i: Type"`` labels of the visible layers (from the toggle widget).
             op: Opacity applied to colour-mapped layers.
+            basemap: Provider name from the basemap ``Select``, or ``None`` to leave the basemap as built.
 
         Returns:
-            A blank ``hv.Overlay`` when nothing is shown, the single element when one is, else the
-            overlay of the chosen layers at opacity ``op``.
+            A blank ``hv.Overlay`` when nothing is shown, else the overlay of the chosen layers at
+            opacity ``op``, over the chosen basemap when one is selected.
         """
         gv, hv = _require_holoviz()
         chosen = [self.layers[int(label.split(":")[0])] for label in shown]
         if not chosen:
             return hv.Overlay([])
         overlay = chosen[0] if len(chosen) == 1 else reduce(_mul, chosen)
-        return overlay.opts(hv.opts.Image(alpha=op), hv.opts.RGB(alpha=op))
+        merged = {**self._recorded_overridable_style(), "alpha": op}
+        overlay = self._restyle(overlay, merged)
+        if basemap:
+            overlay = self._with_basemap(
+                overlay, basemap, context="layer_control basemap"
+            )
+        return overlay
 
-    def attribute_table(self, features: Any, *, linked: bool = True) -> Any:
-        """Build a ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).
+    def attribute_table(self, features: Any, *, linked: bool = False) -> Any:
+        """Build a read-only ``Tabulator`` attribute table of a vector ``FeatureCollection`` (DI.13).
+
+        The table is a **read-only view** of the attributes, not a selection-linked companion to the map:
+        two-way linking needs a ``holoviews.link_selections`` (or a selection stream) shared with the map's
+        elements, which is roadmap IN-5 / DE-13. ``linked=True`` is refused rather than accepted and
+        ignored.
 
         Args:
             features: A pyramids ``FeatureCollection`` (or GeoDataFrame) whose non-geometry columns
                 populate the table.
-            linked: Reserved for two-way selection linking with the map (needs a live server).
+            linked: Must stay ``False``; ``True`` raises ``NotImplementedError``. It used to
+                default to ``True`` and do nothing, which read as "linking is on" when no
+                selection was ever shared with the map.
 
         Returns:
-            A ``panel.widgets.Tabulator`` of the attribute columns.
+            A ``panel.widgets.Tabulator`` of the attribute columns — paginated, and ``disabled`` so
+            the view cannot be edited into disagreeing with the data on the map.
+
+        Raises:
+            NotImplementedError: when ``linked=True`` is passed — two-way selection linking
+                is not implemented (roadmap IN-5 / DE-13), and the flag is refused rather
+                than accepted and ignored.
+
+        Examples:
+            - The geometry column is dropped; what is left is the attributes, unchanged:
+                ```python
+                >>> from pyramids.feature import FeatureCollection             # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> fc = FeatureCollection.read_file("tests/data/points.geojson")  # doctest: +SKIP
+                >>> table = InteractiveMap().attribute_table(fc)               # doctest: +SKIP
+                >>> list(table.value.columns)                                  # doctest: +SKIP
+                ['fid']
+                >>> len(table.value) == len(fc)                                # doctest: +SKIP
+                True
+
+                ```
+            - The view is read-only by construction — a viewer cannot edit a cell into disagreeing
+              with the map:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> InteractiveMap().attribute_table(fc).disabled              # doctest: +SKIP
+                True
+
+                ```
+            - ``linked=True`` is refused: nothing shares a selection with the map's elements yet,
+              and the table is ``disabled``, so it could not emit one either:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     InteractiveMap().attribute_table(fc, linked=True)
+                ... except NotImplementedError as error:
+                ...     print(str(error).split(" — ")[0])
+                attribute_table(linked=True) is not implemented
+
+                ```
         """
+        if linked:
+            raise NotImplementedError(
+                "attribute_table(linked=True) is not implemented — two-way selection linking needs a "
+                "holoviews.link_selections shared with the map's elements (roadmap IN-5/DE-13), and the "
+                "table is disabled=True, so it cannot emit a selection. Pass linked=False (the default) "
+                "for the read-only attribute view."
+            )
         pn = _require_panel()
         pn.extension("tabulator")
         frame = features.drop(columns=[features.geometry.name], errors="ignore")

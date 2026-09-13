@@ -811,3 +811,189 @@ class TestOffLimbEveryLayerKind:
         assert hidden.imshow(regional) is None
         assert not hidden.ax.images, "nothing should have been drawn"
         assert hidden.layers == [], "no layer should have been registered"
+
+
+def _far_side() -> Map:
+    """A globe Map whose orthographic view hides the Netherlands fixtures entirely.
+
+    Returns:
+        Map: a globe centred on the far side of the data.
+    """
+    return Map(
+        crs=projections.orthographic(lon=-175, lat=15), globe=True, figsize=(4, 4)
+    )
+
+
+def _draw(m: Map, method: str, points, polygons, lines):
+    """Call one vector builder on ``m`` with the fixture its geometry type requires.
+
+    Args:
+        m: The Map to draw on.
+        method: The public builder's name.
+        points: A point ``FeatureCollection`` carrying a numeric ``v``.
+        polygons: A polygon ``FeatureCollection`` carrying a numeric ``v``.
+        lines: A line ``FeatureCollection`` carrying a numeric ``v``.
+
+    Returns:
+        Whatever the builder returned.
+    """
+    calls = {
+        "scatter": lambda: m.scatter(points),
+        "choropleth": lambda: m.choropleth(polygons, column="v"),
+        "shapes": lambda: m.shapes(polygons),
+        "voronoi": lambda: m.voronoi(points, column="v"),
+        "cartogram": lambda: m.cartogram(polygons, scale="v", column="v"),
+        "quadtree": lambda: m.quadtree(points, column="v", nmax=1),
+        "kde": lambda: m.kde(points),
+        "sankey": lambda: m.sankey(lines, column="v"),
+    }
+    return calls[method]()
+
+
+#: Every validating vector builder — the eight that share the ``_vector_input`` preamble.
+VECTOR_BUILDERS = [
+    "scatter",
+    "choropleth",
+    "shapes",
+    "voronoi",
+    "cartogram",
+    "quadtree",
+    "kde",
+    "sankey",
+]
+
+
+class TestOffLimbVectorLayers:
+    """The vector builders answer an off-limb view exactly as the raster ones do (H3).
+
+    The contract in ``digitalearth.base.crs`` says one signal covers both data families, and the vector half
+    of it was written into :func:`~digitalearth.base.crs.reproject`. This tier never reached it: the shared
+    preamble called ``features.to_crs`` directly, so a globe that hides the data gave a raw
+    ``ValueError: zero-size array to reduction operation fmin`` from ``choropleth`` and an all-masked layer
+    from ``scatter`` — which ``strict=True`` did not even notice. These tests drive the real orthographic
+    warp rather than monkeypatching the reprojection, because the bypass was the bug.
+    """
+
+    @pytest.fixture
+    def points(self):
+        """Five scattered lon/lat points over the Netherlands, with a numeric ``v``.
+
+        Returns:
+            FeatureCollection: the point fixture every far-side view hides.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        coords = [(4.0, 53.0), (4.6, 53.1), (4.2, 53.6), (4.9, 53.7), (4.4, 53.35)]
+        return FeatureCollection(
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0, 3.0, 4.0, 5.0]},
+                geometry=[Point(x, y) for x, y in coords],
+                crs=4326,
+            )
+        )
+
+    @pytest.fixture
+    def polygons(self):
+        """Three lon/lat squares over the Netherlands, with a numeric ``v``.
+
+        Returns:
+            FeatureCollection: the polygon fixture every far-side view hides.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import box
+
+        return FeatureCollection(
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0, 3.0]},
+                geometry=[
+                    box(4.0 + i * 0.5, 53.0, 4.4 + i * 0.5, 53.4) for i in range(3)
+                ],
+                crs=4326,
+            )
+        )
+
+    @pytest.fixture
+    def lines(self):
+        """Two lon/lat lines over the Netherlands, with a numeric ``v``.
+
+        Returns:
+            FeatureCollection: the line fixture ``sankey`` draws.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import LineString
+
+        return FeatureCollection(
+            gpd.GeoDataFrame(
+                {"v": [1.0, 2.0]},
+                geometry=[
+                    LineString([(4.0, 53.0), (4.5, 53.3)]),
+                    LineString([(4.5, 53.3), (5.0, 53.6)]),
+                ],
+                crs=4326,
+            )
+        )
+
+    @pytest.mark.parametrize("method", VECTOR_BUILDERS)
+    def test_every_vector_builder_draws_nothing(self, method, points, polygons, lines):
+        """A hidden vector layer returns None and registers nothing, like every hidden raster layer."""
+        m = _far_side()
+        assert _draw(m, method, points, polygons, lines) is None, (
+            f"{method} should draw nothing when its features are behind the limb"
+        )
+        assert m.layers == [], f"{method} must not register a layer it could not draw"
+
+    @pytest.mark.parametrize("method", VECTOR_BUILDERS)
+    def test_strict_raises_off_limb_naming_the_layer(
+        self, method, points, polygons, lines
+    ):
+        """Under ``strict=True`` the same call raises ``OffLimbError``, naming the layer it dropped."""
+        from digitalearth.static import OffLimbError
+
+        m = Map(
+            crs=projections.orthographic(lon=-175, lat=15),
+            globe=True,
+            figsize=(4, 4),
+            strict=True,
+        )
+        with pytest.raises(OffLimbError, match=method):
+            _draw(m, method, points, polygons, lines)
+
+    def test_choropleth_no_longer_dies_inside_numpy(self, polygons):
+        """The measured symptom: a globe choropleth raised numpy's ``fmin`` complaint, strict or not.
+
+        Test scenario:
+            ``_finite_polygons`` dropped every far-side ring, and the empty value array then reached
+            ``np.nanmin`` inside the colour scaling — a raw ``ValueError`` naming nothing the caller wrote.
+        """
+        m = _far_side()
+        assert m.choropleth(polygons, column="v") is None, (
+            "an off-limb choropleth must skip, not crash in a reduction"
+        )
+
+    def test_an_unclipped_projection_warns_and_names_the_layer(self, points, caplog):
+        """Off a globe there is no limb to hide behind, so the skip is a warning, not a debug line."""
+        import logging
+
+        m = Map(crs=projections.orthographic(lon=-175, lat=15), figsize=(4, 4))
+        with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
+            assert m.scatter(points) is None
+        assert any("scatter" in record.getMessage() for record in caplog.records), (
+            f"the warning must name the layer, got {[r.getMessage() for r in caplog.records]}"
+        )
+
+    @pytest.mark.parametrize("method", VECTOR_BUILDERS)
+    def test_the_same_builders_still_draw_when_visible(
+        self, method, points, polygons, lines
+    ):
+        """The positive control: a guard that returned None unconditionally would pass everything above."""
+        visible = Map(
+            crs=projections.orthographic(lon=4.5, lat=53.3), globe=True, figsize=(4, 4)
+        )
+        assert _draw(visible, method, points, polygons, lines) is not None, (
+            f"{method} must still draw when its features are on the view"
+        )
+        assert len(visible.layers) == 1, f"{method} must register the layer it drew"

@@ -186,6 +186,7 @@ nav:
         - timeseries: examples/plots/25_timeseries.ipynb
         - climatology: examples/plots/26_climatology.ipynb
   - Reference:
+    - Renamed keywords: reference/renamed-keywords.md
     - Web maps: reference/web_map.md
     - Keyed basemaps: reference/basemaps.md
     - TexturedGlobe (3-D globe): reference/textured_globe.md

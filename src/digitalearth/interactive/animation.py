@@ -7,8 +7,10 @@ registered: ``play`` binds a ``panel.widgets.Player`` to its time kdim for auto-
 matplotlib backend or a client-side **scrubber** HTML that animates offline with no server.
 """
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from digitalearth.base.animation import DEFAULT_FPS
 from digitalearth.interactive.base import _require_holoviz
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -65,11 +67,13 @@ class AnimationMixin(_MixinBase):
         keys = list(dmap.kdims[0].values)
         return hv.HoloMap({key: dmap[key] for key in keys}, kdims=dmap.kdims)
 
-    def play(self, *, fps: int = 3, loop: bool = True) -> Any:
+    def play(self, *, fps: float = DEFAULT_FPS, loop: bool = True) -> Any:
         """Wrap the time cube in a Panel layout with an auto-advancing ``Player`` widget.
 
         Args:
-            fps: Playback frames per second (the Player interval).
+            fps: Playback frames per second (the Player interval). Defaults to
+                :data:`~digitalearth.base.animation.DEFAULT_FPS`, the one rate every tier reads (#256), so
+                the same animation plays at the same speed on every backend.
             loop: Loop at the end (``True``) or stop (``False``).
 
         Returns:
@@ -78,6 +82,41 @@ class AnimationMixin(_MixinBase):
         Raises:
             ValueError: when no ``timecube`` layer has been added.
             ImportError: when the ``interactive`` extra (which provides panel) is absent.
+
+        Examples:
+            - Play a time cube at the shared default speed; the player steps through the cube's
+              own time keys, not a frame index:
+                ```python
+                >>> from pyramids.dataset.collection import DatasetCollection     # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> cube = DatasetCollection.from_files(["jan.tif", "feb.tif"])   # doctest: +SKIP
+                >>> app = InteractiveMap().timecube(cube).play()                  # doctest: +SKIP
+                >>> app[1].value == app[1].options[0]   # starts on step one  # doctest: +SKIP
+                True
+
+                ```
+            - ``fps`` is the playback rate, translated into the Player's millisecond interval —
+              two frames a second is a 500 ms step:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> m = InteractiveMap().timecube(cube)                          # doctest: +SKIP
+                >>> app = m.play(fps=2.0, loop=False)                            # doctest: +SKIP
+                >>> app[1].interval                                               # doctest: +SKIP
+                500
+                >>> app[1].loop_policy                                            # doctest: +SKIP
+                'once'
+
+                ```
+            - Playback needs a time cube; anything else is refused rather than played empty:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> try:                                                          # doctest: +SKIP
+                ...     InteractiveMap().play()
+                ... except ValueError as error:
+                ...     print(str(error).split(" — ")[0])
+                no time cube to animate
+
+                ```
         """
         import panel as pn
 
@@ -94,7 +133,9 @@ class AnimationMixin(_MixinBase):
         view = pn.bind(lambda value: dmap[value], player)
         return pn.Column(pn.panel(view), player)
 
-    def save_animation(self, path: str, *, fps: int = 3, **kwargs: Any) -> str:
+    def save_animation(
+        self, path: Any, *, fps: float = DEFAULT_FPS, **kwargs: Any
+    ) -> Path:
         """Export the time cube as a GIF/MP4 (matplotlib backend) or a scrubber HTML.
 
         ``.gif``/``.mp4`` materialise the DynamicMap to a finite ``HoloMap`` and render via the
@@ -102,15 +143,54 @@ class AnimationMixin(_MixinBase):
         plays offline with no server.
 
         Args:
-            path: Output file (``.gif`` / ``.mp4`` / ``.html``).
-            fps: Frames per second.
+            path: Output file (``.gif`` / ``.mp4`` / ``.html``), as ``str`` or ``pathlib.Path``.
+            fps: Frames per second. Defaults to :data:`~digitalearth.base.animation.DEFAULT_FPS`, the
+                one rate every tier reads (#256).
             **kwargs: Forwarded to :func:`holoviews.save`.
 
         Returns:
-            The ``path`` written.
+            pathlib.Path: the file written, matching :meth:`~digitalearth.interactive.base.\
+InteractiveMapBase.save` (#248).
 
         Raises:
             ValueError: when no ``timecube`` layer has been added.
+
+        Examples:
+            - Export a GIF; the returned ``Path`` can be inspected or moved without re-wrapping it
+              (#248 — this used to come back as a bare ``str``):
+                ```python
+                >>> from pyramids.dataset.collection import DatasetCollection     # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> cube = DatasetCollection.from_files(["jan.tif", "feb.tif"])   # doctest: +SKIP
+                >>> m = InteractiveMap().timecube(cube)                          # doctest: +SKIP
+                >>> out = m.save_animation("rain.gif")                           # doctest: +SKIP
+                >>> out.suffix, out.exists()                                      # doctest: +SKIP
+                ('.gif', True)
+
+                ```
+            - The suffix picks the writer: ``.html`` is the client-side scrubber, which needs no
+              server and no ffmpeg, and ``fps`` sets its playback rate:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> out = InteractiveMap().timecube(cube).save_animation(         # doctest: +SKIP
+                ...     "rain.html", fps=8.0
+                ... )
+                >>> out.name                                                      # doctest: +SKIP
+                'rain.html'
+                >>> "<html" in out.read_text(encoding="utf-8")[:200].lower()      # doctest: +SKIP
+                True
+
+                ```
+            - Exporting needs a time cube, same as :meth:`play`:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> try:                                                          # doctest: +SKIP
+                ...     InteractiveMap().save_animation("nothing.gif")
+                ... except ValueError as error:
+                ...     print(str(error).split(" — ")[0])
+                no time cube to animate
+
+                ```
         """
         gv, hv = _require_holoviz()
         holomap = self._to_holomap(self._time_dynamicmap())
@@ -119,4 +199,4 @@ class AnimationMixin(_MixinBase):
             hv.save(holomap, path, fmt="scrubber", fps=fps, **kwargs)
         else:
             hv.save(holomap, path, backend="matplotlib", fps=fps, **kwargs)
-        return str(path)
+        return Path(path)

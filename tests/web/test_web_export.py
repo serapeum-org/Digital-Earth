@@ -310,6 +310,8 @@ class TestSeleniumIsTheFallback:
         monkeypatch.setattr(WebMap, "_png_via_playwright", staticmethod(_absent))
         monkeypatch.setattr(WebMap, "_png_via_selenium", staticmethod(_present))
         out = tmp_path / "m.png"
-        assert WebMap().basemap()._render_png(str(out)) == str(out)
+        assert WebMap().basemap()._render_png(str(out)) == out, (
+            "the PNG renderer returns the pathlib.Path it wrote (C1)"
+        )
         assert order == ["playwright", "selenium"], order
         assert out.read_bytes().startswith(b"\x89PNG"), "no screenshot was written"

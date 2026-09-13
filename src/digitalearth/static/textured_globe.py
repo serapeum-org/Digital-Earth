@@ -26,8 +26,10 @@ layer/colorbar lifecycle, none of which applies to a textured sphere.
 """
 
 import inspect
+import os
 import warnings
-from typing import Any, Callable, List, Optional, Tuple
+from pathlib import Path
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -2260,12 +2262,16 @@ class TexturedGlobe:
         self._animation_fps = 1000.0 / interval
         return anim
 
-    def save(self, path: str, **kwargs: Any) -> None:
+    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs: Any) -> Path:
         """Save the drawn figure to ``path``.
 
         Args:
             path: Destination file path.
             **kwargs: Forwarded to ``Figure.savefig``.
+
+        Returns:
+            The path that was written, as a :class:`pathlib.Path` — the same contract as every other
+            backend's ``save``.
 
         Raises:
             RuntimeError: if the globe has not been drawn yet.
@@ -2282,7 +2288,9 @@ class TexturedGlobe:
                 >>> globe = TexturedGlobe(np.zeros((8, 16, 3), dtype=np.uint8), n_lon=8, n_lat=4)
                 >>> fig, ax = globe.draw()
                 >>> out = Path(tempfile.mkdtemp()) / "globe.png"
-                >>> globe.save(str(out))
+                >>> written = globe.save(str(out))
+                >>> written == out
+                True
                 >>> out.exists() and out.stat().st_size > 0
                 True
 
@@ -2304,6 +2312,7 @@ class TexturedGlobe:
         if self.fig is None:
             raise RuntimeError("draw() the globe before saving it")
         self.fig.savefig(path, **kwargs)
+        return Path(path)
 
     def save_animation(
         self,

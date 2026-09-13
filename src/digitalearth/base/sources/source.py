@@ -10,6 +10,7 @@ This module is a **leaf**: it imports nothing from :mod:`digitalearth.base.sourc
 
 from typing import Any, Optional
 
+from digitalearth.base.crs import authority_code
 from digitalearth.base.sources.dimension import DimensionInfo
 
 
@@ -24,7 +25,8 @@ class Source:
         z: The data dimension (a :class:`DimensionInfo`), or ``None`` for geometry-only vector sources.
         x: The x / longitude axis (a :class:`DimensionInfo`).
         y: The y / latitude axis (a :class:`DimensionInfo`).
-        crs: The CRS as an EPSG integer or WKT string (whatever pyramids reported), or ``None``.
+        crs: The CRS the coordinates in ``x``/``y`` are expressed in, **as given** — see :attr:`crs` for
+            the contract.
         metadata: Free-form metadata dict (e.g. ``variable``, ``kind``, ``time``, ``member``).
         units: Unit string for the data values, or ``None``.
 
@@ -40,6 +42,8 @@ class Source:
             >>> src.z.values.shape
             (2, 3)
             >>> src.crs
+            4326
+            >>> src.epsg
             4326
             >>> src.metadata("variable")
             'rain'
@@ -88,8 +92,126 @@ class Source:
 
     @property
     def crs(self) -> Any:
-        """The CRS as reported by pyramids (EPSG int or WKT str), or ``None``."""
+        """The CRS the coordinates in :attr:`x` / :attr:`y` are expressed in, as given.
+
+        The contract, so a reader can trust the answer:
+
+        * It is the address of **these** coordinates, not of the file they came from. A caller that warps
+          data into a display CRS before wrapping it passes that CRS to ``get_source(..., crs=...)``, and it
+          is stored verbatim — an EPSG ``int``, or a proj4/WKT ``str`` for a projection with no authority
+          code (an orthographic globe, say, where pyramids reports ``epsg is None``).
+        * Without such a caller it is derived from the input: its EPSG code when it has one, else its
+          projection definition.
+        * ``None`` means the CRS is genuinely **unknown** — a raw numpy array, or an input declaring no CRS
+          at all. It never means "there was a CRS but no code for it"; that case yields the definition.
+
+        Use :attr:`epsg` for the separate code-or-``None`` question.
+
+        Returns:
+            The CRS exactly as it was supplied or derived: an EPSG ``int``, an ``"EPSG:<code>"`` /
+            proj4 / WKT ``str``, or ``None`` when the CRS is genuinely unknown.
+
+        Examples:
+            - A caller that warps into a display CRS stores that CRS verbatim, code and all:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> Source(None, axis, axis, crs=3857).crs
+                3857
+
+                ```
+            - A projection with no authority code keeps its **definition** here — this is the case
+              ``None`` is never used for, because the coordinates do have an address:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> src = Source(None, axis, axis, crs="+proj=ortho +lat_0=53 +lon_0=4")
+                >>> src.crs
+                '+proj=ortho +lat_0=53 +lon_0=4'
+                >>> src.epsg is None
+                True
+
+                ```
+            - ``None`` is reserved for a genuinely unknown CRS — a raw numpy array declares none:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> get_source(np.zeros((2, 3))).crs is None
+                True
+
+                ```
+
+        See Also:
+            epsg: the narrower question — the authority code, or ``None`` when there is none.
+        """
         return self._crs
+
+    @property
+    def epsg(self) -> Optional[int]:
+        """The EPSG code of :attr:`crs`, or ``None`` when it has none.
+
+        The narrower of the two CRS questions: :attr:`crs` always says where the coordinates are, while this
+        answers only "is there an authority code for it". ``None`` therefore means the CRS genuinely names
+        no authority — not merely that it was written out rather than abbreviated.
+
+        The distinction matters because :attr:`crs` is allowed to hold a full definition: a caller that warps
+        into a display CRS stores what pyramids reports, and a warp into a *coded* CRS reports its WKT, which
+        ends on the authority block (``AUTHORITY["EPSG", ...]`` in WKT1, ``ID["EPSG", ...]`` in WKT2). The
+        code spellings are read here directly and anything longer is handed to
+        :func:`~digitalearth.base.crs.authority_code`, so pyramids does the reading — the same rule
+        :func:`~digitalearth.base.crs.is_geographic` follows, and for the same reason: a reader that only
+        matched ``"EPSG:<code>"`` reported "no code" for a CRS that plainly carries one.
+
+        Returns:
+            The EPSG integer, or ``None`` for an unknown CRS or one that names no authority.
+
+        Examples:
+            - An EPSG-coded source answers both questions the same way:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> Source(None, axis, axis, crs="EPSG:3857").epsg
+                3857
+
+                ```
+            - A CRS written out as a definition is read down to the authority block it carries:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.crs import crs_from_user_input
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> Source(None, axis, axis, crs=crs_from_user_input(3857).to_wkt()).epsg
+                3857
+
+                ```
+            - A projection that names no authority keeps its definition and has no code:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import Source, DimensionInfo
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> src = Source(None, axis, axis, crs="+proj=ortho +lat_0=53 +lon_0=4")
+                >>> src.epsg is None, src.crs.startswith("+proj=ortho")
+                (True, True)
+
+                ```
+
+        See Also:
+            crs: the wider question — where the coordinates are, in whatever spelling was supplied.
+        """
+        crs = self._crs
+        if isinstance(crs, bool) or crs is None:
+            return None
+        if isinstance(crs, int):
+            return crs
+        text = str(crs).strip()
+        if text.lower().startswith("epsg:"):
+            text = text.split(":", 1)[1].strip()
+        if text.isdigit():
+            return int(text)
+        return authority_code(crs)
 
     @property
     def units(self) -> Optional[str]:

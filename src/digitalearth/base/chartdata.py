@@ -149,11 +149,12 @@ def field_values(data: Any, column: Optional[str] = None) -> np.ndarray:
         - A raster band contributes its data cells, with the nodata fill dropped:
             ```python
             >>> import numpy as np
-            >>> from types import SimpleNamespace
+            >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.base.chartdata import field_values
-            >>> ds = SimpleNamespace(
-            ...     no_data_value=(-9999.0,),
-            ...     read_array=lambda band=0: np.array([[1.0, -9999.0], [3.0, 4.0]]),
+            >>> ds = Dataset.from_array(
+            ...     np.array([[1.0, -9999.0], [3.0, 4.0]]),
+            ...     geo_ref=GeoReference(top_left_corner=(0, 0), cell_size=1.0, epsg=4326),
+            ...     no_data_value=-9999.0,
             ... )
             >>> field_values(ds).tolist()
             [1.0, 3.0, 4.0]
@@ -267,11 +268,12 @@ def as_finite_array(values: Any) -> np.ndarray:
         - A raster is flattened to its finite band values, nodata dropped:
             ```python
             >>> import numpy as np
-            >>> from types import SimpleNamespace
+            >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.base.chartdata import as_finite_array
-            >>> ds = SimpleNamespace(
-            ...     no_data_value=(-1.0,),
-            ...     read_array=lambda band=0: np.array([[5.0, -1.0], [7.0, 9.0]]),
+            >>> ds = Dataset.from_array(
+            ...     np.array([[5.0, -1.0], [7.0, 9.0]]),
+            ...     geo_ref=GeoReference(top_left_corner=(0, 0), cell_size=1.0, epsg=4326),
+            ...     no_data_value=-1.0,
             ... )
             >>> as_finite_array(ds).tolist()
             [5.0, 7.0, 9.0]

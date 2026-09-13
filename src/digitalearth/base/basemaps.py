@@ -22,6 +22,10 @@ collide with cleopatra's on the static tier and with HoloViews' style options on
 :func:`get_keyed_basemap` — the resolver the backends call — takes those keywords loose, since it has no
 engine keywords of its own to collide with.
 
+The *unkeyed* half of a basemap is a single constant: :data:`DEFAULT_BASEMAP_PROVIDER`, the provider a
+backend uses when the caller named none. It lives here rather than in each tier so that a map drawn with no
+explicit basemap looks the same whichever backend rendered it.
+
 **Planet NICFI** is the first preset (:func:`planet_nicfi`): ~4.77 m monthly mosaics of the tropics, free for
 non-commercial use under NICFI terms. Two things about it are worth knowing before you rely on it:
 
@@ -49,12 +53,28 @@ non-commercial use under NICFI terms. Two things about it are worth knowing befo
 import inspect
 import os
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Callable, Mapping
 
 #: ``(west, south, east, north)`` in lon/lat — the shape every bounding box here uses.
 Extent = tuple[float, float, float, float]
+
+#: The basemap provider a backend reaches for when the caller named none.
+#:
+#: ``"CartoLight"`` is the one token-free provider every tier can render: the interactive tier resolves it
+#: through ``geoviews.tile_sources``, the web tier through its own token-free provider table, and the static
+#: tier through ``xyzservices``. Naming it once here is what keeps a default-basemap map looking the same
+#: whichever backend drew it — before this, each tier hard-coded its own choice and they disagreed
+#: (``CartoLight`` on interactive, ``CartoDark`` on web).
+#:
+#: A light basemap is the default rather than a dark one because data is drawn *on top* of it: most colormaps
+#: are designed to read against white, and a dark ground inverts that contrast.
+#:
+#: TODO(#247): ``tiles()`` takes either a provider name or a URL template in the same parameter, so a
+#: provider name and a URL are indistinguishable at the call site. Renaming that parameter is Core-contract
+#: work and is deliberately not done here.
+DEFAULT_BASEMAP_PROVIDER: str = "CartoLight"
 
 #: NICFI publishes the tropics only, roughly 30°N–30°S. Outside this band the tiles 404, and cleopatra
 #: raises ``ConnectionError`` after its retries — an opaque way to learn the basemap does not cover you.

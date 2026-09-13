@@ -157,7 +157,15 @@ class TestPixiTaskReferences:
         )
 
     @pytest.mark.parametrize(
-        "task", ["lint-names", "lint-format", "lint-imports", "mypy", "doctests"]
+        "task",
+        [
+            "lint-names",
+            "lint-format",
+            "lint-imports",
+            "mypy",
+            "doctests",
+            "test-images",
+        ],
     )
     def test_the_gates_added_for_the_migration_are_wired_up(self, task):
         """Each verification gate is defined and invoked by a real workflow step.
@@ -167,12 +175,18 @@ class TestPixiTaskReferences:
 
         Test scenario:
             These cover code the `main` task cannot reach — undefined names in notebook cells that never
-            execute, formatting and import order, the type checker, and the doctests, which `main` does not
-            collect. The three ruff gates are pinned individually rather than through the aggregate `lint`
-            task: pixi's `depends-on` stops at the first failing subtask, so running them as one CI step
-            would let a formatting slip hide the import-order result. Because the scan reads parsed `run:`
-            scripts, deleting a step stops satisfying this even though the workflow still names the task in
-            a comment.
+            execute, formatting and import order, the type checker, the doctests, which `main` does not
+            collect, and the image baselines, which `main` deselects with `-m 'not mpl'`. The three ruff
+            gates are pinned individually rather than through the aggregate `lint` task: pixi's `depends-on`
+            stops at the first failing subtask, so running them as one CI step would let a formatting slip
+            hide the import-order result. Because the scan reads parsed `run:` scripts, deleting a step stops
+            satisfying this even though the workflow still names the task in a comment.
+
+            `test-images` belongs here for the sharpest version of that reason: `--mpl` is deliberately not
+            in `addopts`, so the comparison exists *only* inside that task, and that task is invoked by
+            exactly one CI step. Drop the step and all 18 figures stop being compared anywhere, with nothing
+            else turning red. (This pins the step, not the branch-protection rule — `image-baselines` still
+            has to be a required check for a broken figure to block a merge.)
         """
         assert task in _tasks(), (
             f"the {task!r} task is not defined in [tool.pixi.tasks]"

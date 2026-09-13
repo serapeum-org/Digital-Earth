@@ -17,37 +17,22 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
 import matplotlib
-from pyramids.dataset import Dataset
 
 from digitalearth.api import quickmap
-from digitalearth.ops.batch import Batch
+from digitalearth.ops.batch import Batch, load_input
 from digitalearth.ops.browser import gallery
 
 __all__ = ["build_parser", "main"]
+
+#: The one raster-then-vector loader, owned by :mod:`digitalearth.ops.batch` so ``plot`` and ``batch`` cannot
+#: drift apart: ``batch`` opens its inputs through :meth:`Batch.render_one`, which calls the same function.
+#: Kept under the old private name because that is what this module's callers and tests import.
+_load = load_input
 
 
 def _parse_crs(value: str) -> Any:
     """Parse a ``--crs`` argument as an EPSG int when all-digits, else a proj4/WKT string."""
     return int(value) if value.lstrip("-").isdigit() else value
-
-
-def _load(path: Any) -> Any:
-    """Load a raster as a pyramids ``Dataset``, falling back to a vector ``FeatureCollection``.
-
-    If both reads fail, the vector error is raised **chained** from the raster error (``raise ... from``) so
-    neither cause is hidden behind the other.
-    """
-    try:
-        return Dataset.read_file(str(path))
-    except (
-        Exception
-    ) as raster_error:  # not a raster pyramids can open — try it as vector
-        from pyramids.feature import FeatureCollection
-
-        try:
-            return FeatureCollection.read_file(str(path))
-        except Exception as vector_error:
-            raise vector_error from raster_error
 
 
 def _add_plot_options(parser: argparse.ArgumentParser) -> None:

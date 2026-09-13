@@ -35,10 +35,14 @@ class Map(
         ax: Existing axes to draw on (a new figure/axes is created when ``None``).
         fig: Figure owning ``ax``.
         figsize: New-figure size when one is created.
+        globe: Draw the projection boundary/graticule and clip layers to it (an orthographic globe).
+        strict: When ``True`` a layer whose data cannot be placed in the display CRS raises
+            :class:`~digitalearth.base.crs.OffLimbError` instead of being skipped with a warning.
 
     Attributes:
         crs: The display CRS every layer is reprojected to.
         domain: The configured domain (or ``None``).
+        strict: Whether a layer that would draw nothing raises instead of being skipped.
 
     Examples:
         - Create a map in Web Mercator and read its display CRS:

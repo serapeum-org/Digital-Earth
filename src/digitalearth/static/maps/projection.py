@@ -4,7 +4,9 @@ Sets the axes extent from a bbox or named domain, builds and caches the projecti
 globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+import os
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
 from pyramids.base.crs import reproject_coordinates
@@ -132,10 +134,18 @@ class ProjectionMixin(_MixinBase):
         """Apply the projection frame if this is a globe map (idempotent). Call before showing/saving."""
         self._apply_frame()
 
-    def save(self, path: str, **kwargs) -> None:
-        """Apply the projection frame (for a globe map) then save the figure."""
+    def save(self, path: Union[str, "os.PathLike[str]"], **kwargs) -> Path:
+        """Apply the projection frame (for a globe map) then save the figure.
+
+        Args:
+            path: Destination file path; the extension picks the format matplotlib writes.
+            **kwargs: Forwarded to :meth:`~digitalearth.static.scene.Scene.save` / ``Figure.savefig``.
+
+        Returns:
+            The path that was written, as a :class:`pathlib.Path`.
+        """
         self._apply_frame()
-        super().save(path, **kwargs)
+        return super().save(path, **kwargs)
 
     def show(self) -> None:
         """Apply the projection frame (for a globe map) then show the figure."""

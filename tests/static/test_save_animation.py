@@ -55,9 +55,16 @@ class TestDirectSave:
         save_animation(anim, "clip.mp4", fps=8)
         assert calls["save"][0][1]["fps"] == 8
 
-    def test_falls_back_to_the_default_rate(self, anim, calls):
+    def test_falls_back_to_the_encoders_own_rate(self, anim, calls):
+        """An unstated rate falls back to the save-time constant, not to an animation entry point's default.
+
+        Test scenario:
+            ``FALLBACK_SAVE_FPS`` used to be called ``DEFAULT_FPS`` — the same name the four tiers' animation
+            entry points use for a different number (``3.0``, now in ``base/animation.py``). The rename is
+            what keeps the two readable apart; this pins that the encoder still falls back to its own.
+        """
         save_animation(anim, "clip.mp4")
-        assert calls["save"][0][1]["fps"] == int(de_animation.DEFAULT_FPS)
+        assert calls["save"][0][1]["fps"] == int(de_animation.FALLBACK_SAVE_FPS)
 
     def test_does_not_force_a_pixel_format(self, anim, calls):
         """No GIF is being derived, so leave cleopatra's playback-friendly default alone."""

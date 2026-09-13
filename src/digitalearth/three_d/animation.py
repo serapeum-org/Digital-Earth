@@ -15,9 +15,19 @@ the ``3d`` extra). No GIS is touched here: animation is pure rendering of alread
 from pyramids upstream.
 """
 
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Sequence, Union
+from collections.abc import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Union
 
 import numpy as np
+
+from digitalearth.base.animation import DEFAULT_FPS
+from digitalearth.base.deprecation import renamed_parameter
+
+# `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
+# defaults to lives in `digitalearth.base.animation`, so one `fps` means one speed whichever backend rendered
+# the clip. This tier used to default to 12 (orbit) and 8 (animate) — two speeds in one tier, and neither
+# matching the others. It stays importable from this module because that is where this tier's callers and
+# tests already reach for it.
 
 #: An up vector: three floats, as a sequence or a numpy array. numpy is the natural way to spell one and
 #: is not a ``typing.Sequence``, so both are accepted rather than adding to the mypy arg-type baseline.
@@ -27,22 +37,23 @@ UpVector = Union[Sequence[float], np.ndarray]
 _MOVIE_SUFFIXES = (".mp4", ".mov", ".avi", ".m4v")
 
 
-def _open_writer(plotter: Any, path: str, framerate: int) -> None:
+def _open_writer(plotter: Any, path: str, fps: float) -> None:
     """Open the right PyVista frame writer for ``path`` (movie for video suffixes, else GIF).
 
     Args:
         plotter: The :class:`pyvista.Plotter` to attach the writer to.
         path: Destination file. A suffix in :data:`_MOVIE_SUFFIXES` opens a movie writer, anything else a GIF.
-        framerate: Frames per second, passed as ``framerate`` to ``open_movie`` and ``fps`` to ``open_gif``.
+        fps: Frames per second. PyVista spells it ``framerate`` on ``open_movie`` and ``fps`` on ``open_gif``;
+            this is where the one public name is translated into each.
 
     Raises:
         AttributeError: if PyVista did not attach its frame writer (``mwriter``) after opening — a fail-fast
             guard against a future PyVista renaming the attribute :func:`_finalize_frames` relies on.
     """
     if str(path).lower().endswith(_MOVIE_SUFFIXES):
-        plotter.open_movie(path, framerate=framerate)
+        plotter.open_movie(path, framerate=fps)
     else:
-        plotter.open_gif(path, fps=framerate)
+        plotter.open_gif(path, fps=fps)
     if not hasattr(
         plotter, "mwriter"
     ):  # pragma: no cover - defensive against an upstream API change
@@ -187,10 +198,11 @@ class AnimationMixin(_MixinBase):
         path: str,
         *,
         n_frames: int = 36,
-        framerate: int = 12,
+        fps: float | None = None,
         factor: float = 3.0,
         shift: float = 0.0,
         viewup: UpVector | None = None,
+        framerate: float | None = None,
         **orbit_kwargs: Any,
     ) -> str:
         """Sweep the camera around the scene and write the fly-through to a GIF/MP4.
@@ -211,7 +223,9 @@ class AnimationMixin(_MixinBase):
                 pyvista silently
                 clamps a smaller value to 3, so fewer used to "work" and produce a three-frame clip; this
                 rejects it instead, which is a narrowing of what the argument accepted before.
-            framerate: Frames per second of the output.
+            fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one
+                speed shared with every other tier's animation entry point, declared once in
+                :mod:`digitalearth.base.animation`; this method used to default to ``12``.
             factor: Orbit radius as a multiple of the scene's bounding size. Smaller closes in on the data.
                 Must be positive and finite. Anything :func:`float` accepts is taken, so ``"0.9"`` works as
                 well as ``0.9``.
@@ -223,6 +237,9 @@ class AnimationMixin(_MixinBase):
                 view of a sheet.
             viewup: Up vector for the path and the camera alike, as three floats. ``None`` leaves pyvista's
                 default.
+            framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
+                removed in a future release and forwards the value unchanged. Passing both is a
+                ``TypeError``.
             **orbit_kwargs: Forwarded to :meth:`pyvista.Plotter.orbit_on_path`, whose signature names what it
                 accepts — ``step`` and ``focus`` are the useful ones here. It takes no ``**kwargs``, so a
                 keyword it does not name raises :class:`TypeError`; ``factor`` and ``shift`` are not among
@@ -240,8 +257,10 @@ class AnimationMixin(_MixinBase):
                 ``threaded=True`` is passed: :meth:`pyvista.Plotter.orbit_on_path` returns
                 before its render thread has written a frame, so the writer here would already be closed and
                 no file would be produced — drive that method yourself for a background render.
-            TypeError: If ``orbit_kwargs`` carries a keyword ``orbit_on_path`` does not name; it takes no
-                ``**kwargs`` of its own. The frame writer is still closed when this happens.
+            TypeError: If both ``fps`` and the deprecated ``framerate`` are given — they name one rate, so
+                neither can be silently preferred. Also if ``orbit_kwargs`` carries a keyword
+                ``orbit_on_path`` does not name; it takes no ``**kwargs`` of its own. The frame writer is
+                still closed when either happens.
 
         Examples:
             - Orbit a terrain scene to a GIF (needs the ``3d`` extra for imageio):
@@ -278,6 +297,14 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
+        fps = renamed_parameter(
+            new="fps",
+            value=fps,
+            old="framerate",
+            alias=framerate,
+            caller="Scene3D.orbit()",
+            default=DEFAULT_FPS,
+        )
         factor = _finite_number(factor, "factor (orbit radius)")
         if factor <= 0:
             raise ValueError(
@@ -298,7 +325,7 @@ class AnimationMixin(_MixinBase):
                 "would finish after the file was closed and produce nothing. Drive plotter.orbit_on_path "
                 "directly if you need a background render."
             )
-        _open_writer(self.plotter, path, framerate)
+        _open_writer(self.plotter, path, fps)
         try:
             orbital_path = self.plotter.generate_orbital_path(
                 factor=factor, n_points=n_frames, viewup=viewup, shift=shift
@@ -320,7 +347,8 @@ class AnimationMixin(_MixinBase):
         path: str,
         update: Callable[["AnimationMixin", Any], None],
         *,
-        framerate: int = 8,
+        fps: float | None = None,
+        framerate: float | None = None,
     ) -> str:
         """Render a frame-by-frame animation driven by ``update`` and write it to a GIF/MP4.
 
@@ -331,10 +359,19 @@ class AnimationMixin(_MixinBase):
             frames: Iterable of per-frame states passed one at a time to ``update``.
             path: Output file. A video suffix writes a movie; anything else a GIF.
             update: Callback ``(scene, frame) -> None`` that updates the scene before each frame is captured.
-            framerate: Frames per second of the output.
+            fps: Frames per second of the output. Defaults to :data:`DEFAULT_FPS` (``3.0``) — the one
+                speed shared with every other tier's animation entry point, declared once in
+                :mod:`digitalearth.base.animation`; this method used to default to ``8``.
+            framerate: **Deprecated** alias of ``fps``; passing it warns that ``framerate=`` will be
+                removed in a future release and forwards the value unchanged. Passing both is a
+                ``TypeError``.
 
         Returns:
             The ``path`` written.
+
+        Raises:
+            TypeError: If both ``fps`` and the deprecated ``framerate`` are given — they name one rate, so
+                neither can be silently preferred.
 
         Examples:
             - Animate a growing terrain over three frames:
@@ -356,7 +393,15 @@ class AnimationMixin(_MixinBase):
 
                 ```
         """
-        _open_writer(self.plotter, path, framerate)
+        fps = renamed_parameter(
+            new="fps",
+            value=fps,
+            old="framerate",
+            alias=framerate,
+            caller="Scene3D.animate()",
+            default=DEFAULT_FPS,
+        )
+        _open_writer(self.plotter, path, fps)
         try:
             for frame in frames:
                 update(self, frame)

@@ -35,6 +35,7 @@ class RasterMixin(_MixinBase):
         *,
         band: int = 1,
         cmap: Optional[str] = None,
+        units: Optional[str] = None,
         opacity: float = 1.0,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
@@ -52,6 +53,12 @@ class RasterMixin(_MixinBase):
             data: A pyramids ``Dataset`` (or anything ``get_source`` accepts).
             band: 1-based band to draw.
             cmap: matplotlib colormap name; ``None`` resolves the autostyle default for the variable.
+            units: What the band's values are measured in, recorded as
+                :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
+                ``None`` (the default) takes the variable's units from
+                :func:`~digitalearth.base.autostyle.auto_style`, and leaves them unknown when it carries
+                none — a unit is never guessed. Pass one to correct a band the library mis-identifies, or
+                to name the units of a variable it does not know.
             opacity: Raster layer opacity in ``[0, 1]``.
             vmin: Lower colour limit; ``None`` uses the band's finite minimum.
             vmax: Upper colour limit; ``None`` uses the band's finite maximum.
@@ -61,13 +68,63 @@ class RasterMixin(_MixinBase):
                 every frame showing at once — including in a saved page, which carries no slider.
 
         Returns:
-            This map (chainable).
+            This map (chainable). When the band cannot be placed — it lies outside what the display CRS
+            can show, or its corners will not express as lon/lat — nothing is added: the layer is skipped
+            with a warning, or the error is raised when the map was built with ``strict=True``.
+
+        Raises:
+            OffLimbError: only when the map was built with ``strict=True`` and the band cannot be
+                placed; by default that layer is skipped with a warning instead, so one unplaceable
+                raster does not cost the map the layers around it.
+
+        Examples:
+            - Colour-map a band and address the layer afterwards by the name it was given (needs
+              the ``web`` extra, so the block is skipped without it):
+                ```python
+                >>> import numpy as np                               # doctest: +SKIP
+                >>> from digitalearth.base.sources import get_source  # doctest: +SKIP
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> src = get_source(                                # doctest: +SKIP
+                ...     np.arange(12.0).reshape(3, 4),
+                ...     x=np.array([0.0, 1.0, 2.0, 3.0]),
+                ...     y=np.array([2.0, 1.0, 0.0]),
+                ... )
+                >>> m = WebMap().add_raster(src, cmap="viridis", name="dem")  # doctest: +SKIP
+                >>> m.layer_ids, len(m.layers)                       # doctest: +SKIP
+                (['dem'], 1)
+
+                ```
+            - The band also hands the map its extent, so the view frames itself and
+              :meth:`~digitalearth.web.base.WebMapBase.fit_bounds` has something to frame on;
+              on an empty map the same call raises instead:
+                ```python
+                >>> m.fit_bounds() is m                              # doctest: +SKIP
+                True
+
+                ```
+            - ``visible=False`` builds the layer hidden, which is how
+              :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks one layer per time
+              step without every frame showing at once — in a saved page too, which has no slider:
+                ```python
+                >>> m = WebMap().add_raster(src, visible=False, name="t0")  # doctest: +SKIP
+                >>> m.layer_ids                                      # doctest: +SKIP
+                ['t0']
+
+                ```
+
+        See Also:
+            digitalearth.web.raster.RasterMixin.rgb_composite: the three-band composite path.
+            digitalearth.web.vector.VectorMixin.contours: draws the same field as vectors.
         """
         import numpy as np
 
         Layer, LayerType = _require_layer_api()
-        source = self._to_display_source(data, band=band)
+        source = self._display_source_or_skip(data, band=band, layer="add_raster")
+        if source is None:
+            return self
         cmap_name = self._auto_cmap(source, cmap)
+        # Carried for a key built from this band's values (see `_auto_units`); `None` when unknown.
+        self.last_units = self._auto_units(source, units)
 
         values = source.z.values
         if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:
@@ -84,10 +141,12 @@ class RasterMixin(_MixinBase):
         url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
         coordinates = self._lonlat_corners(source)
         if coordinates is None:
-            raise ValueError(
+            self._skipped(
+                "add_raster",
                 "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
-                "needs; reproject the dataset, or set a lon/lat display CRS"
+                "needs; reproject the dataset so its extent is representable",
             )
+            return self
         # Already lon/lat, so the framing takes them as they are.
         self._note_lonlat_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
@@ -140,7 +199,9 @@ class RasterMixin(_MixinBase):
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
 
         Returns:
-            The same map instance, so builder calls chain.
+            The same map instance, so builder calls chain. A composite that cannot be placed — off-limb
+            in the display CRS, or with corners that will not express as lon/lat — is skipped with a
+            warning instead, unless the map was built with ``strict=True``.
 
         Raises:
             ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when
@@ -165,7 +226,9 @@ class RasterMixin(_MixinBase):
 
         Layer, LayerType = _require_layer_api()
         require_three_bands("rgb_composite", bands)
-        data = self._to_display_raster(dataset)
+        data = self._display_raster_or_skip(dataset, layer="rgb_composite")
+        if data is None:
+            return self
         stack = get_stack(data, bands, mask=mask_nodata)
         pixels = int(stack.size // max(stack.shape[-1], 1))
         if pixels > _LARGE_RASTER_PIXELS:
@@ -185,10 +248,12 @@ class RasterMixin(_MixinBase):
         url = self._composite_png_datauri(stretch_to_unit(stack, limits))
         coordinates = self._lonlat_corners(source)
         if coordinates is None:
-            raise ValueError(
+            self._skipped(
+                "rgb_composite",
                 "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
-                "needs; reproject the dataset, or set a lon/lat display CRS"
+                "needs; reproject the dataset so its extent is representable",
             )
+            return self
         # Already lon/lat, so the framing takes them as they are.
         self._note_lonlat_bounds(
             (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])

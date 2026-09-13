@@ -116,15 +116,18 @@ class TestDisplaySource:
     """``_to_display_source`` — the single reproject-through-pyramids choke point."""
 
     def test_reprojects_to_display_crs(self, dataset):
-        m = WebMap(crs=3857)
-        assert dataset.epsg != 3857, (
+        m = WebMap()
+        assert dataset.epsg != m.crs, (
             "fixture must start in a non-display CRS for this test"
         )
         src = m._to_display_source(dataset)
-        assert src.crs == 3857
+        assert src.crs == m.crs
 
     def test_same_crs_passes_through_without_warp(self, dataset, monkeypatch):
-        m = WebMap(crs=dataset.epsg)
+        m = WebMap()
+        # The constructor accepts EPSG:4326 only (C13), so the "already in the display CRS" branch is
+        # reached by moving the *data*, not the map.
+        dataset = dataset.to_crs(m.crs)
 
         def _boom(*a, **k):  # pragma: no cover - only fires on regression
             raise AssertionError(
@@ -133,7 +136,7 @@ class TestDisplaySource:
 
         monkeypatch.setattr(type(dataset), "to_crs", _boom)
         src = m._to_display_source(dataset)
-        assert src.crs == dataset.epsg
+        assert src.crs == m.crs
 
     def test_source_passes_through_untouched(self):
         import numpy as np
@@ -146,7 +149,7 @@ class TestDisplaySource:
             DimensionInfo(np.arange(2.0), "y"),
             crs=4326,
         )
-        assert WebMap(crs=3857)._to_display_source(src) is src
+        assert WebMap()._to_display_source(src) is src
 
 
 class TestRegistryAndRender:
@@ -180,7 +183,9 @@ class TestRegistryAndRender:
 
     def test_save_html_writes_a_file(self, tmp_path):
         out = tmp_path / "m.html"
-        assert WebMap(center=(0.0, 0.0), zoom=2).save(str(out)) == str(out)
+        assert WebMap(center=(0.0, 0.0), zoom=2).save(str(out)) == out, (
+            "save returns the pathlib.Path it wrote (C1)"
+        )
         assert out.stat().st_size > 1_000
         assert "maplibre" in out.read_text(encoding="utf-8").lower()
 
@@ -305,14 +310,19 @@ class TestConstructionDefaults:
     @pytest.mark.parametrize(
         "crs, data_epsg, expected",
         [
-            (3857, 3857, False),  # already in the display CRS
-            (3857, 4326, True),  # differing EPSG -> reproject
+            (4326, 4326, False),  # already in the display CRS
+            (4326, 3857, True),  # differing EPSG -> reproject
             ("ESRI:54009", 3857, True),  # string display CRS -> always reproject
-            (3857, None, True),  # no epsg attribute -> reproject path
+            (4326, None, True),  # no epsg attribute -> reproject path
         ],
     )
     def test_needs_reproject_matrix(self, crs, data_epsg, expected):
-        """``_needs_reproject`` only short-circuits on an exact int-EPSG match."""
+        """``_needs_reproject`` only short-circuits on an exact int-EPSG match.
+
+        The display CRS is assigned rather than constructed: the constructor takes EPSG:4326 only (C13),
+        while the helper itself is written against any CRS and the string case still has to answer
+        "reproject".
+        """
 
         class _Data:
             pass
@@ -320,7 +330,9 @@ class TestConstructionDefaults:
         data = _Data()
         if data_epsg is not None:
             data.epsg = data_epsg
-        assert WebMap(crs=crs)._needs_reproject(data) is expected
+        m = WebMap()
+        m.crs = crs
+        assert m._needs_reproject(data) is expected
 
     def test_composition_includes_all_mixins(self):
         """``WebMap`` composes the base plus all seven capability mixins."""
@@ -1216,7 +1228,11 @@ class TestDisplayRasterReprojection:
         """
         from digitalearth.web import WebMap
 
-        assert WebMap(crs=dataset.epsg)._to_display_raster(dataset) is dataset
+        m = WebMap()
+        # The map's display CRS is fixed at 4326 (C13), so the identity branch is reached by putting the
+        # *data* there first; object identity is what a reprojection could not preserve.
+        already = dataset.to_crs(m.crs)
+        assert m._to_display_raster(already) is already
 
     def test_a_dataset_in_another_crs_is_reprojected(self, dataset):
         """The other half of the branch: a mismatch has to actually warp.
@@ -1226,9 +1242,10 @@ class TestDisplayRasterReprojection:
         """
         from digitalearth.web import WebMap
 
-        if dataset.epsg == 3857:
+        m = WebMap()
+        if dataset.epsg == m.crs:
             pytest.skip("fixture is already in the display CRS")
-        assert WebMap(crs=3857)._to_display_raster(dataset) is not dataset
+        assert m._to_display_raster(dataset) is not dataset
 
     def test_something_without_a_crs_passes_through(self):
         """``get_stack`` accepts more than a pyramids Dataset, and those have nothing to reproject."""

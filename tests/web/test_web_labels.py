@@ -77,7 +77,7 @@ class TestLabelsFromAColumn:
             .labels(
                 places,
                 "name",
-                size=18.0,
+                text_size=18.0,
                 color="#ff0000",
                 halo_color="#00ff00",
                 halo_width=2.0,

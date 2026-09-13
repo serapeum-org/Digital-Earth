@@ -204,7 +204,13 @@ class TestTheFramingReachesTheMap:
 
 
 class TestFramingInANonLonLatDisplayCrs:
-    """M5: `fitBounds` takes degrees, and `WebMap(crs=)` is a supported public setting."""
+    """M5: `fitBounds` takes degrees, and `_note_bounds` must convert before it frames.
+
+    The constructor now accepts EPSG:4326 only (C13), so a projected display CRS is no longer reachable
+    through the public API — but `_note_bounds`/`_as_lonlat` still carry the conversion, and it is what
+    stops a projected extent from framing the map on nothing. The display CRS is therefore assigned on
+    the instance here, which is the only way left to exercise that branch.
+    """
 
     def test_a_projected_display_crs_is_converted_before_framing(self, boxes):
         """Handing metres to `fitBounds` frames the map on nothing, silently.
@@ -214,7 +220,9 @@ class TestFramingInANonLonLatDisplayCrs:
         """
         from digitalearth.web import WebMap
 
-        m = WebMap(crs=3857).basemap().choropleth(boxes.to_crs(3857), column="pop")
+        m = WebMap().basemap()
+        m.crs = 3857
+        m.choropleth(boxes.to_crs(3857), column="pop")
         view = m._map_view()
         assert view is not None, "a projected map lost its framing entirely"
         west, south, east, north = view["bounds"]
@@ -281,7 +289,11 @@ class TestRasterPlacementAndFramingAgree:
 
         from digitalearth.web import WebMap
 
-        payload = _payload(WebMap(crs=crs).add_raster(dataset).to_html())
+        m = WebMap()
+        m.crs = (
+            crs  # assigned, not constructed: C13 fixes the public display CRS at 4326
+        )
+        payload = _payload(m.add_raster(dataset).to_html())
         corners = re.search(r'"coordinates": \[\[([-\d.]+), ([-\d.]+)\]', payload)
         view = re.search(r'"fitBounds", \[\[([-\d.]+), ([-\d.]+)', payload)
         assert corners is not None, f"the image source has no corners: {payload[-400:]}"
@@ -333,7 +345,10 @@ class TestFramingGivesUpRatherThanGuessing:
             raise ValueError("unknown CRS")
 
         monkeypatch.setattr(web_base, "reproject_coordinates", _refuse)
-        m = WebMap(crs=3857)
+        m = WebMap()
+        m.crs = (
+            3857  # assigned, not constructed: C13 fixes the public display CRS at 4326
+        )
         m._note_bounds((1.0, 2.0, 3.0, 4.0))
         assert m._data_bounds is None
 
@@ -351,6 +366,9 @@ class TestFramingGivesUpRatherThanGuessing:
             "reproject_coordinates",
             lambda xs, ys, **kwargs: ([float("inf"), 1.0], [2.0, 3.0]),
         )
-        m = WebMap(crs=3857)
+        m = WebMap()
+        m.crs = (
+            3857  # assigned, not constructed: C13 fixes the public display CRS at 4326
+        )
         m._note_bounds((1.0, 2.0, 3.0, 4.0))
         assert m._data_bounds is None

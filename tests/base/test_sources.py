@@ -123,6 +123,25 @@ def test_dimension_info_dataclass():
     np.testing.assert_array_equal(di.values, [1.0, 2.0])
 
 
+def _netcdf_container():
+    """Build a one-variable pyramids ``NetCDF`` from the committed test raster.
+
+    Returns:
+        A ``NetCDF`` holding a single ``acc`` variable whose attribute list declares no ``units``.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+    from pyramids.netcdf import NetCDF
+
+    ds = Dataset.read_file("examples/data/acc4000.tif")
+    values = ds.read_array(band=0).astype("float32")[np.newaxis, ...]
+    return NetCDF.from_array(
+        values,
+        geo_ref=GeoReference(geo=ds.geotransform, epsg=ds.epsg),
+        no_data_value=ds.no_data_value[0],
+        variable_name="acc",
+    )
+
+
 class TestExtractorHelpers:
     """Tests for the private helpers in digitalearth.base.sources.extractors."""
 
@@ -145,20 +164,6 @@ class TestExtractorHelpers:
 
         assert _band_item(("a",), 5, default=None) is None
 
-    def test_mask_nodata_passthrough_when_none(self):
-        """mask_nodata returns the array unchanged (as float) when nodata is None."""
-        from digitalearth.base.arrays import mask_nodata
-
-        out = mask_nodata(np.array([1, 2, 3]), None)
-        np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
-
-    def test_mask_nodata_replaces_with_nan(self):
-        """mask_nodata replaces cells matching nodata with NaN."""
-        from digitalearth.base.arrays import mask_nodata
-
-        out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
-        assert np.isnan(out[1]) and not np.isnan(out[0])
-
     def test_from_netcdf_no_variables_raises(self):
         """_from_netcdf raises ValueError when the NetCDF exposes no variables."""
         from digitalearth.base.sources.extractors import _from_netcdf
@@ -168,6 +173,77 @@ class TestExtractorHelpers:
 
         with pytest.raises(ValueError, match="no variables"):
             _from_netcdf(_StubNetCDF(), None, None)
+
+    def test_attr_answers_none_for_anything_that_is_not_a_mapping(self):
+        """A CF lookup handed something that is not an attribute mapping answers ``None``.
+
+        Test scenario:
+            The identity lookups are fed whatever a driver reports as metadata — ``None`` from a container
+            carrying none, a bare string from one that reports it as text. Both have to mean "no such
+            attribute" rather than fail on the ``.items()`` call the mapping branch makes.
+        """
+        from digitalearth.base.sources.extractors import _attr
+
+        assert _attr(None, "units") is None, (
+            "a container with no metadata mapping declares no units"
+        )
+        assert _attr("units=mm", "units") is None, (
+            "a non-mapping metadata blob must not be parsed for attributes"
+        )
+
+    def test_variable_attributes_is_empty_without_variable_metadata(self):
+        """A container exposing no per-variable metadata reports no attributes at all.
+
+        Test scenario:
+            ``_variable_attributes`` reaches ``meta_data.variables`` through ``getattr``, so a container
+            with neither must answer with an empty mapping — the CF lookups then simply find nothing,
+            instead of the extractor failing on data it can still read values from.
+        """
+        from digitalearth.base.sources.extractors import _variable_attributes
+
+        class _NoMetadata:
+            """A container that exposes values but no ``meta_data``."""
+
+        assert _variable_attributes(_NoMetadata(), "acc") == {}, (
+            "a container with no meta_data must report no attributes"
+        )
+
+    def test_variable_attributes_is_empty_for_a_variable_it_does_not_describe(self):
+        """Asking for a variable the container's metadata does not list yields no attributes.
+
+        Test scenario:
+            The lookup walks the container's per-variable metadata by name. A name that is not in it has
+            to fall out with an empty mapping rather than hand back whichever variable happened to be
+            last, which would label the source with another variable's units.
+        """
+        from digitalearth.base.sources.extractors import _variable_attributes
+
+        assert _variable_attributes(_netcdf_container(), "no_such_variable") == {}, (
+            "an unlisted variable must report no attributes"
+        )
+
+    def test_the_cf_unit_slot_fills_in_for_a_missing_units_attribute(self):
+        """A variable's CF units reach the ``Source`` from the unit slot, not the attribute list.
+
+        Test scenario:
+            GDAL normalises a CF ``units`` attribute onto the variable's own unit and drops it from the
+            attribute list, so reading the attribute list alone left the source unitless for exactly the
+            input type CF units live in.
+        """
+        from dataclasses import replace
+
+        nc = _netcdf_container()
+        metadata = nc.meta_data
+        variables = dict(metadata.variables)
+        variables["acc"] = replace(variables["acc"], unit="m3/s")
+        nc.meta_data = replace(metadata, variables=variables)
+        assert "units" not in variables["acc"].attributes, (
+            "the case under test is a unit slot with no units attribute beside it"
+        )
+        source = get_source(nc)
+        assert source.units == "m3/s", (
+            f"expected the unit slot to be read, got {source.units!r}"
+        )
 
 
 @pytest.mark.parametrize("dtype", ["string", "boolean"])
@@ -392,3 +468,214 @@ def test_reproject_passes_other_failures_through():
     assert not isinstance(caught.value, OffLimbError), (
         "a real projection failure must not be reported as an empty view"
     )
+
+
+#: An orthographic projection has no EPSG code, so pyramids reports ``epsg is None`` for a dataset warped
+#: into it — the case that used to leave ``Source.crs`` saying "unknown" while holding orthographic metres.
+ORTHOGRAPHIC = "+proj=ortho +lat_0=53 +lon_0=4 +datum=WGS84 +units=m +no_defs"
+
+
+def _small_raster():
+    """Build a 20x20 lon/lat raster around (4E, 53N).
+
+    Returns:
+        pyramids.dataset.Dataset: the raster, in EPSG:4326.
+    """
+    from pyramids.dataset import Dataset, GeoReference
+
+    return Dataset.from_array(
+        np.ones((20, 20), "float32"),
+        geo_ref=GeoReference(geo=(4.0, 0.02, 0.0, 53.0, 0.0, -0.02), epsg=4326),
+    )
+
+
+class TestSourceCrsContract:
+    """Regression tests for #235 — ``Source.crs`` was write-only and wrong after a warp."""
+
+    def test_warped_source_reports_the_display_crs_it_was_given(self):
+        """A caller that warped the data names the CRS, and the Source reports it verbatim.
+
+        Test scenario:
+            The reported repro: after ``to_crs(orthographic)`` the source said ``None`` while its x/y held
+            orthographic metres. Now the display CRS the caller warped to is what comes back.
+        """
+        warped = _small_raster().to_crs(ORTHOGRAPHIC)
+        src = get_source(warped, band=1, crs=ORTHOGRAPHIC)
+        assert src.crs == ORTHOGRAPHIC, (
+            f"the display CRS should be stored as given, got {src.crs!r}"
+        )
+        assert src.crs != 4326, (
+            f"a warped source must not report its pre-warp CRS, got {src.crs!r}"
+        )
+        assert src.crs is not None, (
+            f"a warped source must report a CRS rather than 'unknown', got {src.crs!r}"
+        )
+
+    def test_code_less_projection_still_reports_its_definition(self):
+        """Without a caller-supplied CRS the projection definition is used, never ``None``.
+
+        Test scenario:
+            ``epsg is None`` means "no authority code", not "no CRS" — the two questions used to share one
+            slot, and the answer to the wrong one was being stored.
+        """
+        warped = _small_raster().to_crs(ORTHOGRAPHIC)
+        src = get_source(warped, band=1)
+        assert warped.epsg is None, (
+            "the fixture must be a code-less projection to be the case under test"
+        )
+        assert src.crs, (
+            f"a code-less projection must still report its definition, got {src.crs!r}"
+        )
+        assert "ortho" in str(src.crs).lower(), (
+            f"expected the orthographic definition, got {src.crs!r}"
+        )
+
+    def test_epsg_answers_the_code_question_separately(self):
+        """``Source.epsg`` is the code-or-None question; ``crs`` keeps saying where the coordinates are.
+
+        Test scenario:
+            An EPSG-coded raster answers both; the orthographic one answers only ``crs``.
+        """
+        coded = get_source(_small_raster(), band=1)
+        warped = get_source(
+            _small_raster().to_crs(ORTHOGRAPHIC), band=1, crs=ORTHOGRAPHIC
+        )
+        assert (coded.crs, coded.epsg) == (4326, 4326), (
+            f"an EPSG raster should report 4326 twice, got {(coded.crs, coded.epsg)}"
+        )
+        assert warped.epsg is None, (
+            f"an orthographic source has no EPSG code, got {warped.epsg!r}"
+        )
+
+    def test_none_means_genuinely_unknown(self):
+        """``None`` is reserved for an input that declares no CRS at all.
+
+        Test scenario:
+            A raw numpy array is the only source of a ``None`` CRS now that a code-less projection reports
+            its definition.
+        """
+        assert get_source(np.zeros((2, 2))).crs is None, (
+            "a bare numpy array has no CRS, so None is the right answer there"
+        )
+
+    def test_a_frame_declaring_no_crs_reports_an_unknown_one(self):
+        """A vector frame with no CRS at all is the unknown case, not a code-less projection.
+
+        Test scenario:
+            The vector fallback goes EPSG code, then CRS definition. A frame carrying neither has to end
+            at ``None`` rather than at whatever the ``crs`` attribute happened to hold, which is what
+            keeps ``None`` meaning "genuinely unknown" for vectors as well as for raw arrays.
+        """
+        import geopandas as gpd
+        from pyramids.feature import FeatureCollection
+        from shapely.geometry import Point
+
+        frame = gpd.GeoDataFrame(
+            {"value": [1.0, 2.0]},
+            geometry=[Point(0.0, 0.0), Point(1.0, 1.0)],
+            crs=None,
+        )
+        source = get_source(FeatureCollection(frame))
+        assert source.crs is None, (
+            f"a CRS-less frame must report None, got {source.crs!r}"
+        )
+
+    def test_an_authority_prefixed_crs_string_still_answers_its_code(self):
+        """``crs="EPSG:3857"`` answers the code question the same way ``crs=3857`` does.
+
+        Test scenario:
+            A caller that warped the data names the CRS however their stack spells it, and the authority
+            prefix is the common spelling. Stripping it is what stops ``epsg`` reporting ``None`` for a
+            CRS that plainly has a code, while ``crs`` keeps the spelling it was given.
+        """
+        source = get_source(np.zeros((2, 2)), crs="EPSG:3857")
+        assert source.epsg == 3857, f"expected the code 3857, got {source.epsg!r}"
+        assert source.crs == "EPSG:3857", (
+            f"crs must keep the spelling it was given, got {source.crs!r}"
+        )
+
+    def test_a_written_out_definition_still_answers_its_code(self):
+        """A CRS spelled as WKT is read down to the authority block it carries.
+
+        Test scenario:
+            ``crs`` is documented to hold a full definition whenever pyramids reports no code of its own,
+            and a warp into a *coded* CRS reports its WKT — which ends on ``AUTHORITY["EPSG", ...]``. A
+            reader that only stripped an ``"EPSG:"`` prefix answered "no code" for those, so ``epsg`` said
+            ``None`` for a source whose CRS names its authority outright.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        wkt = crs_from_user_input(3857).to_wkt()
+        source = get_source(np.zeros((2, 2)), crs=wkt)
+        assert source.epsg == 3857, (
+            f"the authority block names EPSG:3857, got {source.epsg!r}"
+        )
+        assert source.crs == wkt, (
+            "crs must keep the definition it was given, not the code read out of it"
+        )
+
+    def test_epsg_is_none_when_there_is_no_code_to_report(self):
+        """An unknown CRS has no code, and a boolean is never mistaken for one.
+
+        Test scenario:
+            ``epsg`` narrows ``crs`` to "is there an authority code". ``None`` has none; ``True`` is an
+            ``int`` subclass in Python, so without the boolean guard a stray flag would be reported as
+            the EPSG code 1.
+        """
+        assert get_source(np.zeros((2, 2))).epsg is None, (
+            "a bare numpy array has no CRS, so it has no EPSG code either"
+        )
+        axis = DimensionInfo(np.array([0.0]), "x")
+        assert Source(None, axis, axis, crs=True).epsg is None, (
+            "a boolean must not be read as the EPSG code 1"
+        )
+        assert Source(None, axis, axis, crs=ORTHOGRAPHIC).epsg is None, (
+            "a projection that names no authority must still report no code"
+        )
+
+
+class TestRasterIdentity:
+    """Regression tests for #231 — no extractor wrote the ``standard_name`` the style matcher reads."""
+
+    def test_band_standard_name_reaches_the_source(self):
+        """A band declaring a CF ``standard_name`` carries it into ``Source.metadata``.
+
+        Test scenario:
+            The key ``auto_style`` reads was written by nothing, so the Magics standard-name step was dead
+            code for every real input.
+        """
+        ds = _small_raster()
+        ds.bands.set_metadata({"standard_name": "air_temperature"}, band=0)
+        src = get_source(ds, band=1)
+        assert src.metadata("standard_name") == "air_temperature", (
+            f"expected the band's standard_name, got {src.metadata('standard_name')!r}"
+        )
+
+    def test_dataset_level_metadata_is_read_case_insensitively(self):
+        """A dataset-level ``STANDARD_NAME`` is found too, whatever case the writer used.
+
+        Test scenario:
+            GDAL metadata keys survive round-trips in whatever case a writer chose, so the lookup cannot be
+            case-sensitive.
+        """
+        ds = _small_raster()
+        ds.meta_data = {"STANDARD_NAME": "air_pressure_at_mean_sea_level"}
+        src = get_source(ds, band=1)
+        assert src.metadata("standard_name") == "air_pressure_at_mean_sea_level", (
+            f"an upper-cased key should still be read, got {src.metadata('standard_name')!r}"
+        )
+
+    def test_caller_metadata_still_wins(self):
+        """An explicit ``metadata=`` overrides the derived identity.
+
+        Test scenario:
+            Deriving the key must not take the override away from callers that pass one.
+        """
+        ds = _small_raster()
+        ds.bands.set_metadata({"standard_name": "air_temperature"}, band=0)
+        src = get_source(
+            ds, band=1, metadata={"standard_name": "sea_surface_temperature"}
+        )
+        assert src.metadata("standard_name") == "sea_surface_temperature", (
+            "a caller-supplied standard_name must win over the derived one"
+        )

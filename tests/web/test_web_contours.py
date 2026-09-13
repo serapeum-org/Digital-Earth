@@ -9,7 +9,8 @@ Lives under ``tests/web/``, which is what the ``test-web`` pixi task runs in the
 
 import pytest
 
-from digitalearth.web import WebMap
+from digitalearth.base.crs import OffLimbError
+from digitalearth.web import ContourInterval, WebMap
 
 
 @pytest.fixture(autouse=True)
@@ -97,33 +98,178 @@ class TestTracingIsPyramids:
         assert '"#ff0000"' in _payload(m.to_html())
 
 
+class TestTheIntervalCarriesItsAnchor:
+    """``interval=`` reads as a plain spacing or as a :class:`ContourInterval` that anchors it."""
+
+    @staticmethod
+    def _traced_with(dataset, **kwargs):
+        """Contour ``dataset`` and return the arguments pyramids was handed.
+
+        Args:
+            dataset: The raster fixture to contour.
+            **kwargs: Forwarded to ``contours``.
+
+        Returns:
+            The keyword arguments ``Dataset.contour`` received.
+        """
+        seen = {}
+        original = type(dataset).contour
+
+        def spy(self, **passed):
+            """Record what pyramids was asked for, then trace normally."""
+            seen.update(passed)
+            return original(self, **passed)
+
+        type(dataset).contour = spy
+        try:
+            WebMap().basemap().contours(dataset, **kwargs)
+        finally:
+            type(dataset).contour = original
+        return seen
+
+    def test_a_plain_number_still_means_one_level_every_n(self, dataset):
+        """A bare number is the common spelling and reaches pyramids as spacing anchored at zero.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            Folding ``base`` into the interval must not make the ordinary call more verbose — the spacing
+            is the argument most callers write, and a number can only mean spacing here.
+        """
+        seen = self._traced_with(dataset, interval=50)
+        assert seen["interval"] == 50, (
+            f"the spacing must reach pyramids, got {seen['interval']!r}"
+        )
+        assert seen["base"] == 0.0, (
+            f"a bare spacing anchors at zero, got {seen['base']!r}"
+        )
+
+    def test_an_anchored_interval_offsets_the_levels(self, dataset):
+        """``ContourInterval(spacing, base=)`` carries the anchor through to pyramids.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            ``base`` is the value the spacing counts from, so it decides which iso-values are traced at
+            all. This type is now the only way to say it, so it is the only thing that can carry it down.
+        """
+        seen = self._traced_with(dataset, interval=ContourInterval(50, base=25))
+        assert seen["interval"] == 50, (
+            f"the spacing must survive the type, got {seen['interval']!r}"
+        )
+        assert seen["base"] == 25, (
+            f"the anchor must reach pyramids, got {seen['base']!r}"
+        )
+
+    def test_base_can_no_longer_be_passed_where_it_would_be_dropped(self, dataset):
+        """A loose ``base=`` is refused outright rather than accepted and ignored.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            ``contours(levels=[...], base=50)`` used to be accepted, and pyramids ignored the anchor because
+            explicit levels have no spacing to anchor. Silently dropping an argument the caller wrote is the
+            failure this signature change removes: the only way to say ``base`` now is beside a spacing.
+        """
+        scene = WebMap()
+        with pytest.raises(TypeError) as excinfo:
+            scene.contours(dataset, levels=[100, 200], base=50)
+        assert "base" in str(excinfo.value), (
+            f"the error must name the argument that no longer exists, got {excinfo.value}"
+        )
+
+    @pytest.mark.parametrize("bad", [0, -10, float("nan"), float("inf")])
+    def test_a_spacing_that_traces_nothing_is_refused(self, bad):
+        """A zero, negative or non-finite spacing raises instead of tracing an empty result.
+
+        Args:
+            bad: A spacing that cannot produce levels.
+
+        Test scenario:
+            Each of these reaches pyramids as "no features found", which reports the symptom at the wrong
+            layer. The type refuses it at the point the caller wrote it.
+        """
+        with pytest.raises(ValueError, match="finite and greater than zero"):
+            ContourInterval(bad)
+
+    def test_a_boolean_is_not_a_spacing_of_one(self, dataset):
+        """``interval=True`` is a mis-typed flag, and ``bool`` being an ``int`` must not hide that.
+
+        Args:
+            dataset: The raster fixture to contour.
+
+        Test scenario:
+            Python makes ``True`` an ``int``, so a plain number check would quietly contour every 1 unit --
+            an enormous trace from what was obviously meant as a switch.
+        """
+        scene = WebMap()
+        with pytest.raises(TypeError, match="number or a ContourInterval"):
+            scene.contours(dataset, interval=True)
+
+
 class TestWhatItRefuses:
     """Both failures produce an error that names what the caller actually wrote."""
 
-    @pytest.mark.parametrize(
-        "kwargs",
-        [{}, {"interval": 10, "levels": [1.0]}],
-    )
-    def test_exactly_one_of_interval_or_levels(self, dataset, kwargs):
-        """pyramids requires one of the two; saying so here names the argument, not its internals.
+    def test_both_interval_and_levels_is_an_error(self, dataset):
+        """pyramids takes one of the two; saying so here names the argument, not its internals.
 
         Args:
             dataset: The shared pyramids raster fixture.
-            kwargs: Neither given, or both.
         """
         web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match="exactly one"):
-            web_map.contours(dataset, **kwargs)
+        with pytest.raises(ValueError, match="at most one"):
+            web_map.contours(dataset, interval=10, levels=[1.0])
 
-    def test_an_interval_coarser_than_the_data_says_so(self, dataset):
+    def test_neither_and_no_autostyle_levels_names_both_arguments(self, dataset):
+        """With neither given, `auto_style` is consulted — and an unknown variable has no levels (C6).
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+
+        Test scenario:
+            The fixture's variable is not one the style library knows, so nothing can be resolved and the
+            caller is asked for `interval=`/`levels=` rather than handed a guessed set.
+        """
+        web_map = WebMap().basemap()
+        with pytest.raises(ValueError, match=r"needs interval= or levels="):
+            web_map.contours(dataset)
+
+    def test_an_interval_coarser_than_the_data_skips_and_warns(
+        self, dataset, warning_log
+    ):
         """The fixture tops out near 88, so a 1000-unit interval crosses no level at all.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            warning_log: The tier's loguru warnings.
 
         Test scenario:
             pyramids writes the level attribute only when it writes a feature, so an empty trace reached
             the vector builder as "column 'level' not found" — an error about the wrong thing entirely.
+            Under C7 an empty trace is a skip: no layer, a warning that names the interval, and the rest
+            of the chain still draws.
         """
         web_map = WebMap().basemap()
-        with pytest.raises(ValueError, match="traced nothing"):
+        before = len(web_map.layers)
+        assert web_map.contours(dataset, interval=1000) is web_map
+        assert len(web_map.layers) == before, "an empty trace still added a layer"
+        assert any("nothing was traced" in line for line in warning_log), warning_log
+
+    def test_strict_raises_on_an_empty_trace(self, dataset):
+        """`strict=True` turns the skip back into the error it used to be (C7).
+
+        It is an ``OffLimbError``, the one type every tier raises under ``strict`` (M6): "no level lies
+        within the data" is the same "there is nothing renderable here" the other tiers signal that way,
+        and a pipeline written to ``except OffLimbError`` used to miss this tier's bare ``ValueError``.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+        """
+        web_map = WebMap(strict=True).basemap()
+        with pytest.raises(OffLimbError, match="nothing was traced"):
             web_map.contours(dataset, interval=1000)
 
 

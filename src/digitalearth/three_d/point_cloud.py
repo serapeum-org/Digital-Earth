@@ -10,18 +10,21 @@ module imports neither geopandas nor shapely (the HARD RULE / ``test_no_competit
 all CRS work upstream.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pyvista as pv
+
+from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.three_d.base import classified_scalars
 
 #: Attribute name the per-point colour scalar is stored under on the generated cloud.
 SCALAR = "scalar"
 
 
 def _coords_from_geodataframe(
-    data: Any, value_column: Optional[str]
-) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    data: Any, value_column: str | None
+) -> tuple[np.ndarray, np.ndarray | None]:
     """Read ``(N, 3)`` coordinates (and an optional value column) off a points GeoDataFrame.
 
     Args:
@@ -99,12 +102,15 @@ class PointCloudMixin(_MixinBase):
         self,
         data: Any,
         *,
-        values: Optional[np.ndarray] = None,
-        value_column: Optional[str] = None,
-        point_size: float = 5.0,
+        values: np.ndarray | None = None,
+        value_column: str | None = None,
+        size: float | None = None,
+        scheme: Any | None = None,
+        k: int = 5,
         render_points_as_spheres: bool = True,
         eye_dome_lighting: bool = True,
         cmap: str = "viridis",
+        point_size: float | None = None,
         **kwargs: Any,
     ) -> Any:
         """Render a point cloud (LiDAR / observations / raster cells) and register it as a layer.
@@ -114,14 +120,33 @@ class PointCloudMixin(_MixinBase):
                 GeoDataFrame of ``Point`` geometries (e.g. ``Dataset.get_cell_points()``).
             values: Explicit per-point scalar array to colour by (overrides ``value_column``).
             value_column: Column name to colour by when ``data`` is a GeoDataFrame; ``None`` for no colour.
-            point_size: Marker size in pixels.
+            size: Marker size in pixels (default ``5.0``). Named ``size`` on every tier, so one number means
+                one visual marker size whichever backend drew it.
+            scheme: How the colour values are classified, when the cloud is coloured at all. ``None`` (the
+                default) is a continuous ramp over the raw values; ``"categorical"`` gives every distinct
+                value its own colour; any other ``cleopatra.styling.styles.classify`` scheme name
+                (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) colours ``k`` graduated
+                classes. The classes are computed exactly as the 2-D tiers compute them.
+            k: Number of classes for a graduated ``scheme``; ignored otherwise.
             render_points_as_spheres: Draw points as shaded spheres (cleaner than flat dots).
             eye_dome_lighting: Enable depth-cueing eye-dome lighting (recommended for dense clouds).
             cmap: Colormap used when the cloud is coloured by a scalar.
+            point_size: **Deprecated** alias of ``size``; passing it warns that ``point_size=`` will be
+                removed in a future release and forwards the value unchanged. Passing both is a
+                ``TypeError``.
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_points`.
 
         Returns:
-            The registered :class:`pyvista.Actor` for the point cloud.
+            The registered :class:`pyvista.Actor` for the point cloud, or ``None`` when the cloud held no
+            points (see ``strict`` on :class:`~digitalearth.three_d.base.Scene3DBase`).
+
+        Raises:
+            TypeError: if both ``size`` and the deprecated ``point_size`` are given — they name one
+                parameter, so neither can be silently preferred.
+            ValueError: if ``values`` does not have one entry per point, or if ``scheme`` cannot classify
+                the values. Also — only when the scene was built with ``strict=True`` —
+                :class:`~digitalearth.base.crs.OffLimbError` for an empty cloud, which is otherwise skipped
+                with a warning.
 
         Examples:
             - Render a coloured LiDAR-style xyz table:
@@ -147,28 +172,57 @@ class PointCloudMixin(_MixinBase):
                 >>> scene.close()
 
                 ```
+            - Classify the colours into quantile classes instead of a continuous ramp:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.three_d import Scene3D
+                >>> pts = np.column_stack([np.arange(20.0), np.arange(20.0), np.zeros(20)])
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.point_cloud(pts, values=pts[:, 0], scheme="quantiles", k=4)
+                >>> sorted(set(int(v) for v in scene.layers[0][0]["scalar"]))
+                [0, 1, 2, 3]
+                >>> scene.close()
+
+                ```
         """
+        size = renamed_parameter(
+            new="size",
+            value=size,
+            old="point_size",
+            alias=point_size,
+            caller="Scene3D.point_cloud()",
+            default=5.0,
+        )
         if hasattr(data, "geometry"):
             points, gdf_values = _coords_from_geodataframe(data, value_column)
         else:
             points, gdf_values = _coords_from_array(data), None
 
         scalar = values if values is not None else gdf_values
+        if len(points) == 0:
+            # Validate the scalar length first so an empty cloud paired with values is still a caller error,
+            # not a silently skipped layer.
+            if scalar is not None and len(scalar) != 0:
+                raise ValueError(
+                    f"values length {len(scalar)} does not match {len(points)} points"
+                )
+            self._skip_empty("point_cloud", "the point table is empty")
+            return None
         cloud = pv.PolyData(points)
 
         add_kwargs = dict(
-            point_size=point_size,
+            point_size=size,
             render_points_as_spheres=render_points_as_spheres,
             **kwargs,
         )
         if scalar is not None:
-            scalar = np.asarray(scalar, dtype="float64")
-            if scalar.shape[0] != len(points):
+            if len(scalar) != len(points):
                 raise ValueError(
-                    f"values length {scalar.shape[0]} does not match {len(points)} points"
+                    f"values length {len(scalar)} does not match {len(points)} points"
                 )
-            cloud[SCALAR] = scalar
-            add_kwargs.update(scalars=SCALAR, cmap=cmap)
+            style = classified_scalars(scalar, scheme=scheme, k=k, cmap=cmap)
+            cloud[SCALAR] = style.pop("scalars")
+            add_kwargs.update(scalars=SCALAR, **style)
 
         actor = self.plotter.add_points(cloud, **add_kwargs)
         if eye_dome_lighting:

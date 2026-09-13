@@ -1,3 +1,8 @@
-# pytest-mpl baseline images live here.
-# Generate/update with:  pixi run -e dev pytest --mpl-generate-path=tests/baseline
-# Compare against them with:  pixi run -e dev pytest --mpl
+# pytest-mpl baseline images for the static (matplotlib) backend live here, one PNG per test in
+# tests/static/test_image_baselines.py, named after the test function.
+#
+# Compare the current rendering against them:  pixi run -e dev test-images
+# Regenerate them after a deliberate change:   pixi run -e dev test-images-generate
+#
+# Regenerating rewrites every PNG — review the image diff before committing it, and regenerate on the same
+# OS the CI image-baselines job runs on (freetype rasterises text differently per platform).

@@ -8,17 +8,75 @@ The headline of the tier: turn any ``WebMap`` into a shareable artifact.
 * PNG snapshot — render the HTML in a headless browser and screenshot it. The browser is an **optional,
   gated** dependency (not in the ``[web]`` extra): ``save(*.png)`` raises an actionable ``ImportError`` when
   neither Playwright nor Selenium is installed, rather than failing obscurely.
+* ``animate`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate every
+  tier's animation entry point takes). ``to_gif`` is its deprecated name, and ``duration=`` its deprecated
+  seconds-per-frame spelling, converted to ``fps`` rather than reinterpreted.
 
 ``WebMapBase.save`` dispatches HTML vs. PNG and the ``offline`` flag here (the base sits first in the MRO, so
 these are hooks it calls, not overrides). urllib / browser libs are imported lazily.
 """
 
+import math
 import pathlib
 import re
 import tempfile
-from typing import TYPE_CHECKING, Any
+import warnings
+from typing import TYPE_CHECKING, Any, Optional
 
+from digitalearth.base.animation import DEFAULT_FPS
+from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.web.base import DEFAULT_TITLE
+
+# `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
+# defaults to lives in `digitalearth.base.animation`, so one number means one speed whichever backend renders
+# the series. It stays importable from this module because that is where this tier's callers and tests already
+# reach for it.
+
+
+def _fps_from_duration(seconds: Any) -> float:
+    """Convert the deprecated ``duration=`` (seconds held per frame) into the ``fps`` it means.
+
+    The rename is a unit change, not a spelling change, so the value is *converted* rather than
+    reinterpreted: ``duration=0.5`` has always meant a half-second hold, i.e. two frames a second, and it
+    still does. The positivity check lives here rather than at the call site so it runs after the
+    both-spellings guard in :func:`~digitalearth.base.deprecation.renamed_parameter` — a contradictory call
+    is a ``TypeError`` about the two names, not a complaint about one of the values.
+
+    A non-finite hold is refused by name, before the arithmetic. ``nan`` compares ``False`` against every
+    bound, so it slipped the positivity check here *and* the one on the resolved ``fps``, and ``1 / nan`` is
+    ``nan`` — a rate that means nothing reached the encoder silently (review M10). ``inf`` is refused the
+    same way: a frame held forever is not an animation, and ``1 / inf`` is a zero rate this then re-rejects
+    in terms of a number the caller never wrote.
+
+    Args:
+        seconds: Seconds to hold each frame, as the caller wrote it.
+
+    Returns:
+        The equivalent frames per second.
+
+    Raises:
+        ValueError: when ``seconds`` is not a finite positive number — a zero hold has no rate and would
+            divide by zero, and ``nan``/``inf`` have no rate to convert to at all.
+
+    Examples:
+        - A hold that is not a number is named as such, rather than becoming a ``nan`` frame rate:
+            ```python
+            >>> from digitalearth.web.export import _fps_from_duration
+            >>> _fps_from_duration(float("nan"))
+            Traceback (most recent call last):
+                ...
+            ValueError: duration= must be a finite number of seconds; got nan
+
+            ```
+    """
+    value = float(seconds)
+    if not math.isfinite(value):
+        raise ValueError(
+            f"duration= must be a finite number of seconds; got {seconds!r}"
+        )
+    if value <= 0:
+        raise ValueError(f"duration= must be positive; got {seconds!r}")
+    return 1.0 / value
 
 
 def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
@@ -34,7 +92,7 @@ def _write_gif(frames: list, path: str, *, duration: float, loop: int) -> None:
         loop: Repeat count; ``0`` loops forever.
 
     Raises:
-        ValueError: when there are no frames to write. ``to_gif`` cannot reach this — it refuses a series
+        ValueError: when there are no frames to write. ``animate`` cannot reach this — it refuses a series
             of fewer than two steps first — but this function is the encoder for any frame list, so it
             checks rather than writing a GIF with nothing in it.
     """
@@ -148,8 +206,8 @@ class ExportMixin(_MixinBase):
 
     def _render_png(
         self, path: str, *, title: str = DEFAULT_TITLE, **kwargs: Any
-    ) -> str:
-        """Render the map to a PNG via a headless browser and return ``path`` (gated optional dep).
+    ) -> pathlib.Path:
+        """Render the map to a PNG via a headless browser and return its path (gated optional dep).
 
         Tries Playwright, then Selenium; both render the standalone HTML offscreen and screenshot it. Neither
         is in the ``[web]`` extra, so this raises an actionable ``ImportError`` when no browser is available.
@@ -159,11 +217,11 @@ class ExportMixin(_MixinBase):
             title: HTML document title.
             **kwargs: Reserved for headless-browser options, and not forwarded to ``to_html``. Two keys
                 are recognised: ``widget``, a pre-built map widget to render instead of building a fresh
-                one (how :meth:`to_gif` renders a frame with one step visible), and ``kind``, the export
+                one (how :meth:`animate` renders a frame with one step visible), and ``kind``, the export
                 name quoted in the missing-browser error so a GIF failure does not talk about PNG.
 
         Returns:
-            The ``path`` written.
+            The :class:`pathlib.Path` written.
 
         Raises:
             ImportError: when neither Playwright nor Selenium is installed.
@@ -183,8 +241,8 @@ class ExportMixin(_MixinBase):
             url = html_path.as_uri()
             for renderer in (self._png_via_playwright, self._png_via_selenium):
                 try:
-                    renderer(url, path)
-                    return str(path)
+                    renderer(url, str(path))
+                    return pathlib.Path(path)
                 except ImportError:
                     continue
         raise ImportError(
@@ -193,14 +251,15 @@ class ExportMixin(_MixinBase):
             "a driver."
         )
 
-    def to_gif(
+    def animate(
         self,
         path: str,
         *,
-        duration: float = 0.8,
+        fps: Optional[float] = None,
         loop: int = 0,
         title: str = DEFAULT_TITLE,
-    ) -> str:
+        duration: Optional[float] = None,
+    ) -> pathlib.Path:
         """Write a temporal map's steps as an animated GIF (recipe W7).
 
         A time series is the case where a moving image says most, and it is also the case a web page
@@ -212,37 +271,161 @@ class ExportMixin(_MixinBase):
 
         Args:
             path: Where to write the GIF.
-            duration: Seconds each frame is held.
+            fps: Frames per second — the rate every tier's animation entry point takes, with the same
+                default (:data:`DEFAULT_FPS`, ``3.0``, declared once in :mod:`digitalearth.base.animation`;
+                the signature's ``None`` is the "not passed" sentinel the deprecated spelling is resolved
+                against), so one number means one speed across the whole package. This entry point used to
+                be spelled ``duration=0.8`` (one frame held 0.8 s, i.e. 1.25 fps); a call that names no rate
+                now renders faster, and ``fps=1.25`` restores the previous speed.
             loop: How many times to repeat; ``0`` loops forever.
             title: HTML document title used while rendering.
+            duration: **Deprecated** spelling of the frame rate, in seconds held per frame. Passing
+                it warns that ``duration=`` will be removed in a future release and to write
+                ``fps=`` instead. It is *converted* (``fps = 1 / duration``), never
+                reinterpreted, so an old call produces the animation it always did.
 
         Returns:
-            The ``path`` written.
+            The :class:`pathlib.Path` written.
 
         Raises:
-            ValueError: when the map has no time steps to animate, or fewer than two.
+            TypeError: when both ``fps`` and the deprecated ``duration`` are passed — one rate, two
+                spellings, so neither can be silently preferred.
+            ValueError: when the map has no time steps to animate, or fewer than two, or when ``fps`` /
+                ``duration`` is not a finite positive number — a zero rate has no frame to hold, and a
+                ``nan``/``inf`` one is no rate at all.
             ImportError: when no headless browser is installed — the same gated dependency the PNG
                 snapshot needs, and deliberately not part of ``digitalearth[web]``.
 
         Examples:
             - Animate a raster stack:
                 ```python
-                >>> from digitalearth.web import WebMap                          # doctest: +SKIP
-                >>> WebMap().basemap().timeslider(stack).to_gif("out.gif")       # doctest: +SKIP
+                >>> from digitalearth.web import WebMap                           # doctest: +SKIP
+                >>> from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP
+                >>> stack = DatasetCollection.from_files(["jan.tif", "feb.tif"])  # doctest: +SKIP
+                >>> WebMap().basemap().timeslider(stack).animate("out.gif")       # doctest: +SKIP
 
                 ```
 
         See Also:
             digitalearth.web.temporal.TemporalMixin.timeslider: builds the steps this animates.
+            digitalearth.web.export.ExportMixin.to_gif: the deprecated name of this method.
         """
+        fps = renamed_parameter(
+            new="fps",
+            value=fps,
+            old="duration",
+            alias=duration,
+            caller="WebMap.animate()",
+            default=DEFAULT_FPS,
+            convert=_fps_from_duration,
+        )
+        if not math.isfinite(float(fps)):
+            raise ValueError(f"fps= must be a finite rate; got {fps!r}")
+        if float(fps) <= 0:
+            raise ValueError(f"fps= must be positive; got {fps!r}")
         frames = self._temporal_frames()
         with tempfile.TemporaryDirectory() as work:
             images = [
                 self._frame_png(pathlib.Path(work) / f"frame{index}.png", frame, title)
                 for index, frame in enumerate(frames)
             ]
-            _write_gif(images, path, duration=duration, loop=loop)
-        return str(path)
+            _write_gif(images, path, duration=1.0 / float(fps), loop=loop)
+        return pathlib.Path(path)
+
+    def to_gif(
+        self,
+        path: str,
+        *,
+        fps: Optional[float] = None,
+        loop: int = 0,
+        title: str = DEFAULT_TITLE,
+        duration: Optional[float] = None,
+    ) -> pathlib.Path:
+        """Deprecated alias of :meth:`animate` — same arguments, same result.
+
+        The signature is spelled out rather than forwarded as ``**kwargs`` so that the deprecated
+        ``duration=`` is resolved **here**, one frame below the caller. Forwarding it left
+        :func:`~digitalearth.base.deprecation.renamed_parameter` counting frames from :meth:`animate`, so the
+        warning about the caller's own keyword was attributed to this module instead of to their line
+        (review M9) — a warning nobody can act on, since the file it names is not theirs.
+
+        Args:
+            path: Where to write the GIF.
+            fps: Frames per second — see :meth:`animate`, whose default applies when this is left ``None``.
+            loop: How many times to repeat; ``0`` loops forever.
+            title: HTML document title used while rendering.
+            duration: **Deprecated** spelling of the frame rate, in seconds held per frame; converted to
+                ``fps`` exactly as :meth:`animate` converts it.
+
+        Returns:
+            The :class:`pathlib.Path` written.
+
+        Raises:
+            TypeError: when both ``fps`` and the deprecated ``duration`` are passed.
+            ValueError: whatever :meth:`animate` raises — no time series, fewer than two
+                steps, or a non-finite/non-positive rate. The ``DeprecationWarning`` is emitted
+                first either way, so an old call is told to move even when it then fails for a
+                reason of its own.
+            ImportError: when no headless browser is installed to render the frames.
+
+        Warns:
+            DeprecationWarning: always, naming :meth:`animate` as the spelling to move to; and a second
+                time when the deprecated ``duration=`` is passed instead of ``fps=``. Both are raised
+                from this frame, so both point at the caller's own line.
+
+        Examples:
+            - The old name still does the work, but says it is going away first. There is no series
+              to animate here, so the call raises straight after warning — the warning is the part
+              this example is about, and it needs no engine to show:
+                ```python
+                >>> import warnings
+                >>> from digitalearth.web import WebMap
+                >>> with warnings.catch_warnings(record=True) as caught:
+                ...     warnings.simplefilter("always")
+                ...     try:
+                ...         WebMap().to_gif("steps.gif")
+                ...     except ValueError as error:
+                ...         print(str(error).split(";")[0])
+                animate() needs a raster time series with at least two steps
+                >>> print(caught[0].category.__name__)
+                DeprecationWarning
+                >>> print(str(caught[0].message).split(";")[0])
+                WebMap.to_gif() is deprecated and will be removed in a future release
+
+                ```
+            - The message names its own replacement, so the migration is a rename and nothing
+              else — same arguments, same GIF, no warning:
+                ```python
+                >>> from digitalearth.web import WebMap              # doctest: +SKIP
+                >>> from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP
+                >>> stack = DatasetCollection.from_files(["jan.tif", "feb.tif"])  # doctest: +SKIP
+                >>> m = WebMap().basemap().timeslider(stack)         # doctest: +SKIP
+                >>> m.animate("steps.gif", fps=5).name               # doctest: +SKIP
+                'steps.gif'
+
+                ```
+
+        See Also:
+            animate: the method this forwards to, and the name to write in new code.
+        """
+        warnings.warn(
+            "WebMap.to_gif() is deprecated and will be removed in a future release; use "
+            "WebMap.animate() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        # Resolved here, not in `animate`: from this frame the default stacklevel of 3
+        # (renamed_parameter -> to_gif -> the caller) lands the warning on the user's line.
+        fps = renamed_parameter(
+            new="fps",
+            value=fps,
+            old="duration",
+            alias=duration,
+            caller="WebMap.to_gif()",
+            default=None,
+            convert=_fps_from_duration,
+        )
+        return self.animate(path, fps=fps, loop=loop, title=title)
 
     def _temporal_frames(self) -> list:
         """Return the visible-layer set for each time step, oldest first.
@@ -257,13 +440,13 @@ class ExportMixin(_MixinBase):
         layer_ids = list((config or {}).get("layer_ids") or [])
         if config is None or (config.get("mode") != "raster") or len(layer_ids) < 2:
             raise ValueError(
-                "to_gif() needs a raster time series with at least two steps; add one with "
+                "animate() needs a raster time series with at least two steps; add one with "
                 "timeslider(collection). The vector time-slider filters a single layer, so its steps "
                 "are not separately renderable."
             )
         return [[layer_id] for layer_id in layer_ids]
 
-    def _frame_png(self, path: Any, visible: list, title: str) -> str:
+    def _frame_png(self, path: Any, visible: list, title: str) -> pathlib.Path:
         """Render one animation frame by showing only ``visible`` and screenshotting the page.
 
         Args:
@@ -272,7 +455,7 @@ class ExportMixin(_MixinBase):
             title: HTML document title used while rendering.
 
         Returns:
-            The frame's path, as a string.
+            The frame's :class:`pathlib.Path`.
         """
         config = self._temporal or {}
         steps = list(config.get("layer_ids") or [])

@@ -19,6 +19,12 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
 
+#: Graticule spacings (degrees) :meth:`ProjectionMixin.graticule` can honour. GeoViews draws the grid from
+#: Natural Earth's pre-cut ``graticules_<n>`` line layers, which exist only at these steps and are always
+#: **symmetric** (the same spacing in longitude and latitude) — so anything else is refused rather than
+#: silently rounded to the nearest shipped layer.
+_GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
+
 
 class ProjectionMixin(_MixinBase):
     """Projection builders (DI.9): arbitrary display projections via the matplotlib backend.
@@ -105,17 +111,79 @@ class ProjectionMixin(_MixinBase):
             )
         return factory()
 
-    def graticule(self, **opts: Any) -> Self:
-        """Add a longitude/latitude graticule (parity with ``Map.graticule``).
+    def graticule(
+        self, lon_step: float = 30.0, lat_step: float = 30.0, **opts: Any
+    ) -> Self:
+        """Add a longitude/latitude graticule at the requested spacing (parity with ``Map.graticule``).
+
+        The spacing arguments mirror the static ``Map.graticule(lon_step, lat_step)`` so the same call
+        means the same thing on both tiers. GeoViews draws the grid from Natural Earth's pre-cut
+        ``graticules_<n>`` line layers rather than generating meridians on the fly, so only the shipped,
+        **symmetric** steps can be honoured: ``1``, ``5``, ``10``, ``15``, ``20`` and ``30`` degrees, with
+        ``lon_step == lat_step``. Any other request raises instead of being quietly ignored.
 
         Args:
+            lon_step: Meridian spacing in degrees; one of :data:`_GRATICULE_STEPS`.
+            lat_step: Parallel spacing in degrees; must equal ``lon_step``.
             **opts: Extra HoloViews style options applied to the grid feature.
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``lon_step`` and ``lat_step`` differ, or when the step is not one of the
+                Natural-Earth graticule spacings GeoViews can draw.
+
+        Examples:
+            - A 10-degree graticule instead of the 30-degree default:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap         # doctest: +SKIP
+                >>> m = InteractiveMap().graticule(lon_step=10, lat_step=10)    # doctest: +SKIP
+                >>> m.layers[-1].data.name                                      # doctest: +SKIP
+                'graticules_10'
+
+                ```
         """
         gv, hv = _require_holoviz()
+        step = self._graticule_step(lon_step, lat_step)
         element = gv.feature.grid.clone()
+        if step != 30:
+            # cartopy's NaturalEarthFeature, reached through the element GeoViews already built rather
+            # than through an `import cartopy` (DX.3 — the tier never imports cartopy itself).
+            source = element.data
+            element = element.clone(
+                type(source)(source.category, f"graticules_{step}", source.scale)
+            )
         if opts:
             element = element.opts(**opts)
         return self.add_element(element)
+
+    @staticmethod
+    def _graticule_step(lon_step: float, lat_step: float) -> int:
+        """Validate the requested graticule spacing and return it as a Natural-Earth step.
+
+        Args:
+            lon_step: Meridian spacing in degrees.
+            lat_step: Parallel spacing in degrees.
+
+        Returns:
+            int: the spacing naming the ``graticules_<n>`` Natural-Earth layer to draw.
+
+        Raises:
+            ValueError: when the two steps differ, or the step is not a shipped Natural-Earth spacing.
+        """
+        shipped = {float(known) for known in _GRATICULE_STEPS}
+        for name, value in (("lon_step", lon_step), ("lat_step", lat_step)):
+            if float(value) not in shipped:
+                known = ", ".join(str(entry) for entry in _GRATICULE_STEPS)
+                raise ValueError(
+                    f"graticule() cannot honour {name}={value!r} — GeoViews draws Natural Earth's "
+                    f"pre-cut graticule layers, which exist only at: {known} degrees"
+                )
+        if float(lon_step) != float(lat_step):
+            raise ValueError(
+                f"graticule() cannot honour lon_step={lon_step!r} with lat_step={lat_step!r} — GeoViews "
+                "draws Natural Earth's pre-cut graticule layers, which are symmetric; pass the same "
+                "spacing for both, or use the static tier for an asymmetric grid"
+            )
+        return int(float(lon_step))

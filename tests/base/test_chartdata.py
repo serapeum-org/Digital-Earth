@@ -22,6 +22,31 @@ from digitalearth.base.chartdata import (
 )
 
 
+def _fake_dataset(array, no_data_value):
+    """Build a pyramids-``Dataset`` duck-type whose ``read_array`` masks like the real one.
+
+    ``read_masked_band`` asks pyramids for the mask (``read_array(band=..., masked=True)``) rather than
+    comparing values against the sentinel itself, so a stand-in has to answer that call to stand in at all.
+
+    Args:
+        array: The 2-D band the stand-in returns for every requested index.
+        no_data_value: The per-band nodata tuple, indexed by the requested 0-based band.
+
+    Returns:
+        types.SimpleNamespace: an object exposing ``read_array`` and ``no_data_value``.
+    """
+    values = np.asarray(array)
+
+    def read_array(band=0, masked=False):
+        """Return the stored band, as a masked array built from its sentinel when ``masked``."""
+        nodata = no_data_value[band]
+        if not masked or nodata is None:
+            return values
+        return np.ma.masked_equal(values, nodata)
+
+    return SimpleNamespace(no_data_value=no_data_value, read_array=read_array)
+
+
 @pytest.fixture
 def frame():
     """A small DataFrame with numeric, non-finite, categorical and string columns.
@@ -181,10 +206,7 @@ class TestFieldValues:
         Test scenario:
             A fake Dataset whose band holds a -9999 sentinel and a NaN yields only the real values, 1-D.
         """
-        dataset = SimpleNamespace(
-            no_data_value=(-9999.0,),
-            read_array=lambda band=0: np.array([[1.0, -9999.0], [np.nan, 4.0]]),
-        )
+        dataset = _fake_dataset([[1.0, -9999.0], [np.nan, 4.0]], (-9999.0,))
         out = field_values(dataset)
         assert sorted(out.tolist()) == [1.0, 4.0], f"nodata/NaN not dropped: {out}"
 
@@ -315,10 +337,7 @@ class TestAsFiniteArray:
         Test scenario:
             Both duck-type attributes present, so the nodata sentinel is nulled and the result flattened.
         """
-        dataset = SimpleNamespace(
-            no_data_value=(-1.0,),
-            read_array=lambda band=0: np.array([[1.0, -1.0], [2.0, 3.0]]),
-        )
+        dataset = _fake_dataset([[1.0, -1.0], [2.0, 3.0]], (-1.0,))
         out = as_finite_array(dataset)
         assert out.ndim == 1, f"a Dataset band should be flattened, got {out.ndim}-D"
         assert sorted(out.tolist()) == [1.0, 2.0, 3.0], f"nodata not dropped: {out}"

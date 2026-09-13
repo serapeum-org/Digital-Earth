@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from digitalearth.ops.batch import Batch, _default_namer
+from digitalearth.ops.batch import Batch, _default_namer, load_input
 from digitalearth.static import Map
 
 
@@ -98,4 +98,46 @@ class TestBatch:
         )
         assert all(p.stat().st_size > 0 for p in paths), (
             "both images must be written and non-empty"
+        )
+
+
+class TestVectorPaths:
+    """Regression tests for #229 — batch opened every path as a raster, so a vector path raised."""
+
+    def test_render_one_opens_a_vector_path(self):
+        """A .geojson path renders instead of raising GDAL's "not recognized as a supported file format".
+
+        Test scenario:
+            ``render_one`` is handed a vector *path* (not a loaded FeatureCollection), the case that used to
+            go straight to ``Dataset.read_file`` and die there.
+        """
+        scene = Batch(crs=4326, colorbar=False).render_one("tests/data/points.geojson")
+        assert len(scene.layers) == 1, (
+            f"the vector path should have drawn one layer, got {len(scene.layers)}"
+        )
+
+    def test_run_writes_an_image_for_a_vector_path(self, tmp_path):
+        """``Batch.run`` writes one non-empty image for a vector path.
+
+        Test scenario:
+            The end-to-end batch flow over the same file the CLI's ``plot`` subcommand already accepted.
+        """
+        paths = Batch(crs=4326, colorbar=False).run(
+            ["tests/data/points.geojson"], tmp_path
+        )
+        assert [p.name for p in paths] == ["points.png"], f"unexpected outputs: {paths}"
+        assert paths[0].stat().st_size > 0, "the written image must not be empty"
+
+    def test_loader_chains_both_causes(self, tmp_path):
+        """A file that is neither raster nor vector still raises the vector error chained from the raster one.
+
+        Test scenario:
+            The chaining the CLI's copy of this loader guaranteed must survive the move into ``batch``.
+        """
+        bogus = tmp_path / "not_geo.tif"
+        bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
+        with pytest.raises(RuntimeError, match="not recognized") as exc:
+            load_input(str(bogus))
+        assert exc.value.__cause__ is not None, (
+            "the raster cause should be chained onto the vector error"
         )

@@ -7,6 +7,7 @@ green; install ``digitalearth[3d]`` (or run the ``viz3d`` pixi env) to exercise 
 # The package imports have to follow pytest.importorskip("pyvista") — importing digitalearth.three_d
 # without pyvista is the very thing the skip exists to avoid — so E402 is expected throughout.
 # ruff: noqa: E402
+import json
 import sys
 import types
 
@@ -16,7 +17,13 @@ import pytest
 pv = pytest.importorskip("pyvista")
 
 from digitalearth.three_d import Scene3D, base
-from digitalearth.three_d.base import Scene3DBase, house_theme
+from digitalearth.three_d.base import (
+    IMAGE_SUFFIXES,
+    SCENE_EXPORTERS,
+    Scene3DBase,
+    house_theme,
+    supported_destinations,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -93,9 +100,9 @@ def test_save_dispatches_png_vs_html(tmp_path):
     html_result = scene.save(str(html))
     assert png.exists() and png.stat().st_size > 0
     assert html.exists() and html.stat().st_size > 0
-    # save() returns the RGB frame for a raster path and None for the HTML path
-    assert png_result is not None and png_result.ndim == 3
-    assert html_result is None
+    # C1: save() returns the Path it wrote on every branch — the RGB frame moved to screenshot().
+    assert png_result == png, f"save() must return the png path, got {png_result!r}"
+    assert html_result == html, f"save() must return the html path, got {html_result!r}"
     scene.close()
 
 
@@ -174,6 +181,7 @@ def _stub_scene(component=None, error=None):
     scene = Scene3DBase.__new__(Scene3DBase)
     scene.plotter = _RecordingPlotter(component=component, error=error)
     scene.layers = []
+    scene.strict = False
     return scene
 
 
@@ -633,11 +641,13 @@ class TestSave:
 
         Test scenario:
             `save()` lowercases before matching, so `s.HTML` exports a page instead of silently writing a PNG,
-            and `export_html` normalises the suffix so every casing writes `s.html`.
+            and `export_html` normalises the suffix so every casing writes `s.html`. C1: the returned Path is
+            the normalised name that was actually written, not the casing that was asked for.
         """
         scene = _stub_scene()
-        assert scene.save(str(tmp_path / name)) is None, (
-            "The HTML branch returns None, not a frame"
+        written = scene.save(str(tmp_path / name))
+        assert written == tmp_path / "s.html", (
+            f"The HTML branch must return the normalised path it wrote, got {written!r}"
         )
         expected = str(tmp_path / "s.html")
         assert scene.plotter.calls == [expected], (
@@ -656,8 +666,8 @@ class TestSave:
         """
         scene = _stub_scene()
         out = tmp_path / "s.html"
-        assert scene.save(out) is None, (
-            "A Path ending in .html must take the HTML branch"
+        assert scene.save(out) == out, (
+            "A Path ending in .html must take the HTML branch and return the path written"
         )
         assert scene.plotter.calls == [str(out)], (
             f"The exporter should receive a str, got {scene.plotter.calls}"
@@ -670,17 +680,203 @@ class TestSave:
             tmp_path: Supplies the destination path.
 
         Test scenario:
-            `transparent_background=True` reaches the screenshot call, yielding a 4-channel RGBA frame instead
-            of the usual 3-channel RGB one.
+            `transparent_background=True` reaches the screenshot call, so the file written carries an alpha
+            channel. C1 moved the frame off `save()`, so the proof is the PNG on disk rather than a returned
+            array: a 4-channel PNG declares colour type 6 in its IHDR chunk (byte 25), a 3-channel one type 2.
         """
         scene = Scene3DBase(off_screen=True)
         scene.add_mesh(_dem_grid(), scalars="z")
-        frame = scene.save(str(tmp_path / "s.png"), transparent_background=True)
-        assert frame is not None, "The PNG branch must return the rendered frame"
-        assert frame.shape[-1] == 4, (
-            f"Expected an RGBA frame from transparent_background=True, got {frame.shape}"
-        )
+        out = tmp_path / "s.png"
+        written = scene.save(str(out), transparent_background=True)
         scene.close()
+        assert written == out, (
+            f"The PNG branch must return the path written, got {written!r}"
+        )
+        assert out.read_bytes()[25] == 6, (
+            "transparent_background=True must reach Plotter.screenshot and write an RGBA PNG"
+        )
+
+    def test_a_scene_export_suffix_writes_that_format(self, tmp_path):
+        """A `.gltf` destination exports glTF through PyVista, instead of dying in the screenshot branch.
+
+        Args:
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            Regression guard for the "everything that is not .html is a screenshot" dispatch: `.gltf` used to
+            reach `Plotter.screenshot`, which rejected it as a non-image extension. It must now reach
+            `Plotter.export_gltf` and leave a real glTF document (JSON carrying an `asset` block) behind, with
+            `None` returned because no frame was rendered.
+        """
+        scene = Scene3DBase(off_screen=True, window_size=(120, 90))
+        scene.add_mesh(pv.Sphere())
+        out = tmp_path / "scene.gltf"
+        try:
+            assert scene.save(str(out)) == out, (
+                "An export branch returns the path it wrote (C1)"
+            )
+        finally:
+            scene.close()
+        assert out.exists(), f"export_gltf must write the file it was given, {out!r}"
+        assert out.stat().st_size > 0, f"export_gltf must not leave {out!r} empty"
+        assert "asset" in json.loads(out.read_text(encoding="utf-8")), (
+            "The file must be a glTF document, not a renamed screenshot"
+        )
+
+    def test_an_obj_destination_reaches_the_obj_exporter(self, tmp_path):
+        """A `.obj` destination exports OBJ geometry (plus the `.mtl` VTK writes beside it).
+
+        Args:
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            The second scene-export family member, proving the dispatch table is consulted rather than one
+            suffix being special-cased.
+        """
+        scene = Scene3DBase(off_screen=True, window_size=(120, 90))
+        scene.add_mesh(pv.Sphere())
+        out = tmp_path / "scene.obj"
+        try:
+            assert scene.save(str(out)) == out, (
+                "An export branch returns the path it wrote (C1)"
+            )
+        finally:
+            scene.close()
+        assert out.exists(), f"export_obj must write the .obj it was given, {out!r}"
+        assert out.stat().st_size > 0, f"export_obj must not leave {out!r} empty"
+
+    def test_a_suffix_less_path_raises_instead_of_inventing_a_png(self, tmp_path):
+        """`save("scene")` raises and writes nothing, rather than quietly producing `scene.png`.
+
+        Args:
+            tmp_path: Supplies the destination directory.
+
+        Test scenario:
+            Regression guard for the silent-format case: pyvista appends `.png` to a suffix-less screenshot
+            path, so the caller got a file they never named. The error must say the suffix is missing, and the
+            directory must be left empty.
+        """
+        scene = _stub_scene()
+        with pytest.raises(ValueError, match="has no suffix"):
+            scene.save(str(tmp_path / "scene"))
+        assert list(tmp_path.iterdir()) == [], (
+            "Nothing may be written for a destination save() cannot honour"
+        )
+
+    def test_an_unknown_suffix_names_the_supported_ones(self, tmp_path):
+        """An unsupported suffix raises a Digital-Earth error listing every suffix `save` does dispatch.
+
+        Args:
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            `.xyz` is neither a raster frame nor a scene export. The message must name both families so the
+            caller can fix the call without reading the source.
+        """
+        scene = _stub_scene()
+        with pytest.raises(ValueError) as raised:
+            scene.save(str(tmp_path / "scene.xyz"))
+        message = str(raised.value)
+        assert supported_destinations() in message, (
+            "The error must name the supported suffixes"
+        )
+        for suffix in (*IMAGE_SUFFIXES, *SCENE_EXPORTERS):
+            assert suffix in message, (
+                f"{suffix} is dispatched but missing from the error message"
+            )
+
+    def test_a_pyvista_without_the_exporter_is_reported_clearly(self, tmp_path):
+        """A supported scene suffix whose pyvista exporter is absent raises, naming the missing method.
+
+        Args:
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            The exporters are a pyvista capability, so the dispatcher looks each one up rather than assuming
+            it. The stub plotter has no `export_vtksz`, which must surface as a clear ValueError instead of an
+            AttributeError from deep inside the call.
+        """
+        scene = _stub_scene()
+        with pytest.raises(ValueError, match="export_vtksz"):
+            scene.save(str(tmp_path / "scene.vtksz"))
+
+    def test_a_tif_destination_really_writes_a_tiff(self, tmp_path):
+        """`.tif` screenshots to a TIFF — the format the suffix names, not a PNG under another name.
+
+        Args:
+            tmp_path: Supplies the destination path.
+
+        Test scenario:
+            The old docstring promised "anything else saves a PNG screenshot"; it never did for `.tif`. The
+            written file must start with a TIFF magic number, not the PNG one.
+        """
+        scene = Scene3DBase(off_screen=True, window_size=(120, 90))
+        scene.add_mesh(_dem_grid(), scalars="z")
+        out = tmp_path / "scene.tif"
+        try:
+            written = scene.save(str(out))
+        finally:
+            scene.close()
+        assert written == out, (
+            f"The raster branch returns the path it wrote (C1), got {written!r}"
+        )
+        assert out.read_bytes()[:2] in (b"II", b"MM"), (
+            "A .tif destination must hold a TIFF, not a PNG"
+        )
+
+
+class TestVerticalExaggeration:
+    """Tests for Scene3DBase.vertical_exaggeration — exaggeration as a view scale, not baked geometry."""
+
+    def test_a_fresh_scene_is_at_true_scale(self):
+        """A scene with no exaggeration set renders at 1.0, and says so.
+
+        Test scenario:
+            The property reads the renderer's z scale, which starts at true scale.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            assert scene.vertical_exaggeration == 1.0, (
+                "A fresh scene must be at true scale"
+            )
+        finally:
+            scene.close()
+
+    def test_the_value_set_reads_back_off_the_scene(self):
+        """The exaggeration is scene state a caller can read, not a number lost inside a mesh.
+
+        Test scenario:
+            Regression guard: with the factor multiplied into the mesh points there was nothing to read back.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            scene.vertical_exaggeration = 2.5
+            assert scene.vertical_exaggeration == 2.5, (
+                "The scene must report the exaggeration it was set to"
+            )
+        finally:
+            scene.close()
+
+    def test_it_scales_actors_added_afterwards(self):
+        """The view scale propagates to every actor, including ones added after it was set.
+
+        Test scenario:
+            That propagation is what lets one value govern a whole scene: the mesh keeps its own geometry
+            while the actor rendering it carries the z scale.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            scene.vertical_exaggeration = 3.0
+            sphere = pv.Sphere()
+            actor = scene.add_mesh(sphere)
+            assert actor.scale[2] == pytest.approx(3.0), (
+                "A later actor must pick up the scene's z scale"
+            )
+            assert (sphere.bounds[5] - sphere.bounds[4]) == pytest.approx(1.0), (
+                "The mesh itself must be untouched - only the view is scaled"
+            )
+        finally:
+            scene.close()
 
 
 class TestContextManager:

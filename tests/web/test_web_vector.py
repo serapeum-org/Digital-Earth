@@ -9,6 +9,7 @@ build → render → save path, so the lean dev env stays green while the ``web`
 import numpy as np
 import pytest
 
+from digitalearth.base.symbology import MISSING_COLOR
 from digitalearth.web import WebMap
 
 
@@ -55,16 +56,44 @@ class TestColorExpr:
         expr = WebMap()._color_expr(values, "pop", "quantiles", 4, "viridis")
         edges, _ = classify(values, "quantiles", 4)
 
-        assert expr[0] == "step", (
-            f"graduated colouring must be a step expression, got {expr[0]!r}"
+        # The step is wrapped in a `case` that sends a non-numeric (missing) value to MISSING_COLOR, because
+        # MapLibre's `step` has no null arm — so a feature with no value reads as missing rather than as the
+        # lowest class, which is how every other tier draws it.
+        assert expr[0] == "case", (
+            f"a graduated expression must guard missing values, got {expr[0]!r}"
         )
-        assert expr[1] == ["get", "pop"], (
+        assert expr[1] == ["==", ["typeof", ["get", "pop"]], "number"], (
+            f"the guard must test the column's type, got {expr[1]!r}"
+        )
+        assert expr[3] == MISSING_COLOR, (
+            f"an unclassifiable feature must take the shared missing colour, got {expr[3]!r}"
+        )
+
+        step = expr[2]
+        assert step[0] == "step", (
+            f"graduated colouring must be a step expression, got {step[0]!r}"
+        )
+        assert step[1] == ["get", "pop"], (
             "the step input must read the column with ['get', column]"
         )
         # step layout: [step, [get,col], color0, e1, color1, e2, color2, ...] -> interior edges only.
-        interior = [expr[i] for i in range(3, len(expr), 2)]
+        interior = [step[i] for i in range(3, len(step), 2)]
         assert np.allclose(interior, edges[1:-1]), (
             f"step stops {interior} != classifier {edges[1:-1]}"
+        )
+
+    def test_a_missing_value_is_not_coloured_as_the_lowest_class(self):
+        """A feature whose column is null takes the shared missing colour, not the first class.
+
+        Test scenario:
+            MapLibre evaluates ``step`` left to right and has no null arm, so a missing value used to fall
+            into the first bucket — rendering as "smallest", which on a choropleth reads as data rather than
+            as absence. Every other tier draws it neutral grey; this pins that the web tier now does too.
+        """
+        expr = WebMap()._color_expr(np.arange(20.0), "pop", "quantiles", 4, "viridis")
+        first_class = expr[2][2]
+        assert expr[3] == MISSING_COLOR != first_class, (
+            f"missing must differ from the lowest class: missing={expr[3]!r} lowest={first_class!r}"
         )
 
     def test_graduated_records_breaks_on_the_map(self):
@@ -190,7 +219,9 @@ class TestVectorBuildersNeedEngine:
             crs=4326,
         )
         with pytest.raises(ValueError, match="cannot classify column 'pop'"):
-            WebMap().choropleth(gdf, column="pop")
+            # An explicit scheme: `choropleth` is a continuous ramp by default now (C4), and a ramp over
+            # a constant column has a range to widen rather than classes to cut.
+            WebMap().choropleth(gdf, column="pop", scheme="quantiles")
 
     def test_points_lines_polygons_chain(self, points_gdf, polygons_gdf):
         m = WebMap()

@@ -3,8 +3,10 @@
 Complements the per-plot test files (``test_voronoi``/``test_cartogram``/``test_quadtree``/``test_kde``/
 ``test_sankey``/``test_scale_legend``/``test_scheme``) with the scenarios they did not cover: quadtree aggregation
 variants + ``nmin``, Multi-geometry expansion (cartogram/sankey), empty-FeatureCollection and clipped/globe-CRS
-edge cases, the value→size alignment of ``scatter(scale=...)``, and direct unit tests of the private helpers.
+edge cases, the value→size alignment of ``scatter(size_column=...)``, and direct unit tests of the private helpers.
 """
+
+import logging
 
 import geopandas as gpd
 import numpy as np
@@ -162,17 +164,17 @@ class TestSankeyMultiLineString:
 
 
 class TestScatterScaleAlignment:
-    """Map.scatter(scale=...) maps marker size to the right point (positional alignment)."""
+    """Map.scatter(size_column=...) maps marker size to the right point (positional alignment)."""
 
-    def test_sizes_align_with_scale_column(self):
-        """Per-point marker areas rank-match the scale column in row order."""
+    def test_sizes_align_with_size_column(self):
+        """Per-point marker areas rank-match the size column in row order."""
         pts = [Point(0, 0), Point(1, 0), Point(2, 0), Point(3, 0)]
         s = [4.0, 1.0, 3.0, 2.0]
         fc = _fc(gpd.GeoDataFrame({"s": s}, geometry=pts, crs="EPSG:32618"))
-        pc = Map(crs=fc.epsg).scatter(fc, scale="s", size_limits=(10, 200))
+        pc = Map(crs=fc.epsg).scatter(fc, size_column="s", size_limits=(10, 200))
         sizes = np.asarray(pc.get_sizes())
         assert np.argsort(sizes).tolist() == np.argsort(s).tolist(), (
-            "sizes not aligned to scale column order"
+            "sizes not aligned to size column order"
         )
 
 
@@ -220,6 +222,16 @@ class TestGlobeNonFinite:
         pc = m.quadtree(far_side_points, column="v", nmax=1)
         assert len(pc.get_paths()) >= 1
 
+    @staticmethod
+    def _all_far_side():
+        """Points that are all on the far side of ``ORTHO``, so the warp can place none of them.
+
+        Returns:
+            FeatureCollection: two lon/lat points behind the limb, carrying a numeric ``v``.
+        """
+        pts = [Point(180, 0), Point(170, -10)]  # both far side of ortho@(0,0)
+        return _fc(gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=pts, crs="EPSG:4326"))
+
     @pytest.mark.parametrize(
         "method, kwargs",
         [
@@ -228,12 +240,45 @@ class TestGlobeNonFinite:
             ("kde", {}),
         ],
     )
-    def test_all_far_side_raises(self, method, kwargs):
-        """If every point is on the far side (all non-finite), a clear error is raised, not an opaque GEOS one."""
-        pts = [Point(180, 0), Point(170, -10)]  # both far side of ortho@(0,0)
-        fc = _fc(gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=pts, crs="EPSG:4326"))
-        with pytest.raises(ValueError, match="finite"):
-            getattr(Map(crs=ORTHO), method)(fc, **kwargs)
+    def test_all_far_side_is_skipped_like_every_other_layer(
+        self, method, kwargs, caplog
+    ):
+        """Every point on the far side is the off-limb case, answered the way every layer answers it (H3).
+
+        Test scenario:
+            These three used to raise their own ``ValueError("no finite points …")`` — this tier's private
+            spelling of "there is nothing to draw", raised where ``imshow`` on the same view returns
+            ``None``. Routing the reprojection through the shared helper puts them on the one policy: the
+            layer is skipped, a warning names it (the display CRS is unclipped here, so it is a warning and
+            not a debug line), and nothing opaque escapes from GEOS or numpy.
+        """
+        m = Map(crs=ORTHO)
+        with caplog.at_level(logging.WARNING, logger="digitalearth.static.maps.base"):
+            assert getattr(m, method)(self._all_far_side(), **kwargs) is None, (
+                f"{method} should draw nothing when every point is behind the limb"
+            )
+        assert m.layers == [], f"{method} must not register a layer it could not draw"
+        assert any(method in record.getMessage() for record in caplog.records), (
+            f"the warning must name the layer; got {[r.getMessage() for r in caplog.records]}"
+        )
+
+    @pytest.mark.parametrize(
+        "method, kwargs",
+        [
+            ("voronoi", {"column": "v"}),
+            ("quadtree", {"column": "v"}),
+            ("kde", {}),
+        ],
+    )
+    def test_all_far_side_raises_off_limb_under_strict(self, method, kwargs):
+        """``strict=True`` turns that skip into the one exception every tier raises (H3)."""
+        from digitalearth.static import OffLimbError
+
+        m = Map(crs=ORTHO, strict=True)
+        far_side = self._all_far_side()
+        draw = getattr(m, method)
+        with pytest.raises(OffLimbError, match=method):
+            draw(far_side, **kwargs)
 
 
 class TestApiWrappersNoColumn:
@@ -311,7 +356,7 @@ class TestDefensiveBranches:
         from digitalearth.static import Map as MapCls
 
         def boom(self, *args, **kwargs):
-            raise RuntimeError("colorbar boom")
+            raise ValueError("colorbar boom")
 
         monkeypatch.setattr(MapCls, "colorbar", boom)
         polys = _fc(

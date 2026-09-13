@@ -11,7 +11,7 @@ own leaf module (:mod:`digitalearth.base.sources.source`) so importing it here a
 not create a cycle.
 """
 
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -31,6 +31,7 @@ def get_source(
     x: Optional[np.ndarray] = None,
     y: Optional[np.ndarray] = None,
     metadata: Optional[dict] = None,
+    crs: Any = None,
 ) -> Source:
     """Build a :class:`Source` from any supported input (dispatch entry point).
 
@@ -41,6 +42,16 @@ def get_source(
         x: Optional x coordinates for a raw numpy array (defaults to pixel indices).
         y: Optional y coordinates for a raw numpy array (defaults to pixel indices).
         metadata: Extra metadata merged into the resulting ``Source``.
+        crs: The CRS ``data``'s coordinates are already in, stored on the ``Source`` verbatim — pass it from
+            a caller that has warped the data into a display CRS, since a projection with no authority code
+            cannot be recovered from the warped dataset. ``None`` (the default) derives it from the input.
+
+            Every tier's display-CRS choke point is such a caller: the 3-D tier's
+            ``GlobeMixin._to_geographic_source`` names the CRS it warped to, and the static, interactive and
+            web tiers' ``_prepare`` / ``_to_display_source`` must name theirs the same way — an orthographic
+            display CRS has no authority code to re-derive from the warped dataset, which is the defect the
+            parameter exists to close (#235). Passing a CRS that is **not** the one the coordinates are in is
+            the one misuse: the value is trusted, never verified.
 
     Returns:
         Source: the uniform wrapper the glyph wiring consumes.
@@ -71,5 +82,18 @@ def get_source(
             'raster'
 
             ```
+        - A caller that has already warped the data names the CRS it warped to:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.sources import get_source
+            >>> src = get_source(np.zeros((2, 2)), crs="+proj=ortho +lat_0=53 +lon_0=4")
+            >>> src.crs
+            '+proj=ortho +lat_0=53 +lon_0=4'
+            >>> src.epsg is None
+            True
+
+            ```
     """
-    return extract(data, band=band, variable=variable, x=x, y=y, metadata=metadata)
+    return extract(
+        data, band=band, variable=variable, x=x, y=y, metadata=metadata, crs=crs
+    )

@@ -1,16 +1,25 @@
 """Shared array helpers — the small numpy chores duplicated across the wiring modules.
 
-Three operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`,
+These operations recurred verbatim across :mod:`digitalearth.base.sources.extractors`,
 :mod:`digitalearth.static.charts`, :mod:`digitalearth.static.temporal` and
 :mod:`digitalearth.static.textured_globe`, with subtly different nodata-masking rules. They live here once so
 every caller masks the same way. (``static.map`` and ``static.series`` were consumers before the backend
 restructure split ``fig_of`` out into :mod:`digitalearth.static.figures`; they no longer import from here.)
 
-Masking uses an **exact** comparison against the nodata sentinel (``arr == nodata``): a nodata value is a sentinel
-read straight from the dataset, so it is reproduced exactly in the array, and an exact test cannot accidentally null
-legitimate values that merely sit close to the sentinel (which ``np.isclose`` could). This is pure numpy — no
-pyramids/cleopatra import — so the module stays a leaf consumable from anywhere, which is what qualifies it for
-:mod:`digitalearth.base`.
+:func:`read_masked_band` is how a raster's nodata is masked — the one way, for every caller. It asks pyramids
+for the mask instead of rebuilding it: ``read_array(band=..., masked=True)``, then the mask filled with
+``NaN``. That is the only correct reading since pyramids 0.62.0, whose ``read_array`` unpacks CF-packed bands
+(``scale_factor``/``add_offset``) to physical units by default while ``no_data_value`` stays a **stored**
+sentinel — upstream's own docstring says to compare the sentinel against an ``unpack=False`` read or let
+``masked=True`` build the mask, never to match it against physical values. Comparing the two by hand silently
+missed every nodata cell of a packed band (a stored ``-9999`` reads as ``-98.49`` at ``scale=0.01,
+offset=1.5``). Going through pyramids also honours the band's GDAL **mask/alpha band**, which the hand-rolled
+comparison never saw.
+
+Masking used to have a second tier for callers holding raw values and a sentinel with no dataset behind them —
+``mask_nodata``, plus the ``_band_nodata`` sentinel reader it was paired with. Routing every raster read
+through pyramids left both without a caller, so they were removed rather than kept as a second, wronger way to
+mask.
 
 :func:`ring_runs` is here for the same reason: both globe tiers — the 2-D projected disc in
 :mod:`digitalearth.static.projections` and the 3-D sphere in :mod:`digitalearth.static.textured_globe` — clip a
@@ -22,11 +31,11 @@ The one matplotlib chore that used to sit alongside these (``fig_of``) is not he
 the matplotlib backend rather than to the engine-neutral shared layer.
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 import numpy as np
 
-__all__ = ["NAN_REDUCERS", "finite", "mask_nodata", "read_masked_band", "ring_runs"]
+__all__ = ["NAN_REDUCERS", "finite", "read_masked_band", "ring_runs"]
 
 
 def ring_runs(visible: Any) -> List[np.ndarray]:
@@ -99,40 +108,6 @@ NAN_REDUCERS: Dict[str, Callable[..., Any]] = {
 }
 
 
-def mask_nodata(arr: Any, nodata: Optional[float]) -> np.ndarray:
-    """Return ``arr`` as ``float64`` with cells equal to ``nodata`` replaced by ``NaN``.
-
-    Args:
-        arr: Any array-like of values.
-        nodata: The nodata sentinel to null out, or ``None`` to leave every value untouched.
-
-    Returns:
-        A ``float64`` copy of ``arr`` with exact ``nodata`` matches set to ``NaN``.
-
-    Examples:
-        - The sentinel becomes ``NaN``; everything else is preserved:
-            ```python
-            >>> import numpy as np
-            >>> from digitalearth.base.arrays import mask_nodata
-            >>> mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0).tolist()
-            [1.0, nan, 3.0]
-
-            ```
-        - ``None`` nodata is a no-op (just a float cast):
-            ```python
-            >>> import numpy as np
-            >>> from digitalearth.base.arrays import mask_nodata
-            >>> mask_nodata(np.array([1, 2, 3]), None).tolist()
-            [1.0, 2.0, 3.0]
-
-            ```
-    """
-    a = np.asarray(arr, dtype="float64")
-    if nodata is None:
-        return a
-    return np.where(a == nodata, np.nan, a)
-
-
 def finite(arr: Any) -> np.ndarray:
     """Return the flattened, finite (non-``NaN``/non-``inf``) values of ``arr`` as a 1-D ``float64`` array.
 
@@ -164,65 +139,41 @@ def finite(arr: Any) -> np.ndarray:
     return a[np.isfinite(a)]
 
 
-def _band_nodata(dataset: Any, index: int) -> Optional[float]:
-    """Safely read the 0-based band ``index`` nodata from a dataset's ``no_data_value`` tuple.
-
-    Args:
-        dataset: An object exposing a ``no_data_value`` sequence (e.g. a pyramids ``Dataset``).
-        index: 0-based band index into ``no_data_value``.
-
-    Returns:
-        The sentinel at ``index``, or ``None`` when it is missing, out of range, or unset.
-
-    Examples:
-        - Read the sentinel for a specific band:
-            ```python
-            >>> from types import SimpleNamespace
-            >>> from digitalearth.base.arrays import _band_nodata
-            >>> _band_nodata(SimpleNamespace(no_data_value=(-1.0, -2.0)), 1)
-            -2.0
-
-            ```
-        - An out-of-range index returns ``None`` instead of raising:
-            ```python
-            >>> from types import SimpleNamespace
-            >>> from digitalearth.base.arrays import _band_nodata
-            >>> _band_nodata(SimpleNamespace(no_data_value=(-1.0,)), 5) is None
-            True
-
-            ```
-    """
-    ndv = getattr(dataset, "no_data_value", None)
-    if not ndv:
-        return None
-    try:
-        return ndv[index]
-    except (IndexError, TypeError, KeyError):
-        return None
-
-
 def read_masked_band(dataset: Any, band: int = 1) -> np.ndarray:
-    """Read a 1-based ``band`` of a pyramids ``Dataset`` as ``float64`` with its nodata cells set to ``NaN``.
+    """Read a 1-based ``band`` of a pyramids ``Dataset`` as ``float64`` with its masked cells set to ``NaN``.
+
+    The mask comes from pyramids (``read_array(band=..., masked=True)``), not from comparing values against
+    ``no_data_value`` here. Two reasons, both of which the hand-rolled comparison got wrong:
+
+    * ``read_array`` unpacks a CF-packed band (``scale_factor``/``add_offset``) to physical units, while
+      ``no_data_value`` stays a **stored** sentinel — so the two are different numbers and no cell ever
+      matched. Letting pyramids build the mask is what its own docstring prescribes.
+    * A band's GDAL **mask/alpha band** marks cells that carry no sentinel at all; ``masked=True`` folds it in.
 
     Args:
-        dataset: A pyramids ``Dataset`` (duck-typed by ``read_array`` / ``no_data_value``).
+        dataset: A pyramids ``Dataset`` (duck-typed by ``read_array(band=..., masked=True)``).
         band: 1-based band index (the first band is ``1``); read internally as ``band - 1``.
 
     Returns:
-        The band as a ``float64`` array (same shape as stored) with nodata cells replaced by ``NaN``.
+        The band as a ``float64`` array (same shape as stored) with every masked cell replaced by ``NaN``.
 
     Examples:
-        - Read band 1 (1-based) and null its nodata cells:
+        - A packed band's nodata cell is masked even though its physical value is nothing like the sentinel:
             ```python
             >>> import numpy as np
-            >>> from types import SimpleNamespace
+            >>> from pyramids.dataset import Dataset, GeoReference
             >>> from digitalearth.base.arrays import read_masked_band
-            >>> ds = SimpleNamespace(no_data_value=(-1.0,),
-            ...                      read_array=lambda band=0: np.array([[5.0, -1.0]]))
+            >>> ds = Dataset.from_array(
+            ...     np.array([[100, 200], [300, -9999]], dtype="int16"),
+            ...     geo_ref=GeoReference(top_left_corner=(0, 0), cell_size=1.0, epsg=4326),
+            ...     no_data_value=-9999,
+            ... )
+            >>> ds.scale, ds.offset = [0.01], [1.5]
             >>> read_masked_band(ds, band=1).tolist()
-            [[5.0, nan]]
+            [[2.5, 3.5], [4.5, nan]]
 
             ```
     """
     idx = band - 1
-    return mask_nodata(dataset.read_array(band=idx), _band_nodata(dataset, idx))
+    values = np.ma.asarray(dataset.read_array(band=idx, masked=True)).astype("float64")
+    return np.ma.filled(values, np.nan)

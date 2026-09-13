@@ -1,21 +1,18 @@
 """Tests for digitalearth.base.arrays — shared array helpers (PA-1).
 
-Covers every public/private helper in the module: ``ring_runs``, ``mask_nodata``, ``finite``,
-``read_masked_band`` and ``_band_nodata``. ``fig_of`` moved to the static backend with the module split; see
-``tests/static/test_figures.py``. The dataset-reading helpers are exercised against a small in-memory fake so
-no real raster or filesystem access is needed.
+Covers every helper the module still exposes: ``ring_runs``, ``finite``, ``NAN_REDUCERS`` and
+``read_masked_band``. ``fig_of`` moved to the static backend with the module split (see
+``tests/static/test_figures.py``); ``mask_nodata`` and ``_band_nodata`` were removed with the masking change
+that routed every raster read through pyramids, so there is nothing left of them to test. The dataset-reading
+helper is exercised against a small in-memory fake so no real raster or filesystem access is needed.
 """
-
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from digitalearth.base.arrays import (  # noqa: E402
     NAN_REDUCERS,
-    _band_nodata,
     finite,
-    mask_nodata,
     read_masked_band,
     ring_runs,
 )
@@ -34,10 +31,23 @@ class _FakeDataset:
         self.no_data_value = no_data_value
         self.requested_band = None
 
-    def read_array(self, band=0):
-        """Record the requested 0-based band index and return the stored array."""
+    def read_array(self, band=0, masked=False):
+        """Record the requested 0-based band index and return the stored array.
+
+        ``masked=True`` returns a masked array built from the requested band's own sentinel, the way
+        pyramids builds one — that is the call :func:`read_masked_band` makes, and the reason the sentinel
+        never has to be compared against a value here.
+        """
         self.requested_band = band
-        return self._array
+        if not masked:
+            return self._array
+        try:
+            nodata = self.no_data_value[band]
+        except (IndexError, TypeError, KeyError):
+            nodata = None
+        if nodata is None:
+            return np.ma.asarray(self._array)
+        return np.ma.masked_equal(self._array, nodata)
 
 
 class TestRingRuns:
@@ -115,105 +125,6 @@ class TestRingRuns:
         )
 
 
-class TestMaskNodata:
-    """Tests for mask_nodata."""
-
-    def test_replaces_exact_match_with_nan(self):
-        """mask_nodata nulls cells exactly equal to the sentinel.
-
-        Test scenario:
-            -9999 sentinel becomes NaN; neighbouring real values are untouched.
-        """
-        out = mask_nodata(np.array([1.0, -9999.0, 3.0]), -9999.0)
-        assert np.isnan(out[1]), "sentinel cell should be NaN"
-        assert out[0] == 1.0, f"the first non-sentinel cell changed: {out}"
-        assert out[2] == 3.0, f"the last non-sentinel cell changed: {out}"
-
-    def test_none_nodata_is_float_passthrough(self):
-        """mask_nodata(arr, None) returns a float64 copy unchanged.
-
-        Test scenario:
-            With no sentinel, the only effect is the dtype cast to float64.
-        """
-        out = mask_nodata(np.array([1, 2, 3]), None)
-        assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-        np.testing.assert_array_equal(out, [1.0, 2.0, 3.0])
-
-    def test_exact_compare_keeps_near_sentinel_values(self):
-        """mask_nodata uses exact (not tolerant) comparison.
-
-        Test scenario:
-            A value 0.01% away from the sentinel must survive — proving exact, not isclose, semantics.
-        """
-        near = -9999.0 * (1 + 1e-4)
-        out = mask_nodata(np.array([near, -9999.0]), -9999.0)
-        assert not np.isnan(out[0]), (
-            "value near the sentinel must be preserved (exact compare)"
-        )
-        assert np.isnan(out[1]), "exact sentinel must be masked"
-
-    def test_2d_shape_preserved(self):
-        """mask_nodata preserves array shape.
-
-        Test scenario:
-            A 2-D grid keeps its shape; only matching cells flip to NaN.
-        """
-        out = mask_nodata(np.array([[1.0, 0.0], [0.0, 2.0]]), 0.0)
-        assert out.shape == (2, 2), f"shape changed: {out.shape}"
-        assert np.isnan(out[0, 1]), f"the first zero cell should be NaN: {out}"
-        assert np.isnan(out[1, 0]), f"the second zero cell should be NaN: {out}"
-
-    def test_accepts_array_like_input(self):
-        """mask_nodata coerces any array-like, not just ndarrays.
-
-        Test scenario:
-            A plain Python list of ints with an int sentinel is coerced to float64 and masked, so callers
-            need not pre-convert whatever pyramids handed them.
-        """
-        out = mask_nodata([1, 2, 3], 2)
-        assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-        assert np.isnan(out[1]), (
-            "the integer sentinel should be masked after the float cast"
-        )
-        assert out[0] == 1.0, f"leading non-sentinel cell changed: {out}"
-        assert out[2] == 3.0, f"trailing non-sentinel cell changed: {out}"
-
-    def test_nan_sentinel_matches_nothing(self):
-        """A NaN sentinel masks nothing, because NaN != NaN under an exact comparison.
-
-        Test scenario:
-            The documented consequence of exact-compare semantics: a dataset declaring NaN as its nodata
-            leaves finite values untouched (its NaN cells are already NaN), so no real value is lost.
-        """
-        out = mask_nodata(np.array([1.0, np.nan, 3.0]), np.nan)
-        assert out[0] == 1.0, f"leading finite value must survive a NaN sentinel: {out}"
-        assert out[2] == 3.0, (
-            f"trailing finite value must survive a NaN sentinel: {out}"
-        )
-        assert np.isnan(out[1]), "an already-NaN cell stays NaN"
-
-    def test_empty_input_stays_empty(self):
-        """mask_nodata on an empty array returns an empty float64 array.
-
-        Test scenario:
-            A zero-length band must not raise; the boundary case returns size 0 with the cast applied.
-        """
-        out = mask_nodata(np.array([]), -9999.0)
-        assert out.size == 0, f"expected an empty result, got {out}"
-        assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
-
-    def test_returns_a_copy_not_a_view(self):
-        """mask_nodata does not mutate its input.
-
-        Test scenario:
-            The helper is called on arrays owned by a caller's Dataset, so masking must leave the original
-            untouched — proven by checking the sentinel is still there afterwards.
-        """
-        source = np.array([1.0, -9999.0, 3.0])
-        mask_nodata(source, -9999.0)
-        assert source[1] == -9999.0, f"input array was mutated: {source}"
-
-
 class TestFinite:
     """Tests for finite."""
 
@@ -276,105 +187,6 @@ class TestFinite:
         out = finite(np.array([[1, 2], [3, 4]], dtype="int32"))
         assert out.dtype == np.float64, f"expected float64, got {out.dtype}"
         np.testing.assert_array_equal(out, [1.0, 2.0, 3.0, 4.0])
-
-
-class TestBandNodata:
-    """Tests for _band_nodata."""
-
-    def test_reads_indexed_value(self):
-        """_band_nodata returns the per-band sentinel at the given 0-based index.
-
-        Test scenario:
-            Index 1 of a two-band nodata tuple returns the second entry.
-        """
-        ds = _FakeDataset([[0.0]], no_data_value=(-1.0, -2.0))
-        assert _band_nodata(ds, 1) == -2.0, "should read the second band's nodata"
-
-    def test_missing_attribute_returns_none(self):
-        """_band_nodata returns None when no_data_value is empty/falsey.
-
-        Test scenario:
-            An empty tuple yields None rather than raising.
-        """
-        ds = _FakeDataset([[0.0]], no_data_value=())
-        assert _band_nodata(ds, 0) is None, "empty nodata tuple should give None"
-
-    def test_out_of_range_returns_none(self):
-        """_band_nodata tolerates an out-of-range index.
-
-        Test scenario:
-            Asking for band index 5 of a one-element tuple returns None, not IndexError.
-        """
-        ds = _FakeDataset([[0.0]], no_data_value=(-1.0,))
-        assert _band_nodata(ds, 5) is None, "out-of-range index should give None"
-
-    def test_none_entry_returns_none(self):
-        """_band_nodata returns a stored None entry as-is.
-
-        Test scenario:
-            A band whose nodata is None returns None.
-        """
-        ds = _FakeDataset([[0.0]], no_data_value=(None,))
-        assert _band_nodata(ds, 0) is None, "None entry should return None"
-
-    def test_absent_attribute_returns_none(self):
-        """_band_nodata returns None for an object with no no_data_value attribute at all.
-
-        Test scenario:
-            A duck-typed dataset that never declares nodata must not raise AttributeError — the getattr
-            default is what makes the helper safe for the loose duck-typing the callers use.
-        """
-        assert _band_nodata(SimpleNamespace(), 0) is None, (
-            "a missing attribute should give None"
-        )
-
-    def test_none_attribute_returns_none(self):
-        """_band_nodata returns None when no_data_value itself is None.
-
-        Test scenario:
-            ``no_data_value=None`` is falsey, so the helper short-circuits before subscripting.
-        """
-        assert _band_nodata(SimpleNamespace(no_data_value=None), 0) is None, (
-            "None nodata should give None"
-        )
-
-    def test_unsubscriptable_nodata_returns_none(self):
-        """_band_nodata swallows the TypeError from a non-subscriptable nodata value.
-
-        Test scenario:
-            A dataset exposing a bare number instead of a per-band sequence would raise TypeError on
-            ``ndv[index]``; the helper degrades to None rather than propagating it.
-        """
-        assert _band_nodata(SimpleNamespace(no_data_value=5), 0) is None, (
-            "a scalar nodata should give None"
-        )
-
-    def test_mapping_nodata_missing_key_returns_none(self):
-        """_band_nodata swallows the KeyError from a mapping without the requested band.
-
-        Test scenario:
-            A dict-shaped nodata keyed by band index returns None for an absent key instead of raising.
-        """
-        ds = SimpleNamespace(no_data_value={0: -1.0})
-        assert _band_nodata(ds, 3) is None, "a missing mapping key should give None"
-
-    def test_mapping_nodata_present_key_is_read(self):
-        """_band_nodata reads a mapping-shaped nodata by band index.
-
-        Test scenario:
-            The lookup is a plain subscript, so a dict keyed by band index works as well as a tuple.
-        """
-        ds = SimpleNamespace(no_data_value={0: -1.0})
-        assert _band_nodata(ds, 0) == -1.0, "an existing mapping key should be returned"
-
-    def test_list_nodata_is_read(self):
-        """_band_nodata accepts a list as well as a tuple.
-
-        Test scenario:
-            pyramids may hand back either sequence type; both index identically.
-        """
-        ds = _FakeDataset([[0.0]], no_data_value=[-3.0, -4.0])
-        assert _band_nodata(ds, 1) == -4.0, "a list nodata should index like a tuple"
 
 
 class TestNanReducers:
@@ -527,3 +339,70 @@ class TestReadMaskedBand:
         )
         out = read_masked_band(ds, band=1)
         assert out.shape == (2, 3), f"shape changed: {out.shape}"
+
+
+class TestReadMaskedBandOnPackedData:
+    """Regression tests for #234 — a CF-packed band's nodata was never masked.
+
+    ``read_array`` unpacks ``scale_factor``/``add_offset`` to physical units while ``no_data_value`` stays a
+    stored sentinel, so the old ``arr == nodata`` comparison matched nothing: a stored ``-9999`` reads as
+    ``-98.49`` at ``scale=0.01, offset=1.5``. These tests use a genuinely packed band, which is the only
+    shape that tells the two readings apart.
+    """
+
+    @staticmethod
+    def _packed_dataset():
+        """Build a 2x2 int16 raster packed at ``scale=0.01, offset=1.5`` with a stored ``-9999`` nodata cell.
+
+        Returns:
+            pyramids.dataset.Dataset: the packed raster, whose physical values are
+            ``[[2.5, 3.5], [4.5, -98.49]]`` and whose last cell is nodata.
+        """
+        from pyramids.dataset import Dataset, GeoReference
+
+        ds = Dataset.from_array(
+            np.array([[100, 200], [300, -9999]], dtype="int16"),
+            geo_ref=GeoReference(top_left_corner=(0, 0), cell_size=1.0, epsg=4326),
+            no_data_value=-9999,
+        )
+        ds.scale, ds.offset = [0.01], [1.5]
+        return ds
+
+    def test_packed_nodata_cell_is_nan(self):
+        """The nodata cell of a packed band comes back NaN, not as its unpacked sentinel.
+
+        Test scenario:
+            Before the fix this cell held -98.49 — the stored sentinel run through the packing recipe — and
+            every downstream statistic, colour scale and colorbar counted it as data.
+        """
+        out = read_masked_band(self._packed_dataset(), band=1)
+        assert np.isnan(out[1, 1]), (
+            f"the packed band's nodata cell should be NaN, got {out[1, 1]!r}"
+        )
+
+    def test_packed_real_values_stay_physical(self):
+        """The surviving cells keep their unpacked (physical) values.
+
+        Test scenario:
+            Masking through pyramids must not cost the unpacking — the values are the ones ``read_array``
+            reports, only with the masked cell nulled.
+        """
+        out = read_masked_band(self._packed_dataset(), band=1)
+        np.testing.assert_allclose(
+            [out[0, 0], out[0, 1], out[1, 0]],
+            [2.5, 3.5, 4.5],
+            err_msg=f"physical values changed: {out}",
+        )
+
+    def test_matches_pyramids_own_masked_read(self):
+        """The result equals ``read_array(masked=True)`` filled with NaN — the upstream-prescribed reading.
+
+        Test scenario:
+            Pins the helper to pyramids' own answer rather than to a hand-rolled mask, which is the whole
+            point of the change.
+        """
+        ds = self._packed_dataset()
+        expected = np.ma.filled(
+            ds.read_array(band=0, masked=True).astype("float64"), np.nan
+        )
+        np.testing.assert_array_equal(read_masked_band(ds, band=1), expected)

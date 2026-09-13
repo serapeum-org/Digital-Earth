@@ -65,7 +65,7 @@ class InteractiveMap(
             ```python
             >>> from pyramids.dataset import Dataset                      # doctest: +SKIP
             >>> dem = Dataset.read_file("examples/data/acc4000.tif")      # doctest: +SKIP
-            >>> InteractiveMap().image(dem).tiles().save("map.html")      # doctest: +SKIP
+            >>> InteractiveMap().image(dem).tiles().save("map.html").name  # doctest: +SKIP
             'map.html'
 
             ```

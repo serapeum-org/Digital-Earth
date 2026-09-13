@@ -184,7 +184,7 @@ class TestRegistryAndRender:
 
         out = tmp_path / "m.html"
         m = InteractiveMap().add_element(hv.Points([(0.0, 0.0), (1.0, 1.0)]))
-        assert m.save(str(out)) == str(out)
+        assert m.save(str(out)) == out
         assert out.stat().st_size > 1_000
 
     def test_save_png_via_matplotlib_backend(self, tmp_path):
@@ -224,6 +224,79 @@ class TestStyledAndHelpers:
         plain = np.array([4.0, 5.0])
         assert np.array_equal(_masked_to_nan(plain), plain), (
             "plain arrays must pass through"
+        )
+
+
+class TestStyleReadBack:
+    """#241 — styling applied through ``_styled`` is readable, not write-only."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        pytest.importorskip("geoviews")
+
+    def test_style_of_returns_the_applied_options(self, dataset):
+        """A builder's style is readable off the map, keyed by layer index or element."""
+        m = InteractiveMap().image(dataset, cmap="magma", alpha=0.5)
+        by_index = m.style_of(0)
+        assert by_index["common"]["cmap"] == "magma", (
+            f"cmap not recorded: {by_index['common']}"
+        )
+        assert by_index["common"]["alpha"] == 0.5, (
+            f"alpha not recorded: {by_index['common']}"
+        )
+        assert by_index["bokeh"]["width"] == m.width, "the Bokeh frame must be recorded"
+        assert m.style_of(m.layers[0]) == by_index, (
+            "an element and its index must read back the same style"
+        )
+
+    def test_read_back_agrees_with_the_holoviews_store(self, dataset):
+        """The recorded style matches what HoloViews resolved for the same element."""
+        import holoviews as hv
+
+        m = InteractiveMap(title="discharge").image(
+            dataset, cmap="magma", alpha=0.5, clim=(0.0, 10.0)
+        )
+        element = m.layers[0]
+        recorded = m.style_of(element)
+        style = hv.Store.lookup_options("bokeh", element, "style").kwargs
+        plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
+        assert recorded["common"]["cmap"] == style["cmap"], "cmap must agree with Store"
+        assert recorded["common"]["alpha"] == style["alpha"], (
+            "alpha must agree with Store"
+        )
+        assert tuple(recorded["common"]["clim"]) == tuple(plot["clim"]), (
+            "clim must agree with Store"
+        )
+        assert recorded["bokeh"]["width"] == plot["width"], (
+            "the Bokeh frame must agree with Store"
+        )
+        assert recorded["bokeh"]["title"] == plot["title"], (
+            "the title must agree with Store"
+        )
+
+    def test_layer_styles_covers_every_layer_in_add_order(self, dataset):
+        """``layer_styles`` has one entry per layer; an unstyled layer reads back empty."""
+        m = InteractiveMap().image(dataset, cmap="magma")
+        m.add_element("raw-layer")
+        styles = m.layer_styles
+        assert len(styles) == len(m.layers), "one style entry per registered layer"
+        assert styles[0]["common"]["cmap"] == "magma"
+        assert styles[-1] == {"common": {}, "bokeh": {}}, (
+            "a layer that never went through _styled must read back empty, not raise"
+        )
+
+    def test_styled_keeps_no_unused_engine_binding(self):
+        """``_styled`` calls ``_require_holoviz()`` for its error, without binding names it never uses."""
+        import inspect
+
+        from digitalearth.interactive.base import InteractiveMapBase
+
+        source = inspect.getsource(InteractiveMapBase._styled)
+        assert "gv, hv = _require_holoviz()" not in source, (
+            "_styled must not bind gv/hv it never uses"
+        )
+        assert "_require_holoviz()" in source, (
+            "the lazy-import choke point must still be called for its actionable ImportError"
         )
 
 

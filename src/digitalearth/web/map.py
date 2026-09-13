@@ -62,12 +62,19 @@ class WebMap(
             ['dem', 'basemap']
 
             ```
-        - With the ``web`` extra installed, the map renders/saves:
+        - With the ``web`` extra installed, the map renders and saves, handing back the
+          :class:`pathlib.Path` it wrote. The path is compared by name rather than echoed, so the
+          example reads the same on every platform (``repr`` is ``PosixPath`` or ``WindowsPath``):
             ```python
-            >>> from pyramids.dataset import Dataset                  # doctest: +SKIP
-            >>> dem = Dataset.read_file("examples/data/acc4000.tif")  # doctest: +SKIP
-            >>> WebMap().add_raster(dem).basemap().save("map.html")   # doctest: +SKIP
-            'map.html'
+            >>> import tempfile
+            >>> from pathlib import Path
+            >>> from pyramids.dataset import Dataset
+            >>> from digitalearth.web import WebMap
+            >>> dem = Dataset.read_file("examples/data/acc4000.tif")
+            >>> with tempfile.TemporaryDirectory() as folder:
+            ...     written = WebMap().add_raster(dem).basemap().save(Path(folder) / "map.html")
+            ...     (written.name, written.is_file())
+            ('map.html', True)
 
             ```
 

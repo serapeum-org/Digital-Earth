@@ -15,7 +15,8 @@ Volume rendering uses ``cell_data`` on a grid sized ``shape[::-1] + 1`` (one mor
 isosurfacing uses ``point_data`` on a grid sized ``shape[::-1]``.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pyvista as pv
@@ -138,7 +139,7 @@ class VolumeMixin(_MixinBase):
         self,
         data: Any,
         *,
-        isosurfaces: Optional[Sequence[float]] = None,
+        isosurfaces: Sequence[float] | None = None,
         cmap: str = "viridis",
         **kwargs: Any,
     ) -> Any:

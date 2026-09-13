@@ -3,8 +3,9 @@
 Wraps a lon/lat field around an ellipsoidal Earth using **geovista** (the cartographic layer over PyVista), with
 optional Natural-Earth coastlines. geovista is **optional and isolated**: it is imported *lazily inside*
 :meth:`globe` (never at module import), so the rest of the 3-D tier works without it, and a missing install yields
-a clear, actionable error rather than an import-time crash. CRS/reprojection stays in pyramids; geovista is used
-only to drape the already-prepared lon/lat numpy field onto a sphere.
+a clear, actionable error rather than an import-time crash. CRS/reprojection stays in pyramids — projected input is
+warped to EPSG:4326 via ``Dataset.to_crs`` before extraction, the same way every other tier reaches its display
+CRS — and geovista is used only to drape the already-prepared lon/lat numpy field onto a sphere.
 
 geovista pulls cartopy transitively — that is *its* dependency, never imported here (the HARD RULE /
 ``test_no_competitor_imports`` guard); this module imports only ``geovista`` itself, lazily.
@@ -14,19 +15,26 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from digitalearth.base.crs import declared_crs, is_geographic, reproject
 from digitalearth.base.sources import Source, get_source
 
 #: Fallback scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field (used only if the mesh
 #: exposes no active scalars). Prefer ``mesh.active_scalars_name`` so the binding tracks geovista's own choice.
 _GEOVISTA_DATA = "point_data"
 
+#: The CRS a globe is drawn in. geovista drapes ``(lon, lat)`` onto a WGS84 sphere, so projected input is
+#: warped to this through pyramids before it is extracted.
+GEOGRAPHIC_EPSG = 4326
+
 
 def _check_geographic(lon: np.ndarray, lat: np.ndarray) -> None:
-    """Validate that coordinates look like longitude/latitude, not projected metres.
+    """Last-resort guard for input carrying **no CRS**: do its coordinates at least look like lon/lat?
 
-    geovista drapes ``(lon, lat)`` onto a WGS84 sphere; handing it projected coordinates silently places the
-    field in the wrong spot. Reprojection belongs in pyramids (``Dataset.to_crs(4326)``), so this guards the
-    boundary with a clear, actionable error rather than producing a broken globe.
+    A pyramids ``Dataset`` never reaches here unreprojected (:meth:`GlobeMixin._to_geographic_source` warps it
+    first), and a :class:`~digitalearth.base.sources.Source` that carries a projected CRS is rejected by that
+    CRS, named outright. What is left is input with no CRS at all — a bare ``Source``, or a raw numpy array —
+    for which the coordinate range is the only evidence available. geovista drapes ``(lon, lat)`` onto a WGS84
+    sphere, so metre-scale coordinates would silently place the field in the wrong spot.
 
     Args:
         lon: Longitude coordinate vector.
@@ -37,9 +45,57 @@ def _check_geographic(lon: np.ndarray, lat: np.ndarray) -> None:
     """
     if np.nanmax(np.abs(lon)) > 360.0 or np.nanmax(np.abs(lat)) > 90.0:
         raise ValueError(
-            "globe() expects geographic lon/lat data, but the coordinates look projected. "
-            "Reproject in pyramids first, e.g. dataset.to_crs(4326), then call globe()."
+            "globe() got data with no CRS whose coordinates look projected rather than lon/lat. Without a CRS "
+            "there is nothing to reproject from, so reproject in pyramids first, e.g. dataset.to_crs(4326), "
+            "then call globe()."
         )
+
+
+def _name_crs(src: Source) -> str:
+    """Name a source's CRS the way its owner spelled it, so the refusal quotes something recognisable.
+
+    ``Source.crs`` may be an EPSG ``int``, an ``"EPSG:<code>"`` string or a proj4/WKT definition, so the code
+    cannot simply be interpolated behind a hardcoded ``EPSG:`` prefix — that printed ``EPSG:EPSG:3857`` for
+    the string spelling and ``EPSG:+proj=...`` for a definition.
+
+    Args:
+        src: The source whose CRS is being reported.
+
+    Returns:
+        ``"EPSG:<code>"`` when the CRS has an authority code, else the definition as given.
+    """
+    return f"EPSG:{src.epsg}" if src.epsg is not None else f"{src.crs!r}"
+
+
+def _require_geographic(src: Source) -> None:
+    """Raise unless ``src`` is a geographic lon/lat field, ready to drape on a sphere.
+
+    Splits the two failure modes that used to be one coordinate-magnitude test: a source whose CRS pyramids
+    can read is judged by that CRS (and a projected one is named by its code or definition), while a source
+    with no CRS falls through to :func:`_check_geographic`, the only evidence left. The CRS is read by
+    :func:`~digitalearth.base.crs.is_geographic`, which understands **every** spelling ``Source.crs`` may
+    carry — a reader that understood only the ``int`` spelling called ``"EPSG:3857"`` "unknown" and let a
+    Web-Mercator source through to the coordinate guard, which accepts small metre coordinates as lon/lat.
+
+    Args:
+        src: The extracted source about to be draped.
+
+    Raises:
+        ValueError: if the source carries a projected CRS, or carries none and its coordinates look projected.
+    """
+    geographic = is_geographic(src.crs)
+    if geographic is True:
+        return
+    if geographic is False:
+        raise ValueError(
+            f"globe() expects geographic lon/lat data, but this source is in {_name_crs(src)}, a projected "
+            "CRS. A pyramids Dataset is reprojected for you; a bare Source cannot be, so reproject it in "
+            "pyramids first, e.g. dataset.to_crs(4326), then call globe()."
+        )
+    _check_geographic(
+        np.asarray(src.x.values, dtype="float64"),
+        np.asarray(src.y.values, dtype="float64"),
+    )
 
 
 def _require_geovista():
@@ -85,25 +141,78 @@ class GlobeMixin(_MixinBase):
         digitalearth.three_d.base.Scene3DBase: the typing-only base declared above the class.
     """
 
+    def _to_geographic_source(self, data: Any, *, band: int = 1) -> Source:
+        """Reproject ``data`` to EPSG:4326 through pyramids and extract it as a lon/lat :class:`Source`.
+
+        The globe's display-CRS choke point, mirroring the interactive tier's ``_to_display_source``: anything
+        that exposes pyramids' ``to_crs`` and whose declared CRS
+        (:func:`~digitalearth.base.crs.declared_crs`) is not already geographic is warped by
+        :func:`digitalearth.base.crs.reproject` (i.e. ``Dataset.to_crs(4326)``, plus the shared
+        :class:`~digitalearth.base.crs.OffLimbError` translation). **No reprojection is implemented here** — a
+        CRS pyramids cannot read is left alone rather than guessed at, and validated by
+        :func:`_require_geographic` instead.
+
+        When the warp does run, the CRS it warped to is passed to ``get_source(..., crs=...)`` rather than
+        re-derived from the result: the extracted source is then the globe's CRS by construction, which is
+        exactly the contract :attr:`digitalearth.base.sources.Source.crs` states.
+
+        Args:
+            data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts),
+                or an already-built :class:`~digitalearth.base.sources.Source` (which cannot be reprojected,
+                and so must already be geographic).
+            band: 1-based band index to read.
+
+        Returns:
+            Source: the lon/lat view of ``data``.
+
+        Raises:
+            ValueError: if the result is not geographic — see :func:`_require_geographic`.
+        """
+        warped = False
+        if (
+            not isinstance(data, Source)
+            and hasattr(data, "to_crs")
+            and is_geographic(declared_crs(data)) is False
+        ):
+            data = reproject(data, GEOGRAPHIC_EPSG)
+            warped = True
+        if isinstance(data, Source):
+            src = data
+        else:
+            # Name the CRS we warped to rather than re-deriving it from the warped dataset: this is the
+            # caller the ``crs=`` contract is written for (a warp's own CRS is the one the coordinates are
+            # in, and pyramids cannot always report a code for it).
+            src = get_source(data, band=band, crs=GEOGRAPHIC_EPSG if warped else None)
+        _require_geographic(src)
+        return src
+
     def globe(
         self,
         data: Any,
         *,
         band: int = 1,
-        cmap: str = "viridis",
+        cmap: str | None = None,
         coastlines: bool = True,
         coastline_resolution: str = "110m",
         coastline_color: str = "black",
         **kwargs: Any,
     ) -> Any:
-        """Drape a global lon/lat field onto a 3-D sphere and register it as a layer.
+        """Drape a global field onto a 3-D sphere and register it as a layer.
+
+        Projected input is **reprojected, not refused**: a pyramids ``Dataset`` in any CRS is warped to
+        EPSG:4326 through pyramids (``Dataset.to_crs``) on the way in, exactly as the static, interactive and
+        web tiers do. Only input that cannot be reprojected — a bare
+        :class:`~digitalearth.base.sources.Source` or raw array carrying a projected CRS or none at all — is
+        rejected, with an error naming what is wrong.
 
         Args:
             data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts), or an
-                already-built :class:`~digitalearth.base.sources.Source`, whose x/y are longitude/latitude and whose
+                already-built :class:`~digitalearth.base.sources.Source` whose x/y are longitude/latitude and whose
                 z is the field to drape.
             band: 1-based band index to read.
-            cmap: Colormap for the draped field.
+            cmap: Colormap for the draped field. ``None`` (the default) resolves it from the variable through
+                :func:`~digitalearth.base.autostyle.auto_style` — the same lookup the other three tiers use, so
+                a field is drawn in the same colours whichever tier renders it.
             coastlines: Overlay Natural-Earth coastlines on the globe.
             coastline_resolution: Coastline detail (``"110m"``, ``"50m"``, ``"10m"``).
             coastline_color: Colour of the coastline lines.
@@ -114,6 +223,8 @@ class GlobeMixin(_MixinBase):
 
         Raises:
             ImportError: if the optional ``geovista`` dependency is not installed.
+            ValueError: if ``data`` cannot be reprojected and is not geographic — a ``Source`` in a projected
+                CRS, or one with no CRS whose coordinates are not lon/lat.
 
         Examples:
             - Drape a cosine-of-latitude field on a globe with coastlines (needs the ``3d`` extra / geovista):
@@ -133,17 +244,18 @@ class GlobeMixin(_MixinBase):
                 ```
         """
         gv = _require_geovista()
-        src = data if isinstance(data, Source) else get_source(data, band=band)
+        src = self._to_geographic_source(data, band=band)
         lon = np.asarray(src.x.values, dtype="float64")
         lat = np.asarray(src.y.values, dtype="float64")
         field = np.asarray(src.z.values, dtype="float64")
-        _check_geographic(lon, lat)
 
         mesh = gv.Transform.from_1d(lon, lat, data=field)
         # Colour by whatever scalar geovista set active, so the binding tracks geovista rather than a hardcoded
         # array name; fall back to the documented constant only if no active scalar is present.
         scalars = mesh.active_scalars_name or _GEOVISTA_DATA
-        actor = self.add_mesh(mesh, scalars=scalars, cmap=cmap, **kwargs)
+        actor = self.add_mesh(
+            mesh, scalars=scalars, cmap=self._auto_cmap(src, cmap), **kwargs
+        )
 
         if coastlines:
             from geovista.geometry import coastlines as _load_coastlines

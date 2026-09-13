@@ -2,7 +2,7 @@
 
 Public surface::
 
-    from digitalearth.web import WebMap
+    from digitalearth.web import WebMap, ContourInterval
     m = WebMap()                                  # constructing needs no engine
     m.render()                                     # builders lazy-import maplibre
     m.save("map.html")                             # standalone HTML page
@@ -24,5 +24,6 @@ builder/render method without it raises an actionable ``ImportError`` (``pip ins
 """
 
 from digitalearth.web.map import WebMap
+from digitalearth.web.vector import ContourInterval
 
-__all__ = ["WebMap"]
+__all__ = ["WebMap", "ContourInterval"]

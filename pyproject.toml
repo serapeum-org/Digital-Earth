@@ -36,13 +36,13 @@ dependencies = [
     # closures -- an engine-neutral layer cannot source its imports from one backend's engine.
     "matplotlib >=3.8",
     "geopandas >=1.1.3",
-    "cleopatra[tiles] >=0.36.0",
+    "cleopatra[tiles] >=0.37.0",
     # static/maps/decoration.py constructs the TileProvider a keyed basemap is handed to cleopatra as,
     # so it is imported directly here and declared for the same reason matplotlib is above: it currently
     # arrives through cleopatra's [tiles] extra, and an import satisfied by another package's extra is
     # one repackaging away from a ModuleNotFoundError raised from inside basemap().
     "xyzservices >=2023.10.0",
-    "pyramids-gis >=0.59.0",
+    "pyramids-gis >=0.62.0",
     "loguru >=0.7.3",
     "pyyaml >=6.0",
 ]
@@ -410,6 +410,50 @@ style = [
 env = ["MPLBACKEND=Agg"]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = [
+    "mpl: a visual-regression test that returns a Figure for pytest-mpl to compare against tests/baseline",
+    # pytest-mpl registers this itself, but only when it is installed. Registering it here as well keeps a
+    # plugin-less run (the pure-wheel job, which installs no pytest-mpl) from emitting one
+    # PytestUnknownMarkWarning per decorated test while collecting tests it then deselects with -m 'not mpl'.
+    "mpl_image_compare: pytest-mpl's own marker, re-registered so a run without the plugin stays quiet",
+]
+
+# pytest-mpl. `--mpl` is deliberately NOT in addopts: without it a decorated test still runs but compares
+# nothing, so a contributor whose baselines are missing or stale is never blocked by the normal suite. The
+# comparison is opt-in through the `test-images` task (`pytest -m mpl --mpl`), which CI runs as its own job;
+# `main`/`test-all` deselect the marker instead, because an uncompared image test only re-covers what the
+# rest of tests/static/ already asserts.
+#
+# Baselines are regenerated with `test-images-generate` (`pytest -m mpl --mpl-generate-path=tests/baseline`).
+# The path is resolved against the directory pytest runs in, which for this project is always the repo root
+# (the fixtures read `examples/data/...` the same way).
+mpl-baseline-path = "tests/baseline"
+# Root-mean-square difference between the two images, on the 0-255 scale, averaged over every pixel — so a
+# change confined to a small part of the frame scores far lower than the same change across all of it.
+#
+# Re-measured against the committed baselines, one semantic perturbation per figure, across all 18:
+#   * noise floor: an unchanged re-render scores exactly 0.000, on all 18, repeatably;
+#   * weakest real change: 3.96 (one shared-colorbar panel, contour levels 6 -> 7). Then 4.40 (one scatter
+#     point moved 2 km), 4.44 (graticule dropped), 4.53 (lon/lat step 30 -> 45), 5.28/5.58 (borders dropped,
+#     flat and globe), 7.20 (the RGB stretch frozen to fixed limits), 7.76/9.31 (a colorbar label dropped);
+#   * the rest are comfortable: 8.15-11.40 (legend colours/labels), 14.76 (contourf levels 6 -> 7), 20.06
+#     (choropleth colormap swap), 20.42 (u/v swapped), 21.21-34.85 (a colormap swap on a full-frame field),
+#     38.51 (categorical colormap swap), 68.18 (KDE colormap swap), 94.39 (RGB band order reversed).
+#
+# 1, not the 2 this held before, and not pytest-mpl's own DEFAULT_TOLERANCE — which 2 silently was. 2 left
+# only a 2.0x margin under the weakest real change and, measured here, tolerated a uniform +2.5/255 shift
+# over the entire frame; 1 leaves 4.0x and tolerates +1.3/255. It is not tighter still because the local ->
+# windows-latest delta cannot be measured from a developer machine: a green run at 2 bounds it below 2 and
+# no lower, so the remaining headroom is deliberate. Note the old justification for 2 — "absorbs the
+# antialiasing jitter of a matplotlib patch release" — does not survive measurement: switching text
+# antialiasing off moves these figures by a median RMS of 9.9, an order of magnitude past any tolerance
+# worth setting. A rasteriser change is answered by regenerating the baselines, never by a looser number.
+#
+# Loosen or tighten ONE figure with `@pytest.mark.mpl_image_compare(tolerance=...)` rather than moving this.
+mpl-default-tolerance = 1
+# Strip the matplotlib version and the creation date from the PNG metadata, so a regenerated baseline differs
+# only where the picture differs and re-running the generator produces byte-identical files.
+mpl-deterministic = true
 
 
 [tool.pixi.workspace]
@@ -425,8 +469,10 @@ platforms = ["win-64", "linux-64", "osx-arm64"]
 digitalearth = { path = ".", editable = true }
 
 [tool.pixi.tasks]
-main = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite" }
-test-all = { cmd = "pytest -vvv --cov=src/digitalearth -sv --cov-report=xml --cov-report=term-missing", description = "Run all testsuite" }
+main = { cmd = "pytest -vvv -m 'not mpl' --cov=src/digitalearth -sv --cov-report=xml", description = "Run the main test suite (the `mpl` visual-regression tests are deselected — without `--mpl` they compare nothing; run them via `test-images`)" }
+test-all = { cmd = "pytest -vvv -m 'not mpl' --cov=src/digitalearth -sv --cov-report=xml --cov-report=term-missing", description = "Run all testsuite (same `mpl` deselection as `main`)" }
+test-images = { cmd = "pytest -vvv -m mpl --mpl --cov=src/digitalearth --cov-report=xml", description = "Compare the static backend's figures against the committed baseline PNGs in tests/baseline (pytest-mpl). Carries --cov like every other tier task, because `main` deselects these tests and this is the only job that reports the 18 rendering paths. Regenerate the baselines with `test-images-generate` after a deliberate rendering change. Note it writes coverage.xml like the other tier tasks, so locally it replaces a full `main` report with an 18-test one -- re-run `main` before reading coverage; in CI the two are separate jobs and never collide" }
+test-images-generate = { cmd = "pytest -m mpl --mpl-generate-path=tests/baseline", description = "Regenerate every tests/baseline PNG from the current rendering — review the image diff before committing, it is the record of what the change did to the picture" }
 notebooks = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples --ignore-glob='docs/examples/**/dask-lazy-*.ipynb' --ignore-glob='docs/examples/**/lazy-*-complete.ipynb' --ignore-glob='docs/examples/**/stac-cloud-*.ipynb' --ignore-glob='docs/examples/**/*_3d_*.ipynb' --ignore-glob='docs/examples/pyvista/**' --ignore-glob='docs/examples/interactive/**' --ignore-glob='docs/examples/web/**'", description = "check notebooks (skips dask cookbooks + stac-cloud-* — all hit real endpoints; the 3-D/PyVista notebooks need the viz3d env, run via `notebooks-3d`; the interactive/HoloViz notebooks need the interactive env, run via `notebooks-interactive`; the web/MapLibre notebooks need the web env, run via `notebooks-web`)" }
 test-3d = { cmd = "pytest -vvv tests/three_d --cov=src/digitalearth --cov-report=xml", description = "Run the 3-D (PyVista) tier tests — run in the viz3d env (`pixi run -e viz3d test-3d`)" }
 notebooks-3d = { cmd = "pytest --nbval --nbval-lax --verbose docs/examples/pyvista", description = "check the 3-D (PyVista) notebooks — run in the viz3d env (`pixi run -e viz3d notebooks-3d`)" }
@@ -446,8 +492,10 @@ lint = { depends-on = ["lint-names", "lint-format", "lint-imports"], description
 lint-names = { cmd = "ruff check --select F821 src tests docs", description = "name-check every module and notebook (ruff F821) — catches an undefined name in a cell CI cannot execute. Scoped to F821, and to src/tests/docs, because the full ruleset and examples/ carry pre-existing findings" }
 lint-format = { cmd = "ruff format --check src tests", description = "the formatter the repo configures and pre-commit runs. Gated here so the tree cannot drift from its own config again (#171); scoped to src/tests because docs/ notebooks and examples/ are not formatted" }
 lint-imports = { cmd = "ruff check --select I src tests", description = "import sorting (isort). Split from lint-names because the rest of the ruleset (E/F/W/UP) still carries a pre-existing backlog and cannot be gated yet" }
-doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/three_d -p no:cacheprovider", description = "run the doctests in src. three_d is ignored (it imports pyvista, which only viz3d has); run those via `doctests-3d`" }
+doctests = { cmd = "pytest --doctest-modules src --ignore=src/digitalearth/interactive --ignore=src/digitalearth/three_d --ignore=src/digitalearth/web -p no:cacheprovider", description = "run the doctests in src. The three engine-backed tiers are ignored — their examples need holoviews/geoviews, pyvista and maplibre, which only the interactive/viz3d/web envs have; run them via `doctests-interactive`, `doctests-3d` and `doctests-web`" }
+doctests-interactive = { cmd = "pytest --doctest-modules src/digitalearth/interactive -p no:cacheprovider", description = "run the interactive (HoloViz) doctests, which the `doctests` task ignores because they import holoviews/geoviews. Needs the interactive env" }
 doctests-3d = { cmd = "pytest --doctest-modules src/digitalearth/three_d -p no:cacheprovider", description = "run the three_d doctests, which the `doctests` task ignores because they import pyvista. Needs the viz3d env" }
+doctests-web = { cmd = "pytest --doctest-modules src/digitalearth/web -p no:cacheprovider", description = "run the web (MapLibre + deck.gl) doctests, which the `doctests` task ignores because they import maplibre. Needs the web env" }
 
 
 # numba (pulled by datashader in the interactive tier) caps numpy at <2.5; conda-forge otherwise resolves
