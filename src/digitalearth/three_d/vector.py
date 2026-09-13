@@ -15,7 +15,7 @@ stays in pyramids.
 
 import math
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pyvista as pv
@@ -73,6 +73,81 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _classify_or_refuse(
+    colours: Optional[np.ndarray],
+    *,
+    scheme: Optional[str],
+    k: int,
+    cmap: Any,
+    pinned: dict[str, Any],
+) -> tuple[dict[str, Any], Optional[np.ndarray]]:
+    """Cut `colours` into classes once, per feature, and refuse a colour keyword the scheme owns.
+
+    Classifying before the prisms are built lets the per-cell array be filled straight from the result, so a
+    label column (``scheme="categorical"``) and a column carrying NaN both work — neither survives the
+    round-trip through `float()` that re-keying the raw values required.
+
+    Args:
+        colours: The value column to classify, or `None` when the caller asked for no classification.
+        scheme: Classification scheme passed through to `classified_scalars`.
+        k: Number of classes.
+        cmap: Colormap the classes are drawn from.
+        pinned: The caller's remaining keyword arguments, checked for a collision with the scheme's own.
+
+    Returns:
+        A ``(style, scalars)`` pair: the colour keywords to forward to `add_mesh`, and the per-feature class
+        indices — both empty/`None` when `colours` is `None`.
+
+    Raises:
+        TypeError: when a keyword the scheme sets (`clim` / `n_colors` / `nan_color`) was also passed by the
+            caller.
+    """
+    if colours is None:
+        return {}, None
+    style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
+    scalars = np.asarray(style.pop("scalars"), dtype=float)
+    clashing = sorted(set(style) & set(pinned))
+    if clashing:
+        # `**style, **kwargs` into one call is a "got multiple values" TypeError about Python's internals;
+        # the caller's real mistake is pinning a colour setting the scheme owns, so say that instead
+        # (review L1). The scheme's values cannot lose: `clim`/`n_colors` are the class indices the scalars
+        # were rewritten to, and overriding them re-colours the wrong classes.
+        names = ", ".join(f"{name}=" for name in clashing)
+        raise TypeError(
+            f"extruded_polygons() got {names} together with scheme={scheme!r}, which sets "
+            f"{names} from the classes it cut; drop it, or drop scheme="
+        )
+    return style, scalars
+
+
+def _finite_height(heights: Optional[np.ndarray], height: Any, index: int) -> float:
+    """The extrusion height for one feature, refusing a non-finite one by name.
+
+    Args:
+        heights: The height column as an array, or `None` when every feature shares one height.
+        height: The caller's `height=` argument — a column name when `heights` is given, else a number.
+        index: Position of the feature in the collection, used to name the offending row.
+
+    Returns:
+        The finite height to extrude this feature to.
+
+    Raises:
+        ValueError: when the height is NaN or infinite. Such a prism has all-NaN z coordinates: it vanishes
+            from the render with no error while the actor still reports cells (review L2).
+    """
+    resolved = float(heights[index]) if heights is not None else float(height)
+    if math.isfinite(resolved):
+        return resolved
+    where = (
+        f"row {index} of column {height!r}"
+        if heights is not None
+        else f"height={height!r}"
+    )
+    raise ValueError(
+        f"extruded_polygons() needs a finite extrusion height; {where} is {resolved}"
+    )
 
 
 class VectorMixin(_MixinBase):
@@ -246,37 +321,13 @@ class VectorMixin(_MixinBase):
         # Classify once, per feature, *before* building the prisms. The per-cell array is then filled
         # straight from the result, so a label column ("categorical") and a column carrying NaN both work:
         # neither survives a round-trip through float(), which is what re-keying the raw values required.
-        style: dict[str, Any] = {}
-        scalars = None
-        if colours is not None:
-            style = classified_scalars(colours, scheme=scheme, k=k, cmap=cmap)
-            scalars = np.asarray(style.pop("scalars"), dtype=float)
-            clashing = sorted(set(style) & set(kwargs))
-            if clashing:
-                # `**style, **kwargs` into one call is a "got multiple values" TypeError about Python's
-                # internals; the caller's real mistake is pinning a colour setting the scheme owns, so say
-                # that instead (review L1). The scheme's values cannot lose: `clim`/`n_colors` are the class
-                # indices the scalars were rewritten to, and overriding them re-colours the wrong classes.
-                names = ", ".join(f"{name}=" for name in clashing)
-                raise TypeError(
-                    f"extruded_polygons() got {names} together with scheme={scheme!r}, which sets "
-                    f"{names} from the classes it cut; drop it, or drop scheme="
-                )
+        style, scalars = _classify_or_refuse(
+            colours, scheme=scheme, k=k, cmap=cmap, pinned=kwargs
+        )
 
         prisms: list[pv.PolyData] = []
         for i, geom in enumerate(geoms):
-            h = float(heights[i]) if heights is not None else float(height)
-            if not math.isfinite(h):
-                # A NaN height builds a prism whose z coordinates are all NaN: it vanishes from the render
-                # with no error, and the actor still reports cells (review L2). Name the row instead.
-                where = (
-                    f"row {i} of column {height!r}"
-                    if heights is not None
-                    else f"height={height!r}"
-                )
-                raise ValueError(
-                    f"extruded_polygons() needs a finite extrusion height; {where} is {h}"
-                )
+            h = _finite_height(heights, height, i)
             for ring in _exterior_rings(geom):
                 prism = _extrude_ring(ring, h)
                 if scalars is not None:
