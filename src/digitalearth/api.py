@@ -70,7 +70,9 @@ _UNSET = _Unset()
 #:   arity, and wiring ``colorbar=`` to it is deliberately left to the ``colorbar``/``legend`` rename
 #:   (TODO(#254)) rather than guessed at here.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
-    "matplotlib": frozenset({"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}),
+    "matplotlib": frozenset(
+        {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
+    ),
     "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
     "3d": frozenset({"colorbar"}),
     "web": frozenset({"crs", "basemap"}),
