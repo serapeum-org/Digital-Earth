@@ -121,6 +121,51 @@ class TestQuickplotBackend:
         with pytest.raises(ValueError, match="unknown backend"):
             quickplot(dataset, backend="webgl")
 
+    def test_an_unknown_kind_is_refused_rather_than_drawn_as_an_image(self, dataset):
+        """Round-2 review M7 — a renderer this tier does not have must not fall back to ``image``.
+
+        Args:
+            dataset: The raster to draw.
+
+        Test scenario:
+            ``_raster_kind.get(kind, "image")`` swallowed any unknown name, so
+            ``quickmap(ds, backend="interactive", kind="bogus")`` returned a map with an image layer and no
+            complaint — while the matplotlib backend raised for the same call. ``kind`` is one of the six
+            parameters the refusal gate exists for, and it was checked against the *backend* but never
+            against the set of renderers that backend actually has.
+        """
+        from digitalearth.api import quickmap
+
+        with pytest.raises(ValueError) as excinfo:
+            quickmap(dataset, crs=dataset.epsg, backend="interactive", kind="bogus")
+        message = str(excinfo.value)
+        assert "kind='bogus'" in message, message
+        assert "'contourf'" in message and "'image'" not in message.split(";")[0], (
+            message
+        )
+
+    @pytest.mark.parametrize(
+        ("kind", "expected"),
+        [
+            ("auto", "Image"),
+            ("imshow", "Image"),
+            ("contourf", "Polygons"),
+            ("pcolormesh", "QuadMesh"),
+        ],
+    )
+    def test_every_named_renderer_still_dispatches(self, dataset, kind, expected):
+        """The guard must not disturb the renderers this tier really has.
+
+        Args:
+            dataset: The raster to draw.
+            kind: A renderer name the interactive tier maps.
+            expected: The HoloViews/GeoViews element type it produces.
+        """
+        from digitalearth.api import quickmap
+
+        out = quickmap(dataset, crs=dataset.epsg, backend="interactive", kind=kind)
+        assert type(out.layers[0]).__name__ == expected, type(out.layers[0]).__name__
+
     def test_colorbar_false_drops_colorbar_on_data_layer(self, dataset):
         """quickplot(backend="interactive", colorbar=False) toggles the colorbar off (L2)."""
         from digitalearth.api import quickplot

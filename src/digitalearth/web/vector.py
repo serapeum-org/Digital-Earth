@@ -94,9 +94,12 @@ class VectorMixin(_MixinBase):
                 return int(as_float)
             return value
 
+        # Imported here rather than at module scope so the tier stays importable without matplotlib;
+        # both the categorical and the graduated arm need the shared missing-value colour.
+        from digitalearth.base.symbology import MISSING_COLOR
+
         if isinstance(scheme, str) and scheme.lower() == "categorical":
             from digitalearth.base.symbology import (
-                MISSING_COLOR,
                 categorical_colors,
                 resolve_categorical_cmap,
             )
@@ -131,9 +134,18 @@ class VectorMixin(_MixinBase):
                     f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
                 ) from err
             colors = self._cmap_hex(cmap, len(edges) - 1)
-            expr: list = ["step", ["get", column], colors[0]]
+            step: list = ["step", ["get", column], colors[0]]
             for edge, color in zip(edges[1:-1], colors[1:]):
-                expr.extend([float(edge), color])
+                step.extend([float(edge), color])
+            # A feature with no value must read as missing, not as the lowest class: MapLibre's `step`
+            # has no null arm, so it is guarded by a type test, exactly as the categorical `match` above
+            # falls back to MISSING_COLOR. Every tier draws an unclassifiable feature this same grey.
+            expr: list = [
+                "case",
+                ["==", ["typeof", ["get", column]], "number"],
+                step,
+                MISSING_COLOR,
+            ]
             self.last_breaks = [float(e) for e in edges]
             self.last_legend = {
                 "kind": "graduated",

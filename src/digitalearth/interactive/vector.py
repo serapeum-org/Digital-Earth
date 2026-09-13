@@ -125,8 +125,13 @@ class VectorMixin(_MixinBase):
             scheme: Optional classification scheme for ``value_column`` — ``None`` (the default) is a
                 continuous ramp, a named ``cleopatra.styling.styles.classify`` scheme
                 (``"quantiles"``, ``"equal_interval"``, ``"fisher_jenks"``, …) cuts it into ``k``
-                classes. Spelled and computed the same way on every tier that classifies.
-            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None``.
+                classes, and ``"categorical"`` gives every distinct value its own colour (the same
+                unordered-attribute colouring :meth:`choropleth` does, so a point layer and a polygon
+                layer key one column the same way). Spelled and computed the same way on every tier that
+                classifies. It styles ``value_column``, so naming a scheme without one is refused rather
+                than ignored.
+            k: Number of classes a named ``scheme`` is cut into; ignored when ``scheme`` is ``None`` or
+                ``"categorical"``.
             size: Marker size in screen pixels — the one thing ``size`` ever means on any tier (#251).
             cmap: Colormap used when ``value_column`` is given.
             rasterize: ``"auto"`` (default) routes through Datashader above
@@ -137,7 +142,10 @@ class VectorMixin(_MixinBase):
                 number under the tier's old name. Still accepted (with a ``DeprecationWarning``)
                 for one release; passing it together with ``big_data_threshold`` is a
                 ``TypeError``, since they name one cutoff (#250).
-            **opts: Extra HoloViews style options applied to the element.
+            **opts: Extra HoloViews style options applied to the element. Anything written here **wins**
+                over the option a ``scheme`` derived — the same precedence :meth:`choropleth` applies — so
+                ``colorbar=False`` drops the colorbar on a classified point layer just as it does on a
+                classified polygon one.
 
         Examples:
             - Colour gauging stations by an attribute column:
@@ -157,6 +165,9 @@ class VectorMixin(_MixinBase):
         Raises:
             TypeError: if both ``big_data_threshold`` and the deprecated ``rasterize_threshold``
                 are passed — two values for one cutoff, so neither can be silently preferred.
+            ValueError: if ``scheme`` is given without a ``value_column`` to classify, or when the
+                column cannot be classified (unknown scheme, no spread, ``k < 1``, or an explicit
+                colour list shorter than the class count).
 
         Warns:
             DeprecationWarning: when the deprecated ``rasterize_threshold=`` is used instead of
@@ -164,6 +175,13 @@ class VectorMixin(_MixinBase):
         """
         from digitalearth.interactive.bigdata import _route_through_rasterize
 
+        if scheme is not None and not value_column:
+            # A scheme with nothing to classify used to draw plain points and say nothing — a dropped
+            # styling request, which is exactly what this tier stopped doing elsewhere (review M2).
+            raise ValueError(
+                "InteractiveMap.points(): scheme= classifies value_column=, which was not given; "
+                "name the column to classify, or drop scheme="
+            )
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.points()"
         )
@@ -176,18 +194,28 @@ class VectorMixin(_MixinBase):
             return self.rasterize(
                 gdf, aggregator=aggregator, column=value_column, cmap=cmap, **opts
             )
+        styling: dict = {}
+        if value_column and isinstance(scheme, str) and scheme.lower() == "categorical":
+            # Categorical colouring works off the string form of the value, so it has to relabel the frame
+            # before the element is built — and it is the same relabelling `_categorical_polygons` does, so
+            # a point layer and a polygon layer key an unordered column identically (review M3).
+            gdf, styling, categories = self._categorical_style(
+                gdf, value_column, cmap=cmap
+            )
+            self.last_breaks = categories
+        elif value_column and scheme is not None:
+            styling = self._graduated_style(
+                gdf, value_column, scheme=scheme, k=k, cmap=cmap
+            )
+            self.last_breaks = list(styling["color_levels"])
+        elif value_column:
+            styling = {"color": value_column, "cmap": cmap, "colorbar": True}
         element = self._vector_element(
             "Points", gdf, vdims=[value_column] if value_column else None
         )
-        common: dict = {"size": size, **opts}
-        if value_column and scheme is not None:
-            classified = self._graduated_style(
-                gdf, value_column, scheme=scheme, k=k, cmap=cmap
-            )
-            common.update(classified)
-            self.last_breaks = list(classified["color_levels"])
-        elif value_column:
-            common.update({"color": value_column, "cmap": cmap, "colorbar": True})
+        # `**opts` last: an explicit style the caller wrote outranks the one classification derived, the same
+        # precedence `_graduated_polygons` applies, so one scheme cannot mean two things (review M4).
+        common: dict = {"size": size, **styling, **opts}
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
         return self.add_element(element)
 
@@ -347,13 +375,44 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
+        gdf, styling, categories = self._categorical_style(
+            self._display_gdf(features), column, cmap=cmap
+        )
+        element = self._vector_element("Polygons", gdf, vdims=[column])
+        element = self._styled(
+            element, common={**styling, **opts}, bokeh={"tools": ["hover"]}
+        )
+        self.last_breaks = categories
+        return self.add_element(element)
+
+    def _categorical_style(self, gdf: Any, column: str, *, cmap: str) -> tuple:
+        """Relabel ``column`` as discrete strings and return the options that colour one per value.
+
+        The one distinct-value colouring path in this tier, shared by :meth:`points` and
+        :meth:`_categorical_polygons`, so an unordered column keys a point layer and a polygon layer
+        identically. Splitting it out is what let ``points(scheme="categorical")`` work at all: it used to
+        fall through to :meth:`_graduated_style`, whose classifier coerces the column to ``float`` and so
+        died with "could not convert string to float" on the very columns categorical colouring is for
+        (review M3).
+
+        Args:
+            gdf: The already-reprojected GeoDataFrame carrying ``column`` (never mutated — a copy is
+                relabelled and returned).
+            column: The attribute to colour by (any hashable value; assumed single-dtype — see
+                :meth:`_categorical_polygons` on the string-keyed collapse).
+            cmap: A qualitative colormap name, already resolved by the caller's default.
+
+        Returns:
+            tuple: ``(gdf, options, categories)`` — the relabelled frame, the ``color``/``cmap``/
+            ``colorbar`` options for the element, and the original values in classifier order (what
+            ``last_breaks`` records).
+        """
         from digitalearth.base.symbology import (
             MISSING_COLOR,
             categorical_colors,
             resolve_categorical_cmap,
         )
 
-        gdf = self._display_gdf(features)
         categories, colors = categorical_colors(
             gdf[column], resolve_categorical_cmap(cmap)
         )
@@ -373,11 +432,8 @@ class VectorMixin(_MixinBase):
         if missing.any():
             # Missing values get an explicit neutral fallback, shared with the web and static tiers.
             cmap_by_label[sentinel] = MISSING_COLOR
-        element = self._vector_element("Polygons", gdf, vdims=[column])
-        common = {"color": column, "cmap": cmap_by_label, "colorbar": False, **opts}
-        element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        self.last_breaks = list(categories)
-        return self.add_element(element)
+        options = {"color": column, "cmap": cmap_by_label, "colorbar": False}
+        return gdf, options, list(categories)
 
     def _graduated_style(
         self, gdf: Any, column: str, *, scheme: Any, k: int, cmap: str
@@ -395,14 +451,19 @@ class VectorMixin(_MixinBase):
             column: The numeric attribute to classify and colour by.
             scheme: A named scheme or an explicit sequence of class edges.
             k: Number of classes for a named scheme.
-            cmap: Colormap sampled once per class.
+            cmap: Colormap sampled once per class, or an explicit sequence of colours — which is taken as
+                given, so it must carry exactly one colour per class. A shorter list is **refused**, not
+                recycled: the renderer clamps the extra classes onto the last colour it was given, so they
+                would render identically and the classification would silently lose classes (review M5).
 
         Returns:
             dict: the ``color`` / ``cmap`` / ``color_levels`` / ``colorbar`` options for the element.
 
         Raises:
             ValueError: when the column cannot be classified (unknown scheme, no spread, ``k < 1``, …),
-                wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does.
+                wrapped with the column/scheme/``k`` context exactly as the web tier's ``_color_expr`` does;
+                and when an explicit ``cmap`` sequence carries a different number of colours than the
+                scheme produced classes — see the note above.
         """
         from cleopatra.styling.styles import classify
 
@@ -412,9 +473,20 @@ class VectorMixin(_MixinBase):
             raise ValueError(
                 f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
             ) from err
+        n_classes = len(edges) - 1
+        colours = sample_cmap(cmap, n_classes)
+        if len(colours) != n_classes:
+            # A colormap *name* is sampled to fit; an explicit sequence is taken as given, so a short one
+            # leaves classes sharing the last colour and a long one leaves colours unused — either way the
+            # picture no longer shows the classification it claims (review M5).
+            raise ValueError(
+                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): cmap has "
+                f"{len(colours)} colours for {n_classes} classes; pass one colour per class, or a "
+                "colormap name to sample"
+            )
         return {
             "color": column,
-            "cmap": sample_cmap(cmap, len(edges) - 1),
+            "cmap": colours,
             "color_levels": [float(edge) for edge in edges],
             "colorbar": True,
         }

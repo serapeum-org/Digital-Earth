@@ -82,7 +82,10 @@ def classified_scalars(
             ``"categorical"``.
         cmap: Colormap name for the ramp / classes. For ``"categorical"`` it is resolved through
             :func:`~digitalearth.base.symbology.resolve_categorical_cmap`, which swaps a continuous default
-            for a qualitative one.
+            for a qualitative one. An explicit **sequence** of colours is taken as given rather than
+            sampled, so on a graduated scheme it must carry exactly one colour per class; a shorter list is
+            refused, not recycled, because the lookup table would otherwise clamp every class past its end
+            onto the last colour and they would all render identically.
 
     Returns:
         dict: keyword arguments to splat into :meth:`pyvista.Plotter.add_mesh` /
@@ -91,8 +94,9 @@ def classified_scalars(
 
     Raises:
         ValueError: when the column cannot be classified — an unknown scheme, a constant column with no
-            spread to split, ``k`` below 1, or (for ``"categorical"``) no non-null values. The message names
-            the scheme and ``k`` so the caller can see which of those it was.
+            spread to split, ``k`` below 1, or (for ``"categorical"``) no non-null values — and when an
+            explicit ``cmap`` sequence carries a different number of colours than the scheme produced
+            classes. The message names the scheme and ``k`` so the caller can see which of those it was.
 
     Examples:
         - No scheme is a continuous ramp: the values reach the engine unchanged:
@@ -189,7 +193,16 @@ def classified_scalars(
     # render as the column's maximum. `classify` already cut the edges from the finite values alone, so the
     # classes themselves are unaffected — only the missing values need lifting back out of the ramp.
     codes[np.isnan(numbers)] = np.nan
-    return _discrete_style(codes, sample_cmap(cmap, n_classes))
+    colours = sample_cmap(cmap, n_classes)
+    if len(colours) != n_classes:
+        # A colormap *name* is sampled to fit; an explicit sequence is taken as given. `_discrete_style`
+        # then derives `clim`/`n_colors` from the sequence's length, so a short one clamped every class past
+        # its end onto the last colour — three of five classes vanished with no warning (review M5).
+        raise ValueError(
+            f"cannot classify values (scheme={scheme!r}, k={k}): cmap has {len(colours)} colours for "
+            f"{n_classes} classes; pass one colour per class, or a colormap name to sample"
+        )
+    return _discrete_style(codes, colours)
 
 
 def _discrete_style(codes: np.ndarray, colours: list[str]) -> dict[str, Any]:

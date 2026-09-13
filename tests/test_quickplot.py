@@ -497,3 +497,85 @@ class TestBackendCapabilityRefusal:
         assert forward.call_args.kwargs["crs"] == 4326, (
             f"crs must reach the web builder, got {forward.call_args!r}"
         )
+
+
+class TestTheRefusalNamesWhatTheCallerWrote:
+    """Round-2 review L3/L4/L5 and M19 — a refusal must name a keyword the caller can actually act on."""
+
+    def test_an_array_domain_is_refused_by_name_not_by_numpy(self):
+        """A bbox handed over as an ndarray gets this module's message, not numpy's ambiguity error.
+
+        Test scenario:
+            ``_INERT`` was consulted with ``==``, so ``value == None`` on an array returned an *array* and
+            the ``if`` over it raised "The truth value of an array with more than one element is
+            ambiguous" — from inside the guard whose whole job is to name the offending parameter (L3).
+        """
+        import numpy as np
+
+        with pytest.raises(
+            ValueError, match=r"domain= is not supported by backend='web'"
+        ):
+            qp._reject_unsupported(
+                "web", domain=np.array([0.0, 0.0, 1.0, 1.0]), crs=qp._UNSET
+            )
+
+    @pytest.mark.parametrize(
+        ("backend", "kwargs"),
+        [("3d", {"basemap": 0}), ("web", {"colorbar": 0})],
+    )
+    def test_a_numeric_zero_is_not_the_inert_false(self, backend, kwargs):
+        """``0 == False`` is ``True`` in Python, but ``basemap=0`` is a value the caller typed.
+
+        Args:
+            backend: The tier that cannot honour the keyword.
+            kwargs: The keyword, written as the number zero.
+
+        Test scenario:
+            The inert check means *identity* with the "asks for nothing" value, not equality with it, or a
+            caller who passes a number through a shared kwargs dict is told nothing was dropped when it
+            was (L4).
+        """
+        name = next(iter(kwargs))
+        with pytest.raises(ValueError, match=rf"{name}= is not supported"):
+            qp._reject_unsupported(backend, crs=qp._UNSET, **kwargs)
+
+    @pytest.mark.parametrize("backend", ["web", "3d"])
+    def test_a_module_wrapper_names_itself_not_the_kind_it_injected(
+        self, dataset, backend
+    ):
+        """``imshow(ds, backend="web")`` must not tell the caller to drop a keyword they never wrote.
+
+        Args:
+            dataset: The raster to draw.
+            backend: A tier with no renderer selector.
+
+        Test scenario:
+            The wrapper *is* the ``kind``: it injects ``kind="imshow"`` itself. The generic refusal then
+            said "drop the argument", naming a parameter that does not appear in the caller's source (L5).
+        """
+        with pytest.raises(ValueError) as excinfo:
+            qp.imshow(dataset, backend=backend)
+        message = str(excinfo.value)
+        assert message.startswith("imshow()"), message
+        assert f"backend={backend!r}" in message, message
+        assert "kind=" not in message, (
+            f"the message must not name the injected keyword: {message}"
+        )
+
+    def test_a_column_on_point_input_is_refused_by_name(self):
+        """``quickmap(points, column=...)`` names the keyword instead of leaking cleopatra's error.
+
+        Test scenario:
+            The polygon branch pops ``column`` and draws a choropleth; the point branch forwarded it into
+            ``Map.scatter``'s ``**opts``, where cleopatra answered with its own accepted-keyword list and
+            never mentioned ``column`` (M19). ``Map.scatter`` has no fill column — it sizes markers by
+            ``size_column`` — so the honest answer is a refusal that says so.
+        """
+        from pyramids.feature import FeatureCollection
+
+        fc = FeatureCollection.read_file("tests/data/points.geojson")
+        with pytest.raises(ValueError) as excinfo:
+            qp.quickmap(fc, crs=fc.epsg, column="fid")
+        message = str(excinfo.value)
+        assert "column='fid'" in message, message
+        assert "size_column=" in message, message

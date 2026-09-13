@@ -356,3 +356,132 @@ class TestGraduatedChoropleth:
             hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs["cmap"]
             == "viridis"
         ), "the continuous ramp still takes the cmap name straight through"
+
+
+class TestTheClassifiedPointLayerRefusesWhatItCannotHonour:
+    """Round-2 review M2/M3/M4/M5 — the newly shared classification, on the tier that added it."""
+
+    def test_a_scheme_without_a_value_column_is_refused(self, m, point_fc):
+        """M2 — ``points(scheme=...)`` with nothing to classify was accepted and silently dropped.
+
+        Args:
+            m: The map under test.
+            point_fc: A point ``FeatureCollection`` fixture.
+
+        Test scenario:
+            A dropped styling request, on the same branch that added ``_reject_unsupported`` specifically so
+            requests are refused rather than dropped. The message has to name ``value_column``, because that
+            is the half the caller has to add.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            m.points(point_fc, scheme="quantiles", k=2)
+        message = str(excinfo.value)
+        assert "value_column=" in message and "scheme=" in message, message
+        assert not m.layers, "nothing may be drawn when the request was refused"
+
+    def test_a_categorical_scheme_colours_points_by_distinct_value(self, m, point_fc):
+        """M3 — ``points(scheme="categorical")`` died in the float coercion every other tier avoids.
+
+        Args:
+            m: The map under test.
+            point_fc: A point ``FeatureCollection`` fixture.
+
+        Test scenario:
+            The same defect class as the ``extruded_polygons`` crash fixed earlier: classification ran after
+            a float coercion, so a label column raised "could not convert string to float". It now takes the
+            same distinct-value path ``choropleth(scheme="categorical")`` takes, so both key a column alike.
+        """
+        fc = point_fc.copy()
+        fc["label"] = [("a", "b", "c")[index % 3] for index in range(len(fc))]
+        m.points(fc, value_column="label", scheme="categorical")
+        style = m.style_of(m.layers[0])["common"]
+        assert isinstance(style["cmap"], dict), (
+            f"a categorical point layer maps label -> colour, got {style['cmap']!r}"
+        )
+        assert style["colorbar"] is False, (
+            "a categorical layer is keyed by swatches, not a colorbar"
+        )
+        assert m.last_breaks == sorted({"a", "b", "c"}), m.last_breaks
+
+    def test_a_categorical_point_layer_matches_the_polygon_one(self, m, point_fc):
+        """M3 — the point and polygon categorical paths must agree on the colours they assign.
+
+        Args:
+            m: The map under test.
+            point_fc: A point ``FeatureCollection`` fixture.
+
+        Test scenario:
+            One classifier is the point of the shared helper; two implementations would let a point layer
+            and a polygon layer over the same column disagree on which colour a category gets.
+        """
+        fc = point_fc.copy()
+        fc["label"] = [str(value % 3) for value in range(len(fc))]
+        polygons = fc.copy()
+        polygons["geometry"] = polygons.geometry.buffer(500.0)
+        m.points(fc, value_column="label", scheme="categorical")
+        other = InteractiveMap().choropleth(polygons, "label", scheme="categorical")
+        point_cmap = m.style_of(m.layers[0])["common"]["cmap"]
+        polygon_cmap = other.style_of(other.layers[0])["common"]["cmap"]
+        assert point_cmap == polygon_cmap, (point_cmap, polygon_cmap)
+
+    @pytest.mark.parametrize("builder", ["points", "choropleth"])
+    def test_an_explicit_option_outranks_the_classifier_on_both_builders(
+        self, m, point_fc, polygon_fc, builder
+    ):
+        """M4 — the shared classifier had opposite kwarg precedence on its two callers.
+
+        Args:
+            m: The map under test.
+            point_fc: A point ``FeatureCollection`` fixture.
+            polygon_fc: A polygon ``FeatureCollection`` fixture.
+            builder: Which classified builder to exercise.
+
+        Test scenario:
+            ``points()`` let the classifier win over ``**opts`` while ``_graduated_polygons()`` let the
+            caller win, so ``colorbar=False`` was honoured on a classified choropleth and ignored on a
+            classified point layer. The caller's explicit value wins on both.
+        """
+        if builder == "points":
+            m.points(
+                point_fc, value_column="fid", scheme="quantiles", k=2, colorbar=False
+            )
+        else:
+            m.choropleth(polygon_fc, "fid", scheme="quantiles", k=2, colorbar=False)
+        style = m.style_of(m.layers[0])["common"]
+        assert style["colorbar"] is False, (
+            f"an explicit colorbar=False must survive classification, got {style!r}"
+        )
+
+    @pytest.mark.parametrize("colours", [["#ff0000", "#00ff00"], ["#ff0000"] * 9])
+    def test_a_colour_list_that_does_not_match_the_class_count_is_refused(
+        self, m, polygon_fc, colours
+    ):
+        """M5 — a short colour list collapsed classes onto one colour with no warning.
+
+        Args:
+            m: The map under test.
+            polygon_fc: A polygon ``FeatureCollection`` fixture.
+            colours: An explicit colour sequence that does not carry one colour per class.
+
+        Test scenario:
+            ``sample_cmap`` takes a sequence as given, so the class edges and the colour list could disagree
+            silently — three of five classes rendering identically. One colour per class, or a colormap
+            name to sample; anything else is refused by name.
+        """
+        with pytest.raises(ValueError) as excinfo:
+            m.choropleth(polygon_fc, "fid", scheme="quantiles", k=5, cmap=colours)
+        message = str(excinfo.value)
+        assert "one colour per class" in message, message
+        assert f"{len(colours)} colours for 5 classes" in message, message
+
+    def test_a_colour_list_of_exactly_k_is_honoured(self, m, polygon_fc):
+        """The guard must not disturb the deliberate case it protects.
+
+        Args:
+            m: The map under test.
+            polygon_fc: A polygon ``FeatureCollection`` fixture.
+        """
+        colours = ["#ff0000", "#00ff00", "#0000ff"]
+        m.choropleth(polygon_fc, "fid", scheme="quantiles", k=3, cmap=colours)
+        style = m.style_of(m.layers[0])["common"]
+        assert style["cmap"] == colours, style["cmap"]

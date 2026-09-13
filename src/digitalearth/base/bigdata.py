@@ -23,12 +23,19 @@ DEFAULT_BIG_DATA_THRESHOLD: int = 50_000
 
 
 def validate_big_data_threshold(threshold: Any, *, caller: str) -> int:
-    """Return ``threshold`` as an ``int``, refusing a negative cutoff.
+    """Return ``threshold`` as an ``int``, refusing anything that is not a whole, non-negative row count.
 
     The one rule every tier applies to a per-call ``big_data_threshold=``. A cutoff below zero routes *every*
     layer — an empty one included — to the big-data renderer, which is never what the caller meant; it is far
     more likely a sentinel (``-1``) borrowed from an API where negative means "unlimited". Answering that the
     same way on every backend is the point of sharing the check.
+
+    A cutoff is a count of rows, so a value that is not one is refused rather than coerced into one. ``int()``
+    alone truncated: ``1.9`` became ``1`` and cut over one row *earlier* than the caller asked, silently
+    (review L6). It also let every other bad value surface as a bare ``ValueError`` from ``int`` — ``"abc"``,
+    ``nan``, ``inf``, ``None`` — with no mention of the parameter or the call. Both now report the same way,
+    naming the keyword and the call. An integral ``float`` (``1000.0``) still passes: it *is* a whole count.
+    ``True``/``False`` do not — a boolean is a flag, not a row count, and ``int(True)`` silently meant ``1``.
 
     Args:
         threshold: The cutoff as the caller wrote it, already known not to be ``None``.
@@ -39,7 +46,8 @@ def validate_big_data_threshold(threshold: Any, *, caller: str) -> int:
         The validated cutoff.
 
     Raises:
-        ValueError: when ``threshold`` is negative.
+        ValueError: when ``threshold`` is negative, or when it is not a whole number of rows — a fraction,
+            a boolean, a non-finite float, or anything that is not a number at all.
 
     Examples:
         - A legal cutoff comes back as an ``int``, zero included (it routes everything non-empty):
@@ -51,6 +59,13 @@ def validate_big_data_threshold(threshold: Any, *, caller: str) -> int:
             0
 
             ```
+        - A whole count written as a float is the same count, so it passes:
+            ```python
+            >>> from digitalearth.base.bigdata import validate_big_data_threshold
+            >>> validate_big_data_threshold(1000.0, caller="WebMap.points()")
+            1000
+
+            ```
         - A negative one is refused, and the message names the call:
             ```python
             >>> from digitalearth.base.bigdata import validate_big_data_threshold
@@ -60,8 +75,31 @@ def validate_big_data_threshold(threshold: Any, *, caller: str) -> int:
             ValueError: InteractiveMap.points(): big_data_threshold must not be negative; got -1
 
             ```
+        - A fraction is refused instead of being truncated to the row before it:
+            ```python
+            >>> from digitalearth.base.bigdata import validate_big_data_threshold
+            >>> validate_big_data_threshold(1.9, caller="InteractiveMap.points()")
+            Traceback (most recent call last):
+                ...
+            ValueError: InteractiveMap.points(): big_data_threshold must be a whole number of rows; got 1.9
+
+            ```
     """
-    value = int(threshold)
+    if isinstance(threshold, bool):
+        raise ValueError(
+            f"{caller}: big_data_threshold must be a whole number of rows; got {threshold!r}"
+        )
+    try:
+        value = int(threshold)
+        whole = value == threshold
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(
+            f"{caller}: big_data_threshold must be a whole number of rows; got {threshold!r}"
+        ) from error
+    if not whole:
+        raise ValueError(
+            f"{caller}: big_data_threshold must be a whole number of rows; got {threshold!r}"
+        )
     if value < 0:
         raise ValueError(
             f"{caller}: big_data_threshold must not be negative; got {threshold!r}"

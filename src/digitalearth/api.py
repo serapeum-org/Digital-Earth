@@ -100,6 +100,46 @@ _INERT: dict[str, Any] = {
 }
 
 
+def _asks_for_nothing(value: Any, inert: Any) -> bool:
+    """Return whether ``value`` is the "asks for nothing" value recorded in :data:`_INERT`.
+
+    The comparison is deliberately *not* ``==``. Two things go wrong with equality here. An array-valued
+    ``domain`` (a bbox as an ``ndarray``) compared against ``None`` returns an array, and the ``if`` over it
+    raises numpy's "truth value ... is ambiguous" instead of this module's own message (review L3). And
+    ``0 == False`` is ``True`` in Python, so ``basemap=0`` / ``colorbar=0`` were read as the inert ``False``
+    even though the caller wrote a number (review L4) — the check means *identity* with the inert value, and
+    only the string ``kind="auto"`` needs value equality, because a string literal is not interned by
+    identity across every source.
+
+    Args:
+        value: The value the caller passed for the parameter.
+        inert: The parameter's entry in :data:`_INERT` — the value that asks for nothing.
+
+    Returns:
+        ``True`` when ``value`` is that inert value, so nothing was dropped by ignoring it.
+
+    Examples:
+        - ``False`` is inert, but the number zero is a value the caller typed:
+            ```python
+            >>> from digitalearth.api import _asks_for_nothing
+            >>> _asks_for_nothing(False, False), _asks_for_nothing(0, False)
+            (True, False)
+
+            ```
+        - An array never reaches an ambiguous comparison:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _asks_for_nothing
+            >>> _asks_for_nothing(np.array([0.0, 0.0, 1.0, 1.0]), None)
+            False
+
+            ```
+    """
+    if isinstance(inert, str):
+        return isinstance(value, str) and value == inert
+    return value is inert
+
+
 def _reject_unsupported(backend: str, **passed: Any) -> None:
     """Refuse any keyword the chosen ``backend`` cannot honour, naming the parameter and the backend.
 
@@ -131,12 +171,33 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             True
 
             ```
+        - A bbox handed over as an array is refused by name too, not by numpy's ambiguity error:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.api import _reject_unsupported, _UNSET
+            >>> try:
+            ...     _reject_unsupported("web", domain=np.array([0.0, 0.0, 1.0, 1.0]), crs=_UNSET)
+            ... except ValueError as error:
+            ...     print(str(error).split(";")[0])
+            domain= is not supported by backend='web'
+
+            ```
+        - ``basemap=0`` is a number the caller typed, not the inert ``False``, so it is refused:
+            ```python
+            >>> from digitalearth.api import _reject_unsupported, _UNSET
+            >>> try:
+            ...     _reject_unsupported("3d", basemap=0, crs=_UNSET)
+            ... except ValueError as error:
+            ...     print(str(error).split(";")[0])
+            basemap= is not supported by backend='3d'
+
+            ```
     """
     supported = BACKEND_CAPABILITIES[backend]
     for name, value in passed.items():
         if value is _UNSET or name in supported:
             continue
-        if name in _INERT and value == _INERT[name]:
+        if name in _INERT and _asks_for_nothing(value, _INERT[name]):
             continue  # they asked for nothing, so nothing was dropped
         honoured = ", ".join(
             repr(other)
@@ -226,7 +287,9 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
         **kwargs: Forwarded to the chosen ``Map`` draw method (e.g. ``column``, ``cmap``, ``levels``).
 
     Raises:
-        ValueError: if ``data`` is an empty ``FeatureCollection`` (nothing to draw).
+        ValueError: if ``data`` is an empty ``FeatureCollection`` (nothing to draw), or if ``column`` was
+            given for point input — it names a polygon fill and ``Map.scatter`` has no such parameter, so
+            forwarding it produced an opaque cleopatra error instead of naming the keyword (review M19).
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
     if isinstance(data, FeatureCollection):
@@ -241,6 +304,14 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
             else:
                 scene.shapes(data, **kwargs)
         else:
+            if "column" in kwargs:
+                # `Map.scatter` has no fill column: it sizes markers by `size_column` and colours them from
+                # the collection's own value column. Forwarding `column` reached cleopatra, which answered
+                # with its own keyword list and never named the caller's parameter (review M19).
+                raise ValueError(
+                    f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
+                    "size the markers with size_column=, or drop column="
+                )
             scene.scatter(data, **kwargs)
         return
     if isinstance(data, Dataset):
@@ -296,7 +367,9 @@ def quickmap(
             ``web`` extra) — all fed from the same input-type dispatch. Which of the arguments above each one
             honours is :data:`BACKEND_CAPABILITIES`; anything else you pass it is refused, not dropped.
         **kwargs: Forwarded to the underlying draw method (e.g. ``cmap``, ``levels``, ``column``;
-            ``z_exaggeration``/``height``/``size`` for ``backend="3d"``).
+            ``z_exaggeration``/``height``/``size`` for ``backend="3d"``). ``column`` names a **polygon**
+            fill on ``backend="matplotlib"``: point input there is a ``Map.scatter``, which sizes markers
+            by ``size_column`` instead, so ``column`` on points is refused by name rather than forwarded.
 
     Returns:
         The decorated :class:`Map`, an :class:`InteractiveMap` when ``backend="interactive"``, a
@@ -304,7 +377,8 @@ def quickmap(
 
     Raises:
         ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``coastlines``/``colorbar`` the
-            chosen backend cannot honour — the message names both the parameter and the backend.
+            chosen backend cannot honour — the message names both the parameter and the backend. Also for a
+            ``kind`` naming a renderer the chosen backend does not have, and for ``column`` on point input.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -449,7 +523,8 @@ def _quickmap_interactive(
         The decorated :class:`~digitalearth.interactive.map.InteractiveMap`.
 
     Raises:
-        ValueError: if ``data`` is an empty ``FeatureCollection``.
+        ValueError: if ``data`` is an empty ``FeatureCollection``, or if ``kind`` names a renderer this
+            tier does not have — it is refused by name rather than quietly drawn as an ``image``.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
     from digitalearth.interactive import InteractiveMap
@@ -476,7 +551,14 @@ def _quickmap_interactive(
         else:
             scene.points(data, **kwargs)
     elif isinstance(data, Dataset):
-        getattr(scene, _raster_kind.get(kind, "image"))(data, **kwargs)
+        if kind not in _raster_kind:
+            # A renderer this tier does not have used to fall back to `image` and draw something the caller
+            # never asked for; the matplotlib backend has always refused it (review M7).
+            renderers = ", ".join(repr(name) for name in sorted(_raster_kind))
+            raise ValueError(
+                f"kind={kind!r} is not a renderer of backend='interactive'; use one of {renderers}"
+            )
+        getattr(scene, _raster_kind[kind])(data, **kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
     if (
@@ -660,9 +742,33 @@ def _finish(scene: Map, *, colorbar: bool) -> Map:
 
 
 def _method(name: str):
-    """Build a module-level function that quick-draws via the ``Map`` method ``name``."""
+    """Build a module-level function that quick-draws via the ``Map`` method ``name``.
+
+    The wrapper *is* the ``kind``: it injects ``kind=name`` on the caller's behalf. So when the chosen
+    backend has no renderer selector, :func:`_reject_unsupported`'s "drop the argument" message named a
+    keyword the caller never typed (review L5). The wrapper answers for its own injection instead, naming
+    itself and the call that does work.
+
+    Args:
+        name: The ``Map`` renderer the wrapper draws with, also the wrapper's own name.
+
+    Returns:
+        The module-level quick-draw function.
+    """
 
     def _fn(data: PlottableData, **kwargs) -> Map:
+        backend = kwargs.get("backend", "matplotlib")
+        supported = BACKEND_CAPABILITIES.get(backend)
+        if supported is not None and "kind" not in supported:
+            honoured = ", ".join(
+                repr(other)
+                for other in sorted(BACKEND_CAPABILITIES)
+                if "kind" in BACKEND_CAPABILITIES[other]
+            )
+            raise ValueError(
+                f"{name}() draws with the {name!r} renderer, which backend={backend!r} does not have; "
+                f"it is honoured by {honoured} — call quickmap(data, backend={backend!r}) instead"
+            )
         return quickmap(data, kind=name, **kwargs)
 
     _fn.__name__ = name
