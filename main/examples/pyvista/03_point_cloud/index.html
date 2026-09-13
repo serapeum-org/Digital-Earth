@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/web_map/" class="md-tabs__link">
+        <a href="../../../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3202,6 +3202,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/web_map/" class="md-nav__link">
         
   
@@ -4482,7 +4510,7 @@ def show(scene, title=''):
 <span class="n">z</span> <span class="o">=</span> <span class="n">elevation</span> <span class="o">/</span> <span class="mf">111_320.0</span> <span class="o">*</span> <span class="mf">8.0</span>                          <span class="c1"># metres -&gt; degree-equivalent, 8x exaggeration</span>
 <span class="n">pts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">([</span><span class="n">xx</span><span class="o">.</span><span class="n">ravel</span><span class="p">()[</span><span class="n">finite</span><span class="p">],</span> <span class="n">yy</span><span class="o">.</span><span class="n">ravel</span><span class="p">()[</span><span class="n">finite</span><span class="p">],</span> <span class="n">z</span><span class="p">])</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">elevation</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">pts</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">elevation</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'viridis'</span><span class="p">)</span>
 <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'DEM as a coloured point cloud'</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
@@ -4494,7 +4522,7 @@ elevation = arr.ravel()[finite]
 z = elevation / 111_320.0 * 8.0                          # metres -&gt; degree-equivalent, 8x exaggeration
 pts = np.column_stack([xx.ravel()[finite], yy.ravel()[finite], z])
 scene = Scene3D(off_screen=True)
-scene.point_cloud(pts, values=elevation, point_size=4.0, cmap='viridis')
+scene.point_cloud(pts, values=elevation, size=4.0, cmap='viridis')
 show(scene, 'DEM as a coloured point cloud')
 scene.close()</div>
 </div>
@@ -4549,7 +4577,7 @@ scene.close()</div>
 <span class="n">helix</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">column_stack</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">cos</span><span class="p">(</span><span class="n">t</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">t</span><span class="p">),</span> <span class="n">t</span> <span class="o">/</span> <span class="mi">6</span><span class="p">])</span> <span class="o">+</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mf">0.03</span><span class="p">,</span> <span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">size</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
 <span class="k">for</span> <span class="n">edl</span> <span class="ow">in</span> <span class="p">(</span><span class="kc">True</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
     <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-    <span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">helix</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">t</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">,</span> <span class="n">eye_dome_lighting</span><span class="o">=</span><span class="n">edl</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'plasma'</span><span class="p">)</span>
+    <span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">helix</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">t</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">6.0</span><span class="p">,</span> <span class="n">eye_dome_lighting</span><span class="o">=</span><span class="n">edl</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'plasma'</span><span class="p">)</span>
     <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="sa">f</span><span class="s1">'eye_dome_lighting=</span><span class="si">{</span><span class="n">edl</span><span class="si">}</span><span class="s1">'</span><span class="p">)</span>
     <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 </pre></div>
@@ -4558,7 +4586,7 @@ t = np.linspace(0, 6 * np.pi, 1500)
 helix = np.column_stack([np.cos(t), np.sin(t), t / 6]) + rng.normal(0, 0.03, (t.size, 3))
 for edl in (True, False):
     scene = Scene3D(off_screen=True)
-    scene.point_cloud(helix, values=t, point_size=6.0, eye_dome_lighting=edl, cmap='plasma')
+    scene.point_cloud(helix, values=t, size=6.0, eye_dome_lighting=edl, cmap='plasma')
     show(scene, f'eye_dome_lighting={edl}')
     scene.close()</div>
 </div>
@@ -4620,7 +4648,7 @@ for edl in (True, False):
 <span class="n">gauges</span><span class="p">[</span><span class="s1">'geometry'</span><span class="p">]</span> <span class="o">=</span> <span class="n">gpd</span><span class="o">.</span><span class="n">points_from_xy</span><span class="p">(</span>
     <span class="n">gauges</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">x</span><span class="p">,</span> <span class="n">gauges</span><span class="o">.</span><span class="n">geometry</span><span class="o">.</span><span class="n">y</span><span class="p">,</span> <span class="n">gauges</span><span class="p">[</span><span class="s1">'discharge'</span><span class="p">]</span> <span class="o">/</span> <span class="n">gauges</span><span class="p">[</span><span class="s1">'discharge'</span><span class="p">]</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">*</span> <span class="mf">3.0</span><span class="p">)</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s1">'discharge'</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="n">value_column</span><span class="o">=</span><span class="s1">'discharge'</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">add_axes</span><span class="p">()</span>
 <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'Rhine gauges — height &amp; colour by discharge'</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -4631,7 +4659,7 @@ gauges = gauges.copy()
 gauges['geometry'] = gpd.points_from_xy(
     gauges.geometry.x, gauges.geometry.y, gauges['discharge'] / gauges['discharge'].max() * 3.0)
 scene = Scene3D(off_screen=True)
-scene.point_cloud(gauges, value_column='discharge', point_size=40.0, cmap='turbo')
+scene.point_cloud(gauges, value_column='discharge', size=40.0, cmap='turbo')
 scene.plotter.add_axes()
 show(scene, 'Rhine gauges — height &amp; colour by discharge')
 scene.close()</div>

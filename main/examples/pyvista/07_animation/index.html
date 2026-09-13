@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/web_map/" class="md-tabs__link">
+        <a href="../../../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3202,6 +3202,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/web_map/" class="md-nav__link">
         
   
@@ -4486,7 +4514,7 @@ def show(scene, title=''):
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">terrain</span><span class="p">(</span><span class="n">dem</span><span class="p">,</span> <span class="n">z_exaggeration</span><span class="o">=</span><span class="mf">8.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'terrain'</span><span class="p">)</span>
 <span class="n">gif</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span> <span class="o">/</span> <span class="s1">'orbit.gif'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">orbit</span><span class="p">(</span><span class="n">gif</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> <span class="n">framerate</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">orbit</span><span class="p">(</span><span class="n">gif</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">18</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'orbit GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
 <span class="n">display</span><span class="p">(</span><span class="n">IPyImage</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">gif</span><span class="p">))</span>
@@ -4497,7 +4525,7 @@ dem = Dataset.read_file(str(DATA / 'LisbonElevation.tif'))
 scene = Scene3D(off_screen=True)
 scene.terrain(dem, z_exaggeration=8.0, cmap='terrain')
 gif = str(Path(tempfile.mkdtemp()) / 'orbit.gif')
-scene.orbit(gif, n_frames=18, framerate=12)
+scene.orbit(gif, n_frames=18, fps=12)
 scene.close()
 print('orbit GIF bytes:', os.path.getsize(gif))
 display(IPyImage(filename=gif))</div>
@@ -4568,7 +4596,7 @@ display(IPyImage(filename=gif))</div>
     <span class="n">s</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">camera</span><span class="o">.</span><span class="n">azimuth</span> <span class="o">=</span> <span class="n">azimuth</span>
 
 <span class="n">gif</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span> <span class="o">/</span> <span class="s1">'spin.gif'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">gif</span><span class="p">,</span> <span class="n">spin</span><span class="p">,</span> <span class="n">framerate</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">animate</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">360</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">gif</span><span class="p">,</span> <span class="n">spin</span><span class="p">,</span> <span class="n">fps</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'animate GIF bytes:'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">gif</span><span class="p">))</span>
 <span class="n">display</span><span class="p">(</span><span class="n">IPyImage</span><span class="p">(</span><span class="n">filename</span><span class="o">=</span><span class="n">gif</span><span class="p">))</span>
@@ -4586,7 +4614,7 @@ def spin(s, azimuth):
     s.plotter.camera.azimuth = azimuth
 
 gif = str(Path(tempfile.mkdtemp()) / 'spin.gif')
-scene.animate(range(0, 360, 20), gif, spin, framerate=12)
+scene.animate(range(0, 360, 20), gif, spin, fps=12)
 scene.close()
 print('animate GIF bytes:', os.path.getsize(gif))
 display(IPyImage(filename=gif))</div>

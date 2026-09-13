@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/web_map/" class="md-tabs__link">
+        <a href="../../../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3202,6 +3202,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/web_map/" class="md-nav__link">
         
   
@@ -4519,7 +4547,7 @@ scene.close()</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="saving-png-screenshot-or-interactive-html">Saving — PNG screenshot or interactive HTML<a class="anchor-link" href="#saving-png-screenshot-or-interactive-html">¶</a></h2><p><code>save()</code> writes a PNG screenshot for any normal path, or a self-contained interactive HTML page (trame / vtk.js) when the path ends in <code>.html</code>. <code>screenshot()</code> returns the RGB frame as a NumPy array; <code>export_html()</code> is the explicit HTML form.</p>
+<h2 id="saving-png-screenshot-or-interactive-html">Saving — PNG screenshot or interactive HTML<a class="anchor-link" href="#saving-png-screenshot-or-interactive-html">¶</a></h2><p><code>save()</code> dispatches on the suffix: a raster suffix (<code>.png</code>, <code>.jpg</code>, ...) writes a rendered frame, <code>.html</code> writes a self-contained interactive page (trame / vtk.js), and a scene suffix (<code>.gltf</code>, <code>.obj</code>, ...) exports the geometry. It returns the <code>Path</code> it wrote on every branch. Ask for the pixels by name instead: <code>screenshot()</code> writes the same file <em>and</em> hands back the RGB frame as a NumPy array; <code>export_html()</code> is the explicit HTML form.</p>
 </div>
 </div>
 </div>
@@ -4546,9 +4574,10 @@ scene.close()</div>
 <span class="n">tmp</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">tempfile</span><span class="o">.</span><span class="n">mkdtemp</span><span class="p">())</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">pv</span><span class="o">.</span><span class="n">Cube</span><span class="p">(),</span> <span class="n">color</span><span class="o">=</span><span class="s1">'goldenrod'</span><span class="p">,</span> <span class="n">show_edges</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-<span class="n">png</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tmp</span> <span class="o">/</span> <span class="s1">'cube.png'</span><span class="p">))</span>          <span class="c1"># returns the RGB frame</span>
-<span class="n">html</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tmp</span> <span class="o">/</span> <span class="s1">'cube.html'</span><span class="p">))</span>        <span class="c1"># returns None — writes an interactive page</span>
-<span class="nb">print</span><span class="p">(</span><span class="s1">'screenshot array :'</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">png</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">png</span><span class="p">,</span> <span class="s1">'shape'</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+<span class="n">frame</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">screenshot</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tmp</span> <span class="o">/</span> <span class="s1">'cube.png'</span><span class="p">))</span>  <span class="c1"># writes the file AND returns the RGB frame</span>
+<span class="n">html</span> <span class="o">=</span> <span class="n">scene</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">tmp</span> <span class="o">/</span> <span class="s1">'cube.html'</span><span class="p">))</span>        <span class="c1"># returns the Path it wrote</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'screenshot array :'</span><span class="p">,</span> <span class="nb">type</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="p">,</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="s1">'shape'</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">'html path        :'</span><span class="p">,</span> <span class="n">html</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'png  bytes :'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">tmp</span> <span class="o">/</span> <span class="s1">'cube.png'</span><span class="p">))</span>
 <span class="nb">print</span><span class="p">(</span><span class="s1">'html bytes :'</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">tmp</span> <span class="o">/</span> <span class="s1">'cube.html'</span><span class="p">))</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
@@ -4557,9 +4586,10 @@ scene.close()</div>
 tmp = Path(tempfile.mkdtemp())
 scene = Scene3D(off_screen=True)
 scene.add_mesh(pv.Cube(), color='goldenrod', show_edges=True)
-png = scene.save(str(tmp / 'cube.png'))          # returns the RGB frame
-html = scene.save(str(tmp / 'cube.html'))        # returns None — writes an interactive page
-print('screenshot array :', type(png).__name__, getattr(png, 'shape', None))
+frame = scene.screenshot(str(tmp / 'cube.png'))  # writes the file AND returns the RGB frame
+html = scene.save(str(tmp / 'cube.html'))        # returns the Path it wrote
+print('screenshot array :', type(frame).__name__, getattr(frame, 'shape', None))
+print('html path        :', html.name)
 print('png  bytes :', os.path.getsize(tmp / 'cube.png'))
 print('html bytes :', os.path.getsize(tmp / 'cube.html'))
 scene.close()</div>
@@ -4575,6 +4605,7 @@ scene.close()</div>
 <div class="jp-OutputPrompt jp-OutputArea-prompt"></div>
 <div class="jp-RenderedText jp-OutputArea-output" data-mime-type="text/plain" tabindex="0">
 <pre>screenshot array : ndarray (768, 1024, 3)
+html path        : cube.html
 png  bytes : 38410
 html bytes : 1063299
 </pre>

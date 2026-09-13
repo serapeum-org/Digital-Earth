@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../reference/web_map/" class="md-tabs__link">
+        <a href="../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3239,6 +3239,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../reference/web_map/" class="md-nav__link">
         
   
@@ -3888,6 +3916,12 @@ column and share the raster's coordinate system:</p>
 <a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="p">)</span>
 </code></pre></div>
 <p>See the <a href="../reference/static/">API Reference</a> for the full signature.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>point_size</code> here is <code>StaticGlyph</code>'s own keyword</p>
+<p><code>StaticGlyph.plot</code> keeps <code>point_size=</code> for its point overlay. On the current <code>Map</code> API the same
+idea is spelled <code>size=</code> — <code>Map.scatter(features, size=100)</code> — and <code>point_size=</code> there is a
+deprecated alias. See <a href="../reference/renamed-keywords/">Renamed keywords</a>.</p>
+</div>
 
 
 

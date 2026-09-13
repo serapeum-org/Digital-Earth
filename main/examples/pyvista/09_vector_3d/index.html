@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../../reference/web_map/" class="md-tabs__link">
+        <a href="../../../reference/renamed-keywords/" class="md-tabs__link">
           
   
   
@@ -3213,6 +3213,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../../reference/renamed-keywords/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Renamed keywords
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../../reference/web_map/" class="md-nav__link">
         
   
@@ -4588,7 +4616,7 @@ def lollipops(gdf, value_col, height, radius):
 <span class="n">stems</span><span class="p">,</span> <span class="n">tops</span><span class="p">,</span> <span class="n">vals</span> <span class="o">=</span> <span class="n">lollipops</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="s1">'MAE'</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mf">140_000.0</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="mf">6_000.0</span><span class="p">)</span>
 <span class="n">scene</span> <span class="o">=</span> <span class="n">Scene3D</span><span class="p">(</span><span class="n">off_screen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">stems</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">'dimgray'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">tops</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">vals</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">38.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">,</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">tops</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">vals</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">38.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">,</span>
                   <span class="n">scalar_bar_args</span><span class="o">=</span><span class="p">{</span><span class="s1">'title'</span><span class="p">:</span> <span class="s1">'MAE'</span><span class="p">})</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">add_axes</span><span class="p">()</span>
 <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'Gauge model-error (MAE) — 3-D lollipops (oblique)'</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="s1">'iso'</span><span class="p">,</span> <span class="n">zoom</span><span class="o">=</span><span class="mf">1.4</span><span class="p">)</span>
@@ -4599,7 +4627,7 @@ def lollipops(gdf, value_col, height, radius):
 stems, tops, vals = lollipops(gauges, 'MAE', height=140_000.0, radius=6_000.0)
 scene = Scene3D(off_screen=True)
 scene.add_mesh(stems, color='dimgray')
-scene.point_cloud(tops, values=vals, point_size=38.0, cmap='turbo',
+scene.point_cloud(tops, values=vals, size=38.0, cmap='turbo',
                   scalar_bar_args={'title': 'MAE'})
 scene.plotter.add_axes()
 show(scene, 'Gauge model-error (MAE) — 3-D lollipops (oblique)', view='iso', zoom=1.4)
@@ -4798,7 +4826,7 @@ scene.close()</div>
 <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">lines_to_tubes</span><span class="p">(</span><span class="n">river</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="mf">4_000.0</span><span class="p">,</span> <span class="n">z</span><span class="o">=</span><span class="mf">10_000.0</span><span class="p">),</span> <span class="n">color</span><span class="o">=</span><span class="s1">'royalblue'</span><span class="p">)</span>
 <span class="n">stems</span><span class="p">,</span> <span class="n">tops</span><span class="p">,</span> <span class="n">vals</span> <span class="o">=</span> <span class="n">lollipops</span><span class="p">(</span><span class="n">gauges</span><span class="p">,</span> <span class="s1">'MAE'</span><span class="p">,</span> <span class="n">height</span><span class="o">=</span><span class="mf">160_000.0</span><span class="p">,</span> <span class="n">radius</span><span class="o">=</span><span class="mf">5_000.0</span><span class="p">)</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">add_mesh</span><span class="p">(</span><span class="n">stems</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s1">'dimgray'</span><span class="p">)</span>
-<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">tops</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">vals</span><span class="p">,</span> <span class="n">point_size</span><span class="o">=</span><span class="mf">26.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">,</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">point_cloud</span><span class="p">(</span><span class="n">tops</span><span class="p">,</span> <span class="n">values</span><span class="o">=</span><span class="n">vals</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mf">26.0</span><span class="p">,</span> <span class="n">cmap</span><span class="o">=</span><span class="s1">'turbo'</span><span class="p">,</span>
                   <span class="n">scalar_bar_args</span><span class="o">=</span><span class="p">{</span><span class="s1">'title'</span><span class="p">:</span> <span class="s1">'MAE'</span><span class="p">})</span>
 <span class="n">scene</span><span class="o">.</span><span class="n">plotter</span><span class="o">.</span><span class="n">add_axes</span><span class="p">()</span>
 <span class="n">show</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="s1">'Basin + river + gauges (oblique)'</span><span class="p">,</span> <span class="n">view</span><span class="o">=</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="o">-</span><span class="mi">15</span><span class="p">))</span>
@@ -4811,7 +4839,7 @@ scene.extruded_polygons(basin, height='thickness', color='gainsboro', opacity=0.
 scene.add_mesh(lines_to_tubes(river, radius=4_000.0, z=10_000.0), color='royalblue')
 stems, tops, vals = lollipops(gauges, 'MAE', height=160_000.0, radius=5_000.0)
 scene.add_mesh(stems, color='dimgray')
-scene.point_cloud(tops, values=vals, point_size=26.0, cmap='turbo',
+scene.point_cloud(tops, values=vals, size=26.0, cmap='turbo',
                   scalar_bar_args={'title': 'MAE'})
 scene.plotter.add_axes()
 show(scene, 'Basin + river + gauges (oblique)', view=(20, -15))
