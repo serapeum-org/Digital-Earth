@@ -322,7 +322,8 @@ class TestFramingGivesUpRatherThanGuessing:
             boxes: The fixture frame.
             monkeypatch: pytest's patcher.
         """
-        from digitalearth.web import WebMap, base as web_base
+        from digitalearth.web import WebMap
+        from digitalearth.web import base as web_base
 
         def _refuse(*args, **kwargs):
             """Stand in for a CRS pyproj cannot resolve."""
@@ -339,7 +340,8 @@ class TestFramingGivesUpRatherThanGuessing:
         Args:
             monkeypatch: pytest's patcher.
         """
-        from digitalearth.web import WebMap, base as web_base
+        from digitalearth.web import WebMap
+        from digitalearth.web import base as web_base
 
         monkeypatch.setattr(
             web_base,

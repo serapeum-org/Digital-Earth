@@ -448,7 +448,6 @@ class VectorMixin(_MixinBase):
             opacity: Circle fill opacity in ``[0, 1]``.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature circles; ``True`` forces deck.gl.
-
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
@@ -513,7 +512,6 @@ class VectorMixin(_MixinBase):
             width: Line width in pixels.
             color: Fixed line colour used when ``column`` is ``None``.
             opacity: Line opacity in ``[0, 1]``.
-
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
@@ -562,7 +560,6 @@ class VectorMixin(_MixinBase):
             outline_color: Polygon outline colour.
             big: Big-data routing — ``None`` (default) auto-routes to a GPU deck.gl layer above
                 ``big_data_threshold`` (logged); ``False`` forces per-feature fills; ``True`` forces deck.gl.
-
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 
@@ -641,7 +638,6 @@ class VectorMixin(_MixinBase):
             cmap: matplotlib colormap name.
             opacity: Fill opacity in ``[0, 1]``.
             outline_color: Polygon outline colour.
-
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
 

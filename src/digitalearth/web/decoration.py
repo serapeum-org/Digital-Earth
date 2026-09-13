@@ -525,13 +525,6 @@ class DecorationMixin(_MixinBase):
             cluster hides its bubbles while the count labels remain. ``remove_layer`` does take the whole
             group. Hiding the parts together needs a control py-maplibregl does not ship.
 
-        Note:
-            A row toggles exactly one MapLibre layer, because that is what py-maplibregl's control does.
-            Builders that draw more than one layer — ``cluster`` (bubbles, counts, loose points) and
-            ``graticule`` (lines, degree labels) — are listed once, under their main layer, so toggling a
-            cluster hides its bubbles while the count labels remain. ``remove_layer`` does take the whole
-            group. Hiding the parts together needs a control py-maplibregl does not ship.
-
         Returns:
             The same map instance, so builder calls chain.
 

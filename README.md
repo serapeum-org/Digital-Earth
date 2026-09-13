@@ -78,7 +78,9 @@ along with it (`ipywidgets`, and `jupyter-server-proxy` on pyvista 0.48) even fo
 
 The `web` tier renders pyramids rasters/vectors as MapLibre GL JS / deck.gl layers and exports a
 self-contained HTML page — `WebMap().choropleth(gdf, column="pop").basemap().save("map.html")`, or
-`quickplot(data, backend="web")`. See `docs/examples/web/` for a runnable gallery.
+`quickplot(data, backend="web")`. The runnable gallery in `docs/examples/web/` works through a raster,
+a choropleth, the decoration stack (legend, title, graticule, layer switcher), framing with
+`fit_bounds`, labels and free text, contours and an RGB composite.
 
 **What the web tier is for.** Thematic maps (choropleths, points, lines, heatmaps, clustering), 3-D
 (extrusions, point clouds, 3D tiles, glTF, terrain, globe), and sharing the result as one HTML file. It is

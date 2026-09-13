@@ -135,18 +135,23 @@ class TestTheGridOnTheMap:
         points = gpd.GeoDataFrame(
             {"v": [1]}, geometry=[Point(0.0, 0.0)], crs="EPSG:4326"
         )
-        payload = _payload(WebMap().basemap().points(points).graticule().to_html())
+        web_map = WebMap().basemap().points(points).graticule(name="Grid")
+        payload = _payload(web_map.to_html())
         ids = re.findall(r'\["addLayer", \[\{"id": "([^"]+)"', payload)
         assert ids, payload[-400:]
-        kinds = {"tiles": None, "graticule": None, "circle": None}
-        for position, layer_id in enumerate(ids):
-            for kind in kinds:
-                if layer_id.startswith(kind) and kinds[kind] is None:
-                    kinds[kind] = position
-        assert kinds["tiles"] < kinds["graticule"], (
+        # By id, not by prefix: the grid also emits a "graticule-label-N" layer, and a prefix match finds
+        # that one first — which would leave the line layer's own position unasserted.
+        assert "Grid" in ids, f"the grid line layer is missing: {ids}"
+        tiles = next(
+            i for i, layer_id in enumerate(ids) if layer_id.startswith("tiles")
+        )
+        circle = next(
+            i for i, layer_id in enumerate(ids) if layer_id.startswith("circle")
+        )
+        assert tiles < ids.index("Grid"), (
             f"the graticule is drawn beneath the basemap: {ids}"
         )
-        assert kinds["graticule"] < kinds["circle"], (
+        assert ids.index("Grid") < circle, (
             f"the graticule is drawn over the data: {ids}"
         )
 
