@@ -124,6 +124,26 @@ def test_vertical_unit_scale_geographic_vs_projected():
     assert _vertical_unit_scale(None) == 1.0  # unknown CRS → no rescaling
 
 
+@pytest.mark.parametrize(
+    "spelling",
+    [4326, "EPSG:4326", "epsg:4326", "+proj=longlat +datum=WGS84 +no_defs"],
+)
+def test_every_geographic_spelling_rescales(spelling):
+    """Each spelling ``Source.crs`` may carry must rescale, not just the bare EPSG int.
+
+    Args:
+        spelling: One of the CRS forms the ``Source`` contract allows.
+
+    Test scenario:
+        The scale was read by a helper that did ``int(crs)``, so anything but the int raised, was swallowed as
+        "unknown", and fell back to ``1.0`` — a ~111 000x vertical error that renders the DEM as the invisible
+        needle this very module documents. A geographic CRS must rescale however it is spelled.
+    """
+    assert _vertical_unit_scale(spelling) == pytest.approx(1.0 / _METRES_PER_DEGREE), (
+        f"{spelling!r} is geographic, so metre elevation must be divided by metres-per-degree"
+    )
+
+
 def test_geographic_dem_is_not_an_invisible_needle():
     """A geographic DEM (degrees x/y, metre z) builds relief comparable to its footprint, not a spike.
 

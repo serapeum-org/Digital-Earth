@@ -260,36 +260,6 @@ def supported_destinations() -> str:
     return f"use a raster-frame suffix ({frames}) or a scene-export suffix ({exports})"
 
 
-def is_geographic_crs(crs: Any) -> bool | None:
-    """Return whether ``crs`` is a geographic (lon/lat) CRS, as pyramids reads it.
-
-    CRS interpretation goes through pyramids, the GIS engine — nothing is inferred from coordinate magnitudes
-    here. An unresolvable CRS is reported as "unknown" (``None``) rather than guessed at, so a caller can tell
-    "definitely projected" apart from "no CRS to go on".
-
-    Args:
-        crs: An EPSG code (anything ``int()`` accepts), or ``None``/an unparseable value for "no CRS".
-
-    Returns:
-        ``True`` for a geographic CRS, ``False`` for a projected one, ``None`` when it cannot be resolved.
-
-    Examples:
-        - WGS84 is geographic, Web Mercator is projected, and a missing CRS is simply unknown:
-            ```python
-            >>> from digitalearth.three_d.base import is_geographic_crs
-            >>> is_geographic_crs(4326), is_geographic_crs(3857), is_geographic_crs(None)
-            (True, False, None)
-
-            ```
-    """
-    try:
-        from pyramids.base.crs import sr_from_epsg
-
-        return bool(sr_from_epsg(int(crs)).IsGeographic())
-    except Exception:  # noqa: BLE001 — any CRS-resolution failure means "unknown", never "projected".
-        return None
-
-
 def house_theme() -> pv.themes.Theme:
     """Return Digital-Earth's default PyVista theme (document-style, anti-aliased).
 

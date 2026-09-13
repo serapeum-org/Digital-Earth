@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pyvista as pv
 
+from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
-from digitalearth.three_d.base import is_geographic_crs
 
 #: Attribute name the elevation scalar is stored under on the generated mesh.
 ELEVATION = "elevation"
@@ -37,7 +37,8 @@ def _vertical_unit_scale(crs: Any) -> float:
     (``1.0``). For a **geographic** CRS the coordinates are degrees while elevation is metres — left unscaled the
     surface is ~100 000× taller than it is wide (an invisible vertical needle), so elevation is divided by the
     mean metres-per-degree (:data:`_METRES_PER_DEGREE`). CRS interpretation goes through pyramids (the GIS engine,
-    via :func:`~digitalearth.three_d.base.is_geographic_crs`); an unknown/unparseable CRS falls back to ``1.0``
+    via :func:`~digitalearth.base.crs.is_geographic`, which reads every spelling the ``Source``
+    contract allows); an unknown/unparseable CRS falls back to ``1.0``
     (treat as already-consistent units).
 
     This is a **unit conversion**, not vertical exaggeration: it is baked into the mesh because it is a property
@@ -45,12 +46,13 @@ def _vertical_unit_scale(crs: Any) -> float:
     (:attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`).
 
     Args:
-        crs: The :class:`~digitalearth.base.sources.Source` CRS (an EPSG int, or anything pyramids can resolve).
+        crs: The :class:`~digitalearth.base.sources.Source` CRS — an EPSG int, an ``"EPSG:<code>"``
+            string, or a proj4/WKT definition.
 
     Returns:
         float: ``1 / _METRES_PER_DEGREE`` for a geographic CRS, else ``1.0``.
     """
-    return 1.0 / _METRES_PER_DEGREE if is_geographic_crs(crs) else 1.0
+    return 1.0 / _METRES_PER_DEGREE if is_geographic(crs) else 1.0
 
 
 def _terrain_mesh(
