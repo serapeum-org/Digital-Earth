@@ -271,6 +271,29 @@ def _add_colorbar(scene: Map) -> Any:
         return None
 
 
+def _vector_kind(data: FeatureCollection, caller: str) -> str:
+    """Classify a vector input as the family of renderer it needs, refusing an empty collection.
+
+    Args:
+        data: The ``FeatureCollection`` about to be drawn.
+        caller: Public function name to blame in the error, e.g. ``"quickmap"``.
+
+    Returns:
+        ``"polygons"`` when every geometry is a (multi)polygon, ``"points"`` otherwise — the split the
+        static and web dispatchers both make. A mixed collection reads as ``"points"``, which is what the
+        marker renderers already accepted.
+
+    Raises:
+        ValueError: when the collection is empty. Without this guard the all-``True`` result of an empty
+            ``geom_type`` check classifies it as polygons and the map draws nothing, silently.
+    """
+    if len(data) == 0:
+        raise ValueError(f"{caller} got an empty FeatureCollection (nothing to draw)")
+    if data.geometry.geom_type.isin(["Polygon", "MultiPolygon"]).all():
+        return "polygons"
+    return "points"
+
+
 def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
     """Draw ``data`` on ``scene`` using the renderer implied by its type and ``kind``.
 
@@ -293,26 +316,22 @@ def _draw(scene: Map, data: PlottableData, kind: str, **kwargs) -> None:
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection``.
     """
     if isinstance(data, FeatureCollection):
-        if len(data) == 0:
-            raise ValueError(
-                "quickmap got an empty FeatureCollection (nothing to draw)"
-            )
-        if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
+        if _vector_kind(data, "quickmap") == "polygons":
             column = kwargs.pop("column", None)
             if column is not None:
                 scene.choropleth(data, column=column, **kwargs)
             else:
                 scene.shapes(data, **kwargs)
-        else:
-            if "column" in kwargs:
-                # `Map.scatter` has no fill column: it sizes markers by `size_column` and colours them from
-                # the collection's own value column. Forwarding `column` reached cleopatra, which answered
-                # with its own keyword list and never named the caller's parameter (review M19).
-                raise ValueError(
-                    f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
-                    "size the markers with size_column=, or drop column="
-                )
-            scene.scatter(data, **kwargs)
+            return
+        if "column" in kwargs:
+            # `Map.scatter` has no fill column: it sizes markers by `size_column` and colours them from
+            # the collection's own value column. Forwarding `column` reached cleopatra, which answered
+            # with its own keyword list and never named the caller's parameter (review M19).
+            raise ValueError(
+                f"column={kwargs['column']!r} fills polygons and has no meaning for point input; "
+                "size the markers with size_column=, or drop column="
+            )
+        scene.scatter(data, **kwargs)
         return
     if isinstance(data, Dataset):
         method = "imshow" if kind == "auto" else kind
@@ -538,11 +557,7 @@ def _quickmap_interactive(
     }
     scene = InteractiveMap(crs=crs)
     if isinstance(data, FeatureCollection):
-        if len(data) == 0:
-            raise ValueError(
-                "quickplot got an empty FeatureCollection (nothing to draw)"
-            )
-        if (data.geometry.geom_type.isin(["Polygon", "MultiPolygon"])).all():
+        if _vector_kind(data, "quickplot") == "polygons":
             column = kwargs.pop("column", None)
             if column is not None:
                 scene.choropleth(data, column=column, **kwargs)
