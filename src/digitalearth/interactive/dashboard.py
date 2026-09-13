@@ -17,7 +17,7 @@ from functools import reduce
 from importlib.util import find_spec
 from operator import mul as _mul
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from digitalearth.interactive.base import _require_holoviz
 from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
@@ -42,6 +42,14 @@ _COLOR_MAPPED_TYPES = ("Image", "QuadMesh")
 #: keys is read back and merged *under* the widget value, so an override never silently drops the rest of
 #: the styling a builder applied.
 _OVERRIDABLE_STYLE = ("cmap", "clim", "alpha")
+
+#: Element type names an override reaches that carry no scalar to colour-map: an ``RGB`` composite is
+#: already three colour channels, so ``cmap``/``clim`` have nothing to act on and only the alpha of the
+#: merged style applies to it. Listing it here is what keeps it from being skipped altogether.
+_ALPHA_ONLY_TYPES = ("RGB",)
+
+#: The subset of :data:`_OVERRIDABLE_STYLE` an :data:`_ALPHA_ONLY_TYPES` element can take.
+_ALPHA_ONLY_STYLE = ("alpha",)
 
 #: Built-in colormaps offered by the dashboard cmap selector.
 _CMAP_CHOICES = [
@@ -219,7 +227,40 @@ class DashboardMixin(_MixinBase):
             )
         return merged
 
-    def _with_basemap(self, obj: Any, provider: str) -> Any:
+    def _restyle(self, obj: Any, merged: dict) -> Any:
+        """Apply ``merged`` to every element type a dashboard widget claims to restyle.
+
+        The single place the widget-to-element mapping is spelled, so the dashboard's ``cmap``/``alpha``
+        overrides and the layer control's opacity slider cannot restyle different element sets: a
+        ``QuadMesh`` that ignored the opacity slider and an ``RGB`` that ignored the colormap selector
+        were the two halves of that drift, each silent while its widget still moved.
+
+        The colour-mapped types take the whole merged style; :data:`_ALPHA_ONLY_TYPES` take its alpha
+        alone, because an ``RGB`` composite is already three colour channels and has no scalar for a
+        ``cmap``/``clim`` to map. HoloViews applies each spec only to the matching elements and tolerates
+        a map carrying none of them, so a vector-only map comes back unchanged rather than raising.
+
+        Args:
+            obj: The composed HoloViews object to restyle.
+            merged: ``cmap``/``clim``/``alpha`` entries — widget values merged over the recorded style.
+
+        Returns:
+            ``obj`` with one opts spec applied per restyled element type.
+        """
+        gv, hv = _require_holoviz()
+        specs = [getattr(hv.opts, name)(**merged) for name in _COLOR_MAPPED_TYPES]
+        alpha_only = {
+            key: value for key, value in merged.items() if key in _ALPHA_ONLY_STYLE
+        }
+        if alpha_only:
+            specs += [
+                getattr(hv.opts, name)(**alpha_only) for name in _ALPHA_ONLY_TYPES
+            ]
+        return obj.opts(*specs)
+
+    def _with_basemap(
+        self, obj: Any, provider: str, *, context: str = "dashboard basemap"
+    ) -> Any:
         """Compose ``obj`` over the ``provider`` tile layer, replacing any basemap already in it.
 
         The provider name is resolved through the same
@@ -231,6 +272,8 @@ class DashboardMixin(_MixinBase):
         Args:
             obj: The composed HoloViews object to draw over the basemap.
             provider: A provider name from :data:`_BASEMAP_CHOICES` (or anything ``tiles()`` accepts).
+            context: The requesting entry point, quoted in the Web-Mercator refusal so the message
+                names the widget the caller actually touched.
 
         Returns:
             The overlay with the chosen basemap underneath.
@@ -239,7 +282,7 @@ class DashboardMixin(_MixinBase):
             ValueError: when the display CRS is not Web Mercator, or the provider name is unknown.
         """
         gv, hv = _require_holoviz()
-        self._require_web_mercator("dashboard basemap")
+        self._require_web_mercator(context)
         # A sibling-mixin call: _build_tiles lives on DecorationMixin, which the composed InteractiveMap
         # supplies. The TYPE_CHECKING base above carries the shared state only, not the sibling mixins.
         tile = self._build_tiles(provider, None).opts(level="underlay")  # type: ignore[attr-defined]
@@ -256,10 +299,10 @@ class DashboardMixin(_MixinBase):
             values: Widget values keyed by widget name (``cmap``/``alpha``/``basemap``).
 
         Returns:
-            The composed HoloViews object with the overrides applied — the colour-mapped layers restyled
-            with the widget values merged over their recorded style, over the chosen tile basemap.
+            The composed HoloViews object with the overrides applied — every element type
+            :meth:`_restyle` covers redrawn with the widget values merged over their recorded style,
+            over the chosen tile basemap.
         """
-        gv, hv = _require_holoviz()
         obj = self.render()
         overrides: dict = {}
         if values.get("cmap"):
@@ -268,10 +311,7 @@ class DashboardMixin(_MixinBase):
             overrides["alpha"] = values["alpha"]
         if overrides:
             merged = {**self._recorded_overridable_style(), **overrides}
-            # cmap/alpha apply to the colour-mapped element types; HoloViews applies each spec only to
-            # the matching elements and tolerates a map without them (a vector-only map is returned
-            # unchanged), so no error-swallowing wrapper is needed here.
-            obj = obj.opts(hv.opts.Image(**merged), hv.opts.QuadMesh(**merged))
+            obj = self._restyle(obj, merged)
         if values.get("basemap"):
             obj = self._with_basemap(obj, values["basemap"])
         return obj
@@ -352,7 +392,7 @@ class DashboardMixin(_MixinBase):
         *,
         opacity: bool = True,
         reorder: bool = False,
-        basemap_switch: bool = True,
+        basemap_switch: Optional[bool] = None,
     ) -> Any:
         """Build a layer manager: per-layer visibility toggles, opacity slider, basemap switch (DI.13).
 
@@ -360,21 +400,28 @@ class DashboardMixin(_MixinBase):
         handle per layer (roadmap IN-1; the static twin is #216), which the registry does not yet give, so
         ``reorder=True`` is refused outright rather than accepted and ignored.
 
-        The basemap switch is offered only on a Web-Mercator map — Bokeh renders tiles in EPSG:3857 only,
-        so on any other display CRS the switch is dropped (and logged), never drawn misaligned.
+        Bokeh renders tiles in EPSG:3857 only, so the basemap switch is Web-Mercator-only — and which
+        way that lands depends on whether it was *asked for*. Left at the ``None`` default the switch
+        is furniture this method offers unprompted, so a non-Mercator map drops it and logs why; passed
+        ``basemap_switch=True`` it is an explicit request, and a non-Mercator map is refused with its
+        CRS named. That is the one policy this module applies to an explicit basemap request — the same
+        answer ``dashboard(widgets=("basemap",))`` gives.
 
         Args:
             opacity: Include an opacity slider driving the visible colour-mapped layers.
             reorder: Must stay ``False``; ``True`` raises ``NotImplementedError``.
             basemap_switch: Include a basemap-provider ``Select``, bound so picking a provider swaps the
-                tile layer under the map.
+                tile layer under the map. ``None`` (default) offers it on a Web-Mercator map and drops
+                it (logged) on any other display CRS; ``True`` requires it, so a non-Mercator map
+                raises; ``False`` never builds it.
 
         Returns:
             A ``panel.viewable.Viewable`` whose widgets reactively rebuild the map overlay — toggling
             a layer hides/shows it; the opacity slider sets its alpha; the basemap ``Select`` swaps tiles.
 
         Raises:
-            ValueError: when there are no layers to control.
+            ValueError: when there are no layers to control, or when ``basemap_switch=True`` is passed
+                on a map whose display CRS is not EPSG:3857 (Bokeh renders tiles in Web Mercator only).
             NotImplementedError: when ``reorder=True`` is passed — reordering is not implemented,
                 and the flag is refused rather than accepted and ignored (roadmap IN-1; the static
                 twin is #216).
@@ -405,8 +452,9 @@ class DashboardMixin(_MixinBase):
                 layer_control(reorder=True) is not implemented
 
                 ```
-            - On a Web-Mercator map the controls are toggles + opacity + basemap; on any other
-              display CRS the basemap switch is dropped (and logged) rather than drawn misaligned:
+            - Unprompted, the switch is furniture: on a Web-Mercator map the controls are toggles +
+              opacity + basemap; on any other display CRS it is dropped (and logged) rather than
+              drawn misaligned:
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
                 >>> mercator = InteractiveMap().image(dem).layer_control()     # doctest: +SKIP
@@ -415,6 +463,16 @@ class DashboardMixin(_MixinBase):
                 >>> other = InteractiveMap(crs=4326).image(dem)                 # doctest: +SKIP
                 >>> len(other.layer_control()[0])                              # doctest: +SKIP
                 2
+
+                ```
+            - Asked for outright, the same condition is refused instead, with the display CRS named:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
+                >>> try:                                                       # doctest: +SKIP
+                ...     other.layer_control(basemap_switch=True)
+                ... except ValueError as error:
+                ...     print(str(error).split(" — ")[0])
+                layer_control basemap() needs the Web-Mercator display CRS (crs=3857)
 
                 ```
         """
@@ -440,7 +498,10 @@ class DashboardMixin(_MixinBase):
         )
         if alpha is not None:
             controls.append(alpha)
-        basemap = self._basemap_select(pn) if basemap_switch else None
+        if basemap_switch is False:
+            basemap = None
+        else:
+            basemap = self._basemap_select(pn, requested=basemap_switch is True)
         if basemap is not None:
             controls.append(basemap)
 
@@ -452,17 +513,28 @@ class DashboardMixin(_MixinBase):
         view = pn.bind(self._compose_visible_layers, **bind_kwargs)
         return pn.Row(pn.Column(*controls), pn.panel(view))
 
-    def _basemap_select(self, pn: Any) -> Any:
+    def _basemap_select(self, pn: Any, *, requested: bool) -> Any:
         """Build the layer-control basemap ``Select``, or ``None`` on a non-Web-Mercator map.
 
         Args:
             pn: The imported panel module.
+            requested: Whether the caller asked for the switch outright (``basemap_switch=True``) rather
+                than leaving it at the ``None`` default. An explicit request on a non-Web-Mercator map is
+                refused — the answer ``dashboard(widgets=("basemap",))`` already gives — while an
+                unprompted one is dropped and logged, since nothing was asked for.
 
         Returns:
             A ``panel.widgets.Select`` over :data:`_BASEMAP_CHOICES`, or ``None`` when the display CRS is
-            not EPSG:3857 — in which case the omission is logged rather than left to be guessed at.
+            not EPSG:3857 and the switch was not requested — in which case the omission is logged rather
+            than left to be guessed at.
+
+        Raises:
+            ValueError: when ``requested`` is true and the display CRS is not EPSG:3857; the message
+                names the CRS the map actually uses.
         """
         if self.crs != 3857:
+            if requested:
+                self._require_web_mercator("layer_control basemap")
             from loguru import logger
 
             logger.info(
@@ -496,9 +568,11 @@ class DashboardMixin(_MixinBase):
             return hv.Overlay([])
         overlay = chosen[0] if len(chosen) == 1 else reduce(_mul, chosen)
         merged = {**self._recorded_overridable_style(), "alpha": op}
-        overlay = overlay.opts(hv.opts.Image(**merged), hv.opts.RGB(alpha=op))
+        overlay = self._restyle(overlay, merged)
         if basemap:
-            overlay = self._with_basemap(overlay, basemap)
+            overlay = self._with_basemap(
+                overlay, basemap, context="layer_control basemap"
+            )
         return overlay
 
     def attribute_table(self, features: Any, *, linked: bool = False) -> Any:

@@ -14,6 +14,21 @@ gv = pytest.importorskip("geoviews")
 pn = pytest.importorskip("panel")
 
 
+def _resolved_style(element) -> dict:
+    """Read back the options HoloViews resolved for ``element`` (plot options under style options).
+
+    Args:
+        element: A HoloViews element taken from a composed, restyled object.
+
+    Returns:
+        dict: the element's resolved ``plot`` and ``style`` options, merged — ``cmap``/``alpha`` land in
+        ``style`` and ``clim`` in ``plot``, and an override has to be read back from wherever it landed.
+    """
+    style = hv.Store.lookup_options("bokeh", element, "style").kwargs
+    plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
+    return {**plot, **style}
+
+
 @pytest.fixture()
 def m(dataset) -> InteractiveMap:
     """A Web-Mercator map carrying one raster layer."""
@@ -254,15 +269,171 @@ class TestBasemapWidgetIsWired:
             f"the layer-control basemap must reach the overlay: {[type(e).__name__ for e in out]}"
         )
 
-    def test_layer_control_omits_the_switch_on_a_non_mercator_map(
-        self, dataset, point_fc
-    ):
-        """Off Web Mercator the switch is dropped, never drawn over misaligned data."""
+    def test_unprompted_switch_follows_the_display_crs(self, dataset, point_fc):
+        """Left at its default the switch is furniture: offered on 3857, dropped elsewhere.
+
+        Args:
+            dataset: The raster fixture.
+            point_fc: The point fixture.
+
+        Test scenario:
+            Nobody asked for a basemap here — ``layer_control()`` offers one unprompted — so a map that
+            cannot carry tiles drops the widget (and logs why) instead of refusing the whole control.
+        """
+        mercator = InteractiveMap().image(dataset).points(point_fc).layer_control()
+        assert [w for w in mercator.select(pn.widgets.Select) if w.name == "Basemap"], (
+            "a Web-Mercator map must still get the switch by default"
+        )
+        other = InteractiveMap(crs=4326).image(dataset).points(point_fc).layer_control()
+        assert not [
+            w for w in other.select(pn.widgets.Select) if w.name == "Basemap"
+        ], "a non-Mercator map must not offer a basemap switch"
+
+    def test_explicit_switch_is_refused_off_mercator(self, dataset, point_fc):
+        """``basemap_switch=True`` is a request, and an impossible request is refused, not dropped.
+
+        Args:
+            dataset: The raster fixture.
+            point_fc: The point fixture.
+
+        Test scenario:
+            The two halves of this module used to answer the same condition differently — ``dashboard``
+            raised, ``layer_control`` logged and dropped — so a caller who asked outright got a control
+            missing a widget and no error. The policy is now keyed on whether the basemap was asked for.
+        """
         non_mercator = InteractiveMap(crs=4326).image(dataset).points(point_fc)
-        panel_obj = non_mercator.layer_control(basemap_switch=True)
+        with pytest.raises(ValueError, match="Web-Mercator") as excinfo:
+            non_mercator.layer_control(basemap_switch=True)
+        assert "4326" in str(excinfo.value), (
+            f"the refusal must name the display CRS: {excinfo.value}"
+        )
+
+    def test_false_never_builds_the_switch(self, multi):
+        """``False`` still means never, on a Web-Mercator map too.
+
+        Args:
+            multi: A Web-Mercator map carrying a raster and a point layer.
+
+        Test scenario:
+            The tri-state default must not turn the opt-out into "offer it anyway".
+        """
+        panel_obj = multi.layer_control(basemap_switch=False)
         assert not [
             w for w in panel_obj.select(pn.widgets.Select) if w.name == "Basemap"
-        ], "a non-Mercator map must not offer a basemap switch"
+        ], "basemap_switch=False must not build the switch"
+
+    def test_both_entry_points_refuse_an_explicit_request_alike(self, dataset):
+        """One condition, one policy: both entry points refuse, and both name the CRS.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            This is the finding itself — the same "not Web Mercator" condition had opposite answers in
+            one module. Asserting the two messages agree is what keeps them from drifting apart again.
+        """
+        non_mercator = InteractiveMap(crs=4326).image(dataset)
+        messages = []
+        for call in (
+            lambda: non_mercator.dashboard(widgets=("basemap",)),
+            lambda: non_mercator.layer_control(basemap_switch=True),
+        ):
+            with pytest.raises(ValueError) as excinfo:
+                call()
+            messages.append(str(excinfo.value))
+        assert all("crs=4326" in message for message in messages), messages
+        assert all("EPSG:3857" in message for message in messages), messages
+
+
+class TestBothOverridePathsRestyleTheSameElements:
+    """M13 — the dashboard's overrides and the layer control's slider cover one element set, not two."""
+
+    @pytest.fixture()
+    def mixed(self, dataset) -> InteractiveMap:
+        """A map carrying one of each element type an override reaches: ``Image``, ``QuadMesh``, ``RGB``."""
+        return (
+            InteractiveMap()
+            .image(dataset)
+            .quadmesh(dataset)
+            .rgb(dataset, bands=(1, 1, 1))
+        )
+
+    def test_dashboard_overrides_reach_quadmesh_and_rgb(self, mixed):
+        """The cmap/alpha widgets restyle ``Image`` **and** ``QuadMesh``, and set ``RGB``'s alpha.
+
+        Args:
+            mixed: The three-element map.
+
+        Test scenario:
+            This path restyled ``Image``/``QuadMesh`` and left ``RGB`` alone, so an RGB layer sat at
+            full opacity while the slider moved. ``cmap`` genuinely cannot apply to ``RGB`` — three
+            colour channels, no scalar to map — so the assertion is alpha everywhere, cmap where it
+            means something.
+        """
+        out = mixed._render_with_overrides({"cmap": "magma", "alpha": 0.3})
+        styled = {type(element).__name__: _resolved_style(element) for element in out}
+        assert set(styled) == {"Image", "QuadMesh", "RGB"}, sorted(styled)
+        for name in ("Image", "QuadMesh"):
+            assert styled[name].get("cmap") == "magma", (
+                f"{name} ignored the colormap selector: {styled[name].get('cmap')}"
+            )
+        assert all(styled[name].get("alpha") == 0.3 for name in styled), {
+            name: options.get("alpha") for name, options in styled.items()
+        }
+        assert styled["RGB"].get("cmap") is None, (
+            f"an RGB composite has no scalar to colour-map: {styled['RGB'].get('cmap')}"
+        )
+
+    def test_layer_control_opacity_reaches_quadmesh_and_rgb(self, mixed):
+        """The layer-control slider restyles the same three, ``QuadMesh`` included.
+
+        Args:
+            mixed: The three-element map.
+
+        Test scenario:
+            This path restyled ``Image`` and ``RGB``, so a ``QuadMesh`` layer ignored the opacity slider
+            while the widget still moved — the mirror image of the dashboard's gap.
+        """
+        labels = [
+            f"{index}: {type(layer).__name__}"
+            for index, layer in enumerate(mixed.layers)
+        ]
+        out = mixed._compose_visible_layers(labels, op=0.25)
+        styled = {type(element).__name__: _resolved_style(element) for element in out}
+        assert set(styled) == {"Image", "QuadMesh", "RGB"}, sorted(styled)
+        assert all(styled[name].get("alpha") == 0.25 for name in styled), {
+            name: options.get("alpha") for name, options in styled.items()
+        }
+
+    def test_the_two_paths_restyle_the_same_element_set(self, mixed):
+        """Whatever the element set is, both widgets must move it — that is the finding.
+
+        Args:
+            mixed: The three-element map.
+
+        Test scenario:
+            Comparing the two paths' restyled sets directly is what makes the drift impossible to
+            reintroduce quietly: one path gaining or losing an element type now fails here, not in a
+            widget that moves without changing the picture.
+        """
+        labels = [
+            f"{index}: {type(layer).__name__}"
+            for index, layer in enumerate(mixed.layers)
+        ]
+        dashboard_alphas = {
+            type(element).__name__: _resolved_style(element).get("alpha")
+            for element in mixed._render_with_overrides({"alpha": 0.4})
+        }
+        control_alphas = {
+            type(element).__name__: _resolved_style(element).get("alpha")
+            for element in mixed._compose_visible_layers(labels, op=0.4)
+        }
+        assert dashboard_alphas == control_alphas, (
+            f"the two paths restyle different elements: {dashboard_alphas} vs {control_alphas}"
+        )
+        assert dashboard_alphas == {"Image": 0.4, "QuadMesh": 0.4, "RGB": 0.4}, (
+            dashboard_alphas
+        )
 
 
 class TestInertFlagsAreRefused:
