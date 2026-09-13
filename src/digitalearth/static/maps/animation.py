@@ -5,6 +5,7 @@ treatment so colours do not flicker between frames: a scalar field gets one ``vm
 optional single static colorbar), an RGB/HSV composite gets one frozen per-channel contrast stretch.
 """
 
+import logging
 from math import isfinite
 from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
 
@@ -26,8 +27,20 @@ from digitalearth.static.animation import save_animation
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP
 
+logger = logging.getLogger(__name__)
+
 #: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
 _CLIM_SCAN_CAP = 24
+
+#: What "this frame cannot be read" looks like to :meth:`AnimationMixin._frame_style`, which moves on to the
+#: next frame rather than failing the colorbar. A stack member that is not a plottable input at all is
+#: refused by type (``TypeError``, from the ``get_source`` dispatch); a frame that has no such band — or a
+#: NetCDF frame with no variable to plot — is refused by value (``ValueError``, from pyramids); and a frame
+#: whose bytes cannot be fetched surfaces as the I/O failure the reader reports (``OSError``, or the
+#: ``RuntimeError`` GDAL raises with exceptions enabled, which is what a corrupt or unreachable remote frame
+#: looks like). Anything else — an ``AttributeError`` from a typo in the style lookup, say — is a bug in
+#: this package, not an unreadable frame, and must reach the caller instead of being reported as "no style".
+UNREADABLE_FRAME = (OSError, RuntimeError, TypeError, ValueError)
 
 #: Frames per second every animation entry point defaults to, so ``animate`` and ``rotate`` (and the other
 #: backends' animations) play a clip built with defaults at the same speed.
@@ -573,14 +586,23 @@ class AnimationMixin(_MixinBase):
         Returns:
             The :func:`~digitalearth.base.autostyle.auto_style` dict for the animated variable, or an empty
             dict when no frame could be read.
+
+        Raises:
+            Exception: anything that is not a read failure (see :data:`UNREADABLE_FRAME`) — a style lookup
+                that breaks for its own reasons is a bug, and reporting it as "no style" would hide it
+                behind a silently default-coloured bar.
         """
         for dataset in datasets:
             # An unreadable frame is the next frame's problem, not the colorbar's: styling is decoration,
             # and refusing to build the bar would fail an animation that renders perfectly well.
             try:
                 return auto_style(get_source(dataset, band=band))
-            except Exception:  # noqa: BLE001 - any read failure just moves on to the next frame
-                continue
+            except UNREADABLE_FRAME as error:
+                logger.warning(
+                    "animation colorbar: unreadable frame skipped — %s: %s",
+                    type(error).__name__,
+                    error,
+                )
         return {}
 
     def _animation_colorbar(
