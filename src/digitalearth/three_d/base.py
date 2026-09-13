@@ -32,6 +32,11 @@ Destination = Union[str, "os.PathLike[str]"]
 #: ``.tif`` really is a TIFF — so this is "a rendered frame", not "a PNG".
 IMAGE_SUFFIXES: tuple[str, ...] = (".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")
 
+#: The one scene-export suffix :meth:`Scene3DBase.save` does not look up in :data:`SCENE_EXPORTERS`:
+#: it routes through :meth:`Scene3DBase.export_html`, which normalises the suffix and guards the
+#: VTK build. Named once so the dispatch, the normalisation and the help text cannot drift apart.
+HTML_SUFFIX: str = ".html"
+
 #: Suffixes :meth:`Scene3DBase.save` exports the *scene* to, mapped to the :class:`pyvista.Plotter` method that
 #: writes each. ``.html`` is dispatched separately because it routes through :meth:`Scene3DBase.export_html`,
 #: which normalises the suffix and guards the VTK build. ``.glb`` is deliberately absent: VTK's glTF exporter
@@ -248,7 +253,7 @@ def supported_destinations() -> str:
         ```
     """
     frames = " ".join(IMAGE_SUFFIXES)
-    exports = " ".join([".html", *sorted(SCENE_EXPORTERS)])
+    exports = " ".join([HTML_SUFFIX, *sorted(SCENE_EXPORTERS)])
     return f"use a raster-frame suffix ({frames}) or a scene-export suffix ({exports})"
 
 
@@ -766,7 +771,7 @@ class Scene3DBase:
         # not-installed case to pyvista's own actionable ImportError. The VTK-build check runs before either
         # branch: 0.49 makes it inside the deprecated Plotter.export_html we no longer call, and 0.48 makes
         # it nowhere at all, so doing it here is what guards both versions rather than neither.
-        destination = str(Path(path).with_suffix(".html"))
+        destination = str(Path(path).with_suffix(HTML_SUFFIX))
         _require_one_vtk_build()
         component = getattr(self.plotter, "trame", None)
         if component is None:
@@ -886,7 +891,7 @@ class Scene3DBase:
             export_html: the interactive-page branch.
         """
         suffix = Path(str(path)).suffix.lower()
-        if suffix == ".html":
+        if suffix == HTML_SUFFIX:
             # export_html normalises the suffix it writes, so report the name it actually produced rather
             # than the one that was asked for.
             return Path(self.export_html(path))
