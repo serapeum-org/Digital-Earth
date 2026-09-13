@@ -119,7 +119,12 @@ class TestTheWarningLandsOnTheCallersLine:
         """The text has to carry the call site too, because a wrapper can still swallow the stack."""
         recorded = _warn_from(_public_method, radius=9.0)
         message = str(recorded.message)
-        assert "Fake.points()" in message and "radius=" in message, message
+        assert "Fake.points()" in message, (
+            f"the warning must name the call site, got {message!r}"
+        )
+        assert "radius=" in message, (
+            f"the warning must name the deprecated spelling, got {message!r}"
+        )
         assert "use size= instead" in message, message
 
     def test_both_spellings_at_once_is_a_type_error_and_warns_about_neither(self):

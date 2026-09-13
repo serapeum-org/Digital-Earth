@@ -45,13 +45,13 @@ def keyed_preset(monkeypatch):
     Args:
         monkeypatch: pytest's monkeypatch fixture.
 
-    Yields:
+    Returns:
         str: the preset's name, as a caller would spell it.
     """
     monkeypatch.setitem(basemaps.KEYED_BASEMAPS, "test.keyed", _test_preset)
     monkeypatch.setitem(basemaps.KEYED_BASEMAP_NAMES, "test.keyed", "Test.Keyed")
     monkeypatch.delenv(_TEST_ENV, raising=False)
-    yield "Test.Keyed"
+    return "Test.Keyed"
 
 
 @pytest.fixture

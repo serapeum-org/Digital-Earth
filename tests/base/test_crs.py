@@ -257,8 +257,9 @@ class TestReprojectOffLimb:
             and calls that a success, so a guard reading only exceptions could never fire for a vector
             layer — and the decorator every vector builder carries would have meant nothing.
         """
+        far_side = _points((175.0, 5.0), (170.0, 10.0))
         with pytest.raises(OffLimbError, match="finite coordinate"):
-            reproject(_points((175.0, 5.0), (170.0, 10.0)), ATLANTIC)
+            reproject(far_side, ATLANTIC)
 
     def test_a_visible_vector_layer_comes_back_warped(self):
         """Geometry the projection can place is returned, with a finite extent.

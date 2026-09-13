@@ -58,7 +58,12 @@ class TestAValueThatIsNotARowCountIsRefused:
             validate_big_data_threshold(1.9, caller=CALLER)
         message = str(excinfo.value)
         assert message.startswith(CALLER), message
-        assert "whole number of rows" in message and "1.9" in message, message
+        assert "whole number of rows" in message, (
+            f"the message must say what a valid cutoff is, got {message!r}"
+        )
+        assert "1.9" in message, (
+            f"the message must quote the value it refused, got {message!r}"
+        )
 
     @pytest.mark.parametrize(
         "given",

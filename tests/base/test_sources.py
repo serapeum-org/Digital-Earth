@@ -504,8 +504,11 @@ class TestSourceCrsContract:
         assert src.crs == ORTHOGRAPHIC, (
             f"the display CRS should be stored as given, got {src.crs!r}"
         )
-        assert src.crs != 4326 and src.crs is not None, (
-            "a warped source must not report its pre-warp CRS, nor 'unknown'"
+        assert src.crs != 4326, (
+            f"a warped source must not report its pre-warp CRS, got {src.crs!r}"
+        )
+        assert src.crs is not None, (
+            f"a warped source must report a CRS rather than 'unknown', got {src.crs!r}"
         )
 
     def test_code_less_projection_still_reports_its_definition(self):

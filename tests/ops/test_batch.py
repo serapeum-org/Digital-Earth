@@ -136,7 +136,7 @@ class TestVectorPaths:
         """
         bogus = tmp_path / "not_geo.tif"
         bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
-        with pytest.raises(Exception) as exc:
+        with pytest.raises(RuntimeError, match="not recognized") as exc:
             load_input(str(bogus))
         assert exc.value.__cause__ is not None, (
             "the raster cause should be chained onto the vector error"

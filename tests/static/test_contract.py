@@ -118,7 +118,8 @@ class TestSaveReturnsPath:
         out = tmp_path / "scene.png"
         written = Scene().save(out)
         assert written == out, f"save returned {written!r}, not the path it was given"
-        assert written.exists() and written.stat().st_size > 0, "nothing was written"
+        assert written.exists(), f"save reported {written!r} but no file is there"
+        assert written.stat().st_size > 0, f"{written.name} was written empty"
 
     def test_map_save_returns_the_written_path(self, tmp_path, dataset):
         """Map.save — which applies the projection frame first — returns the path too.
@@ -211,8 +212,11 @@ class TestMarkerSizeAndColumn:
             points_fc, size_column="fid", size_limits=(20, 200)
         )
         sizes = np.asarray(pc.get_sizes())
-        assert sizes.min() == pytest.approx(20) and sizes.max() == pytest.approx(200), (
-            f"column= did not span size_limits: {sizes.min()}..{sizes.max()}"
+        assert sizes.min() == pytest.approx(20), (
+            f"column= did not reach the lower size limit, got {sizes.min()}"
+        )
+        assert sizes.max() == pytest.approx(200), (
+            f"column= did not reach the upper size limit, got {sizes.max()}"
         )
 
     def test_size_sets_a_uniform_marker_size(self, points_fc):
@@ -239,10 +243,11 @@ class TestMarkerSizeAndColumn:
         Test scenario:
             ``scale="fid"`` produces exactly what ``size_column="fid"`` produces, and warns once.
         """
+        deprecated_map = Map(crs=points_fc.epsg)
         with pytest.warns(
             DeprecationWarning, match=r"scale= is deprecated.*use size_column="
         ):
-            deprecated = Map(crs=points_fc.epsg).scatter(
+            deprecated = deprecated_map.scatter(
                 points_fc, scale="fid", size_limits=(20, 200)
             )
         renamed = Map(crs=points_fc.epsg).scatter(
@@ -261,10 +266,11 @@ class TestMarkerSizeAndColumn:
         Test scenario:
             cleopatra's own spelling reaches the markers, with a warning pointing at ``size``.
         """
+        m = Map(crs=points_fc.epsg)
         with pytest.warns(
             DeprecationWarning, match=r"point_size= is deprecated.*use size="
         ):
-            pc = Map(crs=points_fc.epsg).scatter(points_fc, point_size=77)
+            pc = m.scatter(points_fc, point_size=77)
         assert set(np.asarray(pc.get_sizes()).tolist()) == {77.0}, (
             "point_size= no longer sets the size"
         )
@@ -293,10 +299,16 @@ class TestMarkerSizeAndColumn:
             :func:`~digitalearth.base.deprecation.renamed_parameter`. The message has to name both
             spellings and the one to keep, or the caller cannot tell which of their two keywords to delete.
         """
+        m = Map(crs=points_fc.epsg)
         with pytest.raises(TypeError) as excinfo:
-            Map(crs=points_fc.epsg).scatter(points_fc, **kwargs)
+            m.scatter(points_fc, **kwargs)
         message = str(excinfo.value)
-        assert f"{new_name}=" in message and f"{old_name}=" in message, message
+        assert f"{new_name}=" in message, (
+            f"the error must name the spelling to keep ({new_name}=), got {message!r}"
+        )
+        assert f"{old_name}=" in message, (
+            f"the error must name the spelling to drop ({old_name}=), got {message!r}"
+        )
         assert f"pass only {new_name}=" in message, message
 
 

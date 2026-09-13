@@ -288,8 +288,11 @@ class TestIdentityFromRealInputs:
         assert src.metadata("standard_name") == "air_temperature", (
             f"the extractor must carry the CF standard_name, got {src.metadata('standard_name')!r}"
         )
-        assert style["cmap"] == "coolwarm" and style["magics_name"] == "t2m", (
-            f"expected the temperature style, got {style.get('cmap')!r}"
+        assert style["cmap"] == "coolwarm", (
+            f"expected the temperature colormap, got {style.get('cmap')!r}"
+        )
+        assert style["magics_name"] == "t2m", (
+            f"expected the temperature Magics preset, got {style.get('magics_name')!r}"
         )
 
     def test_netcdf_units_reach_the_source(self):

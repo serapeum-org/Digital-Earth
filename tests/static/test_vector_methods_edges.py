@@ -275,8 +275,10 @@ class TestGlobeNonFinite:
         from digitalearth.static import OffLimbError
 
         m = Map(crs=ORTHO, strict=True)
+        far_side = self._all_far_side()
+        draw = getattr(m, method)
         with pytest.raises(OffLimbError, match=method):
-            getattr(m, method)(self._all_far_side(), **kwargs)
+            draw(far_side, **kwargs)
 
 
 class TestApiWrappersNoColumn:
