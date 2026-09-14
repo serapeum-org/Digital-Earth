@@ -170,15 +170,139 @@ class TestSampleEvenly:
             f"one read must be spent on the last frame, got {sample_evenly(list(range(10)), cap=1)}"
         )
 
-    def test_a_boolean_cap_is_refused(self):
-        """``cap=True`` is a mis-typed flag, not a budget of one frame.
+    @pytest.mark.parametrize("cap", [True, False])
+    def test_a_boolean_cap_is_refused(self, cap):
+        """A ``bool`` cap is a mis-typed flag, not a budget of one frame.
+
+        Args:
+            cap: The boolean under test.
 
         Test scenario:
-            ``True`` is an ``int`` in Python, so it slips past the positive-count guard and reads as
-            ``cap=1`` — silently measuring a single frame of a whole cube.
+            ``bool`` subclasses ``int`` in Python, so ``True`` slips past the positive-count guard and reads
+            as ``cap=1`` — silently measuring a single frame of a whole cube. ``False`` would be caught by
+            the positive-count guard, but as a ``ValueError`` about a frame count, which tells a caller who
+            passed a flag nothing about what they actually did wrong; both spellings must name the real
+            mistake.
         """
         with pytest.raises(TypeError, match="not a bool"):
-            sample_evenly([1, 2, 3], cap=True)
+            sample_evenly([1, 2, 3], cap=cap)
+
+
+class TestSampleEvenlyProperties:
+    """The index arithmetic holds for every stack length and cap, not only the ones a case test names.
+
+    ``sample_evenly`` computes positions from a float step and rounds them, so its correctness is arithmetic
+    rather than behavioural: a change to the step, the rounding, or an off-by-one in the endpoints would keep
+    every hand-picked example passing while breaking some other length. These sweep the whole small-input
+    space and assert the five invariants the callers actually depend on, so the arithmetic cannot silently
+    regress.
+    """
+
+    #: Stack lengths swept. Well past four times the default cap, so the sweep covers both the
+    #: short-circuit region and the region where the step is large enough for rounding to matter.
+    _LENGTHS = range(1, 400)
+
+    @pytest.mark.parametrize("cap", range(1, 40))
+    def test_the_sample_is_a_strictly_increasing_subsequence_within_the_cap(self, cap):
+        """Every ``(length, cap)`` pair yields distinct, in-order frames and never more than ``cap``.
+
+        Args:
+            cap: The frame budget under test, swept from 1 to 39 — through the default of 24 and out the
+                other side.
+
+        Test scenario:
+            Three invariants at once, over every stack length from 1 to 399:
+
+            * **Never over the cap.** The cap is a bound on how many warps the scan pays for; a sample that
+              exceeds it makes the budget advisory, which is the bug the old floor-divided stride had.
+            * **No duplicates.** Rounded positions can collide when the step falls below 1, and a collision
+              spends a frame's budget re-reading a frame already read — the sample would claim ``cap``
+              frames while measuring fewer.
+            * **Ascending order.** Frames are handed on in series order, and every tier zips them back
+              against timestamps or member order; a reordered sample would mislabel frames downstream.
+
+            The items are ``range(length)``, so each sampled value *is* its own index and the assertions read
+            directly as index arithmetic.
+        """
+        for length in self._LENGTHS:
+            picked = sample_evenly(list(range(length)), cap=cap)
+            assert len(picked) <= cap, (
+                f"length={length} cap={cap} sampled {len(picked)} frames, over the cap"
+            )
+            assert len(set(picked)) == len(picked), (
+                f"length={length} cap={cap} sampled a duplicate frame: {picked}"
+            )
+            assert picked == sorted(picked), (
+                f"length={length} cap={cap} sampled out of series order: {picked}"
+            )
+
+    @pytest.mark.parametrize("cap", range(1, 40))
+    def test_the_whole_budget_is_spent(self, cap):
+        """The sample is exactly ``min(length, cap)`` frames — never short, never over.
+
+        Args:
+            cap: The frame budget under test.
+
+        Test scenario:
+            The budget is paid for whether or not it is used, so returning fewer frames than the cap allows
+            is a strictly worse range for the same cost. A stride-based rule cannot promise this: the number
+            of frames a stride returns depends on where it runs out. Under the cap the count is the stack's
+            own length, since the short-circuit returns it whole.
+        """
+        for length in self._LENGTHS:
+            picked = sample_evenly(list(range(length)), cap=cap)
+            expected = min(length, cap)
+            assert len(picked) == expected, (
+                f"length={length} cap={cap} must sample {expected} frames, got {len(picked)}"
+            )
+
+    @pytest.mark.parametrize("cap", range(2, 40))
+    def test_both_endpoints_are_sampled_whenever_the_stack_is_thinned(self, cap):
+        """A thinned stack always contributes its first and its last frame.
+
+        Args:
+            cap: The frame budget under test, from 2 up — ``cap=1`` has only one frame to spend and spends
+                it on the last, which :meth:`TestSampleEvenly.test_a_single_frame_budget_reads_the_last`
+                pins separately.
+
+        Test scenario:
+            The guarantee the index-selected rule exists to provide, asserted across the whole space rather
+            than at the handful of lengths a case test can name. The last frame is the one a stride drops,
+            and it is the one that matters: a rising series (accumulated rainfall, a cumulative anomaly, a
+            flood crest) holds its maximum there, so a sample that stops short saturates the ramp exactly
+            where the data peaks. The first matters too — a series usually starts at its baseline, which is
+            the other end of the range.
+        """
+        for length in self._LENGTHS:
+            if length <= cap:
+                continue
+            picked = sample_evenly(list(range(length)), cap=cap)
+            assert picked[0] == 0, (
+                f"length={length} cap={cap} must start at the first frame, got {picked[0]}"
+            )
+            assert picked[-1] == length - 1, (
+                f"length={length} cap={cap} must reach the final frame, got {picked[-1]}"
+            )
+
+    @pytest.mark.parametrize("cap", range(1, 40))
+    def test_a_stack_under_the_cap_comes_back_unchanged(self, cap):
+        """Nothing is dropped, reordered or thinned while the stack still fits the budget.
+
+        Args:
+            cap: The frame budget under test.
+
+        Test scenario:
+            The short-circuit half of the contract, swept rather than sampled: for every length up to and
+            including the cap the answer must be the stack itself. The boundary ``length == cap`` is where an
+            off-by-one in the ``<=`` would show — it would push a full-budget stack into the arithmetic path,
+            and while that path happens to be an identity map there, the check is what keeps the two halves
+            from disagreeing.
+        """
+        for length in range(1, cap + 1):
+            stack = list(range(length))
+            assert sample_evenly(stack, cap=cap) == stack, (
+                f"length={length} cap={cap} fits the budget and must be returned whole"
+            )
 
 
 class TestMeasureClim:

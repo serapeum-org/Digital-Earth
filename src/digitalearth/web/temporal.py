@@ -366,7 +366,9 @@ class TemporalMixin(_MixinBase):
         for index, member in enumerate(members):
             values = self._to_display_source(member, band=band).z.values
             if np.ma.isMaskedArray(values):
-                values = values.filled(np.nan)
+                # Cast before filling: a nodata sentinel is usually an integer one, and `filled(nan)` on an
+                # int band raises rather than widening it. Same defect `measure_clim` carried.
+                values = np.ma.filled(values.astype("float64"), np.nan)
             total_pixels += int(getattr(values, "size", 0))
             if not finite(values).size:
                 raise ValueError(
