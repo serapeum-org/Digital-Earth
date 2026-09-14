@@ -381,14 +381,21 @@ def quickmap(
             a colorbar, ``interactive`` toggles one, ``3d`` shows or hides the scalar bar, and ``web``
             builds :meth:`~digitalearth.web.decoration.DecorationMixin.legend`.
 
-            What "nothing to draw" means differs by tier, and is worth knowing before relying on the
-            default. On ``matplotlib`` an outline-only layer has no mappable artist, so the step is skipped
-            and warned about. On ``web`` the key describes a **classification** — what a builder recorded in
-            :attr:`~digitalearth.web.base.WebMapBase.last_legend` — so a layer that classifies nothing gets
-            no key and the flag is silently inert. Today that includes every raster: ``add_raster`` records
-            no classification, so ``quickmap(raster, backend="web", colorbar=True)`` returns a map with no
-            key while the other three tiers draw one. Giving the web tier a continuous ramp key for a raster
-            is tier work, not part of this argument's contract.
+            ``False`` is the half that is genuinely uniform: it reliably means "no key" on all four.
+            ``True`` is not one behaviour but two. On ``matplotlib`` and ``web`` it **actively builds** a
+            key; on ``interactive`` and ``3d`` it is **passive** — it leaves the builder's or engine's own
+            default in place, which for PyVista means a scalar bar iff the layer carries scalars. Only
+            ``False`` acts on those two.
+
+            What "nothing to draw" means also differs, and both active tiers skip **silently** rather than
+            warning. ``matplotlib`` builds a colorbar for almost any mappable layer, and skips when the last
+            layer has no mappable or is categorical. ``web`` keys only a **classification** — what a builder
+            recorded in :attr:`~digitalearth.web.base.WebMapBase.last_legend` — so an unclassified layer gets
+            nothing. The split is not raster-vs-vector: the same unclassified polygon layer gets a colorbar
+            on ``matplotlib`` and no key on ``web``, and every raster falls on the empty side there because
+            ``add_raster`` records no classification. Giving the web tier a continuous ramp key for a raster
+            is tier work, not part of this argument's contract. A warning is logged only when a builder is
+            reached and then refuses.
 
             The *tier methods* also still differ in shape — a builder that takes content on
             ``matplotlib``/``web``, a visibility flag on ``interactive`` — and unifying those names is
@@ -684,8 +691,8 @@ def _quickmap_web(
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
         colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend` —
-            best-effort, so a map with no classified layer to describe is warned about rather than raised
-            on. ``False`` leaves the map without one.
+            best-effort, so a map with no classified layer to describe silently gets no key rather than
+            raising. ``False`` leaves the map without one.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
