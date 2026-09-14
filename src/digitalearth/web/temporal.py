@@ -27,9 +27,9 @@ from digitalearth.base.crs import OffLimbError
 from digitalearth.web.base import _require_layer_api
 
 #: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
-#: number the static and interactive tiers read too, sampled by the same even stride. The scan reprojects and
-#: reads each member, so an unbounded one makes `timeslider` O(stack) before it draws anything. Pass an
-#: explicit `clim` to skip the scan entirely.
+#: number the static and interactive tiers read too, picked at the same evenly-spread positions. The scan
+#: reprojects and reads each member, so an unbounded one makes `timeslider` O(stack) before it draws
+#: anything. Pass an explicit `clim` to skip the scan entirely.
 _CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
 #: Total pixels above which an inlined stack is warned against. `add_raster` warns per member, which never
@@ -77,7 +77,7 @@ class TemporalMixin(_MixinBase):
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
-        """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps between frames.
+        """Compute one ``(vmin, vmax)`` for the whole series so the colour range never jumps between frames.
 
         Note: this pass is **eager** — it reprojects and reads each scanned member once at ``timeslider``
         construction time (every member is then warped again when its image layer is built). At most
@@ -138,7 +138,8 @@ class TemporalMixin(_MixinBase):
             k: Vector only — number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
             opacity: Layer opacity in ``[0, 1]``.
-            clim: Raster only — frozen ``(vmin, vmax)``; ``None`` computes one range over the whole stack.
+            clim: Raster only — frozen ``(vmin, vmax)``; ``None`` computes one range for the whole series
+                from at most :data:`_CLIM_SCAN_CAP` members sampled evenly across it.
 
         Returns:
             This map (chainable). The slider appears when the map is rendered/shown in a notebook.
@@ -261,7 +262,8 @@ class TemporalMixin(_MixinBase):
             band: 1-based band drawn for every member.
             cmap: matplotlib colormap applied to every member.
             opacity: Image-layer opacity in ``[0, 1]``.
-            clim: Frozen ``(vmin, vmax)``; ``None`` computes one range over the whole stack.
+            clim: Frozen ``(vmin, vmax)``; ``None`` computes one range for the whole series from at most
+                :data:`_CLIM_SCAN_CAP` members sampled evenly across it.
 
         Returns:
             This map (chainable).

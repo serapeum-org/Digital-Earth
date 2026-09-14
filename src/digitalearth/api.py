@@ -68,8 +68,9 @@ _UNSET = _Unset()
 #: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
 #:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
 #:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
-#:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the tier methods themselves — a builder
-#:   that takes content vs a visibility flag — is Core-contract work and stays with U-3.
+#:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
+#:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
+#:   and stays with U-3.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     "matplotlib": frozenset(
         {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
@@ -419,8 +420,11 @@ def quickmap(
     Raises:
         ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``basemap``/``coastlines`` the
             chosen backend cannot honour — the message names both the parameter and the backend. Also for a
-            ``kind`` naming a renderer the chosen backend does not have, and for ``column`` on point input.
+            ``kind`` naming a renderer the chosen backend does not have, for ``column`` on point input, and
+            for an empty ``FeatureCollection``, which would otherwise draw nothing in silence.
             ``colorbar`` is never refused, since every backend honours it.
+        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
+            ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -695,9 +699,10 @@ def _quickmap_web(
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
-        colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend` —
-            best-effort, so a map with no classified layer to describe silently gets no key rather than
-            raising. ``False`` leaves the map without one.
+        colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend`,
+            which checks before it builds rather than catching afterwards: a map with no classified layer to
+            describe gets no key and no error, while a failure inside the builder still surfaces. ``False``
+            leaves the map without one.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
@@ -724,8 +729,8 @@ def _quickmap_web(
             scene.basemap(source)
     if colorbar:
         # This tier's key is a builder, not a toggle, and it refuses a map with nothing classified to
-        # describe. That is the same "no mappable layer" case the matplotlib path tolerates, so it is
-        # tolerated the same way rather than turning `colorbar=True` into an error the caller did not cause.
+        # describe. That is this tier's "no mappable layer" case, which the matplotlib path tolerates too,
+        # so it is tolerated here rather than turning `colorbar=True` into an error the caller did not cause.
         _add_web_legend(scene)
     return scene
 

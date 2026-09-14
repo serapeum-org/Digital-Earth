@@ -36,9 +36,9 @@ __all__ = ["DEFAULT_CLIM_SCAN_CAP", "measure_clim", "sample_evenly", "stack_clim
 #: How many stack frames are read to derive a shared colour range, unless a caller overrides it. Reading every
 #: frame of a long series costs one warp each and buys very little: the range of ~24 frames spread across the
 #: stack is the range of the stack, to the precision a colour ramp can show. Every tier reads this one number,
-#: so the same collection is read at the same members whichever backend draws it. Note that is a claim about
-#: *which frames*, not about the resulting numbers: each tier warps to its own display CRS before measuring,
-#: and resampling moves the extremes, so two tiers can still report slightly different ranges.
+#: so the same collection is read at the same members whichever backend draws it. Note that this is a claim
+#: about *which frames*, not about the resulting numbers: each tier warps to its own display CRS before
+#: measuring, and resampling moves the extremes, so two tiers can still report slightly different ranges.
 DEFAULT_CLIM_SCAN_CAP: int = 24
 
 
@@ -60,9 +60,9 @@ def sample_evenly(
 
     Returns:
         A list of at most ``cap`` items spread across the series, **always including both the first and the
-        last** (for ``cap >= 2``; ``cap=1`` returns the last item alone, since a series' extreme is far
-        more often at its end than its start). Both ends matter: the first because a series often starts at its baseline,
-        the last because a rising one ends at its maximum.
+        last** (for ``cap >= 2``; ``cap=1`` returns the last item alone, since a series' extreme is far more
+        often at its end than its start). Both ends matter: the first because a series often starts at its
+        baseline, the last because a rising one ends at its maximum.
 
     Examples:
         - A short stack is returned whole:
@@ -85,6 +85,31 @@ def sample_evenly(
             >>> from digitalearth.base.clim import sample_evenly
             >>> len(sample_evenly(list(range(60)), cap=None))
             60
+
+            ```
+        - One frame to spend goes on the last, not the first:
+            ```python
+            >>> from digitalearth.base.clim import sample_evenly
+            >>> sample_evenly(list(range(60)), cap=1)
+            [59]
+
+            ```
+        - A zero or negative cap is refused rather than read as "no cap":
+            ```python
+            >>> from digitalearth.base.clim import sample_evenly
+            >>> sample_evenly([0, 1, 2], cap=0)
+            Traceback (most recent call last):
+                ...
+            ValueError: cap must be a positive frame count or None for no cap; got 0
+
+            ```
+        - A bool is refused too, since ``True`` would otherwise measure a single frame:
+            ```python
+            >>> from digitalearth.base.clim import sample_evenly
+            >>> sample_evenly([0, 1, 2], cap=True)
+            Traceback (most recent call last):
+                ...
+            TypeError: cap must be a frame count or None, not a bool; got True
 
             ```
     """

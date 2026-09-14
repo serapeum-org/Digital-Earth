@@ -348,9 +348,8 @@ class AnimationMixin(_MixinBase):
             **Must be drained before the display CRS moves.** Each frame is warped at the moment it is
             pulled, against whatever ``self.crs`` is then — and :meth:`_clim_across_views` reassigns that in
             a loop. Today every caller drains it synchronously inside
-            :func:`~digitalearth.base.clim.measure_clim`, so the frames are warped under the intended
-            view; storing or chaining the
-            generator would silently measure the wrong projection.
+            :func:`~digitalearth.base.clim.measure_clim`, so the frames are warped under the intended view;
+            storing or chaining the generator would silently measure the wrong projection.
         """
         for ds in datasets:
             try:
@@ -509,8 +508,9 @@ class AnimationMixin(_MixinBase):
         frame would otherwise blank the channel for the whole animation). A channel dead in every *scanned*
         frame reports ``(nan, nan)``, which :func:`~digitalearth.base.stretch.stretch_to_unit` reads as
         "no frozen bound for this channel" and answers per frame. Reporting a fixed span here instead would be
-        wrong whenever the scan stride aliases with the nodata pattern — dead in every scanned frame is not
-        dead in every frame, and the frames that do carry data would then clip flat against that span.
+        wrong whenever the sampled positions happen to miss the frames that carry the channel — dead in every
+        scanned frame is not dead in every frame, and the frames that do carry data would then clip flat
+        against that span.
 
         Args:
             datasets: The animation stack.
