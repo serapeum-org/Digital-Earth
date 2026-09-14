@@ -83,8 +83,9 @@ class TestAddWebLegend:
             or the field was renamed. Answering "no key" there would make a rename silently drop every web
             legend while the dev-tier fakes kept passing; the only thing that would notice is the web CI leg.
         """
+        scene = _NoLegendAttribute()
         with pytest.raises(AttributeError):
-            _add_web_legend(_NoLegendAttribute())
+            _add_web_legend(scene)
 
     def test_a_classified_map_gets_its_key_built(self):
         """A recorded classification is passed to the builder, whose result is handed back.

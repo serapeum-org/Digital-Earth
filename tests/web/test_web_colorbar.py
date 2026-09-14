@@ -18,7 +18,7 @@ def _need_engine():
     pytest.importorskip("maplibre")
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygon_fc():
     """A polygon ``FeatureCollection`` carrying an ``fid`` column to classify.
 

@@ -472,10 +472,12 @@ class TestStackClim:
             ``(0, 1)`` still measures, so a normalised raster is not quietly treated as unmeasurable.
         """
         frames = [np.array([0.0, 1.0])]
-        assert stack_clim(frames) == (0.0, 1.0) and measure_clim(frames) == (
-            0.0,
-            1.0,
-        ), f"a real 0-1 span must measure, got {measure_clim(frames)}"
+        assert stack_clim(frames) == (0.0, 1.0), (
+            f"a real 0-1 span must come back unchanged, got {stack_clim(frames)}"
+        )
+        assert measure_clim(frames) == (0.0, 1.0), (
+            f"the same span must measure rather than read as unmeasurable, got {measure_clim(frames)}"
+        )
 
 
 class TestTheTiersShareOneRule:
