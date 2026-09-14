@@ -52,7 +52,10 @@ def sample_evenly(
 
     Args:
         items: The stack members, in series order.
-        cap: Greatest number of items to return. ``None`` (or a non-positive cap) returns every item.
+        cap: Greatest number of items to return; ``None`` returns every item.
+
+    Raises:
+        ValueError: if ``cap`` is zero or negative. ``None`` is how "no cap" is spelled.
 
     Returns:
         A list of at most ``cap`` items spread across the series, **always including both the first and the
@@ -84,7 +87,13 @@ def sample_evenly(
             ```
     """
     seq = list(items)
-    if not seq or cap is None or cap <= 0 or len(seq) <= cap:
+    if cap is not None and cap <= 0:
+        # `None` already says 'no cap'. Reading 0 as unbounded is the opposite of its natural meaning,
+        # and silently over-scanning a 5000-frame cube is not a kindness.
+        raise ValueError(
+            f"cap must be a positive frame count or None for no cap; got {cap!r}"
+        )
+    if not seq or cap is None or len(seq) <= cap:
         return seq
     if cap == 1:
         # One frame to spend: the last. A series' extreme is far more often at its end than its start.

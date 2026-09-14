@@ -85,15 +85,16 @@ class TestTheWebKeyFollowsTheFlag:
         )
 
     def test_a_map_with_nothing_to_describe_is_tolerated(self, polygon_fc):
-        """An unclassified layer under the default ``colorbar=True`` warns rather than raising.
+        """An unclassified layer under the default ``colorbar=True`` is inert rather than raising.
 
         Args:
             polygon_fc: The same collection, drawn without a ``column`` so nothing is classified.
 
         Test scenario:
             ``WebMap.legend`` refuses a map with no classification to describe. Under the default that is not
-            a caller error — they asked for a key *if there is one* — so it is skipped the same way the
-            matplotlib path skips an outline-only layer, rather than turning the default into a crash.
+            a caller error — they asked for a key *if there is one* — so it is skipped silently, rather
+            than turning the default into a crash on unclassified input. Nothing is logged: the guard
+            answers from recorded state and never reaches the builder.
         """
         scene = qp.quickmap(polygon_fc, backend="web", colorbar=True)
         assert "legend" not in scene._panels, (

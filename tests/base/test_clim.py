@@ -91,19 +91,18 @@ class TestSampleEvenly:
         )
 
     @pytest.mark.parametrize("cap", [0, -1])
-    def test_a_nonsensical_cap_scans_everything_rather_than_nothing(self, cap):
-        """A cap of zero or less reads the whole stack instead of returning an empty sample.
+    def test_a_nonsensical_cap_is_refused(self, cap):
+        """A cap of zero or less raises, since ``None`` is how "no cap" is written.
 
         Args:
             cap: The nonsensical cap under test.
 
         Test scenario:
-            Returning nothing would silently produce the ``(0, 1)`` fallback for a stack full of real data,
-            which is a worse failure than ignoring the bad cap.
+            Reading 0 as "unbounded" is the opposite of its natural meaning and duplicates what ``None``
+            already says, so a caller who computed a cap and got 0 would silently scan a whole cube.
         """
-        assert len(sample_evenly([1, 2, 3], cap=cap)) == 3, (
-            f"cap={cap} must not empty the sample"
-        )
+        with pytest.raises(ValueError, match="positive frame count"):
+            sample_evenly([1, 2, 3], cap=cap)
 
     def test_an_empty_stack_samples_to_nothing(self):
         """An empty stack is returned as-is rather than raising on the stride computation.
@@ -334,12 +333,15 @@ class TestStackClim:
 class TestTheTiersShareOneRule:
     """The cap is one number, so the three tiers cannot drift apart again."""
 
-    def test_every_tier_reads_the_shared_cap(self):
-        """static and web both take their cap from ``base.clim`` rather than declaring their own.
+    def test_the_static_tier_reads_the_shared_cap(self):
+        """The static tier's cap is the shared constant, not a second literal.
 
         Test scenario:
-            #174's root cause was three literals free to drift — 24, 50 and none. Importing the tier modules
-            and comparing identity is what stops a fourth value appearing.
+            #174's root cause was three literals free to drift — 24, 50 and none. This is the half that can
+            be checked from the ``dev`` env; the web tier's identical guard lives in
+            ``tests/web/test_web_stack_clim.py`` and the interactive tier, which passes no cap at all, is
+            pinned by the bounded-scan test in ``tests/interactive/test_interactive_stack_clim.py`` — each
+            in the env that can import it.
         """
         from digitalearth.static.maps.animation import _CLIM_SCAN_CAP as static_cap
 
