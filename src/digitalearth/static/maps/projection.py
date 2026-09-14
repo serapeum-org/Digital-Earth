@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
-from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.spec import Bounds
 from digitalearth.static import projections
 from digitalearth.static.domains import DomainLike, resolve_domain
 
@@ -37,14 +37,19 @@ class ProjectionMixin(_MixinBase):
         digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
-    def set_extent(self, bbox: Sequence[float]) -> None:
+    def set_extent(self, bbox: Union[Bounds, Sequence[float]]) -> None:
         """Set the axes extent.
 
         Args:
-            bbox: ``[xmin, xmax, ymin, ymax]`` in the display CRS.
+            bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in the display CRS, or — for callers that
+                predate it — a bare ``[xmin, xmax, ymin, ymax]`` sequence in matplotlib axes order. The
+                sequence form is accepted because that ordering was this method's contract; prefer `Bounds`,
+                which states the ordering instead of leaving it to position.
         """
-        self.ax.set_xlim(bbox[0], bbox[1])
-        self.ax.set_ylim(bbox[2], bbox[3])
+        box = bbox if isinstance(bbox, Bounds) else Bounds.from_mpl(bbox, self.crs)
+        xmin, xmax, ymin, ymax = box.as_mpl()
+        self.ax.set_xlim(xmin, xmax)
+        self.ax.set_ylim(ymin, ymax)
 
     def set_domain(self, domain: Optional[DomainLike] = None) -> None:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
@@ -72,14 +77,9 @@ class ProjectionMixin(_MixinBase):
         bbox = resolve_domain(domain if domain is not None else self.domain)
         if bbox is None:
             return
-        west, south, east, north = bbox
-        xs, ys = reproject_coordinates(
-            [west, east, west, east],
-            [south, south, north, north],
-            from_crs=4326,
-            to_crs=self.crs,
-        )
-        self.set_extent([min(xs), max(xs), min(ys), max(ys)])
+        # A resolved domain is always EPSG:4326 (see `static/domains.py`), which is exactly the assumption
+        # a bare 4-tuple used to carry implicitly. Bounds makes it a value, and does the warp through pyramids.
+        self.set_extent(Bounds.from_bbox(bbox, crs=4326).to_crs(self.crs))
 
     # ------------------------------------------------------------------ globe / projection frame
 
