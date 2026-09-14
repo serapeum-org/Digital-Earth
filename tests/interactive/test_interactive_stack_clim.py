@@ -87,3 +87,44 @@ class TestTheStackScanSpansTheSeries:
         assert len(seen) <= DEFAULT_CLIM_SCAN_CAP, (
             f"the scan read {len(seen)} frames, over the cap of {DEFAULT_CLIM_SCAN_CAP}"
         )
+
+    def test_a_masked_member_measures_as_its_nan_filled_twin(self, monkeypatch):
+        """A member handed over masked answers the same range as an already-NaN-filled one.
+
+        Args:
+            monkeypatch: Replaces the display-CRS read with a masked frame.
+
+        Test scenario:
+            The tier still NaN-fills each frame on its way into the reduction, and the reduction fills
+            again for a caller that did not. Either way the ``-9999`` sentinel must not reach the range: a
+            nodata value setting ``vmin`` pushes every real value into the top sliver of the colour ramp.
+        """
+        scene = InteractiveMap()
+        masked = np.ma.masked_array([1.0, -9999.0, 3.0], mask=[False, True, False])
+        monkeypatch.setattr(
+            scene, "_to_display_source", lambda member, band=1: _Source(masked)
+        )
+        assert scene._global_clim(_Stack(1), 1) == (1.0, 3.0), (
+            f"the nodata sentinel reached the range: {scene._global_clim(_Stack(1), 1)}"
+        )
+
+    def test_a_stack_with_nothing_measurable_falls_back_to_zero_one(self, monkeypatch):
+        """An all-nodata cube yields limits a colormap can take, rather than raising.
+
+        Args:
+            monkeypatch: Makes every member contribute no finite value.
+
+        Test scenario:
+            ``timecube`` derives the range before the ``DynamicMap`` callback draws a frame, so the scan has
+            to answer even for a cube it could measure nothing in. This tier's own pre-delegation code
+            already fell back to ``(0, 1)`` here, and the delegation must not have lost that.
+        """
+        scene = InteractiveMap()
+        monkeypatch.setattr(
+            scene,
+            "_to_display_source",
+            lambda member, band=1: _Source(np.array([np.nan, np.nan])),
+        )
+        assert scene._global_clim(_Stack(3), 1) == (0.0, 1.0), (
+            f"an unmeasurable stack must fall back, got {scene._global_clim(_Stack(3), 1)}"
+        )

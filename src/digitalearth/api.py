@@ -375,17 +375,24 @@ def quickmap(
         coastlines: When True, overlay coastlines (tolerated and warned about if the assets are
             unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
             backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
-        colorbar: Whether the map carries a colour key for the drawn layer. ``True`` (the default) adds
-            one **if there is one to draw**, and is skipped with a warning when the layer has nothing
-            mappable to describe — an outline-only layer, or a web map with no classified layer. ``False``
-            draws none.
+        colorbar: Whether the map carries a colour key for the drawn layer. ``True`` is the default and
+            adds one **if there is one to draw**; ``False`` draws none. Every backend accepts it, so the
+            same call is valid everywhere (#254), but each reaches its own mechanism: ``matplotlib`` builds
+            a colorbar, ``interactive`` toggles one, ``3d`` shows or hides the scalar bar, and ``web``
+            builds :meth:`~digitalearth.web.decoration.DecorationMixin.legend`.
 
-            All four backends honour this, though each reaches its own mechanism: ``matplotlib`` builds a
-            colorbar, ``interactive`` toggles one, ``3d`` shows or hides the scalar bar, and ``web`` builds
-            :meth:`~digitalearth.web.decoration.DecorationMixin.legend`. The *tier methods* still differ in
-            shape — a builder that takes content on ``matplotlib``/``web``, a visibility flag on
-            ``interactive`` — and unifying those names is Core-contract work (#254); what is settled here is
-            that one ``quickmap(colorbar=...)`` means the same thing on every backend.
+            What "nothing to draw" means differs by tier, and is worth knowing before relying on the
+            default. On ``matplotlib`` an outline-only layer has no mappable artist, so the step is skipped
+            and warned about. On ``web`` the key describes a **classification** — what a builder recorded in
+            :attr:`~digitalearth.web.base.WebMapBase.last_legend` — so a layer that classifies nothing gets
+            no key and the flag is silently inert. Today that includes every raster: ``add_raster`` records
+            no classification, so ``quickmap(raster, backend="web", colorbar=True)`` returns a map with no
+            key while the other three tiers draw one. Giving the web tier a continuous ramp key for a raster
+            is tier work, not part of this argument's contract.
+
+            The *tier methods* also still differ in shape — a builder that takes content on
+            ``matplotlib``/``web``, a visibility flag on ``interactive`` — and unifying those names is
+            Core-contract work (U-3).
         backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
             extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
