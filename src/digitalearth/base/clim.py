@@ -55,11 +55,13 @@ def sample_evenly(
         cap: Greatest number of items to return; ``None`` returns every item.
 
     Raises:
+        TypeError: if ``cap`` is a bool — ``True`` would otherwise read as ``cap=1``.
         ValueError: if ``cap`` is zero or negative. ``None`` is how "no cap" is spelled.
 
     Returns:
         A list of at most ``cap`` items spread across the series, **always including both the first and the
-        last** (for ``cap >= 2``). Both ends matter: the first because a series often starts at its baseline,
+        last** (for ``cap >= 2``; ``cap=1`` returns the last item alone, since a series' extreme is far
+        more often at its end than its start). Both ends matter: the first because a series often starts at its baseline,
         the last because a rising one ends at its maximum.
 
     Examples:
@@ -87,6 +89,9 @@ def sample_evenly(
             ```
     """
     seq = list(items)
+    if isinstance(cap, bool):
+        # `True` slips past every numeric guard and reads as `cap=1`, silently measuring one frame.
+        raise TypeError(f"cap must be a frame count or None, not a bool; got {cap!r}")
     if cap is not None and cap <= 0:
         # `None` already says 'no cap'. Reading 0 as unbounded is the opposite of its natural meaning,
         # and silently over-scanning a 5000-frame cube is not a kindness.

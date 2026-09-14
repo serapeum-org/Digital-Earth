@@ -146,8 +146,8 @@ def channel_limits(stack: np.ndarray) -> List[Tuple[float, float]]:
             bounds.append((float("nan"), float("nan")))
             continue
         # finite() already returned a fresh array, so numpy may sort it in place instead of copying
-        # again — the scan reads three channels per frame, for the frames
-        # `digitalearth.base.clim.sample_evenly` picks (at most `DEFAULT_CLIM_SCAN_CAP` of them).
+        # again — the scan reads three channels per frame, for however many frames its caller chose to
+        # hand over.
         lo, hi = np.percentile(values, _STRETCH_PERCENTILES, overwrite_input=True)
         bounds.append((float(lo), float(hi)))
     return bounds

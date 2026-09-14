@@ -67,8 +67,8 @@ _UNSET = _Unset()
 #:   and says so) and no coastline or extent concept; its scalar bar is the ``colorbar`` toggle.
 #: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
 #:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
-#:   ``colorbar=`` is translated here rather than forwarded: ``True`` calls ``legend()`` best-effort, the
-#:   same contract the other three tiers honour (#254). Renaming the tier methods themselves — a builder
+#:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
+#:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the tier methods themselves — a builder
 #:   that takes content vs a visibility flag — is Core-contract work and stays with U-3.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     "matplotlib": frozenset(
@@ -394,8 +394,9 @@ def quickmap(
             nothing. The split is not raster-vs-vector: the same unclassified polygon layer gets a colorbar
             on ``matplotlib`` and no key on ``web``, and every raster falls on the empty side there because
             ``add_raster`` records no classification. Giving the web tier a continuous ramp key for a raster
-            is tier work, not part of this argument's contract. A warning is logged only when a builder is
-            reached and then refuses.
+            is tier work, not part of this argument's contract. Neither active tier logs when it skips: the
+            ``matplotlib`` path warns only if its builder refuses, and the ``web`` path lets a refusal
+            surface, since past the guard only a malformed classification can raise.
 
             The *tier methods* also still differ in shape — a builder that takes content on
             ``matplotlib``/``web``, a visibility flag on ``interactive`` — and unifying those names is

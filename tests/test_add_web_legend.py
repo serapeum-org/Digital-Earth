@@ -10,8 +10,6 @@ environment alongside the rest of ``tests/*.py`` — which is also the point of 
 helper must answer "nothing to describe" from recorded state, without touching the engine at all.
 """
 
-import logging
-
 import pytest
 
 from digitalearth.api import _add_web_legend
@@ -136,9 +134,10 @@ class TestAddWebLegend:
             error: A failure outside :data:`~digitalearth.api.UNMAPPABLE`.
 
         Test scenario:
-            The tolerated set is deliberately narrow. Widening it to bare ``Exception`` would turn "you have
-            not installed ``digitalearth[web]``" into a map that silently comes back without a key, which is
-            the exact class of silent failure the capability checks exist to remove.
+            Nothing is tolerated here any more, so this is the general statement of that: whatever the
+            builder raises reaches the caller. It matters most for a missing extra — turning "you have not
+            installed ``digitalearth[web]``" into a map that silently comes back without a key is the exact
+            class of silent failure the capability checks exist to remove.
         """
         scene = _FakeWebMap(last_legend=CLASSIFIED, error=error)
         with pytest.raises(type(error)):

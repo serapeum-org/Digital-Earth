@@ -56,8 +56,12 @@ class TemporalMixin(_MixinBase):
             collection: A pyramids ``DatasetCollection``.
             band: 1-based band read from each member.
 
+        This tier also stopped letting an infinity set a limit. It reduced with ``np.nanmin``/``np.nanmax``,
+        which skip ``NaN`` but keep ``±inf``, so a single overflowed cell pinned the whole ramp to one end.
+        The shared rule drops every non-finite value, so such a frame now contributes its real extremes.
+
         Returns:
-            ``(vmin, vmax)`` finite colour limits across the whole stack, or ``(0.0, 1.0)`` when no member
+            ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
             holds a finite value.
         """
         return stack_clim(

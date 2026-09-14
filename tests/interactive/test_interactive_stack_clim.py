@@ -84,8 +84,10 @@ class TestTheStackScanSpansTheSeries:
 
         monkeypatch.setattr(scene, "_to_display_source", record)
         scene._global_clim(_Stack(60), 1)
-        assert len(seen) <= DEFAULT_CLIM_SCAN_CAP, (
-            f"the scan read {len(seen)} frames, over the cap of {DEFAULT_CLIM_SCAN_CAP}"
+        assert len(seen) == DEFAULT_CLIM_SCAN_CAP, (
+            f"the scan read {len(seen)} of 60 frames; this tier passes no cap of its own, so it must "
+            f"spend exactly the shared {DEFAULT_CLIM_SCAN_CAP} — an upper bound alone would let the "
+            "default drift and re-split the tiers silently"
         )
 
     def test_a_masked_member_measures_as_its_nan_filled_twin(self, monkeypatch):

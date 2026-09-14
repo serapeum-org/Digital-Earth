@@ -91,7 +91,7 @@ class TemporalMixin(_MixinBase):
             band: 1-based band read from each member.
 
         Returns:
-            ``(vmin, vmax)`` finite colour limits across the whole stack, or ``(0.0, 1.0)`` when no member
+            ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
             holds a finite value.
         """
         return stack_clim(

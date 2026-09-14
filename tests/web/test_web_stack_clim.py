@@ -52,7 +52,7 @@ class TestTheStackScanSpansTheSeries:
         Test scenario:
             Each frame contributes its own index as its only value, so ``vmax`` is exactly the highest frame
             the scan looked at. Under the old ``datasets[:50]`` head slice that was 49 and every later frame
-            was clipped; under the shared stride it reaches 57.
+            was clipped; under the shared index-selected sample it reaches 59, the final frame.
         """
         scene = WebMap()
         monkeypatch.setattr(

@@ -68,7 +68,8 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
         datasets: The animation stack.
 
     Returns:
-        Every ``stride``-th frame, where the stride is chosen so at most :data:`_CLIM_SCAN_CAP` come back.
+        At most :data:`_CLIM_SCAN_CAP` frames, spread across the whole stack and always including its
+        first and last.
     """
     return sample_evenly(datasets, cap=_CLIM_SCAN_CAP)
 
@@ -346,8 +347,9 @@ class AnimationMixin(_MixinBase):
         Note:
             **Must be drained before the display CRS moves.** Each frame is warped at the moment it is
             pulled, against whatever ``self.crs`` is then — and :meth:`_clim_across_views` reassigns that in
-            a loop. Today every caller drains it synchronously inside :func:`~digitalearth.base.clim.
-            measure_clim`, so the frames are warped under the intended view; storing or chaining the
+            a loop. Today every caller drains it synchronously inside
+            :func:`~digitalearth.base.clim.measure_clim`, so the frames are warped under the intended
+            view; storing or chaining the
             generator would silently measure the wrong projection.
         """
         for ds in datasets:

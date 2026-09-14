@@ -1,7 +1,7 @@
 """The shared stack colour-range rule (#174 / DE-9).
 
 Three tiers used to derive the colour range of a raster time stack independently — static capped at 24 by an
-even stride, web at 50 by a head slice, interactive not at all — so one collection could come out on three
+stride, web at 50 by a head slice, interactive not at all — so one collection could come out on three
 different scales. These cover the one rule they now share.
 """
 
@@ -30,15 +30,17 @@ class TestSampleEvenly:
             "a stack under the cap must be returned unchanged"
         )
 
-    def test_a_long_stack_is_strided_rather_than_truncated(self):
+    def test_a_long_stack_is_thinned_rather_than_truncated(self):
         """The sample spans the series instead of stopping partway through it.
 
         Test scenario:
-            This is the divergence #174 exists for. A head slice measures only the beginning; a stride reaches
-            the far end at the same cost.
+            This is the divergence #174 exists for. A head slice measures only the beginning; an
+            index-selected sample reaches the far end at the same cost.
         """
         picked = sample_evenly(list(range(60)), cap=24)
-        assert len(picked) <= 24, f"the cap must bound the sample, got {len(picked)}"
+        assert len(picked) == 24, (
+            f"a stack over the cap must spend the whole budget, got {len(picked)}"
+        )
         assert picked[0] == 0, (
             f"the sample must start at the first frame, got {picked[0]}"
         )
@@ -105,10 +107,10 @@ class TestSampleEvenly:
             sample_evenly([1, 2, 3], cap=cap)
 
     def test_an_empty_stack_samples_to_nothing(self):
-        """An empty stack is returned as-is rather than raising on the stride computation.
+        """An empty stack is returned as-is rather than raising on the step computation.
 
         Test scenario:
-            The stride divides by the cap; an empty sequence must short-circuit before that.
+            The step divides by the cap; an empty sequence must short-circuit before that.
         """
         assert sample_evenly([], cap=24) == [], "an empty stack must sample to nothing"
 
@@ -117,7 +119,7 @@ class TestSampleEvenly:
 
         Test scenario:
             ``len(seq) <= cap`` is the short-circuit, so a stack of exactly ``cap`` members is the frame
-            where an off-by-one would show: a stride of 1 is harmless, a stride of 2 would halve it.
+            where an off-by-one would show: selecting every index is harmless, skipping one halves it.
         """
         picked = sample_evenly(
             list(range(DEFAULT_CLIM_SCAN_CAP)), cap=DEFAULT_CLIM_SCAN_CAP
@@ -127,7 +129,7 @@ class TestSampleEvenly:
         )
 
     @pytest.mark.parametrize("count", [25, 47, 48, 49, 500])
-    def test_the_stride_rounds_up_so_the_cap_is_always_honoured(self, count):
+    def test_the_cap_is_always_honoured_exactly(self, count):
         """No stack length sneaks past the cap, which a floor-divided stride would allow.
 
         Args:
@@ -155,6 +157,28 @@ class TestSampleEvenly:
         picked = sample_evenly(stack, cap=DEFAULT_CLIM_SCAN_CAP)
         picked.append(99)
         assert stack == [0, 1, 2], f"the caller's stack was mutated: {stack}"
+
+    def test_a_single_frame_budget_reads_the_last(self):
+        """``cap=1`` spends its one read on the final frame.
+
+        Test scenario:
+            With one frame to measure, the end of a series is the more informative choice: a rising series
+            holds its maximum there. The branch is reachable from any caller passing a computed cap, so it
+            needs a test rather than only a code comment.
+        """
+        assert sample_evenly(list(range(10)), cap=1) == [9], (
+            f"one read must be spent on the last frame, got {sample_evenly(list(range(10)), cap=1)}"
+        )
+
+    def test_a_boolean_cap_is_refused(self):
+        """``cap=True`` is a mis-typed flag, not a budget of one frame.
+
+        Test scenario:
+            ``True`` is an ``int`` in Python, so it slips past the positive-count guard and reads as
+            ``cap=1`` — silently measuring a single frame of a whole cube.
+        """
+        with pytest.raises(TypeError, match="not a bool"):
+            sample_evenly([1, 2, 3], cap=True)
 
 
 class TestMeasureClim:
