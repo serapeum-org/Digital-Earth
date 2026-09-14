@@ -26,9 +26,10 @@ from digitalearth.base.clim import (
 from digitalearth.base.crs import OffLimbError
 from digitalearth.web.base import _require_layer_api
 
-#: Members scanned when computing a stack's shared colour range. Mirrors the static tier's cap: the scan
-#: reprojects and reads each member, so an unbounded one makes `timeslider` O(stack) before it draws
-#: anything. Pass an explicit `clim` to skip the scan entirely.
+#: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
+#: number the static and interactive tiers read too, sampled by the same even stride. The scan reprojects and
+#: reads each member, so an unbounded one makes `timeslider` O(stack) before it draws anything. Pass an
+#: explicit `clim` to skip the scan entirely.
 _CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
 #: Total pixels above which an inlined stack is warned against. `add_raster` warns per member, which never
@@ -80,8 +81,9 @@ class TemporalMixin(_MixinBase):
 
         Note: this pass is **eager** — it reprojects and reads each scanned member once at ``timeslider``
         construction time (every member is then warped again when its image layer is built). At most
-        :data:`_CLIM_SCAN_CAP` members are scanned, mirroring the static tier's cap; pass an explicit
-        ``clim`` to skip the scan entirely.
+        :data:`_CLIM_SCAN_CAP` members are scanned, spread evenly across the whole series rather than taken
+        from its head — the rule the static and interactive tiers follow too, so the same collection gets the
+        same range whichever tier draws it. Pass an explicit ``clim`` to skip the scan entirely.
 
         Args:
             collection: A pyramids ``DatasetCollection``.

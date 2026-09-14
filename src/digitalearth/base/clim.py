@@ -6,13 +6,11 @@ arrays — no renderer needed — so it lives here rather than three times over.
 
 Before this, each tier had its own copy and the three had drifted on the two things that decide the answer:
 
-============  ===========  =========================================================
-Tier          Cap          Sampling
-============  ===========  =========================================================
-static        24           evenly-spaced stride
-web           50           ``datasets[:50]`` — a head slice
-interactive   uncapped     every member
-============  ===========  =========================================================
+| Tier | Cap | Sampling |
+|---|---|---|
+| static | 24 | evenly-spaced stride |
+| web | 50 | `datasets[:50]` — a head slice |
+| interactive | uncapped | every member |
 
 The sampling difference is the one that shows. A head slice measures only the *beginning* of a series, so a
 60-member stack whose peak sits at index 58 — a flood crest, a fire scar — comes back with a ``vmax`` that

@@ -82,13 +82,12 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
 #:
-#: ``colorbar=False`` is one of them (review L9). The rule here is about *dropped requests*, and what
-#: ``False`` asks for is a map with no colorbar — which is exactly what the one tier that cannot honour the
-#: parameter (``web``) draws anyway. Nothing is lost, so refusing it was pedantry of the same shape as
+#: ``colorbar=False`` was one of them (review L9). The rule here is about *dropped requests*, and what
+#: ``False`` asked for was a map with no colorbar — exactly what the one tier that could not honour the
+#: parameter (``web``) drew anyway. Nothing was lost, so refusing it was pedantry of the same shape as
 #: refusing ``coastlines=False`` there, and it broke the caller who passes one kwargs dict through to
-#: whichever backend they picked. ``colorbar=True`` stays a real request and is still refused by name:
-#: ``web`` keys itself with :meth:`~digitalearth.web.decoration.DecorationMixin.legend`, a different thing
-#: with a different arity (TODO(#254)).
+#: whichever backend they picked. The entry is now moot rather than wrong: ``web`` declares ``colorbar``
+#: too (#254), so no value of it reaches this table on any backend.
 #:
 #: ``crs`` is absent on purpose and stays absent: it has no value that asks for nothing — every CRS names a
 #: projection to display in, and there is no "no CRS" to pass.
@@ -403,9 +402,10 @@ def quickmap(
         :class:`Scene3D` when ``backend="3d"``, or a :class:`WebMap` when ``backend="web"``.
 
     Raises:
-        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``coastlines``/``colorbar`` the
+        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``basemap``/``coastlines`` the
             chosen backend cannot honour — the message names both the parameter and the backend. Also for a
             ``kind`` naming a renderer the chosen backend does not have, and for ``column`` on point input.
+            ``colorbar`` is never refused, since every backend honours it.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -670,6 +670,9 @@ def _quickmap_web(
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
+        colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend` —
+            best-effort, so a map with no classified layer to describe is warned about rather than raised
+            on. ``False`` leaves the map without one.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
