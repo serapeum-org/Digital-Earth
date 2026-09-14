@@ -12,6 +12,7 @@ materialise a frame (``dmap[0]``) to assert on it.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
+from digitalearth.base.clim import sample_evenly, stack_clim
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
@@ -45,26 +46,24 @@ class TemporalMixin(_MixinBase):
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
         """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps.
 
-        Note: this pass is **eager** — it reprojects and extracts every member once at ``timecube``
-        construction time (the per-frame ``DynamicMap`` callback warps them again lazily). For a very
-        large datacube, pass an explicit ``clim`` to ``timecube`` to skip this whole-stack scan.
+        Note: this pass is **eager** — it reprojects and extracts the sampled members once at ``timecube``
+        construction time (the per-frame ``DynamicMap`` callback warps them again lazily). At most
+        :data:`~digitalearth.base.clim.DEFAULT_CLIM_SCAN_CAP` members are read, evenly spaced across the
+        series, which is the rule the static and web tiers follow too. For a very large datacube, pass an
+        explicit ``clim`` to ``timecube`` to skip the scan entirely.
 
         Args:
             collection: A pyramids ``DatasetCollection``.
             band: 1-based band read from each member.
 
         Returns:
-            ``(vmin, vmax)`` finite colour limits across the whole stack.
+            ``(vmin, vmax)`` finite colour limits across the whole stack, or ``(0.0, 1.0)`` when no member
+            holds a finite value.
         """
-        import numpy as np
-
-        lows, highs = [], []
-        for member in collection.datasets:
-            arr = _masked_to_nan(self._to_display_source(member, band=band).z.values)
-            if np.isfinite(arr).any():
-                lows.append(np.nanmin(arr))
-                highs.append(np.nanmax(arr))
-        return (float(min(lows)), float(max(highs))) if lows else (0.0, 1.0)
+        return stack_clim(
+            _masked_to_nan(self._to_display_source(member, band=band).z.values)
+            for member in sample_evenly(collection.datasets)
+        )
 
     @_skips_off_limb
     def timecube(

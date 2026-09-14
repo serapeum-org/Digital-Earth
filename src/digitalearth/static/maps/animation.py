@@ -7,15 +7,20 @@ optional single static colorbar), an RGB/HSV composite gets one frozen per-chann
 
 import logging
 from math import isfinite
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Iterator, List, Optional, Sequence, Tuple
 
 from matplotlib.animation import FuncAnimation
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.base.arrays import finite, read_masked_band
+from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.autostyle import auto_style
+from digitalearth.base.clim import (
+    DEFAULT_CLIM_SCAN_CAP,
+    measure_clim,
+    sample_evenly,
+)
 from digitalearth.base.sources import get_source, get_stack
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
@@ -30,8 +35,9 @@ from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP
 
 logger = logging.getLogger(__name__)
 
-#: Cap on how many stack frames are scanned to derive a shared animation colour scale (L2).
-_CLIM_SCAN_CAP = 24
+# The cap and the striding rule are `digitalearth.base.clim`'s: one number and one sampling strategy shared
+# with the interactive and web tiers, so the same collection gets the same colour scale whichever draws it.
+_CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
 #: What "this frame cannot be read" looks like to :meth:`AnimationMixin._frame_style`, which moves on to the
 #: next frame rather than failing the colorbar. A stack member that is not a plottable input at all is
@@ -54,7 +60,8 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     """Return at most :data:`_CLIM_SCAN_CAP` evenly-spaced frames of ``datasets``.
 
     Both stack scans — the scalar clim and the composite stretch — sample rather than read every frame, and
-    they must sample the same way; keeping the stride in one place is what guarantees that.
+    they must sample the same way; deferring to :func:`~digitalearth.base.clim.sample_evenly` is what
+    guarantees that, and what makes this tier agree with the other two.
 
     Args:
         datasets: The animation stack.
@@ -62,10 +69,7 @@ def _scan_subset(datasets: Sequence[Any]) -> List[Any]:
     Returns:
         Every ``stride``-th frame, where the stride is chosen so at most :data:`_CLIM_SCAN_CAP` come back.
     """
-    seq = list(datasets)
-    # Round the stride UP: a floor divide returns 1 for anything under twice the cap, so a 47-frame stack
-    # would scan all 47 while claiming a cap of 24.
-    return seq[:: -(-len(seq) // _CLIM_SCAN_CAP) if seq else 1]
+    return sample_evenly(datasets, cap=_CLIM_SCAN_CAP)
 
 
 def _as_frames(stack: Any) -> List[Any]:
@@ -322,18 +326,28 @@ class AnimationMixin(_MixinBase):
             The ``(min, max)`` across every frame that could be warped and held a finite value, or
             ``None`` when no frame did.
         """
-        lows: List[float] = []
-        highs: List[float] = []
+        return measure_clim(self._frame_values(datasets, band=band))
+
+    def _frame_values(self, datasets: Sequence[Any], band: int = 1) -> Iterator[Any]:
+        """Yield the display-CRS values of ``band`` for each frame that can be warped onto the view.
+
+        The engine-specific half of the stack scan: warping and band reading are this tier's business, while
+        reducing the arrays to one range is :mod:`digitalearth.base.clim`'s.
+
+        Args:
+            datasets: The frames to read.
+            band: 1-based index of the band to read from each frame.
+
+        Yields:
+            One array per readable frame. A frame that warps to nothing is skipped rather than yielded, so it
+            contributes no colour range.
+        """
         for ds in datasets:
             try:
                 warped = self._reproject(ds)
             except OffLimbError:
                 continue  # this frame draws nothing, so it contributes no colour range
-            arr = finite(read_masked_band(warped, band=band))
-            if arr.size:
-                lows.append(float(arr.min()))
-                highs.append(float(arr.max()))
-        return (min(lows), max(highs)) if lows else None
+            yield read_masked_band(warped, band=band)
 
     def _clim_across_views(
         self, dataset: Any, views: Sequence[Any], band: int = 1

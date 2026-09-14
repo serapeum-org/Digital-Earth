@@ -18,13 +18,18 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
+from digitalearth.base.clim import (
+    DEFAULT_CLIM_SCAN_CAP,
+    sample_evenly,
+    stack_clim,
+)
 from digitalearth.base.crs import OffLimbError
 from digitalearth.web.base import _require_layer_api
 
 #: Members scanned when computing a stack's shared colour range. Mirrors the static tier's cap: the scan
 #: reprojects and reads each member, so an unbounded one makes `timeslider` O(stack) before it draws
 #: anything. Pass an explicit `clim` to skip the scan entirely.
-_CLIM_SCAN_CAP = 50
+_CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
 #: Total pixels above which an inlined stack is warned against. `add_raster` warns per member, which never
 #: fires for a stack of individually-modest members that is collectively enormous.
@@ -86,24 +91,10 @@ class TemporalMixin(_MixinBase):
             ``(vmin, vmax)`` finite colour limits across the whole stack, or ``(0.0, 1.0)`` when no member
             holds a finite value.
         """
-        import numpy as np
-
-        from digitalearth.base.arrays import finite
-
-        lows: List[float] = []
-        highs: List[float] = []
-        for member in collection.datasets[:_CLIM_SCAN_CAP]:
-            values = self._to_display_source(member, band=band).z.values
-            # `finite` goes through np.asarray, which drops a mask and would let the fill value (-9999)
-            # through as a real number. pyramids' extractor already NaN-fills nodata, so this only bites
-            # a caller handing us a masked array directly — fill it first and the two agree.
-            if np.ma.isMaskedArray(values):
-                values = values.filled(np.nan)
-            values = finite(values)
-            if values.size:
-                lows.append(float(values.min()))
-                highs.append(float(values.max()))
-        return (min(lows), max(highs)) if lows else (0.0, 1.0)
+        return stack_clim(
+            self._to_display_source(member, band=band).z.values
+            for member in sample_evenly(collection.datasets, cap=_CLIM_SCAN_CAP)
+        )
 
     def timeslider(
         self,
