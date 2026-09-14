@@ -12,6 +12,7 @@ materialise a frame (``dmap[0]``) to assert on it.
 
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
+from digitalearth.base.clim import sample_evenly, stack_clim
 from digitalearth.interactive.base import (
     _masked_to_nan,
     _require_holoviz,
@@ -43,28 +44,30 @@ class TemporalMixin(_MixinBase):
     """
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
-        """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps.
+        """Compute one ``(vmin, vmax)`` for the whole series so the colour range never jumps between frames.
 
-        Note: this pass is **eager** — it reprojects and extracts every member once at ``timecube``
-        construction time (the per-frame ``DynamicMap`` callback warps them again lazily). For a very
-        large datacube, pass an explicit ``clim`` to ``timecube`` to skip this whole-stack scan.
+        Note: this pass is **eager** — it reprojects and extracts the sampled members once at ``timecube``
+        construction time (the per-frame ``DynamicMap`` callback warps them again lazily). At most
+        :data:`~digitalearth.base.clim.DEFAULT_CLIM_SCAN_CAP` members are read, evenly spaced across the
+        series, which is the rule the static and web tiers follow too. For a very large datacube, pass an
+        explicit ``clim`` to ``timecube`` to skip the scan entirely.
+
+        This tier also stopped letting an infinity set a limit. It reduced with ``np.nanmin``/``np.nanmax``,
+        which skip ``NaN`` but keep ``±inf``, so a single overflowed cell pinned the whole ramp to one end.
+        The shared rule drops every non-finite value, so such a frame now contributes its real extremes.
 
         Args:
             collection: A pyramids ``DatasetCollection``.
             band: 1-based band read from each member.
 
         Returns:
-            ``(vmin, vmax)`` finite colour limits across the whole stack.
+            ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
+            holds a finite value.
         """
-        import numpy as np
-
-        lows, highs = [], []
-        for member in collection.datasets:
-            arr = _masked_to_nan(self._to_display_source(member, band=band).z.values)
-            if np.isfinite(arr).any():
-                lows.append(np.nanmin(arr))
-                highs.append(np.nanmax(arr))
-        return (float(min(lows)), float(max(highs))) if lows else (0.0, 1.0)
+        return stack_clim(
+            _masked_to_nan(self._to_display_source(member, band=band).z.values)
+            for member in sample_evenly(collection.datasets)
+        )
 
     @_skips_off_limb
     def timecube(
@@ -93,8 +96,9 @@ class TemporalMixin(_MixinBase):
             band: 1-based band rendered in every frame.
             cmap: Colormap name; ``None`` (default) resolves it from the variable through
                 ``autostyle.auto_style`` (#249), exactly as ``image`` does.
-            clim: Frozen ``(vmin, vmax)`` colour limits; ``None`` computes a global range once over
-                the whole stack.
+            clim: Frozen ``(vmin, vmax)`` colour limits; ``None`` computes one range for the whole series
+                once, from at most :data:`~digitalearth.base.clim.DEFAULT_CLIM_SCAN_CAP` members sampled
+                evenly across it.
             colorbar: Whether to draw a colorbar.
             **opts: Extra HoloViews style options applied to every frame.
 

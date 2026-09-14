@@ -18,13 +18,19 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
+from digitalearth.base.clim import (
+    DEFAULT_CLIM_SCAN_CAP,
+    sample_evenly,
+    stack_clim,
+)
 from digitalearth.base.crs import OffLimbError
 from digitalearth.web.base import _require_layer_api
 
-#: Members scanned when computing a stack's shared colour range. Mirrors the static tier's cap: the scan
+#: Members scanned when computing a stack's shared colour range — `digitalearth.base.clim`'s cap, the one
+#: number the static and interactive tiers read too, picked at the same evenly-spread positions. The scan
 #: reprojects and reads each member, so an unbounded one makes `timeslider` O(stack) before it draws
 #: anything. Pass an explicit `clim` to skip the scan entirely.
-_CLIM_SCAN_CAP = 50
+_CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
 #: Total pixels above which an inlined stack is warned against. `add_raster` warns per member, which never
 #: fires for a stack of individually-modest members that is collectively enormous.
@@ -71,39 +77,27 @@ class TemporalMixin(_MixinBase):
     """Time-slider builder for :class:`~digitalearth.web.map.WebMap`."""
 
     def _global_clim(self, collection: Any, band: int) -> Tuple[float, float]:
-        """Compute one ``(vmin, vmax)`` over every member so the colour range never jumps between frames.
+        """Compute one ``(vmin, vmax)`` for the whole series so the colour range never jumps between frames.
 
         Note: this pass is **eager** — it reprojects and reads each scanned member once at ``timeslider``
         construction time (every member is then warped again when its image layer is built). At most
-        :data:`_CLIM_SCAN_CAP` members are scanned, mirroring the static tier's cap; pass an explicit
-        ``clim`` to skip the scan entirely.
+        :data:`_CLIM_SCAN_CAP` members are scanned, spread evenly across the whole series rather than taken
+        from its head — the rule the static and interactive tiers follow too, so the same members are read,
+        the same way, whichever tier draws it. The resulting numbers can still differ slightly: each tier
+        warps to its own display CRS before measuring. Pass an explicit ``clim`` to skip the scan entirely.
 
         Args:
             collection: A pyramids ``DatasetCollection``.
             band: 1-based band read from each member.
 
         Returns:
-            ``(vmin, vmax)`` finite colour limits across the whole stack, or ``(0.0, 1.0)`` when no member
+            ``(vmin, vmax)`` finite colour limits taken from the sampled members, or ``(0.0, 1.0)`` when none
             holds a finite value.
         """
-        import numpy as np
-
-        from digitalearth.base.arrays import finite
-
-        lows: List[float] = []
-        highs: List[float] = []
-        for member in collection.datasets[:_CLIM_SCAN_CAP]:
-            values = self._to_display_source(member, band=band).z.values
-            # `finite` goes through np.asarray, which drops a mask and would let the fill value (-9999)
-            # through as a real number. pyramids' extractor already NaN-fills nodata, so this only bites
-            # a caller handing us a masked array directly — fill it first and the two agree.
-            if np.ma.isMaskedArray(values):
-                values = values.filled(np.nan)
-            values = finite(values)
-            if values.size:
-                lows.append(float(values.min()))
-                highs.append(float(values.max()))
-        return (min(lows), max(highs)) if lows else (0.0, 1.0)
+        return stack_clim(
+            self._to_display_source(member, band=band).z.values
+            for member in sample_evenly(collection.datasets, cap=_CLIM_SCAN_CAP)
+        )
 
     def timeslider(
         self,
@@ -144,7 +138,8 @@ class TemporalMixin(_MixinBase):
             k: Vector only — number of classes for the graduated schemes.
             cmap: matplotlib colormap for the value colouring.
             opacity: Layer opacity in ``[0, 1]``.
-            clim: Raster only — frozen ``(vmin, vmax)``; ``None`` computes one range over the whole stack.
+            clim: Raster only — frozen ``(vmin, vmax)``; ``None`` computes one range for the whole series
+                from at most :data:`_CLIM_SCAN_CAP` members sampled evenly across it.
 
         Returns:
             This map (chainable). The slider appears when the map is rendered/shown in a notebook.
@@ -267,7 +262,8 @@ class TemporalMixin(_MixinBase):
             band: 1-based band drawn for every member.
             cmap: matplotlib colormap applied to every member.
             opacity: Image-layer opacity in ``[0, 1]``.
-            clim: Frozen ``(vmin, vmax)``; ``None`` computes one range over the whole stack.
+            clim: Frozen ``(vmin, vmax)``; ``None`` computes one range for the whole series from at most
+                :data:`_CLIM_SCAN_CAP` members sampled evenly across it.
 
         Returns:
             This map (chainable).
@@ -370,7 +366,9 @@ class TemporalMixin(_MixinBase):
         for index, member in enumerate(members):
             values = self._to_display_source(member, band=band).z.values
             if np.ma.isMaskedArray(values):
-                values = values.filled(np.nan)
+                # Cast before filling: a nodata sentinel is usually an integer one, and `filled(nan)` on an
+                # int band raises rather than widening it. Same defect `measure_clim` carried.
+                values = np.ma.filled(values.astype("float64"), np.nan)
             total_pixels += int(getattr(values, "size", 0))
             if not finite(values).size:
                 raise ValueError(

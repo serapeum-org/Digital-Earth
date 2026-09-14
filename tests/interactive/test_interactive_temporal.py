@@ -94,11 +94,25 @@ class TestTimecube:
 
 
 class TestGlobalClim:
-    """``_global_clim`` — the frozen colour range over the whole stack."""
+    """``_global_clim`` — one frozen colour range, sampled across the stack."""
 
-    def test_spans_all_members(self, m, cube):
+    def test_the_range_is_finite_and_ordered(self, m, cube):
+        """The scan yields usable limits for a readable stack.
+
+        Args:
+            m: The interactive map under test.
+            cube: The member collection to measure.
+
+        Test scenario:
+            Named for what it checks. It used to be ``test_spans_all_members``, which stopped being true when
+            the tier adopted the shared cap — at most ``DEFAULT_CLIM_SCAN_CAP`` members are read now, spread
+            across the series. Which members those are is pinned in ``test_interactive_stack_clim.py``.
+        """
         vmin, vmax = m._global_clim(cube, band=1)
-        assert vmin <= vmax and np.isfinite([vmin, vmax]).all()
+        assert vmin <= vmax, f"the range must be ordered, got ({vmin}, {vmax})"
+        assert np.isfinite([vmin, vmax]).all(), (
+            f"the range must be finite, got ({vmin}, {vmax})"
+        )
 
     def test_all_nodata_members_fall_back_to_unit_range(self, m, cube, monkeypatch):
         """When every member is all-NaN, the range falls back to (0.0, 1.0) instead of erroring."""

@@ -66,28 +66,29 @@ _UNSET = _Unset()
 #: * ``3d`` has no display CRS at all (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs` is ``None``
 #:   and says so) and no coastline or extent concept; its scalar bar is the ``colorbar`` toggle.
 #: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
-#:   coastline layer and no colorbar — its key is ``WebMap.legend``, a different thing with a different
-#:   arity, and wiring ``colorbar=`` to it is deliberately left to the ``colorbar``/``legend`` rename
-#:   (TODO(#254)) rather than guessed at here.
+#:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
+#:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
+#:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
+#:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
+#:   and stays with U-3.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     "matplotlib": frozenset(
         {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
     ),
     "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
     "3d": frozenset({"colorbar"}),
-    "web": frozenset({"crs", "basemap"}),
+    "web": frozenset({"crs", "basemap", "colorbar"}),
 }
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
 #: cannot honour the parameter is not a dropped request — there was no request — so it is allowed through.
 #:
-#: ``colorbar=False`` is one of them (review L9). The rule here is about *dropped requests*, and what
-#: ``False`` asks for is a map with no colorbar — which is exactly what the one tier that cannot honour the
-#: parameter (``web``) draws anyway. Nothing is lost, so refusing it was pedantry of the same shape as
+#: ``colorbar=False`` was one of them (review L9). The rule here is about *dropped requests*, and what
+#: ``False`` asked for was a map with no colorbar — exactly what the one tier that could not honour the
+#: parameter (``web``) drew anyway. Nothing was lost, so refusing it was pedantry of the same shape as
 #: refusing ``coastlines=False`` there, and it broke the caller who passes one kwargs dict through to
-#: whichever backend they picked. ``colorbar=True`` stays a real request and is still refused by name:
-#: ``web`` keys itself with :meth:`~digitalearth.web.decoration.DecorationMixin.legend`, a different thing
-#: with a different arity (TODO(#254)).
+#: whichever backend they picked. The entry is now moot rather than wrong: ``web`` declares ``colorbar``
+#: too (#254), so no value of it reaches this table on any backend.
 #:
 #: ``crs`` is absent on purpose and stays absent: it has no value that asks for nothing — every CRS names a
 #: projection to display in, and there is no "no CRS" to pass.
@@ -375,10 +376,32 @@ def quickmap(
         coastlines: When True, overlay coastlines (tolerated and warned about if the assets are
             unreachable). ``backend="matplotlib"``/``"interactive"`` only; ``coastlines=True`` on another
             backend is refused, while ``coastlines=False`` — which asks for nothing — is accepted anywhere.
-        colorbar: When True, add a colorbar for the drawn layer (skipped if there is nothing mappable);
-            defaults to ``True``. ``colorbar=True`` is not supported by ``backend="web"``, whose key is
-            ``WebMap.legend``; ``colorbar=False`` is accepted there, because that tier draws no colorbar to
-            begin with, so suppressing one drops no request.
+        colorbar: Whether the map carries a colour key for the drawn layer. ``True`` is the default and
+            adds one **if there is one to draw**; ``False`` draws none. Every backend accepts it, so the
+            same call is valid everywhere (#254), but each reaches its own mechanism: ``matplotlib`` builds
+            a colorbar, ``interactive`` toggles one, ``3d`` shows or hides the scalar bar, and ``web``
+            builds :meth:`~digitalearth.web.decoration.DecorationMixin.legend`.
+
+            ``False`` is the half that is genuinely uniform: it reliably means "no key" on all four.
+            ``True`` is not one behaviour but two. On ``matplotlib`` and ``web`` it **actively builds** a
+            key; on ``interactive`` and ``3d`` it is **passive** — it leaves the builder's or engine's own
+            default in place, which for PyVista means a scalar bar iff the layer carries scalars. Only
+            ``False`` acts on those two.
+
+            What "nothing to draw" means also differs, and both active tiers skip **silently** rather than
+            warning. ``matplotlib`` builds a colorbar for almost any mappable layer, and skips when the last
+            layer has no mappable or is categorical. ``web`` keys only a **classification** — what a builder
+            recorded in :attr:`~digitalearth.web.base.WebMapBase.last_legend` — so an unclassified layer gets
+            nothing. The split is not raster-vs-vector: the same unclassified polygon layer gets a colorbar
+            on ``matplotlib`` and no key on ``web``, and every raster falls on the empty side there because
+            ``add_raster`` records no classification. Giving the web tier a continuous ramp key for a raster
+            is tier work, not part of this argument's contract. Neither active tier logs when it skips: the
+            ``matplotlib`` path warns only if its builder refuses, and the ``web`` path lets a refusal
+            surface, since past the guard only a malformed classification can raise.
+
+            The *tier methods* also still differ in shape — a builder that takes content on
+            ``matplotlib``/``web``, a visibility flag on ``interactive`` — and unifying those names is
+            Core-contract work (U-3).
         backend: ``"matplotlib"`` (default) returns a static :class:`Map`; ``"interactive"`` returns a
             pan/zoom :class:`~digitalearth.interactive.map.InteractiveMap` (needs the ``interactive``
             extra); ``"3d"`` returns a :class:`~digitalearth.three_d.scene3d.Scene3D` (needs the ``3d``
@@ -395,9 +418,13 @@ def quickmap(
         :class:`Scene3D` when ``backend="3d"``, or a :class:`WebMap` when ``backend="web"``.
 
     Raises:
-        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``coastlines``/``colorbar`` the
+        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``basemap``/``coastlines`` the
             chosen backend cannot honour — the message names both the parameter and the backend. Also for a
-            ``kind`` naming a renderer the chosen backend does not have, and for ``column`` on point input.
+            ``kind`` naming a renderer the chosen backend does not have, for ``column`` on point input, and
+            for an empty ``FeatureCollection``, which would otherwise draw nothing in silence.
+            ``colorbar`` is never refused, since every backend honours it.
+        TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
+            ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
 
     Examples:
         - One call turns a raster into a finished map with a colorbar:
@@ -471,7 +498,9 @@ def quickmap(
             **kwargs,
         )
     if backend == "web":
-        return _quickmap_web(data, crs=crs, basemap=basemap, **kwargs)
+        return _quickmap_web(
+            data, crs=crs, basemap=basemap, colorbar=colorbar, **kwargs
+        )
     scene = Map(crs=3857 if crs is _UNSET else crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
@@ -614,11 +643,45 @@ def _draw_web_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
     scene.points(data, **kwargs)
 
 
+def _add_web_legend(scene: Any) -> Any:
+    """Add the web tier's colour key, tolerating a map with nothing classified to describe.
+
+    The web counterpart of :func:`_add_colorbar`. ``WebMap.legend`` is a *builder* — it reads the
+    classification the last layer recorded — so on a map with no classified layer it raises rather than
+    drawing an empty box. Under ``quickmap(colorbar=True)`` that is not a caller error: the default asks for
+    a key *if there is one to draw*, exactly as the matplotlib path treats an unmappable layer.
+
+    Args:
+        scene: The ``WebMap`` whose most recent classified layer should get a key.
+
+    Returns:
+        The same map, or ``None`` when there was no classification to describe.
+
+    Raises:
+        AttributeError: if ``scene`` carries no ``last_legend`` — that is a defect, not an unkeyed map.
+        Exception: whatever ``legend()`` raises for a malformed classification, which is a web-tier bug and
+            must surface rather than be reported as "no key to draw".
+    """
+    # Answered from recorded state before the engine is touched. `legend()` is a builder: it refuses a map
+    # with nothing classified to describe, and reaching that refusal first calls `_require_maplibre()`. Under
+    # the `colorbar=True` default neither is a caller error -- they asked for a key *if there is one* -- so a
+    # map with no classification must not be the reason an ImportError surfaces.
+    # Read straight off the map, not through getattr: `WebMapBase.__init__` always sets this, so a scene
+    # without it is a defect rather than a map with nothing to key, and a rename must fail here loudly
+    # instead of silently dropping every web key.
+    if not scene.last_legend:
+        return None
+    # No `except` around the builder. The guard above leaves only a malformed `last_legend` able to raise --
+    # a bug in a web builder -- and swallowing that would report a library defect as "no key to draw".
+    return scene.legend()
+
+
 def _quickmap_web(
     data: PlottableData,
     *,
     crs: Any = _UNSET,
     basemap: bool | str | Any = False,
+    colorbar: bool = True,
     **kwargs,
 ) -> Any:
     """Build a finished ``WebMap`` from ``data`` (the ``backend="web"`` path, DX.1).
@@ -636,6 +699,10 @@ def _quickmap_web(
         crs: Display CRS, forwarded to ``WebMap``; :data:`_UNSET` leaves the web tier's own default.
         basemap: ``True`` for the web tier's default dark tile basemap, or the source itself (provider name
             or keyed preset), forwarded to ``WebMap.basemap``.
+        colorbar: When ``True`` (the default), add this tier's colour key through :func:`_add_web_legend`,
+            which checks before it builds rather than catching afterwards: a map with no classified layer to
+            describe gets no key and no error, while a failure inside the builder still surfaces. ``False``
+            leaves the map without one.
         **kwargs: Forwarded to the chosen ``WebMap`` builder (e.g. ``cmap``, ``column``, ``scheme``, ``k``).
 
     Returns:
@@ -660,6 +727,11 @@ def _quickmap_web(
             scene.basemap()
         else:
             scene.basemap(source)
+    if colorbar:
+        # This tier's key is a builder, not a toggle, and it refuses a map with nothing classified to
+        # describe. That is this tier's "no mappable layer" case, which the matplotlib path tolerates too,
+        # so it is tolerated here rather than turning `colorbar=True` into an error the caller did not cause.
+        _add_web_legend(scene)
     return scene
 
 
