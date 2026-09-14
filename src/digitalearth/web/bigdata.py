@@ -22,6 +22,7 @@ from loguru import logger
 
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.spec import Scale
 from digitalearth.web.base import _require_layer_api
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -100,13 +101,8 @@ class BigDataMixin(_MixinBase):
         if weight is not None:
             values = np.asarray(self._require_column(gdf, weight), dtype=float)
             finite = values[np.isfinite(values)]
-            lo, hi = (
-                (float(finite.min()), float(finite.max()))
-                if finite.size
-                else (0.0, 1.0)
-            )
-            if hi <= lo:
-                hi = lo + 1.0
+            lo, hi = Scale.from_values(finite).as_limits()
+
             paint["heatmap-weight"] = [
                 "interpolate",
                 ["linear"],

@@ -52,6 +52,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band, ring_runs
 from digitalearth.base.crs import source_epsg
+from digitalearth.base.spec import Scale
 from digitalearth.static.animation import save_animation
 
 #: Default shape of the global equirectangular canvas built by :meth:`TexturedGlobe.from_dataset`,
@@ -1389,11 +1390,11 @@ class TexturedGlobe:
         data_lo, data_hi = (
             (float(good.min()), float(good.max())) if good.size else (0.0, 1.0)
         )
-        lo = data_lo if vmin is None else float(vmin)
-        hi = data_hi if vmax is None else float(vmax)
-        if hi <= lo:  # a constant band has no range to normalise against
-            hi = lo + 1.0
-        return lo, hi
+        del (
+            data_lo,
+            data_hi,
+        )  # the measurement, the override and the widening are one rule now
+        return Scale.from_values(good, vmin=vmin, vmax=vmax).as_limits()
 
     @classmethod
     def _colorize(

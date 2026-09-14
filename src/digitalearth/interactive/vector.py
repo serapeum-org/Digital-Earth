@@ -18,6 +18,7 @@ producing an empty Bokeh layer.
 from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.spec import Scale
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -465,10 +466,8 @@ class VectorMixin(_MixinBase):
                 and when an explicit ``cmap`` sequence carries a different number of colours than the
                 scheme produced classes — see the note above.
         """
-        from cleopatra.styling.styles import classify
-
         try:
-            edges, _ = classify(gdf[column].to_numpy(), scheme, k)
+            edges = Scale.from_values(gdf[column].to_numpy(), scheme=scheme, k=k).breaks
         except ValueError as err:  # constant column, unknown scheme, k < 1, …
             raise ValueError(
                 f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"

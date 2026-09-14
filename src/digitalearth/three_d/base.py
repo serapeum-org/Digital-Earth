@@ -22,6 +22,7 @@ import pyvista as pv
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import Source
+from digitalearth.base.spec import Scale
 
 logger = logging.getLogger(__name__)
 
@@ -179,11 +180,9 @@ def classified_scalars(
         )
         return _discrete_style(codes, colours)
 
-    from cleopatra.styling.styles import classify
-
     numbers = np.asarray(values, dtype="float64")
     try:
-        edges, _ = classify(numbers, scheme, k)
+        edges = Scale.from_values(numbers, scheme=scheme, k=k).breaks
     except Exception as error:  # unknown scheme, constant column, k < 1 …
         raise ValueError(
             f"cannot classify values (scheme={scheme!r}, k={k}): {error}"

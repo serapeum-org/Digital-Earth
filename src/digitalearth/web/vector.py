@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.spec import Scale
 from digitalearth.web.base import _require_layer_api
 
 
@@ -212,10 +213,8 @@ class VectorMixin(_MixinBase):
             return expr
 
         if scheme is not None:
-            from cleopatra.styling.styles import classify
-
             try:
-                edges, _ = classify(values, scheme, k)
+                edges = Scale.from_values(values, scheme=scheme, k=k).breaks
             except (
                 ValueError
             ) as err:  # constant / single-feature column, unknown scheme, k<1, …
@@ -248,9 +247,7 @@ class VectorMixin(_MixinBase):
         finite = finite[np.isfinite(finite)]
         if finite.size == 0:
             raise ValueError(f"column {column!r} has no finite values to colour")
-        lo, hi = float(finite.min()), float(finite.max())
-        if hi <= lo:
-            hi = lo + 1.0
+        lo, hi = Scale.from_values(finite).as_limits()
         stops = np.linspace(lo, hi, 5)
         colors = self._cmap_hex(cmap, len(stops))
         expr = ["interpolate", ["linear"], ["get", column]]

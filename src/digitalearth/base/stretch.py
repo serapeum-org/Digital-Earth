@@ -16,6 +16,7 @@ from typing import List, Optional, Sequence, Tuple
 import numpy as np
 
 from digitalearth.base.arrays import finite
+from digitalearth.base.spec import Scale
 
 #: Percentiles clipped off each channel by the default composite contrast stretch.
 _STRETCH_PERCENTILES = (2, 98)
@@ -268,11 +269,10 @@ def stretch_to_unit(
             # fixed span, which would clip a live channel flat if the freeze simply never saw it (M2).
             lo, hi = channel_limits(band[..., None])[0]
         if not (np.isfinite(lo) and np.isfinite(hi)):
-            lo, hi = (
-                0.0,
-                1.0,
-            )  # this frame's channel is nodata too: any span, its cells stay NaN
-        elif hi <= lo:
-            hi = lo + 1.0  # a constant channel: widen rather than divide by zero
+            # This frame's channel is nodata too: any span will do, its cells stay NaN either way.
+            lo, hi = 0.0, 1.0
+        else:
+            # A constant channel is widened rather than divided by — the one rule, in base/spec.
+            lo, hi = Scale.from_limits(lo, hi).as_limits()
         out[..., i] = np.clip((band - lo) / (hi - lo), 0.0, 1.0)
     return out

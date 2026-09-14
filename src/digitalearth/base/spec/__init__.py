@@ -13,8 +13,12 @@ What lives here:
 
 * :mod:`~digitalearth.base.spec.bounds` — :class:`~digitalearth.base.spec.bounds.Bounds`, a rectangle that
   carries its own CRS and names each ordering as a method rather than leaving it to position.
+* :mod:`~digitalearth.base.spec.scale` — :class:`~digitalearth.base.spec.scale.Scale`, how a value becomes
+  a colour: the domain, the widening rule five tiers had each written out, the classifier three tiers each
+  called, and the categorical mapping — resolved once and freezable.
 """
 
 from digitalearth.base.spec.bounds import Bounds
+from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 
-__all__ = ["Bounds"]
+__all__ = ["Bounds", "DEFAULT_CLASS_COUNT", "Scale"]
