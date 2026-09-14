@@ -13,6 +13,9 @@ What lives here:
 
 * :mod:`~digitalearth.base.spec.bounds` — :class:`~digitalearth.base.spec.bounds.Bounds`, a rectangle that
   carries its own CRS and names each ordering as a method rather than leaving it to position.
+* :mod:`~digitalearth.base.spec.dataref` — :class:`~digitalearth.base.spec.dataref.DataRef`, where a
+  layer's data comes from, so a layer refers to data instead of holding it. Resolved through
+  :mod:`digitalearth.base.registry`.
 * :mod:`~digitalearth.base.spec.selection` — :class:`~digitalearth.base.spec.selection.Selection`, which
   slice of a dataset a layer draws: bands as a **tuple**, plus time, level, member, overview and budget —
   the axes each tier used to carry in a parameter of its own beside the scalar ``band``.
@@ -22,7 +25,15 @@ What lives here:
 """
 
 from digitalearth.base.spec.bounds import Bounds
+from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 from digitalearth.base.spec.selection import DEFAULT_BAND, Selection
 
-__all__ = ["Bounds", "DEFAULT_BAND", "DEFAULT_CLASS_COUNT", "Scale", "Selection"]
+__all__ = [
+    "Bounds",
+    "DEFAULT_BAND",
+    "DEFAULT_CLASS_COUNT",
+    "DataRef",
+    "Scale",
+    "Selection",
+]

@@ -17,8 +17,12 @@ What it absorbs:
 | `classify(values, scheme, k)` plus its own `try`/`except` | `interactive/vector.py`, `three_d/base.py`, `web/vector.py` |
 | the stack colour range | :mod:`digitalearth.base.clim` — one way to *construct* frozen limits, not a parallel mechanism |
 
-Engine-neutral: the classifier is cleopatra's, reached lazily inside a method, and no renderer is imported at
-module level. See :mod:`digitalearth.base.spec` for the rule.
+Engine-neutral, and the classifier is the part that took thought. The arithmetic lives in cleopatra, which
+`base/` may not import **at all** — not even lazily, since `tests/test_base_is_engine_neutral.py` reads the
+source rather than the imports. So this module declares a seam,
+:func:`digitalearth.base.registry.register_classifier`, and :mod:`digitalearth` fills it at package import.
+The policy stays here — the default class count, the error that names the scheme and `k`, turning edges
+into classes — and only the arithmetic is injected.
 """
 
 from dataclasses import dataclass, field
@@ -28,6 +32,7 @@ from typing import Any, List, Optional, Sequence, Tuple
 import numpy as np
 
 from digitalearth.base.arrays import finite
+from digitalearth.base.registry import get_classifier
 
 __all__ = ["DEFAULT_CLASS_COUNT", "Scale"]
 
@@ -273,7 +278,7 @@ class Scale:
 
     @staticmethod
     def _breaks(values: Any, scheme: str, k: int) -> Tuple[float, ...]:
-        """Cut class edges with cleopatra's classifier, blaming the caller's arguments when it refuses.
+        """Cut class edges with the registered classifier, blaming the caller's arguments when it refuses.
 
         Args:
             values: The data to classify.
@@ -285,11 +290,13 @@ class Scale:
 
         Raises:
             ValueError: when the classifier refuses — an unknown scheme, a class count below one, or a
-                constant column that cannot be cut. Three tiers each wrote their own version of this message;
-                the classifier's own error names none of the three arguments, so they are named here.
+                constant column that cannot be cut. Three tiers each wrote their own version of this
+                message; the classifier's own error names none of the three arguments, so they are
+                named here.
+            RuntimeError: if no classifier has been registered — see
+                :func:`~digitalearth.base.registry.register_classifier`.
         """
-        from cleopatra.styling.styles import classify
-
+        classify = get_classifier()
         numbers = np.asarray(values, dtype="float64")
         try:
             edges, _ = classify(numbers, scheme, k)

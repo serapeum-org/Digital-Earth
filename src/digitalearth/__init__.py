@@ -44,6 +44,31 @@ default), `interactive` (HoloViz/Bokeh), `three_d` (PyVista) and `web` (MapLibre
 engine-neutral `base`. `quickmap`/`quickplot` are the one-call entry points; `Map` is the composable scene.
 """
 
+from digitalearth.base.registry import register_classifier as _register_classifier
+
+
+def _cleopatra_classify(values, scheme, k):
+    """Cut class edges with cleopatra's classifier.
+
+    The implementation behind `base/`'s classifier seam. It lives here rather than in `base/` because `base/`
+    may not import a renderer, and cleopatra is one; the import is inside the call so importing this package
+    does not pull it in.
+
+    Args:
+        values: The data to classify.
+        scheme: Scheme name.
+        k: Number of classes.
+
+    Returns:
+        Whatever ``cleopatra.styling.styles.classify`` returns — an ``(edges, _)`` pair.
+    """
+    from cleopatra.styling.styles import classify
+
+    return classify(values, scheme, k)
+
+
+_register_classifier(_cleopatra_classify)
+
 from digitalearth.api import quickmap, quickplot  # noqa: E402
 from digitalearth.base.sources import DimensionInfo, Source, get_source  # noqa: E402
 from digitalearth.ops.batch import Batch  # noqa: E402
