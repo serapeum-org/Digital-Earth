@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -3987,8 +3987,8 @@ digitalearth.static.map.Map.animate: Combines these across a whole stack so ever
 <a id="__codelineno-0-146" name="__codelineno-0-146"></a>            <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="s2">&quot;nan&quot;</span><span class="p">)))</span>
 <a id="__codelineno-0-147" name="__codelineno-0-147"></a>            <span class="k">continue</span>
 <a id="__codelineno-0-148" name="__codelineno-0-148"></a>        <span class="c1"># finite() already returned a fresh array, so numpy may sort it in place instead of copying</span>
-<a id="__codelineno-0-149" name="__codelineno-0-149"></a>        <span class="c1"># again — the scan reads three channels per frame, for the frames</span>
-<a id="__codelineno-0-150" name="__codelineno-0-150"></a>        <span class="c1"># `digitalearth.base.clim.sample_evenly` picks (at most `DEFAULT_CLIM_SCAN_CAP` of them).</span>
+<a id="__codelineno-0-149" name="__codelineno-0-149"></a>        <span class="c1"># again — the scan reads three channels per frame, for however many frames its caller chose to</span>
+<a id="__codelineno-0-150" name="__codelineno-0-150"></a>        <span class="c1"># hand over.</span>
 <a id="__codelineno-0-151" name="__codelineno-0-151"></a>        <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">percentile</span><span class="p">(</span><span class="n">values</span><span class="p">,</span> <span class="n">_STRETCH_PERCENTILES</span><span class="p">,</span> <span class="n">overwrite_input</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-152" name="__codelineno-0-152"></a>        <span class="n">bounds</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="nb">float</span><span class="p">(</span><span class="n">lo</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">hi</span><span class="p">)))</span>
 <a id="__codelineno-0-153" name="__codelineno-0-153"></a>    <span class="k">return</span> <span class="n">bounds</span>
