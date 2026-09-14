@@ -638,6 +638,12 @@ def _add_web_legend(scene: Any) -> Any:
     Returns:
         The same map, or ``None`` when there was no classification to describe.
     """
+    # Answered from recorded state before the engine is touched. `legend()` is a builder: it refuses a map
+    # with nothing classified to describe, and reaching that refusal first calls `_require_maplibre()`. Under
+    # the `colorbar=True` default neither is a caller error -- they asked for a key *if there is one* -- so a
+    # map with no classification must not be the reason an ImportError surfaces.
+    if not getattr(scene, "last_legend", None):
+        return None
     try:
         return scene.legend()
     except UNMAPPABLE as error:

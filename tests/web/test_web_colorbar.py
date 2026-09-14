@@ -19,18 +19,17 @@ def _need_engine():
 
 
 @pytest.fixture()
-def polygons_gdf():
-    """Four triangles in lon/lat (EPSG:4326) with a ``pop`` value ramp."""
-    gpd = pytest.importorskip("geopandas")
-    from shapely.geometry import Polygon
+def polygon_fc():
+    """A polygon ``FeatureCollection`` carrying an ``fid`` column to classify.
 
-    geoms = [
-        Polygon([(0, 0), (1, 0), (1, 1)]),
-        Polygon([(2, 2), (3, 2), (3, 3)]),
-        Polygon([(4, 4), (5, 4), (5, 5)]),
-        Polygon([(6, 6), (7, 6), (7, 7)]),
-    ]
-    return gpd.GeoDataFrame({"pop": [1.0, 5.0, 9.0, 3.0]}, geometry=geoms, crs=4326)
+    ``quickmap`` dispatches on pyramids types, so this is a ``FeatureCollection`` rather than the bare
+    ``GeoDataFrame`` the tier builders also accept.
+    """
+    from pyramids.feature import FeatureCollection
+
+    fc = FeatureCollection.read_file("tests/data/points.geojson")
+    fc["geometry"] = fc.geometry.buffer(500.0)
+    return fc
 
 
 class TestEveryBackendHonoursColorbar:
@@ -55,48 +54,48 @@ class TestEveryBackendHonoursColorbar:
 class TestTheWebKeyFollowsTheFlag:
     """``colorbar=True`` builds the key when there is one to build, and is tolerated when there is not."""
 
-    def test_a_classified_map_gets_its_key(self, polygons_gdf):
+    def test_a_classified_map_gets_its_key(self, polygon_fc):
         """A choropleth built through ``quickmap`` carries a legend panel.
 
         Args:
-            polygons_gdf: Four triangles with a ``pop`` ramp to classify.
+            polygon_fc: A polygon collection with an ``fid`` column to classify.
 
         Test scenario:
             ``colorbar=True`` is the default, so the one-call path must produce the key a thematic map is
             unreadable without — the same thing ``backend="matplotlib"`` does with a colorbar.
         """
-        scene = qp.quickmap(polygons_gdf, backend="web", column="pop", colorbar=True)
+        scene = qp.quickmap(polygon_fc, backend="web", column="fid", colorbar=True)
         assert "legend" in scene._panels, (
             f"a classified web map must carry a key, panels present: {sorted(scene._panels)}"
         )
 
-    def test_colorbar_false_leaves_no_key(self, polygons_gdf):
+    def test_colorbar_false_leaves_no_key(self, polygon_fc):
         """``colorbar=False`` suppresses the key on a map that could have carried one.
 
         Args:
-            polygons_gdf: Four triangles with a ``pop`` ramp to classify.
+            polygon_fc: A polygon collection with an ``fid`` column to classify.
 
         Test scenario:
             The flag has to be a real choice on this tier, not just an accepted no-op — otherwise "every
             backend honours it" is only half true.
         """
-        scene = qp.quickmap(polygons_gdf, backend="web", column="pop", colorbar=False)
+        scene = qp.quickmap(polygon_fc, backend="web", column="fid", colorbar=False)
         assert "legend" not in scene._panels, (
             "colorbar=False must leave the map without a key"
         )
 
-    def test_a_map_with_nothing_to_describe_is_tolerated(self, polygons_gdf):
+    def test_a_map_with_nothing_to_describe_is_tolerated(self, polygon_fc):
         """An unclassified layer under the default ``colorbar=True`` warns rather than raising.
 
         Args:
-            polygons_gdf: The same triangles, drawn without a ``column`` so nothing is classified.
+            polygon_fc: The same collection, drawn without a ``column`` so nothing is classified.
 
         Test scenario:
             ``WebMap.legend`` refuses a map with no classification to describe. Under the default that is not
             a caller error — they asked for a key *if there is one* — so it is skipped the same way the
             matplotlib path skips an outline-only layer, rather than turning the default into a crash.
         """
-        scene = qp.quickmap(polygons_gdf, backend="web", colorbar=True)
+        scene = qp.quickmap(polygon_fc, backend="web", colorbar=True)
         assert "legend" not in scene._panels, (
             "an unclassified map has no key to draw, so none should appear"
         )

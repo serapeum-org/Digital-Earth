@@ -335,7 +335,6 @@ class TestBackendCapabilityRefusal:
             ("3d", "kind", "contourf"),
             ("web", "domain", "europe"),
             ("web", "coastlines", True),
-            ("web", "colorbar", True),
             ("web", "kind", "contourf"),
             ("interactive", "domain", "europe"),
         ],
@@ -393,9 +392,9 @@ class TestBackendCapabilityRefusal:
             ``coastlines=False`` on the web tier would be pedantry — there were no coastlines to lose — and
             would break callers who pass one kwargs dict through to whichever backend they picked.
 
-            ``colorbar=False`` is the same shape and was refused anyway until review L9: the web tier draws
-            no colorbar at all, so suppressing one asks for exactly what that tier already does.
-            ``colorbar=True`` there stays a refusal — see the parametrised test above.
+            ``colorbar=False`` is the same shape and was refused anyway until review L9. It is no longer a
+            special case at all: since #254 the web tier honours ``colorbar=`` in both directions, building
+            its key through ``WebMap.legend``, so neither value is a dropped request there.
         """
         builder = mocker.patch.object(
             qp, "_quickmap_3d" if backend == "3d" else "_quickmap_web"
@@ -549,7 +548,7 @@ class TestTheRefusalNamesWhatTheCallerWrote:
 
     @pytest.mark.parametrize(
         ("backend", "kwargs"),
-        [("3d", {"basemap": 0}), ("web", {"colorbar": 0})],
+        [("3d", {"basemap": 0}), ("web", {"coastlines": 0})],
     )
     def test_a_numeric_zero_is_not_the_inert_false(self, backend, kwargs):
         """``0 == False`` is ``True`` in Python, but ``basemap=0`` is a value the caller typed.
