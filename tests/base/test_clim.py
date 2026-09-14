@@ -46,20 +46,37 @@ class TestSampleEvenly:
             f"the sample must reach past a 50-frame head slice, but stopped at {picked[-1]}"
         )
 
-    def test_a_late_peak_is_reached_that_a_head_slice_would_miss(self):
-        """A value late in the series is measured, where the old web rule never looked.
+    def test_the_final_frame_is_always_sampled(self):
+        """The last member of the series is read, whatever the stack length.
 
         Test scenario:
-            The concrete regression from #174: a 60-member stack whose extreme sits at index 57 — a flood
-            crest or fire scar. The old ``datasets[:50]`` head slice never reached it and clipped the peak to
-            solid top-of-ramp; the stride samples it.
+            The reason the sample is index-selected rather than strided. A plain stride starts at 0 and runs
+            out before the end — 60 frames stopped at 57, 200 stopped at 198 — and that is the wrong end to
+            drop: a rising series (accumulated rainfall, a cumulative anomaly, a flood crest) holds its
+            maximum in the final frames, so those tiers saturated exactly where the data peaked.
+        """
+        for count in (25, 30, 47, 60, 100, 200):
+            picked = sample_evenly(list(range(count)), cap=24)
+            assert picked[-1] == count - 1, (
+                f"a {count}-frame stack must sample its final frame, but stopped at {picked[-1]}"
+            )
+            assert picked[0] == 0, (
+                f"a {count}-frame stack must still start at the first frame, got {picked[0]}"
+            )
+
+    def test_the_sample_still_skips_frames_in_between(self):
+        """Capping still means most frames go unread — the guarantee is about the ends, not every peak.
+
+        Test scenario:
+            Worth pinning so the guarantee is not over-read. A peak parked on an interior frame the sample
+            steps over is still missed; that is inherent to reading 24 of 60 and is the cost the cap buys.
         """
         picked = sample_evenly(list(range(60)), cap=24)
-        assert 57 in picked, (
-            f"the stride must reach the late peak at 57, sampled {picked}"
+        assert len(picked) == 24, (
+            f"the cap must still bound the read, got {len(picked)}"
         )
-        assert 57 not in list(range(60))[:50], (
-            "the old head slice is supposed to miss index 57 — this test has lost its point"
+        assert set(picked) != set(range(60)), (
+            "a capped sample must not read the whole stack"
         )
 
     def test_no_cap_scans_every_member(self):
@@ -246,6 +263,21 @@ class TestMeasureClim:
         measured = measure_clim(np.array([float(index)]) for index in range(4))
         assert measured == (0.0, 3.0), (
             f"a generator of frames must reduce like a list, got {measured}"
+        )
+
+    def test_an_integer_masked_array_does_not_raise(self):
+        """A nodata sentinel is usually an integer, and filling an int array with ``NaN`` raises.
+
+        Test scenario:
+            The consolidation took the web tier's ``.filled(np.nan)`` and dropped the ``.astype(float)`` the
+            interactive tier did first, so ``measure_clim`` crashed on exactly the dtype its own comment
+            names: ``-9999`` in an ``int16`` band. The cast has to come before the fill.
+        """
+        masked = np.ma.masked_array(
+            np.array([1, -9999, 3], dtype="int16"), mask=[False, True, False]
+        )
+        assert measure_clim([masked]) == (1.0, 3.0), (
+            f"an integer masked frame must measure as its NaN-filled twin, got {measure_clim([masked])}"
         )
 
 

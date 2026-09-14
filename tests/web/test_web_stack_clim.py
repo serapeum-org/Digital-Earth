@@ -62,8 +62,8 @@ class TestTheStackScanSpansTheSeries:
         )
         vmin, vmax = scene._global_clim(_Stack(60), 1)
         assert vmin == 0.0, f"the range must start at the first frame, got {vmin}"
-        assert vmax == 57.0, (
-            f"vmax={vmax}: the old head slice stopped at 49, and the shared stride ends at 57 — the "
+        assert vmax == 59.0, (
+            f"vmax={vmax}: the old head slice stopped at 49, and the index-selected sample ends at 59 — the "
             "same value the static and interactive tiers answer for this stack"
         )
 

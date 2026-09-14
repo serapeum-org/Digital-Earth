@@ -49,8 +49,8 @@ class TestTheStackScanSpansTheSeries:
 
         Test scenario:
             Each frame contributes its own index as its only value, so ``vmax`` is exactly the highest frame
-            the scan looked at. Uncapped this tier read all 60 and answered 59; under the shared stride it
-            answers the same 57 the static and web tiers do.
+            the scan looked at. Uncapped this tier read all 60 and answered 59; under the shared sample it
+            answers the same 59 the static and web tiers do.
         """
         scene = InteractiveMap()
         monkeypatch.setattr(
@@ -60,8 +60,8 @@ class TestTheStackScanSpansTheSeries:
         )
         vmin, vmax = scene._global_clim(_Stack(60), 1)
         assert vmin == 0.0, f"the range must start at the first frame, got {vmin}"
-        assert vmax == 57.0, (
-            f"vmax={vmax} must match the static and web tiers' shared sample, which ends at 57"
+        assert vmax == 59.0, (
+            f"vmax={vmax} must match the static and web tiers' shared sample, which ends at 59"
         )
 
     def test_the_scan_is_bounded_by_the_shared_cap(self, monkeypatch):

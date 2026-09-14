@@ -13,9 +13,13 @@ Before this, each tier had its own copy and the three had drifted on the two thi
 | interactive | uncapped | every member |
 
 The sampling difference is the one that shows. A head slice measures only the *beginning* of a series, so a
-60-member stack whose peak sits at index 58 — a flood crest, a fire scar — comes back with a ``vmax`` that
-clips the peak to solid top-of-ramp on the web tier while the interactive tier renders it correctly. Striding
-evenly spans the whole series at the same cost, which is why it is the rule kept here.
+60-member stack whose peak sits near the end — a flood crest, a fire scar — came back with a ``vmax`` that
+clipped the peak to solid top-of-ramp on the web tier while the interactive tier rendered it correctly.
+
+The rule here spreads its sample across the whole series **including the final frame**. A plain stride does
+not: starting at 0 and stepping, it runs out before the end (200 frames capped at 24 stopped at index 198),
+which is precisely the wrong end to drop for time-series data, where a rising series holds its maximum in the
+last frames.
 
 See Also:
     digitalearth.base.arrays.finite: drops the non-finite values this reduction must ignore.
@@ -49,8 +53,9 @@ def sample_evenly(
         cap: Greatest number of items to return. ``None`` (or a non-positive cap) returns every item.
 
     Returns:
-        A list of at most ``cap`` items whose first element is always ``items[0]``, taken at a fixed stride so
-        the sample spans the series rather than its beginning.
+        A list of at most ``cap`` items spread across the series, **always including both the first and the
+        last** (for ``cap >= 2``). Both ends matter: the first because a series often starts at its baseline,
+        the last because a rising one ends at its maximum.
 
     Examples:
         - A short stack is returned whole:
@@ -60,12 +65,12 @@ def sample_evenly(
             [0, 1, 2]
 
             ```
-        - A long stack is strided, and the sample reaches the end rather than stopping partway:
+        - A long stack is thinned to the cap, and the sample still reaches the final frame:
             ```python
             >>> from digitalearth.base.clim import sample_evenly
             >>> picked = sample_evenly(list(range(60)), cap=24)
             >>> len(picked), picked[0], picked[-1]
-            (20, 0, 57)
+            (24, 0, 59)
 
             ```
         - ``cap=None`` scans everything:
@@ -79,9 +84,16 @@ def sample_evenly(
     seq = list(items)
     if not seq or cap is None or cap <= 0 or len(seq) <= cap:
         return seq
-    # Round the stride UP: a floor divide returns 1 for anything under twice the cap, so a 47-frame stack
-    # would scan all 47 while claiming a cap of 24.
-    return seq[:: -(-len(seq) // cap)]
+    if cap == 1:
+        # One frame to spend: the last. A series' extreme is far more often at its end than its start.
+        return [seq[-1]]
+    # Spread `cap` positions across [0, len-1] inclusive rather than striding from 0 and stopping wherever
+    # the stride runs out. A plain stride drops the tail -- 200 frames at cap 24 stopped at index 198, and
+    # 100 stopped at 95 -- which is the wrong end to lose for time-series data, where a rising series puts
+    # its maximum in the final frames. `len(seq) > cap >= 2` here, so the step exceeds 1 and the rounded
+    # positions stay distinct: exactly `cap` frames come back.
+    step = (len(seq) - 1) / (cap - 1)
+    return [seq[round(i * step)] for i in range(cap)]
 
 
 def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
@@ -130,8 +142,10 @@ def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
         values = arr
         if np.ma.isMaskedArray(values):
             # `finite` goes through np.asarray, which drops a mask and would let the fill value (-9999)
-            # through as a real number. Filling first is what makes a masked input agree with a NaN-filled one.
-            values = values.filled(np.nan)
+            # through as a real number. Filling first is what makes a masked input agree with a NaN-filled
+            # one -- and the cast has to come first, because a nodata sentinel is usually an *integer* one
+            # and `filled(nan)` on an int array raises rather than widening it.
+            values = values.astype("float64").filled(np.nan)
         values = finite(values)
         if values.size:
             lows.append(float(values.min()))
