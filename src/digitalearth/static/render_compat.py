@@ -1,30 +1,53 @@
-"""Translate Digital-Earth's flat styling kwargs into cleopatra's typed render-group objects.
+"""The one place a style is folded into the flat form cleopatra's glyphs take.
 
 cleopatra >=0.30 removed the loose ``plot``/``animate`` styling keywords (``levels``, ``scheme``, ``style``,
 ``color_scale``, ``points``, …) in favour of small typed *group objects* (``Contour``, ``Classify``,
 ``DataStyle``, ``ColorScaling``, ``CellValues``, ``PointOverlay``). Digital-Earth keeps accepting the flat
 kwargs as its public surface and folds them here, so callers stay insulated from the upstream regrouping.
 
-Entry points:
+Those flat kwargs used to be **undeclared** — 26 keys, in no signature anywhere, so a caller could not ask
+what a builder accepts and a typo was a silently ignored keyword rather than an error.
+:data:`STATIC_STYLE_SCHEMA` declares them: each with what it controls, and with the visual channel it drives
+where it drives one. That is what :func:`route_flat_style` routes against and what
+:func:`digitalearth.base.spec.style.StyleSchema.suggest` reads to name the key a typo was meant to be.
 
+Entry points, in the order a style passes through them:
+
+- :func:`route_flat_style` — flat public kwargs -> a declared
+  :class:`~digitalearth.base.spec.style.Symbology`, plus whatever was not style at all.
+- :func:`fold_symbology` — the inverse: a declared symbology -> the flat kwargs, plus any channel this
+  renderer's flat surface cannot express (returned as a value, not raised).
+- :func:`relocate_flat_style` — pop the flat members out of a *constructor* kwargs dict (the cleopatra glyph
+  constructors now reject them) so they can be forwarded to ``plot`` instead. Also folds the ``size``
+  channel onto the constructor spelling a point glyph wants.
+- :func:`group_render_kwargs` — the glyph-agnostic fold into group objects (idempotent; an already-built
+  group object, or an unrelated kwarg, passes through untouched).
 - :func:`prepare_plot_kwargs` — fold the flat members a *given glyph* supports into their group objects, and
   hand back any ``alpha`` the glyph cannot take for the caller to apply to the artist. Applied centrally in
   :meth:`~digitalearth.static.scene.Scene._render_glyph`.
-- :func:`group_render_kwargs` — the glyph-agnostic fold underneath it (idempotent; an already-built group
-  object, or an unrelated kwarg, passes through untouched).
-- :func:`relocate_flat_style` — pop the flat members out of a *constructor* kwargs dict (the cleopatra glyph
-  constructors now reject them) so they can be forwarded to ``plot`` instead.
+
+No builder holds a style-mapping decision of its own: every one of them is here.
 """
 
 import inspect
 from functools import lru_cache
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Any, Dict, Mapping, Optional, Set, Tuple
 
 from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
 from cleopatra.styling.scaling import ColorScale, ColorScaling
 
-__all__ = ["group_render_kwargs", "prepare_plot_kwargs", "relocate_flat_style"]
+from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.spec import StyleKey, StyleSchema, Symbology
+
+__all__ = [
+    "STATIC_STYLE_SCHEMA",
+    "fold_symbology",
+    "group_render_kwargs",
+    "prepare_plot_kwargs",
+    "relocate_flat_style",
+    "route_flat_style",
+]
 
 #: Flat ``color_scale=`` spellings -> the ``ColorScale`` enum the renderer needs (its ``.value``s carry dashes,
 #: so a bare string like ``"power"`` constructs a ColorScaling but blows up at render time). Digital-Earth keeps
@@ -134,7 +157,194 @@ FLAT_STYLE_KEYS = frozenset(
 )
 
 
-def relocate_flat_style(opts: Dict[str, Any]) -> Dict[str, Any]:
+#: The public spelling of a marker's visual size. It is not one of the regrouped flat keys — a point glyph
+#: takes its size on the *constructor* — but it is part of the same declared vocabulary, and the ``size``
+#: channel it drives is what makes it the demonstration that a channel costs a fold rule, not a parameter on
+#: every builder.
+MARKER_SIZE_KEY = "size"
+
+#: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
+#: where it drives one. That is the **26** flat members cleopatra's constructors reject, the 6 typed group
+#: parameters they fold into, and :data:`MARKER_SIZE_KEY` — 33 keywords that were in no signature anywhere.
+#:
+#: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
+#: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
+#: through :class:`~digitalearth.base.spec.encoding.Encoding` rather than through a keyword of their own.
+#: ``tests/static/test_render_compat.py`` pins this table against :data:`FLAT_STYLE_KEYS`, so a key added
+#: upstream cannot quietly go undeclared again.
+STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
+    # -- visual channels of the layer itself
+    StyleKey("alpha", "Layer opacity, 0 transparent to 1 opaque.", channel="opacity"),
+    StyleKey(MARKER_SIZE_KEY, "Marker size, in points.", channel="size"),
+    # -- the point overlay drawn over a field, and its labels
+    StyleKey("points", "Point coordinates to overlay on the field."),
+    StyleKey("point_color", "Marker colour of the point overlay."),
+    StyleKey("point_size", "Marker size of the point overlay, in points."),
+    StyleKey("point_label_color", "Colour of the point overlay's labels."),
+    StyleKey("point_label_size", "Size of the point overlay's labels, in points."),
+    StyleKey("pid_color", "Older spelling of point_label_color."),
+    StyleKey("pid_size", "Older spelling of point_label_size."),
+    # -- contours
+    StyleKey("levels", "Contour levels: a count, or the explicit values to draw."),
+    StyleKey("labels", "Whether to label the contour lines."),
+    StyleKey("label_kw", "Extra keyword arguments for the contour labels."),
+    # -- printed cell values
+    StyleKey("display_cell_value", "Print each cell's value inside the cell."),
+    StyleKey("num_size", "Font size of the printed cell values, in points."),
+    StyleKey(
+        "background_color_threshold",
+        "Value above which a printed cell value switches to the contrasting ink.",
+    ),
+    # -- the data-style preset and its per-call overrides
+    StyleKey("style", "Named data-style preset the surface is drawn with."),
+    StyleKey("hillshade", "Shade the surface with relief."),
+    StyleKey("bands", "Rebands the preset's scale."),
+    StyleKey("alpha_range", "(low, high) opacity the preset's scale is drawn across."),
+    # -- classification
+    StyleKey("scheme", "Classification scheme cutting the values into classes."),
+    StyleKey("k", "Number of classes the scheme cuts."),
+    StyleKey(
+        "category_legend_kwargs", "Extra keyword arguments for a category legend."
+    ),
+    # -- colour scaling
+    StyleKey(
+        "color_scale",
+        "Colour scaling: linear, power, lognorm, sym_log, boundary or midpoint.",
+    ),
+    StyleKey("gamma", "Exponent of the power colour scale."),
+    StyleKey("line_threshold", "Half-width of a symmetric-log scale's linear region."),
+    StyleKey("line_scale", "Width scaling of a symmetric-log scale's linear region."),
+    StyleKey("bounds", "Explicit class bounds for a boundary colour scale."),
+    StyleKey("midpoint", "The value a diverging colour scale centres on."),
+    # -- already-built group objects, passed straight through
+    StyleKey("color", "A built ColorScaling group object."),
+    StyleKey("contour", "A built Contour group object."),
+    StyleKey("data_style", "A built DataStyle group object."),
+    StyleKey("classify", "A built Classify group object."),
+    StyleKey("cells", "A built CellValues group object."),
+)
+
+#: Channel -> the flat keyword that carries it, derived from the declaration so the two cannot disagree.
+_CHANNEL_KEYS: Dict[str, str] = {
+    key.channel: key.name for key in STATIC_STYLE_SCHEMA.keys.values() if key.channel
+}
+
+
+def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]]:
+    """Route flat public kwargs to the channels and properties that own them.
+
+    The half :func:`prepare_plot_kwargs` cannot do: it can only *reject* a keyword it has no home for, whereas
+    routing gives every declared keyword its home and hands back the rest.
+
+    Args:
+        flat: A caller's keyword dict. Not mutated.
+
+    Returns:
+        A ``(symbology, rest)`` pair — the declared style as a value, and the keywords that are not style at
+        all (``cmap``, ``add_colorbar``, the glyph's own constructor options). `rest` is returned rather than
+        refused because this schema covers the styling surface, not everything a builder accepts; use
+        :meth:`~digitalearth.base.spec.style.StyleSchema.suggest` on a key that reaches nothing.
+    """
+    return STATIC_STYLE_SCHEMA.route(flat)
+
+
+def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]]:
+    """Fold a declared symbology into the flat kwargs the cleopatra glyphs take.
+
+    The inverse of :func:`route_flat_style`, and the single point where a declared style becomes this
+    renderer's own form — which is what keeps the vocabulary in ``base/spec/`` free of cleopatra, and
+    cleopatra's spellings out of every builder.
+
+    Args:
+        symbology: The style to fold.
+
+    Returns:
+        A ``(flat, unsupported)`` pair. `flat` carries every constant channel under the keyword that
+        expresses it, plus the static properties unchanged. `unsupported` maps a channel this flat surface
+        cannot express to the reason — a channel with no keyword here, or one driven by a data field, which
+        the flat kwargs have no expression for (the glyph takes resolved ``values`` instead). It is
+        **returned, not raised**, so a caller can degrade rather than fail.
+
+    Examples:
+        - Constants fold onto their keywords; the properties pass through:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.static.render_compat import fold_symbology
+            >>> flat, unsupported = fold_symbology(Symbology.of(opacity=0.4).with_props(hillshade=True))
+            >>> flat == {"alpha": 0.4, "hillshade": True}, unsupported
+            (True, {})
+
+            ```
+        - A channel this surface has no keyword for is reported rather than dropped:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.static.render_compat import fold_symbology
+            >>> _, unsupported = fold_symbology(Symbology.of(height=30.0))
+            >>> sorted(unsupported)
+            ['height']
+
+            ```
+    """
+    flat: Dict[str, Any] = dict(symbology.props)
+    unsupported: Dict[str, str] = {}
+    for channel, encoding in symbology.encodings.items():
+        keyword = _CHANNEL_KEYS.get(channel)
+        if keyword is None:
+            unsupported[channel] = (
+                f"the static tier has no styling keyword for the {channel!r} channel"
+            )
+        elif not encoding.is_constant:
+            unsupported[channel] = (
+                f"the {channel!r} channel is driven by field {encoding.field!r}; the flat kwargs take a "
+                "constant, so the builder must resolve it and pass the values itself"
+            )
+        else:
+            flat[keyword] = encoding.value
+    return flat, unsupported
+
+
+def _fold_marker_size(
+    opts: Dict[str, Any], plot_style: Dict[str, Any], caller: str, depth: int
+) -> None:
+    """Fold the ``size`` channel onto the ``point_size`` a cleopatra point glyph takes (in place).
+
+    ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static tier
+    accepts too; ``point_size`` is cleopatra's own name for it and keeps working for one release.
+
+    It runs *after* the relocation because ``point_size`` is one of the flat keys that moves onto ``plot()``
+    for the raster point overlay, and a point glyph takes its marker size on the **constructor** instead — so
+    the value has to be rescued from there and put back.
+
+    Args:
+        opts: The glyph constructor kwargs, mutated in place: the resolved size becomes ``point_size``.
+        plot_style: The relocated ``plot()`` kwargs, mutated in place: a ``point_size`` meant for this glyph
+            is taken back out of it.
+        caller: The layer method the kwargs were written on, named in the warning and the error.
+        depth: How many frames sit between :func:`relocate_flat_style` and the user's call — see its own
+            ``depth`` argument.
+
+    Raises:
+        TypeError: if both ``size`` and ``point_size`` are passed.
+
+    Warns:
+        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
+    """
+    size = renamed_parameter(
+        new=MARKER_SIZE_KEY,
+        value=opts.pop(MARKER_SIZE_KEY, None),
+        old="point_size",
+        alias=plot_style.pop("point_size", None),
+        caller=caller,
+        stacklevel=depth
+        + 1,  # + this frame, which sits between the caller's and renamed_parameter's
+    )
+    if size is not None:
+        opts["point_size"] = size
+
+
+def relocate_flat_style(
+    opts: Dict[str, Any], *, marker_size_for: Optional[str] = None, depth: int = 5
+) -> Dict[str, Any]:
     """Pop cleopatra-regrouped style keys out of a constructor kwargs dict, returning them.
 
     The glyph constructors reject these keys now — both the flat members (``levels``/``scheme``/``style``/…) and
@@ -145,13 +355,26 @@ def relocate_flat_style(opts: Dict[str, Any]) -> Dict[str, Any]:
 
     Args:
         opts: The constructor keyword dict; mutated in place (matched keys are removed).
+        marker_size_for: Name the layer method — ``"Map.scatter()"`` — when the glyph being built is a point
+            glyph, which takes its marker size on the constructor. The ``size`` channel is then folded onto
+            the ``point_size`` it wants, and the deprecated spelling is warned about on the caller's line.
+            Leave unset for every other glyph.
+        depth: How many frames sit between this call and the user's, for that warning. The default counts
+            here -> the layer method -> ``guarded`` -> the caller; an alias that delegates to another builder
+            adds one more, so it passes ``depth=6``. Measured rather than assumed: a wrong value blames a
+            line inside this package instead of the user's own.
 
     Returns:
         The removed style keys as a new dict.
+
+    Raises:
+        TypeError: if `marker_size_for` is given and the caller passed both ``size`` and ``point_size``.
     """
     moved = {key: opts[key] for key in opts if key in FLAT_STYLE_KEYS}
     for key in moved:
         del opts[key]
+    if marker_size_for is not None:
+        _fold_marker_size(opts, moved, marker_size_for, depth)
     return moved
 
 

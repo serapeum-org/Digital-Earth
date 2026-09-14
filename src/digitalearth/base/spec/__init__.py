@@ -22,18 +22,36 @@ What lives here:
 * :mod:`~digitalearth.base.spec.scale` — :class:`~digitalearth.base.spec.scale.Scale`, how a value becomes
   a colour: the domain, the widening rule five tiers had each written out, the classifier three tiers each
   called, and the categorical mapping — resolved once and freezable.
+* :mod:`~digitalearth.base.spec.encoding` — :class:`~digitalearth.base.spec.encoding.Encoding` and the
+  :data:`~digitalearth.base.spec.encoding.CHANNELS` table: what drives one visual channel. Adding a channel
+  is a row there rather than a keyword on every builder on every tier.
+* :mod:`~digitalearth.base.spec.style` — :class:`~digitalearth.base.spec.style.Symbology`, the look of one
+  layer, and :class:`~digitalearth.base.spec.style.StyleSchema`, which **declares** the style keywords a
+  builder surface accepts so a typo can stop being a silently ignored keyword.
+
+Note the neighbour: :mod:`digitalearth.base.symbology` is the colour *arithmetic* (resolving a categorical
+cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Symbology` here is the
+*vocabulary* — what a layer declares. They are different jobs, which is why they are different modules.
 """
 
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
+from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding
 from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 from digitalearth.base.spec.selection import DEFAULT_BAND, Selection
+from digitalearth.base.spec.style import StyleKey, StyleSchema, Symbology
 
 __all__ = [
     "Bounds",
+    "CHANNELS",
     "DEFAULT_BAND",
     "DEFAULT_CLASS_COUNT",
+    "Channel",
     "DataRef",
+    "Encoding",
     "Scale",
     "Selection",
+    "StyleKey",
+    "StyleSchema",
+    "Symbology",
 ]

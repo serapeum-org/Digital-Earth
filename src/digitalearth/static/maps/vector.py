@@ -37,46 +37,6 @@ from digitalearth.static.render_compat import relocate_flat_style
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 
 
-def _resolve_marker_size(
-    opts: dict, plot_style: dict, caller: str, *, depth: int = 5
-) -> None:
-    """Fold a ``size=`` marker size into the ``point_size`` cleopatra's point glyphs take (in place).
-
-    ``size`` is what a marker's visual size is called on every backend, so it is the spelling the static
-    tier accepts too; ``point_size`` is cleopatra's own name for it and keeps working for one release.
-
-    Call this *after* :func:`~digitalearth.static.render_compat.relocate_flat_style`: ``point_size`` is one
-    of the flat keys that relocates onto ``plot()`` for the raster point overlay, and a point glyph takes
-    its marker size on the **constructor** instead — so the value has to be rescued from there and put back.
-
-    Args:
-        opts: The glyph constructor kwargs, mutated in place: the resolved size becomes ``point_size``.
-        plot_style: The relocated ``plot()`` kwargs, mutated in place: a ``point_size`` meant for this
-            glyph is taken back out of it.
-        caller: The layer method the kwargs were written on, named in the warning and the error.
-        depth: How many frames sit between here and the user's call. The default counts
-            ``renamed_parameter`` -> here -> the layer method -> ``guarded`` -> the caller; an alias that
-            delegates to another builder adds one more, so it passes ``depth=6``. Measured rather than
-            assumed: a wrong value blames a line inside this file instead of the user's own.
-
-    Raises:
-        TypeError: if both ``size`` and ``point_size`` are passed.
-
-    Warns:
-        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
-    """
-    size = renamed_parameter(
-        new="size",
-        value=opts.pop("size", None),
-        old="point_size",
-        alias=plot_style.pop("point_size", None),
-        caller=caller,
-        stacklevel=depth,
-    )
-    if size is not None:
-        opts["point_size"] = size
-
-
 def _draw_missing_neutral(artist: Any) -> None:
     """Colour a classified layer's missing values neutral instead of invisible.
 
@@ -332,10 +292,8 @@ class VectorMixin(_MixinBase):
             else None
         )
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
-        _resolve_marker_size(
-            opts, plot_style, "Map.scatter()"
-        )  # `size` -> cleopatra's `point_size`
+        # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
+        plot_style = relocate_flat_style(opts, marker_size_for="Map.scatter()")
         glyph = ScatterGlyph(
             src.x.values,
             src.y.values,
@@ -399,12 +357,11 @@ class VectorMixin(_MixinBase):
         y = xyz.iloc[:, 1].to_numpy()
         z = xyz.iloc[:, 2].to_numpy()
         opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
         # The caller and frame depth are parameters because :meth:`point_cloud` delegates here: a
         # deprecation warning must name the method the user actually called, and point at their line.
-        _resolve_marker_size(
-            opts, plot_style, _alias_caller, depth=_alias_depth
-        )  # `size` -> cleopatra's `point_size`
+        plot_style = relocate_flat_style(
+            opts, marker_size_for=_alias_caller, depth=_alias_depth
+        )  # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
         return self._render_glyph(glyph, artist="plot", **plot_style)
 
