@@ -35,8 +35,9 @@ from digitalearth.static.maps.raster import DEFAULT_FIELD_CMAP
 
 logger = logging.getLogger(__name__)
 
-# The cap and the striding rule are `digitalearth.base.clim`'s: one number and one sampling strategy shared
-# with the interactive and web tiers, so the same collection gets the same colour scale whichever draws it.
+# The cap and the sampling rule are `digitalearth.base.clim`'s: one number and one strategy shared with the
+# interactive and web tiers, so the same collection is read at the same members, the same way, whichever
+# tier draws it. The *values* can still differ -- each tier warps to its own display CRS first.
 _CLIM_SCAN_CAP = DEFAULT_CLIM_SCAN_CAP
 
 #: What "this frame cannot be read" looks like to :meth:`AnimationMixin._frame_style`, which moves on to the
@@ -341,6 +342,13 @@ class AnimationMixin(_MixinBase):
         Yields:
             One array per readable frame. A frame that warps to nothing is skipped rather than yielded, so it
             contributes no colour range.
+
+        Note:
+            **Must be drained before the display CRS moves.** Each frame is warped at the moment it is
+            pulled, against whatever ``self.crs`` is then — and :meth:`_clim_across_views` reassigns that in
+            a loop. Today every caller drains it synchronously inside :func:`~digitalearth.base.clim.
+            measure_clim`, so the frames are warped under the intended view; storing or chaining the
+            generator would silently measure the wrong projection.
         """
         for ds in datasets:
             try:

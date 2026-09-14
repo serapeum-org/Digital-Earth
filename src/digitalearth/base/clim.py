@@ -36,7 +36,9 @@ __all__ = ["DEFAULT_CLIM_SCAN_CAP", "measure_clim", "sample_evenly", "stack_clim
 #: How many stack frames are read to derive a shared colour range, unless a caller overrides it. Reading every
 #: frame of a long series costs one warp each and buys very little: the range of ~24 frames spread across the
 #: stack is the range of the stack, to the precision a colour ramp can show. Every tier reads this one number,
-#: so the same collection gets the same scale whichever backend draws it.
+#: so the same collection is read at the same members whichever backend draws it. Note that is a claim about
+#: *which frames*, not about the resulting numbers: each tier warps to its own display CRS before measuring,
+#: and resampling moves the extremes, so two tiers can still report slightly different ranges.
 DEFAULT_CLIM_SCAN_CAP: int = 24
 
 
@@ -145,7 +147,7 @@ def measure_clim(arrays: Iterable[Any]) -> Optional[Tuple[float, float]]:
             # through as a real number. Filling first is what makes a masked input agree with a NaN-filled
             # one -- and the cast has to come first, because a nodata sentinel is usually an *integer* one
             # and `filled(nan)` on an int array raises rather than widening it.
-            values = values.astype("float64").filled(np.nan)
+            values = np.ma.filled(values.astype("float64"), np.nan)
         values = finite(values)
         if values.size:
             lows.append(float(values.min()))

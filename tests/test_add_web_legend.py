@@ -77,17 +77,16 @@ class TestAddWebLegend:
             f"the builder must not be reached at all, but was called {scene.legend_calls}x"
         )
 
-    def test_a_scene_without_the_attribute_is_tolerated_like_an_unclassified_one(self):
-        """A scene that carries no ``last_legend`` at all is "nothing to describe", not an ``AttributeError``.
+    def test_a_scene_without_the_attribute_is_a_defect_not_an_unkeyed_map(self):
+        """A scene carrying no ``last_legend`` raises, rather than being read as "nothing to describe".
 
         Test scenario:
-            The attribute is read defensively because this helper takes ``Any`` — a stubbed or mocked map in
-            a caller's test suite need not carry the tier's whole surface, and an ``AttributeError`` escaping
-            here would be a crash in the tolerated path.
+            ``WebMapBase.__init__`` always sets the attribute, so its absence means the map is not a web map
+            or the field was renamed. Answering "no key" there would make a rename silently drop every web
+            legend while the dev-tier fakes kept passing; the only thing that would notice is the web CI leg.
         """
-        assert _add_web_legend(_NoLegendAttribute()) is None, (
-            "a scene with no recorded classification must answer None rather than raise"
-        )
+        with pytest.raises(AttributeError):
+            _add_web_legend(_NoLegendAttribute())
 
     def test_a_classified_map_gets_its_key_built(self):
         """A recorded classification is passed to the builder, whose result is handed back.
@@ -105,38 +104,23 @@ class TestAddWebLegend:
             f"the builder must be called exactly once, got {scene.legend_calls}"
         )
 
-    @pytest.mark.parametrize(
-        "error",
-        [
-            ValueError("legend() has nothing to describe"),
-            AttributeError("no cmap on this layer"),
-            TypeError("not a mappable"),
-        ],
-    )
-    def test_a_builder_refusal_is_tolerated_and_warned_about(self, error, caplog):
-        """A key the tier declines to draw is skipped with a warning, not raised out of ``quickmap``.
+    @pytest.mark.parametrize("error", [ValueError, AttributeError, TypeError])
+    def test_a_malformed_classification_surfaces_rather_than_being_swallowed(
+        self, error
+    ):
+        """A builder that refuses a recorded classification is a library defect, so it propagates.
 
         Args:
-            error: One of the refusals :data:`~digitalearth.api.UNMAPPABLE` covers.
-            caplog: Captures the warning, which is the only trace the skip leaves.
+            error: The exception the stubbed builder raises.
 
         Test scenario:
-            ``colorbar=True`` is the default, so it asks for a key *if there is one to draw*. A map that
-            recorded a classification the builder then refuses is the same "no mappable layer" case the
-            matplotlib path tolerates. Swallowing it silently would be the other failure, though: the
-            warning is what tells a caller who *did* expect a key why they have none.
+            Once the ``last_legend`` guard went in, the only way ``legend()`` can still raise is a malformed
+            spec written by a web builder. Catching that reported a bug in this package as "no key to draw",
+            which is exactly the kind of silent swallow the off-limb work spent Wave 0 removing.
         """
-        scene = _FakeWebMap(last_legend=CLASSIFIED, error=error)
-        with caplog.at_level(logging.WARNING, logger="digitalearth.api"):
-            assert _add_web_legend(scene) is None, (
-                "a refused key must answer None rather than propagate"
-            )
-        assert "colorbar skipped" in caplog.text, (
-            f"the skip must be announced, logged: {caplog.text!r}"
-        )
-        assert type(error).__name__ in caplog.text, (
-            f"the warning must name the refusal, logged: {caplog.text!r}"
-        )
+        scene = _FakeWebMap(last_legend={"kind": "graduated"}, error=error("bad spec"))
+        with pytest.raises(error):
+            _add_web_legend(scene)
 
     @pytest.mark.parametrize(
         "error",

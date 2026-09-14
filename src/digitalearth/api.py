@@ -644,27 +644,31 @@ def _add_web_legend(scene: Any) -> Any:
     The web counterpart of :func:`_add_colorbar`. ``WebMap.legend`` is a *builder* — it reads the
     classification the last layer recorded — so on a map with no classified layer it raises rather than
     drawing an empty box. Under ``quickmap(colorbar=True)`` that is not a caller error: the default asks for
-    a key *if there is one to draw*, exactly as the matplotlib path treats an outline-only layer.
+    a key *if there is one to draw*, exactly as the matplotlib path treats an unmappable layer.
 
     Args:
         scene: The ``WebMap`` whose most recent classified layer should get a key.
 
     Returns:
         The same map, or ``None`` when there was no classification to describe.
+
+    Raises:
+        AttributeError: if ``scene`` carries no ``last_legend`` — that is a defect, not an unkeyed map.
+        Exception: whatever ``legend()`` raises for a malformed classification, which is a web-tier bug and
+            must surface rather than be reported as "no key to draw".
     """
     # Answered from recorded state before the engine is touched. `legend()` is a builder: it refuses a map
     # with nothing classified to describe, and reaching that refusal first calls `_require_maplibre()`. Under
     # the `colorbar=True` default neither is a caller error -- they asked for a key *if there is one* -- so a
     # map with no classification must not be the reason an ImportError surfaces.
-    if not getattr(scene, "last_legend", None):
+    # Read straight off the map, not through getattr: `WebMapBase.__init__` always sets this, so a scene
+    # without it is a defect rather than a map with nothing to key, and a rename must fail here loudly
+    # instead of silently dropping every web key.
+    if not scene.last_legend:
         return None
-    try:
-        return scene.legend()
-    except UNMAPPABLE as error:
-        logger.warning(
-            "quickmap: colorbar skipped — %s: %s", type(error).__name__, error
-        )
-        return None
+    # No `except` around the builder. The guard above leaves only a malformed `last_legend` able to raise --
+    # a bug in a web builder -- and swallowing that would report a library defect as "no key to draw".
+    return scene.legend()
 
 
 def _quickmap_web(

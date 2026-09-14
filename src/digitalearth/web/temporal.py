@@ -82,8 +82,9 @@ class TemporalMixin(_MixinBase):
         Note: this pass is **eager** — it reprojects and reads each scanned member once at ``timeslider``
         construction time (every member is then warped again when its image layer is built). At most
         :data:`_CLIM_SCAN_CAP` members are scanned, spread evenly across the whole series rather than taken
-        from its head — the rule the static and interactive tiers follow too, so the same collection gets the
-        same range whichever tier draws it. Pass an explicit ``clim`` to skip the scan entirely.
+        from its head — the rule the static and interactive tiers follow too, so the same members are read,
+        the same way, whichever tier draws it. The resulting numbers can still differ slightly: each tier
+        warps to its own display CRS before measuring. Pass an explicit ``clim`` to skip the scan entirely.
 
         Args:
             collection: A pyramids ``DatasetCollection``.
