@@ -17,10 +17,13 @@ It **subclasses** `Source` rather than replacing it. Every existing consumer acr
 touching every reader in the package to gain a capability none of them uses yet.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
+
+import numpy as np
 
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.selection import Selection
 from digitalearth.base.spec.viewrequest import ViewRequest
@@ -217,13 +220,24 @@ class SourceView(Source):
                 "it re-readable"
             )
         data = self._ref.open()
-        return self.of(
+        again = self.of(
             data,
             ref=self._ref,
             selection=self._selection,
             request=request,
             crs=self.crs,
         )
+        # A windowed read returns a bare array, which carries no band name — so the variable, units and kind
+        # would be lost by re-reading the very same slice at a different resolution. They describe the data,
+        # not the window, so they are carried over where the new read supplied nothing.
+        for key, value in self._meta.items():
+            # `setdefault` is not enough: the extractor writes an *empty* variable name for a bare array, so
+            # the key exists and would keep winning over the real one.
+            if not again._meta.get(key):
+                again._meta[key] = value
+        if again.units is None:
+            again._units = self.units
+        return again
 
     @classmethod
     def of(
@@ -267,16 +281,23 @@ class SourceView(Source):
         from digitalearth.base.sources import get_source
 
         picked = selection if selection is not None else Selection()
-        windowed = cls._windowed(data, picked, request)
-        source = get_source(windowed, band=picked.first_band, crs=crs)
+        windowed, xs, ys, window_crs = cls._windowed(data, picked, request)
+        source = get_source(
+            windowed,
+            band=picked.first_band,
+            x=xs,
+            y=ys,
+            crs=window_crs if window_crs is not None else crs,
+        )
         return cls(
             source.z,
             source.x,
             source.y,
             source.crs,
-            {"variable": source.metadata("variable")}
-            if source.metadata("variable")
-            else None,
+            # The extractor's metadata is passed through whole. Rebuilding it as {"variable": ...} dropped
+            # `kind` and `standard_name`, and autostyle reads standard_name for the ECMWF-Magics match — so a
+            # view silently lost the identity match this wave's auto_cmap consolidation exists to keep.
+            dict(source._meta),
             source.units,
             ref=ref,
             selection=picked,
@@ -286,8 +307,8 @@ class SourceView(Source):
     @staticmethod
     def _windowed(
         data: Any, selection: Selection, request: Optional[ViewRequest]
-    ) -> Any:
-        """Narrow `data` to the requested window, when the reader can do it.
+    ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any]]:
+        """Narrow `data` to the requested window, and say where the window's cells are.
 
         Args:
             data: The opened object.
@@ -295,20 +316,44 @@ class SourceView(Source):
             request: What was asked for, or ``None``.
 
         Returns:
-            The narrowed object, or `data` unchanged when there is nothing to narrow or no reader support.
-            pyramids owns the windowing (``read_part``); this only decides whether to ask for it, which is
-            the half `interactive/raster.py` does inline.
+            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s — there
+            is nothing to narrow, or the reader has no windowed read.
+
+            Windowed, it is the **array** ``read_part`` returns plus the coordinates of its cell centres and
+            the CRS they are in. The coordinates have to be computed here because ``read_part`` is an array
+            reader, not a dataset reader: pyramids' own docstring says *"Pixel values only — no transform,
+            bounds, or CRS is attached"*. Without them the extractor falls back to ``np.arange`` axes and the
+            view claims a projected CRS while holding pixel indices.
+
+        Raises:
+            Exception: whatever pyramids raises for a window it cannot read.
         """
+        nothing = (data, None, None, None)
         if request is None or not hasattr(data, "read_part"):
-            return data
+            return nothing
         bbox = request.as_bbox()
         if bbox is None:
-            return data
+            return nothing
+        # read_part returns data in the *dataset's* CRS, so a bbox given in another one is converted first
+        # and the window described in the CRS its cells are actually measured in.
+        window = Bounds.from_bbox(list(bbox), crs=request.crs())
+        target = getattr(data, "epsg", None) or getattr(data, "crs", None)
+        if request.crs() is not None and target is not None:
+            window = window.to_crs(target)
         side = request.side()
-        return data.read_part(
-            bbox=bbox,
-            dst_width=side,
-            dst_height=side,
-            bbox_crs=request.crs(),
-            band=selection.first_band - 1,  # pyramids' windowed read is 0-based
+        array = np.asarray(
+            data.read_part(
+                bbox=window.as_bbox(),
+                dst_width=side,
+                dst_height=side,
+                bbox_crs=window.crs,
+                band=selection.first_band - 1,  # pyramids' windowed read is 0-based
+            )
         )
+        rows, columns = array.shape[-2], array.shape[-1]
+        xmin, ymin, xmax, ymax = window.as_bbox()
+        # Cell centres, not edges: an extractor's axes name where each cell *is*, and a half-cell offset is
+        # the difference between a raster drawn correctly and one drawn half a pixel adrift.
+        xs = xmin + (np.arange(columns) + 0.5) * (xmax - xmin) / columns
+        ys = ymax - (np.arange(rows) + 0.5) * (ymax - ymin) / rows
+        return array, xs, ys, window.crs

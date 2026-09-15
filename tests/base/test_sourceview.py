@@ -250,3 +250,86 @@ class TestRereading:
         )
         assert view.z.values.shape == (3, 4), "a plain array is read whole"
         assert view.request.budget == 2, "and the unmet request is still recorded"
+
+
+class TestARereadIsStillGeoreferenced:
+    """The class of defect a shape assertion cannot see."""
+
+    def test_the_window_carries_real_coordinates_not_pixel_indices(self):
+        """A re-read view's axes are in its CRS, not 0, 1, 2, ...
+
+        Test scenario:
+            pyramids' `read_part` is an array reader — its own docstring says "Pixel values only — no
+            transform, bounds, or CRS is attached". Handed straight to the extractor it produced `np.arange`
+            axes while the view went on claiming EPSG:32618, so anything that plotted, extented or
+            reprojected the result drew it at the projected origin. The original `reread` test asserted the
+            shape, which is exactly what the defect preserved.
+        """
+        ref = DataRef(str(RASTER))
+        dataset = ref.open()
+        view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
+        bbox = list(dataset.bbox)
+        again = view.reread(
+            ViewRequest(bounds=Bounds.from_bbox(bbox, crs=view.crs), budget=10_000)
+        )
+        half_cell = (bbox[2] - bbox[0]) / len(again.x.values) / 2
+        assert again.x.values[0] == pytest.approx(bbox[0] + half_cell), (
+            f"the first cell centre must be half a cell inside the window, got {again.x.values[0]}"
+        )
+        assert again.x.values[0] > 1000, (
+            "a projected easting, not a pixel index — this is the assertion the shape check could not make"
+        )
+
+    def test_the_y_axis_runs_north_to_south(self):
+        """A raster's rows are top-down, so the y axis descends.
+
+        Test scenario:
+            Getting this backwards flips the image vertically — which renders perfectly happily, and is the
+            second thing a shape assertion cannot see.
+        """
+        ref = DataRef(str(RASTER))
+        dataset = ref.open()
+        view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
+        again = view.reread(
+            ViewRequest(
+                bounds=Bounds.from_bbox(list(dataset.bbox), crs=view.crs), budget=4096
+            )
+        )
+        assert again.y.values[0] > again.y.values[-1], (
+            "the y axis must descend from north to south"
+        )
+
+    def test_what_the_data_is_survives_a_reread(self):
+        """The variable, the kind and the units describe the data, not the window.
+
+        Test scenario:
+            A windowed read returns a bare array with no band name, so re-reading the same slice at another
+            resolution silently emptied them. `standard_name` in particular is what autostyle matches on, so
+            a re-read view lost the ECMWF-Magics identity this wave's auto_cmap consolidation exists to keep
+            consistent across tiers.
+        """
+        ref = DataRef(str(RASTER))
+        dataset = ref.open()
+        view = SourceView.of(dataset, ref=ref, selection=Selection.of(1))
+        again = view.reread(
+            ViewRequest(
+                bounds=Bounds.from_bbox(list(dataset.bbox), crs=view.crs), budget=4096
+            )
+        )
+        assert again.metadata("variable") == view.metadata("variable"), (
+            "the variable must survive the re-read"
+        )
+        assert again.metadata("kind") == "raster", "and so must the kind"
+
+    def test_the_first_read_keeps_every_metadata_key(self):
+        """`of` passes the extractor's metadata through rather than rebuilding it.
+
+        Test scenario:
+            It was rebuilt as `{"variable": ...}`, which dropped `kind` and `standard_name` before any
+            re-read was involved.
+        """
+        ref = DataRef(str(RASTER))
+        view = SourceView.of(ref.open(), ref=ref)
+        assert view.metadata("kind") == "raster", (
+            "the extractor's `kind` must not be dropped on the way in"
+        )
