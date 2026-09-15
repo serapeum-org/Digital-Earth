@@ -196,7 +196,9 @@ class SourceView(Source):
 
         Raises:
             RuntimeError: if this view has no reference to read from — see :attr:`rereadable`. Raised here,
-                naming the view, rather than surfacing as an `AttributeError` from inside a reader.
+                naming the view, rather than surfacing as an `AttributeError` from inside a reader. Build the
+                view from a `DataRef`, or register the object with
+                :meth:`~digitalearth.base.spec.dataref.DataRef.to_object`, to make it re-readable.
 
         Examples:
             - A view built from a held object refuses, and says why:
@@ -209,15 +211,13 @@ class SourceView(Source):
                 >>> SourceView(None, axis, axis).reread(ViewRequest(budget=100))
                 Traceback (most recent call last):
                     ...
-                RuntimeError: this SourceView carries no DataRef, so it cannot be re-read. It was built from an object the caller held rather than from an address; register it with DataRef.to_object() to make it re-readable
+                RuntimeError: this SourceView has no DataRef, so it cannot be re-read
 
                 ```
         """
         if self._ref is None:
             raise RuntimeError(
-                "this SourceView carries no DataRef, so it cannot be re-read. It was built from an object "
-                "the caller held rather than from an address; register it with DataRef.to_object() to make "
-                "it re-readable"
+                "this SourceView has no DataRef, so it cannot be re-read"
             )
         data = self._ref.open()
         again = self.of(
@@ -281,6 +281,25 @@ class SourceView(Source):
         from digitalearth.base.sources import get_source
 
         picked = selection if selection is not None else Selection()
+        # Only the band is honoured today: the extractor takes `band=` and nothing else, and the overview is
+        # chosen by read_part from the requested size. Storing a selection whose other axes were silently
+        # dropped would let a caller read `.selection` back and believe the view holds a slice it does not.
+        ignored = [
+            name
+            for name in ("time", "level", "member", "overview")
+            if getattr(picked, name) is not None
+        ]
+        if ignored:
+            raise ValueError(
+                f"SourceView cannot yet honour {ignored} on a Selection — only the band is applied, and a "
+                "view that stored the rest would report a slice it does not hold. Narrow the data before "
+                "building the view, or track the gap in the data tier"
+            )
+        if picked.is_composite:
+            raise ValueError(
+                f"SourceView reads one band; got {len(picked.band)}. Use Selection.frames() and build a "
+                "view per channel"
+            )
         windowed, xs, ys, window_crs = cls._windowed(data, picked, request)
         source = get_source(
             windowed,
@@ -375,9 +394,9 @@ class SourceView(Source):
         else:
             # read_part returns data in the *dataset's* CRS, so a bbox given in another one is converted
             # first and the window described in the CRS its cells are actually measured in.
-            window = Bounds.from_bbox(list(bbox), crs=request.crs())
+            window = Bounds.from_bbox(list(bbox), crs=request.crs)
             target = getattr(data, "epsg", None) or getattr(data, "crs", None)
-            if request.crs() is not None and target is not None:
+            if request.crs is not None and target is not None:
                 window = window.to_crs(target)
         width, height = cls._shape(request)
         array = np.asarray(

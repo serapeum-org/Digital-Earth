@@ -104,7 +104,7 @@ class TestTheRequest:
         """
         request = ViewRequest(bounds=Bounds(0.0, 1.0, 2.0, 3.0, crs=4326))
         assert request.as_bbox() == (0.0, 1.0, 2.0, 3.0)
-        assert request.crs() == 4326, "and the CRS travels with it"
+        assert request.crs == 4326, "and the CRS travels with it"
 
     def test_a_request_with_no_region_has_no_bbox(self):
         """Asking for everything is expressed by asking for no region.
@@ -114,7 +114,7 @@ class TestTheRequest:
             the second would read as the origin.
         """
         assert ViewRequest(budget=10).as_bbox() is None
-        assert ViewRequest(budget=10).crs() is None
+        assert ViewRequest(budget=10).crs is None
 
 
 class TestTheViewIsStillASource:
@@ -186,7 +186,7 @@ class TestTheAddress:
         view = SourceView(None, _axis(), _axis("y"))
         request = ViewRequest(budget=100)
         assert view.rereadable is False
-        with pytest.raises(RuntimeError, match="carries no DataRef"):
+        with pytest.raises(RuntimeError, match="has no DataRef"):
             view.reread(request)
 
 

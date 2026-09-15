@@ -188,8 +188,9 @@ class ViewRequest:
         xmin, ymin, xmax, ymax = self.bounds.as_bbox()
         return (xmin, ymin, xmax, ymax)
 
+    @property
     def crs(self) -> Any:
-        """Return the CRS the requested region is expressed in.
+        """The CRS the requested region is expressed in.
 
         Returns:
             The bounds' CRS, or ``None`` when the request names no region.
@@ -198,7 +199,7 @@ class ViewRequest:
             - The CRS travels with the region:
                 ```python
                 >>> from digitalearth.base.spec import Bounds, ViewRequest
-                >>> ViewRequest(bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)).crs()
+                >>> ViewRequest(bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)).crs
                 3857
 
                 ```

@@ -24,7 +24,7 @@ import numpy as np
 __all__ = ["PointArrays"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PointArrays:
     """Point coordinates as parallel float arrays, with the CRS they are measured in.
 
@@ -33,7 +33,10 @@ class PointArrays:
         y: Y coordinates, ``float64``.
         z: Z coordinates, ``float64``. Zeros when the source geometry is 2-D, so a consumer that needs three
             columns always has them — which is what the 3-D tier was filling in by hand.
-        crs: What the coordinates are measured in, or ``None`` when the source declared none.
+        crs: What the coordinates are measured in, or ``None`` when the source declared none. Carried, not
+            normalised: :meth:`of` keeps whatever the caller passed (typically an EPSG ``int``) and
+            :meth:`from_features` keeps whatever the frame declared (typically a ``pyproj.CRS``). Compare it
+            with :func:`pyramids.base.crs.crs_equal` rather than ``==`` if the spelling could differ.
 
     The three arrays are **copies**, marked read-only. Building one from a caller's buffer and then sharing
     memory with it would mean a "frozen" value that changes underneath whoever holds it, and `x`/`y`/`z` and
@@ -135,7 +138,10 @@ class PointArrays:
             crs: Override the CRS to record. Defaults to whatever the input declares.
 
         Returns:
-            The coordinates, with `z` taken from the geometry when it is 3-D and zeros when it is not.
+            The coordinates, with `z` taken from the geometry when **every** point is 3-D, and zeros
+            otherwise. A frame mixing 2-D and 3-D points therefore reads as flat: `has_z.all()` is what
+            geopandas can answer cheaply, and a partly-3-D frame has no elevation for some of its points
+            anyway.
 
         Raises:
             TypeError: if `features` exposes no geometry to read.
@@ -183,6 +189,38 @@ class PointArrays:
         )
 
     # ------------------------------------------------------------------ readers
+
+    def __eq__(self, other: Any) -> bool:
+        """Compare by coordinates and CRS, element by element.
+
+        Args:
+            other: The value to compare with.
+
+        Returns:
+            ``True`` when both hold the same points in the same order, in the same CRS.
+
+            The dataclass-generated ``__eq__`` compared the arrays with ``==``, which yields an array and
+            then raises *"The truth value of an array with more than one element is ambiguous"* — so two
+            perfectly ordinary instances could not be compared at all. Points are bulk data, so this type is
+            deliberately **not** hashable: `Bounds` and `Selection` key caches, this one does not.
+
+        Examples:
+            - Two identical readings compare equal:
+                ```python
+                >>> from digitalearth.base.points import PointArrays
+                >>> PointArrays.of([0.0, 1.0], [2.0, 3.0]) == PointArrays.of([0.0, 1.0], [2.0, 3.0])
+                True
+
+                ```
+        """
+        if not isinstance(other, PointArrays):
+            return NotImplemented
+        return (
+            self.crs == other.crs
+            and np.array_equal(self.x, other.x)
+            and np.array_equal(self.y, other.y)
+            and np.array_equal(self.z, other.z)
+        )
 
     def __len__(self) -> int:
         """Return how many points there are.

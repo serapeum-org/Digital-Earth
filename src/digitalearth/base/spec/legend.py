@@ -176,6 +176,13 @@ class LegendSpec:
 
                 ```
         """
+        if stops < 2:
+            # Fewer than two stops cannot describe a ramp: one divides by zero computing the spacing, none
+            # yields an empty legend. Every other field on this type is checked, and this one reaches the
+            # arithmetic directly.
+            raise ValueError(
+                f"a continuous legend needs at least two stops to describe a ramp; got {stops}"
+            )
         if scale.is_categorical:
             entries = tuple(
                 LegendEntry(str(category), scale.color_for(category), category)
@@ -263,6 +270,11 @@ class LegendSpec:
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a tier stores or serialises.
 
+        Every field is included, so the result is complete rather than the subset a particular tier happens
+        to read. It is not paired with a `from_dict`: a legend is *derived* from a `Scale`, and rebuilding one
+        from a dict would be a second way to construct it — the one thing :meth:`from_scale` exists to
+        prevent. Round-tripping belongs to whatever holds the scale, not to the legend.
+
         Returns:
             The legend as ``kind`` / ``values`` / ``colors`` plus the labels — the shape the web tier already
             keeps in ``last_legend``, so it can derive that from this rather than assembling it three times.
@@ -281,6 +293,8 @@ class LegendSpec:
             "kind": self.kind,
             "title": self.title,
             "units": self.units,
+            "format": self.format,
+            "orientation": self.orientation,
             "labels": [entry.label for entry in self.entries],
             "values": [entry.value for entry in self.entries],
             "colors": [entry.color for entry in self.entries],
