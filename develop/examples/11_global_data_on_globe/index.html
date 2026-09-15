@@ -321,7 +321,7 @@
     
     
       <li class="md-tabs__item">
-        <a href="../../reference/renamed-keywords/" class="md-tabs__link">
+        <a href="../../reference/vocabulary/" class="md-tabs__link">
           
   
   
@@ -3277,6 +3277,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../../reference/vocabulary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Figure vocabulary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../reference/renamed-keywords/" class="md-nav__link">
         
   
@@ -5185,7 +5213,7 @@ fig.tight_layout(); fig;</div>
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="5-centre-the-globe-on-a-place">5. Centre the globe on a place<a class="anchor-link" href="#5-centre-the-globe-on-a-place">¶</a></h2><p>The orthographic <strong>centre</strong> <code>(lon, lat)</code> fixes where the globe faces — change those two numbers to point it anywhere. Below, the same ETOPO relief is shown from four centres. To zoom into a region of a centred globe instead of the whole disc, use <code>set_domain(name)</code> (a named region) or <code>set_extent([xmin, ymin, xmax, ymax])</code> in projected coordinates.</p>
+<h2 id="5-centre-the-globe-on-a-place">5. Centre the globe on a place<a class="anchor-link" href="#5-centre-the-globe-on-a-place">¶</a></h2><p>The orthographic <strong>centre</strong> <code>(lon, lat)</code> fixes where the globe faces — change those two numbers to point it anywhere. Below, the same ETOPO relief is shown from four centres. To zoom into a region of a centred globe instead of the whole disc, use <code>set_domain(name)</code> (a named region) or <code>set_extent(...)</code>. <code>set_extent</code> takes matplotlib's axes ordering, <code>[xmin, xmax, ymin, ymax]</code>, in the display CRS — or, better, a <code>Bounds</code>, which names both the ordering and the CRS and is reprojected for you: <code>set_extent(Bounds.from_bbox([xmin, ymin, xmax, ymax], crs=4326))</code>.</p>
 </div>
 </div>
 </div>
