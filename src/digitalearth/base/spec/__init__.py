@@ -46,6 +46,7 @@ from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding
 from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 from digitalearth.base.spec.selection import DEFAULT_BAND, Selection
 from digitalearth.base.spec.style import StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec.viewrequest import ViewRequest
 
 __all__ = [
     "Bounds",
@@ -60,4 +61,5 @@ __all__ = [
     "StyleKey",
     "StyleSchema",
     "Symbology",
+    "ViewRequest",
 ]
