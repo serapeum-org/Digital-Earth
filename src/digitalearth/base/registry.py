@@ -285,6 +285,11 @@ def resolve_uri(uri: str) -> Any:
     # A Windows drive letter is not a scheme: "C:/data/x.tif" must read as a path, not as scheme "C".
     if len(scheme) == 1:
         scheme = "file"
+    # Nor is anything holding a separator. A GDAL virtual path carries its own colon
+    # ("/vsicurl/https://host/x.tif"), which split on the first colon yields "/vsicurl/https" — a scheme no
+    # plugin could ever register, so the error blamed a missing plugin for what is a path.
+    if "/" in scheme or "\\" in scheme:
+        scheme = "file"
     if scheme not in _RESOLVERS:
         raise KeyError(
             f"no resolver registered for scheme {scheme!r}; known schemes are "

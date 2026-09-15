@@ -143,6 +143,29 @@ class TestTheRegistry:
                 "a drive letter must route to the file resolver"
             )
 
+    def test_a_gdal_virtual_path_is_a_path_not_a_scheme(self):
+        """`/vsicurl/https://host/x.tif` routes to the file resolver, which knows what a vsi path is.
+
+        Test scenario:
+            The scheme was taken as everything before the first colon, so a virtual path carrying its own
+            colon yielded a "scheme" of `/vsicurl/https` and a KeyError blaming a missing plugin. Only a
+            colon-free vsi path ever reached the carve-out in `_resolve_file` that exists to handle them,
+            so the feature was half dead.
+        """
+        seen = []
+        with temporary_resolver("file", lambda uri: seen.append(uri) or "opened"):
+            for uri in (
+                "/vsicurl/https://host/x.tif",
+                "/vsizip/C:/data.zip/x.tif",
+                "/vsizip/data.zip/x.tif",
+            ):
+                assert resolve_uri(uri) == "opened", (
+                    f"{uri} must reach the file resolver"
+                )
+        assert len(seen) == 3, (
+            "every virtual path must route to the file resolver unchanged"
+        )
+
 
 class TestInMemoryObjects:
     """Referencing data a caller already holds, without writing it to disk."""
