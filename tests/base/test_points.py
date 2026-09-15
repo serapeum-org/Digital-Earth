@@ -152,15 +152,18 @@ class TestFiniteFiltering:
         points, _ = PointArrays.of([0.0, float("inf"), 2.0], [1.0, 2.0, 3.0]).finite()
         assert points.x.tolist() == [0.0, 2.0], "the non-finite point must be dropped"
 
-    def test_a_non_finite_y_or_z_drops_the_point_too(self):
-        """All three coordinates are checked, not just x.
+    def test_a_non_finite_y_drops_the_point_too(self):
+        """Both position coordinates are checked, not just x.
 
         Test scenario:
-            A point with a finite x and an infinite y is just as unusable, and a z-aware consumer needs the
-            third checked as well.
+            A point with a finite x and an infinite y is just as unplaceable. `z` is deliberately *not* in
+            the default mask — see `test_an_unknown_elevation_does_not_drop_a_drawable_2d_point`, which is
+            the behaviour this test used to contradict.
         """
         assert len(PointArrays.of([0.0], [float("nan")], [1.0]).finite()[0]) == 0
-        assert len(PointArrays.of([0.0], [1.0], [float("inf")]).finite()[0]) == 0
+        assert len(PointArrays.of([0.0], [1.0], [float("inf")]).finite()[0]) == 1, (
+            "an unusable elevation must not remove a point a 2-D consumer can place"
+        )
 
     def test_aligned_arrays_are_filtered_by_the_same_mask(self):
         """A value column stays in step with the points that survive.
@@ -196,6 +199,39 @@ class TestFiniteFiltering:
         points = PointArrays.of([0.0, float("inf")], [1.0, 2.0])
         points.finite()
         assert len(points) == 2, "the original must keep every point"
+
+    def test_an_unknown_elevation_does_not_drop_a_drawable_2d_point(self):
+        """A NaN z must not remove a point whose x and y are perfectly good.
+
+        Test scenario:
+            The replaced code masked on x and y only — z was never read at the interactive tessellation site.
+            Reading z in `from_features` and folding it into the mask silently changed the topology of a 2-D
+            Delaunay mesh: a 4-node mesh became 3 nodes because one point's elevation was unknown. 3-D point
+            geometry is ordinary in GeoJSON, so this is reachable from `InteractiveMap.trimesh`.
+        """
+        points = PointArrays.of([0.0, 1.0], [2.0, 3.0], [9.0, float("nan")])
+        assert len(points.finite()[0]) == 2, "a 2-D consumer must keep both points"
+
+    def test_a_three_dimensional_consumer_can_ask_for_z_to_count(self):
+        """Filtering on z is available, just not the default.
+
+        Test scenario:
+            A point cloud genuinely cannot place a point with no elevation. The distinction is the caller's
+            to make, which is why it is a parameter rather than a fixed rule.
+        """
+        points = PointArrays.of([0.0, 1.0], [2.0, 3.0], [9.0, float("nan")])
+        assert len(points.finite(dims="xyz")[0]) == 1, (
+            "opting in must drop the NaN-z point"
+        )
+
+    def test_a_dims_string_naming_something_else_is_refused(self):
+        """A typo'd axis name is caught rather than silently filtering nothing.
+
+        Test scenario:
+            `dims="xu"` would otherwise mask on x alone and quietly ignore the rest, which reads as working.
+        """
+        with pytest.raises(ValueError, match="names"):
+            PointArrays.of([0.0], [1.0]).finite(dims="xu")
 
 
 class TestShapes:

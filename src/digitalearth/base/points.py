@@ -184,7 +184,7 @@ class PointArrays:
         return len(self.x)
 
     def finite(
-        self, *aligned: Any
+        self, *aligned: Any, dims: str = "xy"
     ) -> Tuple["PointArrays", Tuple[Optional[np.ndarray], ...]]:
         """Drop points whose coordinates are not finite, taking aligned arrays with them.
 
@@ -196,6 +196,10 @@ class PointArrays:
             *aligned: Optional per-point arrays to filter by the same mask — a value column, an id column.
                 A ``None`` entry passes through as ``None``, so a caller with an optional column needs no
                 branch of its own.
+            dims: Which coordinates have to be finite. The default ``"xy"`` is deliberate: most consumers are
+                2-D, and a point with a perfectly good position but an unknown *elevation* is still a point
+                they can draw. Folding `z` in by default silently changed the topology of a 2-D Delaunay
+                tessellation. Pass ``"xyz"`` where a missing z really does make the point unusable.
 
         Returns:
             A ``(points, aligned)`` pair: the surviving points, and the filtered arrays in the order given.
@@ -210,8 +214,24 @@ class PointArrays:
                 1
 
                 ```
+            - An unknown elevation does not remove a point a 2-D consumer can still draw:
+                ```python
+                >>> from digitalearth.base.points import PointArrays
+                >>> pts = PointArrays.of([0.0, 1.0], [2.0, 3.0], [9.0, float("nan")])
+                >>> len(pts.finite()[0]), len(pts.finite(dims="xyz")[0])
+                (2, 1)
+
+                ```
         """
-        mask = np.isfinite(self.x) & np.isfinite(self.y) & np.isfinite(self.z)
+        axes = {"x": self.x, "y": self.y, "z": self.z}
+        unknown = sorted(set(dims) - set(axes))
+        if unknown:
+            raise ValueError(
+                f"finite() takes dims made of 'x', 'y' and 'z'; got {dims!r}, which names {unknown}"
+            )
+        mask = np.ones(len(self.x), dtype=bool)
+        for name in dims:
+            mask &= np.isfinite(axes[name])
         kept = PointArrays(self.x[mask], self.y[mask], self.z[mask], self.crs)
         filtered = tuple(
             None if item is None else np.asarray(item)[mask] for item in aligned
