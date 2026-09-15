@@ -15,9 +15,12 @@ Reprojection is pyramids' job, not this package's: :meth:`Bounds.to_crs` delegat
 ``pyramids.base.crs.reproject_coordinates`` rather than doing coordinate maths here.
 """
 
+import warnings
 from dataclasses import dataclass
 from math import isfinite
 from typing import Any, List, Sequence, Tuple
+
+import numpy as np
 
 __all__ = ["Bounds"]
 
@@ -202,11 +205,24 @@ class Bounds:
 
                 ```
         """
-        xs = [float(v) for v in x]
-        ys = [float(v) for v in y]
-        if not xs or not ys:
+        # numpy's reductions rather than a Python loop: this runs per render over every coordinate of a
+        # raster's axes, and materialising a Python list of them was a cost the previous np.min/np.max had
+        # not. It also keeps what those accepted — a 2-D array, and NaN coordinates, which nanmin ignores
+        # rather than turning into a "needs finite edges" error from the constructor.
+        xs = np.asarray(x, dtype="float64")
+        ys = np.asarray(y, dtype="float64")
+        if xs.size == 0 or ys.size == 0:
             raise ValueError("Bounds.from_points needs at least one coordinate pair")
-        return cls(min(xs), min(ys), max(xs), max(ys), crs)
+        with warnings.catch_warnings():
+            # An all-NaN axis warns and yields NaN, which the constructor then refuses by name.
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return cls(
+                float(np.nanmin(xs)),
+                float(np.nanmin(ys)),
+                float(np.nanmax(xs)),
+                float(np.nanmax(ys)),
+                crs,
+            )
 
     @staticmethod
     def _four(values: Sequence[float], label: str) -> Tuple[float, float, float, float]:
@@ -388,5 +404,8 @@ class Bounds:
             [self.ymin, self.ymin, self.ymax, self.ymax],
             from_crs=self.crs,
             to_crs=crs,
+            # pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step
+            # into a degenerate one — and set_extent would hand matplotlib a singular limit.
+            precision=None,
         )
         return Bounds(min(xs), min(ys), max(xs), max(ys), crs)
