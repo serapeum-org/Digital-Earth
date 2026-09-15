@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from pyramids.base.georeference import GeoReference
+from pyramids.dataset import Dataset
 
 from digitalearth.base.sources import DimensionInfo, Source
 from digitalearth.base.sources.view import SourceView
@@ -16,6 +18,22 @@ from digitalearth.base.spec import Bounds, DataRef, Selection, ViewRequest
 
 #: Anchored on this file, so the read works whatever directory pytest was started from.
 RASTER = Path(__file__).resolve().parents[2] / "examples" / "data" / "acc4000.tif"
+
+
+@pytest.fixture(scope="module")
+def labelled_raster(tmp_path_factory) -> Path:
+    """Write an 8x8 raster whose every value names the cell it sits in (`column + 10 * row`).
+
+    The cells are one unit square with the top-left corner at `(0, 8)`, so a value of `34` is the cell whose
+    centre is `(4.5, 4.5)`. That lets a coordinate assertion be made about the *data* rather than the shape.
+    """
+    path = tmp_path_factory.mktemp("labelled") / "grid.tif"
+    rows, columns = np.mgrid[0:8, 0:8]
+    Dataset.from_array(
+        arr=(columns + 10 * rows).astype("float64"),
+        geo_ref=GeoReference(top_left_corner=(0.0, 8.0), cell_size=1.0, epsg=3857),
+    ).to_file(str(path))
+    return path
 
 
 def _axis(name: str = "x") -> DimensionInfo:
@@ -298,6 +316,39 @@ class TestARereadIsStillGeoreferenced:
         assert again.y.values[0] > again.y.values[-1], (
             "the y axis must descend from north to south"
         )
+
+    def test_an_unaligned_window_labels_the_cells_it_actually_read(self, labelled_raster):
+        """A sub-window off the source's pixel grid is labelled where its data really sits.
+
+        Test scenario:
+            `read_part` snaps a window **outward** to whole source pixels — `floor`/`ceil` through
+            `world_to_pixel` — so the buffer it returns spans the snapped rectangle, not the one asked for.
+            Labelling it from the requested bbox shifts *and* scales the axes by up to one source cell per
+            edge, worst at the decimation factors this class exists to serve. The two tests above cannot see
+            it: both window the full extent, which is pixel-aligned by construction, so the snap is a no-op.
+
+            The raster encodes its own coordinates (`value == column + 10 * row`), and the read is at the
+            snapped window's native 4x4, so no resampling stands between a cell's label and its identity —
+            every assertion below is exact.
+        """
+        ref = DataRef(str(labelled_raster))
+        view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
+        again = view.reread(
+            ViewRequest(
+                bounds=Bounds(1.5, 1.5, 4.5, 4.5, crs=view.crs),
+                width=4,
+                height=4,
+                budget=10_000,
+            )
+        )
+        for column, x in enumerate(again.x.values):
+            assert again.z.values[0][column] % 10 == pytest.approx(x - 0.5), (
+                f"the cell labelled x={x} holds source column {again.z.values[0][column] % 10}"
+            )
+        for row, y in enumerate(again.y.values):
+            assert again.z.values[row][0] // 10 == pytest.approx(7.5 - y), (
+                f"the cell labelled y={y} holds source row {again.z.values[row][0] // 10}"
+            )
 
     def test_what_the_data_is_survives_a_reread(self):
         """The variable, the kind and the units describe the data, not the window.

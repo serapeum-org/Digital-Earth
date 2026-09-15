@@ -402,6 +402,12 @@ class SourceView(Source):
             target = getattr(data, "epsg", None) or getattr(data, "crs", None)
             if request.crs is not None and target is not None:
                 window = window.to_crs(target)
+        # Snap the window outward to whole source pixels *before* reading. read_part does this internally
+        # (floor/ceil through world_to_pixel) and returns a buffer spanning the snapped window — so labelling
+        # the result from the requested bbox misplaces every cell by up to one source pixel per edge, worst
+        # on exactly the zoomed-out tiles this exists for. Aligning the request makes the snap a no-op, so
+        # the window asked for and the window read are the same rectangle.
+        window = cls._aligned(window, data)
         width, height = cls._shape(request)
         array = np.asarray(
             data.read_part(
@@ -419,3 +425,38 @@ class SourceView(Source):
         xs = xmin + (np.arange(columns) + 0.5) * (xmax - xmin) / columns
         ys = ymax - (np.arange(rows) + 0.5) * (ymax - ymin) / rows
         return array, xs, ys, window.crs
+
+    @staticmethod
+    def _aligned(window: Bounds, data: Any) -> Bounds:
+        """Grow `window` outward to the source's pixel edges, so a read of it needs no snapping.
+
+        Args:
+            window: The window wanted, in the source's CRS.
+            data: The object being read, for its geotransform.
+
+        Returns:
+            The smallest pixel-aligned window containing `window`, or `window` unchanged when the source
+            exposes no geotransform to align against.
+
+            This is the same outward snap ``read_part`` performs internally. Doing it here rather than
+            reproducing its arithmetic afterwards is what keeps the labels honest: the caller's bbox and the
+            rectangle actually read become one rectangle, so there is no second window to get wrong.
+
+            The long-term answer is for the reader to return the window's transform alongside the array —
+            an upstream change, not one to make here.
+        """
+        transform = getattr(data, "geotransform", None)
+        if not transform:
+            return window
+        origin_x, pixel_w, _, origin_y, _, pixel_h = transform[:6]
+        if not pixel_w or not pixel_h:
+            return window
+        height = abs(pixel_h)
+        xmin, ymin, xmax, ymax = window.as_bbox()
+        left = origin_x + np.floor((xmin - origin_x) / pixel_w) * pixel_w
+        right = origin_x + np.ceil((xmax - origin_x) / pixel_w) * pixel_w
+        # The geotransform's y step is negative for a north-up raster, so rows are measured down from the
+        # origin; align against that and convert back.
+        top = origin_y - np.floor((origin_y - ymax) / height) * height
+        bottom = origin_y - np.ceil((origin_y - ymin) / height) * height
+        return Bounds(float(left), float(bottom), float(right), float(top), window.crs)
