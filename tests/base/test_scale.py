@@ -146,6 +146,30 @@ class TestTheDomain:
             == 1
         ), "two equal scales must collapse to one entry"
 
+    def test_two_explicit_limits_the_wrong_way_round_are_refused(self):
+        """A caller who swapped `vmin` and `vmax` is told, not silently corrected.
+
+        Test scenario:
+            The widening rule exists for a *measured* constant domain. Applied to two limits the caller wrote
+            down *in the wrong order*, it dropped their `vmax` and drew against `(vmin, vmin + 1)` — so
+            `vmin=10, vmax=5` became `(10, 11)`, hiding an obvious typo behind a plausible-looking range.
+            An explicit *equal* pair is different and still widens: see the neighbouring test.
+        """
+        with pytest.raises(ValueError, match="reversed pair"):
+            Scale.from_values([1.0, 2.0, 3.0], vmin=10.0, vmax=5.0)
+
+    def test_one_explicit_limit_still_widens_against_the_data(self):
+        """Only the both-explicit case is a typo; one limit plus a measurement is not.
+
+        Test scenario:
+            Guards the boundary of the rule above — a caller who pins only `vmin` above the data still gets a
+            usable range rather than an error.
+        """
+        assert Scale.from_values([1.0, 2.0, 3.0], vmin=10.0).as_limits() == (
+            10.0,
+            11.0,
+        ), "a single explicit limit must still widen rather than raise"
+
 
 class TestClassification:
     """The classifier is reached once, from here, rather than three times from three tiers."""
@@ -282,6 +306,31 @@ class TestCategorical:
         """
         with pytest.raises(ValueError, match="at least one category"):
             Scale.categorical([], [])
+
+    def test_a_boolean_category_is_not_the_same_label_as_one(self):
+        """`True` and `1` are different categories, though they compare equal.
+
+        Test scenario:
+            `in`/`.index` compare with `==`, and `True == 1` in Python — so a layer with both as categories
+            coloured every `1` with `True`'s colour. Categories are labels arriving straight from a data
+            column, which is exactly where a bool column and an int column meet.
+        """
+        scale = Scale.categorical([True, 1], ["#f00", "#0f0"])
+        assert scale.color_for(True) == "#f00", "True keeps the colour assigned to True"
+        assert scale.color_for(1) == "#0f0", "and 1 keeps the one assigned to 1"
+
+    def test_a_nan_category_can_still_be_looked_up(self):
+        """A category that was stored can be found again, even if it is NaN.
+
+        Test scenario:
+            NaN compares unequal to itself, so an `==`-based lookup could never reach it and every NaN read
+            as missing — including one the scale was explicitly given a colour for.
+        """
+        nan = float("nan")
+        scale = Scale.categorical([nan, "land"], ["#aaa", "#8b4513"], missing="#ccc")
+        assert scale.color_for(nan) == "#aaa", (
+            "the stored NaN category must be reachable"
+        )
 
 
 class TestItStaysAValue:

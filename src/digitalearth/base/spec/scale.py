@@ -285,6 +285,16 @@ class Scale:
         )
         lo = data_lo if vmin is None else float(vmin)
         hi = data_hi if vmax is None else float(vmax)
+        if vmin is not None and vmax is not None and hi < lo:
+            # Two limits the caller wrote down, in the wrong order. An explicit *equal* pair is a caller
+            # saying the range is constant, and is widened like a measured one — the web tier's raster path
+            # has always done that. A reversed pair says nothing of the kind: widening it would drop the
+            # caller's vmax and draw against (vmin, vmin + 1), hiding an obvious typo behind a plausible
+            # range.
+            raise ValueError(
+                f"Scale needs vmin <= vmax; got vmin={lo}, vmax={hi}. Both were given explicitly, so this "
+                "is a reversed pair rather than a constant domain to widen — check their order"
+            )
         if hi <= lo:
             # The rule all five copies chose: a constant domain is widened by one rather than divided by.
             hi = lo + 1.0
@@ -427,8 +437,15 @@ class Scale:
 
                 ```
         """
-        if category in self.categories:
-            return self._colors[self.categories.index(category)]
+        for index, known in enumerate(self.categories):
+            # `in`/`.index` compare with ==, which makes True equal to 1 and leaves a NaN category
+            # unreachable. Categories are labels, so `False` and `0` are different labels even though they
+            # compare equal, and an identity check is what finds a NaN that was actually stored.
+            if known is category or (
+                isinstance(known, bool) == isinstance(category, bool)
+                and known == category
+            ):
+                return self._colors[index]
         return self.missing
 
     def class_of(self, value: float) -> Optional[int]:
