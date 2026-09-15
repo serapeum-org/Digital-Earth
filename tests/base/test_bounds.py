@@ -233,6 +233,29 @@ class TestOperations:
                 Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
             )
 
+    def test_a_value_that_names_no_crs_is_not_equal_to_itself(self):
+        """`crs=0` does not match `crs=0`, because neither names a reference system.
+
+        Test scenario:
+            pyramids' `crs_equal` carries a guard for exactly this, and an `==` or `is` shortcut in front of
+            it re-opened the hole: CPython interns `0`, `''` and `True`, so two rectangles built with `crs=0`
+            compared equal and unioned as though they agreed on a CRS neither had.
+        """
+        with pytest.raises(ValueError, match="one CRS"):
+            Bounds(0.0, 0.0, 1.0, 1.0, crs=0).union(Bounds(0.0, 0.0, 2.0, 2.0, crs=0))
+
+    def test_two_unset_crss_still_count_as_the_same(self):
+        """Two rectangles that declare no CRS need no reprojection between them.
+
+        Test scenario:
+            The one case a shortcut would have been for. `crs_equal` already answers it, which is why no
+            shortcut is needed — and `Bounds.from_points` defaults `crs` to None, so this is a real path.
+        """
+        merged = Bounds(0.0, 0.0, 1.0, 1.0, crs=None).union(
+            Bounds(0.0, 0.0, 2.0, 2.0, crs=None)
+        )
+        assert merged.as_bbox() == [0.0, 0.0, 2.0, 2.0], "two unset CRSs must union"
+
 
 class TestReprojection:
     """`to_crs` delegates to pyramids; this package does no coordinate maths."""

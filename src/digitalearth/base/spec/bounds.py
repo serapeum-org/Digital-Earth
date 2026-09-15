@@ -35,9 +35,13 @@ def _same_crs(one: Any, other: Any) -> bool:
         ``4326 != "EPSG:4326"`` would refuse a great many *right* ones. pyramids owns the normalisation, so
         it is asked; it answers ``False`` for a spelling it cannot read rather than raising, which is what
         this needs — the question is whether reprojection is required, not whether the input is valid.
+
+        Nothing short-circuits in front of it, not even identity. `crs_equal` carries a guard that refuses
+        values naming no reference system, and CPython interns ``0``, ``''`` and ``True`` — so an ``is`` or
+        ``==`` shortcut would answer "same CRS" for two rectangles built with ``crs=0``, letting them union
+        as though they agreed and letting ``to_crs(0)`` no-op instead of refusing. It already answers
+        ``True`` for two unset CRSs, which is the one case a shortcut would have been for.
     """
-    if one is other or one == other:
-        return True
     from pyramids.base.crs import crs_equal
 
     return bool(crs_equal(one, other))
