@@ -176,6 +176,88 @@ class Scale:
         return cls(lo, hi, scheme=scheme, breaks=breaks, missing=missing)
 
     @classmethod
+    def from_finite(
+        cls,
+        values: Any,
+        *,
+        vmin: Optional[float] = None,
+        vmax: Optional[float] = None,
+        missing: Optional[str] = None,
+    ) -> "Scale":
+        """Derive a scale from values the caller has already filtered to finite ones.
+
+        :meth:`from_values` filters first, which costs a full pass and a compacted copy of every finite
+        value. Several callers had just done exactly that and thrown the result away — on a 2160x4320 global
+        canvas that is a second ~75 MB allocation for an answer already in hand. This is the same rule
+        without the second pass.
+
+        Args:
+            values: Finite values only. Passing non-finite ones here produces a NaN domain rather than an
+                error, which is the price of skipping the check — use :meth:`from_values` if unsure.
+            vmin: Explicit lower limit, overriding the measured one.
+            vmax: Explicit upper limit.
+            missing: Colour for values the scale cannot place.
+
+        Returns:
+            The resolved scale.
+
+        Raises:
+            ValueError: if both limits are given the wrong way round.
+
+        Examples:
+            - The same domain as `from_values`, without re-filtering:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_finite([1.0, 5.0, 9.0]).as_limits()
+                (1.0, 9.0)
+
+                ```
+            - An empty selection still yields limits a colormap can take:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_finite([]).as_limits()
+                (0.0, 1.0)
+
+                ```
+        """
+        array = np.asarray(values, dtype="float64").ravel()
+        lo, hi = cls._apply_limits(array, vmin, vmax)
+        return cls(lo, hi, missing=missing)
+
+    @classmethod
+    def breaks_of(
+        cls, values: Any, scheme: str, k: int = DEFAULT_CLASS_COUNT
+    ) -> Tuple[float, ...]:
+        """Cut class edges without deriving a domain, for a caller that only wants the classes.
+
+        The three classification sites read ``.breaks`` and nothing else, so measuring the domain for them —
+        a full pass over the data plus a compacted copy of every finite value — is work whose result is
+        discarded. This is the same classifier, the same error, and no measurement.
+
+        Args:
+            values: The data to classify.
+            scheme: Classification scheme name.
+            k: Number of classes.
+
+        Returns:
+            The class edges, ``k + 1`` of them for ``k`` classes.
+
+        Raises:
+            ValueError: if the scheme is unknown to the classifier, or `k` is not a usable class count. The
+                message names the scheme and the count, exactly as :meth:`from_values` does.
+
+        Examples:
+            - Three classes, four edges, and no domain derived:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> len(Scale.breaks_of(list(range(10)), "equal_interval", 3))
+                4
+
+                ```
+        """
+        return cls._breaks(values, scheme, k)
+
+    @classmethod
     def from_limits(
         cls, vmin: float, vmax: float, *, missing: Optional[str] = None
     ) -> "Scale":
@@ -278,6 +360,25 @@ class Scale:
             A ``(lo, hi)`` pair with ``hi > lo`` guaranteed.
         """
         measured = finite(values)
+        return Scale._apply_limits(measured, vmin, vmax)
+
+    @staticmethod
+    def _apply_limits(
+        measured: Any, vmin: Optional[float], vmax: Optional[float]
+    ) -> Tuple[float, float]:
+        """Turn an already-finite array plus any explicit limits into a usable domain.
+
+        Args:
+            measured: Finite values, as :func:`digitalearth.base.arrays.finite` returns them.
+            vmin: Explicit lower limit, or ``None`` to measure.
+            vmax: Explicit upper limit, or ``None`` to measure.
+
+        Returns:
+            A ``(lo, hi)`` pair with ``hi > lo`` guaranteed.
+
+        Raises:
+            ValueError: if both limits were given and they are the wrong way round.
+        """
         data_lo, data_hi = (
             (float(measured.min()), float(measured.max()))
             if measured.size

@@ -1386,15 +1386,9 @@ class TexturedGlobe(WatermarkMixin):
             ValueError: If the bounds leave no range — see :meth:`_validate_colour_bounds`.
         """
         cls._validate_colour_bounds(good, vmin, vmax)
-        # A unit range is the fallback when the band has no finite value to take a bound from.
-        data_lo, data_hi = (
-            (float(good.min()), float(good.max())) if good.size else (0.0, 1.0)
-        )
-        del (
-            data_lo,
-            data_hi,
-        )  # the measurement, the override and the widening are one rule now
-        return Scale.from_values(good, vmin=vmin, vmax=vmax).as_limits()
+        # `good` is already the finite subset, so from_finite skips the second pass and the ~75 MB copy
+        # from_values would make of a global canvas. A unit range remains the fallback for an empty one.
+        return Scale.from_finite(good, vmin=vmin, vmax=vmax).as_limits()
 
     @classmethod
     def _colorize(

@@ -101,7 +101,7 @@ class BigDataMixin(_MixinBase):
         if weight is not None:
             values = np.asarray(self._require_column(gdf, weight), dtype=float)
             finite = values[np.isfinite(values)]
-            lo, hi = Scale.from_values(finite).as_limits()
+            lo, hi = Scale.from_finite(finite).as_limits()
 
             paint["heatmap-weight"] = [
                 "interpolate",

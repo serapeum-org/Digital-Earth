@@ -396,7 +396,9 @@ class RasterMixin(_MixinBase):
         if not valid.any():
             raise ValueError("add_raster got a band with no finite values to colour")
         # The domain, the explicit-limit override and the constant-band widening are one rule, in base/spec.
-        lo, hi = Scale.from_values(data, vmin=vmin, vmax=vmax).as_limits()
+        # `valid` is already computed above, so the finite subset is handed over rather than derived twice —
+        # this is the tier with the explicit inline-pixel budget.
+        lo, hi = Scale.from_finite(data[valid], vmin=vmin, vmax=vmax).as_limits()
         norm = Normalize(vmin=lo, vmax=hi)
         rgba = colormaps[cmap](norm(np.where(valid, data, lo)))
         rgba[~valid, 3] = 0.0  # NoData → transparent

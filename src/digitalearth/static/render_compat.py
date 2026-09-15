@@ -217,7 +217,14 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     StyleKey("bounds", "Explicit class bounds for a boundary colour scale."),
     StyleKey("midpoint", "The value a diverging colour scale centres on."),
     # -- already-built group objects, passed straight through
-    StyleKey("color", "A built ColorScaling group object."),
+    # NOT the `color` visual channel, despite the name. This is cleopatra's `plot(color=...)` parameter,
+    # which takes a ColorScaling group object describing how values are *scaled* onto a ramp. The static
+    # tier has no flat keyword for a constant layer colour at all — colour comes from `cmap` plus the data —
+    # so this key deliberately declares no channel, and fold_symbology says so when asked for one.
+    StyleKey(
+        "color",
+        "A built ColorScaling group object — the colour *scaling*, not a colour.",
+    ),
     StyleKey("contour", "A built Contour group object."),
     StyleKey("data_style", "A built DataStyle group object."),
     StyleKey("classify", "A built Classify group object."),
@@ -313,7 +320,14 @@ def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]
         keyword = _CHANNEL_KEYS.get(channel)
         if keyword is None:
             unsupported[channel] = (
-                f"the static tier has no styling keyword for the {channel!r} channel"
+                f"the static tier has no flat styling keyword for the {channel!r} channel"
+                + (
+                    " — a matplotlib layer takes its colours from cmap plus the data values, and the flat"
+                    " `color=` key is cleopatra's ColorScaling group, which is the scaling rather than a"
+                    " colour"
+                    if channel == "color"
+                    else ""
+                )
             )
         elif not encoding.is_constant:
             unsupported[channel] = (

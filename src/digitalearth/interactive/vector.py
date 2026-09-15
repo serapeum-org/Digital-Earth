@@ -467,7 +467,7 @@ class VectorMixin(_MixinBase):
                 scheme produced classes — see the note above.
         """
         try:
-            edges = Scale.from_values(gdf[column].to_numpy(), scheme=scheme, k=k).breaks
+            edges = Scale.breaks_of(gdf[column].to_numpy(), scheme, k)
         except ValueError as err:  # constant column, unknown scheme, k < 1, …
             # Scale's own message already names the scheme and `k`; this adds the one fact it cannot
             # know, the column. Repeating scheme/k here printed both twice in a row.

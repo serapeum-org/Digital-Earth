@@ -182,7 +182,7 @@ def classified_scalars(
 
     numbers = np.asarray(values, dtype="float64")
     try:
-        edges = Scale.from_values(numbers, scheme=scheme, k=k).breaks
+        edges = Scale.breaks_of(numbers, scheme, k)
     except Exception as error:  # unknown scheme, constant column, k < 1 …
         # Scale's own message already names the scheme and `k`, and there is no column here to add, so
         # this only normalises the exception type the tiers raise.

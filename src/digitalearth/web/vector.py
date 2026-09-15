@@ -214,7 +214,7 @@ class VectorMixin(_MixinBase):
 
         if scheme is not None:
             try:
-                edges = Scale.from_values(values, scheme=scheme, k=k).breaks
+                edges = Scale.breaks_of(values, scheme, k)
             except (
                 ValueError
             ) as err:  # constant / single-feature column, unknown scheme, k<1, …
@@ -247,7 +247,7 @@ class VectorMixin(_MixinBase):
         finite = finite[np.isfinite(finite)]
         if finite.size == 0:
             raise ValueError(f"column {column!r} has no finite values to colour")
-        lo, hi = Scale.from_values(finite).as_limits()
+        lo, hi = Scale.from_finite(finite).as_limits()
         stops = np.linspace(lo, hi, 5)
         colors = self._cmap_hex(cmap, len(stops))
         expr = ["interpolate", ["linear"], ["get", column]]

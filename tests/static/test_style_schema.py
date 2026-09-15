@@ -128,6 +128,40 @@ class TestRoutingAndFolding:
             f"the reason must name the field; got {unsupported['opacity']!r}"
         )
 
+    def test_the_color_key_is_the_scaling_group_not_the_colour_channel(self):
+        """`color` names two different things, and the schema is explicit about which one it declares.
+
+        Test scenario:
+            cleopatra's `plot(color=...)` takes a ColorScaling group — how values are *scaled* onto a ramp —
+            while `CHANNELS` declares a `color` channel for the colour itself. The names collide and cannot
+            both change: the flat key has to match cleopatra's kwarg. So the collision is pinned here rather
+            than left for a reader to trip over, along with the fact that the static tier has no flat keyword
+            for a constant layer colour at all — colour comes from `cmap` plus the data values.
+        """
+        assert STATIC_STYLE_SCHEMA.keys["color"].channel is None, (
+            "the flat color key is the scaling group, so it must declare no channel"
+        )
+        sym, rest = route_flat_style({"color": "a-colorscaling-object"})
+        assert dict(sym.props) == {"color": "a-colorscaling-object"}, (
+            "it must route as a static property, not as the colour channel"
+        )
+        assert not sym.encodings and not rest, "and nowhere else"
+
+    def test_asking_to_fold_the_colour_channel_explains_why_it_cannot(self):
+        """The unsupported reason names the actual reason, not just the absence.
+
+        Test scenario:
+            "no keyword for 'color'" on the one channel the vocabulary calls first-class reads as an
+            oversight. It is not: a matplotlib layer is coloured by a colormap over its values, and the flat
+            `color=` key is a different concept wearing the same name.
+        """
+        _, unsupported = fold_symbology(Symbology.of(color="#f00"))
+        assert (
+            "cmap" in unsupported["color"] and "ColorScaling" in unsupported["color"]
+        ), (
+            f"the reason must explain the two-way collision; got {unsupported['color']!r}"
+        )
+
 
 class TestTheMarkerSizeChannel:
     """The channel beyond colour, folded here instead of in the builders."""
