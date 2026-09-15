@@ -490,19 +490,69 @@ class TestTheRequestedShape:
             600,
         )
 
-    def test_a_canvas_over_budget_is_scaled_down_keeping_its_shape(self):
-        """The budget is the limit; the canvas is only what would look best.
+    @pytest.mark.parametrize(
+        "width, height, budget",
+        [
+            (800, 600, 4800),
+            (10_000, 1, 100),
+            (1_000, 1, 100),
+            (4_000, 3, 1_000),
+            (1, 10_000, 100),
+            (1920, 1080, 10),
+            (7, 5, 11),
+            (2, 3, 1),
+        ],
+    )
+    def test_an_over_budget_canvas_never_reads_more_cells_than_the_budget(
+        self, width, height, budget
+    ):
+        """Whatever the shape, the product of the two numbers returned fits the budget.
 
         Test scenario:
-            Refusing would be unhelpful and reading it whole would blow the budget, so it is scaled — and the
-            aspect ratio survives the scaling.
+            The budget is the memory guard — `ViewRequest.budget` is documented as the limit "a reader that
+            cannot serve both must respect". The previous spelling clamped each axis to a minimum of one
+            *after* scaling, so on an elongated canvas the short axis truncated to zero, was lifted back to
+            one, and left the long axis at its scaled value: `10000x1` under a budget of `100` came back as
+            `1000x1`, ten times the limit. The single case the old test sampled (`800x600 / 4800`) divides
+            exactly, so it passed while the property it named did not hold.
+
+            The rows below are the shapes that break it — `width >> height` and its transpose — plus the
+            dividing case, so the assertion is on the property rather than on a sample.
         """
-        width, height = SourceView._shape(
-            ViewRequest(width=800, height=600, budget=4800)
+        columns, rows = SourceView._shape(
+            ViewRequest(width=width, height=height, budget=budget)
         )
-        assert width * height <= 4800, f"{width}x{height} must fit the budget"
-        assert round(width / height, 2) == round(800 / 600, 2), (
-            "and keep the aspect ratio"
+        assert columns >= 1 and rows >= 1, (
+            f"a read has to return at least one cell, got {columns}x{rows}"
+        )
+        assert columns * rows <= budget, (
+            f"{width}x{height} under a budget of {budget} came back as {columns}x{rows} = "
+            f"{columns * rows} cells"
+        )
+
+    @pytest.mark.parametrize(
+        "width, height, budget",
+        [(800, 600, 4800), (1920, 1080, 480_000), (1000, 250, 40_000)],
+    )
+    def test_a_scaled_canvas_keeps_its_shape_to_the_nearest_whole_cell(
+        self, width, height, budget
+    ):
+        """The aspect ratio survives the scaling, as closely as a whole number of cells allows.
+
+        Test scenario:
+            The budget is the guarantee and the shape is best effort, so this states the bound rather than
+            an equality: each axis is within one cell of the exactly-scaled canvas. `round(w / h, 2)` — what
+            the old test asserted — holds only where the scale factor happens to divide.
+        """
+        columns, rows = SourceView._shape(
+            ViewRequest(width=width, height=height, budget=budget)
+        )
+        scale = (budget / (width * height)) ** 0.5
+        assert abs(columns - width * scale) < 1, (
+            f"the width must be within a cell of {width * scale:.3f}, got {columns}"
+        )
+        assert abs(rows - height * scale) < 1, (
+            f"the height must be within a cell of {height * scale:.3f}, got {rows}"
         )
 
     def test_a_budget_alone_wins_over_the_readability_floor(self):

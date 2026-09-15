@@ -327,8 +327,8 @@ class SourceView(Source):
             request=request,
         )
 
-    @staticmethod
-    def _shape(request: ViewRequest) -> Tuple[int, int]:
+    @classmethod
+    def _shape(cls, request: ViewRequest) -> Tuple[int, int]:
         """Return the ``(width, height)`` in cells a windowed read should produce.
 
         Args:
@@ -340,8 +340,9 @@ class SourceView(Source):
             exist to describe. Otherwise a square of :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side`,
             which is what a budget alone can say.
 
-            A canvas over budget is scaled down keeping its aspect ratio, because the budget is the limit the
-            process can actually afford and the canvas is only what would look best.
+            A canvas over budget is scaled down by :meth:`_fitted`. The budget is the **guarantee**: the
+            product of the two numbers returned never exceeds it. The aspect ratio is best effort, held to
+            the nearest whole cell, because cells do not come in fractions.
         """
         width, height = request.width, request.height
         if width is None or height is None:
@@ -355,8 +356,38 @@ class SourceView(Source):
             return side, side
         if request.within_budget(width * height):
             return width, height
-        scale = (request.budget / (width * height)) ** 0.5  # type: ignore[operator]
-        return max(1, int(width * scale)), max(1, int(height * scale))
+        return cls._fitted(width, height, request.budget)  # type: ignore[arg-type]
+
+    @staticmethod
+    def _fitted(width: int, height: int, budget: int) -> Tuple[int, int]:
+        """Shrink a canvas until it fits `budget` cells, keeping its shape as nearly as whole cells allow.
+
+        Args:
+            width: The canvas width in cells.
+            height: The canvas height in cells.
+            budget: The greatest number of cells that may be returned.
+
+        Returns:
+            A ``(width, height)`` whose product is **always** ``<= budget``, and which is within one cell
+            per axis of the exactly-scaled canvas whenever both axes survive the scaling.
+
+            Truncating each axis can only go under the scale factor, so the product of the two truncated
+            axes is under the budget by construction. What is *not* safe is lifting a truncated axis back
+            to one afterwards, which is what this replaces: for an elongated canvas the short axis rounds to
+            zero, and restoring it multiplies the long axis straight back through the limit. Measured on the
+            old spelling, ``10000x1`` under a budget of ``100`` returned ``1000x1`` — ten times the limit the
+            budget exists to impose, on exactly the shapes it matters for (a cross-section strip, a profile).
+
+            A canvas that elongated gets its long axis capped at the budget and its short axis set to one,
+            which is the most detail the limit can buy.
+        """
+        scale = (budget / (width * height)) ** 0.5
+        columns, rows = int(width * scale), int(height * scale)
+        if columns and rows:
+            return columns, rows
+        if width >= height:
+            return max(1, min(width, budget)), 1
+        return 1, max(1, min(height, budget))
 
     @classmethod
     def _windowed(
