@@ -305,8 +305,39 @@ class SourceView(Source):
         )
 
     @staticmethod
+    def _shape(request: ViewRequest) -> Tuple[int, int]:
+        """Return the ``(width, height)`` in cells a windowed read should produce.
+
+        Args:
+            request: What was asked for.
+
+        Returns:
+            The caller's canvas when they named both dimensions **and it fits the budget** — reading a square
+            for a request that says ``800x600`` distorts the aspect ratio of the very canvas those fields
+            exist to describe. Otherwise a square of :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side`,
+            which is what a budget alone can say.
+
+            A canvas over budget is scaled down keeping its aspect ratio, because the budget is the limit the
+            process can actually afford and the canvas is only what would look best.
+        """
+        width, height = request.width, request.height
+        if width is None or height is None:
+            if request.budget is None:
+                side = request.side()
+            else:
+                # The budget wins over `side()`'s readability floor. Its own docstring calls it the limit "a
+                # reader that cannot serve both must respect", and a floor of 64 turned a budget of 16 into
+                # 4,096 cells. A caller who sets a budget that small has asked for a thumbnail.
+                side = max(1, int(request.budget**0.5))
+            return side, side
+        if request.within_budget(width * height):
+            return width, height
+        scale = (request.budget / (width * height)) ** 0.5  # type: ignore[operator]
+        return max(1, int(width * scale)), max(1, int(height * scale))
+
+    @classmethod
     def _windowed(
-        data: Any, selection: Selection, request: Optional[ViewRequest]
+        cls, data: Any, selection: Selection, request: Optional[ViewRequest]
     ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any]]:
         """Narrow `data` to the requested window, and say where the window's cells are.
 
@@ -333,19 +364,27 @@ class SourceView(Source):
             return nothing
         bbox = request.as_bbox()
         if bbox is None:
-            return nothing
-        # read_part returns data in the *dataset's* CRS, so a bbox given in another one is converted first
-        # and the window described in the CRS its cells are actually measured in.
-        window = Bounds.from_bbox(list(bbox), crs=request.crs())
-        target = getattr(data, "epsg", None) or getattr(data, "crs", None)
-        if request.crs() is not None and target is not None:
-            window = window.to_crs(target)
-        side = request.side()
+            # A budget with no region still has to be honoured: the object *can* window, so skipping here
+            # returned the whole raster and blew the budget silently. The source's own bbox is the region.
+            source_bbox = getattr(data, "bbox", None)
+            if source_bbox is None or request.budget is None:
+                return nothing
+            window = Bounds.from_bbox(
+                list(source_bbox), crs=getattr(data, "epsg", None)
+            )
+        else:
+            # read_part returns data in the *dataset's* CRS, so a bbox given in another one is converted
+            # first and the window described in the CRS its cells are actually measured in.
+            window = Bounds.from_bbox(list(bbox), crs=request.crs())
+            target = getattr(data, "epsg", None) or getattr(data, "crs", None)
+            if request.crs() is not None and target is not None:
+                window = window.to_crs(target)
+        width, height = cls._shape(request)
         array = np.asarray(
             data.read_part(
                 bbox=window.as_bbox(),
-                dst_width=side,
-                dst_height=side,
+                dst_width=width,
+                dst_height=height,
                 bbox_crs=window.crs,
                 band=selection.first_band - 1,  # pyramids' windowed read is 0-based
             )
