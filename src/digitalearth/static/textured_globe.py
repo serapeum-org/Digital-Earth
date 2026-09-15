@@ -40,7 +40,7 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
     TexturedGlobeGlyph,
 )
 from cleopatra.styling.colors import resolve_colormap
-from cleopatra.styling.watermark import stamp_mark
+from cleopatra.styling.watermark import WatermarkMixin
 from matplotlib import cbook, rcParams
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection, PolyCollection
@@ -916,7 +916,7 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
         return _front_depth(axes, _FILL_RANK)
 
 
-class TexturedGlobe:
+class TexturedGlobe(WatermarkMixin):
     """A 3-D textured globe built from geospatial data.
 
     Wraps ``cleopatra.glyphs.globe.TexturedGlobeGlyph``: this class owns the data → texture conversion and
@@ -2449,7 +2449,7 @@ class TexturedGlobe:
 
         Args:
             mark: The mark image — a file path or an ``(H, W, 3)`` / ``(H, W, 4)`` array.
-            **kwargs: Forwarded to ``cleopatra.styling.watermark.stamp_mark``.
+            **kwargs: Forwarded to cleopatra's ``WatermarkMixin.stamp_mark``.
 
         Returns:
             The frameless inset ``Axes`` the mark was drawn on.
@@ -2490,7 +2490,7 @@ class TexturedGlobe:
         """
         if self.fig is None:
             raise RuntimeError("draw() the globe before stamping it")
-        return stamp_mark(self.fig, mark, **kwargs)
+        return self.stamp_mark(mark, **kwargs)
 
 
 #: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported from this module (not from
