@@ -27,6 +27,7 @@ from pyramids.dataset import Dataset
 
 from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.crs import declared_crs, source_epsg
+from digitalearth.base.points import PointArrays
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import Selection
@@ -414,12 +415,10 @@ def _from_feature(fc: Any, metadata: Optional[dict], *, crs: Any = None) -> Sour
     coordinates come from the geometry; non-point geometries fall back to their centroid.
     """
     geom_name = fc.geometry.name
-    geom = fc.geometry
-    if (geom.geom_type == "Point").all():
-        xs, ys = geom.x.to_numpy(), geom.y.to_numpy()
-    else:
-        cent = geom.centroid
-        xs, ys = cent.x.to_numpy(), cent.y.to_numpy()
+    # The point-or-centroid choice and the coordinate read are PointArrays' — this was the copy the other
+    # sites' spellings were measured against.
+    points = PointArrays.from_features(fc, centroids=True)
+    xs, ys = points.x, points.y
 
     # Classified with pandas, not np.issubdtype: the latter understands only numpy dtypes and *raises*
     # on a pandas extension dtype rather than answering False, so one nullable or string column anywhere

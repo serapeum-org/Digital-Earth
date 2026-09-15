@@ -27,8 +27,13 @@ from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD,
     validate_big_data_threshold,
 )
-from digitalearth.base.crs import OffLimbError, reproject
+from digitalearth.base.crs import OffLimbError
 from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.display import (
+    auto_cmap,
+    needs_reproject,
+    to_display_source,
+)
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 
@@ -319,10 +324,13 @@ class InteractiveMapBase:
 
         Returns:
             ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+
+        Note:
+            This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
+            and tests call it. :meth:`_to_display_source` now calls the shared function **directly**, so
+            overriding this method no longer changes what gets reprojected. Nothing in-tree overrides it.
         """
-        return not (
-            isinstance(self.crs, int) and getattr(data, "epsg", None) == self.crs
-        )
+        return needs_reproject(data, self.crs)
 
     def _to_display_source(self, data: Any, *, band: int = 1) -> Source:
         """Reproject ``data`` to the display CRS through pyramids and wrap it as a :class:`Source`.
@@ -340,15 +348,7 @@ class InteractiveMapBase:
         Returns:
             Source: the display-CRS view (``z``/``x``/``y``/``crs``/``metadata``).
         """
-        if isinstance(data, Source):
-            return data
-        if (
-            hasattr(data, "epsg")
-            and hasattr(data, "to_crs")
-            and self._needs_reproject(data)
-        ):
-            data = reproject(data, self.crs)
-        return get_source(data, band=band)
+        return to_display_source(data, self.crs, band=band)
 
     def _skip_off_limb(self, layer: str, error: OffLimbError) -> Self:
         """Answer a layer whose data the display CRS cannot place: skip it, or raise under ``strict``.
@@ -487,9 +487,7 @@ class InteractiveMapBase:
         Returns:
             The colormap name to use.
         """
-        if cmap is not None:
-            return cmap
-        return self._auto_style(source).get("cmap", "viridis")
+        return auto_cmap(source, cmap)
 
     def _auto_cmap_for_band(self, dataset: Any, band: int, cmap: Optional[str]) -> str:
         """Resolve a colormap from a raster band's **name**, without reading the band (#249).

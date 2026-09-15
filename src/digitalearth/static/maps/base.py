@@ -12,6 +12,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from digitalearth.base.crs import OffLimbError, reproject
+from digitalearth.base.display import needs_reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.static.scene import Scene
@@ -77,7 +78,7 @@ class GeoLayerBase(Scene):
             ``False`` only when the display CRS is an ``int`` equal to ``dataset.epsg`` (data already in the
             display CRS); ``True`` otherwise — i.e. for a differing EPSG code or any proj4/string CRS.
         """
-        return not (isinstance(self.crs, int) and dataset.epsg == self.crs)
+        return needs_reproject(dataset, self.crs)
 
     def _skipped_off_limb(self, layer: str) -> None:
         """Record that ``layer`` drew nothing because its data is outside the display CRS.

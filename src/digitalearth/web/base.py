@@ -29,7 +29,11 @@ from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD as _SHARED_BIG_DATA_THRESHOLD,
 )
 from digitalearth.base.crs import OffLimbError, reproject
-from digitalearth.base.sources import get_source
+from digitalearth.base.display import (
+    auto_cmap,
+    needs_reproject,
+    to_display_source,
+)
 from digitalearth.base.sources.source import Source
 from digitalearth.base.symbology import sample_cmap
 
@@ -927,9 +931,7 @@ class WebMapBase:
         Returns:
             ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
         """
-        return not (
-            isinstance(self.crs, int) and getattr(data, "epsg", None) == self.crs
-        )
+        return needs_reproject(data, self.crs)
 
     def _to_display_source(self, data: Any, *, band: int = 1) -> Source:
         """Reproject ``data`` to the display CRS through pyramids and wrap it as a :class:`Source`.
@@ -948,15 +950,7 @@ class WebMapBase:
         Returns:
             Source: the display-CRS view (``z``/``x``/``y``/``crs``/``metadata``).
         """
-        if isinstance(data, Source):
-            return data
-        if (
-            hasattr(data, "epsg")
-            and hasattr(data, "to_crs")
-            and self._needs_reproject(data)
-        ):
-            data = reproject(data, self.crs)
-        return get_source(data, band=band)
+        return to_display_source(data, self.crs, band=band)
 
     def _to_display_raster(self, dataset: Any) -> Any:
         """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
@@ -1342,9 +1336,7 @@ class WebMapBase:
         Returns:
             The colormap name to use.
         """
-        if cmap is not None:
-            return cmap
-        return self._style_for(source).get("cmap", "viridis")
+        return auto_cmap(source, cmap)
 
     def _auto_levels(self, source: Any, levels: Optional[Any]) -> Optional[Any]:
         """Resolve contour levels: the caller's ``levels`` if given, else the autostyle ones.

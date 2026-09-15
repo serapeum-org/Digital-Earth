@@ -21,6 +21,7 @@ import numpy as np
 import pyvista as pv
 
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.display import auto_cmap
 from digitalearth.base.sources import Source
 from digitalearth.base.spec import Scale
 
@@ -555,11 +556,7 @@ class Scene3DBase:
         Returns:
             The colormap name to use.
         """
-        if cmap is not None:
-            return cmap
-        from digitalearth.base.autostyle import auto_style
-
-        return auto_style(source).get("cmap") or fallback
+        return auto_cmap(source, cmap, fallback)
 
     def _add_actor(self, mesh: Any, actor: Any) -> Any:
         """Register a rendered ``mesh`` and its ``actor``, returning the actor.

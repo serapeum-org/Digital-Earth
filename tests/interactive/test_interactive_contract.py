@@ -82,7 +82,15 @@ def off_limb(monkeypatch):
         """
         raise OffLimbError(f"the data lies outside what {crs!r} can show")
 
-    for module in (interactive_base, interactive_raster, interactive_vector):
+    # base.display is where the warp now happens: DE-17 (#277) lifted _to_display_source out of the tier
+    # base classes, so the tier modules no longer import `reproject` themselves. The two tier modules that
+    # still call it directly are patched as well.
+    from digitalearth.base import display as base_display
+
+    # No hasattr guard: if a later refactor moves the warp again, a silently-skipped patch would leave these
+    # tests passing while simulating nothing. monkeypatch.setattr raises on a missing attribute, which is the
+    # signal we want. base_display is where _to_display_source warps; the other two call reproject directly.
+    for module in (base_display, interactive_raster, interactive_vector):
         monkeypatch.setattr(module, "reproject", _raise)
 
 
