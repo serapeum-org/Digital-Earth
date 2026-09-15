@@ -4019,6 +4019,8 @@ onto the drawn surface so vector overlays land where they belong at any spin.</p
 
 
     <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="cleopatra.styling.watermark.WatermarkMixin">WatermarkMixin</span></code></p>
 
 
 
@@ -5731,7 +5733,7 @@ direction that shades a day/night terminator), <code>ambient</code>, <code>fig</
 <span class="normal"><a href="#__codelineno-0-2490">2490</a></span>
 <span class="normal"><a href="#__codelineno-0-2491">2491</a></span>
 <span class="normal"><a href="#__codelineno-0-2492">2492</a></span>
-<span class="normal"><a href="#__codelineno-0-2493">2493</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-919" name="__codelineno-0-919"></a><span class="k">class</span><span class="w"> </span><span class="nc">TexturedGlobe</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-2493">2493</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-919" name="__codelineno-0-919"></a><span class="k">class</span><span class="w"> </span><span class="nc">TexturedGlobe</span><span class="p">(</span><span class="n">WatermarkMixin</span><span class="p">):</span>
 <a id="__codelineno-0-920" name="__codelineno-0-920"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A 3-D textured globe built from geospatial data.</span>
 <a id="__codelineno-0-921" name="__codelineno-0-921"></a>
 <a id="__codelineno-0-922" name="__codelineno-0-922"></a><span class="sd">    Wraps ``cleopatra.glyphs.globe.TexturedGlobeGlyph``: this class owns the data → texture conversion and</span>
@@ -7264,7 +7266,7 @@ direction that shades a day/night terminator), <code>ambient</code>, <code>fig</
 <a id="__codelineno-0-2449" name="__codelineno-0-2449"></a>
 <a id="__codelineno-0-2450" name="__codelineno-0-2450"></a><span class="sd">        Args:</span>
 <a id="__codelineno-0-2451" name="__codelineno-0-2451"></a><span class="sd">            mark: The mark image — a file path or an ``(H, W, 3)`` / ``(H, W, 4)`` array.</span>
-<a id="__codelineno-0-2452" name="__codelineno-0-2452"></a><span class="sd">            **kwargs: Forwarded to ``cleopatra.styling.watermark.stamp_mark``.</span>
+<a id="__codelineno-0-2452" name="__codelineno-0-2452"></a><span class="sd">            **kwargs: Forwarded to cleopatra&#39;s ``WatermarkMixin.stamp_mark``.</span>
 <a id="__codelineno-0-2453" name="__codelineno-0-2453"></a>
 <a id="__codelineno-0-2454" name="__codelineno-0-2454"></a><span class="sd">        Returns:</span>
 <a id="__codelineno-0-2455" name="__codelineno-0-2455"></a><span class="sd">            The frameless inset ``Axes`` the mark was drawn on.</span>
@@ -7305,7 +7307,7 @@ direction that shades a day/night terminator), <code>ambient</code>, <code>fig</
 <a id="__codelineno-0-2490" name="__codelineno-0-2490"></a><span class="sd">        &quot;&quot;&quot;</span>
 <a id="__codelineno-0-2491" name="__codelineno-0-2491"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fig</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-2492" name="__codelineno-0-2492"></a>            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;draw() the globe before stamping it&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a>        <span class="k">return</span> <span class="n">stamp_mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">,</span> <span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stamp_mark</span><span class="p">(</span><span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -11854,7 +11856,7 @@ a <code>bbox_inches="tight"</code> save crops surrounding whitespace and so shif
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Forwarded to <code>cleopatra.styling.watermark.stamp_mark</code>.</p>
+                <p>Forwarded to cleopatra's <code>WatermarkMixin.stamp_mark</code>.</p>
               </div>
             </td>
             <td>
@@ -12002,7 +12004,7 @@ a <code>bbox_inches="tight"</code> save crops surrounding whitespace and so shif
 <a id="__codelineno-0-2449" name="__codelineno-0-2449"></a>
 <a id="__codelineno-0-2450" name="__codelineno-0-2450"></a><span class="sd">    Args:</span>
 <a id="__codelineno-0-2451" name="__codelineno-0-2451"></a><span class="sd">        mark: The mark image — a file path or an ``(H, W, 3)`` / ``(H, W, 4)`` array.</span>
-<a id="__codelineno-0-2452" name="__codelineno-0-2452"></a><span class="sd">        **kwargs: Forwarded to ``cleopatra.styling.watermark.stamp_mark``.</span>
+<a id="__codelineno-0-2452" name="__codelineno-0-2452"></a><span class="sd">        **kwargs: Forwarded to cleopatra&#39;s ``WatermarkMixin.stamp_mark``.</span>
 <a id="__codelineno-0-2453" name="__codelineno-0-2453"></a>
 <a id="__codelineno-0-2454" name="__codelineno-0-2454"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-2455" name="__codelineno-0-2455"></a><span class="sd">        The frameless inset ``Axes`` the mark was drawn on.</span>
@@ -12043,7 +12045,7 @@ a <code>bbox_inches="tight"</code> save crops surrounding whitespace and so shif
 <a id="__codelineno-0-2490" name="__codelineno-0-2490"></a><span class="sd">    &quot;&quot;&quot;</span>
 <a id="__codelineno-0-2491" name="__codelineno-0-2491"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">fig</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 <a id="__codelineno-0-2492" name="__codelineno-0-2492"></a>        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;draw() the globe before stamping it&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a>    <span class="k">return</span> <span class="n">stamp_mark</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">fig</span><span class="p">,</span> <span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+<a id="__codelineno-0-2493" name="__codelineno-0-2493"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">stamp_mark</span><span class="p">(</span><span class="n">mark</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
