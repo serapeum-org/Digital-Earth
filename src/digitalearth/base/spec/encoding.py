@@ -181,6 +181,17 @@ class Encoding:
                 f"a constant Encoding for {self.channel!r} cannot carry a scale or an output range; "
                 "they only apply to a field"
             )
+        if (
+            self.output_range is not None
+            and self.scale is not None
+            and self.scale.is_categorical
+        ):
+            # A categorical scale resolves to its own colours, so there is no position for a range to
+            # stretch. Ignoring the argument returned colours from a channel the caller asked numbers of.
+            raise ValueError(
+                f"the {self.channel!r} encoding cannot combine a categorical scale with an output range: "
+                "a category resolves to its assigned colour, not to a position a range can stretch"
+            )
 
     # ------------------------------------------------------------------ builders
 

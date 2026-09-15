@@ -24,12 +24,15 @@ to keep importing this module cheap — not to make `base/` pyramids-free, which
 
 import os
 import uuid
-from typing import Any, Callable, Dict
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterator, Optional
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 __all__ = [
     "OBJECT_SCHEME",
+    "temporary_classifier",
+    "temporary_resolver",
     "get_classifier",
     "register_classifier",
     "SOURCES_GROUP",
@@ -48,7 +51,7 @@ SOURCES_GROUP: str = "digitalearth.sources"
 OBJECT_SCHEME: str = "object"
 
 _RESOLVERS: Dict[str, Callable[[str], Any]] = {}
-_CLASSIFIER: Dict[str, Callable[..., Any]] = {}
+_CLASSIFIER: Optional[Callable[..., Any]] = None
 _OBJECTS: Dict[str, Any] = {}
 
 
@@ -64,12 +67,16 @@ def register_resolver(scheme: str, resolver: Callable[[str], Any]) -> None:
             one is more likely a typo than an intent.
 
     Examples:
-        - Register a resolver and read it back:
+        - Register a resolver and reach it through the scheme it serves. A plain call is **permanent** —
+          there is no unregister — so this shows it inside :func:`temporary_resolver`, which is what to
+          reach for anywhere the registration should not outlive the code that made it:
             ```python
-            >>> from digitalearth.base.registry import register_resolver, resolvers
-            >>> register_resolver("demo", lambda uri: uri.upper())
+            >>> from digitalearth.base.registry import resolve_uri, resolvers, temporary_resolver
+            >>> with temporary_resolver("demo", lambda uri: uri.upper()):
+            ...     "demo" in resolvers(), resolve_uri("demo:x")
+            (True, 'DEMO:X')
             >>> "demo" in resolvers()
-            True
+            False
 
             ```
     """
@@ -305,19 +312,20 @@ def register_classifier(classifier: Callable[[Any, str, int], Any]) -> None:
             ``styles.classify`` signature.
 
     Examples:
-        - Swap in a classifier of your own, then put the package's back:
+        - Swap in a classifier of your own. :func:`temporary_classifier` is the form to reach for: there
+          is one classifier for the whole process, so a replacement that is not restored silently changes
+          every later classification:
             ```python
-            >>> from digitalearth.base.registry import get_classifier, register_classifier
-            >>> original = get_classifier()
-            >>> register_classifier(lambda values, scheme, k: ([0.0, 0.5, 1.0], None))
+            >>> from digitalearth.base.registry import temporary_classifier
             >>> from digitalearth.base.spec import Scale
-            >>> Scale.from_values([0.0, 1.0], scheme="anything").breaks
+            >>> with temporary_classifier(lambda values, scheme, k: ([0.0, 0.5, 1.0], None)):
+            ...     Scale.from_values([0.0, 1.0], scheme="anything").breaks
             (0.0, 0.5, 1.0)
-            >>> register_classifier(original)
 
             ```
     """
-    _CLASSIFIER["fn"] = classifier
+    global _CLASSIFIER
+    _CLASSIFIER = classifier
 
 
 def get_classifier() -> Callable[..., Any]:
@@ -341,9 +349,85 @@ def get_classifier() -> Callable[..., Any]:
 
             ```
     """
-    if "fn" not in _CLASSIFIER:
+    if _CLASSIFIER is None:
         raise RuntimeError(
             "no classifier is registered. digitalearth registers one at import; import the package, or "
             "call base.registry.register_classifier() with a classify(values, scheme, k) callable"
         )
-    return _CLASSIFIER["fn"]
+    return _CLASSIFIER
+
+
+@contextmanager
+def temporary_resolver(scheme: str, resolver: Callable[[str], Any]) -> Iterator[None]:
+    """Register a resolver for the duration of a block, then put the table back as it was.
+
+    The registry is process-global and has no unregister, so a test or an example that registers a scheme
+    changes what every later one sees. This is the scoped form, so demonstrating the registry does not leave
+    a scheme behind in the session that ran the demonstration.
+
+    Args:
+        scheme: The URI scheme to register under.
+        resolver: The resolver to install for the block.
+
+    Yields:
+        Nothing; the registration is in effect inside the block.
+
+    Examples:
+        - The scheme resolves inside the block and is gone afterwards:
+            ```python
+            >>> from digitalearth.base.registry import resolve_uri, resolvers, temporary_resolver
+            >>> with temporary_resolver("scratch", lambda uri: uri.upper()):
+            ...     resolve_uri("scratch:x")
+            'SCRATCH:X'
+            >>> "scratch" in resolvers()
+            False
+
+            ```
+    """
+    had = scheme in _RESOLVERS
+    previous = _RESOLVERS.get(scheme)
+    register_resolver(scheme, resolver)
+    try:
+        yield
+    finally:
+        if had and previous is not None:
+            _RESOLVERS[scheme] = previous
+        else:
+            _RESOLVERS.pop(scheme, None)
+
+
+@contextmanager
+def temporary_classifier(classifier: Callable[..., Any]) -> Iterator[None]:
+    """Swap the registered classifier for the duration of a block.
+
+    There is one classifier for the process, so replacing it without restoring leaves every later
+    classification using the replacement. Where that happens inside a doctest it is worse than a wrong
+    answer: the failure surfaces in some unrelated example further down the session.
+
+    Args:
+        classifier: The ``classify(values, scheme, k)`` callable to install for the block.
+
+    Yields:
+        Nothing; the classifier is in effect inside the block.
+
+    Examples:
+        - The swap applies inside and is undone after, even if the block raises:
+            ```python
+            >>> import digitalearth  # registers the real adapter
+            >>> from digitalearth.base.registry import get_classifier, temporary_classifier
+            >>> real = get_classifier()
+            >>> with temporary_classifier(lambda values, scheme, k: ([0.0, 0.5, 1.0], None)):
+            ...     get_classifier()([0.0], "anything", 2)[0]
+            [0.0, 0.5, 1.0]
+            >>> get_classifier() is real
+            True
+
+            ```
+    """
+    global _CLASSIFIER
+    previous = _CLASSIFIER
+    _CLASSIFIER = classifier
+    try:
+        yield
+    finally:
+        _CLASSIFIER = previous

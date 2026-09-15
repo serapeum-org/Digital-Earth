@@ -122,6 +122,23 @@ class TestBinding:
             "the encoding must not track the caller's list"
         )
 
+    def test_a_categorical_scale_and_an_output_range_cannot_be_combined(self):
+        """Asking for numbers from a scale that yields colours is refused.
+
+        Test scenario:
+            The combination used to construct and then quietly drop the range, so a `size` encoding returned
+            hex colours — values a numeric channel cannot use, from an argument the caller explicitly set.
+        """
+        from digitalearth.base.spec import Scale as _Scale
+
+        with pytest.raises(ValueError, match="categorical scale with an output range"):
+            Encoding.by_field(
+                "size",
+                "class",
+                scale=_Scale.categorical(["a"], ["#f00"]),
+                output_range=(1.0, 2.0),
+            )
+
 
 class TestResolving:
     """What a channel resolves to, and why it is not a rendered value."""

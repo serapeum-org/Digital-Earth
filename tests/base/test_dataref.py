@@ -15,6 +15,7 @@ from digitalearth.base.registry import (
     register_resolver,
     resolve_uri,
     resolvers,
+    temporary_resolver,
 )
 from digitalearth.base.spec import DataRef
 
@@ -101,9 +102,12 @@ class TestTheRegistry:
             The open-registry property. A plugin declares itself under the entry-point group rather than
             editing a table here.
         """
-        register_resolver("demo-scheme", lambda uri: f"opened:{uri}")
-        assert DataRef("demo-scheme://x").open() == "opened:demo-scheme://x", (
-            "a registered resolver must be reached"
+        with temporary_resolver("demo-scheme", lambda uri: f"opened:{uri}"):
+            assert DataRef("demo-scheme://x").open() == "opened:demo-scheme://x", (
+                "a registered resolver must be reached"
+            )
+        assert "demo-scheme" not in resolvers(), (
+            "the scoped form must leave the registry as it found it"
         )
 
     def test_an_unknown_scheme_lists_the_known_ones(self):
@@ -134,14 +138,10 @@ class TestTheRegistry:
             Splitting naively on the first colon makes every absolute Windows path unresolvable — and this
             package is developed on Windows, so it would fail immediately and confusingly.
         """
-        original = resolvers()["file"]
-        register_resolver("file", lambda uri: f"file-resolver:{uri}")
-        try:
+        with temporary_resolver("file", lambda uri: f"file-resolver:{uri}"):
             assert resolve_uri("C:/data/x.tif") == "file-resolver:C:/data/x.tif", (
                 "a drive letter must route to the file resolver"
             )
-        finally:
-            register_resolver("file", original)
 
 
 class TestInMemoryObjects:
@@ -217,12 +217,12 @@ class TestTheClassifierSeam:
         """
         from digitalearth.base import registry
 
-        saved = registry._CLASSIFIER.pop("fn")
-        try:
+        with registry.temporary_classifier(None):  # type: ignore[arg-type]
             with pytest.raises(RuntimeError, match="no classifier is registered"):
                 registry.get_classifier()
-        finally:
-            registry._CLASSIFIER["fn"] = saved
+        assert callable(registry.get_classifier()), (
+            "the real classifier must be back afterwards"
+        )
 
 
 class TestTheFileResolver:
