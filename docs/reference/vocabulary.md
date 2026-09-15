@@ -77,6 +77,50 @@ tier had written out separately.
 
 ::: digitalearth.base.spec.scale.DEFAULT_CLASS_COUNT
 
+## `ViewRequest` — how much to read, and how finely
+
+A `DataRef` says *where* data is and a `Selection` says *which slice*; neither says how much of it to read or
+at what resolution. Three of the four backend studies invented this third question independently, which is
+the usual sign a type is missing rather than optional.
+
+::: digitalearth.base.spec.viewrequest.ViewRequest
+
+## `SourceView` — a view that remembers its own address
+
+A `Source` carries materialised data and forgets where it came from, so the only way to get different pixels
+was to start again from the caller's object. That is what blocks dynamic tiling, level of detail and point
+clouds too large to hold. `SourceView` keeps the reference and the slice, so it can be read again.
+
+::: digitalearth.base.sources.view.SourceView
+
+## `LegendSpec` — a legend derived from what was drawn
+
+Every tier built one its own way, and nothing structurally tied a swatch to the colour actually drawn.
+Deriving the rows from the resolved `Scale` makes the agreement a construction rather than a maintenance
+task.
+
+::: digitalearth.base.spec.legend.LegendSpec
+
+::: digitalearth.base.spec.legend.LegendEntry
+
+## `PointArrays` — geometry as coordinate arrays
+
+Turning a `FeatureCollection` into numpy arrays was written out 22 times across 9 files, in three spellings,
+with inconsistent handling of non-finite coordinates — the ones a globe or clipped CRS produces for the far
+side of the world.
+
+::: digitalearth.base.points.PointArrays
+
+## Getting data into the display CRS
+
+The three helpers each tier used to define for itself.
+
+::: digitalearth.base.display.needs_reproject
+
+::: digitalearth.base.display.to_display_source
+
+::: digitalearth.base.display.auto_cmap
+
 ## The registries
 
 How a reference becomes data, without `base/` knowing any reader — and how `Scale` reaches a classifier
