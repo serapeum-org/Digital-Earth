@@ -184,9 +184,10 @@ class TestTheAddress:
             cannot be re-read from an address it never had.
         """
         view = SourceView(None, _axis(), _axis("y"))
+        request = ViewRequest(budget=100)
         assert view.rereadable is False
         with pytest.raises(RuntimeError, match="carries no DataRef"):
-            view.reread(ViewRequest(budget=100))
+            view.reread(request)
 
 
 class TestRereading:

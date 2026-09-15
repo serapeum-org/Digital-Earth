@@ -160,13 +160,17 @@ class TestTheSpecItself:
             LegendSpec(orientation="diagonal")
 
     def test_it_is_a_value(self):
-        """Two legends with the same rows compare equal.
+        """A legend built two ways compares equal to one built by hand.
 
         Test scenario:
             What lets a test assert two tiers produced the same legend rather than comparing row by row.
+            The two sides are constructed differently on purpose: comparing one expression with itself would
+            pass even if equality were identity, which is the opposite of what a value object promises.
         """
-        rows = (LegendEntry("a", "#f00", 1),)
-        assert LegendSpec(rows, "categorical") == LegendSpec(rows, "categorical")
+        built = LegendSpec.from_scale(Scale.categorical(["a"], ["#f00"]))
+        assert built == LegendSpec((LegendEntry("a", "#f00", "a"),), "categorical"), (
+            "from_scale and the constructor must produce equal legends"
+        )
 
     def test_entries_are_stored_as_a_tuple(self):
         """A list passed in does not stay the caller's.
