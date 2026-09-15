@@ -167,7 +167,14 @@ class Encoding:
                 f"an Encoding for {self.channel!r} needs exactly one of value= (a constant) or field= "
                 "(driven by the data)"
             )
-        if self.field is None and (self.scale is not None or self.output_range):
+        if self.output_range is not None:
+            object.__setattr__(self, "output_range", tuple(self.output_range))
+            if len(self.output_range) != 2:
+                raise ValueError(
+                    f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
+                    f"{self.output_range!r}"
+                )
+        if self.field is None and (self.scale is not None or self.output_range is not None):
             raise ValueError(
                 f"a constant Encoding for {self.channel!r} cannot carry a scale or an output range; "
                 "they only apply to a field"

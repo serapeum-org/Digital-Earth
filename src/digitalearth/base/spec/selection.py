@@ -104,6 +104,9 @@ class Selection:
         Raises:
             ValueError: for an empty band tuple or a non-positive index.
         """
+        # A caller reaching the constructor directly can pass a list; stored as given it would leave the
+        # selection unhashable, so coerce before the guards read it.
+        object.__setattr__(self, "band", tuple(self.band))
         if not self.band:
             raise ValueError("Selection needs at least one band")
         for index in self.band:

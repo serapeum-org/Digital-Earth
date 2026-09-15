@@ -117,6 +117,35 @@ class TestTheDomain:
         with pytest.raises(ValueError, match="finite limits"):
             Scale.from_limits(0.0, float("inf"))
 
+    def test_a_sequence_field_is_stored_as_a_tuple(self):
+        """A caller's list does not become the scale's storage.
+
+        Test scenario:
+            `scheme` is a documented sequence-of-edges input on three tiers, so a real call path hands a
+            mutable list to a type that calls itself frozen. Stored as given, the caller could edit the
+            scale's classification afterwards and the scale would not hash.
+        """
+        edges = [0.0, 1.0, 2.0]
+        scale = Scale(0.0, 1.0, scheme=edges, breaks=edges)
+        edges.append(99.0)
+        assert scale.breaks == (0.0, 1.0, 2.0), (
+            "the scale must not track the caller's list"
+        )
+        assert scale.scheme == (0.0, 1.0, 2.0), "including the scheme spelling"
+
+    def test_a_scale_can_key_a_cache(self):
+        """`Scale` hashes, so a resolved scale can go in a set or a dict key.
+
+        Test scenario:
+            Freezing a scale once and reusing it across frames is the type's whole purpose; being unhashable
+            would stop the cache that makes that worthwhile.
+        """
+        scale = Scale.from_values([0.0, 10.0], scheme="equal_interval", k=2)
+        assert (
+            len({scale, Scale.from_values([0.0, 10.0], scheme="equal_interval", k=2)})
+            == 1
+        ), "two equal scales must collapse to one entry"
+
 
 class TestClassification:
     """The classifier is reached once, from here, rather than three times from three tiers."""

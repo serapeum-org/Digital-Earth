@@ -114,6 +114,14 @@ class Scale:
                 f"Scale needs at least two class edges to bound one class; got {self.breaks}. "
                 "An empty breaks tuple is how a continuous ramp says it cuts no classes"
             )
+        # Coerce every sequence field to a tuple. `scheme` is a documented sequence-of-edges input on three
+        # tiers, so a caller's list really does arrive here; stored as given it would leave the scale
+        # unhashable and editable from outside, which is not what "frozen value object" promises.
+        object.__setattr__(self, "breaks", tuple(self.breaks))
+        object.__setattr__(self, "categories", tuple(self.categories))
+        object.__setattr__(self, "_colors", tuple(self._colors))
+        if isinstance(self.scheme, (list, set)):
+            object.__setattr__(self, "scheme", tuple(self.scheme))
 
     # ------------------------------------------------------------------ builders
 

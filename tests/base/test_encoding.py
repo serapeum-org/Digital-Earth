@@ -97,6 +97,31 @@ class TestBinding:
         with pytest.raises(ValueError, match="non-empty field name"):
             Encoding.by_field("color", "")
 
+    def test_an_output_range_that_is_not_a_pair_is_refused(self):
+        """A bad `output_range` fails where it was written, naming the channel.
+
+        Test scenario:
+            It was only tested for truthiness, so an empty or three-valued range constructed fine and then
+            failed inside `resolve()` with "not enough values to unpack" — an error naming neither the
+            channel nor the argument, raised far from the call that caused it.
+        """
+        with pytest.raises(ValueError, match="output_range as a .low, high. pair"):
+            Encoding.by_field("size", "f", output_range=(1.0, 2.0, 3.0))
+
+    def test_an_output_range_list_is_stored_as_a_tuple(self):
+        """The pair is copied, so the encoding does not track the caller's list.
+
+        Test scenario:
+            Same reason as every other sequence field on these types: a frozen value that quietly follows a
+            mutable argument is not frozen.
+        """
+        span = [4.0, 20.0]
+        encoding = Encoding.by_field("size", "f", output_range=span)
+        span.append(99.0)
+        assert encoding.output_range == (4.0, 20.0), (
+            "the encoding must not track the caller's list"
+        )
+
 
 class TestResolving:
     """What a channel resolves to, and why it is not a rendered value."""

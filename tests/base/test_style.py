@@ -66,6 +66,31 @@ class TestSymbology:
         with pytest.raises(TypeError):
             sym.props["hillshade"] = False
 
+    def test_a_symbology_can_key_a_cache(self):
+        """`Symbology` hashes when its properties do.
+
+        Test scenario:
+            `Bounds`, `Scale`, `Selection` and `Encoding` all hash. A symbology that did not would be the odd
+            one out the moment a cache or a set is keyed on a layer's style.
+        """
+        assert len({Symbology.of(color="#f00"), Symbology.of(color="#f00")}) == 1, (
+            "two equal symbologies must collapse to one entry"
+        )
+
+    def test_a_property_value_is_not_deep_frozen(self):
+        """Only the mapping is frozen; what a caller put in it stays theirs.
+
+        Test scenario:
+            Pinned deliberately rather than claimed away. Deep-freezing arbitrary style values is not
+            realistic, so the docstring states the limit and this is the behaviour it states.
+        """
+        levels = [1.0, 2.0]
+        sym = Symbology().with_props(levels=levels)
+        levels.append(3.0)
+        assert sym.props["levels"] == [1.0, 2.0, 3.0], (
+            "a mutable property value is shared with the caller, by documented design"
+        )
+
 
 class TestMerging:
     """Defaults, themes and layer-kind styling, laid under what a caller asked for."""

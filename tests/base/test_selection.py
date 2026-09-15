@@ -193,3 +193,28 @@ class TestItStaysAValue:
         assert Selection.of(1, level=850) == Selection.of(1, level=850), (
             "equal axes must compare equal"
         )
+
+    def test_a_list_band_is_stored_as_a_tuple(self):
+        """A caller reaching the constructor directly still gets an immutable selection.
+
+        Test scenario:
+            `Selection.of` normalises, but the dataclass constructor is public too — and a list stored as
+            given leaves the selection unhashable and editable from outside.
+        """
+        bands = [1, 2]
+        selection = Selection(band=bands)
+        bands.append(3)
+        assert selection.band == (1, 2), (
+            "the selection must not track the caller's list"
+        )
+
+    def test_a_selection_can_key_a_cache(self):
+        """`Selection` hashes, so a read can be memoised by what it selects.
+
+        Test scenario:
+            Caching a materialised read on its selection is what Wave 2's data tier is for; an unhashable
+            selection would rule that out.
+        """
+        assert len({Selection.of((1, 2)), Selection.of([1, 2])}) == 1, (
+            "two equal selections must collapse to one entry"
+        )

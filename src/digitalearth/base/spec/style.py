@@ -126,8 +126,11 @@ class Symbology:
         """Check every encoding is filed under its own channel, then freeze both mappings.
 
         The dataclass is frozen, but a plain ``dict`` field is not — a caller holding the dict it passed in
-        could still edit the symbology afterwards. Replacing both with read-only views closes that, so
-        "frozen" is a guarantee rather than a naming convention.
+        could still re-key the symbology afterwards. Replacing both with read-only views closes that.
+
+        Only the mapping is frozen, not the values in it: a caller who puts a list of contour levels in
+        `props` keeps a reference to that list and can still change what it holds. Deep-freezing arbitrary
+        style values is not realistic, so this is stated rather than claimed away.
 
         Raises:
             ValueError: if a key does not match its encoding's channel.
@@ -140,6 +143,26 @@ class Symbology:
                 )
         object.__setattr__(self, "encodings", MappingProxyType(dict(self.encodings)))
         object.__setattr__(self, "props", MappingProxyType(dict(self.props)))
+
+    def __hash__(self) -> int:
+        """Hash by the channels driven and the properties set, so a style can key a cache.
+
+        Returns:
+            A hash over the encodings and the properties. `Bounds`, `Scale`, `Selection` and `Encoding` all
+            hash; a symbology that did not would be the odd one out the moment Wave 2 wants to key a set or
+            a cache on a layer's style.
+
+        Raises:
+            TypeError: if a property value is itself unhashable — a list of contour levels, say. Only the
+                mapping is frozen, not what a caller put in it, so an unhashable style is a real possibility
+                rather than something to paper over.
+        """
+        return hash(
+            (
+                tuple(sorted(self.encodings.items(), key=lambda item: item[0])),
+                tuple(sorted(self.props.items(), key=lambda item: item[0])),
+            )
+        )
 
     # ------------------------------------------------------------------ builders
 
