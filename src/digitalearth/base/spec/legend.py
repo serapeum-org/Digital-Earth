@@ -17,12 +17,18 @@ This says what a legend contains. Drawing it stays with each tier — a MapLibre
 colorbar and a Bokeh panel have nothing in common below this line.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from digitalearth.base.spec.scale import Scale
 
 __all__ = ["LegendEntry", "LegendSpec"]
+
+#: The legend kinds every tier can draw. A module constant, not a dataclass field: declared as a field it
+#: became the 7th constructor parameter, so a caller could hand the type its own allow-list and defeat the
+#: check `__post_init__` exists for — and it leaked into `dataclasses.asdict()`. `Scale` and `Selection` keep
+#: their constants at module level for the same reason.
+LEGEND_KINDS: Tuple[str, ...] = ("categorical", "graduated", "continuous")
 
 #: How many stops a continuous ramp is described with. Five is what the web tier already used; sharing the
 #: number is what stops a sixth appearing when another tier grows a ramp legend.
@@ -95,9 +101,6 @@ class LegendSpec:
     units: Optional[str] = None
     format: Optional[str] = None
     orientation: str = "vertical"
-    _KINDS: Tuple[str, ...] = field(
-        default=("categorical", "graduated", "continuous"), repr=False, compare=False
-    )
 
     def __post_init__(self) -> None:
         """Refuse a kind or orientation no tier can draw.
@@ -106,9 +109,9 @@ class LegendSpec:
             ValueError: for an unknown `kind` or `orientation`. Both select a drawing path in every tier, so
                 an unrecognised one is silently ignored at render time and the legend simply does not appear.
         """
-        if self.kind not in self._KINDS:
+        if self.kind not in LEGEND_KINDS:
             raise ValueError(
-                f"LegendSpec kind must be one of {list(self._KINDS)}; got {self.kind!r}"
+                f"LegendSpec kind must be one of {list(LEGEND_KINDS)}; got {self.kind!r}"
             )
         if self.orientation not in ("vertical", "horizontal"):
             raise ValueError(

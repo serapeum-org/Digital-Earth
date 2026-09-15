@@ -17,6 +17,7 @@ decides *which* request a given output wants, stays there.
 
 from dataclasses import dataclass
 from math import isfinite, sqrt
+from numbers import Integral
 from typing import Any, Optional, Tuple
 
 from digitalearth.base.spec.bounds import Bounds
@@ -77,12 +78,17 @@ class ViewRequest:
             value = getattr(self, name)
             if value is None:
                 continue
-            if isinstance(value, bool) or not isinstance(value, int):
+            # Integral, not int, and coerced — exactly as Selection does, and for the same reason: canvas
+            # sizes and cell budgets arrive from numpy arithmetic, and these two types are meant to be used
+            # in the same call. Refusing np.int64 here while Selection accepts it is one vocabulary
+            # disagreeing with itself.
+            if isinstance(value, bool) or not isinstance(value, Integral):
                 raise ValueError(
                     f"ViewRequest {name} must be a whole number of pixels or cells; got {value!r}"
                 )
             if value <= 0:
                 raise ValueError(f"ViewRequest {name} must be positive; got {value}")
+            object.__setattr__(self, name, int(value))
         if not isfinite(self.pixel_ratio) or self.pixel_ratio <= 0:
             raise ValueError(
                 f"ViewRequest pixel_ratio must be a positive number; got {self.pixel_ratio!r}"
