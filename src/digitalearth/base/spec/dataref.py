@@ -114,6 +114,26 @@ class DataRef:
         Raises:
             KeyError: if no resolver is registered for the scheme, or an ``object:`` id is not in this
                 process.
+
+        Examples:
+            - An in-memory reference hands back the data it names:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> ref = DataRef.to_object({"rows": 3}, name="doc-open")
+                >>> ref.open()["rows"]
+                3
+
+                ```
+            - A scheme nothing is registered for says so, and lists the ones that are — a plugin that failed
+              to install looks exactly like a typo otherwise:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> DataRef("weirdscheme://x").open()  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no resolver registered for scheme 'weirdscheme'; known schemes are [...]..."
+
+                ```
         """
         return resolve_uri(self.uri)
 
@@ -123,6 +143,25 @@ class DataRef:
         Returns:
             The fields that are set. `driver` and `version` are omitted when unset, so the common case is one
             key and a stored figure does not fill with nulls.
+
+        Examples:
+            - The common case is a single key:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> DataRef("data/dem.tif").to_dict()
+                {'uri': 'data/dem.tif'}
+
+                ```
+            - Hints appear only when they were set:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> stored = DataRef("s3://bucket/x.tif", version="2024-01").to_dict()
+                >>> sorted(stored)
+                ['uri', 'version']
+                >>> stored["version"]
+                '2024-01'
+
+                ```
         """
         out: Dict[str, Any] = {"uri": self.uri}
         if self.driver is not None:
@@ -144,6 +183,25 @@ class DataRef:
         Raises:
             ValueError: if `uri` is missing or empty, or the mapping carries a key this type does not know —
                 silently dropping an unknown key would lose data a newer writer meant to keep.
+
+        Examples:
+            - Rebuild a reference a figure stored, and read its fields back:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> ref = DataRef.from_dict({"uri": "s3://bucket/x.tif", "driver": "COG"})
+                >>> ref.uri, ref.driver
+                ('s3://bucket/x.tif', 'COG')
+
+                ```
+            - A key this version does not know is refused rather than dropped:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> DataRef.from_dict({"uri": "a.tif", "bbox": [0, 0, 1, 1]})
+                Traceback (most recent call last):
+                    ...
+                ValueError: DataRef.from_dict got unknown keys ['bbox']; known keys are ['driver', 'uri', 'version']
+
+                ```
         """
         known = {"uri", "driver", "version"}
         unknown = sorted(set(data) - known)

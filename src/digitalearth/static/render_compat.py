@@ -170,7 +170,7 @@ MARKER_SIZE_KEY = "size"
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
 #: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
 #: through :class:`~digitalearth.base.spec.encoding.Encoding` rather than through a keyword of their own.
-#: ``tests/static/test_render_compat.py`` pins this table against :data:`FLAT_STYLE_KEYS`, so a key added
+#: ``tests/static/test_style_schema.py`` pins this table against :data:`FLAT_STYLE_KEYS`, so a key added
 #: upstream cannot quietly go undeclared again.
 STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     # -- visual channels of the layer itself
@@ -244,6 +244,28 @@ def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]
         all (``cmap``, ``add_colorbar``, the glyph's own constructor options). `rest` is returned rather than
         refused because this schema covers the styling surface, not everything a builder accepts; use
         :meth:`~digitalearth.base.spec.style.StyleSchema.suggest` on a key that reaches nothing.
+
+    Examples:
+        - A channel keyword, a static property and a constructor option travel in one dict and are separated:
+            ```python
+            >>> from digitalearth.static.render_compat import route_flat_style
+            >>> sym, rest = route_flat_style({"alpha": 0.4, "hillshade": True, "cmap": "viridis"})
+            >>> sym.encoding("opacity").resolve()
+            0.4
+            >>> dict(sym.props), rest
+            ({'hillshade': True}, {'cmap': 'viridis'})
+
+            ```
+        - A misspelt key reaches nothing, and the schema names what it was probably meant to be:
+            ```python
+            >>> from digitalearth.static.render_compat import STATIC_STYLE_SCHEMA, route_flat_style
+            >>> _, rest = route_flat_style({"hillshde": True})
+            >>> list(rest)
+            ['hillshde']
+            >>> STATIC_STYLE_SCHEMA.suggest("hillshde")
+            'hillshade'
+
+            ```
     """
     return STATIC_STYLE_SCHEMA.route(flat)
 

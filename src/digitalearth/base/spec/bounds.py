@@ -209,6 +209,23 @@ class Bounds:
 
         Returns:
             The four edges in bbox order.
+
+        Examples:
+            - The corners come back in the order a bounding box is written in:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(0.0, 10.0, 4.0, 20.0, crs=4326).as_bbox()
+                [0.0, 10.0, 4.0, 20.0]
+
+                ```
+            - Which is what a pyramids call wants, unpacked:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> xmin, ymin, xmax, ymax = Bounds(-5.0, 40.0, 5.0, 50.0, crs=4326).as_bbox()
+                >>> xmax - xmin, ymax - ymin
+                (10.0, 10.0)
+
+                ```
         """
         return [self.xmin, self.ymin, self.xmax, self.ymax]
 
@@ -217,6 +234,23 @@ class Bounds:
 
         Returns:
             The four edges in matplotlib axes order.
+
+        Examples:
+            - The x pair comes first here, unlike :meth:`as_bbox`:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(0.0, 10.0, 4.0, 20.0, crs=4326).as_mpl()
+                [0.0, 4.0, 10.0, 20.0]
+
+                ```
+            - The two orderings disagree for the same rectangle, which is the bug this type removes:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> box = Bounds(0.0, 10.0, 4.0, 20.0, crs=4326)
+                >>> box.as_bbox() == box.as_mpl()
+                False
+
+                ```
         """
         return [self.xmin, self.xmax, self.ymin, self.ymax]
 

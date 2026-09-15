@@ -154,6 +154,25 @@ class Selection:
 
         Returns:
             ``True`` for a multi-band selection — what a composite renderer needs to know.
+
+        Examples:
+            - Three bands are a composite; one is not:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of((3, 2, 1)).is_composite
+                True
+                >>> Selection.of(1).is_composite
+                False
+
+                ```
+            - Which is how a builder picks its path without inspecting the tuple itself:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> sel = Selection.of((4, 3, 2))
+                >>> len(sel.band) if sel.is_composite else 1
+                3
+
+                ```
         """
         return len(self.band) > 1
 
@@ -164,6 +183,22 @@ class Selection:
         Returns:
             The first band in the selection. A composite narrowed to one channel goes through
             :meth:`with_band` instead; this is for the many builders that only ever draw one.
+
+        Examples:
+            - The band a single-band builder should read:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of(3).first_band
+                3
+
+                ```
+            - For a composite it is the first channel, in the order the caller wrote them:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of((7, 2, 1)).first_band
+                7
+
+                ```
         """
         return self.band[0]
 

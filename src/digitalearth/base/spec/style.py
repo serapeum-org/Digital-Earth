@@ -48,6 +48,23 @@ class StyleKey:
 
     Raises:
         ValueError: if `channel` names something that is not a declared channel.
+
+    Examples:
+        - A keyword that drives a channel says which one:
+            ```python
+            >>> from digitalearth.base.spec import StyleKey
+            >>> key = StyleKey("alpha", "Layer opacity, 0 transparent to 1 opaque.", channel="opacity")
+            >>> key.name, key.channel
+            ('alpha', 'opacity')
+
+            ```
+        - A static property declares no channel, and that is how routing tells the two apart:
+            ```python
+            >>> from digitalearth.base.spec import StyleKey
+            >>> StyleKey("hillshade", "Shade the surface with relief.").channel is None
+            True
+
+            ```
     """
 
     name: str
@@ -169,6 +186,22 @@ class Symbology:
         Returns:
             Its encoding, or ``None`` when the layer does not style that channel — which is the renderer's
             cue to use its own default rather than to raise.
+
+        Examples:
+            - Ask what drives a channel, then resolve it:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology.of(color="#f00").encoding("color").resolve()
+                '#f00'
+
+                ```
+            - An unstyled channel answers ``None``, so the renderer keeps its own default:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology.of(color="#f00").encoding("width") is None
+                True
+
+                ```
         """
         return self.encodings.get(channel)
 
@@ -206,6 +239,24 @@ class Symbology:
 
         Returns:
             A new symbology; this one is unchanged.
+
+        Examples:
+            - Properties accumulate, and the original is untouched:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> one = Symbology().with_props(scheme="quantiles")
+                >>> both = one.with_props(k=7)
+                >>> sorted(both.props), sorted(one.props)
+                (['k', 'scheme'], ['scheme'])
+
+                ```
+            - Naming a property again replaces it:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology().with_props(k=5).with_props(k=9).props["k"]
+                9
+
+                ```
         """
         merged = dict(self.props)
         merged.update(props)
@@ -261,6 +312,30 @@ class StyleSchema:
         Raises:
             ValueError: if a name is declared twice — two rows for one keyword means one of them is dead, and
                 which one wins would depend on argument order.
+
+        Examples:
+            - Declare a surface, then ask what it accepts and what a keyword controls:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> schema = StyleSchema.of(
+                ...     StyleKey("alpha", "Layer opacity.", channel="opacity"),
+                ...     StyleKey("levels", "Contour levels."),
+                ... )
+                >>> schema.names()
+                ('alpha', 'levels')
+                >>> schema.keys["levels"].doc
+                'Contour levels.'
+
+                ```
+            - Declaring one name twice is refused, because one of the two rows would be dead:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> StyleSchema.of(StyleKey("alpha", "One."), StyleKey("alpha", "Two."))
+                Traceback (most recent call last):
+                    ...
+                ValueError: style key 'alpha' is declared twice
+
+                ```
         """
         table: Dict[str, StyleKey] = {}
         for key in keys:
@@ -275,6 +350,24 @@ class StyleSchema:
         Returns:
             The names a caller may pass — the answer to "what does this builder accept?" that did not exist
             before.
+
+        Examples:
+            - The declared keywords, sorted:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> schema = StyleSchema.of(StyleKey("levels", "Contour levels."), StyleKey("k", "Classes."))
+                >>> schema.names()
+                ('k', 'levels')
+
+                ```
+            - Which is enough to spot a keyword the surface does not accept:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> schema = StyleSchema.of(StyleKey("hillshade", "Shade the surface."))
+                >>> [name for name in ("hillshade", "cmpa") if name not in schema.names()]
+                ['cmpa']
+
+                ```
         """
         return tuple(sorted(self.keys))
 
@@ -283,6 +376,27 @@ class StyleSchema:
 
         Returns:
             The distinct channel names its keys point at.
+
+        Examples:
+            - Only the keys that drive a channel are counted:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> schema = StyleSchema.of(
+                ...     StyleKey("alpha", "Layer opacity.", channel="opacity"),
+                ...     StyleKey("size", "Marker size.", channel="size"),
+                ...     StyleKey("hillshade", "Shade the surface."),
+                ... )
+                >>> schema.channels()
+                ('opacity', 'size')
+
+                ```
+            - A surface of static properties alone drives nothing:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> StyleSchema.of(StyleKey("levels", "Contour levels.")).channels()
+                ()
+
+                ```
         """
         return tuple(sorted({key.channel for key in self.keys.values() if key.channel}))
 
@@ -338,6 +452,23 @@ class StyleSchema:
         Returns:
             The closest declared name, or ``None`` when nothing is close enough to be worth guessing. A wrong
             guess is worse than none — it sends the caller to a key that was never their intent.
+
+        Examples:
+            - A near miss is named, which is what turns a silently ignored typo into an answerable error:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> schema = StyleSchema.of(StyleKey("hillshade", "Shade the surface."))
+                >>> schema.suggest("hillshde")
+                'hillshade'
+
+                ```
+            - Something unlike every declared key is not guessed at:
+                ```python
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> StyleSchema.of(StyleKey("hillshade", "Shade the surface.")).suggest("zzzzzz") is None
+                True
+
+                ```
         """
         matches = get_close_matches(name, self.keys, n=1, cutoff=0.7)
         return matches[0] if matches else None

@@ -56,8 +56,9 @@ class Scale:
         missing: Colour for a value the scale cannot place — nodata, or a category it never saw.
 
     Raises:
-        ValueError: if `vmin`/`vmax` are not finite, or `vmax` is not greater than `vmin`. Build through
-            :meth:`from_values` rather than widening by hand.
+        ValueError: if `vmin`/`vmax` are not finite, if `vmax` is not greater than `vmin`, or if `breaks`
+            holds a single edge — one edge bounds no class. Build through :meth:`from_values` rather than
+            widening by hand.
 
     Examples:
         - Derive a continuous scale from data, and read back the limits it settled on:
@@ -319,6 +320,28 @@ class Scale:
 
         Returns:
             ``True`` when a scheme produced class edges.
+
+        Examples:
+            - A scheme cuts classes, and the scale says so:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_values([0.0, 10.0], scheme="equal_interval", k=2)
+                >>> scale.is_classified
+                True
+                >>> len(scale.class_ranges())
+                2
+
+                ```
+            - Without one it runs a continuous ramp and cuts nothing:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_values([0.0, 10.0])
+                >>> scale.is_classified
+                False
+                >>> scale.breaks
+                ()
+
+                ```
         """
         return bool(self.breaks)
 
@@ -328,6 +351,25 @@ class Scale:
 
         Returns:
             ``True`` when categories were supplied.
+
+        Examples:
+            - A categorical scale knows its categories by name:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.categorical(["land", "sea"], ["#8b4513", "#1e90ff"])
+                >>> scale.is_categorical
+                True
+                >>> scale.categories
+                ('land', 'sea')
+
+                ```
+            - A numeric scale is not categorical, however few values it saw:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_values([1.0, 2.0]).is_categorical
+                False
+
+                ```
         """
         return bool(self.categories)
 
@@ -336,6 +378,25 @@ class Scale:
 
         Returns:
             The domain, with ``vmax > vmin`` guaranteed.
+
+        Examples:
+            - The pair a normaliser is built from, ready to unpack:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> vmin, vmax = Scale.from_values([3.0, 7.0, 5.0]).as_limits()
+                >>> vmin, vmax
+                (3.0, 7.0)
+                >>> vmax - vmin
+                4.0
+
+                ```
+            - A constant band still yields a usable span rather than a zero-width one:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_values([7.0, 7.0]).as_limits()
+                (7.0, 8.0)
+
+                ```
         """
         return self.vmin, self.vmax
 

@@ -79,6 +79,24 @@ def resolvers() -> Dict[str, Callable[[str], Any]]:
 
     Returns:
         A copy of the table, so a caller inspecting it cannot edit the registry by accident.
+
+    Examples:
+        - Reach the resolver a scheme is served by:
+            ```python
+            >>> from digitalearth.base.registry import resolvers
+            >>> resolvers()["object"].__name__
+            '_resolve_object'
+
+            ```
+        - Editing what comes back leaves the registry alone, because it is a copy:
+            ```python
+            >>> from digitalearth.base.registry import resolvers
+            >>> table = resolvers()
+            >>> del table["file"]
+            >>> "file" in resolvers()
+            True
+
+            ```
     """
     return dict(_RESOLVERS)
 
@@ -116,6 +134,21 @@ def clear_objects() -> None:
 
     The table is process-local and holds strong references, so a long-lived session that registers many
     datasets keeps them all alive. This is the release valve, and what a test suite calls between cases.
+
+    Examples:
+        - A cleared id no longer resolves:
+            ```python
+            >>> from digitalearth.base.registry import clear_objects, register_object, resolve_uri
+            >>> uri = register_object([1, 2], name="doc-rows")
+            >>> resolve_uri(uri)
+            [1, 2]
+            >>> clear_objects()
+            >>> resolve_uri("object:doc-rows")
+            Traceback (most recent call last):
+                ...
+            KeyError: "no object is registered as 'doc-rows'. An object: reference only resolves in the process that registered it — save the data and reference it by path to share the figure"
+
+            ```
     """
     _OBJECTS.clear()
 
@@ -222,6 +255,19 @@ def register_classifier(classifier: Callable[[Any, str, int], Any]) -> None:
     Args:
         classifier: Called as ``classifier(values, scheme, k)``, returning ``(edges, _)`` — cleopatra's
             ``styles.classify`` signature.
+
+    Examples:
+        - Swap in a classifier of your own, then put the package's back:
+            ```python
+            >>> from digitalearth.base.registry import get_classifier, register_classifier
+            >>> original = get_classifier()
+            >>> register_classifier(lambda values, scheme, k: ([0.0, 0.5, 1.0], None))
+            >>> from digitalearth.base.spec import Scale
+            >>> Scale.from_values([0.0, 1.0], scheme="anything").breaks
+            (0.0, 0.5, 1.0)
+            >>> register_classifier(original)
+
+            ```
     """
     _CLASSIFIER["fn"] = classifier
 
@@ -235,6 +281,17 @@ def get_classifier() -> Callable[..., Any]:
     Raises:
         RuntimeError: if none is registered. That means `digitalearth` was not imported, or something
             replaced its registration — not a caller error, so it says so rather than reading as a bad scheme.
+
+    Examples:
+        - Cut class edges with whatever is registered — ``k`` classes give ``k + 1`` edges:
+            ```python
+            >>> import digitalearth  # registers the adapter
+            >>> from digitalearth.base.registry import get_classifier
+            >>> edges, _ = get_classifier()([0.0, 5.0, 10.0], "equal_interval", 2)
+            >>> [float(edge) for edge in edges]
+            [0.0, 5.0, 10.0]
+
+            ```
     """
     if "fn" not in _CLASSIFIER:
         raise RuntimeError(

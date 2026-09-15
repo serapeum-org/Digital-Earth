@@ -39,6 +39,24 @@ class Channel:
             magnitude in the channel's own units, ``"text"`` for a label. A renderer reads this to know
             whether to hand the result to a colormap or use it directly.
         doc: One line saying what the channel controls, so the declared vocabulary is self-describing.
+
+    Examples:
+        - Look a channel up and read what it controls:
+            ```python
+            >>> from digitalearth.base.spec import CHANNELS
+            >>> CHANNELS["size"].kind
+            'number'
+            >>> CHANNELS["size"].doc
+            'Marker or glyph size, in points.'
+
+            ```
+        - The table is the growth axis, so the channels a feature will need are already in it:
+            ```python
+            >>> from digitalearth.base.spec import CHANNELS
+            >>> sorted(name for name in CHANNELS if CHANNELS[name].kind == "number")
+            ['height', 'opacity', 'rotation', 'size', 'width']
+
+            ```
     """
 
     name: str
@@ -171,6 +189,23 @@ class Encoding:
         Raises:
             ValueError: if the channel is undeclared, or `value` is ``None`` — which would read as "no
                 binding" rather than "this channel is off".
+
+        Examples:
+            - A constant colour, resolved back out:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.constant("color", "#1e90ff").resolve()
+                '#1e90ff'
+
+                ```
+            - Any declared channel works the same way, and knows it does not vary:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> width = Encoding.constant("width", 2.5)
+                >>> width.is_constant, width.resolve([1, 2])
+                (True, [2.5, 2.5])
+
+                ```
         """
         return cls(channel=channel, value=value)
 
@@ -196,6 +231,26 @@ class Encoding:
 
         Raises:
             ValueError: if the channel is undeclared or `field` is empty.
+
+        Examples:
+            - Name the column the channel varies with, and read it back:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> enc = Encoding.by_field("color", "landcover")
+                >>> enc.field, enc.is_constant
+                ('landcover', False)
+
+                ```
+            - With a scale and an output range, the values land in the channel's own units:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Scale
+                >>> enc = Encoding.by_field(
+                ...     "size", "magnitude", scale=Scale.from_limits(0.0, 8.0), output_range=(2.0, 18.0)
+                ... )
+                >>> enc.resolve([0.0, 4.0, 8.0])
+                [2.0, 10.0, 18.0]
+
+                ```
         """
         if not field:
             raise ValueError(
@@ -211,6 +266,25 @@ class Encoding:
 
         Returns:
             ``True`` for a constant binding — the case a renderer can set once instead of per feature.
+
+        Examples:
+            - A constant is set once; a field-driven channel is not:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.constant("opacity", 0.5).is_constant
+                True
+                >>> Encoding.by_field("opacity", "confidence").is_constant
+                False
+
+                ```
+            - Which is what lets a renderer take the cheap path when it can:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> enc = Encoding.constant("color", "#333")
+                >>> enc.resolve() if enc.is_constant else enc.resolve(["a", "b"])
+                '#333'
+
+                ```
         """
         return self.field is None
 
