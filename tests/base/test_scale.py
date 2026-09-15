@@ -158,17 +158,48 @@ class TestTheDomain:
         with pytest.raises(ValueError, match="reversed pair"):
             Scale.from_values([1.0, 2.0, 3.0], vmin=10.0, vmax=5.0)
 
-    def test_one_explicit_limit_still_widens_against_the_data(self):
-        """Only the both-explicit case is a typo; one limit plus a measurement is not.
+    @pytest.mark.parametrize(
+        ("kwargs", "match"),
+        [
+            ({"vmin": 10.0}, "at or above every value"),
+            ({"vmax": -5.0}, "at or below every value"),
+        ],
+    )
+    def test_one_explicit_limit_past_all_the_data_is_refused(self, kwargs, match):
+        """A single limit on the wrong side of the data is discarded just as silently, so it raises too.
+
+        Args:
+            kwargs: The explicit limit under test.
+            match: The phrase the error must carry.
 
         Test scenario:
-            Guards the boundary of the rule above — a caller who pins only `vmin` above the data still gets a
-            usable range rather than an error.
+            `from_values([1, 2], vmax=-5)` returned `(1.0, 2.0)` — the caller's limit dropped entirely — and
+            `vmin=10` returned `(10, 11)`, a range holding none of the values. That is exactly what the
+            reversed-pair rule above refuses, so covering only the both-explicit case left the other half of
+            its own argument unenforced. `TexturedGlobe._validate_colour_bounds` already refused both, so the
+            globe tier and the web tier disagreed — the divergence this consolidation exists to remove.
         """
-        assert Scale.from_values([1.0, 2.0, 3.0], vmin=10.0).as_limits() == (
-            10.0,
-            11.0,
-        ), "a single explicit limit must still widen rather than raise"
+        with pytest.raises(ValueError, match=match):
+            Scale.from_values([1.0, 2.0, 3.0], **kwargs)
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [({"vmin": 0.0}, (0.0, 3.0)), ({"vmax": 9.0}, (1.0, 9.0))],
+    )
+    def test_one_explicit_limit_that_widens_the_view_is_kept(self, kwargs, expected):
+        """A limit that extends the range past the data is the ordinary case and must survive.
+
+        Args:
+            kwargs: The explicit limit under test.
+            expected: The resulting domain.
+
+        Test scenario:
+            Guards the boundary of the rule above: pinning a colour scale wider than one frame's data is the
+            whole point of `clim=`, and must not be caught by a guard aimed at limits that exclude it.
+        """
+        assert Scale.from_values([1.0, 2.0, 3.0], **kwargs).as_limits() == expected, (
+            "a limit that widens the view must be kept"
+        )
 
 
 class TestClassification:

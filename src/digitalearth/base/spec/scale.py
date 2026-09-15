@@ -396,6 +396,18 @@ class Scale:
                 f"Scale needs vmin <= vmax; got vmin={lo}, vmax={hi}. Both were given explicitly, so this "
                 "is a reversed pair rather than a constant domain to widen — check their order"
             )
+        if measured.size and vmax is None and vmin is not None and lo >= data_hi:
+            # One explicit limit, on the wrong side of the data. The widening below would discard it just
+            # as silently as a reversed pair, and draw against a range holding none of the values.
+            raise ValueError(
+                f"Scale got vmin={lo}, which is at or above every value in the data (max {data_hi}); "
+                "nothing would be drawn in range — check the limit or drop it"
+            )
+        if measured.size and vmin is None and vmax is not None and hi <= data_lo:
+            raise ValueError(
+                f"Scale got vmax={hi}, which is at or below every value in the data (min {data_lo}); "
+                "nothing would be drawn in range — check the limit or drop it"
+            )
         if hi <= lo:
             # The rule all five copies chose: a constant domain is widened by one rather than divided by.
             hi = lo + 1.0
