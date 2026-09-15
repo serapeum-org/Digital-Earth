@@ -21,7 +21,8 @@ says *where* from. Materialising both is the data tier's job (`DE-16`, Wave 2).
 """
 
 from dataclasses import dataclass, replace
-from typing import Any, Optional, Sequence, Tuple, Union
+from numbers import Integral
+from typing import Any, Iterable, List, Optional, Tuple, Union
 
 __all__ = ["DEFAULT_BAND", "Selection"]
 
@@ -33,14 +34,15 @@ def _as_bands(band: Any) -> Tuple[Any, ...]:
     """Normalise a band argument to a tuple, leaving validation to :class:`Selection`.
 
     Args:
-        band: A single band, or any sequence of them.
+        band: A single band, or any iterable of them — a list, a tuple, a numpy array or a generator.
 
     Returns:
-        The bands as a tuple. A non-sequence — including a ``bool``, which is an ``int`` in Python and would
-        otherwise fail obscurely inside ``tuple()`` — is wrapped as a one-tuple so the real complaint comes
-        from the one place that knows what a band must be.
+        The bands as a tuple. Anything that is not an iterable of bands is wrapped as a one-tuple, so the
+        real complaint comes from the one place that knows what a band must be rather than from ``tuple()``.
+        Testing for ``Iterable`` rather than ``Sequence`` is deliberate: a numpy array of indices and a
+        generator expression are both natural ways to name bands, and ``Sequence`` excludes both.
     """
-    if isinstance(band, Sequence) and not isinstance(band, (str, bytes)):
+    if isinstance(band, Iterable) and not isinstance(band, (str, bytes)):
         return tuple(band)
     return (band,)
 
@@ -109,8 +111,10 @@ class Selection:
         object.__setattr__(self, "band", tuple(self.band))
         if not self.band:
             raise ValueError("Selection needs at least one band")
+        bands: List[int] = []
         for index in self.band:
-            if isinstance(index, bool) or not isinstance(index, int):
+            # bool is an int in Python, and True would read as band 1 — almost never what a caller meant.
+            if isinstance(index, bool) or not isinstance(index, Integral):
                 raise ValueError(
                     f"Selection needs whole 1-based band numbers; got {index!r}"
                 )
@@ -119,10 +123,15 @@ class Selection:
                     f"Selection bands are 1-based; got {index}. Band 0 is usually a caller expecting "
                     "0-based indexing, which would silently draw the wrong band"
                 )
+            # Accept any Integral but store a Python int: np.int64 is a whole 1-based band number by every
+            # reasonable reading, and GDAL's SWIG binding rejects it outright, so coercing here is what makes
+            # `bands=np.array([3, 2, 1])` work at all rather than failing deep inside the reader.
+            bands.append(int(index))
+        object.__setattr__(self, "band", tuple(bands))
 
     @classmethod
     def of(
-        cls, band: Union[int, Sequence[int]] = DEFAULT_BAND, **rest: Any
+        cls, band: Union[int, Iterable[int]] = DEFAULT_BAND, **rest: Any
     ) -> "Selection":
         """Build a selection, accepting a band as either a scalar or a sequence.
 
@@ -205,7 +214,7 @@ class Selection:
         """
         return self.band[0]
 
-    def with_band(self, band: Union[int, Sequence[int]]) -> "Selection":
+    def with_band(self, band: Union[int, Iterable[int]]) -> "Selection":
         """Return a copy naming different bands, keeping every other axis.
 
         Args:
@@ -234,8 +243,9 @@ class Selection:
         """Return one single-band selection per band, in order.
 
         Returns:
-            One selection per band. For a single-band selection that is just ``(self,)``; for a composite it
-            is the per-channel reads, in channel order, each still carrying the shared axes.
+            One selection per band — for a single-band selection, one equal to this one; for a composite, the
+            per-channel reads in channel order, each still carrying the shared axes. The entries are fresh
+            values rather than ``self``, so a caller may hold both without either aliasing the other.
 
         Examples:
             - An RGB composite becomes its three channel reads, in order:

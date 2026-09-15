@@ -4,6 +4,7 @@
 asked two ways. These cover the type that asks it once.
 """
 
+import numpy as np
 import pytest
 
 from digitalearth.base.spec import DEFAULT_BAND, Selection
@@ -84,6 +85,43 @@ class TestBandIsATuple:
         """
         with pytest.raises(ValueError, match="at least one band"):
             Selection.of([])
+
+    def test_numpy_integers_are_accepted_and_stored_as_python_ints(self):
+        """A numpy index is a whole 1-based band number, and is coerced to what the reader takes.
+
+        Test scenario:
+            `np.array([3, 2, 1])` is the natural way to name composite bands beside numpy data, and
+            `isinstance(np.int64(1), int)` is False — so a plain int check refused it while saying it was not
+            a whole number. Worse, GDAL's SWIG binding rejects numpy integers outright, so passing one
+            through would have failed deep inside the reader. Coercing here is what makes it work at all.
+        """
+        selection = Selection.of(np.array([3, 2, 1]))
+        assert selection.band == (3, 2, 1), "a numpy array of indices must be accepted"
+        assert [type(band) for band in selection.band] == [int, int, int], (
+            "and stored as Python ints, which is what the reader takes"
+        )
+
+    def test_a_generator_of_bands_is_accepted(self):
+        """Bands may be produced lazily.
+
+        Test scenario:
+            `get_stack` iterated its bands before this type existed, so a generator worked. Testing for
+            `Sequence` rather than `Iterable` silently wrapped the generator object itself as a one-tuple
+            and then refused it as not a number.
+        """
+        assert Selection.of(band for band in (1, 2)).band == (1, 2), (
+            "a generator must be consumed, not wrapped"
+        )
+
+    def test_a_float_that_happens_to_be_whole_is_still_refused(self):
+        """`2.0` is not an index, even though it equals one.
+
+        Test scenario:
+            Accepting floats would mean accepting `2.5` too, or silently truncating it. The rule is whole
+            numbers, and a float says the caller computed the band rather than named it.
+        """
+        with pytest.raises(ValueError, match="whole 1-based band numbers"):
+            Selection.of(2.0)
 
 
 class TestTheOtherAxes:

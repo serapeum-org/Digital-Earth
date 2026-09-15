@@ -174,7 +174,9 @@ class Encoding:
                     f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
                     f"{self.output_range!r}"
                 )
-        if self.field is None and (self.scale is not None or self.output_range is not None):
+        if self.field is None and (
+            self.scale is not None or self.output_range is not None
+        ):
             raise ValueError(
                 f"a constant Encoding for {self.channel!r} cannot carry a scale or an output range; "
                 "they only apply to a field"
