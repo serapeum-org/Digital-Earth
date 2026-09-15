@@ -35,6 +35,10 @@ class PointArrays:
             columns always has them — which is what the 3-D tier was filling in by hand.
         crs: What the coordinates are measured in, or ``None`` when the source declared none.
 
+    The three arrays are **copies**, marked read-only. Building one from a caller's buffer and then sharing
+    memory with it would mean a "frozen" value that changes underneath whoever holds it, and `x`/`y`/`z` and
+    :meth:`as_xy` hand the arrays straight back out.
+
     Raises:
         ValueError: if the three arrays are not the same length. They are index-aligned with each other and
             with any attribute column a caller filters alongside them, so a mismatch is a defect that would
@@ -106,9 +110,14 @@ class PointArrays:
 
                 ```
         """
-        xs = np.asarray(x, dtype="float64").ravel()
-        ys = np.asarray(y, dtype="float64").ravel()
-        zs = np.zeros_like(xs) if z is None else np.asarray(z, dtype="float64").ravel()
+        # np.array, not np.asarray: asarray does not copy a contiguous float64 input, so the "frozen" value
+        # would share memory with the caller's buffer and change underneath it. The arrays are then marked
+        # read-only, because `x`/`y`/`z` and `as_xy()` hand them straight back out.
+        xs = np.array(x, dtype="float64").ravel()
+        ys = np.array(y, dtype="float64").ravel()
+        zs = np.zeros_like(xs) if z is None else np.array(z, dtype="float64").ravel()
+        for array in (xs, ys, zs):
+            array.flags.writeable = False
         return cls(xs, ys, zs, crs)
 
     @classmethod
@@ -232,7 +241,12 @@ class PointArrays:
         mask = np.ones(len(self.x), dtype=bool)
         for name in dims:
             mask &= np.isfinite(axes[name])
-        kept = PointArrays(self.x[mask], self.y[mask], self.z[mask], self.crs)
+        # Boolean indexing already copies, so these are fresh buffers; marking them read-only keeps the
+        # guarantee `of` makes, since finite() is the other way an instance is built.
+        kept_x, kept_y, kept_z = self.x[mask], self.y[mask], self.z[mask]
+        for array in (kept_x, kept_y, kept_z):
+            array.flags.writeable = False
+        kept = PointArrays(kept_x, kept_y, kept_z, self.crs)
         filtered = tuple(
             None if item is None else np.asarray(item)[mask] for item in aligned
         )
