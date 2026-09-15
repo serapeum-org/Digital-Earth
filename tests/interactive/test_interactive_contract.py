@@ -82,8 +82,19 @@ def off_limb(monkeypatch):
         """
         raise OffLimbError(f"the data lies outside what {crs!r} can show")
 
-    for module in (interactive_base, interactive_raster, interactive_vector):
-        monkeypatch.setattr(module, "reproject", _raise)
+    # base.display is where the warp now happens: DE-17 (#277) lifted _to_display_source out of the tier
+    # base classes, so the tier modules no longer import `reproject` themselves. The two tier modules that
+    # still call it directly are patched as well.
+    from digitalearth.base import display as base_display
+
+    for module in (
+        base_display,
+        interactive_base,
+        interactive_raster,
+        interactive_vector,
+    ):
+        if hasattr(module, "reproject"):
+            monkeypatch.setattr(module, "reproject", _raise)
 
 
 def _source(variable: str, values: np.ndarray = None) -> Source:

@@ -14,7 +14,7 @@ The CLI always renders headless (matplotlib ``Agg``); human-facing progress goes
 import argparse
 import sys
 from pathlib import Path
-from typing import Any, List, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import matplotlib
 

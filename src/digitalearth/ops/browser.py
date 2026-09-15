@@ -10,7 +10,7 @@ emailed or archived as-is.
 import html
 from base64 import b64encode
 from pathlib import Path
-from typing import Any, Iterable, List, Optional, Sequence
+from typing import Any, Iterable, Optional, Sequence
 
 __all__ = ["gallery"]
 

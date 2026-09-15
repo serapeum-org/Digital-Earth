@@ -14,7 +14,7 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 from loguru import logger
 
