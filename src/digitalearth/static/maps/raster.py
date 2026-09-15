@@ -180,22 +180,22 @@ class RasterMixin(_MixinBase):
         return self._field(dataset, kind="pcolormesh", **kwargs)
 
     @staticmethod
-    def _extent_of(x: Any, y: Any, crs: Any = None) -> List[float]:
+    def _extent_of(x: Any, y: Any) -> List[float]:
         """Return the bbox-order extent enclosing 1-D x/y coordinate arrays, as cleopatra takes it.
 
         Args:
             x: X coordinates, already in the display CRS.
             y: Y coordinates, already in the display CRS.
-            crs: The CRS those coordinates are in, when the caller knows it. It does not affect the numbers —
-                the extent is a min/max over values already in that CRS — so it is optional here; it is
-                carried only so the rectangle can say what it is measured in.
 
         Returns:
             ``[xmin, ymin, xmax, ymax]``. The ordering comes from
             :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox` rather than a list written out here, so it
-            cannot drift from the ordering the axes path uses.
+            cannot drift from the ordering the axes path uses. The `Bounds` is built only to name that
+            ordering and is unwrapped immediately, so it carries no CRS: the caller's coordinates are already
+            in the display one, and a CRS that changes nothing is a parameter every caller must think about
+            for no benefit.
         """
-        return Bounds.from_points(x, y, crs=crs).as_bbox()
+        return Bounds.from_points(x, y, crs=None).as_bbox()
 
     def _extent(self, ds: Any) -> List[float]:
         """Return the bbox-order extent of a dataset's cell-centre coords, as cleopatra takes it.
@@ -206,7 +206,7 @@ class RasterMixin(_MixinBase):
         Returns:
             ``[xmin, ymin, xmax, ymax]``.
         """
-        return self._extent_of(ds.x, ds.y, crs=self.crs)
+        return self._extent_of(ds.x, ds.y)
 
     def rgb_composite(
         self,

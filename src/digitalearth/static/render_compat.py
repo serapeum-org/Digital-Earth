@@ -198,7 +198,7 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     # -- the data-style preset and its per-call overrides
     StyleKey("style", "Named data-style preset the surface is drawn with."),
     StyleKey("hillshade", "Shade the surface with relief."),
-    StyleKey("bands", "Rebands the preset's scale."),
+    StyleKey("bands", "Discrete band count partitioning the preset's value range."),
     StyleKey("alpha_range", "(low, high) opacity the preset's scale is drawn across."),
     # -- classification
     StyleKey("scheme", "Classification scheme cutting the values into classes."),
@@ -396,9 +396,9 @@ def relocate_flat_style(
             the ``point_size`` it wants, and the deprecated spelling is warned about on the caller's line.
             Leave unset for every other glyph.
         depth: How many frames sit between this call and the user's, for that warning. The default counts
-            here -> the layer method -> ``guarded`` -> the caller; an alias that delegates to another builder
-            adds one more, so it passes ``depth=6``. Measured rather than assumed: a wrong value blames a
-            line inside this package instead of the user's own.
+            ``renamed_parameter`` -> the marker-size fold -> here -> the layer method -> the caller; an alias
+            that delegates to another builder adds one more, so it passes ``depth=6``. Measured rather than
+            assumed: a wrong value blames a line inside this package instead of the user's own.
 
     Returns:
         The removed style keys as a new dict.
@@ -431,7 +431,14 @@ def _fold_points(out: Dict[str, Any]) -> None:
         field: out.pop(key) for key, field in _POINT_FIELDS.items() if key in out
     }
     if points is None:
-        return  # only marker styling was passed with no array to attach it to; drop it
+        # Marker styling with no array to attach it to. Dropping it was the old behaviour and is the exact
+        # silence this module's schema exists to remove: `point_color="red"` on a layer with no `points=`
+        # did nothing and said nothing. The keys were already popped above, so naming them is all that is
+        # left to do.
+        raise ValueError(
+            f"{sorted(point_kw)} style the point overlay, but no points= array was given for them to "
+            "apply to; pass points=, or drop the styling"
+        )
     out["points"] = PointOverlay(points, **point_kw)
 
 

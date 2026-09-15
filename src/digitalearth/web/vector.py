@@ -159,8 +159,9 @@ class VectorMixin(_MixinBase):
             :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
 
         Raises:
-            ValueError: propagated from ``cleopatra.styling.styles.classify`` (unknown scheme, no spread, …) or from
-                the categorical helper (no non-null values).
+            ValueError: from :class:`~digitalearth.base.spec.scale.Scale` when the scheme cannot classify
+                the column (unknown scheme, no spread, …), naming the scheme and ``k``; or from the
+                categorical helper (no non-null values).
         """
         import numpy as np
 

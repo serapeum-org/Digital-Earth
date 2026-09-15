@@ -213,12 +213,15 @@ def test_an_already_built_point_overlay_is_left_alone():
     )
 
 
-def test_marker_styling_with_no_points_array_is_dropped():
-    """point_* styling passed without any `points` has nothing to attach to.
+def test_marker_styling_with_no_points_array_is_refused():
+    """point_* styling passed without any `points` names the keys rather than vanishing.
 
     Test scenario:
-        `PointOverlay` needs an array; building one from styling alone would raise deep inside cleopatra.
-        Dropping it is the deliberate choice — there is no overlay to style, so the keys describe nothing.
+        This is the module's own thesis applied to itself: dropping the keys meant `point_color="red"` on a
+        layer with no `points=` did nothing and said nothing, which is the silence the declared schema exists
+        to remove. Contrast `test_an_already_built_point_overlay_is_left_alone`, where a stray `point_*` key
+        *is* left in place — there the overlay exists, so `prepare_plot_kwargs` can report the key against
+        the glyph that could not take it. Here there is nothing to report it against, so it is named now.
     """
-    out = group_render_kwargs({"point_color": "red", "point_size": 8})
-    assert out == {}, f"marker styling with no points array must be dropped, got {out}"
+    with pytest.raises(ValueError, match="no points= array was given"):
+        group_render_kwargs({"point_color": "red", "point_size": 8})

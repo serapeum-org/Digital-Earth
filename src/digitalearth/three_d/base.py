@@ -57,8 +57,9 @@ def classified_scalars(
     """Turn a value column into the ``scalars``/``cmap`` keywords that colour a PyVista layer.
 
     The 3-D counterpart of the classification the other tiers apply to a choropleth, and deliberately the
-    same computation: a graduated ``scheme`` gets its class edges from ``cleopatra.styling.styles.classify``
-    (pure-numpy quantiles / equal-interval / Fisher-Jenks) and ``scheme="categorical"`` its colours from
+    same computation: a graduated ``scheme`` gets its class edges from
+    :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` (which reaches the registered classifier, so every
+    tier cuts identical edges) and ``scheme="categorical"`` its colours from
     :func:`digitalearth.base.symbology.categorical_colors`, so one ``scheme``/``k``/``cmap`` triple paints the
     same classes here as on a static, interactive or web map.
 
