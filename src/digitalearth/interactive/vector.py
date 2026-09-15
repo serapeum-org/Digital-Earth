@@ -480,7 +480,7 @@ class VectorMixin(_MixinBase):
             # leaves classes sharing the last colour and a long one leaves colours unused — either way the
             # picture no longer shows the classification it claims (review M5).
             raise ValueError(
-                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): cmap has "
+                f"cannot classify column {column!r}: cmap has "
                 f"{len(colours)} colours for {n_classes} classes; pass one colour per class, or a "
                 "colormap name to sample"
             )

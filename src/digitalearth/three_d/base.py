@@ -184,7 +184,10 @@ def classified_scalars(
     numbers = np.asarray(values, dtype="float64")
     try:
         edges = Scale.breaks_of(numbers, scheme, k)
-    except Exception as error:  # unknown scheme, constant column, k < 1 …
+    # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
+    # swallowing that would present a wiring failure as bad data. The other two tiers already let it
+    # through, so catching it here made the three disagree on exactly that case.
+    except ValueError as error:  # unknown scheme, constant column, k < 1 …
         # Scale's own message already names the scheme and `k`, and there is no column here to add, so
         # this only normalises the exception type the tiers raise.
         raise ValueError(f"cannot classify values: {error}") from error

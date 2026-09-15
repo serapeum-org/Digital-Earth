@@ -395,8 +395,11 @@ def temporary_resolver(scheme: str, resolver: Callable[[str], Any]) -> Iterator[
     try:
         yield
     finally:
-        if had and previous is not None:
-            _RESOLVERS[scheme] = previous
+        if had:
+            # `had`, not `previous is not None`: register_resolver validates the scheme but not the
+            # resolver, so None can be registered — and testing the value would delete it instead of
+            # putting it back.
+            _RESOLVERS[scheme] = previous  # type: ignore[assignment]
         else:
             _RESOLVERS.pop(scheme, None)
 
