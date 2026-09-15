@@ -320,9 +320,9 @@ class Encoding:
 
             * no scale — the values unchanged, for a renderer that holds its own mapping
             * a categorical scale — each value's colour, or the scale's missing colour
-            * any other scale — the normalised position in ``[0, 1]``, stretched into `output_range` when one
-              is set. A classified scale steps: every value in a class resolves to that class's position, so
-              the picture matches the legend's swatches.
+            * any other scale — the normalised position in ``[0, 1]``, stretched into `output_range` when
+                one is set. A classified scale steps: every value in a class resolves to that class's
+                position, so the picture matches the legend's swatches.
 
             A value the scale cannot place — not finite — resolves to ``None``, which is the renderer's cue
             to draw it as missing rather than as some other class.
