@@ -11,7 +11,10 @@ what a builder accepts and a typo was a silently ignored keyword rather than an 
 where it drives one. That is what :func:`route_flat_style` routes against and what
 :func:`digitalearth.base.spec.style.StyleSchema.suggest` reads to name the key a typo was meant to be.
 
-Entry points, in the order a style passes through them:
+Entry points. The first two are **Wave-1 scaffolding**: they are the declared-style half of the seam
+Wave 3's `LayerSpec` plugs into, and no builder calls them yet — the builders still pass flat kwargs
+through the last three. Said plainly because a docstring describing a pipeline that does not exist is
+the kind of claim that survives unchecked into the wave that was supposed to build it.
 
 - :func:`route_flat_style` — flat public kwargs -> a declared
   :class:`~digitalearth.base.spec.style.Symbology`, plus whatever was not style at all.
@@ -26,7 +29,8 @@ Entry points, in the order a style passes through them:
   hand back any ``alpha`` the glyph cannot take for the caller to apply to the artist. Applied centrally in
   :meth:`~digitalearth.static.scene.Scene._render_glyph`.
 
-No builder holds a style-mapping decision of its own: every one of them is here.
+What *is* true today: no builder holds a style-mapping decision of its own — every cleopatra spelling,
+including the ``size`` -> ``point_size`` fold, is decided here.
 """
 
 import inspect
@@ -182,8 +186,13 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     StyleKey("point_size", "Marker size of the point overlay, in points."),
     StyleKey("point_label_color", "Colour of the point overlay's labels."),
     StyleKey("point_label_size", "Size of the point overlay's labels, in points."),
-    StyleKey("pid_color", "Older spelling of point_label_color."),
-    StyleKey("pid_size", "Older spelling of point_label_size."),
+    StyleKey(
+        "pid_color",
+        "Older spelling of point_label_color; ignored when both are passed.",
+    ),
+    StyleKey(
+        "pid_size", "Older spelling of point_label_size; ignored when both are passed."
+    ),
     # -- contours
     StyleKey("levels", "Contour levels: a count, or the explicit values to draw."),
     StyleKey("labels", "Whether to label the contour lines."),

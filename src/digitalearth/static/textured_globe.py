@@ -919,6 +919,10 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
 class TexturedGlobe(WatermarkMixin):
     """A 3-D textured globe built from geospatial data.
 
+    Inherits cleopatra's ``WatermarkMixin``, whose surface comes with it as-is: :meth:`stamp` below is this
+    package's documented spelling for the logo stamp, and ``stamp_watermark(text)`` is available unchanged
+    from upstream, documented there rather than here.
+
     Wraps ``cleopatra.glyphs.globe.TexturedGlobeGlyph``: this class owns the data → texture conversion and
     the lon/lat overlay maths, the glyph owns the sphere, the tilt, the lighting and the render.
 

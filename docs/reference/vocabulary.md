@@ -53,11 +53,29 @@ value.
 
 ::: digitalearth.base.spec.encoding.Encoding
 
+::: digitalearth.base.spec.encoding.Channel
+
+### The declared channels
+
+`CHANNELS` is the table a channel is a row in. It is the growth axis the whole type exists for: `height`
+and `text` are already there, ahead of the extrusion and label features that will need them, because adding
+a channel should cost a row plus a fold rule per backend — not a keyword on every builder on four tiers.
+
 ::: digitalearth.base.spec.style.Symbology
 
 ::: digitalearth.base.spec.style.StyleSchema
 
 ::: digitalearth.base.spec.style.StyleKey
+
+## The shared defaults
+
+Constants that exist so a second value cannot appear. `DEFAULT_BAND` is the band a builder reads when the
+caller names none; `DEFAULT_CLASS_COUNT` is the five classes a graduated scheme cuts by default, which every
+tier had written out separately.
+
+::: digitalearth.base.spec.selection.DEFAULT_BAND
+
+::: digitalearth.base.spec.scale.DEFAULT_CLASS_COUNT
 
 ## The registries
 

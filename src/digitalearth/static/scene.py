@@ -27,6 +27,10 @@ from digitalearth.static.render_compat import prepare_plot_kwargs
 class Scene(WatermarkMixin):
     """A shared-axes host for composing cleopatra glyph layers into one figure.
 
+    Inherits cleopatra's ``WatermarkMixin``, whose surface comes with it as-is: :meth:`stamp` below is this
+    package's documented spelling for the logo stamp, and ``stamp_watermark(text)`` (diagonal brand text
+    with an optional credit line) is available unchanged from upstream, documented there rather than here.
+
     Args:
         ax: An existing axes to draw on. When ``None`` a new figure/axes is created.
         fig: The figure owning ``ax``. Ignored unless ``ax`` is also given.
