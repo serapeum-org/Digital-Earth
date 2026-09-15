@@ -257,14 +257,18 @@ class SourceView(Source):
             ref: The reference `data` was opened from, recorded so the view can be re-read.
             selection: Which slice to read. Defaults to the default band.
             request: The region/resolution/budget wanted. Applied through pyramids' windowed read when the
-                object exposes one, and otherwise recorded but not enforced — a reader that cannot window is
-                not a reason to refuse the read.
+                object exposes one — including a budget with no region, which windows against the source's
+                own extent. Otherwise recorded but not enforced: a reader that cannot window is not a reason
+                to refuse the read.
             crs: The CRS to record for the coordinates, passed through to the extractor.
 
         Returns:
             The view.
 
         Raises:
+            ValueError: if `selection` names more than a band. Only the band is honoured, so a view that
+                stored `time`, `level`, `member` or `overview` would report a slice it does not hold; a
+                composite selection is refused for the same reason.
             Exception: whatever the extractor raises for data it cannot read.
 
         Examples:
