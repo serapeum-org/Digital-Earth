@@ -18,6 +18,7 @@ producing an empty Bokeh layer.
 from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.spec import Scale
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
     _masked_to_nan,
@@ -442,9 +443,10 @@ class VectorMixin(_MixinBase):
 
         The one classification path in this tier, shared by :meth:`points` and :meth:`choropleth`, so a
         classified point layer and a classified polygon layer cannot land on different class edges. It is a
-        thin adapter over ``cleopatra.styling.styles.classify`` — the **same** classifier the web and static
-        tiers call — whose edges become HoloViews ``color_levels`` alongside a per-class ``cmap`` list, which
-        is what makes Bokeh draw flat classes instead of interpolating the ramp.
+        thin adapter over :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` — the **same** class edges
+        the web and static tiers cut, through the one classifier seam — whose edges become HoloViews
+        ``color_levels`` alongside a per-class ``cmap`` list, which is what makes Bokeh draw flat classes
+        instead of interpolating the ramp.
 
         Args:
             gdf: The already-reprojected GeoDataFrame carrying ``column``.
@@ -465,14 +467,12 @@ class VectorMixin(_MixinBase):
                 and when an explicit ``cmap`` sequence carries a different number of colours than the
                 scheme produced classes — see the note above.
         """
-        from cleopatra.styling.styles import classify
-
         try:
-            edges, _ = classify(gdf[column].to_numpy(), scheme, k)
+            edges = Scale.breaks_of(gdf[column].to_numpy(), scheme, k)
         except ValueError as err:  # constant column, unknown scheme, k < 1, …
-            raise ValueError(
-                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
-            ) from err
+            # Scale's own message already names the scheme and `k`; this adds the one fact it cannot
+            # know, the column. Repeating scheme/k here printed both twice in a row.
+            raise ValueError(f"cannot classify column {column!r}: {err}") from err
         n_classes = len(edges) - 1
         colours = sample_cmap(cmap, n_classes)
         if len(colours) != n_classes:
@@ -480,7 +480,7 @@ class VectorMixin(_MixinBase):
             # leaves classes sharing the last colour and a long one leaves colours unused — either way the
             # picture no longer shows the classification it claims (review M5).
             raise ValueError(
-                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): cmap has "
+                f"cannot classify column {column!r}: cmap has "
                 f"{len(colours)} colours for {n_classes} classes; pass one colour per class, or a "
                 "colormap name to sample"
             )
@@ -503,11 +503,11 @@ class VectorMixin(_MixinBase):
     ) -> Self:
         """Fill polygons by classified value — one flat colour per class (the graduated scheme).
 
-        A thin adapter over ``cleopatra.styling.styles.classify``, the **same** classifier the web and static
-        tiers use, so ``scheme``/``k`` mean one thing across the tiers. The class edges it returns are handed
-        to HoloViews as ``color_levels`` alongside a per-class ``cmap`` list, which is what makes Bokeh draw
-        discrete classes instead of interpolating the ramp. The classification itself is never reimplemented
-        here: when the shared ``Scale`` vocabulary (DE-12) lands, this method is the seam it replaces.
+        A thin adapter over :class:`~digitalearth.base.spec.scale.Scale`, which every tier now cuts its
+        class edges through, so ``scheme``/``k`` mean one thing across the four. The edges it returns are
+        handed to HoloViews as ``color_levels`` alongside a per-class ``cmap`` list, which is what makes
+        Bokeh draw discrete classes instead of interpolating the ramp. The classification itself is never
+        reimplemented here.
 
         Args:
             features: A pyramids ``FeatureCollection`` of polygons (reprojected through pyramids).
@@ -554,9 +554,9 @@ class VectorMixin(_MixinBase):
         to classify a numeric column into ``k`` flat classes. Either way the categories or class edges are
         recorded on ``last_breaks`` for legend parity with the web tier.
 
-        Graduated classification goes through ``cleopatra.styling.styles.classify`` — the same classifier the
-        web and static tiers use — so the same ``column``/``scheme``/``k`` yields the same breaks on every
-        tier. Note the *default* ``scheme`` still differs: this interactive tier (like the static
+        Graduated classification goes through :class:`~digitalearth.base.spec.scale.Scale` — the one place
+        every tier reaches the classifier — so the same ``column``/``scheme``/``k`` yields the same breaks on
+        every tier. Note the *default* ``scheme`` still differs: this interactive tier (like the static
         ``Map.choropleth``) defaults to a **continuous** ramp, whereas the **web** ``choropleth`` is
         graduated-by-default (``"quantiles"``). Pass ``scheme`` explicitly for identical classification.
 

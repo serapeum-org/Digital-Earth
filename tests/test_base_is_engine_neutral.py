@@ -87,7 +87,7 @@ def _modules() -> list[Path]:
 
 
 def _module_id(path: Path) -> str:
-    """Path-based, collision-free parametrize id (``base/`` has three ``__init__.py`` files)."""
+    """Path-based, collision-free parametrize id (``base/`` has four ``__init__.py`` files)."""
     return str(path.relative_to(BASE)).replace("\\", "/")
 
 

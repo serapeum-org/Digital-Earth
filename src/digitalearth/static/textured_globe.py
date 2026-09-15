@@ -40,7 +40,7 @@ from cleopatra.glyphs.globe.textured_globe_glyph import (
     TexturedGlobeGlyph,
 )
 from cleopatra.styling.colors import resolve_colormap
-from cleopatra.styling.watermark import stamp_mark
+from cleopatra.styling.watermark import WatermarkMixin
 from matplotlib import cbook, rcParams
 from matplotlib.animation import FuncAnimation
 from matplotlib.collections import LineCollection, PolyCollection
@@ -52,6 +52,7 @@ from pyramids.dataset import Dataset, GeoReference
 
 from digitalearth.base.arrays import finite, read_masked_band, ring_runs
 from digitalearth.base.crs import source_epsg
+from digitalearth.base.spec import Scale
 from digitalearth.static.animation import save_animation
 
 #: Default shape of the global equirectangular canvas built by :meth:`TexturedGlobe.from_dataset`,
@@ -915,8 +916,12 @@ class _SphereFill(_GlobeOverlay, PolyCollection):
         return _front_depth(axes, _FILL_RANK)
 
 
-class TexturedGlobe:
+class TexturedGlobe(WatermarkMixin):
     """A 3-D textured globe built from geospatial data.
+
+    Inherits cleopatra's ``WatermarkMixin``, whose surface comes with it as-is: :meth:`stamp` below is this
+    package's documented spelling for the logo stamp, and ``stamp_watermark(text)`` is available unchanged
+    from upstream, documented there rather than here.
 
     Wraps ``cleopatra.glyphs.globe.TexturedGlobeGlyph``: this class owns the data → texture conversion and
     the lon/lat overlay maths, the glyph owns the sphere, the tilt, the lighting and the render.
@@ -1385,15 +1390,9 @@ class TexturedGlobe:
             ValueError: If the bounds leave no range — see :meth:`_validate_colour_bounds`.
         """
         cls._validate_colour_bounds(good, vmin, vmax)
-        # A unit range is the fallback when the band has no finite value to take a bound from.
-        data_lo, data_hi = (
-            (float(good.min()), float(good.max())) if good.size else (0.0, 1.0)
-        )
-        lo = data_lo if vmin is None else float(vmin)
-        hi = data_hi if vmax is None else float(vmax)
-        if hi <= lo:  # a constant band has no range to normalise against
-            hi = lo + 1.0
-        return lo, hi
+        # `good` is already the finite subset, so from_finite skips the second pass and the ~75 MB copy
+        # from_values would make of a global canvas. A unit range remains the fallback for an empty one.
+        return Scale.from_finite(good, vmin=vmin, vmax=vmax).as_limits()
 
     @classmethod
     def _colorize(
@@ -2448,7 +2447,7 @@ class TexturedGlobe:
 
         Args:
             mark: The mark image — a file path or an ``(H, W, 3)`` / ``(H, W, 4)`` array.
-            **kwargs: Forwarded to ``cleopatra.styling.watermark.stamp_mark``.
+            **kwargs: Forwarded to cleopatra's ``WatermarkMixin.stamp_mark``.
 
         Returns:
             The frameless inset ``Axes`` the mark was drawn on.
@@ -2489,7 +2488,7 @@ class TexturedGlobe:
         """
         if self.fig is None:
             raise RuntimeError("draw() the globe before stamping it")
-        return stamp_mark(self.fig, mark, **kwargs)
+        return self.stamp_mark(mark, **kwargs)
 
 
 #: ``EARTH_TILT_DEG`` is cleopatra's constant, re-exported from this module (not from

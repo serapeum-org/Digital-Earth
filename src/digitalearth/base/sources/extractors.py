@@ -29,6 +29,7 @@ from digitalearth.base.arrays import read_masked_band
 from digitalearth.base.crs import declared_crs, source_epsg
 from digitalearth.base.sources.dimension import DimensionInfo
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import Selection
 from digitalearth.base.types import PlottableData, RasterLike
 
 
@@ -41,18 +42,25 @@ def get_stack(data: RasterLike, bands: Any, *, mask: bool = True) -> np.ndarray:
 
     Args:
         data: A pyramids ``Dataset`` (duck-typed by ``read_array`` / ``no_data_value``).
-        bands: An ordered iterable of **1-based** band indices to stack (e.g. ``(1, 2, 3)``).
+        bands: Which bands to stack, in order — a :class:`~digitalearth.base.spec.selection.Selection`, or
+            an ordered iterable of **1-based** indices (e.g. ``(1, 2, 3)``). Either way it is normalised
+            through `Selection`, so the 1-based contract this docstring states is now enforced rather than
+            assumed: a 0 raises here instead of reading the wrong band.
         mask: When ``True`` (default) each band's nodata cells are set to ``NaN`` (consistent with the
             single-band path); ``False`` returns the raw cast values.
 
     Returns:
         np.ndarray: a ``float64`` array of shape ``(rows, cols, len(bands))``.
+
+    Raises:
+        ValueError: if `bands` is empty, or names a band below 1.
     """
+    wanted = bands.band if isinstance(bands, Selection) else Selection.of(bands).band
     layers = [
         read_masked_band(data, b)
         if mask
         else np.asarray(data.read_array(band=b - 1), dtype="float64")
-        for b in bands
+        for b in wanted
     ]
     return np.dstack(layers)
 

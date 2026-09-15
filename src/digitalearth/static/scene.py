@@ -17,15 +17,19 @@ from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
-from cleopatra.styling.watermark import stamp_mark
+from cleopatra.styling.watermark import WatermarkMixin
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from digitalearth.static.render_compat import prepare_plot_kwargs
 
 
-class Scene:
+class Scene(WatermarkMixin):
     """A shared-axes host for composing cleopatra glyph layers into one figure.
+
+    Inherits cleopatra's ``WatermarkMixin``, whose surface comes with it as-is: :meth:`stamp` below is this
+    package's documented spelling for the logo stamp, and ``stamp_watermark(text)`` (diagonal brand text
+    with an optional credit line) is available unchanged from upstream, documented there rather than here.
 
     Args:
         ax: An existing axes to draw on. When ``None`` a new figure/axes is created.
@@ -252,7 +256,7 @@ class Scene:
         self.ax.set_title(title, **kwargs)
 
     def stamp(self, mark: Any, **kwargs: Any) -> Any:
-        """Stamp a logo / watermark onto the figure (delegates to ``cleopatra.styling.watermark.stamp_mark``).
+        """Stamp a logo / watermark onto the figure (delegates to cleopatra's ``WatermarkMixin.stamp_mark``).
 
         The mark is placed in one corner of :attr:`fig` on a frameless inset axes in figure-fraction
         coordinates, so it keeps its proportion and corner offset at whatever dpi the figure is later saved
@@ -297,7 +301,7 @@ class Scene:
 
                 ```
         """
-        return stamp_mark(self.fig, mark, **kwargs)
+        return self.stamp_mark(mark, **kwargs)
 
     def save(self, path: Union[str, "os.PathLike[str]"], **kwargs) -> Path:
         """Save the figure to ``path`` (``bbox_inches="tight"`` by default).

@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
-from pyramids.base.crs import reproject_coordinates
 
+from digitalearth.base.spec import Bounds
 from digitalearth.static import projections
 from digitalearth.static.domains import DomainLike, resolve_domain
 
@@ -37,14 +37,64 @@ class ProjectionMixin(_MixinBase):
         digitalearth.static.maps.base.GeoLayerBase: the typing-only base declared above the class.
     """
 
-    def set_extent(self, bbox: Sequence[float]) -> None:
+    def set_extent(self, bbox: Union[Bounds, Sequence[float]]) -> None:
         """Set the axes extent.
 
         Args:
-            bbox: ``[xmin, xmax, ymin, ymax]`` in the display CRS.
+            bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to the
+                display CRS, which is the point of passing one — or a bare ``[xmin, xmax, ymin, ymax]``
+                sequence in matplotlib axes order, assumed to be in the display CRS already. The sequence
+                form is accepted because that ordering was this method's contract; prefer `Bounds`, which
+                states both the ordering and the CRS instead of leaving them to position and assumption.
+
+        Raises:
+            ValueError: if the sequence form does not hold exactly four values.
+
+        Notes:
+            A **flipped** pair is honoured in the sequence form: ``[10, 0, 0, 10]`` inverts the x axis, which
+            is how matplotlib expresses ``invert_xaxis`` through the limits. A `Bounds` cannot express that —
+            it refuses corners the wrong way round, because for a rectangle handed to pyramids or cleopatra
+            that is a defect rather than an intent — so invert the axis directly if you need both.
+
+        Examples:
+            - A rectangle in another CRS is converted, so the frame lands where the data is:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> from digitalearth.base.spec import Bounds
+                >>> m = Map(crs=3857)
+                >>> m.set_extent(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+                >>> round(m.ax.get_xlim()[1])
+                111319
+
+                ```
+            - The bare sequence is matplotlib's own ordering, in the display CRS:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=3857)
+                >>> m.set_extent([0.0, 100.0, 0.0, 50.0])
+                >>> [float(v) for v in m.ax.get_xlim()], [float(v) for v in m.ax.get_ylim()]
+                ([0.0, 100.0], [0.0, 50.0])
+
+                ```
         """
-        self.ax.set_xlim(bbox[0], bbox[1])
-        self.ax.set_ylim(bbox[2], bbox[3])
+        if isinstance(bbox, Bounds):
+            # to_crs is a no-op when the CRSs already match. Without it a rectangle that carries its CRS
+            # would be trusted to be in the display one, which is exactly the mistake Bounds exists to stop.
+            xmin, xmax, ymin, ymax = bbox.to_crs(self.crs).as_mpl()
+        else:
+            # Not routed through Bounds: axes limits may legitimately run backwards, and Bounds refuses that.
+            values = [float(value) for value in bbox]
+            if len(values) != 4:
+                raise ValueError(
+                    f"set_extent needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
+                )
+            xmin, xmax, ymin, ymax = values
+        self.ax.set_xlim(xmin, xmax)
+        self.ax.set_ylim(ymin, ymax)
 
     def set_domain(self, domain: Optional[DomainLike] = None) -> None:
         """Set the axes extent from a named region or bbox, reprojected to the display CRS via pyramids.
@@ -53,6 +103,10 @@ class ProjectionMixin(_MixinBase):
             domain: A registered region name (e.g. ``"Europe"``), an explicit ``(west, south, east, north)``
                 bbox in EPSG:4326, or ``None`` to fall back to the domain passed at construction. A no-op
                 when neither resolves to a domain.
+
+        Raises:
+            ValueError: if a caller-supplied bbox has its corners the wrong way round — including one
+                crossing the antimeridian, which a single rectangle cannot express.
 
         Examples:
             - In a geographic CRS the axes limits equal the named region's bounds:
@@ -72,14 +126,19 @@ class ProjectionMixin(_MixinBase):
         bbox = resolve_domain(domain if domain is not None else self.domain)
         if bbox is None:
             return
-        west, south, east, north = bbox
-        xs, ys = reproject_coordinates(
-            [west, east, west, east],
-            [south, south, north, north],
-            from_crs=4326,
-            to_crs=self.crs,
-        )
-        self.set_extent([min(xs), max(xs), min(ys), max(ys)])
+        # A resolved domain is always EPSG:4326 (see `static/domains.py`), which is exactly the assumption
+        # a bare 4-tuple used to carry implicitly. Bounds makes it a value, and does the warp through pyramids.
+        try:
+            box = Bounds.from_bbox(bbox, crs=4326)
+        except ValueError as error:
+            # Bounds refuses corners the wrong way round, and its message names only the numbers. A caller
+            # who wrote a bbox crossing the antimeridian needs to hear which argument and which ordering.
+            raise ValueError(
+                f"set_domain got a bbox whose corners are the wrong way round: {tuple(bbox)}. It takes "
+                "(west, south, east, north) in EPSG:4326, and cannot express a region crossing the "
+                f"antimeridian — split it into two, or set the extent directly ({error})"
+            ) from error
+        self.set_extent(box.to_crs(self.crs))
 
     # ------------------------------------------------------------------ globe / projection frame
 

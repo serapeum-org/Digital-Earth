@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.spec import Scale
 from digitalearth.web.base import _require_layer_api
 
 
@@ -158,8 +159,9 @@ class VectorMixin(_MixinBase):
             :meth:`~digitalearth.web.decoration.DecorationMixin.legend` renders.
 
         Raises:
-            ValueError: propagated from ``cleopatra.styling.styles.classify`` (unknown scheme, no spread, …) or from
-                the categorical helper (no non-null values).
+            ValueError: from :class:`~digitalearth.base.spec.scale.Scale` when the scheme cannot classify
+                the column (unknown scheme, no spread, …), naming the scheme and ``k``; or from the
+                categorical helper (no non-null values).
         """
         import numpy as np
 
@@ -212,16 +214,14 @@ class VectorMixin(_MixinBase):
             return expr
 
         if scheme is not None:
-            from cleopatra.styling.styles import classify
-
             try:
-                edges, _ = classify(values, scheme, k)
+                edges = Scale.breaks_of(values, scheme, k)
             except (
                 ValueError
             ) as err:  # constant / single-feature column, unknown scheme, k<1, …
-                raise ValueError(
-                    f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
-                ) from err
+                # Scale's own message already names the scheme and `k`; this adds the column, which it
+                # cannot know. Repeating scheme/k here printed both twice in a row.
+                raise ValueError(f"cannot classify column {column!r}: {err}") from err
             colors = self._cmap_hex(cmap, len(edges) - 1)
             step: list = ["step", ["get", column], colors[0]]
             for edge, color in zip(edges[1:-1], colors[1:]):
@@ -248,9 +248,7 @@ class VectorMixin(_MixinBase):
         finite = finite[np.isfinite(finite)]
         if finite.size == 0:
             raise ValueError(f"column {column!r} has no finite values to colour")
-        lo, hi = float(finite.min()), float(finite.max())
-        if hi <= lo:
-            hi = lo + 1.0
+        lo, hi = Scale.from_finite(finite).as_limits()
         stops = np.linspace(lo, hi, 5)
         colors = self._cmap_hex(cmap, len(stops))
         expr = ["interpolate", ["linear"], ["get", column]]

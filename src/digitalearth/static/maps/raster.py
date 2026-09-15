@@ -12,6 +12,7 @@ from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 from digitalearth.base.autostyle import auto_style
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
+from digitalearth.base.spec import Bounds
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -180,11 +181,31 @@ class RasterMixin(_MixinBase):
 
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
-        """Return bbox-order ``[xmin, ymin, xmax, ymax]`` from 1-D x/y coordinate arrays (cleopatra order)."""
-        return [float(np.min(x)), float(np.min(y)), float(np.max(x)), float(np.max(y))]
+        """Return the bbox-order extent enclosing 1-D x/y coordinate arrays, as cleopatra takes it.
+
+        Args:
+            x: X coordinates, already in the display CRS.
+            y: Y coordinates, already in the display CRS.
+
+        Returns:
+            ``[xmin, ymin, xmax, ymax]``. The ordering comes from
+            :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox` rather than a list written out here, so it
+            cannot drift from the ordering the axes path uses. The `Bounds` is built only to name that
+            ordering and is unwrapped immediately, so it carries no CRS: the caller's coordinates are already
+            in the display one, and a CRS that changes nothing is a parameter every caller must think about
+            for no benefit.
+        """
+        return Bounds.from_points(x, y, crs=None).as_bbox()
 
     def _extent(self, ds: Any) -> List[float]:
-        """Return bbox-order ``[xmin, ymin, xmax, ymax]`` of a dataset's cell-centre coords (cleopatra order)."""
+        """Return the bbox-order extent of a dataset's cell-centre coords, as cleopatra takes it.
+
+        Args:
+            ds: The display-CRS source whose ``x``/``y`` coordinates bound the image.
+
+        Returns:
+            ``[xmin, ymin, xmax, ymax]``.
+        """
         return self._extent_of(ds.x, ds.y)
 
     def rgb_composite(

@@ -22,6 +22,7 @@ import pyvista as pv
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.sources import Source
+from digitalearth.base.spec import Scale
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,9 @@ def classified_scalars(
     """Turn a value column into the ``scalars``/``cmap`` keywords that colour a PyVista layer.
 
     The 3-D counterpart of the classification the other tiers apply to a choropleth, and deliberately the
-    same computation: a graduated ``scheme`` gets its class edges from ``cleopatra.styling.styles.classify``
-    (pure-numpy quantiles / equal-interval / Fisher-Jenks) and ``scheme="categorical"`` its colours from
+    same computation: a graduated ``scheme`` gets its class edges from
+    :meth:`~digitalearth.base.spec.scale.Scale.breaks_of` (which reaches the registered classifier, so every
+    tier cuts identical edges) and ``scheme="categorical"`` its colours from
     :func:`digitalearth.base.symbology.categorical_colors`, so one ``scheme``/``k``/``cmap`` triple paints the
     same classes here as on a static, interactive or web map.
 
@@ -179,15 +181,16 @@ def classified_scalars(
         )
         return _discrete_style(codes, colours)
 
-    from cleopatra.styling.styles import classify
-
     numbers = np.asarray(values, dtype="float64")
     try:
-        edges, _ = classify(numbers, scheme, k)
-    except Exception as error:  # unknown scheme, constant column, k < 1 …
-        raise ValueError(
-            f"cannot classify values (scheme={scheme!r}, k={k}): {error}"
-        ) from error
+        edges = Scale.breaks_of(numbers, scheme, k)
+    # ValueError, not Exception: get_classifier raises RuntimeError when nothing filled the seam, and
+    # swallowing that would present a wiring failure as bad data. The other two tiers already let it
+    # through, so catching it here made the three disagree on exactly that case.
+    except ValueError as error:  # unknown scheme, constant column, k < 1 …
+        # Scale's own message already names the scheme and `k`, and there is no column here to add, so
+        # this only normalises the exception type the tiers raise.
+        raise ValueError(f"cannot classify values: {error}") from error
     # `edges` bounds the classes, so it holds one more entry than there are classes; digitize against the
     # interior edges to land every value in 0 .. n_classes - 1 (clip catches the closed upper bound).
     n_classes = max(len(edges) - 1, 1)

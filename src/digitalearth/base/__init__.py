@@ -28,6 +28,13 @@ What lives here:
   variable, attribution, coverage) every backend resolves by name, plus ``DEFAULT_BASEMAP_PROVIDER``, the
   one provider every tier falls back to when the caller named none. Pure data: it emits a URL with the
   tile placeholders intact and constructs no engine object.
+* :mod:`~digitalearth.base.spec` — the engine-neutral **vocabulary** a figure is described in:
+  ``Bounds`` (one rectangle ordering), ``Scale`` (value to colour), ``Selection`` (which slice),
+  ``DataRef`` (where the data is), and ``Encoding``/``Symbology``/``StyleSchema`` (how a layer looks).
+  Value objects: frozen, comparable, renderer-free.
+* :mod:`~digitalearth.base.registry` — the open registries: data resolvers keyed by URI scheme, the
+  in-process object table an ``object:`` reference resolves through, and the classifier seam that lets
+  ``Scale`` reach cleopatra's arithmetic without ``base/`` importing it.
 * :mod:`~digitalearth.base.deprecation` — ``renamed_parameter``, the single rule for a renamed keyword: the
   old spelling keeps working with a ``DeprecationWarning``, and passing both spellings is a ``TypeError``.
   Every backend resolves its renames through it, so the four tiers cannot drift apart on the contract again.

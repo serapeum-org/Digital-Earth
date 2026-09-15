@@ -195,3 +195,58 @@ def test_scatter_alpha_applies_to_the_rendered_artist():
     )
     artist = Map(crs=4326).scatter(fc, alpha=0.5)
     assert artist.get_alpha() == 0.5
+
+
+def test_an_already_built_point_overlay_is_left_alone():
+    """A caller who passes a built PointOverlay keeps it, and stray point_* keys are not silently dropped.
+
+    Test scenario:
+        The fold is applied centrally and must be idempotent on its own output. Rebuilding the overlay would
+        discard whatever the caller configured on it; dropping the leftover point_* keys instead of leaving
+        them for `prepare_plot_kwargs` to report would lose styling with no error.
+    """
+    overlay = PointOverlay(np.array([[0.0, 0.0]]))
+    out = group_render_kwargs({"points": overlay, "point_color": "red"})
+    assert out["points"] is overlay, "a built overlay must be kept as given"
+    assert out["point_color"] == "red", (
+        "a stray point_* key must be left in place, not silently dropped"
+    )
+
+
+def test_marker_styling_with_no_points_array_is_refused():
+    """point_* styling passed without any `points` names the keys rather than vanishing.
+
+    Test scenario:
+        This is the module's own thesis applied to itself: dropping the keys meant `point_color="red"` on a
+        layer with no `points=` did nothing and said nothing, which is the silence the declared schema exists
+        to remove. Contrast `test_an_already_built_point_overlay_is_left_alone`, where a stray `point_*` key
+        *is* left in place — there the overlay exists, so `prepare_plot_kwargs` can report the key against
+        the glyph that could not take it. Here there is nothing to report it against, so it is named now.
+    """
+    with pytest.raises(ValueError, match="no points= array was given"):
+        group_render_kwargs({"point_color": "red", "point_size": 8})
+
+
+def test_an_explicit_points_none_is_still_a_no_op():
+    """Forwarding `points=None` does nothing, as it did before the styling guard was added.
+
+    Test scenario:
+        `points=` is a public styling kwarg on the raster builders, and forwarding an optional variable
+        (`points=points_or_none`) is the ordinary way to write a wrapper around them. The round-1 fix that
+        names orphaned point styling raised unconditionally once `points` was present-but-None, so it
+        reported an empty list of keys and broke every such wrapper.
+    """
+    out = group_render_kwargs({"points": None, "cmap": "viridis"})
+    assert out == {"cmap": "viridis"}, f"points=None must fold to nothing, got {out}"
+
+
+def test_orphaned_point_styling_names_the_keyword_the_caller_wrote():
+    """The error says `point_color`, not cleopatra's internal field name `color`.
+
+    Test scenario:
+        The keys were collected by `PointOverlay` *field* name, so the message listed names the caller never
+        typed. `color` is worse than merely unfamiliar — it is itself a declared style key here, meaning
+        cleopatra's ColorScaling group, so the message pointed at a real keyword that does something else.
+    """
+    with pytest.raises(ValueError, match=r"\['point_color'\]"):
+        group_render_kwargs({"points": None, "point_color": "red"})

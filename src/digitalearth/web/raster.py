@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
+from digitalearth.base.spec import Scale
 from digitalearth.web.base import _require_layer_api
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
@@ -394,10 +395,10 @@ class RasterMixin(_MixinBase):
         valid = np.isfinite(data)
         if not valid.any():
             raise ValueError("add_raster got a band with no finite values to colour")
-        lo = float(np.nanmin(data)) if vmin is None else float(vmin)
-        hi = float(np.nanmax(data)) if vmax is None else float(vmax)
-        if hi <= lo:  # constant band — widen so Normalize stays valid
-            hi = lo + 1.0
+        # The domain, the explicit-limit override and the constant-band widening are one rule, in base/spec.
+        # `valid` is already computed above, so the finite subset is handed over rather than derived twice —
+        # this is the tier with the explicit inline-pixel budget.
+        lo, hi = Scale.from_finite(data[valid], vmin=vmin, vmax=vmax).as_limits()
         norm = Normalize(vmin=lo, vmax=hi)
         rgba = colormaps[cmap](norm(np.where(valid, data, lo)))
         rgba[~valid, 3] = 0.0  # NoData → transparent
