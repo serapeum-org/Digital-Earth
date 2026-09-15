@@ -78,6 +78,10 @@ class DataRef:
         """
         if not self.uri or not self.uri.strip():
             raise ValueError("DataRef needs a non-empty uri")
+        if self.uri != self.uri.strip():
+            # Blank was already refused; surrounding whitespace was not, and " a.tif" is a path that does
+            # not exist on any filesystem that would have opened "a.tif".
+            object.__setattr__(self, "uri", self.uri.strip())
 
     @classmethod
     def to_object(cls, obj: Any, *, name: str = "", **rest: Any) -> "DataRef":

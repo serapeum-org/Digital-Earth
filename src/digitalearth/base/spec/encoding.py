@@ -165,9 +165,23 @@ class Encoding:
         if (self.value is None) == (self.field is None):
             raise ValueError(
                 f"an Encoding for {self.channel!r} needs exactly one of value= (a constant) or field= "
-                "(driven by the data)"
+                "(driven by the data); a constant of None reads as no binding at all"
+            )
+        if self.field is not None and not str(self.field).strip():
+            # `by_field` refuses this, but the constructor is public too — and an empty field name reports
+            # is_constant == False while naming a column nobody can look up.
+            raise ValueError(
+                f"an Encoding for {self.channel!r} needs a non-empty field name; got {self.field!r}"
             )
         if self.output_range is not None:
+            if isinstance(self.output_range, (str, bytes)) or not hasattr(
+                self.output_range, "__iter__"
+            ):
+                # tuple(5) raises TypeError about ints, which names neither the argument nor the channel.
+                raise ValueError(
+                    f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
+                    f"{self.output_range!r}"
+                )
             object.__setattr__(self, "output_range", tuple(self.output_range))
             if len(self.output_range) != 2:
                 raise ValueError(

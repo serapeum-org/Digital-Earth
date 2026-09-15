@@ -27,7 +27,7 @@ into classes — and only the arithmetic is injected.
 
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -89,7 +89,7 @@ class Scale:
 
     vmin: float
     vmax: float
-    scheme: Optional[str] = None
+    scheme: Optional[Union[str, Tuple[float, ...]]] = None
     breaks: Tuple[float, ...] = ()
     categories: Tuple[Any, ...] = ()
     missing: Optional[str] = None
@@ -114,13 +114,26 @@ class Scale:
                 f"Scale needs at least two class edges to bound one class; got {self.breaks}. "
                 "An empty breaks tuple is how a continuous ramp says it cuts no classes"
             )
+        if len(tuple(self.categories)) != len(tuple(self._colors)):
+            # `categorical()` checks this, but the constructor is public and color_for indexes _colors by
+            # the category's position — a short list raises IndexError from a lookup, far from the cause.
+            raise ValueError(
+                f"a categorical Scale needs one colour per category; got {len(tuple(self.categories))} "
+                f"categories and {len(tuple(self._colors))} colours"
+            )
         # Coerce every sequence field to a tuple. `scheme` is a documented sequence-of-edges input on three
         # tiers, so a caller's list really does arrive here; stored as given it would leave the scale
         # unhashable and editable from outside, which is not what "frozen value object" promises.
         object.__setattr__(self, "breaks", tuple(self.breaks))
         object.__setattr__(self, "categories", tuple(self.categories))
         object.__setattr__(self, "_colors", tuple(self._colors))
-        if isinstance(self.scheme, (list, set)):
+        if isinstance(self.scheme, set):
+            # Class edges are ordered data and a set has no order, so tuple(set) would pick one by hash.
+            raise ValueError(
+                f"Scale got scheme={self.scheme!r}: a set has no ordering, but class edges are ordered. "
+                "Pass a list or tuple of edges, or a scheme name"
+            )
+        if isinstance(self.scheme, list):
             object.__setattr__(self, "scheme", tuple(self.scheme))
 
     # ------------------------------------------------------------------ builders

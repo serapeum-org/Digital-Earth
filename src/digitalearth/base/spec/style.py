@@ -153,9 +153,11 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if a property value is itself unhashable — a list of contour levels, say. Only the
-                mapping is frozen, not what a caller put in it, so an unhashable style is a real possibility
-                rather than something to paper over.
+            TypeError: if any value in it is itself unhashable. That is a property — a list of contour
+                levels, say — or equally a constant on an encoding: ``Symbology.of(color=[1, 0, 0])`` is an
+                ordinary RGB spelling and fails the same way. Only the mappings are frozen, not what a
+                caller put in them, so an unhashable style is a real possibility rather than something to
+                paper over.
         """
         return hash(
             (
@@ -361,9 +363,19 @@ class StyleSchema:
                 ```
         """
         table: Dict[str, StyleKey] = {}
+        driving: Dict[str, str] = {}
         for key in keys:
             if key.name in table:
                 raise ValueError(f"style key {key.name!r} is declared twice")
+            if key.channel is not None:
+                if key.channel in driving:
+                    # route() writes encodings[key.channel], so a second keyword on one channel would
+                    # overwrite the first in whatever order the caller's kwargs happened to iterate.
+                    raise ValueError(
+                        f"style keys {driving[key.channel]!r} and {key.name!r} both drive the "
+                        f"{key.channel!r} channel; only one may, or routing would silently drop one"
+                    )
+                driving[key.channel] = key.name
             table[key.name] = key
         return cls(keys=table)
 

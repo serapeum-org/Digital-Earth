@@ -1,8 +1,14 @@
 """spec — the engine-neutral vocabulary a figure is described in.
 
-These are **value objects**: frozen, comparable, renderer-free. They say *what* a map shows — which rectangle,
-which slice, which colour rule — and never *how* a backend draws it. Nothing here may import matplotlib,
-pyvista, holoviews or maplibre; :mod:`tests.test_base_is_engine_neutral` enforces that.
+These are **value objects**: frozen, comparable, renderer-free. They say *what* a map shows — which
+rectangle, which slice, which colour rule — and never *how* a backend draws it. Nothing here may import
+matplotlib, pyvista, holoviews or maplibre; :mod:`tests.test_base_is_engine_neutral` enforces that.
+
+"Frozen" covers the structure, not everything a caller puts in it. Every sequence field is copied to a
+tuple and every mapping to a read-only view, so a type cannot be re-shaped from outside — but a field
+holding an arbitrary value (`Selection.time`, `Encoding.value`, a `Symbology` property) keeps whatever
+object it was given. So these hash when their contents do: `Selection.of(1, time="2024-01")` hashes and
+`Selection.of(1, time=[1, 2])` does not.
 
 The point of a shared vocabulary is that a value crosses a tier boundary without a convention having to travel
 beside it in a docstring. A bare ``[float, float, float, float]`` cannot say whether it is
