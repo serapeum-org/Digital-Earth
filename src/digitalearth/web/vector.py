@@ -293,12 +293,16 @@ class VectorMixin(_MixinBase):
         for stop, color in zip(stops, colors):
             expr.extend([float(stop), color])
         self.last_breaks = [float(s) for s in stops]
+        # The stops are handed over rather than recomputed from the limits: np.linspace pins its last
+        # element to `hi` exactly and the arithmetic in `from_scale` does not, so for lo=-3.7, hi=12.9 the
+        # top swatch was labelled 12.900000000000002 while the ramp drew 12.9. The legend must be the stops
+        # that were drawn, not a second computation that usually agrees with them.
         self.last_legend = self._legend_dict(
             LegendSpec.from_scale(
                 Scale.from_limits(lo, hi),
                 colors=list(colors),
                 title=column,
-                stops=len(self.last_breaks),
+                values=self.last_breaks,
             ),
             column,
         )

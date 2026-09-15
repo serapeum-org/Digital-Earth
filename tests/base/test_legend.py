@@ -156,6 +156,61 @@ class TestFromAContinuousScale:
         assert legend.kind != "continuous", "the arm under test is one that reads no stops"
         assert len(legend.entries) >= 1, "and it still produced its rows"
 
+    def test_the_drawn_stops_can_be_handed_over_instead_of_recomputed(self):
+        """`values=` makes the legend the ramp, rather than a second computation of it.
+
+        Test scenario:
+            `np.linspace(lo, hi, n)` pins its last element to `hi` exactly; `lo + (hi - lo) * i / (n - 1)`
+            does not. For `lo=-3.7, hi=12.9` those differ in the last place, so a caller that drew the
+            linspace stops and let the legend recompute them labelled its top swatch with a value it never
+            drew. Passing the stops in removes the second computation rather than making the two agree.
+        """
+        drawn = [-3.7, 0.45, 4.6, 8.75, 12.9]
+        legend = LegendSpec.from_scale(
+            Scale.from_limits(-3.7, 12.9),
+            colors=["#a", "#b", "#c", "#d", "#e"],
+            values=drawn,
+        )
+        assert [entry.value for entry in legend.entries] == drawn, (
+            "every row must hold the stop it was given"
+        )
+        recomputed = LegendSpec.from_scale(
+            Scale.from_limits(-3.7, 12.9),
+            colors=["#a", "#b", "#c", "#d", "#e"],
+            stops=5,
+        )
+        assert recomputed.entries[-1].value != drawn[-1], (
+            "and the recomputation this replaces really does differ, or the test proves nothing"
+        )
+
+    def test_handed_over_stops_set_how_many_colours_are_needed(self):
+        """`values=` decides the row count, so the colour check follows it rather than `stops`.
+
+        Test scenario:
+            Otherwise a caller passing three stops and three colours would be refused for not matching the
+            default of five — the count has to come from whichever source is in play.
+        """
+        legend = LegendSpec.from_scale(
+            Scale.from_limits(0.0, 1.0), colors=["#a", "#b", "#c"], values=[0.0, 0.5, 1.0]
+        )
+        assert len(legend.entries) == 3, "three stops, three rows"
+        with pytest.raises(ValueError, match="one colour per stop"):
+            LegendSpec.from_scale(
+                Scale.from_limits(0.0, 1.0), colors=["#a", "#b"], values=[0.0, 0.5, 1.0]
+            )
+
+    def test_too_few_handed_over_stops_are_refused_like_too_few_recomputed_ones(self):
+        """One stop is not a ramp however it arrives.
+
+        Test scenario:
+            The guard moved into this arm reads `stops`; a caller supplying `values=` bypasses that number
+            entirely, so the check has to count whichever of the two describes the ramp.
+        """
+        with pytest.raises(ValueError, match="at least two stops"):
+            LegendSpec.from_scale(
+                Scale.from_limits(0.0, 1.0), colors=["#a"], values=[0.5]
+            )
+
     @pytest.mark.parametrize("stops", [0, 1])
     def test_a_ramp_needs_at_least_two_stops(self, stops):
         """One stop divides by zero; none gives an empty legend.

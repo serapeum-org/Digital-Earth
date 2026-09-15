@@ -130,6 +130,7 @@ class LegendSpec:
         format: Optional[str] = None,
         orientation: str = "vertical",
         stops: int = DEFAULT_RAMP_STOPS,
+        values: Optional[Sequence[float]] = None,
     ) -> "LegendSpec":
         """Build a legend from the scale a layer was drawn with.
 
@@ -146,7 +147,14 @@ class LegendSpec:
             units: Unit string for the values.
             format: Format spec for numeric labels.
             orientation: ``"vertical"`` or ``"horizontal"``.
-            stops: How many stops describe a continuous ramp.
+            stops: How many stops describe a continuous ramp. Ignored when `values` is given.
+            values: The stop values the ramp was actually drawn with, for the continuous arm. Pass them
+                whenever the caller already holds them. Recomputing them here from the limits is a second
+                computation that *usually* agrees: ``numpy.linspace`` pins its final element to ``stop``
+                exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For ``lo=-3.7, hi=12.9`` the
+                recomputed top stop is ``12.900000000000002`` while the drawn one is ``12.9`` — so the top
+                swatch is labelled with a value the layer never draws, which is the disagreement this type
+                exists to remove.
 
         Returns:
             The legend.
@@ -197,16 +205,19 @@ class LegendSpec:
         # a number it goes on to ignore. Fewer than two cannot describe a ramp — one divides by zero
         # computing the spacing, none yields an empty legend — and this is the field that reaches the
         # arithmetic directly, where every other one is checked in `__post_init__`.
-        if stops < 2:
+        described = stops if values is None else len(values)
+        if described < 2:
             raise ValueError(
-                f"a continuous legend needs at least two stops to describe a ramp; got {stops}"
+                f"a continuous legend needs at least two stops to describe a ramp; got {described}"
             )
-        lo, hi = scale.as_limits()
-        values = [lo + (hi - lo) * i / (stops - 1) for i in range(stops)]
-        colors = cls._checked(colors, stops, "continuous", "stop")
+        ramp = [float(value) for value in values] if values is not None else None
+        if ramp is None:
+            lo, hi = scale.as_limits()
+            ramp = [lo + (hi - lo) * i / (stops - 1) for i in range(stops)]
+        colors = cls._checked(colors, len(ramp), "continuous", "stop")
         entries = tuple(
             LegendEntry(cls._number(value, format), color, value)
-            for value, color in zip(values, colors)
+            for value, color in zip(ramp, colors)
         )
         return cls(entries, "continuous", title, units, format, orientation)
 
