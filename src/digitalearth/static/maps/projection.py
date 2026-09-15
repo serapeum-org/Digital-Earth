@@ -104,6 +104,10 @@ class ProjectionMixin(_MixinBase):
                 bbox in EPSG:4326, or ``None`` to fall back to the domain passed at construction. A no-op
                 when neither resolves to a domain.
 
+        Raises:
+            ValueError: if a caller-supplied bbox has its corners the wrong way round — including one
+                crossing the antimeridian, which a single rectangle cannot express.
+
         Examples:
             - In a geographic CRS the axes limits equal the named region's bounds:
                 ```python
@@ -124,7 +128,17 @@ class ProjectionMixin(_MixinBase):
             return
         # A resolved domain is always EPSG:4326 (see `static/domains.py`), which is exactly the assumption
         # a bare 4-tuple used to carry implicitly. Bounds makes it a value, and does the warp through pyramids.
-        self.set_extent(Bounds.from_bbox(bbox, crs=4326).to_crs(self.crs))
+        try:
+            box = Bounds.from_bbox(bbox, crs=4326)
+        except ValueError as error:
+            # Bounds refuses corners the wrong way round, and its message names only the numbers. A caller
+            # who wrote a bbox crossing the antimeridian needs to hear which argument and which ordering.
+            raise ValueError(
+                f"set_domain got a bbox whose corners are the wrong way round: {tuple(bbox)}. It takes "
+                "(west, south, east, north) in EPSG:4326, and cannot express a region crossing the "
+                f"antimeridian — split it into two, or set the extent directly ({error})"
+            ) from error
+        self.set_extent(box.to_crs(self.crs))
 
     # ------------------------------------------------------------------ globe / projection frame
 

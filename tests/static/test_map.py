@@ -354,3 +354,16 @@ def test_stock_img_tiles_path(mocker):
     spy = mocker.patch.object(Map, "basemap", return_value=sentinel)
     m = Map(crs=3857)
     assert m.stock_img() is sentinel and spy.called
+
+
+def test_set_domain_names_itself_when_a_bbox_is_back_to_front():
+    """A caller's antimeridian bbox is refused by `set_domain`, not by `Bounds` internals.
+
+    Test scenario:
+        `resolve_domain` accepts an arbitrary caller bbox, so a region crossing the antimeridian —
+        `(170, -10, -170, 10)` — reaches `Bounds`, which refuses corners the wrong way round with a message
+        naming only the numbers. The caller wrote `(west, south, east, north)` and sees a complaint about
+        `xmin`/`xmax`, mentioning neither the method, nor the ordering, nor the antimeridian.
+    """
+    with pytest.raises(ValueError, match="set_domain got a bbox"):
+        Map(crs=4326).set_domain((170.0, -10.0, -170.0, 10.0))
