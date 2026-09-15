@@ -194,8 +194,9 @@ def _path_of(uri: str) -> str:
     Examples:
         - A POSIX absolute URI keeps the root it names:
             ```python
+            >>> import os
             >>> from digitalearth.base.registry import _path_of
-            >>> _path_of("file:///home/me/x.tif").replace("\\", "/")
+            >>> _path_of("file:///home/me/x.tif").replace(os.sep, "/")
             '/home/me/x.tif'
 
             ```
