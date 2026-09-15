@@ -340,6 +340,17 @@ class SourceView(Source):
             exist to describe. Otherwise a square of :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side`,
             which is what a budget alone can say.
 
+            The canvas is measured in **device** pixels, so a request carrying ``pixel_ratio=2.0`` reads the
+            1600x1200 it will draw rather than the 800x600 it is laid out at. That is the whole purpose of
+            :attr:`~digitalearth.base.spec.viewrequest.ViewRequest.pixels`, which
+            :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` already folds the ratio into; reading
+            the CSS canvas instead returned a quarter of the detail on a retina display, and did it silently,
+            because the result is *under* the budget the caller set.
+
+            The count compared against the budget is the product of the two integers returned — the number of
+            cells that will actually be read, which is ``pixels`` up to the rounding of a fractional device
+            pixel.
+
             A canvas over budget is scaled down by :meth:`_fitted`. The budget is the **guarantee**: the
             product of the two numbers returned never exceeds it. The aspect ratio is best effort, held to
             the nearest whole cell, because cells do not come in fractions.
@@ -354,9 +365,11 @@ class SourceView(Source):
                 # 4,096 cells. A caller who sets a budget that small has asked for a thumbnail.
                 side = max(1, int(request.budget**0.5))
             return side, side
-        if request.within_budget(width * height):
-            return width, height
-        return cls._fitted(width, height, request.budget)  # type: ignore[arg-type]
+        columns = max(1, int(width * request.pixel_ratio))
+        rows = max(1, int(height * request.pixel_ratio))
+        if request.within_budget(columns * rows):
+            return columns, rows
+        return cls._fitted(columns, rows, request.budget)  # type: ignore[arg-type]
 
     @staticmethod
     def _fitted(width: int, height: int, budget: int) -> Tuple[int, int]:

@@ -490,6 +490,36 @@ class TestTheRequestedShape:
             600,
         )
 
+    def test_a_hidpi_canvas_reads_the_pixels_it_will_draw(self):
+        """`pixel_ratio=2.0` reads 1600x1200, not the 800x600 the canvas is laid out at.
+
+        Test scenario:
+            `ViewRequest.pixels` exists to fold the device ratio in, and `side()` already does — but the
+            windowed path compared and returned raw CSS pixels, so a retina canvas read a quarter of the
+            detail it renders at. Silently, and *under* the budget the caller set, so the budget could not
+            be blamed for it either.
+        """
+        assert SourceView._shape(
+            ViewRequest(width=800, height=600, pixel_ratio=2.0, budget=10**7)
+        ) == (1600, 1200)
+
+    def test_a_hidpi_canvas_is_measured_against_the_budget_in_device_pixels(self):
+        """The ratio counts towards the budget as well as towards the detail.
+
+        Test scenario:
+            800x600 at ratio 2.0 is 1,920,000 cells, which a budget of 1,000,000 cannot afford — so it
+            scales, where the CSS canvas (480,000) would have sailed through untouched.
+        """
+        columns, rows = SourceView._shape(
+            ViewRequest(width=800, height=600, pixel_ratio=2.0, budget=1_000_000)
+        )
+        assert columns * rows <= 1_000_000, (
+            f"the device canvas must be held to the budget, got {columns}x{rows}"
+        )
+        assert (columns, rows) != (800, 600), (
+            "and scaling it must not land back on the CSS canvas by coincidence"
+        )
+
     @pytest.mark.parametrize(
         "width, height, budget",
         [
