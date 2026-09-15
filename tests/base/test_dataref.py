@@ -274,16 +274,58 @@ class TestTheFileResolver:
             DataRef(str(path)).open()
         ), "a file: URI and a bare path must reach the same reader"
 
+    @pytest.mark.parametrize(
+        ("uri", "expected"),
+        [
+            ("file:///home/me/x.tif", "/home/me/x.tif"),
+            ("file:///C:/data/x.tif", "C:/data/x.tif"),
+            ("file:data/dem.tif", "data/dem.tif"),
+            ("file:///a%20b/x.tif", "/a b/x.tif"),
+        ],
+    )
+    def test_a_file_uri_keeps_the_path_it_names(self, uri, expected):
+        """Every `file:` spelling resolves to the path it actually names.
+
+        Args:
+            uri: The reference as a stored figure would carry it.
+            expected: The path it must resolve to, separators normalised.
+
+        Test scenario:
+            The three-slash form is RFC 8089's absolute spelling. Rescuing a Windows drive letter by stripping
+            leading slashes turned every absolute POSIX path into a relative one, so `file:///home/me/x.tif`
+            resolved against the working directory — opening the wrong file wherever a same-named relative
+            path existed. CI's own matrix runs on Linux, and the old test used a Windows path with no `///`,
+            so it never entered the branch.
+        """
+        from digitalearth.base.registry import _path_of
+
+        assert _path_of(uri).replace("\\", "/") == expected, (
+            f"{uri!r} must resolve to {expected!r}, got {_path_of(uri)!r}"
+        )
+
+    def test_a_missing_path_is_reported_as_missing(self):
+        """A typo'd path blames the path, not the format.
+
+        Test scenario:
+            Both readers are tried in turn, so without this check a file that was never there surfaces as
+            whatever the *vector* reader says about it — sending the user to check the format of a file that
+            does not exist.
+        """
+        with pytest.raises(FileNotFoundError, match="no such file"):
+            DataRef(str(self._DATA / "no-such-file.tif")).open()
+
     def test_something_readable_as_neither_blames_both_readers(self):
-        """A path that is neither raster nor vector reports the vector failure, chained to the raster one.
+        """A file that exists but is neither raster nor vector reports both failures, chained.
 
         Test scenario:
             Reporting only the last error would blame the vector reader for a corrupt GeoTIFF. The chain is
             what lets whoever reads the traceback see that *both* readers were tried and why each declined.
         """
-        missing = str(self._DATA / "no-such-file.tif")
         with pytest.raises(Exception) as caught:
-            DataRef(missing).open()
+            DataRef(str(Path(__file__).resolve())).open()
+        assert not isinstance(caught.value, FileNotFoundError), (
+            "this file exists, so the failure must be a read failure, not a missing-path one"
+        )
         assert caught.value.__cause__ is not None, (
             "the vector failure must chain from the raster failure, so both are visible"
         )

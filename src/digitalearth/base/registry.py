@@ -17,12 +17,16 @@ to disk to be referenced, so :func:`register_object` puts it in a process-local 
 ``object:`` URI that resolves to it. That is what lets a figure describe layers over an object built in a
 notebook.
 
-Nothing here imports a renderer, or pyramids at module level: the default resolver reaches for pyramids lazily
-so `base/` stays importable without it.
+Nothing here imports a renderer. pyramids is imported inside the default resolver rather than at module level
+to keep importing this module cheap — not to make `base/` pyramids-free, which it is not: `base/crs.py` and
+`base/sources/extractors.py` both import it at module level and `pyramids-gis` is a hard dependency.
 """
 
+import os
 import uuid
 from typing import Any, Callable, Dict
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 __all__ = [
     "OBJECT_SCHEME",
@@ -175,6 +179,44 @@ def _resolve_object(uri: str) -> Any:
     return _OBJECTS[key]
 
 
+def _path_of(uri: str) -> str:
+    """Return the filesystem path a ``file:`` URI names, or the string unchanged.
+
+    Args:
+        uri: A ``file:`` URI, or a path that is already one.
+
+    Returns:
+        The local path. ``url2pathname`` is what knows the per-platform rules — that ``file:///C:/x.tif``
+        carries a leading slash Windows must drop but POSIX must keep, and that ``%20`` is a space. Hand-rolling
+        that with ``lstrip("/")`` rescues the drive letter and breaks every absolute POSIX path, which is the bug
+        this replaced.
+
+    Examples:
+        - A POSIX absolute URI keeps the root it names:
+            ```python
+            >>> from digitalearth.base.registry import _path_of
+            >>> _path_of("file:///home/me/x.tif").replace("\\", "/")
+            '/home/me/x.tif'
+
+            ```
+        - A bare path is already a path:
+            ```python
+            >>> from digitalearth.base.registry import _path_of
+            >>> _path_of("data/dem.tif")
+            'data/dem.tif'
+
+            ```
+    """
+    if not uri.startswith("file:"):
+        return uri
+    parsed = urlparse(uri)
+    path = url2pathname(parsed.path)
+    if parsed.netloc:
+        # file://server/share/x.tif is a UNC path; the host is part of it, not an authority to drop.
+        return f"//{parsed.netloc}{path}"
+    return path
+
+
 def _resolve_file(uri: str) -> Any:
     """Open a path through pyramids, choosing the reader by what the path holds.
 
@@ -185,10 +227,15 @@ def _resolve_file(uri: str) -> Any:
         A pyramids ``Dataset`` for a raster, or a ``FeatureCollection`` for a vector.
 
     Raises:
-        Exception: whatever pyramids raises when it can read the path as neither.
+        FileNotFoundError: if the path does not exist. Checked before the readers are tried, because a typo
+            would otherwise surface as whatever the *vector* reader says about a file that was never there —
+            pointing at the format instead of at the path.
+        Exception: whatever pyramids raises when the path exists but reads as neither.
     """
-    path = uri[len("file:") :] if uri.startswith("file:") else uri
-    path = path.lstrip("/") if path.startswith("///") else path
+    path = _path_of(uri)
+    # A GDAL virtual path (/vsizip/, /vsicurl/, …) is not a filesystem entry, so only a plain path is checked.
+    if not path.startswith("/vsi") and not os.path.exists(path):
+        raise FileNotFoundError(f"no such file: {path!r} (from {uri!r})")
     from pyramids.dataset import Dataset
 
     try:
