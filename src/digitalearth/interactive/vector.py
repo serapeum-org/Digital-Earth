@@ -900,7 +900,11 @@ class VectorMixin(_MixinBase):
         # The extraction and the non-finite drop are PointArrays' — and it keeps the value column in step
         # with the points it removes, which this site was doing with a second application of the mask.
         column = gdf[value_column].to_numpy() if value_column else None
-        points, (column,) = PointArrays.from_features(gdf).finite(column)
+        # centroids=False preserves the error this site raised before: a Delaunay mesh over polygon
+        # centroids is exactly the caller whose maths is only meaningful on real points.
+        points, (column,) = PointArrays.from_features(gdf, centroids=False).finite(
+            column
+        )
         x, y = points.x, points.y
         simplices = Triangulation(x, y).triangles
         if value_column:

@@ -38,7 +38,9 @@ def _coords_from_geodataframe(
     """
     # The x/y/z read, the float64 coercion and the "zeros when the geometry is 2-D" rule are all
     # PointArrays' now — this tier wrote out its own copy of each.
-    points = PointArrays.from_features(data).as_columns()
+    # centroids=False keeps the error this site has always raised: a point cloud of polygon centroids is
+    # a plausible-looking picture of data the caller never asked to reduce.
+    points = PointArrays.from_features(data, centroids=False).as_columns()
     values = (
         np.asarray(data[value_column].to_numpy(), dtype="float64")
         if value_column
