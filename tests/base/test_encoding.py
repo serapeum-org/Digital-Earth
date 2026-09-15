@@ -281,8 +281,10 @@ class TestItStaysAValue:
         """Equality is by value.
 
         Test scenario:
-            What lets a test assert two tiers resolved the same styling rather than comparing field by field.
+            What lets a test assert two tiers resolved the same styling rather than comparing field by
+            field. Built two ways on purpose: comparing one expression with itself would pass even if
+            equality were identity, which is the opposite of what a value object promises.
         """
-        assert Encoding.constant("size", 6) == Encoding.constant("size", 6), (
-            "equal bindings must compare equal"
+        assert Encoding.constant("size", 6) == Encoding(channel="size", value=6), (
+            "the builder and the constructor must produce equal bindings"
         )

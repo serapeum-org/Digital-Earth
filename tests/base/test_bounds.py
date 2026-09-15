@@ -303,11 +303,13 @@ class TestItStaysAValue:
         """Equality is by value, which is what makes it testable.
 
         Test scenario:
-            Identity comparison would make every assertion in this file need a manual field-by-field check.
+            Identity comparison would make every assertion in this file need a manual field-by-field
+            check. The two sides are built by different routes on purpose: one expression compared with
+            itself would pass even if equality *were* identity.
         """
-        assert Bounds(0.0, 1.0, 2.0, 3.0, crs=4326) == Bounds(
-            0.0, 1.0, 2.0, 3.0, crs=4326
-        ), "equal edges and CRS must compare equal"
+        assert Bounds(0.0, 1.0, 2.0, 3.0, crs=4326) == Bounds.from_bbox(
+            [0.0, 1.0, 2.0, 3.0], crs=4326
+        ), "the constructor and from_bbox must produce equal rectangles"
 
     def test_it_cannot_be_mutated(self):
         """A rectangle handed to a renderer cannot be changed underneath it.

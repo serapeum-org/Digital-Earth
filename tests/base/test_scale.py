@@ -445,8 +445,10 @@ class TestItStaysAValue:
         """Equality is by value.
 
         Test scenario:
-            What lets a test assert two tiers resolved the same scale, rather than comparing field by field.
+            What lets a test assert two tiers resolved the same scale, rather than comparing field by
+            field. Built two ways on purpose: comparing one expression with itself would pass even if
+            equality were identity.
         """
-        assert Scale.from_limits(0.0, 1.0) == Scale.from_limits(0.0, 1.0), (
-            "equal domains must compare equal"
+        assert Scale.from_limits(0.0, 1.0) == Scale(0.0, 1.0), (
+            "the builder and the constructor must produce equal domains"
         )

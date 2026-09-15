@@ -226,10 +226,11 @@ class TestItStaysAValue:
         """Equality is by value.
 
         Test scenario:
-            What lets a test assert two paths resolved the same slice.
+            What lets a test assert two paths resolved the same slice. Built two ways on purpose:
+            comparing one expression with itself would pass even if equality were identity.
         """
-        assert Selection.of(1, level=850) == Selection.of(1, level=850), (
-            "equal axes must compare equal"
+        assert Selection.of(1, level=850) == Selection(band=(1,), level=850), (
+            "the builder and the constructor must produce equal selections"
         )
 
     def test_a_list_band_is_stored_as_a_tuple(self):
