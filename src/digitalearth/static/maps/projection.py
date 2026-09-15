@@ -41,13 +41,33 @@ class ProjectionMixin(_MixinBase):
         """Set the axes extent.
 
         Args:
-            bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in the display CRS, or — for callers that
-                predate it — a bare ``[xmin, xmax, ymin, ymax]`` sequence in matplotlib axes order. The
-                sequence form is accepted because that ordering was this method's contract; prefer `Bounds`,
-                which states the ordering instead of leaving it to position.
+            bbox: A :class:`~digitalearth.base.spec.bounds.Bounds` in **any** CRS — it is reprojected to the
+                display CRS, which is the point of passing one — or a bare ``[xmin, xmax, ymin, ymax]``
+                sequence in matplotlib axes order, assumed to be in the display CRS already. The sequence
+                form is accepted because that ordering was this method's contract; prefer `Bounds`, which
+                states both the ordering and the CRS instead of leaving them to position and assumption.
+
+        Raises:
+            ValueError: if the sequence form does not hold exactly four values.
+
+        Notes:
+            A **flipped** pair is honoured in the sequence form: ``[10, 0, 0, 10]`` inverts the x axis, which
+            is how matplotlib expresses ``invert_xaxis`` through the limits. A `Bounds` cannot express that —
+            it refuses corners the wrong way round, because for a rectangle handed to pyramids or cleopatra
+            that is a defect rather than an intent — so invert the axis directly if you need both.
         """
-        box = bbox if isinstance(bbox, Bounds) else Bounds.from_mpl(bbox, self.crs)
-        xmin, xmax, ymin, ymax = box.as_mpl()
+        if isinstance(bbox, Bounds):
+            # to_crs is a no-op when the CRSs already match. Without it a rectangle that carries its CRS
+            # would be trusted to be in the display one, which is exactly the mistake Bounds exists to stop.
+            xmin, xmax, ymin, ymax = bbox.to_crs(self.crs).as_mpl()
+        else:
+            # Not routed through Bounds: axes limits may legitimately run backwards, and Bounds refuses that.
+            values = [float(value) for value in bbox]
+            if len(values) != 4:
+                raise ValueError(
+                    f"set_extent needs exactly 4 values as [xmin, xmax, ymin, ymax]; got {len(values)}"
+                )
+            xmin, xmax, ymin, ymax = values
         self.ax.set_xlim(xmin, xmax)
         self.ax.set_ylim(ymin, ymax)
 

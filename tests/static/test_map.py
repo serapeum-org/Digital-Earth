@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from digitalearth.base.spec import Bounds
 from digitalearth.static import Map
 
 
@@ -54,6 +55,60 @@ def test_set_extent(dataset):
     m.set_extent([0.0, 100.0, 0.0, 50.0])
     assert m.ax.get_xlim() == (0.0, 100.0)
     assert m.ax.get_ylim() == (0.0, 50.0)
+
+
+def test_set_extent_reprojects_a_foreign_crs_bounds():
+    """A Bounds in another CRS is converted to the display CRS rather than trusted.
+
+    Test scenario:
+        The failure Bounds exists to remove: one square degree at the origin, handed to a Web Mercator map,
+        used verbatim would silently frame one square *metre* — a 111,000x error that draws without complaint.
+    """
+    m = Map(crs=3857)
+    m.set_extent(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+    xmin, xmax = m.ax.get_xlim()
+    assert round(xmax) == 111319, (
+        f"one degree of longitude must reproject to ~111,319 m, got {xmax}"
+    )
+    assert round(xmin) == 0, f"the western edge must stay at the origin, got {xmin}"
+
+
+def test_set_extent_leaves_a_matching_crs_bounds_alone():
+    """A Bounds already in the display CRS passes through untouched.
+
+    Test scenario:
+        Reprojection must be a no-op when there is nothing to convert, or every same-CRS call would pay a
+        round trip through pyramids and risk drift from it.
+    """
+    m = Map(crs=3857)
+    m.set_extent(Bounds(0.0, 0.0, 100.0, 50.0, crs=3857))
+    assert m.ax.get_xlim() == (0.0, 100.0), "a same-CRS rectangle must be used as given"
+    assert m.ax.get_ylim() == (0.0, 50.0)
+
+
+def test_set_extent_still_accepts_a_flipped_axis():
+    """A backwards pair inverts the axis, as it did before Bounds was introduced.
+
+    Test scenario:
+        `[10, 0, 0, 10]` is how matplotlib expresses `invert_xaxis` through the limits, and it worked on
+        main. Routing the sequence form through Bounds — which refuses corners the wrong way round, rightly,
+        for a rectangle handed to pyramids — would have turned a documented matplotlib operation into a
+        ValueError on a public method.
+    """
+    m = Map(crs=3857)
+    m.set_extent([10.0, 0.0, 0.0, 10.0])
+    assert m.ax.get_xlim() == (10.0, 0.0), "a flipped pair must invert the axis"
+
+
+def test_set_extent_rejects_a_sequence_that_is_not_four_values():
+    """A wrong-length extent is refused rather than silently truncated.
+
+    Test scenario:
+        `main` ignored a fifth value, so a caller who passed a bbox in the wrong ordering-and-length got a
+        plausible-looking frame instead of an error.
+    """
+    with pytest.raises(ValueError, match="exactly 4 values"):
+        Map(crs=3857).set_extent([0.0, 1.0, 0.0, 1.0, 2.0])
 
 
 def test_no_cartopy_import():
