@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
-from digitalearth.base.spec import LegendEntry, LegendSpec, Scale
+from digitalearth.base.spec import LegendSpec, Scale
 from digitalearth.web.base import _require_layer_api
 
 
@@ -262,16 +262,19 @@ class VectorMixin(_MixinBase):
                 MISSING_COLOR,
             ]
             self.last_breaks = [float(e) for e in edges]
+            # Through from_scale, like the categorical arm: building the rows by hand here was the same
+            # assembly this wave set out to remove, routed through an extra type for no new guarantee — and
+            # it re-spelled the range label a fourth time. Going through the Scale exercises class_ranges()'s
+            # k-classes-from-k+1-edges arithmetic in production rather than only in its own test.
             self.last_legend = self._legend_dict(
-                LegendSpec(
-                    entries=tuple(
-                        LegendEntry(f"{lo} – {hi}", color, (lo, hi))
-                        for (lo, hi), color in zip(
-                            list(zip(self.last_breaks[:-1], self.last_breaks[1:])),
-                            colors,
-                        )
+                LegendSpec.from_scale(
+                    Scale(
+                        self.last_breaks[0],
+                        self.last_breaks[-1],
+                        scheme=scheme,
+                        breaks=tuple(self.last_breaks),
                     ),
-                    kind="graduated",
+                    colors=list(colors),
                     title=column,
                 ),
                 column,
@@ -291,13 +294,11 @@ class VectorMixin(_MixinBase):
             expr.extend([float(stop), color])
         self.last_breaks = [float(s) for s in stops]
         self.last_legend = self._legend_dict(
-            LegendSpec(
-                entries=tuple(
-                    LegendEntry(str(value), color, value)
-                    for value, color in zip(self.last_breaks, colors)
-                ),
-                kind="continuous",
+            LegendSpec.from_scale(
+                Scale.from_limits(lo, hi),
+                colors=list(colors),
                 title=column,
+                stops=len(self.last_breaks),
             ),
             column,
         )
