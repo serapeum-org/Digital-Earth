@@ -469,9 +469,9 @@ class VectorMixin(_MixinBase):
         try:
             edges = Scale.from_values(gdf[column].to_numpy(), scheme=scheme, k=k).breaks
         except ValueError as err:  # constant column, unknown scheme, k < 1, …
-            raise ValueError(
-                f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
-            ) from err
+            # Scale's own message already names the scheme and `k`; this adds the one fact it cannot
+            # know, the column. Repeating scheme/k here printed both twice in a row.
+            raise ValueError(f"cannot classify column {column!r}: {err}") from err
         n_classes = len(edges) - 1
         colours = sample_cmap(cmap, n_classes)
         if len(colours) != n_classes:

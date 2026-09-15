@@ -184,9 +184,9 @@ def classified_scalars(
     try:
         edges = Scale.from_values(numbers, scheme=scheme, k=k).breaks
     except Exception as error:  # unknown scheme, constant column, k < 1 …
-        raise ValueError(
-            f"cannot classify values (scheme={scheme!r}, k={k}): {error}"
-        ) from error
+        # Scale's own message already names the scheme and `k`, and there is no column here to add, so
+        # this only normalises the exception type the tiers raise.
+        raise ValueError(f"cannot classify values: {error}") from error
     # `edges` bounds the classes, so it holds one more entry than there are classes; digitize against the
     # interior edges to land every value in 0 .. n_classes - 1 (clip catches the closed upper bound).
     n_classes = max(len(edges) - 1, 1)

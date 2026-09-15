@@ -218,9 +218,9 @@ class VectorMixin(_MixinBase):
             except (
                 ValueError
             ) as err:  # constant / single-feature column, unknown scheme, k<1, …
-                raise ValueError(
-                    f"cannot classify column {column!r} (scheme={scheme!r}, k={k}): {err}"
-                ) from err
+                # Scale's own message already names the scheme and `k`; this adds the column, which it
+                # cannot know. Repeating scheme/k here printed both twice in a row.
+                raise ValueError(f"cannot classify column {column!r}: {err}") from err
             colors = self._cmap_hex(cmap, len(edges) - 1)
             step: list = ["step", ["get", column], colors[0]]
             for edge, color in zip(edges[1:-1], colors[1:]):
