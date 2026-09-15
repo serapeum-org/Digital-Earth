@@ -94,6 +94,16 @@ def to_display_source(data: Any, crs: Any, *, band: int = 1) -> Source:
     Raises:
         Exception: whatever pyramids raises for a warp it cannot perform, or the extractor for data it
             cannot read.
+
+    Examples:
+        - A plain array has no CRS to warp from, so it goes straight to extraction:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.display import to_display_source
+            >>> to_display_source(np.arange(6.0).reshape(2, 3), 4326).z.values.shape
+            (2, 3)
+
+            ```
     """
     if isinstance(data, Source):
         return data

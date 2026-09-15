@@ -95,6 +95,17 @@ class ViewRequest:
         Returns:
             ``width * height``, scaled by :attr:`pixel_ratio` — the count a reader compares against
             :attr:`budget`.
+
+        Examples:
+            - A retina canvas asks for the pixels it will actually draw:
+                ```python
+                >>> from digitalearth.base.spec import ViewRequest
+                >>> ViewRequest(width=800, height=600).pixels
+                480000
+                >>> ViewRequest(width=800, height=600, pixel_ratio=2.0).pixels
+                1920000
+
+                ```
         """
         if self.width is None or self.height is None:
             return None
@@ -111,6 +122,15 @@ class ViewRequest:
             The larger of `floor` and the square root of the effective cell allowance — the canvas sizing
             `interactive/raster.py` does by hand as ``max(64, int(sqrt(max_pixels)))``. With neither a
             budget nor a canvas, `floor` is the answer.
+
+        Examples:
+            - The budget sets the side, and a tiny one still floors:
+                ```python
+                >>> from digitalearth.base.spec import ViewRequest
+                >>> ViewRequest(budget=1_000_000).side(), ViewRequest(budget=4).side()
+                (1000, 64)
+
+                ```
         """
         allowance = self.budget if self.budget is not None else self.pixels
         if allowance is None:
@@ -125,6 +145,17 @@ class ViewRequest:
 
         Returns:
             ``True`` when there is no budget, or the read fits inside it.
+
+        Examples:
+            - No budget affords anything:
+                ```python
+                >>> from digitalearth.base.spec import ViewRequest
+                >>> ViewRequest().within_budget(10 ** 9)
+                True
+                >>> ViewRequest(budget=100).within_budget(101)
+                False
+
+                ```
         """
         return self.budget is None or cells <= self.budget
 
@@ -134,6 +165,17 @@ class ViewRequest:
         Returns:
             ``(xmin, ymin, xmax, ymax)``, or ``None`` when the request names no region. The ordering comes
             from :meth:`~digitalearth.base.spec.bounds.Bounds.as_bbox` rather than being written out here.
+
+        Examples:
+            - A region in bbox order, and no region at all:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, ViewRequest
+                >>> ViewRequest(bounds=Bounds(0.0, 1.0, 2.0, 3.0, crs=4326)).as_bbox()
+                (0.0, 1.0, 2.0, 3.0)
+                >>> ViewRequest(budget=10).as_bbox() is None
+                True
+
+                ```
         """
         if self.bounds is None:
             return None
@@ -145,5 +187,14 @@ class ViewRequest:
 
         Returns:
             The bounds' CRS, or ``None`` when the request names no region.
+
+        Examples:
+            - The CRS travels with the region:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, ViewRequest
+                >>> ViewRequest(bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)).crs()
+                3857
+
+                ```
         """
         return None if self.bounds is None else self.bounds.crs

@@ -95,6 +95,16 @@ class PointArrays:
 
         Raises:
             ValueError: if the sequences are not the same length.
+
+        Examples:
+            - Integer input comes back as floats, with z filled in:
+                ```python
+                >>> from digitalearth.base.points import PointArrays
+                >>> pts = PointArrays.of([0, 1], [2, 3], crs=4326)
+                >>> pts.x.tolist(), pts.z.tolist()
+                ([0.0, 1.0], [0.0, 0.0])
+
+                ```
         """
         xs = np.asarray(x, dtype="float64").ravel()
         ys = np.asarray(y, dtype="float64").ravel()
@@ -230,5 +240,15 @@ class PointArrays:
 
         Returns:
             The two coordinate arrays, so a 2-D call site never has to know `z` exists.
+
+        Examples:
+            - Unpacked straight into a 2-D consumer:
+                ```python
+                >>> from digitalearth.base.points import PointArrays
+                >>> x, y = PointArrays.of([0.0, 1.0], [2.0, 3.0]).as_xy()
+                >>> x.tolist(), y.tolist()
+                ([0.0, 1.0], [2.0, 3.0])
+
+                ```
         """
         return [self.x, self.y]

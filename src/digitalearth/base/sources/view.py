@@ -95,6 +95,19 @@ class SourceView(Source):
         Returns:
             The reference. ``None`` is not a defect — a caller may pass a `Dataset` they built in a notebook,
             and that view is perfectly usable; it just cannot be re-read from an address it never had.
+
+        Examples:
+            - The address a view was read from:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import DimensionInfo
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> from digitalearth.base.spec import DataRef
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> SourceView(None, axis, axis, ref=DataRef("dem.tif")).ref.uri
+                'dem.tif'
+
+                ```
         """
         return self._ref
 
@@ -105,6 +118,18 @@ class SourceView(Source):
         Returns:
             The selection. Defaults to the default band rather than ``None``, so a caller never has to guard
             before narrowing it.
+
+        Examples:
+            - A view with no selection still answers with one:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import DimensionInfo
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> SourceView(None, axis, axis).selection.first_band
+                1
+
+                ```
         """
         return self._selection
 
@@ -114,6 +139,18 @@ class SourceView(Source):
 
         Returns:
             The request, kept so a caller can compare what it asked for with what it got.
+
+        Examples:
+            - A view not read against a request says so:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import DimensionInfo
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> axis = DimensionInfo(np.array([0.0]), "x")
+                >>> SourceView(None, axis, axis).request is None
+                True
+
+                ```
         """
         return self._request
 
@@ -215,6 +252,17 @@ class SourceView(Source):
 
         Raises:
             Exception: whatever the extractor raises for data it cannot read.
+
+        Examples:
+            - A plain array becomes a view with no address, which is a legitimate state:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> view = SourceView.of(np.arange(6.0).reshape(2, 3), crs=4326)
+                >>> view.z.values.shape, view.rereadable
+                ((2, 3), False)
+
+                ```
         """
         from digitalearth.base.sources import get_source
 

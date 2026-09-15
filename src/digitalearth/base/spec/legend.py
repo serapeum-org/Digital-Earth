@@ -38,6 +38,16 @@ class LegendEntry:
         color: The colour drawn, as the renderer drew it.
         value: The underlying value or range this row stands for, kept so a tier can build an interactive
             legend that filters or highlights. ``None`` when the row is decorative.
+
+    Examples:
+        - A row carries what it stands for, not just its label:
+            ```python
+            >>> from digitalearth.base.spec import LegendEntry
+            >>> row = LegendEntry("land", "#8b4513", "land")
+            >>> row.label, row.color, row.value
+            ('land', '#8b4513', 'land')
+
+            ```
     """
 
     label: str
@@ -253,6 +263,16 @@ class LegendSpec:
         Returns:
             The legend as ``kind`` / ``values`` / ``colors`` plus the labels — the shape the web tier already
             keeps in ``last_legend``, so it can derive that from this rather than assembling it three times.
+
+        Examples:
+            - The three keys a tier reads back:
+                ```python
+                >>> from digitalearth.base.spec import LegendSpec, Scale
+                >>> payload = LegendSpec.from_scale(Scale.categorical(["a"], ["#f00"])).to_dict()
+                >>> payload["kind"], payload["values"], payload["colors"]
+                ('categorical', ['a'], ['#f00'])
+
+                ```
         """
         return {
             "kind": self.kind,
