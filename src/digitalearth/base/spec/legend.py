@@ -176,13 +176,6 @@ class LegendSpec:
 
                 ```
         """
-        if stops < 2:
-            # Fewer than two stops cannot describe a ramp: one divides by zero computing the spacing, none
-            # yields an empty legend. Every other field on this type is checked, and this one reaches the
-            # arithmetic directly.
-            raise ValueError(
-                f"a continuous legend needs at least two stops to describe a ramp; got {stops}"
-            )
         if scale.is_categorical:
             entries = tuple(
                 LegendEntry(str(category), scale.color_for(category), category)
@@ -199,6 +192,15 @@ class LegendSpec:
             )
             return cls(entries, "graduated", title, units, format, orientation)
 
+        # Checked here rather than at the top of the method, because this is the only arm that reads
+        # `stops`: a categorical or graduated legend has its rows from the scale and was being refused over
+        # a number it goes on to ignore. Fewer than two cannot describe a ramp — one divides by zero
+        # computing the spacing, none yields an empty legend — and this is the field that reaches the
+        # arithmetic directly, where every other one is checked in `__post_init__`.
+        if stops < 2:
+            raise ValueError(
+                f"a continuous legend needs at least two stops to describe a ramp; got {stops}"
+            )
         lo, hi = scale.as_limits()
         values = [lo + (hi - lo) * i / (stops - 1) for i in range(stops)]
         colors = cls._checked(colors, stops, "continuous", "stop")

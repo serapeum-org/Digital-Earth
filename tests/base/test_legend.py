@@ -136,6 +136,26 @@ class TestFromAContinuousScale:
         )
         assert len(legend.entries) == 3
 
+    @pytest.mark.parametrize(
+        "scale, colors",
+        [
+            (Scale.categorical(["a"], ["#f00"]), None),
+            (Scale.from_values([0.0, 10.0], scheme="equal_interval", k=2), ["#a", "#b"]),
+        ],
+        ids=["categorical", "graduated"],
+    )
+    def test_a_legend_with_no_ramp_ignores_the_stop_count(self, scale, colors):
+        """Only a continuous legend reads `stops`, so only it may be refused over one.
+
+        Test scenario:
+            The guard ran before the categorical and graduated branches, so both refused a `stops` value
+            they go on to ignore — `from_scale(Scale.categorical(...), stops=1)` raised "a continuous legend
+            needs at least two stops" about a legend that is not continuous and has no ramp.
+        """
+        legend = LegendSpec.from_scale(scale, colors=colors, stops=1)
+        assert legend.kind != "continuous", "the arm under test is one that reads no stops"
+        assert len(legend.entries) >= 1, "and it still produced its rows"
+
     @pytest.mark.parametrize("stops", [0, 1])
     def test_a_ramp_needs_at_least_two_stops(self, stops):
         """One stop divides by zero; none gives an empty legend.
