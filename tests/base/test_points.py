@@ -94,7 +94,7 @@ class TestFromFeatures:
             produced coordinates on one path and an exception on another.
         """
         square = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
-        gdf = gpd.GeoDataFrame(geometry=[square], crs="EPSG:4326")
+        gdf = gpd.GeoDataFrame(geometry=[square], crs="EPSG:3857")
         points = PointArrays.from_features(gdf)
         assert (points.x.tolist(), points.y.tolist()) == ([1.0], [1.0]), (
             "a polygon must be read at its centroid"
@@ -108,7 +108,7 @@ class TestFromFeatures:
             default keeps the extractor's behaviour; `centroids=False` is for the sites that should refuse.
         """
         square = Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])
-        gdf = gpd.GeoDataFrame(geometry=[square], crs="EPSG:4326")
+        gdf = gpd.GeoDataFrame(geometry=[square], crs="EPSG:3857")
         with pytest.raises(ValueError, match="not all points"):
             PointArrays.from_features(gdf, centroids=False)
 
@@ -121,7 +121,7 @@ class TestFromFeatures:
             turned the centroid fallback into a crash.
         """
         gdf = gpd.GeoDataFrame(
-            geometry=[Polygon([(0, 0), (1, 0), (1, 1)])], crs="EPSG:4326"
+            geometry=[Polygon([(0, 0), (1, 0), (1, 1)])], crs="EPSG:3857"
         )
         assert len(PointArrays.from_features(gdf)) == 1, (
             "a polygon must reach the centroid fallback, not raise"
