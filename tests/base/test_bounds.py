@@ -181,14 +181,44 @@ class TestOperations:
         ], "a 10% pad on a span of 10 adds 1 on each side"
 
     def test_padding_that_would_invert_the_rectangle_raises(self):
-        """Shrinking past zero is refused by the same guard that refuses an inverted rectangle.
+        """Shrinking past the centre is refused, and the error names the padding that did it.
 
         Test scenario:
             A negative pad is legitimate for tightening a frame, but one large enough to cross the centre
-            produces an inverted rectangle, which must not escape as a silently flipped axis.
+            produces an inverted rectangle, which must not escape as a silently flipped axis. Leaving the
+            constructor to catch it reported `xmin=7.5, xmax=2.5` for a call written as `padded(-0.75)` —
+            neither the method, nor the fraction, nor the reason appears, so the caller has to
+            reverse-engineer where those numbers came from.
         """
-        with pytest.raises(ValueError, match="xmin <= xmax"):
+        with pytest.raises(ValueError, match=r"padded\(-0.75\) would invert"):
             Bounds(0.0, 0.0, 10.0, 10.0, crs=4326).padded(-0.75)
+
+    def test_two_spellings_of_one_crs_are_the_same_crs(self):
+        """`4326` and `"EPSG:4326"` name the same system, so a union across them works.
+
+        Test scenario:
+            The type exists to stop a rectangle being measured against the wrong CRS. Comparing the spellings
+            with `==` also refuses a great many *right* ones — an EPSG int from one source and an authority
+            string from another are the same reference system, and pyramids already owns that normalisation.
+        """
+        merged = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326).union(
+            Bounds(0.0, 0.0, 2.0, 2.0, crs="EPSG:4326")
+        )
+        assert merged.as_bbox() == [0.0, 0.0, 2.0, 2.0], (
+            "two spellings of one CRS must union rather than raise"
+        )
+
+    def test_genuinely_different_crss_are_still_refused(self):
+        """The guard still catches the case it was written for.
+
+        Test scenario:
+            Guards the boundary of the test above — normalising spellings must not normalise away a real
+            mismatch, which would silently union degrees with metres.
+        """
+        with pytest.raises(ValueError, match="one CRS"):
+            Bounds(0.0, 0.0, 1.0, 1.0, crs=4326).union(
+                Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
+            )
 
 
 class TestReprojection:

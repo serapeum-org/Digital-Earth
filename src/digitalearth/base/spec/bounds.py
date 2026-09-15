@@ -22,6 +22,30 @@ from typing import Any, List, Sequence, Tuple
 __all__ = ["Bounds"]
 
 
+def _same_crs(one: Any, other: Any) -> bool:
+    """Whether two CRS spellings name the same reference system.
+
+    Args:
+        one: A CRS in any spelling pyramids accepts — an EPSG int, an ``"EPSG:4326"`` string, a proj4 string.
+        other: The CRS to compare it with.
+
+    Returns:
+        ``True`` when they denote the same system. Compared by meaning rather than by ``==``, because the
+        whole point of carrying a CRS is to stop a rectangle being measured against the wrong one — and
+        ``4326 != "EPSG:4326"`` would refuse a great many *right* ones. pyramids owns the normalisation, so
+        it is asked; if it cannot read either spelling, the comparison falls back to equality rather than
+        raising, since this is used to decide whether work is needed, not to validate.
+    """
+    if one is other or one == other:
+        return True
+    try:
+        from pyramids.base.crs import crs_equal
+
+        return bool(crs_equal(one, other))
+    except Exception:
+        return False
+
+
 @dataclass(frozen=True)
 class Bounds:
     """An axis-aligned rectangle in one CRS.
@@ -281,7 +305,7 @@ class Bounds:
 
                 ```
         """
-        if self.crs != other.crs:
+        if not _same_crs(self.crs, other.crs):
             raise ValueError(
                 f"union needs both rectangles in one CRS; got {self.crs!r} and {other.crs!r} — "
                 "reproject one with to_crs() first"
@@ -318,6 +342,13 @@ class Bounds:
         """
         dx = (self.xmax - self.xmin) * fraction
         dy = (self.ymax - self.ymin) * fraction
+        if dx * 2 < -(self.xmax - self.xmin) or dy * 2 < -(self.ymax - self.ymin):
+            # Constructing the rectangle would raise, but its message names only the numbers that came out
+            # — leaving the caller to work out where a 6.0 and a 4.0 came from when they wrote -0.6.
+            raise ValueError(
+                f"padded({fraction}) would invert this rectangle: a fraction below -0.5 removes more than "
+                "the rectangle has. Use a fraction above -0.5 to shrink it"
+            )
         return Bounds(
             self.xmin - dx, self.ymin - dy, self.xmax + dx, self.ymax + dy, self.crs
         )
@@ -346,7 +377,7 @@ class Bounds:
 
                 ```
         """
-        if crs == self.crs:
+        if _same_crs(crs, self.crs):
             return self
         from pyramids.base.crs import reproject_coordinates
 
