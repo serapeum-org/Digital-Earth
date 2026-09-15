@@ -10,11 +10,16 @@ the three actually was:
 | ``_needs_reproject`` | 3 | **2** — interactive and web agree; static differs |
 | ``_auto_cmap`` | 3 | **3** — all differ |
 
-The `_auto_cmap` case is the interesting one, because all three claim in their own docstrings to *mirror* the
-others. They differ in the name of the lookup they reach through — ``self._auto_style`` on one tier,
+The `_auto_cmap` case is the interesting one, because all three claim in their own docstrings to *mirror*
+the others. They differ in the name of the lookup they reach through — ``self._auto_style`` on one tier,
 ``self._style_for`` on another — and in whether the last-resort colormap is a parameter. Underneath, all three
 call :func:`digitalearth.base.autostyle.auto_style` and take its ``cmap``. Three implementations kept in step
 by hand and by docstring is the drift this refactor exists to remove.
+
+They are **equivalent in practice today**: ``auto_style`` seeds every answer from the library's ``default``
+group, which carries ``viridis``, so the ``cmap`` key is always present and truthy and the three spellings
+cannot diverge. The one lifted here is the defensive one, which stays right if that ever stops being true —
+not a live defect any of them had.
 
 These are free functions taking the display CRS as an argument rather than reading ``self.crs``, so a tier
 that is not a scene class can use them too, and so they can be tested without one.
@@ -127,9 +132,11 @@ def auto_cmap(source: Any, cmap: Optional[str], fallback: str = DEFAULT_CMAP) ->
     Returns:
         The caller's `cmap` when they named one, else the lookup's answer, else `fallback`.
 
-        The fallback is reached with ``or`` rather than as a ``dict.get`` default, which is the 3-D tier's
-        spelling and the only one of the three that is right: a style entry carrying ``cmap=None``
-        explicitly would satisfy ``.get("cmap", "viridis")`` and return ``None``, which is not a colormap.
+        The fallback is reached with ``or`` rather than as a ``dict.get`` default. Both spellings give the
+        same answer for every input the shipped library can produce — it seeds each result from a ``default``
+        group carrying ``viridis``, so ``cmap`` is always present and truthy. ``or`` is chosen because it also
+        holds if a library ever answers with ``cmap=None`` or ``""``, which ``.get("cmap", "viridis")``
+        would hand back as the colormap.
 
     Examples:
         - A caller's choice always wins:
