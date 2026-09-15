@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -21793,7 +21793,171 @@ asked for from what it got — a reader may return fewer cells than the budget a
 <span class="normal"><a href="#__codelineno-0-418">418</a></span>
 <span class="normal"><a href="#__codelineno-0-419">419</a></span>
 <span class="normal"><a href="#__codelineno-0-420">420</a></span>
-<span class="normal"><a href="#__codelineno-0-421">421</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="k">class</span><span class="w"> </span><span class="nc">SourceView</span><span class="p">(</span><span class="n">Source</span><span class="p">):</span>
+<span class="normal"><a href="#__codelineno-0-421">421</a></span>
+<span class="normal"><a href="#__codelineno-0-422">422</a></span>
+<span class="normal"><a href="#__codelineno-0-423">423</a></span>
+<span class="normal"><a href="#__codelineno-0-424">424</a></span>
+<span class="normal"><a href="#__codelineno-0-425">425</a></span>
+<span class="normal"><a href="#__codelineno-0-426">426</a></span>
+<span class="normal"><a href="#__codelineno-0-427">427</a></span>
+<span class="normal"><a href="#__codelineno-0-428">428</a></span>
+<span class="normal"><a href="#__codelineno-0-429">429</a></span>
+<span class="normal"><a href="#__codelineno-0-430">430</a></span>
+<span class="normal"><a href="#__codelineno-0-431">431</a></span>
+<span class="normal"><a href="#__codelineno-0-432">432</a></span>
+<span class="normal"><a href="#__codelineno-0-433">433</a></span>
+<span class="normal"><a href="#__codelineno-0-434">434</a></span>
+<span class="normal"><a href="#__codelineno-0-435">435</a></span>
+<span class="normal"><a href="#__codelineno-0-436">436</a></span>
+<span class="normal"><a href="#__codelineno-0-437">437</a></span>
+<span class="normal"><a href="#__codelineno-0-438">438</a></span>
+<span class="normal"><a href="#__codelineno-0-439">439</a></span>
+<span class="normal"><a href="#__codelineno-0-440">440</a></span>
+<span class="normal"><a href="#__codelineno-0-441">441</a></span>
+<span class="normal"><a href="#__codelineno-0-442">442</a></span>
+<span class="normal"><a href="#__codelineno-0-443">443</a></span>
+<span class="normal"><a href="#__codelineno-0-444">444</a></span>
+<span class="normal"><a href="#__codelineno-0-445">445</a></span>
+<span class="normal"><a href="#__codelineno-0-446">446</a></span>
+<span class="normal"><a href="#__codelineno-0-447">447</a></span>
+<span class="normal"><a href="#__codelineno-0-448">448</a></span>
+<span class="normal"><a href="#__codelineno-0-449">449</a></span>
+<span class="normal"><a href="#__codelineno-0-450">450</a></span>
+<span class="normal"><a href="#__codelineno-0-451">451</a></span>
+<span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span>
+<span class="normal"><a href="#__codelineno-0-456">456</a></span>
+<span class="normal"><a href="#__codelineno-0-457">457</a></span>
+<span class="normal"><a href="#__codelineno-0-458">458</a></span>
+<span class="normal"><a href="#__codelineno-0-459">459</a></span>
+<span class="normal"><a href="#__codelineno-0-460">460</a></span>
+<span class="normal"><a href="#__codelineno-0-461">461</a></span>
+<span class="normal"><a href="#__codelineno-0-462">462</a></span>
+<span class="normal"><a href="#__codelineno-0-463">463</a></span>
+<span class="normal"><a href="#__codelineno-0-464">464</a></span>
+<span class="normal"><a href="#__codelineno-0-465">465</a></span>
+<span class="normal"><a href="#__codelineno-0-466">466</a></span>
+<span class="normal"><a href="#__codelineno-0-467">467</a></span>
+<span class="normal"><a href="#__codelineno-0-468">468</a></span>
+<span class="normal"><a href="#__codelineno-0-469">469</a></span>
+<span class="normal"><a href="#__codelineno-0-470">470</a></span>
+<span class="normal"><a href="#__codelineno-0-471">471</a></span>
+<span class="normal"><a href="#__codelineno-0-472">472</a></span>
+<span class="normal"><a href="#__codelineno-0-473">473</a></span>
+<span class="normal"><a href="#__codelineno-0-474">474</a></span>
+<span class="normal"><a href="#__codelineno-0-475">475</a></span>
+<span class="normal"><a href="#__codelineno-0-476">476</a></span>
+<span class="normal"><a href="#__codelineno-0-477">477</a></span>
+<span class="normal"><a href="#__codelineno-0-478">478</a></span>
+<span class="normal"><a href="#__codelineno-0-479">479</a></span>
+<span class="normal"><a href="#__codelineno-0-480">480</a></span>
+<span class="normal"><a href="#__codelineno-0-481">481</a></span>
+<span class="normal"><a href="#__codelineno-0-482">482</a></span>
+<span class="normal"><a href="#__codelineno-0-483">483</a></span>
+<span class="normal"><a href="#__codelineno-0-484">484</a></span>
+<span class="normal"><a href="#__codelineno-0-485">485</a></span>
+<span class="normal"><a href="#__codelineno-0-486">486</a></span>
+<span class="normal"><a href="#__codelineno-0-487">487</a></span>
+<span class="normal"><a href="#__codelineno-0-488">488</a></span>
+<span class="normal"><a href="#__codelineno-0-489">489</a></span>
+<span class="normal"><a href="#__codelineno-0-490">490</a></span>
+<span class="normal"><a href="#__codelineno-0-491">491</a></span>
+<span class="normal"><a href="#__codelineno-0-492">492</a></span>
+<span class="normal"><a href="#__codelineno-0-493">493</a></span>
+<span class="normal"><a href="#__codelineno-0-494">494</a></span>
+<span class="normal"><a href="#__codelineno-0-495">495</a></span>
+<span class="normal"><a href="#__codelineno-0-496">496</a></span>
+<span class="normal"><a href="#__codelineno-0-497">497</a></span>
+<span class="normal"><a href="#__codelineno-0-498">498</a></span>
+<span class="normal"><a href="#__codelineno-0-499">499</a></span>
+<span class="normal"><a href="#__codelineno-0-500">500</a></span>
+<span class="normal"><a href="#__codelineno-0-501">501</a></span>
+<span class="normal"><a href="#__codelineno-0-502">502</a></span>
+<span class="normal"><a href="#__codelineno-0-503">503</a></span>
+<span class="normal"><a href="#__codelineno-0-504">504</a></span>
+<span class="normal"><a href="#__codelineno-0-505">505</a></span>
+<span class="normal"><a href="#__codelineno-0-506">506</a></span>
+<span class="normal"><a href="#__codelineno-0-507">507</a></span>
+<span class="normal"><a href="#__codelineno-0-508">508</a></span>
+<span class="normal"><a href="#__codelineno-0-509">509</a></span>
+<span class="normal"><a href="#__codelineno-0-510">510</a></span>
+<span class="normal"><a href="#__codelineno-0-511">511</a></span>
+<span class="normal"><a href="#__codelineno-0-512">512</a></span>
+<span class="normal"><a href="#__codelineno-0-513">513</a></span>
+<span class="normal"><a href="#__codelineno-0-514">514</a></span>
+<span class="normal"><a href="#__codelineno-0-515">515</a></span>
+<span class="normal"><a href="#__codelineno-0-516">516</a></span>
+<span class="normal"><a href="#__codelineno-0-517">517</a></span>
+<span class="normal"><a href="#__codelineno-0-518">518</a></span>
+<span class="normal"><a href="#__codelineno-0-519">519</a></span>
+<span class="normal"><a href="#__codelineno-0-520">520</a></span>
+<span class="normal"><a href="#__codelineno-0-521">521</a></span>
+<span class="normal"><a href="#__codelineno-0-522">522</a></span>
+<span class="normal"><a href="#__codelineno-0-523">523</a></span>
+<span class="normal"><a href="#__codelineno-0-524">524</a></span>
+<span class="normal"><a href="#__codelineno-0-525">525</a></span>
+<span class="normal"><a href="#__codelineno-0-526">526</a></span>
+<span class="normal"><a href="#__codelineno-0-527">527</a></span>
+<span class="normal"><a href="#__codelineno-0-528">528</a></span>
+<span class="normal"><a href="#__codelineno-0-529">529</a></span>
+<span class="normal"><a href="#__codelineno-0-530">530</a></span>
+<span class="normal"><a href="#__codelineno-0-531">531</a></span>
+<span class="normal"><a href="#__codelineno-0-532">532</a></span>
+<span class="normal"><a href="#__codelineno-0-533">533</a></span>
+<span class="normal"><a href="#__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#__codelineno-0-536">536</a></span>
+<span class="normal"><a href="#__codelineno-0-537">537</a></span>
+<span class="normal"><a href="#__codelineno-0-538">538</a></span>
+<span class="normal"><a href="#__codelineno-0-539">539</a></span>
+<span class="normal"><a href="#__codelineno-0-540">540</a></span>
+<span class="normal"><a href="#__codelineno-0-541">541</a></span>
+<span class="normal"><a href="#__codelineno-0-542">542</a></span>
+<span class="normal"><a href="#__codelineno-0-543">543</a></span>
+<span class="normal"><a href="#__codelineno-0-544">544</a></span>
+<span class="normal"><a href="#__codelineno-0-545">545</a></span>
+<span class="normal"><a href="#__codelineno-0-546">546</a></span>
+<span class="normal"><a href="#__codelineno-0-547">547</a></span>
+<span class="normal"><a href="#__codelineno-0-548">548</a></span>
+<span class="normal"><a href="#__codelineno-0-549">549</a></span>
+<span class="normal"><a href="#__codelineno-0-550">550</a></span>
+<span class="normal"><a href="#__codelineno-0-551">551</a></span>
+<span class="normal"><a href="#__codelineno-0-552">552</a></span>
+<span class="normal"><a href="#__codelineno-0-553">553</a></span>
+<span class="normal"><a href="#__codelineno-0-554">554</a></span>
+<span class="normal"><a href="#__codelineno-0-555">555</a></span>
+<span class="normal"><a href="#__codelineno-0-556">556</a></span>
+<span class="normal"><a href="#__codelineno-0-557">557</a></span>
+<span class="normal"><a href="#__codelineno-0-558">558</a></span>
+<span class="normal"><a href="#__codelineno-0-559">559</a></span>
+<span class="normal"><a href="#__codelineno-0-560">560</a></span>
+<span class="normal"><a href="#__codelineno-0-561">561</a></span>
+<span class="normal"><a href="#__codelineno-0-562">562</a></span>
+<span class="normal"><a href="#__codelineno-0-563">563</a></span>
+<span class="normal"><a href="#__codelineno-0-564">564</a></span>
+<span class="normal"><a href="#__codelineno-0-565">565</a></span>
+<span class="normal"><a href="#__codelineno-0-566">566</a></span>
+<span class="normal"><a href="#__codelineno-0-567">567</a></span>
+<span class="normal"><a href="#__codelineno-0-568">568</a></span>
+<span class="normal"><a href="#__codelineno-0-569">569</a></span>
+<span class="normal"><a href="#__codelineno-0-570">570</a></span>
+<span class="normal"><a href="#__codelineno-0-571">571</a></span>
+<span class="normal"><a href="#__codelineno-0-572">572</a></span>
+<span class="normal"><a href="#__codelineno-0-573">573</a></span>
+<span class="normal"><a href="#__codelineno-0-574">574</a></span>
+<span class="normal"><a href="#__codelineno-0-575">575</a></span>
+<span class="normal"><a href="#__codelineno-0-576">576</a></span>
+<span class="normal"><a href="#__codelineno-0-577">577</a></span>
+<span class="normal"><a href="#__codelineno-0-578">578</a></span>
+<span class="normal"><a href="#__codelineno-0-579">579</a></span>
+<span class="normal"><a href="#__codelineno-0-580">580</a></span>
+<span class="normal"><a href="#__codelineno-0-581">581</a></span>
+<span class="normal"><a href="#__codelineno-0-582">582</a></span>
+<span class="normal"><a href="#__codelineno-0-583">583</a></span>
+<span class="normal"><a href="#__codelineno-0-584">584</a></span>
+<span class="normal"><a href="#__codelineno-0-585">585</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-34" name="__codelineno-0-34"></a><span class="k">class</span><span class="w"> </span><span class="nc">SourceView</span><span class="p">(</span><span class="n">Source</span><span class="p">):</span>
 <a id="__codelineno-0-35" name="__codelineno-0-35"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A materialised view of data, carrying the reference and slice it was read from.</span>
 <a id="__codelineno-0-36" name="__codelineno-0-36"></a>
 <a id="__codelineno-0-37" name="__codelineno-0-37"></a><span class="sd">    Args:</span>
@@ -22089,8 +22253,8 @@ asked for from what it got — a reader may return fewer cells than the budget a
 <a id="__codelineno-0-327" name="__codelineno-0-327"></a>            <span class="n">request</span><span class="o">=</span><span class="n">request</span><span class="p">,</span>
 <a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="p">)</span>
 <a id="__codelineno-0-329" name="__codelineno-0-329"></a>
-<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="nd">@staticmethod</span>
-<a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_shape</span><span class="p">(</span><span class="n">request</span><span class="p">:</span> <span class="n">ViewRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_shape</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">ViewRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
 <a id="__codelineno-0-332" name="__codelineno-0-332"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the ``(width, height)`` in cells a windowed read should produce.</span>
 <a id="__codelineno-0-333" name="__codelineno-0-333"></a>
 <a id="__codelineno-0-334" name="__codelineno-0-334"></a><span class="sd">        Args:</span>
@@ -22102,85 +22266,249 @@ asked for from what it got — a reader may return fewer cells than the budget a
 <a id="__codelineno-0-340" name="__codelineno-0-340"></a><span class="sd">            exist to describe. Otherwise a square of :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side`,</span>
 <a id="__codelineno-0-341" name="__codelineno-0-341"></a><span class="sd">            which is what a budget alone can say.</span>
 <a id="__codelineno-0-342" name="__codelineno-0-342"></a>
-<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">            A canvas over budget is scaled down keeping its aspect ratio, because the budget is the limit the</span>
-<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">            process can actually afford and the canvas is only what would look best.</span>
-<a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-346" name="__codelineno-0-346"></a>        <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">request</span><span class="o">.</span><span class="n">height</span>
-<a id="__codelineno-0-347" name="__codelineno-0-347"></a>        <span class="k">if</span> <span class="n">width</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">height</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-348" name="__codelineno-0-348"></a>            <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-349" name="__codelineno-0-349"></a>                <span class="n">side</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">side</span><span class="p">()</span>
-<a id="__codelineno-0-350" name="__codelineno-0-350"></a>            <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-351" name="__codelineno-0-351"></a>                <span class="c1"># The budget wins over `side()`&#39;s readability floor. Its own docstring calls it the limit &quot;a</span>
-<a id="__codelineno-0-352" name="__codelineno-0-352"></a>                <span class="c1"># reader that cannot serve both must respect&quot;, and a floor of 64 turned a budget of 16 into</span>
-<a id="__codelineno-0-353" name="__codelineno-0-353"></a>                <span class="c1"># 4,096 cells. A caller who sets a budget that small has asked for a thumbnail.</span>
-<a id="__codelineno-0-354" name="__codelineno-0-354"></a>                <span class="n">side</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">budget</span><span class="o">**</span><span class="mf">0.5</span><span class="p">))</span>
-<a id="__codelineno-0-355" name="__codelineno-0-355"></a>            <span class="k">return</span> <span class="n">side</span><span class="p">,</span> <span class="n">side</span>
-<a id="__codelineno-0-356" name="__codelineno-0-356"></a>        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">within_budget</span><span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="n">height</span><span class="p">):</span>
-<a id="__codelineno-0-357" name="__codelineno-0-357"></a>            <span class="k">return</span> <span class="n">width</span><span class="p">,</span> <span class="n">height</span>
-<a id="__codelineno-0-358" name="__codelineno-0-358"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">budget</span> <span class="o">/</span> <span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="n">height</span><span class="p">))</span> <span class="o">**</span> <span class="mf">0.5</span>  <span class="c1"># type: ignore[operator]</span>
-<a id="__codelineno-0-359" name="__codelineno-0-359"></a>        <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)),</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span> <span class="o">*</span> <span class="n">scale</span><span class="p">))</span>
-<a id="__codelineno-0-360" name="__codelineno-0-360"></a>
-<a id="__codelineno-0-361" name="__codelineno-0-361"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-362" name="__codelineno-0-362"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_windowed</span><span class="p">(</span>
-<a id="__codelineno-0-363" name="__codelineno-0-363"></a>        <span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">selection</span><span class="p">:</span> <span class="n">Selection</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ViewRequest</span><span class="p">]</span>
-<a id="__codelineno-0-364" name="__codelineno-0-364"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
-<a id="__codelineno-0-365" name="__codelineno-0-365"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Narrow `data` to the requested window, and say where the window&#39;s cells are.</span>
-<a id="__codelineno-0-366" name="__codelineno-0-366"></a>
-<a id="__codelineno-0-367" name="__codelineno-0-367"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-368" name="__codelineno-0-368"></a><span class="sd">            data: The opened object.</span>
-<a id="__codelineno-0-369" name="__codelineno-0-369"></a><span class="sd">            selection: Which slice is wanted.</span>
-<a id="__codelineno-0-370" name="__codelineno-0-370"></a><span class="sd">            request: What was asked for, or ``None``.</span>
-<a id="__codelineno-0-371" name="__codelineno-0-371"></a>
-<a id="__codelineno-0-372" name="__codelineno-0-372"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-373" name="__codelineno-0-373"></a><span class="sd">            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s — there</span>
-<a id="__codelineno-0-374" name="__codelineno-0-374"></a><span class="sd">            is nothing to narrow, or the reader has no windowed read.</span>
-<a id="__codelineno-0-375" name="__codelineno-0-375"></a>
-<a id="__codelineno-0-376" name="__codelineno-0-376"></a><span class="sd">            Windowed, it is the **array** ``read_part`` returns plus the coordinates of its cell centres and</span>
-<a id="__codelineno-0-377" name="__codelineno-0-377"></a><span class="sd">            the CRS they are in. The coordinates have to be computed here because ``read_part`` is an array</span>
-<a id="__codelineno-0-378" name="__codelineno-0-378"></a><span class="sd">            reader, not a dataset reader: pyramids&#39; own docstring says *&quot;Pixel values only — no transform,</span>
-<a id="__codelineno-0-379" name="__codelineno-0-379"></a><span class="sd">            bounds, or CRS is attached&quot;*. Without them the extractor falls back to ``np.arange`` axes and the</span>
-<a id="__codelineno-0-380" name="__codelineno-0-380"></a><span class="sd">            view claims a projected CRS while holding pixel indices.</span>
-<a id="__codelineno-0-381" name="__codelineno-0-381"></a>
-<a id="__codelineno-0-382" name="__codelineno-0-382"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-383" name="__codelineno-0-383"></a><span class="sd">            Exception: whatever pyramids raises for a window it cannot read.</span>
-<a id="__codelineno-0-384" name="__codelineno-0-384"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-385" name="__codelineno-0-385"></a>        <span class="n">nothing</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-386" name="__codelineno-0-386"></a>        <span class="k">if</span> <span class="n">request</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;read_part&quot;</span><span class="p">):</span>
-<a id="__codelineno-0-387" name="__codelineno-0-387"></a>            <span class="k">return</span> <span class="n">nothing</span>
-<a id="__codelineno-0-388" name="__codelineno-0-388"></a>        <span class="n">bbox</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span>
-<a id="__codelineno-0-389" name="__codelineno-0-389"></a>        <span class="k">if</span> <span class="n">bbox</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-390" name="__codelineno-0-390"></a>            <span class="c1"># A budget with no region still has to be honoured: the object *can* window, so skipping here</span>
-<a id="__codelineno-0-391" name="__codelineno-0-391"></a>            <span class="c1"># returned the whole raster and blew the budget silently. The source&#39;s own bbox is the region.</span>
-<a id="__codelineno-0-392" name="__codelineno-0-392"></a>            <span class="n">source_bbox</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;bbox&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-393" name="__codelineno-0-393"></a>            <span class="k">if</span> <span class="n">source_bbox</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">request</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-394" name="__codelineno-0-394"></a>                <span class="k">return</span> <span class="n">nothing</span>
-<a id="__codelineno-0-395" name="__codelineno-0-395"></a>            <span class="n">window</span> <span class="o">=</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span>
-<a id="__codelineno-0-396" name="__codelineno-0-396"></a>                <span class="nb">list</span><span class="p">(</span><span class="n">source_bbox</span><span class="p">),</span> <span class="n">crs</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;epsg&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-397" name="__codelineno-0-397"></a>            <span class="p">)</span>
-<a id="__codelineno-0-398" name="__codelineno-0-398"></a>        <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-399" name="__codelineno-0-399"></a>            <span class="c1"># read_part returns data in the *dataset&#39;s* CRS, so a bbox given in another one is converted</span>
-<a id="__codelineno-0-400" name="__codelineno-0-400"></a>            <span class="c1"># first and the window described in the CRS its cells are actually measured in.</span>
-<a id="__codelineno-0-401" name="__codelineno-0-401"></a>            <span class="n">window</span> <span class="o">=</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">bbox</span><span class="p">),</span> <span class="n">crs</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span>
-<a id="__codelineno-0-402" name="__codelineno-0-402"></a>            <span class="n">target</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;epsg&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-<a id="__codelineno-0-403" name="__codelineno-0-403"></a>            <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">crs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-404" name="__codelineno-0-404"></a>                <span class="n">window</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">to_crs</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
-<a id="__codelineno-0-405" name="__codelineno-0-405"></a>        <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_shape</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-<a id="__codelineno-0-406" name="__codelineno-0-406"></a>        <span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span>
-<a id="__codelineno-0-407" name="__codelineno-0-407"></a>            <span class="n">data</span><span class="o">.</span><span class="n">read_part</span><span class="p">(</span>
-<a id="__codelineno-0-408" name="__codelineno-0-408"></a>                <span class="n">bbox</span><span class="o">=</span><span class="n">window</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">(),</span>
-<a id="__codelineno-0-409" name="__codelineno-0-409"></a>                <span class="n">dst_width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-410" name="__codelineno-0-410"></a>                <span class="n">dst_height</span><span class="o">=</span><span class="n">height</span><span class="p">,</span>
-<a id="__codelineno-0-411" name="__codelineno-0-411"></a>                <span class="n">bbox_crs</span><span class="o">=</span><span class="n">window</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
-<a id="__codelineno-0-412" name="__codelineno-0-412"></a>                <span class="n">band</span><span class="o">=</span><span class="n">selection</span><span class="o">.</span><span class="n">first_band</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>  <span class="c1"># pyramids&#39; windowed read is 0-based</span>
-<a id="__codelineno-0-413" name="__codelineno-0-413"></a>            <span class="p">)</span>
-<a id="__codelineno-0-414" name="__codelineno-0-414"></a>        <span class="p">)</span>
-<a id="__codelineno-0-415" name="__codelineno-0-415"></a>        <span class="n">rows</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-<a id="__codelineno-0-416" name="__codelineno-0-416"></a>        <span class="n">xmin</span><span class="p">,</span> <span class="n">ymin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">,</span> <span class="n">ymax</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span>
-<a id="__codelineno-0-417" name="__codelineno-0-417"></a>        <span class="c1"># Cell centres, not edges: an extractor&#39;s axes name where each cell *is*, and a half-cell offset is</span>
-<a id="__codelineno-0-418" name="__codelineno-0-418"></a>        <span class="c1"># the difference between a raster drawn correctly and one drawn half a pixel adrift.</span>
-<a id="__codelineno-0-419" name="__codelineno-0-419"></a>        <span class="n">xs</span> <span class="o">=</span> <span class="n">xmin</span> <span class="o">+</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">xmax</span> <span class="o">-</span> <span class="n">xmin</span><span class="p">)</span> <span class="o">/</span> <span class="n">columns</span>
-<a id="__codelineno-0-420" name="__codelineno-0-420"></a>        <span class="n">ys</span> <span class="o">=</span> <span class="n">ymax</span> <span class="o">-</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">ymax</span> <span class="o">-</span> <span class="n">ymin</span><span class="p">)</span> <span class="o">/</span> <span class="n">rows</span>
-<a id="__codelineno-0-421" name="__codelineno-0-421"></a>        <span class="k">return</span> <span class="n">array</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span><span class="p">,</span> <span class="n">window</span><span class="o">.</span><span class="n">crs</span>
+<a id="__codelineno-0-343" name="__codelineno-0-343"></a><span class="sd">            The canvas is measured in **device** pixels, so a request carrying ``pixel_ratio=2.0`` reads the</span>
+<a id="__codelineno-0-344" name="__codelineno-0-344"></a><span class="sd">            1600x1200 it will draw rather than the 800x600 it is laid out at. That is the whole purpose of</span>
+<a id="__codelineno-0-345" name="__codelineno-0-345"></a><span class="sd">            :attr:`~digitalearth.base.spec.viewrequest.ViewRequest.pixels`, which</span>
+<a id="__codelineno-0-346" name="__codelineno-0-346"></a><span class="sd">            :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` already folds the ratio into; reading</span>
+<a id="__codelineno-0-347" name="__codelineno-0-347"></a><span class="sd">            the CSS canvas instead returned a quarter of the detail on a retina display, and did it silently,</span>
+<a id="__codelineno-0-348" name="__codelineno-0-348"></a><span class="sd">            because the result is *under* the budget the caller set.</span>
+<a id="__codelineno-0-349" name="__codelineno-0-349"></a>
+<a id="__codelineno-0-350" name="__codelineno-0-350"></a><span class="sd">            The count compared against the budget is the product of the two integers returned — the number of</span>
+<a id="__codelineno-0-351" name="__codelineno-0-351"></a><span class="sd">            cells that will actually be read, which is ``pixels`` up to the rounding of a fractional device</span>
+<a id="__codelineno-0-352" name="__codelineno-0-352"></a><span class="sd">            pixel.</span>
+<a id="__codelineno-0-353" name="__codelineno-0-353"></a>
+<a id="__codelineno-0-354" name="__codelineno-0-354"></a><span class="sd">            A canvas over budget is scaled down by :meth:`_fitted`. The budget is the **guarantee**: the</span>
+<a id="__codelineno-0-355" name="__codelineno-0-355"></a><span class="sd">            product of the two numbers returned never exceeds it. The aspect ratio is best effort, held to</span>
+<a id="__codelineno-0-356" name="__codelineno-0-356"></a><span class="sd">            the nearest whole cell, because cells do not come in fractions.</span>
+<a id="__codelineno-0-357" name="__codelineno-0-357"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-358" name="__codelineno-0-358"></a>        <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">request</span><span class="o">.</span><span class="n">height</span>
+<a id="__codelineno-0-359" name="__codelineno-0-359"></a>        <span class="k">if</span> <span class="n">width</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">height</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-360" name="__codelineno-0-360"></a>            <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-361" name="__codelineno-0-361"></a>                <span class="n">side</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">side</span><span class="p">()</span>
+<a id="__codelineno-0-362" name="__codelineno-0-362"></a>            <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-363" name="__codelineno-0-363"></a>                <span class="c1"># The budget wins over `side()`&#39;s readability floor. Its own docstring calls it the limit &quot;a</span>
+<a id="__codelineno-0-364" name="__codelineno-0-364"></a>                <span class="c1"># reader that cannot serve both must respect&quot;, and a floor of 64 turned a budget of 16 into</span>
+<a id="__codelineno-0-365" name="__codelineno-0-365"></a>                <span class="c1"># 4,096 cells. A caller who sets a budget that small has asked for a thumbnail.</span>
+<a id="__codelineno-0-366" name="__codelineno-0-366"></a>                <span class="n">side</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">budget</span><span class="o">**</span><span class="mf">0.5</span><span class="p">))</span>
+<a id="__codelineno-0-367" name="__codelineno-0-367"></a>            <span class="k">return</span> <span class="n">side</span><span class="p">,</span> <span class="n">side</span>
+<a id="__codelineno-0-368" name="__codelineno-0-368"></a>        <span class="n">columns</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="n">request</span><span class="o">.</span><span class="n">pixel_ratio</span><span class="p">))</span>
+<a id="__codelineno-0-369" name="__codelineno-0-369"></a>        <span class="n">rows</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span> <span class="o">*</span> <span class="n">request</span><span class="o">.</span><span class="n">pixel_ratio</span><span class="p">))</span>
+<a id="__codelineno-0-370" name="__codelineno-0-370"></a>        <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">within_budget</span><span class="p">(</span><span class="n">columns</span> <span class="o">*</span> <span class="n">rows</span><span class="p">):</span>
+<a id="__codelineno-0-371" name="__codelineno-0-371"></a>            <span class="k">return</span> <span class="n">columns</span><span class="p">,</span> <span class="n">rows</span>
+<a id="__codelineno-0-372" name="__codelineno-0-372"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_fitted</span><span class="p">(</span><span class="n">columns</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">request</span><span class="o">.</span><span class="n">budget</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
+<a id="__codelineno-0-373" name="__codelineno-0-373"></a>
+<a id="__codelineno-0-374" name="__codelineno-0-374"></a>    <span class="nd">@staticmethod</span>
+<a id="__codelineno-0-375" name="__codelineno-0-375"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_fitted</span><span class="p">(</span><span class="n">width</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">height</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">budget</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-376" name="__codelineno-0-376"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Shrink a canvas until it fits `budget` cells, keeping its shape as nearly as whole cells allow.</span>
+<a id="__codelineno-0-377" name="__codelineno-0-377"></a>
+<a id="__codelineno-0-378" name="__codelineno-0-378"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-379" name="__codelineno-0-379"></a><span class="sd">            width: The canvas width in cells.</span>
+<a id="__codelineno-0-380" name="__codelineno-0-380"></a><span class="sd">            height: The canvas height in cells.</span>
+<a id="__codelineno-0-381" name="__codelineno-0-381"></a><span class="sd">            budget: The greatest number of cells that may be returned.</span>
+<a id="__codelineno-0-382" name="__codelineno-0-382"></a>
+<a id="__codelineno-0-383" name="__codelineno-0-383"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-384" name="__codelineno-0-384"></a><span class="sd">            A ``(width, height)`` whose product is **always** ``&lt;= budget``, and which is within one cell</span>
+<a id="__codelineno-0-385" name="__codelineno-0-385"></a><span class="sd">            per axis of the exactly-scaled canvas whenever both axes survive the scaling.</span>
+<a id="__codelineno-0-386" name="__codelineno-0-386"></a>
+<a id="__codelineno-0-387" name="__codelineno-0-387"></a><span class="sd">            Truncating each axis can only go under the scale factor, so the product of the two truncated</span>
+<a id="__codelineno-0-388" name="__codelineno-0-388"></a><span class="sd">            axes is under the budget by construction. What is *not* safe is lifting a truncated axis back</span>
+<a id="__codelineno-0-389" name="__codelineno-0-389"></a><span class="sd">            to one afterwards, which is what this replaces: for an elongated canvas the short axis rounds to</span>
+<a id="__codelineno-0-390" name="__codelineno-0-390"></a><span class="sd">            zero, and restoring it multiplies the long axis straight back through the limit. Measured on the</span>
+<a id="__codelineno-0-391" name="__codelineno-0-391"></a><span class="sd">            old spelling, ``10000x1`` under a budget of ``100`` returned ``1000x1`` — ten times the limit the</span>
+<a id="__codelineno-0-392" name="__codelineno-0-392"></a><span class="sd">            budget exists to impose, on exactly the shapes it matters for (a cross-section strip, a profile).</span>
+<a id="__codelineno-0-393" name="__codelineno-0-393"></a>
+<a id="__codelineno-0-394" name="__codelineno-0-394"></a><span class="sd">            A canvas that elongated gets its long axis capped at the budget and its short axis set to one,</span>
+<a id="__codelineno-0-395" name="__codelineno-0-395"></a><span class="sd">            which is the most detail the limit can buy.</span>
+<a id="__codelineno-0-396" name="__codelineno-0-396"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-397" name="__codelineno-0-397"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="p">(</span><span class="n">budget</span> <span class="o">/</span> <span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="n">height</span><span class="p">))</span> <span class="o">**</span> <span class="mf">0.5</span>
+<a id="__codelineno-0-398" name="__codelineno-0-398"></a>        <span class="n">columns</span><span class="p">,</span> <span class="n">rows</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span> <span class="o">*</span> <span class="n">scale</span><span class="p">),</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)</span>
+<a id="__codelineno-0-399" name="__codelineno-0-399"></a>        <span class="k">if</span> <span class="n">columns</span> <span class="ow">and</span> <span class="n">rows</span><span class="p">:</span>
+<a id="__codelineno-0-400" name="__codelineno-0-400"></a>            <span class="k">return</span> <span class="n">columns</span><span class="p">,</span> <span class="n">rows</span>
+<a id="__codelineno-0-401" name="__codelineno-0-401"></a>        <span class="k">if</span> <span class="n">width</span> <span class="o">&gt;=</span> <span class="n">height</span><span class="p">:</span>
+<a id="__codelineno-0-402" name="__codelineno-0-402"></a>            <span class="k">return</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">width</span><span class="p">,</span> <span class="n">budget</span><span class="p">)),</span> <span class="mi">1</span>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a>        <span class="k">return</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">min</span><span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">budget</span><span class="p">))</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_windowed</span><span class="p">(</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a>        <span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">selection</span><span class="p">:</span> <span class="n">Selection</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">ViewRequest</span><span class="p">]</span>
+<a id="__codelineno-0-408" name="__codelineno-0-408"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
+<a id="__codelineno-0-409" name="__codelineno-0-409"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Narrow `data` to the requested window, and say where the window&#39;s cells are.</span>
+<a id="__codelineno-0-410" name="__codelineno-0-410"></a>
+<a id="__codelineno-0-411" name="__codelineno-0-411"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-412" name="__codelineno-0-412"></a><span class="sd">            data: The opened object.</span>
+<a id="__codelineno-0-413" name="__codelineno-0-413"></a><span class="sd">            selection: Which slice is wanted.</span>
+<a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="sd">            request: What was asked for, or ``None``.</span>
+<a id="__codelineno-0-415" name="__codelineno-0-415"></a>
+<a id="__codelineno-0-416" name="__codelineno-0-416"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s — there</span>
+<a id="__codelineno-0-418" name="__codelineno-0-418"></a><span class="sd">            is nothing to narrow, or the reader has no windowed read.</span>
+<a id="__codelineno-0-419" name="__codelineno-0-419"></a>
+<a id="__codelineno-0-420" name="__codelineno-0-420"></a><span class="sd">            Windowed, it is the **array** ``read_part`` returns plus the coordinates of its cell centres and</span>
+<a id="__codelineno-0-421" name="__codelineno-0-421"></a><span class="sd">            the CRS they are in. The coordinates have to be computed here because ``read_part`` is an array</span>
+<a id="__codelineno-0-422" name="__codelineno-0-422"></a><span class="sd">            reader, not a dataset reader: pyramids&#39; own docstring says *&quot;Pixel values only — no transform,</span>
+<a id="__codelineno-0-423" name="__codelineno-0-423"></a><span class="sd">            bounds, or CRS is attached&quot;*. Without them the extractor falls back to ``np.arange`` axes and the</span>
+<a id="__codelineno-0-424" name="__codelineno-0-424"></a><span class="sd">            view claims a projected CRS while holding pixel indices.</span>
+<a id="__codelineno-0-425" name="__codelineno-0-425"></a>
+<a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="sd">            Exception: whatever pyramids raises for a window it cannot read.</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a>        <span class="n">nothing</span> <span class="o">=</span> <span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a>        <span class="k">if</span> <span class="n">request</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;read_part&quot;</span><span class="p">):</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a>            <span class="k">return</span> <span class="n">nothing</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a>        <span class="n">bbox</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a>        <span class="k">if</span> <span class="n">bbox</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a>            <span class="c1"># A budget with no region still has to be honoured: the object *can* window, so skipping here</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a>            <span class="c1"># returned the whole raster and blew the budget silently. The source&#39;s own bbox is the region.</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a>            <span class="n">source_bbox</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;bbox&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a>            <span class="k">if</span> <span class="n">source_bbox</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">request</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a>                <span class="k">return</span> <span class="n">nothing</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a>            <span class="n">window</span> <span class="o">=</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a>                <span class="nb">list</span><span class="p">(</span><span class="n">source_bbox</span><span class="p">),</span> <span class="n">crs</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;epsg&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a>            <span class="p">)</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a>        <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>            <span class="c1"># read_part returns data in the *dataset&#39;s* CRS, so a bbox given in another one is converted</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a>            <span class="c1"># first and the window described in the CRS its cells are actually measured in.</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a>            <span class="n">window</span> <span class="o">=</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">bbox</span><span class="p">),</span> <span class="n">crs</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a>            <span class="n">target</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;epsg&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a>            <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">crs</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">target</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a>                <span class="n">window</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">to_crs</span><span class="p">(</span><span class="n">target</span><span class="p">)</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a>        <span class="c1"># Snap the window outward to whole source pixels *before* reading. read_part does this internally</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a>        <span class="c1"># (floor/ceil through world_to_pixel) and returns a buffer spanning the snapped window — so labelling</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>        <span class="c1"># the result from the requested bbox misplaces every cell by up to one source pixel per edge, worst</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a>        <span class="c1"># on exactly the zoomed-out tiles this exists for. Aligning the request makes the snap a no-op, so</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a>        <span class="c1"># the window asked for and the window read are the same rectangle.</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>        <span class="n">window</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_aligned</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="n">width</span><span class="p">,</span> <span class="n">height</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_shape</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>        <span class="n">array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>            <span class="n">data</span><span class="o">.</span><span class="n">read_part</span><span class="p">(</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>                <span class="n">bbox</span><span class="o">=</span><span class="n">window</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">(),</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>                <span class="n">dst_width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>                <span class="n">dst_height</span><span class="o">=</span><span class="n">height</span><span class="p">,</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>                <span class="n">bbox_crs</span><span class="o">=</span><span class="n">window</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>                <span class="n">band</span><span class="o">=</span><span class="n">selection</span><span class="o">.</span><span class="n">first_band</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>  <span class="c1"># pyramids&#39; windowed read is 0-based</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>            <span class="p">)</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a>        <span class="p">)</span>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a>        <span class="n">rows</span><span class="p">,</span> <span class="n">columns</span> <span class="o">=</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">array</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a>        <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_axes</span><span class="p">(</span><span class="n">window</span><span class="p">,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">columns</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a>        <span class="k">return</span> <span class="n">array</span><span class="p">,</span> <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span><span class="p">,</span> <span class="n">window</span><span class="o">.</span><span class="n">crs</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_aligned</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="n">Bounds</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Bounds</span><span class="p">:</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Grow `window` outward to the source&#39;s pixel edges, so a read of it needs no snapping.</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">            window: The window wanted, in the source&#39;s CRS.</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">            data: The object being read, for its geotransform.</span>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">            The smallest pixel-aligned window containing `window`, or `window` unchanged when the source</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">            exposes no geotransform to align against.</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">            This is the same outward snap ``read_part`` performs internally. Doing it here rather than</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">            reproducing its arithmetic afterwards is what keeps the labels honest: the caller&#39;s bbox and the</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">            rectangle actually read become one rectangle, so there is no second window to get wrong.</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">            The long-term answer is for the reader to return the window&#39;s transform alongside the array —</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">            an upstream change, not one to make here.</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a>        <span class="n">transform</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_grid</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a>        <span class="k">if</span> <span class="n">transform</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a>            <span class="k">return</span> <span class="n">window</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a>        <span class="n">origin_x</span><span class="p">,</span> <span class="n">pixel_w</span><span class="p">,</span> <span class="n">origin_y</span><span class="p">,</span> <span class="n">pixel_h</span> <span class="o">=</span> <span class="n">transform</span>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a>        <span class="n">xmin</span><span class="p">,</span> <span class="n">ymin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">,</span> <span class="n">ymax</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a>        <span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_snapped</span><span class="p">(</span><span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">,</span> <span class="n">origin_x</span><span class="p">,</span> <span class="n">pixel_w</span><span class="p">)</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a>        <span class="n">bottom</span><span class="p">,</span> <span class="n">top</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_snapped</span><span class="p">(</span><span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">,</span> <span class="n">origin_y</span><span class="p">,</span> <span class="n">pixel_h</span><span class="p">)</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a>        <span class="k">return</span> <span class="n">Bounds</span><span class="p">(</span><span class="n">left</span><span class="p">,</span> <span class="n">bottom</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">top</span><span class="p">,</span> <span class="n">window</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="nd">@staticmethod</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_grid</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the source&#39;s ``(origin_x, step_x, origin_y, step_y)``, or ``None`` if it has no grid.</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">            data: The object being read.</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">            The four geotransform entries that place a cell, with the rotation terms dropped — a rotated</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">            raster is not something an axis-aligned window can describe, and pyramids does not produce one.</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">            ``None`` when there is no geotransform, or a step is zero and the grid degenerate.</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a>        <span class="n">transform</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="s2">&quot;geotransform&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">transform</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">transform</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">6</span><span class="p">:</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a>            <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a>        <span class="n">origin_x</span><span class="p">,</span> <span class="n">pixel_w</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">origin_y</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">pixel_h</span> <span class="o">=</span> <span class="n">transform</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">pixel_w</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">pixel_h</span><span class="p">:</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a>            <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a>        <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">origin_x</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">pixel_w</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">origin_y</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">pixel_h</span><span class="p">)</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a>    <span class="nd">@staticmethod</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_snapped</span><span class="p">(</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a>        <span class="n">low</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">high</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">origin</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="n">step</span><span class="p">:</span> <span class="nb">float</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Widen one axis of a window out to the cell edges that enclose it.</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">            low: The lower world coordinate of the window on this axis.</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">            high: The upper world coordinate.</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">            origin: The geotransform&#39;s origin for this axis.</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">            step: The geotransform&#39;s cell step, which may be negative.</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">            The ``(low, high)`` pair of enclosing cell edges, in ascending world order.</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">            The floor and the ceiling are taken in **pixel** space and only then converted back, because a</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">            negative step reverses which end of the window each one belongs to. Flooring the low world</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">            coordinate directly — the obvious spelling — snaps *inward* on such an axis, which reads as a</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">            correct fix and silently crops.</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a>        <span class="n">first</span> <span class="o">=</span> <span class="p">(</span><span class="n">low</span> <span class="o">-</span> <span class="n">origin</span><span class="p">)</span> <span class="o">/</span> <span class="n">step</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a>        <span class="n">second</span> <span class="o">=</span> <span class="p">(</span><span class="n">high</span> <span class="o">-</span> <span class="n">origin</span><span class="p">)</span> <span class="o">/</span> <span class="n">step</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a>        <span class="n">edges</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a>            <span class="n">origin</span> <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">floor</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">)))</span> <span class="o">*</span> <span class="n">step</span><span class="p">,</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a>            <span class="n">origin</span> <span class="o">+</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">second</span><span class="p">)))</span> <span class="o">*</span> <span class="n">step</span><span class="p">,</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a>        <span class="p">)</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a>        <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="n">edges</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-546" name="__codelineno-0-546"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_axes</span><span class="p">(</span>
+<a id="__codelineno-0-547" name="__codelineno-0-547"></a>        <span class="bp">cls</span><span class="p">,</span> <span class="n">window</span><span class="p">:</span> <span class="n">Bounds</span><span class="p">,</span> <span class="n">rows</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">columns</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Any</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548"></a>    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the cell-centre coordinates of a windowed read, in the order its rows and columns come.</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">            window: The pixel-aligned window that was read.</span>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a><span class="sd">            rows: How many rows came back.</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554"></a><span class="sd">            columns: How many columns.</span>
+<a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="sd">            data: The object that was read, for its geotransform.</span>
+<a id="__codelineno-0-556" name="__codelineno-0-556"></a>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">            An ``(x, y)`` pair of centre coordinates.</span>
+<a id="__codelineno-0-559" name="__codelineno-0-559"></a>
+<a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="sd">            Cell centres, not edges: an extractor&#39;s axes name where each cell *is*, and a half-cell offset</span>
+<a id="__codelineno-0-561" name="__codelineno-0-561"></a><span class="sd">            is the difference between a raster drawn correctly and one drawn half a pixel adrift.</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562"></a>
+<a id="__codelineno-0-563" name="__codelineno-0-563"></a><span class="sd">            The **direction** of each axis comes from the geotransform&#39;s step signs, because ``read_part``</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564"></a><span class="sd">            returns rows and columns in storage order. A raster stored south-up (``step_y &gt; 0``) therefore</span>
+<a id="__codelineno-0-565" name="__codelineno-0-565"></a><span class="sd">            hands back ascending y, and one stored east-left (``step_x &lt; 0``) descending x; labelling</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566"></a><span class="sd">            either the usual way round renders it mirrored, silently, since a flipped raster draws</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567"></a><span class="sd">            perfectly happily. With no geotransform to consult the north-up, west-left convention is</span>
+<a id="__codelineno-0-568" name="__codelineno-0-568"></a><span class="sd">            assumed, which is what every raster pyramids writes itself uses.</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569"></a>
+<a id="__codelineno-0-570" name="__codelineno-0-570"></a><span class="sd">        Note:</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a><span class="sd">            Only this windowed path derives the y direction. pyramids&#39; own ``Dataset.y`` measures rows</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a><span class="sd">            downward from ``geotransform[3]`` whatever the sign of ``geotransform[5]``, so a south-up source</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a><span class="sd">            read through any other extractor is labelled outside its own extent (a raster spanning y 0..8</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a><span class="sd">            reports ``y = [-0.5, -1.5, ...]``), and its ``bbox`` comes back with ``ymin &gt; ymax``. Fixing</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a><span class="sd">            that is an upstream change; this method only avoids adding a second, differently-wrong answer.</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a>        <span class="n">xmin</span><span class="p">,</span> <span class="n">ymin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">,</span> <span class="n">ymax</span> <span class="o">=</span> <span class="n">window</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="n">grid</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_grid</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a>        <span class="n">east_left</span> <span class="o">=</span> <span class="n">grid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">grid</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mi">0</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580"></a>        <span class="n">south_up</span> <span class="o">=</span> <span class="n">grid</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">grid</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span>
+<a id="__codelineno-0-581" name="__codelineno-0-581"></a>        <span class="n">x_from</span><span class="p">,</span> <span class="n">x_to</span> <span class="o">=</span> <span class="p">(</span><span class="n">xmax</span><span class="p">,</span> <span class="n">xmin</span><span class="p">)</span> <span class="k">if</span> <span class="n">east_left</span> <span class="k">else</span> <span class="p">(</span><span class="n">xmin</span><span class="p">,</span> <span class="n">xmax</span><span class="p">)</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="n">y_from</span><span class="p">,</span> <span class="n">y_to</span> <span class="o">=</span> <span class="p">(</span><span class="n">ymin</span><span class="p">,</span> <span class="n">ymax</span><span class="p">)</span> <span class="k">if</span> <span class="n">south_up</span> <span class="k">else</span> <span class="p">(</span><span class="n">ymax</span><span class="p">,</span> <span class="n">ymin</span><span class="p">)</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a>        <span class="n">xs</span> <span class="o">=</span> <span class="n">x_from</span> <span class="o">+</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">columns</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">x_to</span> <span class="o">-</span> <span class="n">x_from</span><span class="p">)</span> <span class="o">/</span> <span class="n">columns</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a>        <span class="n">ys</span> <span class="o">=</span> <span class="n">y_from</span> <span class="o">+</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">rows</span><span class="p">)</span> <span class="o">+</span> <span class="mf">0.5</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">y_to</span> <span class="o">-</span> <span class="n">y_from</span><span class="p">)</span> <span class="o">/</span> <span class="n">rows</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a>        <span class="k">return</span> <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
