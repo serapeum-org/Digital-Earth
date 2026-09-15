@@ -143,9 +143,14 @@ class PointArrays:
             geopandas can answer cheaply, and a partly-3-D frame has no elevation for some of its points
             anyway.
 
+            A row whose geometry is **missing** reads as `NaN`, whatever `centroids` says. A `null` geometry
+            is ordinary in GeoJSON, and it is absent data rather than data of the wrong shape — so it is for
+            :meth:`finite` to drop, which is what every caller does with it. Only a geometry that is
+            genuinely present and not a point is subject to the `centroids` decision.
+
         Raises:
             TypeError: if `features` exposes no geometry to read.
-            ValueError: if `centroids` is ``False`` and the geometry is not all points.
+            ValueError: if `centroids` is ``False`` and a geometry that is present is not a point.
 
         Examples:
             - The CRS comes from the data unless overridden:
@@ -173,7 +178,11 @@ class PointArrays:
                 f"PointArrays.from_features needs vector data with a geometry; got "
                 f"{type(features).__name__}"
             )
-        if not bool((geom.geom_type == "Point").all()):
+        # Judge only the geometry that is there. A null geometry's `geom_type` is NaN, so testing the whole
+        # series classified a frame with one missing row as "not all points" — which made `centroids=False`
+        # refuse a frame the caller had every right to pass, and that these call sites used to draw.
+        present = geom.notna()
+        if not bool((geom.geom_type[present] == "Point").all()):
             if not centroids:
                 raise ValueError(
                     "PointArrays.from_features got geometry that is not all points, and centroids=False. "

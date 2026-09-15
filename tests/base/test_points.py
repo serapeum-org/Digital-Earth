@@ -112,6 +112,43 @@ class TestFromFeatures:
         with pytest.raises(ValueError, match="not all points"):
             PointArrays.from_features(gdf, centroids=False)
 
+    @pytest.mark.parametrize("centroids", [True, False])
+    def test_a_missing_geometry_reads_as_nan_rather_than_raising(self, centroids):
+        """A `null` geometry among points is absent data, not data of the wrong shape.
+
+        Test scenario:
+            `main` drew such a frame: geopandas answers `NaN` from `.x` for a null geometry and the finite
+            mask dropped the row. Testing the whole series with `(geom_type == "Point").all()` classified it
+            as "not all points" — a null's `geom_type` is `NaN` — so `centroids=False` refused a frame that
+            had been rendering, at `InteractiveMap.trimesh` and at the 3-D point cloud. A GeoJSON feature
+            with a `null` geometry is ordinary, so this is reachable straight from user data.
+
+            Both values of `centroids` are asserted because the refusal is what broke, and the fallback runs
+            the same classification one line above it.
+        """
+        gdf = gpd.GeoDataFrame(
+            geometry=[Point(0, 0), None, Point(2, 2)], crs="EPSG:3857"
+        )
+        points = PointArrays.from_features(gdf, centroids=centroids)
+        assert len(points) == 3, "the missing row stays, so the arrays still align with the frame"
+        assert np.isnan(points.x[1]), "and reads as NaN, the way geopandas answers for it"
+        kept, _ = points.finite()
+        assert len(kept) == 2, "leaving `finite` to drop it, as every caller does"
+
+    def test_a_real_non_point_geometry_is_still_refused_when_centroids_is_off(self):
+        """Relaxing the null case does not relax the case the guard is for.
+
+        Test scenario:
+            The fix narrows the classification to geometry that is present; a polygon sitting beside a null
+            must still be refused, or the guard has been removed rather than corrected.
+        """
+        gdf = gpd.GeoDataFrame(
+            geometry=[Point(0, 0), None, Polygon([(0, 0), (1, 0), (1, 1)])],
+            crs="EPSG:3857",
+        )
+        with pytest.raises(ValueError, match="not all points"):
+            PointArrays.from_features(gdf, centroids=False)
+
     def test_a_non_point_geometry_is_checked_before_its_coordinates_are_touched(self):
         """The geometry-type check comes first, because reading `.x` on a polygon raises.
 
