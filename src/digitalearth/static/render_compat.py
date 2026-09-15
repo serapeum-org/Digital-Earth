@@ -405,6 +405,27 @@ def relocate_flat_style(
 
     Raises:
         TypeError: if `marker_size_for` is given and the caller passed both ``size`` and ``point_size``.
+
+    Examples:
+        - The styling keys move out, and the constructor keeps what it still accepts:
+            ```python
+            >>> from digitalearth.static.render_compat import relocate_flat_style
+            >>> opts = {"scheme": "quantiles", "k": 4, "cmap": "viridis"}
+            >>> moved = relocate_flat_style(opts)
+            >>> sorted(moved), opts
+            (['k', 'scheme'], {'cmap': 'viridis'})
+
+            ```
+        - For a point glyph, the `size` channel folds onto the constructor spelling cleopatra wants:
+            ```python
+            >>> from digitalearth.static.render_compat import relocate_flat_style
+            >>> opts = {"size": 12, "cmap": "viridis"}
+            >>> relocate_flat_style(opts, marker_size_for="Map.scatter()")
+            {}
+            >>> opts["point_size"]
+            12
+
+            ```
     """
     moved = {key: opts[key] for key in opts if key in FLAT_STYLE_KEYS}
     for key in moved:

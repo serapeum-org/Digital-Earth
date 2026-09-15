@@ -55,6 +55,31 @@ class ProjectionMixin(_MixinBase):
             is how matplotlib expresses ``invert_xaxis`` through the limits. A `Bounds` cannot express that —
             it refuses corners the wrong way round, because for a rectangle handed to pyramids or cleopatra
             that is a defect rather than an intent — so invert the axis directly if you need both.
+
+        Examples:
+            - A rectangle in another CRS is converted, so the frame lands where the data is:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> from digitalearth.base.spec import Bounds
+                >>> m = Map(crs=3857)
+                >>> m.set_extent(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+                >>> round(m.ax.get_xlim()[1])
+                111319
+
+                ```
+            - The bare sequence is matplotlib's own ordering, in the display CRS:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth import Map
+                >>> m = Map(crs=3857)
+                >>> m.set_extent([0.0, 100.0, 0.0, 50.0])
+                >>> [float(v) for v in m.ax.get_xlim()], [float(v) for v in m.ax.get_ylim()]
+                ([0.0, 100.0], [0.0, 50.0])
+
+                ```
         """
         if isinstance(bbox, Bounds):
             # to_crs is a no-op when the CRSs already match. Without it a rectangle that carries its CRS
