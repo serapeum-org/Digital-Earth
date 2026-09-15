@@ -136,6 +136,22 @@ class TestFromAContinuousScale:
         )
         assert len(legend.entries) == 3
 
+    @pytest.mark.parametrize("stops", [0, 1])
+    def test_a_ramp_needs_at_least_two_stops(self, stops):
+        """One stop divides by zero; none gives an empty legend.
+
+        Args:
+            stops: The unusable stop count under test.
+
+        Test scenario:
+            Every other field on this type is validated in `__post_init__`; `stops` reached the spacing
+            arithmetic directly, so `stops=1` raised ZeroDivisionError from inside a list comprehension.
+        """
+        with pytest.raises(ValueError, match="at least two stops"):
+            LegendSpec.from_scale(
+                Scale.from_limits(0.0, 1.0), colors=["#a"] * max(stops, 1), stops=stops
+            )
+
 
 class TestTheSpecItself:
     """The value, and what it refuses."""

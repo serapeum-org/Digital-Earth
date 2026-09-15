@@ -233,6 +233,44 @@ class TestFiniteFiltering:
         with pytest.raises(ValueError, match="names"):
             PointArrays.of([0.0], [1.0]).finite(dims="xu")
 
+    def test_two_equal_readings_compare_equal(self):
+        """Comparison works at all, which it did not before round 1.
+
+        Test scenario:
+            The dataclass-generated `__eq__` compared the arrays with `==`, yielding an array, so any
+            instance holding more than one point raised "The truth value of an array with more than one
+            element is ambiguous" on comparison.
+        """
+        assert PointArrays.of([0.0, 1.0], [2.0, 3.0]) == PointArrays.of(
+            [0.0, 1.0], [2.0, 3.0]
+        )
+
+    def test_different_points_do_not_compare_equal(self):
+        """The comparison is a real one, not a constant True.
+
+        Test scenario:
+            Guards the boundary of the test above — an `__eq__` that always answered True would satisfy it.
+        """
+        assert PointArrays.of([0.0], [1.0]) != PointArrays.of([9.0], [1.0])
+
+    def test_comparing_with_something_else_defers(self):
+        """A non-PointArrays gets `NotImplemented`, so Python can try the other side.
+
+        Test scenario:
+            Returning False outright would stop a future type from defining equality with this one.
+        """
+        assert PointArrays.of([0.0], [1.0]) != "not points"
+
+    def test_points_are_deliberately_unhashable(self):
+        """Bulk data does not key a cache, unlike `Bounds` and `Selection`.
+
+        Test scenario:
+            Stated rather than accidental: the other value types in this refactor hash on purpose, so the
+            difference needs to be a decision the tests record.
+        """
+        with pytest.raises(TypeError):
+            hash(PointArrays.of([0.0], [1.0]))
+
 
 class TestShapes:
     """The two forms consumers ask for."""
