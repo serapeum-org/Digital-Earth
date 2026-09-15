@@ -20,20 +20,36 @@ from digitalearth.base.spec import Bounds, DataRef, Selection, ViewRequest
 RASTER = Path(__file__).resolve().parents[2] / "examples" / "data" / "acc4000.tif"
 
 
-@pytest.fixture(scope="module")
-def labelled_raster(tmp_path_factory) -> Path:
+#: The three storage orders an 8x8 unit raster can have, as `(origin_x, step_x, 0, origin_y, 0, step_y)`.
+#: `read_part` hands rows and columns back in storage order, so the step signs decide which way the axes run.
+NORTH_UP = (0.0, 1.0, 0.0, 8.0, 0.0, -1.0)
+SOUTH_UP = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+EAST_LEFT = (8.0, -1.0, 0.0, 8.0, 0.0, -1.0)
+
+STORAGE_ORDERS = [("north_up", NORTH_UP), ("south_up", SOUTH_UP), ("east_left", EAST_LEFT)]
+
+
+def _write_labelled(directory: Path, name: str, geo: tuple) -> Path:
     """Write an 8x8 raster whose every value names the cell it sits in (`column + 10 * row`).
 
-    The cells are one unit square with the top-left corner at `(0, 8)`, so a value of `34` is the cell whose
-    centre is `(4.5, 4.5)`. That lets a coordinate assertion be made about the *data* rather than the shape.
+    The cells are one unit square and cover x, y in 0..8 in every storage order, so a value of `34` is the
+    cell in stored row 3, stored column 4 wherever that lands in world coordinates. That lets a coordinate
+    assertion be made about the *data* rather than the shape.
     """
-    path = tmp_path_factory.mktemp("labelled") / "grid.tif"
+    path = directory / f"{name}.tif"
     rows, columns = np.mgrid[0:8, 0:8]
     Dataset.from_array(
         arr=(columns + 10 * rows).astype("float64"),
-        geo_ref=GeoReference(top_left_corner=(0.0, 8.0), cell_size=1.0, epsg=3857),
+        geo_ref=GeoReference(geo=geo, epsg=3857),
     ).to_file(str(path))
     return path
+
+
+@pytest.fixture(scope="module")
+def labelled_rasters(tmp_path_factory) -> dict:
+    """The same labelled 8x8 raster written in each of the three storage orders, keyed by order name."""
+    directory = tmp_path_factory.mktemp("labelled")
+    return {name: _write_labelled(directory, name, geo) for name, geo in STORAGE_ORDERS}
 
 
 def _axis(name: str = "x") -> DimensionInfo:
@@ -317,7 +333,7 @@ class TestARereadIsStillGeoreferenced:
             "the y axis must descend from north to south"
         )
 
-    def test_an_unaligned_window_labels_the_cells_it_actually_read(self, labelled_raster):
+    def test_an_unaligned_window_labels_the_cells_it_actually_read(self, labelled_rasters):
         """A sub-window off the source's pixel grid is labelled where its data really sits.
 
         Test scenario:
@@ -331,7 +347,7 @@ class TestARereadIsStillGeoreferenced:
             snapped window's native 4x4, so no resampling stands between a cell's label and its identity —
             every assertion below is exact.
         """
-        ref = DataRef(str(labelled_raster))
+        ref = DataRef(str(labelled_rasters["north_up"]))
         view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
         again = view.reread(
             ViewRequest(
@@ -349,6 +365,44 @@ class TestARereadIsStillGeoreferenced:
             assert again.z.values[row][0] // 10 == pytest.approx(7.5 - y), (
                 f"the cell labelled y={y} holds source row {again.z.values[row][0] // 10}"
             )
+
+    @pytest.mark.parametrize("stored, geo", STORAGE_ORDERS)
+    def test_the_axes_follow_the_direction_the_rows_are_stored_in(
+        self, labelled_rasters, stored, geo
+    ):
+        """A raster stored south-up or east-left is labelled the way its cells are actually laid out.
+
+        Test scenario:
+            `read_part` returns rows and columns in **storage** order, so the direction of each axis is the
+            sign of the matching geotransform step. Labelling a south-up raster north-to-south, or an
+            east-left one west-to-east, renders it mirrored — silently, because a flipped raster draws
+            perfectly happily, which is why `test_the_y_axis_runs_north_to_south` exists at all.
+
+            Both flips are exercised because the fix touches one expression per axis, and the y arm alone
+            was what the review named. The expected value is derived from each cell's own label through the
+            geotransform, so a single rule covers all three orders rather than three hand-written tables.
+        """
+        ref = DataRef(str(labelled_rasters[stored]))
+        view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
+        again = view.reread(
+            ViewRequest(
+                bounds=Bounds(1.5, 1.5, 4.5, 4.5, crs=view.crs),
+                width=4,
+                height=4,
+                budget=10_000,
+            )
+        )
+        origin_x, step_x, _, origin_y, _, step_y = geo
+        for row, y in enumerate(again.y.values):
+            for column, x in enumerate(again.x.values):
+                stored_column = (x - origin_x) / step_x - 0.5
+                stored_row = (y - origin_y) / step_y - 0.5
+                assert again.z.values[row][column] == pytest.approx(
+                    stored_column + 10 * stored_row
+                ), (
+                    f"the cell labelled ({x}, {y}) must hold what is stored at row {stored_row}, "
+                    f"column {stored_column}, got {again.z.values[row][column]}"
+                )
 
     def test_what_the_data_is_survives_a_reread(self):
         """The variable, the kind and the units describe the data, not the window.

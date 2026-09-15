@@ -419,15 +419,11 @@ class SourceView(Source):
             )
         )
         rows, columns = array.shape[-2], array.shape[-1]
-        xmin, ymin, xmax, ymax = window.as_bbox()
-        # Cell centres, not edges: an extractor's axes name where each cell *is*, and a half-cell offset is
-        # the difference between a raster drawn correctly and one drawn half a pixel adrift.
-        xs = xmin + (np.arange(columns) + 0.5) * (xmax - xmin) / columns
-        ys = ymax - (np.arange(rows) + 0.5) * (ymax - ymin) / rows
+        xs, ys = cls._axes(window, rows, columns, data)
         return array, xs, ys, window.crs
 
-    @staticmethod
-    def _aligned(window: Bounds, data: Any) -> Bounds:
+    @classmethod
+    def _aligned(cls, window: Bounds, data: Any) -> Bounds:
         """Grow `window` outward to the source's pixel edges, so a read of it needs no snapping.
 
         Args:
@@ -445,18 +441,101 @@ class SourceView(Source):
             The long-term answer is for the reader to return the window's transform alongside the array —
             an upstream change, not one to make here.
         """
-        transform = getattr(data, "geotransform", None)
-        if not transform:
+        transform = cls._grid(data)
+        if transform is None:
             return window
+        origin_x, pixel_w, origin_y, pixel_h = transform
+        xmin, ymin, xmax, ymax = window.as_bbox()
+        left, right = cls._snapped(xmin, xmax, origin_x, pixel_w)
+        bottom, top = cls._snapped(ymin, ymax, origin_y, pixel_h)
+        return Bounds(left, bottom, right, top, window.crs)
+
+    @staticmethod
+    def _grid(data: Any) -> Optional[Tuple[float, float, float, float]]:
+        """Return the source's ``(origin_x, step_x, origin_y, step_y)``, or ``None`` if it has no grid.
+
+        Args:
+            data: The object being read.
+
+        Returns:
+            The four geotransform entries that place a cell, with the rotation terms dropped — a rotated
+            raster is not something an axis-aligned window can describe, and pyramids does not produce one.
+            ``None`` when there is no geotransform, or a step is zero and the grid degenerate.
+        """
+        transform = getattr(data, "geotransform", None)
+        if not transform or len(transform) < 6:
+            return None
         origin_x, pixel_w, _, origin_y, _, pixel_h = transform[:6]
         if not pixel_w or not pixel_h:
-            return window
-        height = abs(pixel_h)
+            return None
+        return float(origin_x), float(pixel_w), float(origin_y), float(pixel_h)
+
+    @staticmethod
+    def _snapped(
+        low: float, high: float, origin: float, step: float
+    ) -> Tuple[float, float]:
+        """Widen one axis of a window out to the cell edges that enclose it.
+
+        Args:
+            low: The lower world coordinate of the window on this axis.
+            high: The upper world coordinate.
+            origin: The geotransform's origin for this axis.
+            step: The geotransform's cell step, which may be negative.
+
+        Returns:
+            The ``(low, high)`` pair of enclosing cell edges, in ascending world order.
+
+            The floor and the ceiling are taken in **pixel** space and only then converted back, because a
+            negative step reverses which end of the window each one belongs to. Flooring the low world
+            coordinate directly — the obvious spelling — snaps *inward* on such an axis, which reads as a
+            correct fix and silently crops.
+        """
+        first = (low - origin) / step
+        second = (high - origin) / step
+        edges = (
+            origin + float(np.floor(min(first, second))) * step,
+            origin + float(np.ceil(max(first, second))) * step,
+        )
+        return min(edges), max(edges)
+
+    @classmethod
+    def _axes(
+        cls, window: Bounds, rows: int, columns: int, data: Any
+    ) -> Tuple[Any, Any]:
+        """Return the cell-centre coordinates of a windowed read, in the order its rows and columns come.
+
+        Args:
+            window: The pixel-aligned window that was read.
+            rows: How many rows came back.
+            columns: How many columns.
+            data: The object that was read, for its geotransform.
+
+        Returns:
+            An ``(x, y)`` pair of centre coordinates.
+
+            Cell centres, not edges: an extractor's axes name where each cell *is*, and a half-cell offset
+            is the difference between a raster drawn correctly and one drawn half a pixel adrift.
+
+            The **direction** of each axis comes from the geotransform's step signs, because ``read_part``
+            returns rows and columns in storage order. A raster stored south-up (``step_y > 0``) therefore
+            hands back ascending y, and one stored east-left (``step_x < 0``) descending x; labelling
+            either the usual way round renders it mirrored, silently, since a flipped raster draws
+            perfectly happily. With no geotransform to consult the north-up, west-left convention is
+            assumed, which is what every raster pyramids writes itself uses.
+
+        Note:
+            Only this windowed path derives the y direction. pyramids' own ``Dataset.y`` measures rows
+            downward from ``geotransform[3]`` whatever the sign of ``geotransform[5]``, so a south-up source
+            read through any other extractor is labelled outside its own extent (a raster spanning y 0..8
+            reports ``y = [-0.5, -1.5, ...]``), and its ``bbox`` comes back with ``ymin > ymax``. Fixing
+            that is an upstream change; this method only avoids adding a second, differently-wrong answer.
+        """
         xmin, ymin, xmax, ymax = window.as_bbox()
-        left = origin_x + np.floor((xmin - origin_x) / pixel_w) * pixel_w
-        right = origin_x + np.ceil((xmax - origin_x) / pixel_w) * pixel_w
-        # The geotransform's y step is negative for a north-up raster, so rows are measured down from the
-        # origin; align against that and convert back.
-        top = origin_y - np.floor((origin_y - ymax) / height) * height
-        bottom = origin_y - np.ceil((origin_y - ymin) / height) * height
-        return Bounds(float(left), float(bottom), float(right), float(top), window.crs)
+        grid = cls._grid(data)
+        east_left = grid is not None and grid[1] < 0
+        south_up = grid is not None and grid[3] > 0
+        x_from, x_to = (xmax, xmin) if east_left else (xmin, xmax)
+        y_from, y_to = (ymin, ymax) if south_up else (ymax, ymin)
+        xs = x_from + (np.arange(columns) + 0.5) * (x_to - x_from) / columns
+        ys = y_from + (np.arange(rows) + 0.5) * (y_to - y_from) / rows
+        return xs, ys
