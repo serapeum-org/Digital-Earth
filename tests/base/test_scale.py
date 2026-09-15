@@ -96,6 +96,27 @@ class TestTheDomain:
             "from_limits must widen a degenerate pair"
         )
 
+    def test_a_non_finite_domain_cannot_be_constructed(self):
+        """NaN or infinity for a limit is refused at construction.
+
+        Test scenario:
+            `from_values` filters non-finite data out before measuring, so this is the hand-built path — and
+            a NaN limit does not raise downstream, it silently normalises every value to NaN and draws a
+            blank layer.
+        """
+        with pytest.raises(ValueError, match="finite domain"):
+            Scale(float("nan"), 1.0)
+
+    def test_from_limits_refuses_a_non_finite_limit(self):
+        """The same check on the limits-in builder.
+
+        Test scenario:
+            `from_limits` takes a caller's `clim=` directly, so it is the likeliest way an infinity gets in —
+            a stack whose measured range came back unbounded, for instance.
+        """
+        with pytest.raises(ValueError, match="finite limits"):
+            Scale.from_limits(0.0, float("inf"))
+
 
 class TestClassification:
     """The classifier is reached once, from here, rather than three times from three tiers."""
@@ -175,6 +196,18 @@ class TestClassification:
         assert Scale.from_values([1.0, 2.0]).class_of(1.5) is None, (
             "a continuous scale has no class to report"
         )
+
+    def test_edges_that_bound_no_class_are_refused(self):
+        """A single class edge describes nothing, so it cannot be held.
+
+        Test scenario:
+            `k` classes give `k + 1` edges, so one edge means zero classes. Left unchecked, `class_of` walks
+            an empty list of upper bounds and returns `-1` — a negative class index that reads as valid and
+            colours the value from the wrong end of the ramp. An empty tuple stays legal: that is how a
+            continuous scale says it cuts no classes at all.
+        """
+        with pytest.raises(ValueError, match="at least two class edges"):
+            Scale(0.0, 1.0, scheme="equal_interval", breaks=(5.0,))
 
 
 class TestCategorical:

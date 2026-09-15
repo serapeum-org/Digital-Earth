@@ -4,6 +4,8 @@ Holding the data object inside the layer is what blocks dynamic tiling, level-of
 wants to round-trip through a dict. These cover the reference and the registry that opens it.
 """
 
+from pathlib import Path
+
 import pytest
 
 from digitalearth.base.registry import (
@@ -221,3 +223,82 @@ class TestTheClassifierSeam:
                 registry.get_classifier()
         finally:
             registry._CLASSIFIER["fn"] = saved
+
+
+class TestTheFileResolver:
+    """The built-in resolver: a path becomes a pyramids object, with the reader chosen by what is there."""
+
+    #: Anchored on this file rather than the working directory, so the resolver is handed a real absolute
+    #: path — which is the argument shape it exists to handle, and is what a stored figure would carry.
+    _DATA = Path(__file__).resolve().parents[1] / "data"
+    _EXAMPLES = Path(__file__).resolve().parents[2] / "examples" / "data"
+
+    def test_a_raster_path_opens_as_a_dataset(self):
+        """A GeoTIFF resolves through pyramids' raster reader.
+
+        Test scenario:
+            The common case, and the first reader tried. `DataRef("dem.tif").open()` is the whole point of
+            the type — a layer naming its data instead of holding it.
+        """
+        from pyramids.dataset import Dataset
+
+        opened = DataRef(str(self._EXAMPLES / "acc4000.tif")).open()
+        assert isinstance(opened, Dataset), (
+            f"a .tif must resolve to a pyramids Dataset, got {type(opened).__name__}"
+        )
+
+    def test_a_vector_path_opens_as_a_feature_collection(self):
+        """A GeoJSON resolves through the vector reader, after the raster reader declines.
+
+        Test scenario:
+            The resolver does not switch on the extension — it tries the raster reader and falls through.
+            That is deliberate (an extension lies often enough), and this is the path that proves the
+            fall-through works rather than merely existing.
+        """
+        from pyramids.feature import FeatureCollection
+
+        opened = DataRef(str(self._DATA / "points.geojson")).open()
+        assert isinstance(opened, FeatureCollection), (
+            f"a .geojson must resolve to a FeatureCollection, got {type(opened).__name__}"
+        )
+
+    def test_a_file_uri_resolves_the_same_as_a_bare_path(self):
+        """The `file:` scheme is accepted as well as a plain path.
+
+        Test scenario:
+            A stored figure may carry either spelling, and a reference that resolved one way when written and
+            another when read back would make the format useless.
+        """
+        path = self._DATA / "points.geojson"
+        assert type(DataRef(f"file:{path}").open()) is type(
+            DataRef(str(path)).open()
+        ), "a file: URI and a bare path must reach the same reader"
+
+    def test_something_readable_as_neither_blames_both_readers(self):
+        """A path that is neither raster nor vector reports the vector failure, chained to the raster one.
+
+        Test scenario:
+            Reporting only the last error would blame the vector reader for a corrupt GeoTIFF. The chain is
+            what lets whoever reads the traceback see that *both* readers were tried and why each declined.
+        """
+        missing = str(self._DATA / "no-such-file.tif")
+        with pytest.raises(Exception) as caught:
+            DataRef(missing).open()
+        assert caught.value.__cause__ is not None, (
+            "the vector failure must chain from the raster failure, so both are visible"
+        )
+
+
+class TestRegisteringAResolver:
+    """The guard on the registry itself."""
+
+    def test_a_resolver_needs_a_scheme_to_be_reachable_under(self):
+        """An empty scheme is refused rather than stored.
+
+        Test scenario:
+            `resolve_uri` derives the scheme from the URI and falls back to `"file"`, so nothing ever looks
+            up `""`. A resolver registered there would be silently unreachable — which looks exactly like a
+            plugin that failed to install.
+        """
+        with pytest.raises(ValueError, match="non-empty scheme"):
+            register_resolver("", lambda uri: uri)

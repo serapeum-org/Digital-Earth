@@ -86,6 +86,17 @@ class TestBinding:
         with pytest.raises(ValueError, match="needs its values"):
             Encoding.by_field("color", "elevation").resolve()
 
+    def test_a_field_encoding_needs_a_field_name(self):
+        """An empty field name is not a binding to the data either.
+
+        Test scenario:
+            It comes from a caller threading an unset column through — `color_column or ""`. Left through, it
+            would resolve every feature against a column nobody can name, and the error would surface far
+            away, inside whatever tried the lookup.
+        """
+        with pytest.raises(ValueError, match="non-empty field name"):
+            Encoding.by_field("color", "")
+
 
 class TestResolving:
     """What a channel resolves to, and why it is not a rendered value."""

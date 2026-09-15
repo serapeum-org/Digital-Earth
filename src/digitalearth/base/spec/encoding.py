@@ -265,20 +265,20 @@ class Encoding:
             return items
         if self.scale.is_categorical:
             return [self.scale.color_for(item) for item in items]
-        return [self._position(item) for item in items]
+        return [self._position(self.scale, item) for item in items]
 
-    def _position(self, value: Any) -> Optional[float]:
+    def _position(self, scale: Scale, value: Any) -> Optional[float]:
         """Place one numeric value on the channel, in ``[0, 1]`` or in `output_range`.
 
         Args:
+            scale: The scale to place against. Passed in rather than read from `self` because the caller has
+                already established there is one — taking it as an argument is what makes that a fact here
+                rather than a second check that can never fail.
             value: The datum to place.
 
         Returns:
             Its position, or ``None`` when it is not a finite number the scale can place.
         """
-        scale = self.scale
-        if scale is None:
-            return None
         try:
             number = float(value)
         except (TypeError, ValueError):
@@ -286,11 +286,11 @@ class Encoding:
         if not isfinite(number):
             return None
         if scale.is_classified:
-            index = scale.class_of(number)
-            if index is None:
-                return None
             classes = max(len(scale.class_ranges()) - 1, 1)
-            position = index / classes
+            # A finite value on a classified scale always places: `class_of` clamps rather than declining,
+            # and a Scale cannot hold fewer than two edges. The fallback is for the type, not the data.
+            index = scale.class_of(number)
+            position = (0 if index is None else index) / classes
         else:
             lo, hi = scale.as_limits()
             position = _clamp_unit((number - lo) / (hi - lo))

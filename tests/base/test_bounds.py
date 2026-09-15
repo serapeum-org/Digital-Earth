@@ -116,6 +116,17 @@ class TestARectangleMustBeOne:
             "a zero-area rectangle must be constructible"
         )
 
+    def test_no_coordinates_at_all_is_refused(self):
+        """A rectangle cannot be measured from nothing.
+
+        Test scenario:
+            The empty case reaches here whenever a layer's geometry was entirely filtered out — every point
+            off the limb of a globe CRS, say. `min()` over an empty sequence raises `ValueError` with a
+            message about `arg is an empty sequence`, which says nothing about bounds; this names the call.
+        """
+        with pytest.raises(ValueError, match="at least one coordinate pair"):
+            Bounds.from_points([], [], crs=4326)
+
 
 class TestOperations:
     """`union` and `padded` are what auto-framing is built from."""

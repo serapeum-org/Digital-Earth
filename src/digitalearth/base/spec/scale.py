@@ -98,7 +98,7 @@ class Scale:
         """Refuse a domain nothing can be normalised against.
 
         Raises:
-            ValueError: for a non-finite or degenerate domain.
+            ValueError: for a non-finite or degenerate domain, or for class edges that bound no class.
         """
         for name, value in (("vmin", self.vmin), ("vmax", self.vmax)):
             if not isfinite(value):
@@ -107,6 +107,11 @@ class Scale:
             raise ValueError(
                 f"Scale needs vmax > vmin; got vmin={self.vmin}, vmax={self.vmax}. "
                 "Build with Scale.from_values(), which widens a constant domain for you"
+            )
+        if self.breaks and len(self.breaks) < 2:
+            raise ValueError(
+                f"Scale needs at least two class edges to bound one class; got {self.breaks}. "
+                "An empty breaks tuple is how a continuous ramp says it cuts no classes"
             )
 
     # ------------------------------------------------------------------ builders

@@ -195,3 +195,30 @@ def test_scatter_alpha_applies_to_the_rendered_artist():
     )
     artist = Map(crs=4326).scatter(fc, alpha=0.5)
     assert artist.get_alpha() == 0.5
+
+
+def test_an_already_built_point_overlay_is_left_alone():
+    """A caller who passes a built PointOverlay keeps it, and stray point_* keys are not silently dropped.
+
+    Test scenario:
+        The fold is applied centrally and must be idempotent on its own output. Rebuilding the overlay would
+        discard whatever the caller configured on it; dropping the leftover point_* keys instead of leaving
+        them for `prepare_plot_kwargs` to report would lose styling with no error.
+    """
+    overlay = PointOverlay(np.array([[0.0, 0.0]]))
+    out = group_render_kwargs({"points": overlay, "point_color": "red"})
+    assert out["points"] is overlay, "a built overlay must be kept as given"
+    assert out["point_color"] == "red", (
+        "a stray point_* key must be left in place, not silently dropped"
+    )
+
+
+def test_marker_styling_with_no_points_array_is_dropped():
+    """point_* styling passed without any `points` has nothing to attach to.
+
+    Test scenario:
+        `PointOverlay` needs an array; building one from styling alone would raise deep inside cleopatra.
+        Dropping it is the deliberate choice — there is no overlay to style, so the keys describe nothing.
+    """
+    out = group_render_kwargs({"point_color": "red", "point_size": 8})
+    assert out == {}, f"marker styling with no points array must be dropped, got {out}"
