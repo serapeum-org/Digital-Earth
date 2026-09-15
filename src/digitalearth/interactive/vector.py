@@ -18,6 +18,7 @@ producing an empty Bokeh layer.
 from typing import TYPE_CHECKING, Any, Optional, Self, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.points import PointArrays
 from digitalearth.base.spec import Scale
 from digitalearth.base.symbology import sample_cmap
 from digitalearth.interactive.base import (
@@ -896,13 +897,14 @@ class VectorMixin(_MixinBase):
         )  # matplotlib, not a forbidden GIS engine
 
         gdf = self._display_gdf(data)
-        x = gdf.geometry.x.to_numpy()
-        y = gdf.geometry.y.to_numpy()
-        finite = np.isfinite(x) & np.isfinite(y)
-        x, y = x[finite], y[finite]
+        # The extraction and the non-finite drop are PointArrays' — and it keeps the value column in step
+        # with the points it removes, which this site was doing with a second application of the mask.
+        column = gdf[value_column].to_numpy() if value_column else None
+        points, (column,) = PointArrays.from_features(gdf).finite(column)
+        x, y = points.x, points.y
         simplices = Triangulation(x, y).triangles
         if value_column:
-            z = gdf[value_column].to_numpy()[finite]
+            z = column
             nodes = gv.Points((x, y, z), vdims=[value_column], crs=crs)
             return nodes, simplices, [value_column]
         return gv.Points((x, y), crs=crs), simplices, []

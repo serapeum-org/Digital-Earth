@@ -16,6 +16,7 @@ import numpy as np
 import pyvista as pv
 
 from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.points import PointArrays
 from digitalearth.three_d.base import classified_scalars
 
 #: Attribute name the per-point colour scalar is stored under on the generated cloud.
@@ -35,15 +36,9 @@ def _coords_from_geodataframe(
         tuple: ``(points, values)`` where ``points`` is an ``(N, 3)`` float array (z filled with 0 when the
         geometries are 2-D) and ``values`` is the column array or ``None``.
     """
-    geom = data.geometry
-    x = np.asarray(geom.x.to_numpy(), dtype="float64")
-    y = np.asarray(geom.y.to_numpy(), dtype="float64")
-    z = (
-        np.asarray(geom.z.to_numpy(), dtype="float64")
-        if bool(geom.has_z.all())
-        else np.zeros_like(x)
-    )
-    points = np.column_stack([x, y, z])
+    # The x/y/z read, the float64 coercion and the "zeros when the geometry is 2-D" rule are all
+    # PointArrays' now — this tier wrote out its own copy of each.
+    points = PointArrays.from_features(data).as_columns()
     values = (
         np.asarray(data[value_column].to_numpy(), dtype="float64")
         if value_column

@@ -23,6 +23,7 @@ from shapely.affinity import scale as affine_scale
 from digitalearth.base.arrays import NAN_REDUCERS, read_masked_band
 from digitalearth.base.crs import reproject
 from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
 from digitalearth.base.symbology import (
     MISSING_COLOR,
@@ -867,6 +868,10 @@ class VectorMixin(_MixinBase):
         dropped — together with their matching ``values`` — so downstream tessellation / binning / KDE never
         receives ``inf`` / ``nan``.
 
+        This is now a thin adapter over :class:`~digitalearth.base.points.PointArrays`, which is this helper
+        lifted into `base/` so the other three tiers stop hand-rolling it. Kept as a method because the three
+        call sites here want the flat ``(xs, ys, values)`` triple rather than the value object.
+
         Args:
             geom: A geopandas point ``GeoSeries`` (already in the display CRS).
             values: Optional per-point array aligned with ``geom``; filtered by the same finite mask.
@@ -874,12 +879,8 @@ class VectorMixin(_MixinBase):
         Returns:
             tuple: ``(xs, ys, values)`` numpy arrays of finite points; ``values`` is ``None`` when not given.
         """
-        xs = np.asarray(geom.x, dtype=float)
-        ys = np.asarray(geom.y, dtype=float)
-        mask = np.isfinite(xs) & np.isfinite(ys)
-        if values is not None:
-            values = np.asarray(values)[mask]
-        return xs[mask], ys[mask], values
+        points, (filtered,) = PointArrays.of(geom.x, geom.y).finite(values)
+        return points.x, points.y, filtered
 
     @_skips_off_limb
     def voronoi(
