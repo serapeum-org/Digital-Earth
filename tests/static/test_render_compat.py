@@ -225,3 +225,28 @@ def test_marker_styling_with_no_points_array_is_refused():
     """
     with pytest.raises(ValueError, match="no points= array was given"):
         group_render_kwargs({"point_color": "red", "point_size": 8})
+
+
+def test_an_explicit_points_none_is_still_a_no_op():
+    """Forwarding `points=None` does nothing, as it did before the styling guard was added.
+
+    Test scenario:
+        `points=` is a public styling kwarg on the raster builders, and forwarding an optional variable
+        (`points=points_or_none`) is the ordinary way to write a wrapper around them. The round-1 fix that
+        names orphaned point styling raised unconditionally once `points` was present-but-None, so it
+        reported an empty list of keys and broke every such wrapper.
+    """
+    out = group_render_kwargs({"points": None, "cmap": "viridis"})
+    assert out == {"cmap": "viridis"}, f"points=None must fold to nothing, got {out}"
+
+
+def test_orphaned_point_styling_names_the_keyword_the_caller_wrote():
+    """The error says `point_color`, not cleopatra's internal field name `color`.
+
+    Test scenario:
+        The keys were collected by `PointOverlay` *field* name, so the message listed names the caller never
+        typed. `color` is worse than merely unfamiliar — it is itself a declared style key here, meaning
+        cleopatra's ColorScaling group, so the message pointed at a real keyword that does something else.
+    """
+    with pytest.raises(ValueError, match=r"\['point_color'\]"):
+        group_render_kwargs({"points": None, "point_color": "red"})

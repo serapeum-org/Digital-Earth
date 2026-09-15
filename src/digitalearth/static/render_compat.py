@@ -448,16 +448,24 @@ def _fold_points(out: Dict[str, Any]) -> None:
     if isinstance(out.get("points"), PointOverlay):
         return  # already a built overlay; leave any stray point_* keys in place, don't silently drop them
     points = out.pop("points", None)
+    # Keep the caller's spelling beside the PointOverlay field it folds into: the error below has to name
+    # `point_color`, which the caller wrote, not `color`, which is a *different* declared style key here
+    # (cleopatra's ColorScaling group) and would send them to the wrong keyword entirely.
+    written = [key for key in _POINT_FIELDS if key in out]
     point_kw = {
         field: out.pop(key) for key, field in _POINT_FIELDS.items() if key in out
     }
     if points is None:
-        # Marker styling with no array to attach it to. Dropping it was the old behaviour and is the exact
+        if not point_kw:
+            # No array and no styling — nothing to fold. `points=None` is how a wrapper forwards an
+            # optional argument it was not given, and it was a no-op before; raising here broke every
+            # such wrapper.
+            return
+        # Styling with no array to attach it to. Dropping it was the old behaviour and is the exact
         # silence this module's schema exists to remove: `point_color="red"` on a layer with no `points=`
-        # did nothing and said nothing. The keys were already popped above, so naming them is all that is
-        # left to do.
+        # did nothing and said nothing.
         raise ValueError(
-            f"{sorted(point_kw)} style the point overlay, but no points= array was given for them to "
+            f"{sorted(written)} style the point overlay, but no points= array was given for them to "
             "apply to; pass points=, or drop the styling"
         )
     out["points"] = PointOverlay(points, **point_kw)
