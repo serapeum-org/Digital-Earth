@@ -278,7 +278,6 @@ class TestTheFileResolver:
         ("uri", "expected"),
         [
             ("file:///home/me/x.tif", "/home/me/x.tif"),
-            ("file:///C:/data/x.tif", "C:/data/x.tif"),
             ("file:data/dem.tif", "data/dem.tif"),
             ("file:///a%20b/x.tif", "/a b/x.tif"),
             ("file://server/share/x.tif", "//server/share/x.tif"),
@@ -302,6 +301,26 @@ class TestTheFileResolver:
 
         assert _path_of(uri).replace("\\", "/") == expected, (
             f"{uri!r} must resolve to {expected!r}, got {_path_of(uri)!r}"
+        )
+
+    def test_a_drive_letter_uri_resolves_the_way_the_platform_reads_it(self):
+        """`file:///C:/data/x.tif` means different things on Windows and on POSIX, and both are right.
+
+        Test scenario:
+            The leading slash before a drive letter is Windows syntax: there it is stripped, leaving
+            the path rooted at the drive. On POSIX there are no drive letters, so `/C:/data/x.tif` is
+            simply a directory named `C:` at the root — and stripping the slash would be the very
+            bug this replaced, pointed the other way. `url2pathname` is what knows which platform it is
+            on, so the expectation has to follow it rather than assert one platform's answer everywhere.
+        """
+        import os
+
+        from digitalearth.base.registry import _path_of
+
+        resolved = _path_of("file:///C:/data/x.tif").replace(os.sep, "/")
+        expected = "C:/data/x.tif" if os.name == "nt" else "/C:/data/x.tif"
+        assert resolved == expected, (
+            f"on {os.name!r} the drive-letter URI must resolve to {expected!r}, got {resolved!r}"
         )
 
     def test_a_missing_path_is_reported_as_missing(self):
