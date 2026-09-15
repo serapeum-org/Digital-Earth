@@ -281,6 +281,7 @@ class TestTheFileResolver:
             ("file:///C:/data/x.tif", "C:/data/x.tif"),
             ("file:data/dem.tif", "data/dem.tif"),
             ("file:///a%20b/x.tif", "/a b/x.tif"),
+            ("file://server/share/x.tif", "//server/share/x.tif"),
         ],
     )
     def test_a_file_uri_keeps_the_path_it_names(self, uri, expected):

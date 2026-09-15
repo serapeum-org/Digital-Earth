@@ -262,6 +262,60 @@ class TestClassification:
         with pytest.raises(ValueError, match="at least two class edges"):
             Scale(0.0, 1.0, scheme="equal_interval", breaks=(5.0,))
 
+    def test_breaks_of_cuts_edges_without_deriving_a_domain(self):
+        """The classify-only path returns the same edges `from_values` would, and measures nothing.
+
+        Test scenario:
+            The three classification sites read `.breaks` and nothing else, so deriving a domain for them —
+            a full pass plus a compacted copy of every finite value — produced an answer thrown straight
+            away. This must stay identical to the long way round, or the tiers would cut different classes
+            depending on which call they happened to use.
+        """
+        values = list(range(10))
+        assert (
+            Scale.breaks_of(values, "equal_interval", 3)
+            == Scale.from_values(values, scheme="equal_interval", k=3).breaks
+        ), "the short path must cut exactly the edges the long one does"
+
+    def test_breaks_of_reports_a_bad_scheme_the_same_way(self):
+        """The shorter path keeps the error that names the scheme and `k`.
+
+        Test scenario:
+            It is the same classifier and the same wrapper, so a caller cannot get a worse message by taking
+            the path that skips the measurement.
+        """
+        with pytest.raises(ValueError, match=r"scheme='nonsense'.*k=5"):
+            Scale.breaks_of([1.0, 2.0, 3.0], "nonsense")
+
+    def test_from_finite_matches_from_values_on_already_filtered_data(self):
+        """The pre-filtered builder settles on exactly the domain the filtering one would.
+
+        Test scenario:
+            Four call sites had already filtered to finite values and handed the result straight back to
+            `from_values`, which filtered it again — a second full pass and, on a global canvas, a second
+            ~75 MB copy. The two builders must agree exactly, or which one a tier happened to call would
+            change the colours it drew.
+        """
+        finite_values = [1.0, 5.0, 9.0]
+        assert (
+            Scale.from_finite(finite_values).as_limits()
+            == Scale.from_values(finite_values).as_limits()
+        ), "the two builders must settle on the same domain"
+
+    def test_from_finite_keeps_the_empty_and_widening_rules(self):
+        """Skipping the filter does not skip the degenerate-case handling.
+
+        Test scenario:
+            An empty selection must still yield limits a colormap can take, and a constant one must still
+            widen — those rules are the reason the type exists, not part of the filtering it skips.
+        """
+        assert Scale.from_finite([]).as_limits() == (0.0, 1.0), (
+            "empty falls back to the unit range"
+        )
+        assert Scale.from_finite([7.0, 7.0]).as_limits() == (7.0, 8.0), (
+            "a constant domain widens"
+        )
+
 
 class TestCategorical:
     """Unordered categories, where a numeric domain is not the question."""

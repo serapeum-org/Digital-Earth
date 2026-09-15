@@ -33,17 +33,14 @@ def _same_crs(one: Any, other: Any) -> bool:
         ``True`` when they denote the same system. Compared by meaning rather than by ``==``, because the
         whole point of carrying a CRS is to stop a rectangle being measured against the wrong one — and
         ``4326 != "EPSG:4326"`` would refuse a great many *right* ones. pyramids owns the normalisation, so
-        it is asked; if it cannot read either spelling, the comparison falls back to equality rather than
-        raising, since this is used to decide whether work is needed, not to validate.
+        it is asked; it answers ``False`` for a spelling it cannot read rather than raising, which is what
+        this needs — the question is whether reprojection is required, not whether the input is valid.
     """
     if one is other or one == other:
         return True
-    try:
-        from pyramids.base.crs import crs_equal
+    from pyramids.base.crs import crs_equal
 
-        return bool(crs_equal(one, other))
-    except Exception:
-        return False
+    return bool(crs_equal(one, other))
 
 
 @dataclass(frozen=True)

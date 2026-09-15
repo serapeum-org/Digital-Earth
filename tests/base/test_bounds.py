@@ -220,6 +220,19 @@ class TestOperations:
                 Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
             )
 
+    def test_an_unreadable_crs_spelling_falls_back_to_plain_inequality(self):
+        """A CRS neither pyramids nor equality can match is treated as different, not as an error.
+
+        Test scenario:
+            `_same_crs` decides whether reprojection is needed, not whether input is valid — so a spelling
+            pyramids cannot parse must answer "not the same" rather than raise out of `union`, where the
+            caller would get a CRS-parsing traceback for what is really a mismatched-rectangle message.
+        """
+        with pytest.raises(ValueError, match="one CRS"):
+            Bounds(0.0, 0.0, 1.0, 1.0, crs="not-a-crs-at-all").union(
+                Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
+            )
+
 
 class TestReprojection:
     """`to_crs` delegates to pyramids; this package does no coordinate maths."""
