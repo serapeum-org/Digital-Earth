@@ -32,6 +32,20 @@ __all__ = ["FigureSpec", "PanelSpec", "SCHEMA_VERSION"]
 SCHEMA_VERSION = 1
 
 
+def _is_known_version(version: Any) -> bool:
+    """Whether `version` is exactly the schema version this module reads.
+
+    Args:
+        version: The candidate.
+
+    Returns:
+        ``True`` only for the integer :data:`SCHEMA_VERSION`. A boolean is an int in Python and ``1.0`` equals ``1``,
+        so a plain ``==`` accepted both — and a figure built with ``1.0`` then wrote ``"schema_version": 1.0`` back
+        out, a version spelling no reader should have to expect.
+    """
+    return type(version) is int and version == SCHEMA_VERSION
+
+
 def _identifier(owner: str, value: Any) -> None:
     """Refuse an id that could not address anything.
 
@@ -239,10 +253,7 @@ class FigureSpec:
         Raises:
             ValueError: as described on the class.
         """
-        if (
-            isinstance(self.schema_version, bool)
-            or self.schema_version != SCHEMA_VERSION
-        ):
+        if not _is_known_version(self.schema_version):
             raise ValueError(
                 f"FigureSpec schema_version {self.schema_version!r} is not one this version of digitalearth reads; "
                 f"it reads {SCHEMA_VERSION}"
@@ -507,7 +518,7 @@ class FigureSpec:
                 f"FigureSpec.from_dict needs a mapping; got {type(data).__name__}"
             )
         version = require("FigureSpec", data, "schema_version")
-        if isinstance(version, bool) or version != SCHEMA_VERSION:
+        if not _is_known_version(version):
             raise ValueError(
                 f"FigureSpec.from_dict got schema_version {version!r}; this version of digitalearth reads "
                 f"{SCHEMA_VERSION}"

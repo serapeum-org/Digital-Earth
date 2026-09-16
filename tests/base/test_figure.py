@@ -301,7 +301,7 @@ class TestTheSchemaVersion:
             == SCHEMA_VERSION
         )
 
-    @pytest.mark.parametrize("version", [2, 0, True, "1"])
+    @pytest.mark.parametrize("version", [2, 0, True, "1", 1.0])
     def test_the_constructor_refuses_a_version_it_does_not_read(self, version):
         """Only the current version is accepted.
 
@@ -323,6 +323,19 @@ class TestTheSchemaVersion:
         """
         stored = {"schema_version": 2, "panels": [], "legend": {}}
         with pytest.raises(ValueError, match="got schema_version 2"):
+            FigureSpec.from_dict(stored)
+
+    def test_from_dict_refuses_a_float_version(self):
+        """`1.0` equals `1` but is not the version spelling a writer produces, so a reader refuses it.
+
+        Test scenario:
+            A plain `==` let `1.0` through, and a figure built with it wrote `"schema_version": 1.0` back out.
+        """
+        stored = {
+            "schema_version": 1.0,
+            "panels": [{"id": "p", "viewport": {"crs": 3857}}],
+        }
+        with pytest.raises(ValueError, match="got schema_version 1.0"):
             FigureSpec.from_dict(stored)
 
     def test_from_dict_needs_a_version(self):
