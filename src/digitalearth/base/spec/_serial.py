@@ -32,6 +32,33 @@ def refuse_unknown(owner: str, data: Any, known: Iterable[str]) -> None:
         TypeError: if `data` is not a mapping.
         ValueError: if it has a key outside `known`. The message lists both sets, sorted, so the caller can see
             whether it is a typo or a field from a newer version.
+
+    Examples:
+        - A mapping that uses only known keys passes, and nothing is returned:
+            ```python
+            >>> from digitalearth.base.spec._serial import refuse_unknown
+            >>> print(refuse_unknown("Camera", {"position": [0, 1, 0]}, ("position", "view_up")))
+            None
+
+            ```
+        - An unknown key is named beside the keys that exist:
+            ```python
+            >>> from digitalearth.base.spec._serial import refuse_unknown
+            >>> refuse_unknown("Camera", {"position": [0, 1, 0], "roll": 3}, ("view_up", "position"))
+            Traceback (most recent call last):
+                ...
+            ValueError: Camera.from_dict got unknown keys ['roll']; known keys are ['position', 'view_up']
+
+            ```
+        - Something that is not a mapping at all is a `TypeError`:
+            ```python
+            >>> from digitalearth.base.spec._serial import refuse_unknown
+            >>> refuse_unknown("Camera", [0, 1, 0], ("position",))
+            Traceback (most recent call last):
+                ...
+            TypeError: Camera.from_dict needs a mapping; got list
+
+            ```
     """
     if not isinstance(data, Mapping):
         raise TypeError(f"{owner}.from_dict needs a mapping; got {type(data).__name__}")
@@ -56,6 +83,24 @@ def require(owner: str, data: Mapping[str, Any], key: str) -> Any:
 
     Raises:
         ValueError: if the key is absent, naming it rather than surfacing as a bare `KeyError`.
+
+    Examples:
+        - A present key returns its value:
+            ```python
+            >>> from digitalearth.base.spec._serial import require
+            >>> require("Viewport", {"crs": 4326, "globe": True}, "crs")
+            4326
+
+            ```
+        - A missing key is named, with the keys that were there:
+            ```python
+            >>> from digitalearth.base.spec._serial import require
+            >>> require("Viewport", {"globe": True}, "crs")
+            Traceback (most recent call last):
+                ...
+            ValueError: Viewport.from_dict needs 'crs'; got keys ['globe']
+
+            ```
     """
     if key not in data:
         raise ValueError(f"{owner}.from_dict needs {key!r}; got keys {sorted(data)}")
@@ -71,11 +116,39 @@ def finite_number(owner: str, name: str, value: Any) -> float:
         value: The candidate.
 
     Returns:
-        The value as a Python float.
+        The value as a Python float. A Python or numpy integer is accepted and converted.
 
     Raises:
-        ValueError: for a bool (which is an int in Python, and would read `True` as `1.0`), a non-number, `nan`
-            or an infinity.
+        ValueError: for a bool (which is an int in Python, and would read `True` as `1.0`), a non-number — a
+            numeric string included — `nan` or an infinity.
+
+    Examples:
+        - An integer, Python or numpy, comes back as a float:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import finite_number
+            >>> finite_number("Camera", "view_angle", 45), finite_number("Camera", "view_angle", np.int64(45))
+            (45.0, 45.0)
+
+            ```
+        - A boolean is refused rather than read as `1.0`:
+            ```python
+            >>> from digitalearth.base.spec._serial import finite_number
+            >>> finite_number("Camera", "view_angle", True)
+            Traceback (most recent call last):
+                ...
+            ValueError: Camera needs view_angle as a number; got True
+
+            ```
+        - A non-finite value is refused, naming the field:
+            ```python
+            >>> from digitalearth.base.spec._serial import finite_number
+            >>> finite_number("Camera", "distance", float("inf"))
+            Traceback (most recent call last):
+                ...
+            ValueError: Camera needs a finite distance; got inf
+
+            ```
     """
     if isinstance(value, bool) or not isinstance(
         value, (int, float, np.integer, np.floating)
@@ -95,16 +168,47 @@ def to_json_value(value: Any, where: str) -> Any:
         where: The field, for the message — ``"Symbology.props['levels']"``.
 
     Returns:
-        The value with tuples and arrays as lists, mappings as dicts and numpy scalars as Python numbers. JSON has
-        no tuple, so a tuple comes back from a round trip as a list: equality survives a round trip for values
-        that are already JSON-native, which is what a figure description should hold.
+        The value with tuples and arrays as lists (nested arrays as nested lists), mappings as dicts and numpy
+        scalars as the Python `bool`, `int` or `float` they hold. JSON has no tuple, so a tuple comes back from a
+        round trip as a list: equality survives a round trip for values that are already JSON-native, which is
+        what a figure description should hold.
 
     Raises:
         TypeError: for anything else — a dataset, a `datetime`, a set, a mapping with a non-string key — naming
-            `where`. A set is refused rather than listed because it has no order to write down. `nan` and the
-            infinities are refused too: JSON has no spelling for them, and the ``NaN``/``Infinity`` tokens Python's
-            `json` writes by default are rejected by strict readers — ``json.dumps(allow_nan=False)``, and
-            JavaScript's ``JSON.parse``, which is what reads an exported page.
+            `where`, down to the item inside a list or dict. A set is refused rather than listed because it has
+            no order to write down. `nan` and the infinities are refused too: JSON has no spelling for them. The
+            `NaN`/`Infinity` tokens Python's `json.dumps` writes by default are not JSON — `json.dumps` itself
+            refuses them with `allow_nan=False`, and JavaScript's `JSON.parse`, which is what reads an exported
+            page, raises a `SyntaxError` on them.
+
+    Examples:
+        - Tuples, arrays and numpy scalars come back as the JSON-native types:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import to_json_value
+            >>> to_json_value({"levels": (1, 2), "grid": np.array([[1, 2], [3, 4]]), "k": np.int64(5)}, "props")
+            {'levels': [1, 2], 'grid': [[1, 2], [3, 4]], 'k': 5}
+
+            ```
+        - A live object is refused, naming where it sits:
+            ```python
+            >>> from datetime import datetime
+            >>> from digitalearth.base.spec._serial import to_json_value
+            >>> to_json_value({"when": [datetime(2024, 1, 1)]}, "Symbology.props")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            TypeError: Symbology.props['when'][0] holds a datetime, which has no JSON form. A figure description ...
+
+            ```
+        - `nan` is refused rather than written as a token strict readers reject:
+            ```python
+            >>> from digitalearth.base.spec._serial import to_json_value
+            >>> to_json_value([1.0, float("nan")], "Scale.breaks")
+            Traceback (most recent call last):
+                ...
+            TypeError: Scale.breaks[1] is nan, which has no JSON form; strict JSON readers refuse NaN and Infinity
+
+            ```
     """
     if value is None or isinstance(value, (bool, str)):
         return value
@@ -146,10 +250,10 @@ def _finite(value: Any, where: str) -> Any:
         where: The field, for the message.
 
     Returns:
-        `value` unchanged.
+        `value` unchanged — only a float is inspected, so a boolean, an int or a string always passes.
 
     Raises:
-        TypeError: for `nan`, `inf` or `-inf`.
+        TypeError: for a float that is `nan`, `inf` or `-inf`.
     """
     if isinstance(value, float) and not isfinite(value):
         raise TypeError(
@@ -166,13 +270,43 @@ def crs_to_json(crs: Any, where: str) -> Any:
         where: The field, for the message.
 
     Returns:
-        ``None``, an integer or a string unchanged. A CRS object becomes ``"EPSG:<code>"`` when pyramids reads an
-        authority code out of it, and its WKT otherwise. Either reads back through the same pyramids parser that
-        read the object, so the system is kept even though the Python type is not.
+        `None` or a string unchanged — a string is not checked, so one pyramids cannot read is written as
+        given — and an integer (a numpy integer included) as a Python `int`. A CRS object becomes
+        `"EPSG:<code>"` when pyramids reads an authority code out of it, and its WKT otherwise. Either reads
+        back through the same pyramids parser that read the object, so the system is kept even though the
+        Python type is not.
 
     Raises:
-        TypeError: for a boolean — `True` is an `int` and would be written as EPSG code 1 — or for an object
-            pyramids cannot read as a CRS.
+        TypeError: for a boolean — `True` is an `int` and would be written as EPSG code 1 — or for any other
+            object pyramids cannot read as a CRS, a float among them.
+
+    Examples:
+        - An EPSG integer and a string pass through:
+            ```python
+            >>> from digitalearth.base.spec._serial import crs_to_json
+            >>> crs_to_json(4326, "Viewport.crs"), crs_to_json("+proj=ortho +lat_0=30", "Viewport.crs")
+            (4326, '+proj=ortho +lat_0=30')
+
+            ```
+        - A CRS object is written by its authority code, or as WKT when it has none:
+            ```python
+            >>> from pyramids.base.crs import crs_from_user_input
+            >>> from digitalearth.base.spec._serial import crs_to_json
+            >>> crs_to_json(crs_from_user_input(3857), "Bounds.crs")
+            'EPSG:3857'
+            >>> crs_to_json(crs_from_user_input("+proj=ortho +lat_0=30 +lon_0=10"), "Bounds.crs")[:7]
+            'PROJCRS'
+
+            ```
+        - A boolean names no reference system:
+            ```python
+            >>> from digitalearth.base.spec._serial import crs_to_json
+            >>> crs_to_json(True, "Bounds.crs")
+            Traceback (most recent call last):
+                ...
+            TypeError: Bounds.crs is True, which names no coordinate reference system
+
+            ```
     """
     if crs is None or isinstance(crs, str):
         return crs

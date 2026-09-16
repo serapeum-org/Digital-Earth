@@ -2,9 +2,10 @@
 
 On every tier the view is loose state on the facade. The static `Map` keeps ``crs``, ``domain`` and ``globe`` as three
 attributes, and animates a rotation by assigning ``self.crs`` per frame and restoring it afterwards
-(``static/maps/animation.py``). The 3-D tier has no camera at all beyond a ``cpos=`` keyword forwarded to ``show()``
-(#204). None of it can be read back, compared or stored — which is what export (#187, #194), camera read-back (#204)
-and a figure description all need.
+(`static/maps/animation.py`). The 3-D tier has no camera value of its own: a view is framed through a `cpos=`
+keyword forwarded to `show()`, or swept along `orbit`'s path, and the tier has no API of its own to read the camera
+back (#204). None of it is one value that can be compared or stored — which is what export (#187, #194), camera
+read-back (#204) and a figure description all need.
 
 These are values: frozen, serialisable, renderer-free. A change of view is a new value, never a mutation of the old
 one, which is what makes a rotation a sequence of views rather than a loop that edits one in place.
@@ -47,13 +48,14 @@ def _vector(owner: str, name: str, value: Any) -> Vector3:
     Args:
         owner: The type being built, for the message.
         name: The field.
-        value: The candidate — any sequence of three numbers.
+        value: The candidate — any iterable of three numbers other than a string: a tuple, a list, a numpy array.
 
     Returns:
         The vector as a tuple of floats.
 
     Raises:
-        ValueError: if it is not a sequence of exactly three finite numbers.
+        ValueError: for a string or a non-iterable, an iterable that does not hold exactly three items, or an item
+            that is not a finite number (a boolean included).
     """
     if isinstance(value, (str, bytes)) or not hasattr(value, "__iter__"):
         raise ValueError(f"{owner} needs {name} as three numbers; got {value!r}")
@@ -82,8 +84,8 @@ class Viewport:
         globe: Whether the map is drawn on a globe frame rather than a flat projection.
 
     Raises:
-        ValueError: for a boolean CRS, `bounds` that is not a `Bounds` or is in a different CRS, a `domain` that is
-            neither a non-empty name nor four finite numbers, or a non-boolean `globe`.
+        ValueError: for a `None` or boolean CRS, `bounds` that is not a `Bounds` or is in a different CRS, a
+            `domain` that is neither a non-empty name nor four finite numbers, or a non-boolean `globe`.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
@@ -99,6 +101,15 @@ class Viewport:
             >>> from digitalearth.base.spec import Viewport
             >>> Viewport(domain="europe").domain
             'europe'
+
+            ```
+        - A region in another CRS is refused rather than drawn in the wrong place; `framed` reprojects it:
+            ```python
+            >>> from digitalearth.base.spec import Bounds, Viewport
+            >>> Viewport(3857, bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: Viewport bounds are in 4326 but the view is drawn in 3857; use Viewport.framed(bounds), ...
 
             ```
     """
@@ -127,7 +138,8 @@ class Viewport:
         """Refuse bounds that are not a `Bounds`, or that are in a different CRS from the view.
 
         Raises:
-            ValueError: naming both CRSs and `framed`, which reprojects.
+            ValueError: for bounds that are not a `Bounds`; or, naming both CRSs and `framed`, which reprojects, for
+                bounds in a CRS pyramids does not judge the same as the view's.
         """
         if self.bounds is None:
             return
@@ -156,7 +168,8 @@ class Viewport:
             The name unchanged, the four edges as floats, or ``None``.
 
         Raises:
-            ValueError: for an empty name, a scalar, the wrong number of edges, or a non-finite edge.
+            ValueError: for an empty or whitespace-only name, a non-iterable, the wrong number of edges, or an edge
+                that is not a finite number (a boolean included).
         """
         if domain is None:
             return None
@@ -198,6 +211,14 @@ class Viewport:
                 ([0.0, 0.0, 10.0, 5.0], None)
 
                 ```
+            - A region in another CRS is reprojected into the view's:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, Viewport
+                >>> framed = Viewport(3857).framed(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+                >>> framed.bounds.crs, [round(edge) for edge in framed.bounds.as_bbox()]
+                (3857, [0, 0, 111319, 111325])
+
+                ```
         """
         if not isinstance(bounds, Bounds):
             raise ValueError(
@@ -224,6 +245,14 @@ class Viewport:
                 False
 
                 ```
+            - A CRS spelled as a string always warps, even when it names the data's own system:
+                ```python
+                >>> from types import SimpleNamespace
+                >>> from digitalearth.base.spec import Viewport
+                >>> Viewport("EPSG:4326").needs_reproject(SimpleNamespace(epsg=4326))
+                True
+
+                ```
         """
         # Imported here: base.display reaches base.sources, which imports this package, so importing it at module
         # level would be circular.
@@ -235,10 +264,11 @@ class Viewport:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            ``crs``, plus ``bounds``, ``domain`` and ``globe`` when set.
+            `crs`, plus `bounds` and `domain` when set and `globe` only when it is `True`. A CRS object is written
+            as `"EPSG:<code>"` or WKT; an EPSG integer or a string is written as given, unchecked.
 
         Raises:
-            TypeError: if the CRS is not one pyramids can read.
+            TypeError: if the CRS is an object pyramids cannot read as a CRS.
 
         Examples:
             - A default view is its CRS:
@@ -246,6 +276,14 @@ class Viewport:
                 >>> from digitalearth.base.spec import Viewport
                 >>> Viewport().to_dict()
                 {'crs': 3857}
+
+                ```
+            - A framed globe view writes its region as a dict of named edges:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, Viewport
+                >>> stored = Viewport(4326, bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326), globe=True).to_dict()
+                >>> sorted(stored), stored["bounds"]
+                (['bounds', 'crs', 'globe'], {'xmin': 0.0, 'ymin': 0.0, 'xmax': 1.0, 'ymax': 1.0, 'crs': 4326})
 
                 ```
         """
@@ -271,7 +309,7 @@ class Viewport:
             The view, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
+            TypeError: if `data`, or its `bounds`, is not a mapping.
             ValueError: for a missing CRS, an unknown key, or a view the constructor refuses.
 
         Examples:
@@ -281,6 +319,22 @@ class Viewport:
                 >>> view = Viewport.from_dict({"crs": "+proj=ortho +lat_0=30 +lon_0=10", "globe": True})
                 >>> view.globe, view.crs
                 (True, '+proj=ortho +lat_0=30 +lon_0=10')
+
+                ```
+            - A stored domain box comes back as a tuple of floats:
+                ```python
+                >>> from digitalearth.base.spec import Viewport
+                >>> Viewport.from_dict({"crs": 4326, "domain": [-10, 35, 30, 60]}).domain
+                (-10.0, 35.0, 30.0, 60.0)
+
+                ```
+            - The CRS cannot be left out:
+                ```python
+                >>> from digitalearth.base.spec import Viewport
+                >>> Viewport.from_dict({"globe": True})
+                Traceback (most recent call last):
+                    ...
+                ValueError: Viewport.from_dict needs 'crs'; got keys ['globe']
 
                 ```
         """
@@ -322,6 +376,23 @@ class Camera:
             >>> camera = Camera.look_at((0.0, 0.0, 0.0), azimuth=225.0, elevation=30.0, distance=100.0)
             >>> round(camera.azimuth, 6), round(camera.elevation, 6), round(camera.distance, 6)
             (225.0, 30.0, 100.0)
+
+            ```
+        - Fields left out look at the origin with `+z` up and VTK's 30-degree view angle; vectors become floats:
+            ```python
+            >>> from digitalearth.base.spec import Camera
+            >>> camera = Camera((0, -10, 5))
+            >>> camera.position, camera.focal_point, camera.view_up, camera.view_angle
+            ((0.0, -10.0, 5.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0), 30.0)
+
+            ```
+        - Looking straight down with the default vertical `view_up` leaves "up" undefined:
+            ```python
+            >>> from digitalearth.base.spec import Camera
+            >>> Camera((0.0, 0.0, 10.0))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: Camera view_up (0.0, 0.0, 1.0) is parallel to the line of sight, so 'up' on the screen is ...
 
             ```
     """
@@ -420,8 +491,9 @@ class Camera:
             The camera.
 
         Raises:
-            ValueError: for a non-positive distance, or any value the constructor refuses — including looking
-                straight down with the default vertical `view_up`.
+            ValueError: for a non-positive distance, an azimuth, elevation or distance that is not a finite number,
+                or any value the constructor refuses — including looking straight down with the default vertical
+                `view_up`.
 
         Examples:
             - Looking at a point from due south, level with it:
@@ -484,8 +556,9 @@ class Camera:
         """The compass bearing from the focal point to the camera, in degrees.
 
         Returns:
-            A bearing in ``[0, 360)``, clockwise from north (``+y``). A camera directly above or below its focal
-            point has no horizontal direction and reports ``0``.
+            A bearing in `[0, 360)`, clockwise from north (`+y`). A camera directly above or below its focal
+            point has no horizontal direction, so its bearing means nothing: it comes out as `0`, or as `180` when
+            the y offset is a negative zero, because `atan2` keeps the sign of zero.
 
         Examples:
             - A camera due east of its focal point:
@@ -493,6 +566,13 @@ class Camera:
                 >>> from digitalearth.base.spec import Camera
                 >>> Camera((5.0, 0.0, 0.0)).azimuth
                 90.0
+
+                ```
+            - Bearings run clockwise, so due west is 270 rather than -90:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> Camera((-5.0, 0.0, 0.0)).azimuth
+                270.0
 
                 ```
         """
@@ -513,6 +593,13 @@ class Camera:
                 >>> from digitalearth.base.spec import Camera
                 >>> Camera((0.0, 5.0, 0.0)).elevation
                 0.0
+
+                ```
+            - A camera straight above, which needs a horizontal up vector:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> Camera((0.0, 0.0, 5.0), view_up=(0.0, 1.0, 0.0)).elevation
+                90.0
 
                 ```
         """
@@ -537,6 +624,15 @@ class Camera:
                 ([0.0, -10.0, 5.0], True, 30.0)
 
                 ```
+            - The dict survives a JSON round trip and rebuilds an equal camera:
+                ```python
+                >>> import json
+                >>> from digitalearth.base.spec import Camera
+                >>> text = json.dumps(Camera((0.0, -10.0, 5.0), vertical_exaggeration=3.0).to_dict())
+                >>> Camera.from_dict(json.loads(text)).vertical_exaggeration
+                3.0
+
+                ```
         """
         return {
             "position": list(self.position),
@@ -558,7 +654,8 @@ class Camera:
             The camera, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
+            TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not iterable — a
+                bare number is rejected by `tuple()` before the constructor can name the field.
             ValueError: for a missing position, an unknown key, or a camera the constructor refuses.
 
         Examples:
@@ -567,6 +664,23 @@ class Camera:
                 >>> from digitalearth.base.spec import Camera
                 >>> Camera.from_dict({"position": [0, -10, 5], "vertical_exaggeration": 3}).vertical_exaggeration
                 3.0
+
+                ```
+            - Only the position is required; the rest takes the constructor's defaults:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> camera = Camera.from_dict({"position": [0, -10, 5]})
+                >>> camera.focal_point, camera.parallel
+                ((0.0, 0.0, 0.0), False)
+
+                ```
+            - A missing position is named:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> Camera.from_dict({"view_angle": 45})
+                Traceback (most recent call last):
+                    ...
+                ValueError: Camera.from_dict needs 'position'; got keys ['view_angle']
 
                 ```
         """

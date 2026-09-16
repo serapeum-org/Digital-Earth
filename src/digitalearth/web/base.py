@@ -423,7 +423,8 @@ class WebMapBase:
         self._issued_ids: set = set()
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
-        #: Every data layer added, in draw order, as a :class:`~digitalearth.base.spec.layer.LayerTree`. The
+        #: Every data layer added, in the order it was added, as a :class:`~digitalearth.base.spec.layer.LayerTree`.
+        #: That is not always draw order: a graticule joins the reference band beneath data added before it. The
         #: id addresses the layer in MapLibre; the label is what a layer switcher shows a viewer. Controls and
         #: basemaps are not in here — they are not things a viewer turns on and off.
         self._layer_tree: LayerTree = LayerTree()
@@ -769,7 +770,25 @@ class WebMapBase:
         caller could not address a layer afterwards to hide, remove or switch it.
 
         Returns:
-            The layer ids, oldest first.
+            The layer ids, oldest first, as a new list. A layer the caller named carries that name as its id; an
+            unnamed one gets a generated id.
+
+        Examples:
+            - Named and unnamed layers, in the order they were added:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").text(2.35, 48.86, "Paris")
+                >>> m.layer_ids
+                ['amsterdam', 'text-3']
+
+                ```
+            - A map with no data layers has no ids:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().layer_ids
+                []
+
+                ```
         """
         return list(self._layer_tree.ids)
 
@@ -781,6 +800,10 @@ class WebMapBase:
             label: What a layer switcher should call it; ``None`` falls back to the id.
             kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
                 the tree describes the layer rather than only naming it.
+
+        Raises:
+            ValueError: when `LayerSpec` refuses the id — a builder's `name=` becomes the id as given, so a name
+                with surrounding whitespace is refused here — or the kind, or when the id is already in the tree.
         """
         self._layer_tree = self._layer_tree.add(
             LayerSpec(layer_id, kind, label=label or layer_id)
@@ -807,6 +830,25 @@ class WebMapBase:
         Raises:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
                 look exactly like a layer that refused to go away.
+
+        Examples:
+            - Remove one layer; the map is returned, so calls chain:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").text(2.35, 48.86, "Paris", name="paris")
+                >>> m.remove_layer("amsterdam") is m, m.layer_ids, len(m.layers)
+                (True, ['paris'], 1)
+
+                ```
+            - An id that was never added is refused, naming the ids that were:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").remove_layer("paris")
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no layer 'paris' on this map; added layers are ['amsterdam']"
+
+                ```
         """
         present = self.layer_ids
         if layer_id not in present:

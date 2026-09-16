@@ -414,10 +414,11 @@ class Encoding:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            ``channel``, plus whichever of ``value``, ``field``, ``scale`` and ``output_range`` is set.
+            `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant goes
+            through the JSON check (a tuple is written as a list); `output_range` is written as a list, as held.
 
         Raises:
-            TypeError: if the constant has no JSON form.
+            TypeError: if the constant, or the scale's scheme or a category, has no JSON form.
 
         Examples:
             - A constant is its channel and its value:
@@ -460,8 +461,9 @@ class Encoding:
             The encoding, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: for a missing channel, an unknown key, or a binding the constructor refuses.
+            TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not iterable.
+            ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the
+                constructor refuses.
 
         Examples:
             - A stored constant reads back and resolves as before:
@@ -469,6 +471,23 @@ class Encoding:
                 >>> from digitalearth.base.spec import Encoding
                 >>> Encoding.from_dict({"channel": "color", "value": "#f00"}).resolve()
                 '#f00'
+
+                ```
+            - A stored field-driven size reads back with its scale and output range:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> stored = {"channel": "size", "field": "pop", "scale": {"vmin": 0, "vmax": 100}}
+                >>> Encoding.from_dict({**stored, "output_range": [4, 20]}).resolve([0.0, 50.0, 100.0])
+                [4.0, 12.0, 20.0]
+
+                ```
+            - A binding with both a constant and a field is refused:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.from_dict({"channel": "color", "value": "#f00", "field": "class"})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: an Encoding for 'color' needs exactly one of value= (a constant) or field= ...
 
                 ```
         """

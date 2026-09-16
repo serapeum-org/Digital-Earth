@@ -649,11 +649,13 @@ class Scale:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            ``vmin`` and ``vmax``, plus each of ``scheme``, ``breaks``, ``categories``, ``colors`` and ``missing``
-            that is set. Class edges and categories are written as lists.
+            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`
+            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Only
+            `scheme` and `categories` go through the JSON check; the limits, the edges, the colours and `missing`
+            are written without it.
 
         Raises:
-            TypeError: if a category has no JSON form.
+            TypeError: if `scheme` or a category has no JSON form.
 
         Examples:
             - A continuous scale is its domain:
@@ -669,6 +671,13 @@ class Scale:
                 >>> stored = Scale.categorical(["a", "b"], ["#f00", "#00f"]).to_dict()
                 >>> stored["categories"], stored["colors"]
                 (['a', 'b'], ['#f00', '#00f'])
+
+                ```
+            - A classified scale carries its scheme and its class edges:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale(0.0, 10.0, scheme="quantiles", breaks=(0.0, 4.0, 10.0)).to_dict()
+                {'vmin': 0.0, 'vmax': 10.0, 'scheme': 'quantiles', 'breaks': [0.0, 4.0, 10.0]}
 
                 ```
         """
@@ -696,8 +705,11 @@ class Scale:
             breaks, which is what makes a frozen scale reproduce the colours it was drawn with.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: for a missing domain, an unknown key, or a domain the constructor refuses.
+            TypeError: if `data` is not a mapping, or a limit or an edge is of a type `float()` does not take, such
+                as `None`.
+            ValueError: for a missing `vmin` or `vmax`, an unknown key, or a scale the constructor refuses — a
+                non-finite or degenerate domain, a single class edge, or a colour count that does not match the
+                categories.
 
         Examples:
             - Stored class edges come back without re-classifying anything:
@@ -706,6 +718,23 @@ class Scale:
                 >>> scale = Scale.from_dict({"vmin": 0, "vmax": 10, "breaks": [0, 5, 10]})
                 >>> scale.class_ranges()
                 [(0.0, 5.0), (5.0, 10.0)]
+
+                ```
+            - A categorical scale keeps each category's colour across a round trip:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stored = Scale.categorical(["forest", "water"], ["#228b22", "#1e90ff"]).to_dict()
+                >>> Scale.from_dict(stored).color_for("water")
+                '#1e90ff'
+
+                ```
+            - A domain with no width is refused:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_dict({"vmin": 1, "vmax": 1})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Scale needs vmax > vmin; got vmin=1.0, vmax=1.0. ...
 
                 ```
         """

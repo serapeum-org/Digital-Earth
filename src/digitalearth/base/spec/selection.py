@@ -270,8 +270,8 @@ class Selection:
             ``None``, so the common single-band selection is one key.
 
         Raises:
-            TypeError: if `time`, `level` or `member` holds a value with no JSON form — a `datetime`, say. Store
-                the ISO string instead.
+            TypeError: if an axis other than `band` holds a value with no JSON form — a `datetime`, a set or `nan`,
+                say. Store a `datetime` as its ISO string instead.
 
         Examples:
             - The default selection is one key:
@@ -286,6 +286,16 @@ class Selection:
                 >>> from digitalearth.base.spec import Selection
                 >>> Selection.of(2, time="2024-01", level=850).to_dict()
                 {'band': [2], 'time': '2024-01', 'level': 850}
+
+                ```
+            - A live `datetime` has no JSON form and is refused where it is written:
+                ```python
+                >>> from datetime import datetime
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of(1, time=datetime(2024, 1, 1)).to_dict()  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                TypeError: Selection.time holds a datetime, which has no JSON form. ...
 
                 ```
         """
@@ -307,7 +317,8 @@ class Selection:
             The selection, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
+            TypeError: if `data` is not a mapping, or `band` is not iterable — a bare number is rejected by
+                `tuple()` before the constructor sees it.
             ValueError: for an unknown key, or a band the constructor refuses.
 
         Examples:
@@ -316,6 +327,14 @@ class Selection:
                 >>> from digitalearth.base.spec import Selection
                 >>> Selection.from_dict({"band": [3, 2, 1]}).band
                 (3, 2, 1)
+
+                ```
+            - Without a `band` key the default band is read, and the other axes come back as stored:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> selection = Selection.from_dict({"time": "2024-01-01", "level": 850})
+                >>> selection.band, selection.time, selection.level
+                ((1,), '2024-01-01', 850)
 
                 ```
         """

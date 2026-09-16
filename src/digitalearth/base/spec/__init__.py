@@ -44,8 +44,9 @@ What lives here:
   :class:`~digitalearth.base.spec.figure.FigureSpec`: the whole figure, which round-trips through a dict with no
   renderer imported.
 
-Every type here that a figure stores has a ``to_dict``/``from_dict`` pair, built on the shared rules in
-``_serial.py``: an unknown key is refused rather than dropped, and a value with no JSON form is refused where it
+Every type here that a figure stores has a `to_dict`/`from_dict` pair, and each pair refuses an unknown key rather
+than dropping it. All but `DataRef`'s, which predates them, are built on the shared rules in `_serial.py`, which
+also refuse a free-form value — a constant, a style property, a category, a slice axis — with no JSON form where it
 is written.
 
 Note the neighbour: :mod:`digitalearth.base.symbology` is the colour *arithmetic* (resolving a categorical

@@ -1,10 +1,10 @@
 """Where a figure is going, and so how much of each source it may read.
 
-The read budget used to belong to whoever made the call. ``interactive/raster.py``'s ``large_image`` hard-codes
-``max_pixels=4_000_000``; the interactive tier's ``big_data_threshold`` is a per-map attribute; an exported page and
-a live window get the same budget. The design's rule is the other way round — **the budget belongs to the target,
-never to the layer**: a page shared as HTML carries its pixels inline (#189) and should be lighter than a window a
-reader pans around.
+The read budget used to belong to whoever made the call. `interactive/raster.py`'s `large_image` sets its own
+default, `max_pixels=4_000_000`; the interactive tier's `big_data_threshold` is a per-map attribute; an exported
+page and a live window get the same budget. The design's rule is the other way round — **the budget belongs to the
+target, never to the layer**: a page shared as HTML carries its pixels inline (#189) and should be lighter than a
+window a reader pans around.
 
 :class:`RenderTarget` is that target, and :meth:`RenderTarget.view_request` is the one place a
 :class:`~digitalearth.base.spec.viewrequest.ViewRequest` is made from a view: the region from the view, the canvas and
@@ -47,7 +47,7 @@ def _positive_whole(name: str, value: Any) -> Optional[int]:
         The value as a Python int, or ``None``.
 
     Raises:
-        ValueError: for a boolean, a non-integer or a value below one.
+        ValueError: for a boolean, a non-integer (a whole float such as `2.0` included) or a value below one.
     """
     if value is None:
         return None
@@ -71,7 +71,7 @@ class RenderTarget:
 
     Raises:
         ValueError: for an unknown kind (naming the kinds that exist), a non-positive or non-integer canvas or
-            budget, or a non-positive or non-finite pixel ratio.
+            budget, or a pixel ratio that is a boolean, not a number, not finite or not positive.
 
     Examples:
         - A page is lighter than a window by default:
@@ -79,6 +79,22 @@ class RenderTarget:
             >>> from digitalearth.base.spec import RenderTarget
             >>> RenderTarget("window").effective_budget, RenderTarget("html").effective_budget
             (4000000, 1000000)
+
+            ```
+        - A whole-number pixel ratio is stored as a float:
+            ```python
+            >>> from digitalearth.base.spec import RenderTarget
+            >>> RenderTarget("image", width=1200, height=800, pixel_ratio=2).pixel_ratio
+            2.0
+
+            ```
+        - An unknown kind is refused, naming the kinds that exist:
+            ```python
+            >>> from digitalearth.base.spec import RenderTarget
+            >>> RenderTarget("pdf")
+            Traceback (most recent call last):
+                ...
+            ValueError: RenderTarget kind must be one of ['window', 'html', 'image', 'batch']; got 'pdf'
 
             ```
     """
@@ -127,6 +143,13 @@ class RenderTarget:
                 250000
 
                 ```
+            - With no budget of its own, each kind reads its entry in `DEFAULT_BUDGETS`:
+                ```python
+                >>> from digitalearth.base.spec import TARGET_KINDS, RenderTarget
+                >>> {kind: RenderTarget(kind).effective_budget for kind in TARGET_KINDS}
+                {'window': 4000000, 'html': 1000000, 'image': 4000000, 'batch': 4000000}
+
+                ```
         """
         return self.budget if self.budget is not None else DEFAULT_BUDGETS[self.kind]
 
@@ -145,13 +168,16 @@ class RenderTarget:
             view: The view being rendered. A `Viewport` supplies its framed region; a `Camera` supplies none, since a
                 3-D view has no rectangle to read.
             bounds: A region to read instead of the view's. When a `Viewport` is given, the region is reprojected into
-                the view's CRS, which is the CRS the reader is asked in.
+                the view's CRS, which is the CRS the reader is asked in; with a `Camera` or no view it is used as
+                given.
 
         Returns:
-            The request: region, canvas, pixel ratio and :attr:`effective_budget`.
+            The request: region, canvas, pixel ratio and :attr:`effective_budget`. The region is `None` when
+            neither the view nor `bounds` supplies one.
 
         Raises:
-            ValueError: if `view` is neither a `Viewport`, a `Camera` nor ``None``, or `bounds` is not a `Bounds`.
+            ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, or
+                if `bounds` cannot be reprojected into the viewport's CRS.
 
         Examples:
             - The view's region, the target's canvas and budget:
@@ -161,6 +187,22 @@ class RenderTarget:
                 >>> request = RenderTarget("html", width=800, height=400).view_request(view)
                 >>> request.as_bbox(), request.width, request.budget
                 ((0.0, 0.0, 10.0, 5.0), 800, 1000000)
+
+                ```
+            - A region given in another CRS is asked for in the view's:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, RenderTarget, Viewport
+                >>> request = RenderTarget().view_request(Viewport(3857), bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+                >>> request.crs, [round(edge) for edge in request.as_bbox()]
+                (3857, [0, 0, 111319, 111325])
+
+                ```
+            - A 3-D camera has no rectangle, so only the canvas and the budget are set:
+                ```python
+                >>> from digitalearth.base.spec import Camera, RenderTarget
+                >>> request = RenderTarget("image", width=640, height=480).view_request(Camera((0.0, -10.0, 5.0)))
+                >>> request.bounds, request.width, request.budget
+                (None, 640, 4000000)
 
                 ```
         """
@@ -200,6 +242,13 @@ class RenderTarget:
                 {'kind': 'image', 'width': 1200, 'height': 800, 'pixel_ratio': 2.0}
 
                 ```
+            - The pixel ratio is written even at its default, and an unset budget stays unset:
+                ```python
+                >>> from digitalearth.base.spec import RenderTarget
+                >>> RenderTarget("html").to_dict()
+                {'kind': 'html', 'pixel_ratio': 1.0}
+
+                ```
         """
         out: Dict[str, Any] = {"kind": self.kind}
         for name in ("width", "height"):
@@ -231,6 +280,15 @@ class RenderTarget:
                 >>> from digitalearth.base.spec import RenderTarget
                 >>> RenderTarget.from_dict({"kind": "html", "budget": 500000}).effective_budget
                 500000
+
+                ```
+            - A key this version does not know is refused rather than dropped:
+                ```python
+                >>> from digitalearth.base.spec import RenderTarget
+                >>> RenderTarget.from_dict({"kind": "html", "dpi": 2})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: RenderTarget.from_dict got unknown keys ['dpi']; known keys are ['budget', 'height', ...]
 
                 ```
         """

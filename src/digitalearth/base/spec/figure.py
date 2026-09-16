@@ -39,9 +39,10 @@ def _is_known_version(version: Any) -> bool:
         version: The candidate.
 
     Returns:
-        ``True`` only for the integer :data:`SCHEMA_VERSION`. A boolean is an int in Python and ``1.0`` equals ``1``,
-        so a plain ``==`` accepted both — and a figure built with ``1.0`` then wrote ``"schema_version": 1.0`` back
-        out, a version spelling no reader should have to expect.
+        `True` only for :data:`SCHEMA_VERSION` as a Python `int`; a float, a boolean, a string or a numpy integer
+        is `False`. `True == 1` and `1.0 == 1` both hold in Python, so an `==` test needs a type check beside it.
+        The check this replaced guarded booleans but not floats, and a figure built with `1.0` wrote
+        `"schema_version": 1.0` back out, a version spelling no reader should have to expect.
     """
     return type(version) is int and version == SCHEMA_VERSION
 
@@ -54,7 +55,7 @@ def _identifier(owner: str, value: Any) -> None:
         value: The candidate id.
 
     Raises:
-        ValueError: for a non-string, an empty string, or one with surrounding whitespace.
+        ValueError: for a non-string, an empty or whitespace-only string, or one with surrounding whitespace.
     """
     if not isinstance(value, str) or not value.strip() or value != value.strip():
         raise ValueError(
@@ -74,8 +75,9 @@ class PanelSpec:
         title: The panel's title, or ``None``.
 
     Raises:
-        ValueError: for an empty or padded id, a view that is neither a `Viewport` nor a `Camera`, a layer id that is
-            not a non-empty string, a layer listed twice, or a non-string title.
+        ValueError: for an id that is not a non-empty string or has surrounding whitespace, a view that is neither a
+            `Viewport` nor a `Camera`, `layers` given as a bare string, a layer id that is not a non-empty string, a
+            layer listed twice, or a non-string title.
 
     Examples:
         - Two panels over the same layer, in two projections:
@@ -85,6 +87,23 @@ class PanelSpec:
             >>> right = PanelSpec("polar", Viewport("EPSG:3413"), layers=("t2m",))
             >>> left.view.crs, right.view.crs, left.layers == right.layers
             (3857, 'EPSG:3413', True)
+
+            ```
+        - A panel with no view named is a Web Mercator map, and a list of layer ids is stored as a tuple:
+            ```python
+            >>> from digitalearth.base.spec import PanelSpec
+            >>> panel = PanelSpec("main", layers=["dem", "roads"])
+            >>> panel.view.crs, panel.layers
+            (3857, ('dem', 'roads'))
+
+            ```
+        - A bare string is refused rather than read as one layer id per letter:
+            ```python
+            >>> from digitalearth.base.spec import PanelSpec
+            >>> PanelSpec("main", layers="t2m")
+            Traceback (most recent call last):
+                ...
+            ValueError: PanelSpec layers must be a sequence of layer ids; got the string 't2m'
 
             ```
     """
@@ -137,7 +156,7 @@ class PanelSpec:
             field — plus ``layers`` and ``title`` when set.
 
         Raises:
-            TypeError: if the view's CRS is not one pyramids can read.
+            TypeError: if the view is a `Viewport` whose CRS is an object pyramids cannot read as a CRS.
 
         Examples:
             - The view is stored under the key that names its kind:
@@ -145,6 +164,14 @@ class PanelSpec:
                 >>> from digitalearth.base.spec import PanelSpec, Viewport
                 >>> PanelSpec("main", Viewport(4326), layers=("dem",)).to_dict()
                 {'id': 'main', 'viewport': {'crs': 4326}, 'layers': ['dem']}
+
+                ```
+            - A 3-D panel stores a camera, and its title:
+                ```python
+                >>> from digitalearth.base.spec import Camera, PanelSpec
+                >>> stored = PanelSpec("3d", Camera((0.0, -10.0, 5.0)), title="Terrain").to_dict()
+                >>> sorted(stored), stored["camera"]["position"]
+                (['camera', 'id', 'title'], [0.0, -10.0, 5.0])
 
                 ```
         """
@@ -170,9 +197,9 @@ class PanelSpec:
             The panel, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: for a missing id, an unknown key, both or neither of ``viewport`` and ``camera``, or a panel
-                the constructor refuses.
+            TypeError: if `data` or its view is not a mapping, or `layers` is not iterable.
+            ValueError: for a missing id, an unknown key, both or neither of `viewport` and `camera`, a view its own
+                `from_dict` refuses, or a panel the constructor refuses.
 
         Examples:
             - A stored 3-D panel reads back with its camera:
@@ -181,6 +208,15 @@ class PanelSpec:
                 >>> panel = PanelSpec.from_dict({"id": "3d", "camera": {"position": [0, -10, 5]}})
                 >>> panel.view.position
                 (0.0, -10.0, 5.0)
+
+                ```
+            - A panel must say which kind of view it has:
+                ```python
+                >>> from digitalearth.base.spec import PanelSpec
+                >>> PanelSpec.from_dict({"id": "main", "layers": ["dem"]})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: PanelSpec.from_dict needs exactly one of 'viewport' (a flat map) or 'camera' ...
 
                 ```
         """
@@ -216,14 +252,15 @@ class FigureSpec:
         layers: Every layer in the figure, in draw order. A panel shows the ones it names.
         size: ``(width, height)`` of the whole figure, in the renderer's units, or ``None``.
         title: The figure's title, or ``None``.
-        schema_version: The description's version. Only :data:`SCHEMA_VERSION` is accepted.
+        schema_version: The description's version. Only :data:`SCHEMA_VERSION`, as an `int`, is accepted.
 
     Raises:
-        ValueError: for an unknown schema version, no panels, a panel that is not a `PanelSpec`, two panels sharing
-            an id, a source id that is not a non-empty string or maps to something other than a `DataRef`, a layer
-            tree that is not a `LayerTree`, a layer whose source or elevation source is not among the sources, a
-            panel naming a layer that is not in the tree, a size that is not two positive finite numbers, or a
-            non-string title.
+        ValueError: for a schema version that is not :data:`SCHEMA_VERSION` as an `int` (`1.0` is refused), no
+            panels, a panel that is not a `PanelSpec`, two panels sharing an id, a source id that is not a non-empty
+            string without surrounding whitespace or maps to something other than a `DataRef`, a layer tree that is
+            not a `LayerTree`, a layer whose source or elevation source is not among the sources, a panel naming a
+            layer that is not in the tree, a size that is not two positive finite numbers (a boolean counts as
+            neither), or a non-string title.
 
     Examples:
         - One source, one layer, one panel:
@@ -236,6 +273,24 @@ class FigureSpec:
             ... )
             >>> [layer.id for layer in fig.layers_of("main")], fig.schema_version
             (['dem'], 1)
+
+            ```
+        - A panel may only show layers the figure holds:
+            ```python
+            >>> from digitalearth.base.spec import FigureSpec, PanelSpec
+            >>> FigureSpec(panels=(PanelSpec("main", layers=("dem",)),))
+            Traceback (most recent call last):
+                ...
+            ValueError: panel 'main' shows layers ['dem'] that are not in the figure; layers are []
+
+            ```
+        - The version is the integer, not a float equal to it:
+            ```python
+            >>> from digitalearth.base.spec import FigureSpec, PanelSpec
+            >>> FigureSpec(panels=(PanelSpec("main"),), schema_version=1.0)
+            Traceback (most recent call last):
+                ...
+            ValueError: FigureSpec schema_version 1.0 is not one this version of digitalearth reads; it reads 1
 
             ```
     """
@@ -315,7 +370,8 @@ class FigureSpec:
             A fresh dict of the sources.
 
         Raises:
-            ValueError: for an empty or padded source id, or a value that is not a `DataRef`.
+            ValueError: for a source id that is not a string, is empty or has surrounding whitespace, or a value
+                that is not a `DataRef`.
         """
         checked = dict(sources)
         for source_id, ref in checked.items():
@@ -353,7 +409,8 @@ class FigureSpec:
             ``(width, height)`` as floats, or ``None`` when unset.
 
         Raises:
-            ValueError: for anything but two positive finite numbers — a boolean counts as neither.
+            ValueError: for anything but two positive finite numbers — a string, a non-iterable, the wrong count,
+                or a boolean, which counts as no number.
         """
         if size is None:
             return None
@@ -414,6 +471,15 @@ class FigureSpec:
                 'Left'
 
                 ```
+            - An id no panel has is named beside the ids that exist:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec, PanelSpec
+                >>> FigureSpec(panels=(PanelSpec("a"),)).panel("b")
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no panel 'b' in this figure; panels are ['a']"
+
+                ```
         """
         for panel in self.panels:
             if panel.id == panel_id:
@@ -453,11 +519,13 @@ class FigureSpec:
         """Return the plain-dict form of the whole figure.
 
         Returns:
-            ``schema_version`` and ``panels``, plus ``sources``, ``layers``, ``size`` and ``title`` when set. The dict
-            holds only JSON types, so ``json.dumps`` writes it as is.
+            `schema_version` and `panels`, plus `sources`, `layers`, `size` and `title` when set. The free-form
+            values — encoding constants, style properties, scale categories and schemes, selection axes — go
+            through the JSON check as they are written, so a figure built from plain, finite Python numbers,
+            strings, lists and dicts gives a dict `json.dumps` writes as is.
 
         Raises:
-            TypeError: if any part holds a value with no JSON form.
+            TypeError: if a free-form value has no JSON form, or a CRS is an object pyramids cannot read.
 
         Examples:
             - The version is always written:
@@ -465,6 +533,22 @@ class FigureSpec:
                 >>> from digitalearth.base.spec import FigureSpec, PanelSpec
                 >>> FigureSpec(panels=(PanelSpec("main"),)).to_dict()
                 {'schema_version': 1, 'panels': [{'id': 'main', 'viewport': {'crs': 3857}}]}
+
+                ```
+            - A figure survives a JSON round trip, with no renderer involved:
+                ```python
+                >>> import json
+                >>> from digitalearth.base.spec import DataRef, FigureSpec, LayerSpec, LayerTree, PanelSpec, Viewport
+                >>> fig = FigureSpec(
+                ...     panels=(PanelSpec("main", Viewport(4326), layers=("dem",)),),
+                ...     sources={"srtm": DataRef("data/dem.tif")},
+                ...     layers=LayerTree((LayerSpec("dem", "raster", source_id="srtm"),)),
+                ...     size=(8, 4),
+                ... )
+                >>> text = json.dumps(fig.to_dict(), allow_nan=False)
+                >>> back = FigureSpec.from_dict(json.loads(text))
+                >>> back == fig, back.size
+                (True, (8.0, 4.0))
 
                 ```
         """
@@ -498,9 +582,10 @@ class FigureSpec:
             The figure, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: for a missing or unknown schema version, a missing panel list, an unknown key, or a figure the
-                constructor refuses.
+            TypeError: if `data` is not a mapping, or a part is the wrong shape — a panel or the layer tree that is
+                not a mapping, or `panels` or `size` that is not iterable.
+            ValueError: for a missing or unknown schema version, a missing panel list, an unknown key, a part its own
+                `from_dict` refuses, or a figure the constructor refuses.
 
         Examples:
             - A figure from a newer schema is refused before it is read:

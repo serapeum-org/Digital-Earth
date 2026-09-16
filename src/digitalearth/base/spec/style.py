@@ -298,7 +298,8 @@ class Symbology:
             styling stores an empty dict.
 
         Raises:
-            TypeError: if a property or a constant has no JSON form.
+            TypeError: if a property, an encoding's constant, or the scheme or a category of an encoding's scale
+                has no JSON form.
 
         Examples:
             - Encodings are stored under the channel they drive:
@@ -337,8 +338,9 @@ class Symbology:
             The symbology, with every encoding checked against the channel it is filed under.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: for an unknown key, or an encoding filed under a channel it does not drive.
+            TypeError: if `data`, or a stored encoding, is not a mapping.
+            ValueError: for an unknown key, an encoding `Encoding.from_dict` refuses — an undeclared channel, say —
+                or an encoding filed under a channel it does not drive.
 
         Examples:
             - A stored style reads back channel by channel:
@@ -348,6 +350,16 @@ class Symbology:
                 >>> sym = Symbology.from_dict(stored)
                 >>> sym.encoding("opacity").resolve(), sym.props["k"]
                 (0.4, 5)
+
+                ```
+            - An encoding filed under a channel it does not drive is refused:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> misfiled = {"encodings": {"color": {"channel": "opacity", "value": 0.4}}}
+                >>> Symbology.from_dict(misfiled)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: encoding filed under 'color' drives channel 'opacity'; ...
 
                 ```
         """

@@ -80,17 +80,18 @@ class LayerSpec:
         filter: A filter expression, carried for the renderer rather than interpreted here.
 
     Raises:
-        ValueError: for an empty or padded id, a kind that is not a lowercase identifier, a non-boolean `visible`,
-            a `selection` or `symbology` of the wrong type, an empty optional string, or a layer whose `z_source`
-            names the layer itself.
+        ValueError: for an id that is not a non-empty string or has surrounding whitespace, a kind that is not a
+            lowercase identifier, a non-boolean `visible`, a `selection` or `symbology` of the wrong type, a
+            `source_id`, `z_source`, `label`, `group` or `filter` that is neither `None` nor a non-empty string, or
+            a `z_source` of `"layer:"` that names no layer or names the layer itself.
 
     Examples:
-        - A raster layer over a source, drawn with a colour ramp:
+        - A raster layer over a source, drawn at 80% opacity:
             ```python
             >>> from digitalearth.base.spec import LayerSpec, Symbology
             >>> dem = LayerSpec("dem", "raster", source_id="srtm", symbology=Symbology.of(opacity=0.8))
-            >>> dem.kind, dem.source_id, dem.visible
-            ('raster', 'srtm', True)
+            >>> dem.kind, dem.source_id, dem.visible, dem.symbology.encoding("opacity").resolve()
+            ('raster', 'srtm', True, 0.8)
 
             ```
         - Imagery draped over that layer names it as its elevation source:
@@ -98,6 +99,15 @@ class LayerSpec:
             >>> from digitalearth.base.spec import LayerSpec
             >>> LayerSpec("imagery", "rgb", source_id="s2", z_source="layer:dem").z_layer
             'dem'
+
+            ```
+        - A layer cannot drape itself over itself:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> LayerSpec("dem", "raster", z_source="layer:dem")
+            Traceback (most recent call last):
+                ...
+            ValueError: layer 'dem' cannot take its elevation from itself
 
             ```
     """
@@ -214,6 +224,13 @@ class LayerSpec:
                 {'id': 'dem', 'kind': 'raster', 'source_id': 'srtm', 'visible': False}
 
                 ```
+            - A plain visible layer with no source, slice or style stores two keys:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec
+                >>> LayerSpec("grid", "graticule").to_dict()
+                {'id': 'grid', 'kind': 'graticule'}
+
+                ```
         """
         out: Dict[str, Any] = {"id": self.id, "kind": self.kind}
         if self.source_id is not None:
@@ -242,7 +259,7 @@ class LayerSpec:
             The layer, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
+            TypeError: if `data`, or its `selection` or `symbology`, is not a mapping.
             ValueError: for a missing id or kind, an unknown key, or a field the constructor refuses.
 
         Examples:
@@ -252,6 +269,15 @@ class LayerSpec:
                 >>> layer = LayerSpec.from_dict({"id": "t2m", "kind": "raster", "selection": {"band": [2]}})
                 >>> layer.selection.band
                 (2,)
+
+                ```
+            - Z-order lives in the tree, so an `order` key is unknown and refused rather than dropped:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec
+                >>> LayerSpec.from_dict({"id": "dem", "kind": "raster", "order": 0})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: LayerSpec.from_dict got unknown keys ['order']; known keys are ['filter', 'group', ...]
 
                 ```
         """
@@ -304,8 +330,9 @@ class LayerTree:
             says, and comes back as it was when the group is switched on again.
 
     Raises:
-        ValueError: for two layers sharing an id, a `z_source` naming a layer that is not in the tree, a chain of
-            `z_source` references that loops back on itself, or a hidden group no layer belongs to.
+        ValueError: for an entry that is not a `LayerSpec`, two layers sharing an id, a `z_source` naming a layer
+            that is not in the tree, a chain of `z_source` references that loops back on itself, or a hidden group
+            no layer belongs to.
 
     Examples:
         - Build a tree and address layers by id rather than by position:
@@ -325,6 +352,16 @@ class LayerTree:
             >>> hidden = tree.set_group_visible("obs", False)
             >>> hidden.is_visible("a"), hidden.is_visible("b"), hidden.get("a").visible
             (False, True, True)
+
+            ```
+        - Draped layers that take their elevation from each other in a loop are refused:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec, LayerTree
+            >>> looped = (LayerSpec("a", "rgb", z_source="layer:b"), LayerSpec("b", "rgb", z_source="layer:a"))
+            >>> LayerTree(looped)  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: z_source references loop: a -> b -> a. ...
 
             ```
     """
@@ -465,6 +502,15 @@ class LayerTree:
                 'srtm'
 
                 ```
+            - An id the tree does not hold is named beside the ids it does:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> LayerTree().add(LayerSpec("dem", "raster")).get("roads")
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no layer 'roads' in this tree; layers are ['dem']"
+
+                ```
         """
         for layer in self.layers:
             if layer.id == layer_id:
@@ -525,6 +571,15 @@ class LayerTree:
                 ('tiles', 'roads')
 
                 ```
+            - A position past the top is refused rather than clamped:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> LayerTree().add(LayerSpec("dem", "raster")).add(LayerSpec("roads", "lines"), index=5)
+                Traceback (most recent call last):
+                    ...
+                IndexError: cannot add 'roads' at position 5; positions run from 0 (bottom) to 1 (top)
+
+                ```
         """
         if layer.id in self.ids:
             raise ValueError(
@@ -561,6 +616,26 @@ class LayerTree:
                 >>> from digitalearth.base.spec import LayerSpec, LayerTree
                 >>> LayerTree().add(LayerSpec("a", "points")).add(LayerSpec("b", "lines")).remove("a").ids
                 ('b',)
+
+                ```
+            - Removing the last layer of a hidden group un-hides the group:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> tree = LayerTree().add(LayerSpec("a", "points", group="obs")).add(LayerSpec("b", "lines"))
+                >>> hidden = tree.set_group_visible("obs", False)
+                >>> hidden.hidden_groups, hidden.remove("a").hidden_groups
+                (frozenset({'obs'}), frozenset())
+
+                ```
+            - A surface another layer is draped over cannot be removed first:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> draped = LayerSpec("img", "rgb", z_source="layer:dem")
+                >>> tree = LayerTree().add(LayerSpec("dem", "raster")).add(draped)
+                >>> tree.remove("dem")  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: layer 'dem' cannot be removed while ['img'] take their elevation from it; ...
 
                 ```
         """
@@ -600,6 +675,14 @@ class LayerTree:
                 ('b', 'a')
 
                 ```
+            - Send a layer to the bottom; the others keep their relative order:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> tree = LayerTree((LayerSpec("a", "points"), LayerSpec("b", "lines"), LayerSpec("c", "fill")))
+                >>> tree.move("c", 0).ids
+                ('c', 'a', 'b')
+
+                ```
         """
         layer = self.get(layer_id)
         count = len(self.layers)
@@ -626,7 +709,8 @@ class LayerTree:
 
         Raises:
             KeyError: if no layer has that id.
-            ValueError: if the new description breaks a reference the tree depends on.
+            ValueError: if the new description breaks what the tree holds together: its `z_source` names a layer
+                the tree does not have or closes a loop, or it leaves a hidden group with no layer in it.
 
         Examples:
             - Restyle a layer without moving it:
@@ -636,6 +720,16 @@ class LayerTree:
                 >>> restyled = tree.replace(LayerSpec("a", "points", symbology=Symbology.of(color="#f00")))
                 >>> restyled.ids, restyled.get("a").symbology.encoding("color").resolve()
                 (('a', 'b'), '#f00')
+
+                ```
+            - Re-pointing a layer's elevation at a layer the tree lacks is refused:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> tree = LayerTree().add(LayerSpec("dem", "raster"))
+                >>> tree.replace(LayerSpec("dem", "raster", z_source="layer:nope"))  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: layer 'dem' takes its elevation from layer 'nope', which is not in the tree; ...
 
                 ```
         """
@@ -698,6 +792,14 @@ class LayerTree:
                 frozenset({'obs'})
 
                 ```
+            - Switching the group back on restores a layer that was hidden only by its group:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> hidden = LayerTree().add(LayerSpec("a", "points", group="obs")).set_group_visible("obs", False)
+                >>> hidden.is_visible("a"), hidden.set_group_visible("obs", True).is_visible("a")
+                (False, True)
+
+                ```
         """
         if group not in self.groups:
             raise KeyError(
@@ -733,6 +835,14 @@ class LayerTree:
                 {'layers': [{'id': 'a', 'kind': 'points'}]}
 
                 ```
+            - Hidden groups are written as a sorted list:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> tree = LayerTree((LayerSpec("a", "points", group="obs"), LayerSpec("b", "lines", group="base")))
+                >>> tree.set_group_visible("obs", False).set_group_visible("base", False).to_dict()["hidden_groups"]
+                ['base', 'obs']
+
+                ```
         """
         out: Dict[str, Any] = {"layers": [layer.to_dict() for layer in self.layers]}
         if self.hidden_groups:
@@ -750,8 +860,9 @@ class LayerTree:
             The tree, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: for an unknown key, or a tree the constructor refuses.
+            TypeError: if `data`, or a stored layer, is not a mapping.
+            ValueError: for an unknown key, a layer `LayerSpec.from_dict` refuses, or a tree the constructor
+                refuses.
 
         Examples:
             - A stored tree reads back in the same order:
@@ -759,6 +870,14 @@ class LayerTree:
                 >>> from digitalearth.base.spec import LayerTree
                 >>> LayerTree.from_dict({"layers": [{"id": "a", "kind": "points"}, {"id": "b", "kind": "lines"}]}).ids
                 ('a', 'b')
+
+                ```
+            - A hidden group stays hidden across a round trip:
+                ```python
+                >>> from digitalearth.base.spec import LayerTree
+                >>> stored = {"layers": [{"id": "a", "kind": "points", "group": "obs"}], "hidden_groups": ["obs"]}
+                >>> LayerTree.from_dict(stored).is_visible("a")
+                False
 
                 ```
         """

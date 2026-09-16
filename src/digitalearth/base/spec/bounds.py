@@ -418,11 +418,12 @@ class Bounds:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            The four edges and the CRS. A CRS object is written as ``"EPSG:<code>"`` (or WKT when it has no code),
-            so the dict survives `json.dumps`; an EPSG integer or a string is written as given.
+            The four edges, as held, and the CRS. A CRS object is written as `"EPSG:<code>"` (or WKT when it has no
+            code), so the CRS survives `json.dumps`; `None`, an EPSG integer or a string is written as given, and a
+            string is not checked.
 
         Raises:
-            TypeError: if the CRS is not one pyramids can read.
+            TypeError: if the CRS is a boolean, or an object pyramids cannot read as a CRS.
 
         Examples:
             - The edges keep their names, so the ordering cannot be misread:
@@ -430,6 +431,14 @@ class Bounds:
                 >>> from digitalearth.base.spec import Bounds
                 >>> Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()
                 {'xmin': 0.0, 'ymin': 1.0, 'xmax': 2.0, 'ymax': 3.0, 'crs': 4326}
+
+                ```
+            - A CRS object is written by its authority code:
+                ```python
+                >>> from pyramids.base.crs import crs_from_user_input
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326)).to_dict()["crs"]
+                'EPSG:4326'
 
                 ```
         """
@@ -446,14 +455,16 @@ class Bounds:
         """Rebuild a rectangle from its dict form.
 
         Args:
-            data: A mapping as produced by :meth:`to_dict`.
+            data: A mapping as produced by :meth:`to_dict`. Each edge goes through `float()`; a missing `crs`
+                means `None`.
 
         Returns:
             The rectangle, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping.
-            ValueError: if an edge is missing, a key is unknown, or the edges do not bound a rectangle.
+            TypeError: if `data` is not a mapping, or an edge is of a type `float()` does not take, such as `None`.
+            ValueError: if an edge is missing or is a string that is not a number, a key is unknown, or the edges
+                are not finite or do not bound a rectangle.
 
         Examples:
             - A stored rectangle reads back to the same value:
@@ -462,6 +473,15 @@ class Bounds:
                 >>> box = Bounds.from_dict({"xmin": 0, "ymin": 0, "xmax": 10, "ymax": 5, "crs": 3857})
                 >>> box.as_bbox(), box.crs
                 ([0.0, 0.0, 10.0, 5.0], 3857)
+
+                ```
+            - A missing edge is named:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds.from_dict({"xmin": 0, "ymin": 0, "xmax": 1, "crs": 4326})
+                Traceback (most recent call last):
+                    ...
+                ValueError: Bounds.from_dict needs 'ymax'; got keys ['crs', 'xmax', 'xmin', 'ymin']
 
                 ```
         """

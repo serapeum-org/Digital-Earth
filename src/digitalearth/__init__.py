@@ -114,13 +114,15 @@ _LAZY_MODULES = {
     ),
     "digitalearth.static.temporal": ("Climatology", "TimeSeries"),
 }
+#: Public name -> the module it is imported from: :data:`_LAZY_MODULES` turned inside out.
 _LAZY_EXPORTS = {
     name: module for module, names in _LAZY_MODULES.items() for name in names
 }
 
 #: Subpackages the eager imports used to leave bound on the package, so `import digitalearth` followed by
 #: `digitalearth.static.Map` kept working. The optional backends were never bound this way and still are not:
-#: resolving `digitalearth.web` on attribute access would turn `hasattr` into an ImportError without the extra.
+#: resolving `digitalearth.three_d` on attribute access would turn `hasattr` into a `ModuleNotFoundError` without
+#: the `3d` extra, because `hasattr` only swallows `AttributeError`.
 _LAZY_SUBPACKAGES = ("api", "base", "ops", "static")
 
 __all__ = [
@@ -197,12 +199,12 @@ _REMOVED_GEOSTATISTICS = ("geostatistics", "hotspot_map", "kriging_map", "lisa_m
 
 
 def __getattr__(name: str):
-    """Resolve an attribute the package does not bind yet: a public name, a subpackage, a moved submodule, or a
-    removed geostatistics name.
+    """Resolve an attribute the package does not bind yet.
 
-    A public name from ``__all__`` is imported from its home module on first use and cached, as is one of the
-    subpackages the package used to bind eagerly — so importing the package imports no renderer until something
-    asks for one. The removed names are tested next and always raise: the ``geostatistics`` submodule and the
+    That is a public name, a subpackage, a moved submodule, or a removed geostatistics name. A public name from
+    `__all__` is imported from its home module on first use and cached, as is one of the subpackages the package
+    used to bind eagerly — so importing the package imports no renderer until something asks for one. The
+    removed names are tested next and always raise: the ``geostatistics`` submodule and the
     ``lisa_map``/``hotspot_map``/``kriging_map`` presets went upstream to geostatista, so there is nothing here
     to forward them to and the error says where they went. A name listed in ``_MOVED_SUBMODULES`` is imported
     from its new location, cached in the module globals so the :class:`DeprecationWarning` fires once per
@@ -217,7 +219,8 @@ def __getattr__(name: str):
 
     Raises:
         AttributeError: for one of the removed geostatistics names, with a message naming its replacement; and
-            for any other name that is neither a real attribute nor a moved submodule.
+            for any other name that is neither a real attribute, a lazily resolved name or subpackage, nor a moved
+            submodule.
     """
     if name in _LAZY_EXPORTS:
         import importlib
@@ -256,7 +259,12 @@ def __getattr__(name: str):
 
 
 def __dir__() -> list:
-    """Include the lazily resolved names and the moved-submodule aliases, so tab-completion and ``dir()`` find them."""
+    """List the package's attributes, including the ones it has not resolved yet.
+
+    Returns:
+        The bound module globals, the lazily resolved public names and subpackages, and the moved-submodule
+        aliases, as one sorted list — so tab-completion and `dir()` find a name before its first use imports it.
+    """
     return sorted(
         set(globals())
         | set(_MOVED_SUBMODULES)
