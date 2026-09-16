@@ -129,6 +129,35 @@ class TestTheRequestAViewMakes:
         assert request.bounds is None, request.bounds
         assert request.budget == DEFAULT_BUDGETS["window"], request.budget
 
+    @pytest.mark.parametrize(
+        "kind, width, height, side",
+        [
+            ("image", 640, 480, 554),
+            ("html", 800, 400, 565),
+            ("window", 4000, 4000, 2000),
+        ],
+        ids=["small-still", "small-page", "canvas-over-budget"],
+    )
+    def test_a_named_canvas_sizes_the_read_within_the_budget(
+        self, kind, width, height, side
+    ):
+        """A target with a canvas reads what the canvas can show, and never more than its budget.
+
+        Args:
+            kind: The target kind, which sets the budget.
+            width: The canvas width.
+            height: The canvas height.
+            side: The square side the request must size a decimated read to.
+
+        Test scenario:
+            `view_request` always sets a budget, and `ViewRequest.side()` preferred the budget to the canvas, so a
+            640x480 still sized its read to 2,000 cells a side — 13 times the pixels it can show — against the
+            `DEFAULT_BUDGETS` note that a still with a canvas "is sized from the canvas anyway, within the budget".
+            A canvas bigger than the budget is still held to the budget.
+        """
+        request = RenderTarget(kind, width=width, height=height).view_request()
+        assert request.side() == side, request
+
     def test_a_camera_supplies_no_region(self):
         """A 3-D view has no rectangle to read; the target's budget is what limits it."""
         request = RenderTarget("image", width=1024, height=768).view_request(

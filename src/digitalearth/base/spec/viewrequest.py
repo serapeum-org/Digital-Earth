@@ -126,8 +126,10 @@ class ViewRequest:
 
         Returns:
             The larger of `floor` and the square root of the effective cell allowance — the canvas sizing
-            `interactive/raster.py` does by hand as ``max(64, int(sqrt(max_pixels)))``. With neither a
-            budget nor a canvas, `floor` is the answer.
+            `interactive/raster.py` does by hand as ``max(64, int(sqrt(max_pixels)))``. The allowance is the
+            budget or the canvas's :attr:`pixels`, whichever is set, and the **smaller** of the two when both
+            are: the canvas says what is wanted and the budget what is affordable, and a read past the canvas
+            fetches cells nothing draws. With neither, `floor` is the answer.
 
         Examples:
             - The budget sets the side, and a tiny one still floors:
@@ -137,11 +139,24 @@ class ViewRequest:
                 (1000, 64)
 
                 ```
+            - A canvas under the budget sizes the read; one over it is held to the budget:
+                ```python
+                >>> from digitalearth.base.spec import ViewRequest
+                >>> ViewRequest(width=640, height=480, budget=4_000_000).side()
+                554
+                >>> ViewRequest(width=4000, height=4000, budget=1_000_000).side()
+                1000
+
+                ```
         """
-        allowance = self.budget if self.budget is not None else self.pixels
-        if allowance is None:
+        # The windowed read in `SourceView` already reads a canvas that fits its budget; the square a decimating
+        # reader aims for follows the same rule rather than reading up to the budget whatever the canvas shows.
+        allowances = [
+            limit for limit in (self.budget, self.pixels) if limit is not None
+        ]
+        if not allowances:
             return floor
-        return max(floor, int(sqrt(allowance)))
+        return max(floor, int(sqrt(min(allowances))))
 
     def within_budget(self, cells: int) -> bool:
         """Whether a read of `cells` cells is affordable.
