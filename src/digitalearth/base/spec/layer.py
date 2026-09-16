@@ -1001,5 +1001,10 @@ class LayerTree:
                     as_list("LayerTree", "layers", data.get("layers", ()))
                 )
             ),
-            as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ())),
+            # The constructor checks each entry is a group name and freezes them; a frozenset here would raise a bare
+            # "unhashable type" for a nested list before that check could name it.
+            cast(
+                FrozenSet[str],
+                as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ())),
+            ),
         )
