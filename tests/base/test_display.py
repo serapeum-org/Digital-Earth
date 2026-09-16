@@ -120,7 +120,9 @@ class TestAutoCmap:
         assert auto_cmap(source, None, lookup=lookup) == "from-the-tier", (
             "the supplied lookup's answer must be used"
         )
-        assert consulted == [source], "and it must be asked exactly once, about this source"
+        assert consulted == [source], (
+            "and it must be asked exactly once, about this source"
+        )
 
     def test_a_supplied_lookup_is_not_consulted_when_the_caller_named_a_colormap(self):
         """The caller's `cmap` still short-circuits, whichever lookup is in play.
@@ -130,9 +132,13 @@ class TestAutoCmap:
         """
         consulted = []
         assert auto_cmap(None, "magma", lookup=consulted.append) == "magma"
-        assert consulted == [], "the lookup must not run when there is nothing to resolve"
+        assert consulted == [], (
+            "the lookup must not run when there is nothing to resolve"
+        )
 
-    def test_a_supplied_lookup_replaces_auto_style_and_an_empty_answer_reaches_the_fallback(self, monkeypatch):
+    def test_a_supplied_lookup_replaces_auto_style_and_an_empty_answer_reaches_the_fallback(
+        self, monkeypatch
+    ):
         """With `lookup=` given, `auto_style` is never asked, and a lookup naming no colormap still falls back.
 
         Test scenario:
@@ -143,9 +149,14 @@ class TestAutoCmap:
         import digitalearth.base.autostyle as autostyle
 
         monkeypatch.setattr(
-            autostyle, "auto_style", lambda _: pytest.fail("auto_style must not run when a lookup is supplied")
+            autostyle,
+            "auto_style",
+            lambda _: pytest.fail("auto_style must not run when a lookup is supplied"),
         )
-        assert auto_cmap(self._source("t2m"), None, "cividis", lookup=lambda _: {}) == "cividis", (
+        assert (
+            auto_cmap(self._source("t2m"), None, "cividis", lookup=lambda _: {})
+            == "cividis"
+        ), (
             "an empty answer from the supplied lookup must fall back to the caller's fallback"
         )
 

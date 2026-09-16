@@ -81,7 +81,9 @@ def test_a_null_geometry_reads_as_nan_rather_than_raising():
     gdf = gpd.GeoDataFrame(geometry=[Point(0, 0), None, Point(2, 2)], crs="EPSG:3857")
     coords, values = _coords_from_geodataframe(gdf, None)
     assert coords.shape == (3, 3), f"every row survives the read, got {coords.shape}"
-    assert np.isnan(coords[1, 0]), "the missing row reads as NaN, the way geopandas answers for it"
+    assert np.isnan(coords[1, 0]), (
+        "the missing row reads as NaN, the way geopandas answers for it"
+    )
     assert values is None, "and no value column was asked for"
 
 

@@ -122,7 +122,14 @@ class TestColorExpr:
 
     @pytest.mark.parametrize(
         "lo, hi",
-        [(-3.7, 12.9), (3.5, 91.25), (0.1, 0.7), (-1.0, 1.0), (2.2, 7.7), (-273.15, 100.0)],
+        [
+            (-3.7, 12.9),
+            (3.5, 91.25),
+            (0.1, 0.7),
+            (-1.0, 1.0),
+            (2.2, 7.7),
+            (-273.15, 100.0),
+        ],
     )
     def test_the_continuous_legend_holds_the_stops_that_were_drawn(self, lo, hi):
         """``last_legend["values"]`` is ``last_breaks``, not a recomputation that usually agrees.

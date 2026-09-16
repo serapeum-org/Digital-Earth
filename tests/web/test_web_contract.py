@@ -543,7 +543,6 @@ class TestC5CmapResolvesThroughAutostyle:
         """The lookup is a default, not an override."""
         assert WebMap()._auto_cmap(_source("t2m"), "magma") == "magma"
 
-
     def test_overriding_the_style_lookup_reaches_the_colormap(self):
         """``_style_for`` is the tier's single lookup, so replacing it changes the colormap too.
 

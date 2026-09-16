@@ -27,7 +27,11 @@ NORTH_UP = (0.0, 1.0, 0.0, 8.0, 0.0, -1.0)
 SOUTH_UP = (0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 EAST_LEFT = (8.0, -1.0, 0.0, 8.0, 0.0, -1.0)
 
-STORAGE_ORDERS = [("north_up", NORTH_UP), ("south_up", SOUTH_UP), ("east_left", EAST_LEFT)]
+STORAGE_ORDERS = [
+    ("north_up", NORTH_UP),
+    ("south_up", SOUTH_UP),
+    ("east_left", EAST_LEFT),
+]
 
 
 def _write_labelled(directory: Path, name: str, geo: tuple) -> Path:
@@ -359,7 +363,9 @@ class TestARereadIsStillGeoreferenced:
             "the y axis must descend from north to south"
         )
 
-    def test_an_unaligned_window_labels_the_cells_it_actually_read(self, labelled_rasters):
+    def test_an_unaligned_window_labels_the_cells_it_actually_read(
+        self, labelled_rasters
+    ):
         """A sub-window off the source's pixel grid is labelled where its data really sits.
 
         Test scenario:
@@ -483,10 +489,10 @@ class TestWhatTheViewRefuses:
             believe the view held that slice — and `overview` in particular reads as honoured, because
             `read_part` genuinely does choose one, just from the requested size rather than from here.
         """
+        grid = np.arange(6.0).reshape(2, 3)
+        selection = Selection.of(1, **axis)
         with pytest.raises(ValueError, match="cannot yet honour"):
-            SourceView.of(
-                np.arange(6.0).reshape(2, 3), selection=Selection.of(1, **axis)
-            )
+            SourceView.of(grid, selection=selection)
 
     def test_a_selection_budget_is_applied_not_just_stored(self):
         """`Selection.of(1, budget=64)` limits the read, and the view records the request it applied.
@@ -499,9 +505,12 @@ class TestWhatTheViewRefuses:
         """
         ref = DataRef(str(RASTER))
         view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1, budget=64))
-        assert view.z.values.size <= 64, f"the budget must limit the read, got {view.z.values.size} cells"
-        assert view.request is not None and view.request.budget == 64, (
-            f"and the view must record the request it applied, got {view.request}"
+        assert view.z.values.size <= 64, (
+            f"the budget must limit the read, got {view.z.values.size} cells"
+        )
+        assert view.request is not None, "the view must record the request it applied"
+        assert view.request.budget == 64, (
+            f"and that request must carry the selection's budget, got {view.request.budget}"
         )
 
     @pytest.mark.parametrize(
@@ -518,7 +527,9 @@ class TestWhatTheViewRefuses:
             Either order — a looser request must not lift the selection's limit, and a looser selection must
             not lift the request's.
         """
-        folded = SourceView._budgeted(ViewRequest(budget=request_budget), selection_budget)
+        folded = SourceView._budgeted(
+            ViewRequest(budget=request_budget), selection_budget
+        )
         assert folded.budget == min(selection_budget, request_budget), (
             f"expected {min(selection_budget, request_budget)}, got {folded.budget}"
         )
@@ -529,7 +540,9 @@ class TestWhatTheViewRefuses:
         Test scenario:
             The request is rebuilt with `dataclasses.replace`; the bounds and canvas it carried must survive.
         """
-        request = ViewRequest(bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=3857), width=8, height=4)
+        request = ViewRequest(
+            bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=3857), width=8, height=4
+        )
         folded = SourceView._budgeted(request, 16)
         assert (folded.bounds, folded.width, folded.height, folded.budget) == (
             request.bounds,
@@ -570,7 +583,9 @@ class TestWhatTheViewRefuses:
             A request is only built from the selection when it names a budget; inventing an empty one here
             would make every unwindowed view claim to have answered a request nobody made.
         """
-        assert SourceView._budgeted(None, None) is None, "no request must stay no request"
+        assert SourceView._budgeted(None, None) is None, (
+            "no request must stay no request"
+        )
 
     def test_a_composite_selection_is_refused(self):
         """A view holds one band, so a three-band selection says so.
@@ -579,10 +594,10 @@ class TestWhatTheViewRefuses:
             `Selection.of((3, 2, 1))` reads as an RGB composite. Taking `first_band` and dropping the rest
             would draw one channel and report three.
         """
+        grid = np.arange(6.0).reshape(2, 3)
+        selection = Selection.of((3, 2, 1))
         with pytest.raises(ValueError, match="reads one band"):
-            SourceView.of(
-                np.arange(6.0).reshape(2, 3), selection=Selection.of((3, 2, 1))
-            )
+            SourceView.of(grid, selection=selection)
 
 
 class TestTheRequestedShape:
@@ -662,9 +677,8 @@ class TestTheRequestedShape:
         columns, rows = SourceView._shape(
             ViewRequest(width=width, height=height, budget=budget)
         )
-        assert columns >= 1 and rows >= 1, (
-            f"a read has to return at least one cell, got {columns}x{rows}"
-        )
+        assert columns >= 1, f"a read has to return at least one column, got {columns}"
+        assert rows >= 1, f"a read has to return at least one row, got {rows}"
         assert columns * rows <= budget, (
             f"{width}x{height} under a budget of {budget} came back as {columns}x{rows} = "
             f"{columns * rows} cells"
@@ -713,7 +727,9 @@ class TestTheRequestedShape:
         assert SourceView._shape(ViewRequest()) == (64, 64)
 
     @pytest.mark.parametrize("width, height", [(800, None), (None, 600)])
-    def test_a_canvas_missing_one_dimension_is_sized_by_the_budget_alone(self, width, height):
+    def test_a_canvas_missing_one_dimension_is_sized_by_the_budget_alone(
+        self, width, height
+    ):
         """One named dimension is not a canvas, so the read is the square the budget affords.
 
         Args:
@@ -725,13 +741,17 @@ class TestTheRequestedShape:
             so a budget of 100 reads 10x10 rather than a strip sized from the one dimension given.
         """
         shape = SourceView._shape(ViewRequest(width=width, height=height, budget=100))
-        assert shape == (10, 10), f"{width}x{height} under a budget of 100 must read 10x10, got {shape}"
+        assert shape == (10, 10), (
+            f"{width}x{height} under a budget of 100 must read 10x10, got {shape}"
+        )
 
     @pytest.mark.parametrize(
         "width, height, expected",
         [(10_000, 1, (100, 1)), (5_000, 2, (100, 1)), (1, 10_000, (1, 100))],
     )
-    def test_an_elongated_canvas_spends_the_whole_budget_on_its_long_axis(self, width, height, expected):
+    def test_an_elongated_canvas_spends_the_whole_budget_on_its_long_axis(
+        self, width, height, expected
+    ):
         """When the short axis scales to nothing, the long axis gets every cell the budget allows.
 
         Args:
@@ -745,7 +765,9 @@ class TestTheRequestedShape:
             capped at the budget and the short axis at one, in whichever orientation the canvas has.
         """
         fitted = SourceView._fitted(width, height, 100)
-        assert fitted == expected, f"{width}x{height} under a budget of 100 must fit as {expected}, got {fitted}"
+        assert fitted == expected, (
+            f"{width}x{height} under a budget of 100 must fit as {expected}, got {fitted}"
+        )
 
 
 class TestWindowingWhatCannotBeWindowed:
@@ -810,7 +832,9 @@ class TestTheRemainingWindowArms:
             {"member": 3, "variable": "t2m", "flag": True},
             {"member": 0, "variable": "t2m", "flag": False},
         )
-        assert merged["member"] == 0, f"the new read's member must stand, got {merged['member']}"
+        assert merged["member"] == 0, (
+            f"the new read's member must stand, got {merged['member']}"
+        )
         assert merged["flag"] is False, "and so must any other falsy value it wrote"
 
     def test_only_the_keys_that_describe_the_data_are_carried(self):
@@ -822,14 +846,21 @@ class TestTheRemainingWindowArms:
             produce it.
         """
         merged = SourceView._carried(
-            {"variable": "t2m", "kind": "raster", "standard_name": "air_temperature", "overview": 2},
+            {
+                "variable": "t2m",
+                "kind": "raster",
+                "standard_name": "air_temperature",
+                "overview": 2,
+            },
             {"variable": "", "kind": "raster"},
         )
         assert merged == {
             "variable": "t2m",
             "kind": "raster",
             "standard_name": "air_temperature",
-        }, f"only the describing keys are carried, and the empty variable is filled, got {merged}"
+        }, (
+            f"only the describing keys are carried, and the empty variable is filled, got {merged}"
+        )
 
     def test_a_reread_does_not_write_into_the_view_it_just_read(self):
         """The carry-over builds a new view, so `again` is never mutated through private attributes.
@@ -843,8 +874,12 @@ class TestTheRemainingWindowArms:
         view = SourceView(*_raster_parts(ref), {"variable": "rain"}, "mm", ref=ref)
         before = dict(view._meta)
         again = view.reread(ViewRequest(budget=64))
-        assert again.metadata("variable") == "rain", "the variable is carried to the new view"
-        assert view._meta == before, "and the view that was re-read is left exactly as it was"
+        assert again.metadata("variable") == "rain", (
+            "the variable is carried to the new view"
+        )
+        assert view._meta == before, (
+            "and the view that was re-read is left exactly as it was"
+        )
         assert again is not view, "a re-read is a new view"
 
     def test_a_budget_only_request_against_an_object_with_no_budget_declines(self):
@@ -881,7 +916,9 @@ class TestTheRemainingWindowArms:
             "and hold projected coordinates, not the degrees the request was written in"
         )
 
-    def test_a_window_with_no_crs_is_read_in_the_rasters_own_coordinates(self, labelled_rasters):
+    def test_a_window_with_no_crs_is_read_in_the_rasters_own_coordinates(
+        self, labelled_rasters
+    ):
         """A region naming no CRS is not converted, and its cells are still labelled where they sit.
 
         Test scenario:
@@ -892,10 +929,18 @@ class TestTheRemainingWindowArms:
         """
         ref = DataRef(str(labelled_rasters["north_up"]))
         view = SourceView.of(ref.open(), ref=ref)
-        again = view.reread(ViewRequest(bounds=Bounds(1.5, 1.5, 4.5, 4.5, crs=None), width=4, height=4))
-        assert again.crs == 3857, f"the view must report the raster's own CRS, got {again.crs}"
-        assert again.x.values.tolist() == [1.5, 2.5, 3.5, 4.5], f"got x={again.x.values}"
-        assert again.z.values[0][0] == 31.0, f"the top-left cell must be stored row 3, column 1, got {again.z.values}"
+        again = view.reread(
+            ViewRequest(bounds=Bounds(1.5, 1.5, 4.5, 4.5, crs=None), width=4, height=4)
+        )
+        assert again.crs == 3857, (
+            f"the view must report the raster's own CRS, got {again.crs}"
+        )
+        assert again.x.values.tolist() == [1.5, 2.5, 3.5, 4.5], (
+            f"got x={again.x.values}"
+        )
+        assert again.z.values[0][0] == 31.0, (
+            f"the top-left cell must be stored row 3, column 1, got {again.z.values}"
+        )
 
     def test_a_reader_declaring_no_crs_keeps_the_window_in_the_requested_one(self):
         """With no CRS to convert into, the bbox reaches `read_part` as written and the view reports its CRS.
@@ -908,12 +953,16 @@ class TestTheRemainingWindowArms:
         reader = _WindowedReader(geotransform=(0.0, 1.0, 0.0, 8.0, 0.0, -1.0))
         view = SourceView.of(
             reader,
-            request=ViewRequest(bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=4, height=4),
+            request=ViewRequest(
+                bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=4, height=4
+            ),
         )
-        assert reader.calls == [{"bbox": [1.0, 2.0, 5.0, 6.0], "bbox_crs": 4326, "band": 0}], (
-            f"the window must be read unconverted, got {reader.calls}"
+        assert reader.calls == [
+            {"bbox": [1.0, 2.0, 5.0, 6.0], "bbox_crs": 4326, "band": 0}
+        ], f"the window must be read unconverted, got {reader.calls}"
+        assert view.crs == 4326, (
+            f"and the view must report the request's CRS, got {view.crs}"
         )
-        assert view.crs == 4326, f"and the view must report the request's CRS, got {view.crs}"
 
     def test_a_reader_with_no_geotransform_reads_the_window_exactly_as_asked(self):
         """With no grid to snap to, the requested rectangle is the one read, labelled north-up and west-left.
@@ -926,13 +975,19 @@ class TestTheRemainingWindowArms:
         reader = _WindowedReader()
         view = SourceView.of(
             reader,
-            request=ViewRequest(bounds=Bounds(0.25, 0.5, 4.25, 2.5, crs=3857), width=4, height=2),
+            request=ViewRequest(
+                bounds=Bounds(0.25, 0.5, 4.25, 2.5, crs=3857), width=4, height=2
+            ),
         )
         assert reader.calls[0]["bbox"] == [0.25, 0.5, 4.25, 2.5], (
             f"an ungridded window must not be snapped, got {reader.calls[0]['bbox']}"
         )
-        assert view.x.values.tolist() == [0.75, 1.75, 2.75, 3.75], f"x must ascend, got {view.x.values}"
-        assert view.y.values.tolist() == [2.0, 1.0], f"y must descend, got {view.y.values}"
+        assert view.x.values.tolist() == [0.75, 1.75, 2.75, 3.75], (
+            f"x must ascend, got {view.x.values}"
+        )
+        assert view.y.values.tolist() == [2.0, 1.0], (
+            f"y must descend, got {view.y.values}"
+        )
 
     @pytest.mark.parametrize(
         "geotransform",
@@ -958,8 +1013,12 @@ class TestTheRemainingWindowArms:
         """
         data = SimpleNamespace(geotransform=geotransform)
         window = Bounds(0.25, 0.5, 4.25, 2.5, crs=3857)
-        assert SourceView._grid(data) is None, f"{geotransform!r} must not read as a grid"
-        assert SourceView._aligned(window, data) is window, "and the window must come back unchanged"
+        assert SourceView._grid(data) is None, (
+            f"{geotransform!r} must not read as a grid"
+        )
+        assert SourceView._aligned(window, data) is window, (
+            "and the window must come back unchanged"
+        )
 
     def test_a_usable_geotransform_is_read_as_floats_without_its_rotation_terms(self):
         """`_grid` keeps each axis's origin and step, as floats, and drops the two rotation terms.
@@ -969,8 +1028,12 @@ class TestTheRemainingWindowArms:
             the grid a window snaps to; integer entries come back as floats for the pixel arithmetic.
         """
         grid = SourceView._grid(SimpleNamespace(geotransform=[10, 2, 7, 20, 9, -2]))
-        assert grid == (10.0, 2.0, 20.0, -2.0), f"expected origin and step per axis, got {grid}"
-        assert all(isinstance(entry, float) for entry in grid), f"every entry must be a float, got {grid}"
+        assert grid == (10.0, 2.0, 20.0, -2.0), (
+            f"expected origin and step per axis, got {grid}"
+        )
+        assert all(isinstance(entry, float) for entry in grid), (
+            f"every entry must be a float, got {grid}"
+        )
 
     @pytest.mark.parametrize(
         "low, high, origin, step, expected",
@@ -981,9 +1044,17 @@ class TestTheRemainingWindowArms:
             (1.3, 4.6, 8.0, -2.0, (0.0, 6.0)),
             (2.0, 5.0, 8.0, -1.0, (2.0, 5.0)),
         ],
-        ids=["positive_step", "negative_step", "half_step", "wide_negative_step", "already_aligned"],
+        ids=[
+            "positive_step",
+            "negative_step",
+            "half_step",
+            "wide_negative_step",
+            "already_aligned",
+        ],
     )
-    def test_an_axis_is_snapped_outward_to_the_enclosing_cell_edges(self, low, high, origin, step, expected):
+    def test_an_axis_is_snapped_outward_to_the_enclosing_cell_edges(
+        self, low, high, origin, step, expected
+    ):
         """Each edge moves out to the nearest cell edge beyond it, whichever way the axis is stored.
 
         Args:
@@ -999,8 +1070,11 @@ class TestTheRemainingWindowArms:
             than one, and an axis already on the grid, which must come back as it went in.
         """
         snapped = SourceView._snapped(low, high, origin, step)
-        assert snapped == pytest.approx(expected), f"({low}, {high}) on step {step} snapped to {snapped}"
-        assert snapped[0] <= low and snapped[1] >= high, f"{snapped} must enclose ({low}, {high})"
+        assert snapped == pytest.approx(expected), (
+            f"({low}, {high}) on step {step} snapped to {snapped}"
+        )
+        assert snapped[0] <= low, f"{snapped} must start at or below {low}"
+        assert snapped[1] >= high, f"{snapped} must end at or above {high}"
 
     def test_only_an_empty_variable_is_a_placeholder(self):
         """`variable=""` is filled from the previous read; an empty `kind` or `standard_name` stands.
@@ -1026,4 +1100,6 @@ class TestTheRemainingWindowArms:
             something else — and a describing key neither read supplied is not invented.
         """
         merged = SourceView._carried({"variable": "t2m"}, {"variable": "precip"})
-        assert merged == {"variable": "precip"}, f"the new read's variable must stand alone, got {merged}"
+        assert merged == {"variable": "precip"}, (
+            f"the new read's variable must stand alone, got {merged}"
+        )

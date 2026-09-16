@@ -141,7 +141,10 @@ class TestFromAContinuousScale:
         "scale, colors",
         [
             (Scale.categorical(["a"], ["#f00"]), None),
-            (Scale.from_values([0.0, 10.0], scheme="equal_interval", k=2), ["#a", "#b"]),
+            (
+                Scale.from_values([0.0, 10.0], scheme="equal_interval", k=2),
+                ["#a", "#b"],
+            ),
         ],
         ids=["categorical", "graduated"],
     )
@@ -154,7 +157,9 @@ class TestFromAContinuousScale:
             needs at least two stops" about a legend that is not continuous and has no ramp.
         """
         legend = LegendSpec.from_scale(scale, colors=colors, stops=1)
-        assert legend.kind != "continuous", "the arm under test is one that reads no stops"
+        assert legend.kind != "continuous", (
+            "the arm under test is one that reads no stops"
+        )
         assert len(legend.entries) >= 1, "and it still produced its rows"
 
     def test_the_drawn_stops_can_be_handed_over_instead_of_recomputed(self):
@@ -192,13 +197,14 @@ class TestFromAContinuousScale:
             default of five — the count has to come from whichever source is in play.
         """
         legend = LegendSpec.from_scale(
-            Scale.from_limits(0.0, 1.0), colors=["#a", "#b", "#c"], values=[0.0, 0.5, 1.0]
+            Scale.from_limits(0.0, 1.0),
+            colors=["#a", "#b", "#c"],
+            values=[0.0, 0.5, 1.0],
         )
         assert len(legend.entries) == 3, "three stops, three rows"
+        scale = Scale.from_limits(0.0, 1.0)
         with pytest.raises(ValueError, match="one colour per stop"):
-            LegendSpec.from_scale(
-                Scale.from_limits(0.0, 1.0), colors=["#a", "#b"], values=[0.0, 0.5, 1.0]
-            )
+            LegendSpec.from_scale(scale, colors=["#a", "#b"], values=[0.0, 0.5, 1.0])
 
     def test_too_few_handed_over_stops_are_refused_like_too_few_recomputed_ones(self):
         """One stop is not a ramp however it arrives.
@@ -207,10 +213,9 @@ class TestFromAContinuousScale:
             The guard moved into this arm reads `stops`; a caller supplying `values=` bypasses that number
             entirely, so the check has to count whichever of the two describes the ramp.
         """
+        scale = Scale.from_limits(0.0, 1.0)
         with pytest.raises(ValueError, match="at least two stops"):
-            LegendSpec.from_scale(
-                Scale.from_limits(0.0, 1.0), colors=["#a"], values=[0.5]
-            )
+            LegendSpec.from_scale(scale, colors=["#a"], values=[0.5])
 
     def test_a_stop_count_beside_handed_over_stops_is_ignored_not_refused(self):
         """`stops=1` next to three handed-over stops describes a valid three-stop ramp.
@@ -220,7 +225,10 @@ class TestFromAContinuousScale:
             values. Counting `stops` would refuse a perfectly good ramp over a number it never uses.
         """
         legend = LegendSpec.from_scale(
-            Scale.from_limits(0.0, 1.0), colors=["#a", "#b", "#c"], stops=1, values=[0.0, 0.5, 1.0]
+            Scale.from_limits(0.0, 1.0),
+            colors=["#a", "#b", "#c"],
+            stops=1,
+            values=[0.0, 0.5, 1.0],
         )
         assert [entry.value for entry in legend.entries] == [0.0, 0.5, 1.0], (
             "the handed-over stops, not the stop count, must decide the rows"
@@ -235,13 +243,17 @@ class TestFromAContinuousScale:
             legend's.
         """
         legend = LegendSpec.from_scale(
-            Scale.from_limits(0.0, 10.0), colors=["#a", "#b", "#c"], values=np.array([0, 5, 10])
+            Scale.from_limits(0.0, 10.0),
+            colors=["#a", "#b", "#c"],
+            values=np.array([0, 5, 10]),
         )
         values = [entry.value for entry in legend.entries]
         assert all(isinstance(value, float) for value in values), (
             f"every stop must be a float, got {[type(value).__name__ for value in values]}"
         )
-        assert values == [0.0, 5.0, 10.0], f"and hold the value it was given, got {values}"
+        assert values == [0.0, 5.0, 10.0], (
+            f"and hold the value it was given, got {values}"
+        )
 
     @pytest.mark.parametrize("stops", [0, 1])
     def test_a_ramp_needs_at_least_two_stops(self, stops):
@@ -254,10 +266,10 @@ class TestFromAContinuousScale:
             Every other field on this type is validated in `__post_init__`; `stops` reached the spacing
             arithmetic directly, so `stops=1` raised ZeroDivisionError from inside a list comprehension.
         """
+        scale = Scale.from_limits(0.0, 1.0)
+        colors = ["#a"] * max(stops, 1)
         with pytest.raises(ValueError, match="at least two stops"):
-            LegendSpec.from_scale(
-                Scale.from_limits(0.0, 1.0), colors=["#a"] * max(stops, 1), stops=stops
-            )
+            LegendSpec.from_scale(scale, colors=colors, stops=stops)
 
 
 class TestTheSpecItself:
@@ -278,7 +290,9 @@ class TestTheSpecItself:
         import digitalearth.base.spec as spec
         from digitalearth.base.spec import legend
 
-        assert name in spec.__all__, f"{name} must be listed in digitalearth.base.spec.__all__"
+        assert name in spec.__all__, (
+            f"{name} must be listed in digitalearth.base.spec.__all__"
+        )
         assert getattr(spec, name) is getattr(legend, name), (
             f"spec.{name} must be the legend module's own object, not a copy"
         )

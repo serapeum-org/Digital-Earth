@@ -45,8 +45,9 @@ class TestBuilding:
             They are index-aligned with each other and with any attribute column filtered alongside them. A
             mismatch draws points at another point's coordinates, silently.
         """
+        x, y, z = np.array([0.0, 1.0]), np.array([0.0]), np.array([0.0])
         with pytest.raises(ValueError, match="the same length"):
-            PointArrays(np.array([0.0, 1.0]), np.array([0.0]), np.array([0.0]))
+            PointArrays(x, y, z)
 
     def test_the_length_is_the_point_count(self):
         """`len()` answers how many points there are.
@@ -130,12 +131,18 @@ class TestFromFeatures:
             geometry=[Point(0, 0), None, Point(2, 2)], crs="EPSG:3857"
         )
         points = PointArrays.from_features(gdf, centroids=centroids)
-        assert len(points) == 3, "the missing row stays, so the arrays still align with the frame"
-        assert np.isnan(points.x[1]), "and reads as NaN, the way geopandas answers for it"
+        assert len(points) == 3, (
+            "the missing row stays, so the arrays still align with the frame"
+        )
+        assert np.isnan(points.x[1]), (
+            "and reads as NaN, the way geopandas answers for it"
+        )
         kept, _ = points.finite()
         assert len(kept) == 2, "leaving `finite` to drop it, as every caller does"
 
-    def test_a_missing_geometry_does_not_flatten_the_three_dimensional_points_beside_it(self):
+    def test_a_missing_geometry_does_not_flatten_the_three_dimensional_points_beside_it(
+        self,
+    ):
         """One null among 3-D points keeps every other point's height.
 
         Test scenario:
@@ -150,7 +157,9 @@ class TestFromFeatures:
         z = PointArrays.from_features(gdf, centroids=False).z
         assert z[0] == 5.0, f"the first point keeps its height, got {z.tolist()}"
         assert z[2] == 7.0, f"and so does the last, got {z.tolist()}"
-        assert np.isnan(z[1]), f"while the missing row's height is missing too, got {z.tolist()}"
+        assert np.isnan(z[1]), (
+            f"while the missing row's height is missing too, got {z.tolist()}"
+        )
 
     def test_a_frame_of_only_missing_geometry_reads_as_flat(self):
         """With no present geometry there is nothing to call 3-D, so `z` stays zeros.
@@ -161,7 +170,9 @@ class TestFromFeatures:
         """
         gdf = gpd.GeoDataFrame(geometry=[None, None], crs="EPSG:3857")
         z = PointArrays.from_features(gdf, centroids=False).z
-        assert z.tolist() == [0.0, 0.0], f"an all-null frame reads as flat, got {z.tolist()}"
+        assert z.tolist() == [0.0, 0.0], (
+            f"an all-null frame reads as flat, got {z.tolist()}"
+        )
 
     def test_a_real_non_point_geometry_is_still_refused_when_centroids_is_off(self):
         """Relaxing the null case does not relax the case the guard is for.
@@ -191,8 +202,11 @@ class TestFromFeatures:
         """
         gdf = gpd.GeoDataFrame(geometry=[None, None], crs="EPSG:3857")
         points = PointArrays.from_features(gdf, centroids=centroids)
-        assert len(points) == 2, "every row is kept, so the arrays still align with the frame"
-        assert np.isnan(points.x).all() and np.isnan(points.y).all(), f"got x={points.x}, y={points.y}"
+        assert len(points) == 2, (
+            "every row is kept, so the arrays still align with the frame"
+        )
+        assert np.isnan(points.x).all(), f"every x is missing, got {points.x}"
+        assert np.isnan(points.y).all(), f"and every y, got {points.y}"
         assert len(points.finite()[0]) == 0, "and no point survives the finite mask"
 
     def test_a_non_point_geometry_is_checked_before_its_coordinates_are_touched(self):
@@ -313,8 +327,9 @@ class TestFiniteFiltering:
         Test scenario:
             `dims="xu"` would otherwise mask on x alone and quietly ignore the rest, which reads as working.
         """
+        points = PointArrays.of([0.0], [1.0])
         with pytest.raises(ValueError, match="names"):
-            PointArrays.of([0.0], [1.0]).finite(dims="xu")
+            points.finite(dims="xu")
 
     @pytest.mark.parametrize("dims", ["", "xx", "yxy"])
     def test_an_empty_or_repeating_dims_string_is_refused(self, dims):
@@ -328,10 +343,13 @@ class TestFiniteFiltering:
             point survived — the silently-working typo the guard exists to stop — and a repeated letter
             passed where the caller almost certainly meant a different axis.
         """
+        points = PointArrays.of([0.0, float("nan")], [1.0, 2.0])
         with pytest.raises(ValueError, match="at most once, and at least one"):
-            PointArrays.of([0.0, float("nan")], [1.0, 2.0]).finite(dims=dims)
+            points.finite(dims=dims)
 
-    @pytest.mark.parametrize("dims, kept_x", [("y", [1.0, 2.0]), ("zx", [0.0, 2.0]), ("zyx", [2.0])])
+    @pytest.mark.parametrize(
+        "dims, kept_x", [("y", [1.0, 2.0]), ("zx", [0.0, 2.0]), ("zyx", [2.0])]
+    )
     def test_a_single_or_reordered_dims_string_is_accepted(self, dims, kept_x):
         """Any non-empty, non-repeating choice of axes filters on exactly those axes, in any order.
 
@@ -344,9 +362,13 @@ class TestFiniteFiltering:
             documented spellings, `"xy"` and `"xyz"`, would pass every refusal test and still reject a caller
             filtering on `y` alone or naming the axes in another order.
         """
-        points = PointArrays.of([0.0, 1.0, 2.0], [float("nan"), 1.0, 2.0], [2.0, float("nan"), 2.0])
+        points = PointArrays.of(
+            [0.0, 1.0, 2.0], [float("nan"), 1.0, 2.0], [2.0, float("nan"), 2.0]
+        )
         kept, _ = points.finite(dims=dims)
-        assert kept.x.tolist() == kept_x, f"dims={dims!r} must keep x={kept_x}, got {kept.x.tolist()}"
+        assert kept.x.tolist() == kept_x, (
+            f"dims={dims!r} must keep x={kept_x}, got {kept.x.tolist()}"
+        )
 
     def test_two_equal_readings_compare_equal(self):
         """Comparison works at all, which it did not before round 1.
@@ -356,8 +378,12 @@ class TestFiniteFiltering:
             instance holding more than one point raised "The truth value of an array with more than one
             element is ambiguous" on comparison.
         """
-        assert PointArrays.of([0.0, 1.0], [2.0, 3.0]) == PointArrays.of(
-            [0.0, 1.0], [2.0, 3.0]
+        built = PointArrays.of([0.0, 1.0], [2.0, 3.0])
+        constructed = PointArrays(
+            np.array([0.0, 1.0]), np.array([2.0, 3.0]), np.zeros(2), None
+        )
+        assert built == constructed, (
+            "two instances holding the same points must compare equal"
         )
 
     def test_different_points_do_not_compare_equal(self):
@@ -383,8 +409,9 @@ class TestFiniteFiltering:
             Stated rather than accidental: the other value types in this refactor hash on purpose, so the
             difference needs to be a decision the tests record.
         """
+        points = PointArrays.of([0.0], [1.0])
         with pytest.raises(TypeError):
-            hash(PointArrays.of([0.0], [1.0]))
+            hash(points)
 
 
 class TestTheReadOnlyGuaranteeReachesSource:
@@ -403,11 +430,15 @@ class TestTheReadOnlyGuaranteeReachesSource:
 
         from digitalearth.base.sources import get_source
 
-        gdf = gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=[Point(0, 1), Point(2, 3)], crs="EPSG:4326")
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0]}, geometry=[Point(0, 1), Point(2, 3)], crs="EPSG:4326"
+        )
         source = get_source(FeatureCollection(gdf))
         with pytest.raises(ValueError, match="read-only"):
             source.x.values[0] = 9.0
-        assert np.array(source.x.values).flags.writeable, "and the documented copy is writable"
+        assert np.array(source.x.values).flags.writeable, (
+            "and the documented copy is writable"
+        )
 
 
 class TestShapes:

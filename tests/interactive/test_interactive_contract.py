@@ -306,7 +306,6 @@ class TestAutoCmap:
             "an unnamed band falls back to the tier's previous literal"
         )
 
-
     def test_overriding_the_style_lookup_reaches_the_colormap(self):
         """``_auto_style`` is the tier's single lookup, so replacing it changes the colormap too.
 

@@ -68,7 +68,6 @@ class TestTrimesh:
         m.trimesh(point_fc, rasterize=False)
         assert isinstance(m.layers[0], gv.TriMesh)
 
-
     def test_a_null_geometry_is_dropped_rather_than_raising(self, m):
         """A frame with one `null` geometry among points still triangulates.
 
