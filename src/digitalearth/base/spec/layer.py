@@ -22,7 +22,7 @@ Two decisions this module settles:
 import re
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
-from typing import Any, Dict, FrozenSet, Iterator, List, Mapping, Optional, Tuple
+from typing import Any, Dict, FrozenSet, Iterator, List, Mapping, Optional, Tuple, cast
 
 from digitalearth.base.spec._serial import refuse_unknown, require
 from digitalearth.base.spec.selection import Selection
@@ -766,7 +766,9 @@ class LayerTree:
 
                 ```
         """
-        return self.replace(with_fields(self.get(layer_id), visible=visible))
+        return self.replace(
+            cast(LayerSpec, with_fields(self.get(layer_id), visible=visible))
+        )
 
     def set_group_visible(self, group: str, visible: bool) -> "LayerTree":
         """Return a tree with a whole group switched on or off.
