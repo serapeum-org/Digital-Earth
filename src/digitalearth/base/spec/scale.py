@@ -27,12 +27,20 @@ into classes — and only the arithmetic is injected.
 
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from digitalearth.base.arrays import finite
 from digitalearth.base.registry import get_classifier
+from digitalearth.base.spec._serial import (
+    as_list,
+    finite_number,
+    frozen_value,
+    refuse_unknown,
+    require,
+    to_json_value,
+)
 
 __all__ = ["DEFAULT_CLASS_COUNT", "Scale"]
 
@@ -125,7 +133,11 @@ class Scale:
         # tiers, so a caller's list really does arrive here; stored as given it would leave the scale
         # unhashable and editable from outside, which is not what "frozen value object" promises.
         object.__setattr__(self, "breaks", tuple(self.breaks))
-        object.__setattr__(self, "categories", tuple(self.categories))
+        object.__setattr__(
+            self,
+            "categories",
+            tuple(frozen_value(category) for category in self.categories),
+        )
         object.__setattr__(self, "_colors", tuple(self._colors))
         if isinstance(self.scheme, set):
             # Class edges are ordered data and a set has no order, so tuple(set) would pick one by hash.
@@ -548,7 +560,9 @@ class Scale:
         """Return the colour assigned to one category.
 
         Args:
-            category: The category to look up.
+            category: The category to look up. Categories are labels: a boolean — Python's, or numpy's `bool_`, which
+                is what `np.unique` over a boolean column holds — matches only a boolean category, so `True` does not
+                find a category `1`, nor `1` a category `True`.
 
         Returns:
             Its colour, or :attr:`missing` when the scale never saw it.
@@ -562,13 +576,25 @@ class Scale:
                 '#ccc'
 
                 ```
+            - A numpy boolean finds the boolean category; the integer `1` does not:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.categorical([True, False], ["#f00", "#00f"], missing="#ccc")
+                >>> scale.color_for(np.bool_(True)), scale.color_for(1)
+                ('#f00', '#ccc')
+
+                ```
         """
+        category = frozen_value(category)
         for index, known in enumerate(self.categories):
             # `in`/`.index` compare with ==, which makes True equal to 1 and leaves a NaN category
             # unreachable. Categories are labels, so `False` and `0` are different labels even though they
             # compare equal, and an identity check is what finds a NaN that was actually stored.
+            # A numpy boolean — what a boolean column's `.unique()` holds — is a boolean label too.
             if known is category or (
-                isinstance(known, bool) == isinstance(category, bool)
+                isinstance(known, (bool, np.bool_))
+                == isinstance(category, (bool, np.bool_))
                 and known == category
             ):
                 return self._colors[index]
@@ -641,3 +667,125 @@ class Scale:
                 ```
         """
         return self
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`
+            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every
+            field goes through the JSON check, so a numpy number is written as a plain Python one.
+
+        Raises:
+            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming
+                the field.
+
+        Examples:
+            - A continuous scale is its domain:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).to_dict()
+                {'vmin': 0.0, 'vmax': 10.0}
+
+                ```
+            - A categorical scale carries its colours:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stored = Scale.categorical(["a", "b"], ["#f00", "#00f"]).to_dict()
+                >>> stored["categories"], stored["colors"]
+                (['a', 'b'], ['#f00', '#00f'])
+
+                ```
+            - A classified scale carries its scheme and its class edges:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale(0.0, 10.0, scheme="quantiles", breaks=(0.0, 4.0, 10.0)).to_dict()
+                {'vmin': 0.0, 'vmax': 10.0, 'scheme': 'quantiles', 'breaks': [0.0, 4.0, 10.0]}
+
+                ```
+        """
+        # Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is
+        # finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.
+        out: Dict[str, Any] = {
+            "vmin": to_json_value(self.vmin, "Scale.vmin"),
+            "vmax": to_json_value(self.vmax, "Scale.vmax"),
+        }
+        if self.scheme is not None:
+            out["scheme"] = to_json_value(self.scheme, "Scale.scheme")
+        if self.breaks:
+            out["breaks"] = to_json_value(self.breaks, "Scale.breaks")
+        if self.categories:
+            out["categories"] = to_json_value(self.categories, "Scale.categories")
+            out["colors"] = to_json_value(self._colors, "Scale.colors")
+        if self.missing is not None:
+            out["missing"] = to_json_value(self.missing, "Scale.missing")
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Scale":
+        """Rebuild a scale from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the
+            breaks, which is what makes a frozen scale reproduce the colours it was drawn with.
+
+        Raises:
+            TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming
+                the field.
+            ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown
+                key, or a scale the constructor refuses — a
+                non-finite or degenerate domain, a single class edge, or a colour count that does not match the
+                categories.
+
+        Examples:
+            - Stored class edges come back without re-classifying anything:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_dict({"vmin": 0, "vmax": 10, "breaks": [0, 5, 10]})
+                >>> scale.class_ranges()
+                [(0.0, 5.0), (5.0, 10.0)]
+
+                ```
+            - A categorical scale keeps each category's colour across a round trip:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stored = Scale.categorical(["forest", "water"], ["#228b22", "#1e90ff"]).to_dict()
+                >>> Scale.from_dict(stored).color_for("water")
+                '#1e90ff'
+
+                ```
+            - A domain with no width is refused:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_dict({"vmin": 1, "vmax": 1})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Scale needs vmax > vmin; got vmin=1.0, vmax=1.0. ...
+
+                ```
+        """
+        refuse_unknown(
+            "Scale",
+            data,
+            ("vmin", "vmax", "scheme", "breaks", "categories", "colors", "missing"),
+        )
+        scheme = data.get("scheme")
+        return cls(
+            finite_number("Scale", "vmin", require("Scale", data, "vmin")),
+            finite_number("Scale", "vmax", require("Scale", data, "vmax")),
+            scheme=tuple(scheme) if isinstance(scheme, list) else scheme,
+            breaks=tuple(
+                finite_number("Scale", f"breaks[{index}]", edge)
+                for index, edge in enumerate(
+                    as_list("Scale", "breaks", data.get("breaks", ()))
+                )
+            ),
+            categories=as_list("Scale", "categories", data.get("categories", ())),
+            missing=data.get("missing"),
+            _colors=as_list("Scale", "colors", data.get("colors", ())),
+        )

@@ -7,7 +7,7 @@ library.
 
 import geopandas as gpd
 import pytest
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +46,23 @@ def polygons():
 
 
 @pytest.fixture
+def lines():
+    """Two line strings with a numeric column.
+
+    Returns:
+        A GeoDataFrame in EPSG:4326.
+    """
+    return gpd.GeoDataFrame(
+        {"v": [1, 2]},
+        geometry=[
+            LineString([(0.0, 0.0), (1.0, 1.0)]),
+            LineString([(1.0, 0.0), (2.0, 1.0)]),
+        ],
+        crs="EPSG:4326",
+    )
+
+
+@pytest.fixture
 def raster_stack(tmp_path):
     """A 3-member ``DatasetCollection``, one file per step.
 
@@ -75,6 +92,38 @@ def raster_stack(tmp_path):
     return DatasetCollection.from_files(paths)
 
 
+@pytest.fixture
+def raster():
+    """A small single-band in-memory raster.
+
+    Returns:
+        A pyramids ``Dataset`` in EPSG:4326.
+    """
+    pytest.importorskip("pyramids")
+    import numpy as np
+    from pyramids.base.georeference import GeoReference
+    from pyramids.dataset import Dataset
+
+    geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+    _, xx = np.mgrid[0:8, 0:9]
+    return Dataset.from_array(
+        (xx / 10.0).astype("float32"), geo_ref=geo_ref, no_data_value=-9999.0
+    )
+
+
+def _drawn(web_map):
+    """Return the ids of a map's addressable layers in the order they are drawn, bottom first.
+
+    Args:
+        web_map: The map.
+
+    Returns:
+        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none.
+    """
+    ids = [getattr(layer, "_digitalearth_layer_id", None) for layer in web_map.layers]
+    return [layer_id for layer_id in ids if layer_id is not None]
+
+
 def _payload(html):
     """Return the page's call payload — what this map does, not what the library contains.
 
@@ -100,6 +149,272 @@ class TestTheRegistryIsAddressable:
         assert len(m.layer_ids) == 2, m.layer_ids
         assert m.layer_ids[0].startswith("fill"), m.layer_ids
         assert m.layer_ids[1].startswith("circle"), m.layer_ids
+
+    def test_each_data_layer_is_described_with_its_kind_and_label(
+        self, points, polygons
+    ):
+        """The index is a `LayerTree`, so a layer is described as well as named (DE-20, #281).
+
+        Test scenario:
+            The index held `(id, label)` pairs and the label was never read back. Backed by a `LayerTree`, each
+            entry says what sort of layer it is — the builder's paint type — and carries the caller's name as its
+            label, which is what a later export or a layer switcher needs.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(polygons, column="pop", name="Population")
+            .points(points)
+        )
+        fill, circle = m.layer_ids
+        assert m._layer_tree.ids == (fill, circle), m._layer_tree.ids
+        assert m._layer_tree.get(fill).kind == "fill", m._layer_tree.get(fill)
+        assert m._layer_tree.get(fill).display_label == "Population", m._layer_tree.get(
+            fill
+        )
+        assert m._layer_tree.get(circle).kind == "circle", m._layer_tree.get(circle)
+
+    @pytest.mark.parametrize(
+        "method, fixture, args, kwargs, kind",
+        [
+            ("add_raster", "raster", (), {}, "raster"),
+            ("rgb_composite", "raster", (), {"bands": (1, 1, 1)}, "rgb"),
+            ("heatmap", "points", (), {}, "heatmap"),
+            ("cluster", "points", (), {}, "clusters"),
+            ("extrusion", "polygons", (), {"height": "pop"}, "extrusion"),
+            ("text", None, (4.9, 52.4, "Amsterdam"), {}, "text"),
+            ("graticule", None, (), {}, "graticule"),
+            ("labels", "points", ("v",), {}, "label"),
+        ],
+        ids=[
+            "add_raster",
+            "rgb_composite",
+            "heatmap",
+            "cluster",
+            "extrusion",
+            "text",
+            "graticule",
+            "labels",
+        ],
+    )
+    def test_every_other_builder_records_the_kind_of_layer_it_adds(
+        self, request, method, fixture, args, kwargs, kind
+    ):
+        """Each builder beyond the vector ones names its layer's kind in the tree.
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data, or ``None`` for a builder that takes none.
+            args: Positional arguments after the data.
+            kwargs: Keyword arguments the builder needs.
+            kind: The kind the builder must record.
+
+        Test scenario:
+            The vector builders record their paint type, asserted above. The raster, composite, big-data, 3-D and
+            decoration builders each pass their own kind, and a wrong one would describe the layer as something
+            it is not in any later export. `labels` builds a symbol layer and records `"label"`, the one vector
+            kind that is not a paint type.
+        """
+        from digitalearth.web import WebMap
+
+        inputs = () if fixture is None else (request.getfixturevalue(fixture),)
+        m = getattr(WebMap().basemap(), method)(*inputs, *args, **kwargs)
+        assert len(m.layer_ids) == 1, (
+            f"{method} should index one layer; got {m.layer_ids}"
+        )
+        recorded = m._layer_tree.get(m.layer_ids[0])
+        assert recorded.kind == kind, (
+            f"{method} recorded kind {recorded.kind!r}, expected {kind!r}"
+        )
+
+    @pytest.mark.parametrize(
+        "method, fixture, kwargs",
+        [
+            ("add_raster", "raster", {}),
+            ("rgb_composite", "raster", {"bands": (1, 1, 1)}),
+            ("points", "points", {}),
+            ("lines", "lines", {}),
+            ("polygons", "polygons", {}),
+            ("choropleth", "polygons", {"column": "pop"}),
+            ("labels", "points", {"column": "v"}),
+            ("contours", "raster", {"levels": [0.3, 0.6], "labels": True}),
+            ("graticule", None, {}),
+        ],
+        ids=[
+            "add_raster",
+            "rgb_composite",
+            "points",
+            "lines",
+            "polygons",
+            "choropleth",
+            "labels",
+            "contours",
+            "graticule",
+        ],
+    )
+    def test_a_layer_built_hidden_is_recorded_hidden(
+        self, request, method, fixture, kwargs
+    ):
+        """Every builder that takes `visible=` records the layer's visibility in the tree, not only in MapLibre.
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data, or ``None`` for a builder that takes none.
+            kwargs: Keyword arguments the builder needs besides `visible`.
+
+        Test scenario:
+            `_index_layer` took no `visible`, so the tree described every layer as visible while the emitted
+            MapLibre layout said ``visibility: none``. A layer switcher, an export or a reconciler reading the tree
+            would have shown every hidden layer. `contours` with labels indexes two layers, and both must be hidden.
+        """
+        from digitalearth.web import WebMap
+
+        inputs = () if fixture is None else (request.getfixturevalue(fixture),)
+        m = getattr(WebMap().basemap(), method)(*inputs, visible=False, **kwargs)
+        assert m.layer_ids, f"{method} indexed no layer"
+        shown = [layer for layer in m.layer_ids if m._layer_tree.is_visible(layer)]
+        assert shown == [], f"{method}(visible=False) recorded {shown} as visible"
+
+    def test_a_layer_built_visible_is_recorded_visible(self, points):
+        """The default builds a visible layer, and the tree says so.
+
+        Test scenario:
+            The other half of the hidden case: threading `visible` through must not turn the default into hidden.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points)
+        assert m._layer_tree.is_visible(m.layer_ids[0]), m._layer_tree
+
+    @pytest.mark.parametrize(
+        "method, fixture, visible, drawn",
+        [
+            ("points", "points", 0, False),
+            ("points", "points", 1, True),
+            ("add_raster", "raster", None, False),
+            ("graticule", None, 0, False),
+        ],
+        ids=["points-0", "points-1", "raster-none", "graticule-0"],
+    )
+    def test_a_non_boolean_visible_builds_and_is_recorded_as_drawn(
+        self, request, method, fixture, visible, drawn
+    ):
+        """A builder given `visible=0`, `1` or `None` builds as it always did, and the tree records what it drew.
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data, or ``None`` for a builder that takes none.
+            visible: A non-boolean `visible=` value.
+            drawn: Whether the builder draws the layer visible for that value — its truthiness.
+
+        Test scenario:
+            The builders decide the MapLibre layout by the value's truthiness, so `visible=0` built a hidden layer
+            on `main`. Passing the value on to `LayerSpec`, which accepts only a real boolean, turned each of these
+            working calls into "ValueError: LayerSpec visible must be True or False", naming a type the caller never
+            used.
+        """
+        from digitalearth.web import WebMap
+
+        inputs = () if fixture is None else (request.getfixturevalue(fixture),)
+        m = getattr(WebMap().basemap(), method)(*inputs, visible=visible)
+        recorded = [m._layer_tree.get(layer).visible for layer in m.layer_ids]
+        assert recorded == [drawn], recorded
+
+    def test_only_the_first_timeslider_frame_is_recorded_visible(self, raster_stack):
+        """A raster timeslider builds its first frame visible and the rest hidden, and the tree records that.
+
+        Test scenario:
+            Every frame after the first is built with ``visible=False`` so a saved page shows one frame. The tree
+            recorded all of them as visible.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().timeslider(raster_stack)
+        recorded = [m._layer_tree.is_visible(layer) for layer in m.layer_ids]
+        assert recorded == [True, False, False], recorded
+
+    def test_a_graticule_added_after_data_sits_beneath_it_in_the_tree(self):
+        """The tree lists layers bottom first, so a graticule drawn under earlier data comes first in it too.
+
+        Test scenario:
+            `graticule` joins the reference band beneath the data, but was appended to the tree, so the tree read
+            `('data-1', 'Graticule')` while the map drew `['Graticule', 'data-1']`. A renderer trusting the tree's
+            order — its documented meaning — would draw the graticule over the data.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().text(4.9, 52.4, "A", name="data-1").graticule()
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+        assert _drawn(m) == ["Graticule", "data-1"], _drawn(m)
+
+    def test_a_graticule_re_added_after_removing_one_still_sits_beneath_the_data(self):
+        """Removing a graticule gives its place in the reference band back, so the next one lands under the data.
+
+        Test scenario:
+            `remove_layer` took the graticule off the list but left the reference-band count at one, so the next
+            `add_reference` inserted one slot too high — above the data it should sit under — and the tree, which
+            follows the band, would have agreed with the wrong order.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().text(4.9, 52.4, "A", name="data-1").graticule()
+        m.remove_layer("Graticule").graticule()
+        (graticule,) = [layer for layer in m.layer_ids if layer != "data-1"]
+        assert _drawn(m) == [graticule, "data-1"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
+    def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
+        """A name the web tier accepted before its index became a `LayerTree` is still accepted, verbatim.
+
+        Args:
+            name: A padded or blank layer name.
+
+        Test scenario:
+            The tier uses the caller's name as the MapLibre id and as the label, unchanged. `LayerSpec` refused ids
+            with surrounding whitespace and blank labels, so `text(..., name=" amsterdam")` raised a `ValueError` about
+            `LayerSpec` — a regression on a call that had worked, naming a type the caller never used.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "A", name=name)
+        assert m.layer_ids == [name], m.layer_ids
+        assert m._layer_tree.get(name).display_label == name, m._layer_tree.get(name)
+
+    def test_a_map_with_a_layer_can_be_deep_copied(self):
+        """`copy.deepcopy` of a map with a data layer works and gives an independent map.
+
+        Test scenario:
+            The layer index became a `LayerTree`, whose layers hold a `Symbology` with read-only mapping views that
+            cannot be pickled; deep-copying any map with a layer then raised `cannot pickle 'mappingproxy' object`,
+            where `main`'s list index copied fine.
+        """
+        import copy
+
+        from digitalearth.web import WebMap
+
+        original = WebMap().text(4.9, 52.4, "A", name="amsterdam")
+        clone = copy.deepcopy(original)
+        clone.remove_layer("amsterdam")
+        assert original.layer_ids == ["amsterdam"], (
+            "removing from the copy must not touch the original"
+        )
+        assert clone.layer_ids == [], clone.layer_ids
+
+    def test_removing_a_layer_removes_it_from_the_tree(self, points):
+        """`remove_layer` and the tree agree, so the description never outlives the layer."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().points(points).points(points)
+        first, second = m.layer_ids
+        m.remove_layer(first)
+        assert first not in m._layer_tree, m._layer_tree.ids
+        assert m._layer_tree.ids == (second,), m._layer_tree.ids
 
     def test_a_basemap_is_not_a_data_layer(self, points):
         """The basemap is the ground; listing it among the toggles would invite turning the map off.

@@ -748,7 +748,7 @@ class DecorationMixin(_MixinBase):
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
         # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
-        self._index_layer(layer_id, name)
+        self._index_layer(layer_id, name, kind="text")
         return self.add_layer(layer=apply)
 
     def title(
@@ -887,7 +887,9 @@ class DecorationMixin(_MixinBase):
                 widget.add_layer(text)
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._index_layer(layer_id, layer_id)
+        self._index_layer(
+            layer_id, layer_id, kind="graticule", visible=visible, reference=True
+        )
         # Reference geography says nothing about where to look, so it does not frame the map. It is
         # added to the reference band: over the basemap (an underlay would be hidden beneath opaque
         # tiles) and under the data, which it must not obscure.

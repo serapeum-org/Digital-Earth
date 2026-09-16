@@ -8,6 +8,40 @@ These cover the type that replaces all three.
 import pytest
 
 from digitalearth.base.spec import Bounds
+from digitalearth.base.spec.bounds import same_crs
+
+#: A projected CRS with no authority code of its own — the kind a `.prj` file gives a `GeoDataFrame`. PROJ's
+#: identification guesses EPSG:23031 (ED50 / UTM 31N) for it at 70% confidence, which is a different datum.
+_CODELESS_UTM = "+proj=utm +zone=31 +ellps=intl +units=m +no_defs"
+
+
+@pytest.fixture
+def identifications(monkeypatch):
+    """Count every PROJ identification (`CRS.to_epsg` / `CRS.to_authority`) made while a test runs.
+
+    Args:
+        monkeypatch: pytest's patcher, used to wrap the two pyproj methods.
+
+    Returns:
+        A dict whose ``"count"`` the wrapped methods increment.
+    """
+    import pyproj
+
+    seen = {"count": 0}
+    for name in ("to_epsg", "to_authority"):
+        original = getattr(pyproj.CRS, name)
+        monkeypatch.setattr(pyproj.CRS, name, _counted(original, seen))
+    return seen
+
+
+def _counted(method, seen):
+    """Wrap a pyproj method so each call increments ``seen["count"]``."""
+
+    def wrapper(self, *args, **kwargs):
+        seen["count"] += 1
+        return method(self, *args, **kwargs)
+
+    return wrapper
 
 
 class TestTheOrderingIsNamed:
@@ -220,11 +254,69 @@ class TestOperations:
                 Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
             )
 
+    def test_a_crs_object_is_the_same_crs_as_its_own_code(self):
+        """`to_crs` into the CRS object a rectangle already carries returns the rectangle, not a reprojection.
+
+        Test scenario:
+            Compared through pyramids' `crs_equal`, which reads only int/str/None, a CRS object was never the same as
+            anything — itself included — so `to_crs` reprojected a rectangle into its own CRS.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        crs = crs_from_user_input(3857)
+        box = Bounds(0.0, 0.0, 1.0, 1.0, crs=crs)
+        assert box.to_crs(crs) is box, (
+            "the same CRS object must be recognised as the same CRS"
+        )
+        assert box.to_crs(3857) is box, "and so must its EPSG code"
+
+    def test_a_crs_object_without_a_code_is_not_the_code_proj_guesses_for_it(self):
+        """A code-less CRS object is the same CRS as its own definition, and not the EPSG code PROJ guesses for it.
+
+        Test scenario:
+            `same_crs` wrote a CRS object through PROJ's identification at 70% confidence, so this UTM zone on the
+            International ellipsoid compared equal to EPSG:23031 (ED50 / UTM 31N, another datum) — while its own WKT,
+            which names the same definition, did not. Two spellings of one CRS disagreed, and a `Viewport` in the
+            object accepted a rectangle in the guessed code without reprojecting it.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        obj = crs_from_user_input(_CODELESS_UTM)
+        assert same_crs(obj, 23031) is False, "a guessed code is not the object's CRS"
+        assert same_crs(obj, obj.to_wkt()) is True, (
+            "the object's own definition is its CRS"
+        )
+
+    def test_comparing_and_reprojecting_crs_objects_runs_no_proj_identification(
+        self, identifications
+    ):
+        """`same_crs`, a no-op `to_crs` and `Viewport.framed` read a CRS object's definition, not the PROJ database.
+
+        Args:
+            identifications: Counts PROJ identification calls.
+
+        Test scenario:
+            Each comparison identified the object against the PROJ database, uncached — about 50-130 ms per call for a
+            code-less CRS — so the static tier's `set_domain` on a `GeoDataFrame.crs` went from 0.008 s to 0.3 s. It
+            made 2 identifications for one `same_crs`, 2 for a no-op `to_crs` and 5 for `framed`.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        from digitalearth.base.spec import Viewport
+
+        obj = crs_from_user_input(_CODELESS_UTM)
+        same_crs(obj, obj)
+        Bounds(0.0, 0.0, 1.0, 1.0, crs=obj).to_crs(obj)
+        Viewport(obj).framed(Bounds(2.0, 50.0, 3.0, 51.0, crs=4326))
+        assert identifications["count"] == 0, (
+            f"{identifications['count']} PROJ identifications"
+        )
+
     def test_an_unreadable_crs_spelling_falls_back_to_plain_inequality(self):
         """A CRS neither pyramids nor equality can match is treated as different, not as an error.
 
         Test scenario:
-            `_same_crs` decides whether reprojection is needed, not whether input is valid — so a spelling
+            `same_crs` decides whether reprojection is needed, not whether input is valid — so a spelling
             pyramids cannot parse must answer "not the same" rather than raise out of `union`, where the
             caller would get a CRS-parsing traceback for what is really a mismatched-rectangle message.
         """
@@ -232,6 +324,49 @@ class TestOperations:
             Bounds(0.0, 0.0, 1.0, 1.0, crs="not-a-crs-at-all").union(
                 Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
             )
+
+    @pytest.mark.parametrize(
+        "crs", [4326.5, [4326], True], ids=["float", "list", "bool"]
+    )
+    def test_a_crs_with_no_written_form_is_refused_when_the_rectangle_is_built(
+        self, crs
+    ):
+        """A CRS a figure could not store is refused by the constructor, naming the field.
+
+        Args:
+            crs: A value that names no CRS pyramids can read.
+
+        Test scenario:
+            The rectangle held the value and failed only when written — or, before that, when compared.
+        """
+        with pytest.raises(ValueError, match="Bounds.crs"):
+            Bounds(0.0, 0.0, 1.0, 1.0, crs=crs)
+
+    def test_comparing_a_float_crs_does_not_change_how_its_integer_compares(self):
+        """After a float CRS is compared, the integer with the same value still matches itself.
+
+        Test scenario:
+            A CRS value with no written form was handed to pyramids' `crs_equal`, whose answers are cached by value
+            without regard to type: `32634.0 == 32634` and they hash alike, so the float's "not the same" answer was
+            reused for the integer. After `same_crs(32634.0, 32634)`, two rectangles in `crs=32634` refused to union
+            ("got 32634 and 32634") and `to_crs(32634)` reprojected a rectangle into its own CRS. `32634` is used
+            because no other test compares it, so the cache holds no earlier answer for it.
+        """
+        assert same_crs(32634.0, 32634) is False
+        assert same_crs(32634, 32634) is True, "the integer CRS must still match itself"
+
+    @pytest.mark.parametrize("value", [[4326], {4326}], ids=["list", "set"])
+    def test_an_unhashable_crs_value_compares_as_different(self, value):
+        """A list or a set names no CRS this can write, so it compares as different rather than raising.
+
+        Args:
+            value: An unhashable CRS value.
+
+        Test scenario:
+            It reached `crs_equal`, which caches by argument, and raised `TypeError: unhashable type: 'list'` —
+            from `same_crs`, `union` and `to_crs` — where the docstring says such a value compares as different.
+        """
+        assert same_crs(value, 4326) is False
 
     def test_a_value_that_names_no_crs_is_not_equal_to_itself(self):
         """`crs=0` does not match `crs=0`, because neither names a reference system.
@@ -259,6 +394,21 @@ class TestOperations:
 
 class TestReprojection:
     """`to_crs` delegates to pyramids; this package does no coordinate maths."""
+
+    def test_a_rectangle_outside_the_target_projection_names_both_crss(self):
+        """A rectangle on the far side of an orthographic globe is refused as a failed reprojection.
+
+        Test scenario:
+            pyramids returns infinite coordinates for a corner the target projection cannot show, and the enclosing
+            rectangle was handed straight to the constructor, which reported "Bounds needs finite edges; got
+            xmin=inf" — naming neither CRS nor the reprojection that produced the infinity.
+        """
+        far_side = Bounds(170.0, -10.0, 180.0, 10.0, crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"in 4326 cannot be reprojected into '\+proj=ortho \+lat_0=0 \+lon_0=0'",
+        ):
+            far_side.to_crs("+proj=ortho +lat_0=0 +lon_0=0")
 
     def test_the_same_crs_is_returned_unchanged(self):
         """Reprojecting to the CRS it already has does no work.

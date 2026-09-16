@@ -22,8 +22,17 @@ everywhere.
 from dataclasses import dataclass
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
+from digitalearth.base.spec._serial import (
+    as_list,
+    frozen_value,
+    plain_text,
+    read_entry,
+    refuse_unknown,
+    require,
+    to_json_value,
+)
 from digitalearth.base.spec.scale import Scale
 
 __all__ = ["CHANNELS", "Channel", "Encoding"]
@@ -104,7 +113,8 @@ class Encoding:
 
     Attributes:
         channel: Which channel this drives — a key of :data:`CHANNELS`.
-        value: The constant, when the channel does not vary with the data.
+        value: The constant, when the channel does not vary with the data. A list in it, however nested, is stored
+            as a tuple, so `[1, 0, 0]` and `(1, 0, 0)` are one constant.
         field: The column or band name the channel varies with. Exactly one of `value` and `field` is set.
         scale: How a field's values map onto the channel. ``None`` passes the values through untouched, which
             is what a renderer wants when it holds its own mapping.
@@ -113,9 +123,10 @@ class Encoding:
             positions the backend's ramp consumes.
 
     Raises:
-        ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, or if a
-            scale or an output range is attached to a constant — a constant that carries a mapping is a
-            caller who expected the mapping to apply, and silently ignoring it would draw one colour.
+        ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, if `field` is
+            not a non-empty string, or if a scale or an output range is attached to a constant — a constant that
+            carries a mapping is a caller who expected the mapping to apply, and silently ignoring it would draw one
+            colour.
 
     Examples:
         - A constant, which is what a plain ``color="#f00"`` means:
@@ -155,39 +166,31 @@ class Encoding:
         """Refuse an encoding that names no channel, or names both a constant and a field.
 
         Raises:
-            ValueError: for an undeclared channel, an ambiguous or empty binding, or a mapping attached to a
-                constant.
+            ValueError: for an undeclared channel, an ambiguous or empty binding, a field that is not a string, or
+                a mapping attached to a constant.
         """
         if self.channel not in CHANNELS:
             raise ValueError(
                 f"{self.channel!r} is not a visual channel; declared channels are {sorted(CHANNELS)}"
             )
+        # A constant is stored canonically — lists as tuples — so an encoding round-trips equal through JSON,
+        # which has no tuple, and hashes whichever spelling the caller used.
+        object.__setattr__(self, "value", frozen_value(self.value))
         if (self.value is None) == (self.field is None):
             raise ValueError(
                 f"an Encoding for {self.channel!r} needs exactly one of value= (a constant) or field= "
                 "(driven by the data); a constant of None reads as no binding at all"
             )
-        if self.field is not None and not str(self.field).strip():
-            # `by_field` refuses this, but the constructor is public too — and an empty field name reports
-            # is_constant == False while naming a column nobody can look up.
+        if self.field is not None and (
+            not isinstance(self.field, str) or not self.field.strip()
+        ):
+            # `by_field` refuses an empty name, but the constructor is public too — and an empty field name reports
+            # is_constant == False while naming a column nobody can look up. A field that is not a string at all —
+            # a datetime, NaN, a number — would be written by `to_dict` as it is, and fail inside `json.dumps`.
             raise ValueError(
-                f"an Encoding for {self.channel!r} needs a non-empty field name; got {self.field!r}"
+                f"an Encoding for {self.channel!r} needs a field name that is a non-empty string; got {self.field!r}"
             )
-        if self.output_range is not None:
-            if isinstance(self.output_range, (str, bytes)) or not hasattr(
-                self.output_range, "__iter__"
-            ):
-                # tuple(5) raises TypeError about ints, which names neither the argument nor the channel.
-                raise ValueError(
-                    f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
-                    f"{self.output_range!r}"
-                )
-            object.__setattr__(self, "output_range", tuple(self.output_range))
-            if len(self.output_range) != 2:
-                raise ValueError(
-                    f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
-                    f"{self.output_range!r}"
-                )
+        self._check_output_range()
         if self.field is None and (
             self.scale is not None or self.output_range is not None
         ):
@@ -205,6 +208,30 @@ class Encoding:
             raise ValueError(
                 f"the {self.channel!r} encoding cannot combine a categorical scale with an output range: "
                 "a category resolves to its assigned colour, not to a position a range can stretch"
+            )
+
+    def _check_output_range(self) -> None:
+        """Store `output_range` as a tuple, refusing anything that is not a `(low, high)` pair.
+
+        Raises:
+            ValueError: for a string, a non-iterable or an iterable that does not hold exactly two items, naming the
+                channel.
+        """
+        if self.output_range is None:
+            return
+        if isinstance(self.output_range, (str, bytes)) or not hasattr(
+            self.output_range, "__iter__"
+        ):
+            # tuple(5) raises TypeError about ints, which names neither the argument nor the channel.
+            raise ValueError(
+                f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
+                f"{self.output_range!r}"
+            )
+        object.__setattr__(self, "output_range", tuple(self.output_range))
+        if len(self.output_range) != 2:
+            raise ValueError(
+                f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
+                f"{self.output_range!r}"
             )
 
     # ------------------------------------------------------------------ builders
@@ -288,7 +315,7 @@ class Encoding:
         """
         if not field:
             raise ValueError(
-                f"an Encoding for {channel!r} needs a non-empty field name"
+                f"an Encoding for {channel!r} needs a field name that is a non-empty string"
             )
         return cls(channel=channel, field=field, scale=scale, output_range=output_range)
 
@@ -406,3 +433,108 @@ class Encoding:
             return position
         low, high = self.output_range
         return low + position * (high - low)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant and
+            `output_range` go through the JSON check, so a tuple is written as a list and a numpy number or string
+            as a plain Python one. `channel` and `field` are written as Python strings too.
+
+        Raises:
+            TypeError: if the constant, an `output_range` end, or any field of the scale has no JSON form.
+
+        Examples:
+            - A constant is its channel and its value:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.constant("opacity", 0.5).to_dict()
+                {'channel': 'opacity', 'value': 0.5}
+
+                ```
+            - A field-driven channel carries its scale:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Scale
+                >>> stored = Encoding.by_field("size", "pop", scale=Scale.from_limits(0, 100)).to_dict()
+                >>> stored["field"], stored["scale"]
+                ('pop', {'vmin': 0.0, 'vmax': 100.0})
+
+                ```
+        """
+        out: Dict[str, Any] = {"channel": plain_text(self.channel)}
+        if self.value is not None:
+            out["value"] = to_json_value(
+                self.value, f"Encoding[{self.channel!r}].value"
+            )
+        if self.field is not None:
+            out["field"] = plain_text(self.field)
+        if self.scale is not None:
+            out["scale"] = self.scale.to_dict()
+        if self.output_range is not None:
+            out["output_range"] = to_json_value(
+                self.output_range, f"Encoding[{self.channel!r}].output_range"
+            )
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Encoding":
+        """Rebuild an encoding from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The encoding, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the
+                field, rather than failing inside `tuple()`.
+            ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the
+                constructor refuses. An error of either type from the stored scale names where it sits:
+                `Encoding.from_dict scale: Scale.from_dict needs a mapping; got int`.
+
+        Examples:
+            - A stored constant reads back and resolves as before:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.from_dict({"channel": "color", "value": "#f00"}).resolve()
+                '#f00'
+
+                ```
+            - A stored field-driven size reads back with its scale and output range:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> stored = {"channel": "size", "field": "pop", "scale": {"vmin": 0, "vmax": 100}}
+                >>> Encoding.from_dict({**stored, "output_range": [4, 20]}).resolve([0.0, 50.0, 100.0])
+                [4.0, 12.0, 20.0]
+
+                ```
+            - A binding with both a constant and a field is refused:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.from_dict({"channel": "color", "value": "#f00", "field": "class"})  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: an Encoding for 'color' needs exactly one of value= (a constant) or field= ...
+
+                ```
+        """
+        refuse_unknown(
+            "Encoding", data, ("channel", "value", "field", "scale", "output_range")
+        )
+        scale = data.get("scale")
+        output_range = data.get("output_range")
+        return cls(
+            channel=require("Encoding", data, "channel"),
+            value=data.get("value"),
+            field=data.get("field"),
+            scale=None
+            if scale is None
+            else read_entry("Encoding", "scale", Scale.from_dict, scale),
+            output_range=None
+            if output_range is None
+            else as_list("Encoding", "output_range", output_range),
+        )

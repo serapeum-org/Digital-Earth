@@ -4,11 +4,12 @@ These are **value objects**: frozen, comparable, renderer-free. They say *what* 
 rectangle, which slice, which colour rule — and never *how* a backend draws it. Nothing here may import
 matplotlib, pyvista, holoviews or maplibre; :mod:`tests.test_base_is_engine_neutral` enforces that.
 
-"Frozen" covers the structure, not everything a caller puts in it. Every sequence field is copied to a
-tuple and every mapping to a read-only view, so a type cannot be re-shaped from outside — but a field
-holding an arbitrary value (`Selection.time`, `Encoding.value`, a `Symbology` property) keeps whatever
-object it was given. So these hash when their contents do: `Selection.of(1, time="2024-01")` hashes and
-`Selection.of(1, time=[1, 2])` does not.
+"Frozen" covers the structure, and the sequences inside it. Every sequence field is copied to a tuple and
+every mapping to a read-only `FrozenDict`, and the free-form values (`Selection.time`, `Encoding.value`, a `Symbology`
+property, a `Scale` category) store their lists as tuples, however nested. So `Selection.of(1, time=[1, 2])` and
+`Selection.of(1, time=(1, 2))` are one value that hashes, and a round trip through JSON — which has no tuple —
+reads back equal. A numpy array held as such a value is stored the same way, as nested tuples of its elements.
+A dict is copied with its values frozen, and does not hash.
 
 The point of a shared vocabulary is that a value crosses a tier boundary without a convention having to travel
 beside it in a docstring. A bare ``[float, float, float, float]`` cannot say whether it is
@@ -34,6 +35,20 @@ What lives here:
 * :mod:`~digitalearth.base.spec.style` — :class:`~digitalearth.base.spec.style.Symbology`, the look of one
   layer, and :class:`~digitalearth.base.spec.style.StyleSchema`, which **declares** the style keywords a
   builder surface accepts so a typo can stop being a silently ignored keyword.
+* :mod:`~digitalearth.base.spec.layer` — :class:`~digitalearth.base.spec.layer.LayerSpec`, what one layer draws,
+  and :class:`~digitalearth.base.spec.layer.LayerTree`, the layers in draw order, addressed by id.
+* :mod:`~digitalearth.base.spec.viewport` — :class:`~digitalearth.base.spec.viewport.Viewport` and
+  :class:`~digitalearth.base.spec.viewport.Camera`: the view of a flat map and of a 3-D scene, as values.
+* :mod:`~digitalearth.base.spec.target` — :class:`~digitalearth.base.spec.target.RenderTarget`, the output a
+  figure is rendered to, which owns the read budget.
+* :mod:`~digitalearth.base.spec.figure` — :class:`~digitalearth.base.spec.figure.PanelSpec` and
+  :class:`~digitalearth.base.spec.figure.FigureSpec`: the whole figure, which round-trips through a dict with no
+  renderer imported.
+
+Every type here that a figure stores has a `to_dict`/`from_dict` pair, and each pair refuses an unknown key rather
+than dropping it. All of them, `DataRef`'s included, are built on the shared rules in `_serial.py`, which also
+refuse a free-form value — a constant, a style property, a category, a slice axis — with no JSON form where it is
+written.
 
 Note the neighbour: :mod:`digitalearth.base.symbology` is the colour *arithmetic* (resolving a categorical
 cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Symbology` here is the
@@ -43,6 +58,8 @@ cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Sy
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding
+from digitalearth.base.spec.figure import SCHEMA_VERSION, FigureSpec, PanelSpec
+from digitalearth.base.spec.layer import LAYER_REFERENCE, LayerSpec, LayerTree
 from digitalearth.base.spec.legend import (
     DEFAULT_RAMP_STOPS,
     LEGEND_KINDS,
@@ -52,24 +69,38 @@ from digitalearth.base.spec.legend import (
 from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 from digitalearth.base.spec.selection import DEFAULT_BAND, Selection
 from digitalearth.base.spec.style import StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec.target import DEFAULT_BUDGETS, TARGET_KINDS, RenderTarget
+from digitalearth.base.spec.viewport import DEFAULT_VIEW_ANGLE, Camera, Viewport
 from digitalearth.base.spec.viewrequest import ViewRequest
 
 __all__ = [
     "Bounds",
     "CHANNELS",
+    "Camera",
     "DEFAULT_BAND",
+    "DEFAULT_BUDGETS",
     "DEFAULT_CLASS_COUNT",
     "DEFAULT_RAMP_STOPS",
+    "DEFAULT_VIEW_ANGLE",
     "Channel",
     "DataRef",
     "Encoding",
+    "FigureSpec",
+    "LAYER_REFERENCE",
     "LEGEND_KINDS",
     "LegendEntry",
+    "LayerSpec",
+    "LayerTree",
     "LegendSpec",
+    "PanelSpec",
+    "RenderTarget",
+    "SCHEMA_VERSION",
     "Scale",
     "Selection",
     "StyleKey",
     "StyleSchema",
     "Symbology",
+    "TARGET_KINDS",
     "ViewRequest",
+    "Viewport",
 ]

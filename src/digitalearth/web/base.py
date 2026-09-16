@@ -20,7 +20,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
-from typing import Any, Dict, List, Optional, Self, Tuple
+from typing import Any, Dict, List, Optional, Self
 
 from loguru import logger
 from pyramids.base.crs import reproject_coordinates
@@ -35,6 +35,7 @@ from digitalearth.base.display import (
     to_display_source,
 )
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.symbology import sample_cmap
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
@@ -422,10 +423,11 @@ class WebMapBase:
         self._issued_ids: set = set()
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
-        #: Every data layer added, in order, as ``(id, label)``. The id addresses the layer in MapLibre;
-        #: the label is what a layer switcher shows a viewer. Controls and basemaps are not in here —
-        #: they are not things a viewer turns on and off.
-        self._layer_index: List[Tuple[str, str]] = []
+        #: Every data layer added, in draw order — bottom first, as a :class:`~digitalearth.base.spec.layer.LayerTree`
+        #: lists them — so a graticule, which joins the reference band beneath the data, sits beneath data added
+        #: before it here too. The id addresses the layer in MapLibre; the label is what a layer switcher shows a
+        #: viewer. Controls and basemaps are not in here — they are not things a viewer turns on and off.
+        self._layer_tree: LayerTree = LayerTree()
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
@@ -762,24 +764,83 @@ class WebMapBase:
 
     @property
     def layer_ids(self) -> List[str]:
-        """The MapLibre ids of the data layers added so far, in order.
+        """The MapLibre ids of the data layers added so far, in draw order.
 
         The registry used to be write-only: builders minted ids internally and nothing surfaced them, so a
         caller could not address a layer afterwards to hide, remove or switch it.
 
         Returns:
-            The layer ids, oldest first.
-        """
-        return [layer_id for layer_id, _ in self._layer_index]
+            The layer ids, bottom first, as a new list: the order they were added in, except that a graticule,
+            which is drawn in the reference band beneath the data, is listed before every layer that is not a
+            graticule, whenever it was added. A layer the caller named carries that name as its id; an unnamed one
+            gets a generated id.
 
-    def _index_layer(self, layer_id: str, label: Optional[str]) -> None:
+        Examples:
+            - Named and unnamed layers, in the order they were added:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").text(2.35, 48.86, "Paris")
+                >>> m.layer_ids
+                ['amsterdam', 'text-3']
+
+                ```
+            - A graticule added last is listed first, because it is drawn beneath the data:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").graticule().layer_ids
+                ['Graticule', 'amsterdam']
+
+                ```
+            - A map with no data layers has no ids:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().layer_ids
+                []
+
+                ```
+        """
+        return list(self._layer_tree.ids)
+
+    def _index_layer(
+        self,
+        layer_id: str,
+        label: Optional[str],
+        *,
+        kind: str,
+        visible: bool = True,
+        reference: bool = False,
+    ) -> None:
         """Record a data layer so it can be addressed later.
 
         Args:
             layer_id: The MapLibre layer id.
             label: What a layer switcher should call it; ``None`` falls back to the id.
+            kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
+                the tree describes the layer rather than only naming it.
+            visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
+                tree says what the MapLibre layout says; the builders without one always build visible. It is
+                recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
+                and records one.
+            reference: Whether the layer is about to join the reference band through :meth:`add_reference`. It
+                then joins the tree at the top of that band — beneath every data layer — rather than on top, so
+                the tree's order stays the order the map draws in. Call this before `add_reference`.
+
+        Raises:
+            ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
+                the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
+                whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
-        self._layer_index.append((layer_id, label or layer_id))
+        index = None
+        if reference:
+            band = self.layers[: self._underlay_count + self._reference_count]
+            banded = {getattr(layer, "_digitalearth_layer_id", None) for layer in band}
+            index = sum(1 for existing in self._layer_tree.ids if existing in banded)
+        self._layer_tree = self._layer_tree.add(
+            # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
+            # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
+            LayerSpec(layer_id, kind, label=label or layer_id, visible=bool(visible)),
+            index=index,
+        )
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.
@@ -802,14 +863,41 @@ class WebMapBase:
         Raises:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
                 look exactly like a layer that refused to go away.
+
+        Examples:
+            - Remove one layer; the map is returned, so calls chain:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").text(2.35, 48.86, "Paris", name="paris")
+                >>> m.remove_layer("amsterdam") is m, m.layer_ids, len(m.layers)
+                (True, ['paris'], 1)
+
+                ```
+            - An id that was never added is refused, naming the ids that were:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").remove_layer("paris")
+                Traceback (most recent call last):
+                    ...
+                KeyError: "no layer 'paris' on this map; added layers are ['amsterdam']"
+
+                ```
         """
         present = self.layer_ids
         if layer_id not in present:
             raise KeyError(
                 f"no layer {layer_id!r} on this map; added layers are {present}"
             )
-        index = present.index(layer_id)
-        self._layer_index.pop(index)
+        self._layer_tree = self._layer_tree.remove(layer_id)
+        # The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the
+        # next `add_reference` inserts one place too high — above data it belongs beneath.
+        self._reference_count -= sum(
+            1
+            for layer in self.layers[
+                self._underlay_count : self._underlay_count + self._reference_count
+            ]
+            if getattr(layer, "_digitalearth_layer_id", None) == layer_id
+        )
         self.layers = [
             layer
             for layer in self.layers

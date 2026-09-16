@@ -5,6 +5,8 @@ Colour is the only channel this package treats as first class; size, width, heig
 channel a row in a table instead.
 """
 
+import datetime
+
 import pytest
 
 from digitalearth.base.spec import CHANNELS, Encoding, Scale
@@ -94,8 +96,27 @@ class TestBinding:
             would resolve every feature against a column nobody can name, and the error would surface far
             away, inside whatever tried the lookup.
         """
-        with pytest.raises(ValueError, match="non-empty field name"):
+        with pytest.raises(ValueError, match="field name that is a non-empty string"):
             Encoding.by_field("color", "")
+
+    @pytest.mark.parametrize(
+        "field",
+        [datetime.datetime(2020, 1, 1), float("nan"), 5, b"elevation"],
+        ids=["datetime", "nan", "int", "bytes"],
+    )
+    def test_a_field_that_is_not_a_string_is_refused(self, field):
+        """A field names a column or a band, so it is a string; anything else is refused where it is built.
+
+        Args:
+            field: A non-string field.
+
+        Test scenario:
+            The constructor only checked `str(field).strip()`, so any object passed. `to_dict` then wrote it as it
+            was: a datetime failed inside `json.dumps` naming neither the type nor the field, NaN produced a dict
+            strict JSON refuses, and `5` read back as a number where a name belongs.
+        """
+        with pytest.raises(ValueError, match="field name that is a non-empty string"):
+            Encoding("color", field=field)
 
     def test_an_output_range_that_is_not_a_pair_is_refused(self):
         """A bad `output_range` fails where it was written, naming the channel.

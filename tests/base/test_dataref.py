@@ -4,6 +4,7 @@ Holding the data object inside the layer is what blocks dynamic tiling, level-of
 wants to round-trip through a dict. These cover the reference and the registry that opens it.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -58,8 +59,39 @@ class TestTheReference:
         Test scenario:
             That failure only shows on another machine, which is the worst time to find it.
         """
-        with pytest.raises(ValueError, match="non-empty uri"):
+        with pytest.raises(ValueError, match="uri as a non-empty string"):
             DataRef("   ")
+
+    @pytest.mark.parametrize(
+        "fields, message",
+        [
+            ({"uri": 5}, "DataRef needs uri as a non-empty string; got 5"),
+            ({"uri": Path("dem.tif")}, "DataRef needs uri as a non-empty string; got"),
+            (
+                {"uri": "a.tif", "driver": object()},
+                "DataRef needs driver as a string or None; got <object",
+            ),
+            (
+                {"uri": "a.tif", "version": 2024},
+                "DataRef needs version as a string or None; got 2024",
+            ),
+        ],
+        ids=["int-uri", "path-uri", "object-driver", "int-version"],
+    )
+    def test_a_field_that_is_not_a_string_is_refused(self, fields, message):
+        """`uri`, `driver` and `version` are strings, and anything else is refused where the reference is built.
+
+        Args:
+            fields: The constructor arguments, one of them not a string.
+            message: The start of the message that must name it.
+
+        Test scenario:
+            An int `uri` raised `AttributeError: 'int' object has no attribute 'strip'`; a `Path` did the same. A
+            non-string `driver` or `version` was accepted and written by `to_dict` as it was, so a figure holding
+            the reference failed inside `json.dumps` — or, for an int version, read back as a number.
+        """
+        with pytest.raises(ValueError, match=re.escape(message)):
+            DataRef(**fields)
 
     def test_an_unknown_key_is_refused_rather_than_dropped(self):
         """A dict carrying a field this version does not know raises.

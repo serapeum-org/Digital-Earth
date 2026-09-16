@@ -27,9 +27,17 @@ backend's job, and in the static tier there is exactly one place it happens.
 
 from dataclasses import dataclass, field
 from difflib import get_close_matches
-from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from digitalearth.base.spec._serial import (
+    FrozenDict,
+    as_mapping,
+    frozen_value,
+    plain_text,
+    read_entry,
+    refuse_unknown,
+    to_json_value,
+)
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
 __all__ = ["StyleKey", "StyleSchema", "Symbology"]
@@ -92,7 +100,8 @@ class Symbology:
         encodings: Channel name -> :class:`~digitalearth.base.spec.encoding.Encoding`. Each entry is stored
             under the channel it drives, so a renderer asks by channel rather than searching.
         props: Static style properties that are not visual channels — a contour level list, a hillshade flag,
-            a legend kwargs dict. Declared, unlike the keyword soup they replace, but not resolved per datum.
+            a legend kwargs dict. Declared, unlike the keyword soup they replace, but not resolved per datum. Every
+            list in a value, however nested, is stored as a tuple.
 
     Raises:
         ValueError: if an encoding is filed under a channel it does not drive. That mismatch would make
@@ -126,11 +135,15 @@ class Symbology:
         """Check every encoding is filed under its own channel, then freeze both mappings.
 
         The dataclass is frozen, but a plain ``dict`` field is not — a caller holding the dict it passed in
-        could still re-key the symbology afterwards. Replacing both with read-only views closes that.
+        could still re-key the symbology afterwards. Holding both as a read-only
+        :class:`~digitalearth.base.spec._serial.FrozenDict` closes that, and still copies, pickles and converts
+        under `dataclasses.asdict`.
 
-        Only the mapping is frozen, not the values in it: a caller who puts a list of contour levels in
-        `props` keeps a reference to that list and can still change what it holds. Deep-freezing arbitrary
-        style values is not realistic, so this is stated rather than claimed away.
+        Property values are stored in their canonical form: every list and tuple in them, however nested,
+        becomes a tuple (see :func:`~digitalearth.base.spec._serial.frozen_value`). That copies a caller's list —
+        appending to it afterwards no longer changes the symbology — and it is what lets a symbology written with
+        `to_dict`, where tuples become JSON lists, read back equal and hashable. A numpy array is stored as nested
+        tuples too; any other mutable value, a custom object say, is held as given.
 
         Raises:
             ValueError: if a key does not match its encoding's channel.
@@ -141,8 +154,36 @@ class Symbology:
                     f"encoding filed under {key!r} drives channel {encoding.channel!r}; "
                     "a Symbology stores each encoding under the channel it drives"
                 )
-        object.__setattr__(self, "encodings", MappingProxyType(dict(self.encodings)))
-        object.__setattr__(self, "props", MappingProxyType(dict(self.props)))
+        object.__setattr__(self, "encodings", FrozenDict(dict(self.encodings)))
+        object.__setattr__(
+            self,
+            "props",
+            FrozenDict(
+                {key: frozen_value(value) for key, value in dict(self.props).items()}
+            ),
+        )
+
+    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+        """Pickle and copy by rebuilding through the constructor.
+
+        Returns:
+            ``(type(self), (dict(encodings), dict(props)))`` — the caller's subclass, not `Symbology` by name.
+
+            Rebuilding from plain dicts goes through the same validation and freezing as any other construction.
+
+        Examples:
+            - A copy is equal to the original, and is a separate object:
+                ```python
+                >>> import copy
+                >>> from digitalearth.base.spec import Symbology
+                >>> original = Symbology.of(color="#f00").with_props(levels=(1, 2))
+                >>> clone = copy.deepcopy(original)
+                >>> clone == original, clone is original
+                (True, False)
+
+                ```
+        """
+        return type(self), (dict(self.encodings), dict(self.props))
 
     def __hash__(self) -> int:
         """Hash by the channels driven and the properties set, so a style can key a cache.
@@ -153,11 +194,9 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if any value in it is itself unhashable. That is a property — a list of contour
-                levels, say — or equally a constant on an encoding: ``Symbology.of(color=[1, 0, 0])`` is an
-                ordinary RGB spelling and fails the same way. Only the mappings are frozen, not what a
-                caller put in them, so an unhashable style is a real possibility rather than something to
-                paper over.
+            TypeError: if any value in it is itself unhashable — a dict held as a property,
+                say. A list is not among them: lists are stored as tuples, so ``Symbology.of(color=[1, 0, 0])``
+                hashes. Nor is a numpy array, which is stored as nested tuples of its elements.
         """
         return hash(
             (
@@ -287,6 +326,97 @@ class Symbology:
         merged.update(props)
         return Symbology(encodings=dict(self.encodings), props=merged)
 
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``encodings`` (channel -> encoding dict) and ``props``, each omitted when empty — so a layer with no
+            styling stores an empty dict.
+
+        Raises:
+            TypeError: if a property, an encoding's constant, or the scheme or a category of an encoding's scale
+                has no JSON form.
+
+        Examples:
+            - Encodings are stored under the channel they drive:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology.of(color="#f00").to_dict()
+                {'encodings': {'color': {'channel': 'color', 'value': '#f00'}}}
+
+                ```
+            - No styling at all is an empty dict:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology().to_dict()
+                {}
+
+                ```
+        """
+        out: Dict[str, Any] = {}
+        if self.encodings:
+            out["encodings"] = {
+                plain_text(channel): encoding.to_dict()
+                for channel, encoding in self.encodings.items()
+            }
+        if self.props:
+            out["props"] = to_json_value(dict(self.props), "Symbology.props")
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Symbology":
+        """Rebuild a symbology from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The symbology, with every encoding checked against the channel it is filed under.
+
+        Raises:
+            TypeError: if `data`, `encodings`, `props` or a stored encoding is not a mapping, naming the field.
+            ValueError: for an unknown key, an encoding `Encoding.from_dict` refuses — an undeclared channel, say —
+                or an encoding filed under a channel it does not drive. An error of either type from a stored
+                encoding names where it sits:
+                `Symbology.from_dict encodings['color']: Encoding.from_dict needs a mapping; got int`. The
+                misfiled-channel refusal comes from the constructor, and carries no path.
+
+        Examples:
+            - A stored style reads back channel by channel:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> stored = {"encodings": {"opacity": {"channel": "opacity", "value": 0.4}}, "props": {"k": 5}}
+                >>> sym = Symbology.from_dict(stored)
+                >>> sym.encoding("opacity").resolve(), sym.props["k"]
+                (0.4, 5)
+
+                ```
+            - An encoding filed under a channel it does not drive is refused:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> misfiled = {"encodings": {"color": {"channel": "opacity", "value": 0.4}}}
+                >>> Symbology.from_dict(misfiled)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: encoding filed under 'color' drives channel 'opacity'; ...
+
+                ```
+        """
+        refuse_unknown("Symbology", data, ("encodings", "props"))
+        return cls(
+            encodings={
+                channel: read_entry(
+                    "Symbology", f"encodings[{channel!r}]", Encoding.from_dict, encoding
+                )
+                for channel, encoding in as_mapping(
+                    "Symbology", "encodings", data.get("encodings", {})
+                ).items()
+            },
+            props=as_mapping("Symbology", "props", data.get("props", {})),
+        )
+
 
 @dataclass(frozen=True)
 class StyleSchema:
@@ -322,7 +452,28 @@ class StyleSchema:
 
     def __post_init__(self) -> None:
         """Freeze the table, so a schema handed around cannot be extended behind a caller's back."""
-        object.__setattr__(self, "keys", MappingProxyType(dict(self.keys)))
+        object.__setattr__(self, "keys", FrozenDict(dict(self.keys)))
+
+    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+        """Pickle and copy by rebuilding through the constructor.
+
+        Returns:
+            ``(type(self), (dict(keys),))`` — the caller's subclass, not `StyleSchema` by name. Rebuilding from a
+            plain dict goes through the same freezing as any other construction.
+
+        Examples:
+            - A copy is equal to the original, and is a separate object:
+                ```python
+                >>> import copy
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> original = StyleSchema.of(StyleKey("cmap", "Colormap name."))
+                >>> clone = copy.deepcopy(original)
+                >>> clone == original, clone is original
+                (True, False)
+
+                ```
+        """
+        return type(self), (dict(self.keys),)
 
     @classmethod
     def of(cls, *keys: StyleKey) -> "StyleSchema":

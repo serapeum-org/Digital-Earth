@@ -1,5 +1,6 @@
 """Tests for the top-level digitalearth public surface (PC-4)."""
 
+import ast
 import importlib
 import importlib.metadata
 import importlib.util
@@ -91,6 +92,77 @@ class TestPackageExports:
             "projections submodule not wired"
         )
 
+    @pytest.mark.parametrize("name, home", sorted(digitalearth._LAZY_EXPORTS.items()))
+    def test_a_public_name_is_imported_from_its_home_on_first_use_and_cached(
+        self, name, home, monkeypatch
+    ):
+        """Each public name resolves to the object its home module defines, and stays bound once resolved.
+
+        Args:
+            name: A public name the package root resolves lazily.
+            home: The module the name is imported from.
+            monkeypatch: pytest's patcher, used to unbind the name so the access is a first one.
+
+        Test scenario:
+            The package root no longer imports these eagerly, so ``import digitalearth`` loads no renderer.
+            Unbinding the name forces the ``__getattr__`` path; the object returned must be the home module's
+            own, and it must then sit in the package namespace so later accesses skip the hook.
+        """
+        monkeypatch.delitem(vars(digitalearth), name, raising=False)
+        resolved = getattr(digitalearth, name)
+        expected = getattr(importlib.import_module(home), name)
+        assert resolved is expected, f"digitalearth.{name} is not {home}.{name}"
+        assert vars(digitalearth).get(name) is expected, (
+            f"digitalearth.{name} was not cached after its first resolution"
+        )
+
+    def test_a_type_checker_sees_every_lazy_name_imported_from_its_home(self):
+        """The root's `if TYPE_CHECKING:` block imports each lazy name, and each subpackage, from where it lives.
+
+        Test scenario:
+            A type checker does not run `__getattr__`; it reads the imports. Resolving the public names lazily
+            left mypy and IDEs nothing but an unannotated `__getattr__`, so `from digitalearth import Map` was
+            `Any` and `quickmap(backend=5)` passed mypy. The block this reads is what gives them the real
+            objects back, and it has to name exactly what `_LAZY_EXPORTS` and `_LAZY_SUBPACKAGES` resolve at
+            runtime — a name missing here is `Any` again, and one imported from the wrong module is a type the
+            caller never gets.
+        """
+        tree = ast.parse(
+            pathlib.Path(digitalearth.__file__).read_text(encoding="utf-8")
+        )
+        blocks = [
+            node
+            for node in tree.body
+            if isinstance(node, ast.If)
+            and isinstance(node.test, ast.Name)
+            and node.test.id == "TYPE_CHECKING"
+        ]
+        assert len(blocks) == 1, (
+            f"expected one top-level `if TYPE_CHECKING:` block, found {len(blocks)}"
+        )
+        imported = {
+            alias.asname or alias.name: node.module
+            for node in blocks[0].body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        subpackages = {
+            name for name, module in imported.items() if module == "digitalearth"
+        }
+        names = {
+            name: module
+            for name, module in imported.items()
+            if module != "digitalearth"
+        }
+        drift = sorted(set(names.items()) ^ set(digitalearth._LAZY_EXPORTS.items()))
+        assert not drift, (
+            f"the TYPE_CHECKING imports differ from _LAZY_EXPORTS by {drift}"
+        )
+        missing = sorted(subpackages ^ set(digitalearth._LAZY_SUBPACKAGES))
+        assert not missing, (
+            f"the TYPE_CHECKING subpackage imports differ from _LAZY_SUBPACKAGES by {missing}"
+        )
+
 
 #: The subpackages the backend-per-package layout introduced, and a module each must contain.
 LAYOUT = [
@@ -134,6 +206,49 @@ class TestSubpackageLayout:
         module = importlib.import_module(package)
         assert hasattr(module, "__path__"), (
             f"{package} should be a package with submodules"
+        )
+
+    @pytest.mark.parametrize("name", digitalearth._LAZY_SUBPACKAGES)
+    def test_a_subpackage_the_root_used_to_bind_resolves_on_attribute_access(
+        self, name, monkeypatch
+    ):
+        """``import digitalearth`` then ``digitalearth.static.Map`` keeps working with the root's imports lazy.
+
+        Args:
+            name: A subpackage the eager imports used to leave bound on the package.
+            monkeypatch: pytest's patcher, used to unbind the subpackage as a fresh ``import digitalearth`` would.
+
+        Test scenario:
+            A subpackage is bound on its parent only once something imports it, and the root no longer does.
+            Attribute access on the unbound name must return the subpackage itself and bind it.
+        """
+        monkeypatch.delitem(vars(digitalearth), name, raising=False)
+        resolved = getattr(digitalearth, name)
+        expected = importlib.import_module(f"digitalearth.{name}")
+        assert resolved is expected, (
+            f"digitalearth.{name} resolved to {resolved!r}, not the subpackage"
+        )
+        assert vars(digitalearth).get(name) is expected, (
+            f"digitalearth.{name} was not bound after its first resolution"
+        )
+
+    @pytest.mark.parametrize("name", ["interactive", "three_d", "web"])
+    def test_an_optional_backend_is_not_resolved_on_attribute_access(
+        self, name, monkeypatch
+    ):
+        """A backend behind an extra is not imported by touching the attribute.
+
+        Args:
+            name: A backend subpackage that needs an optional extra.
+            monkeypatch: pytest's patcher, used to unbind the subpackage if an earlier test imported it.
+
+        Test scenario:
+            Resolving ``digitalearth.web`` on access would turn ``hasattr`` into an ImportError where the extra is
+            not installed. Unbound, the attribute is absent until the caller imports the subpackage itself.
+        """
+        monkeypatch.delitem(vars(digitalearth), name, raising=False)
+        assert not hasattr(digitalearth, name), (
+            f"digitalearth.{name} was resolved on attribute access"
         )
 
     def test_old_flat_module_paths_are_gone(self):

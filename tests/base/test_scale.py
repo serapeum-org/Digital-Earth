@@ -4,6 +4,9 @@ Five places wrote out "a constant band has no range, widen it by one", and three
 classifier with their own error handling. These cover the type that absorbed both.
 """
 
+import json
+
+import numpy as np
 import pytest
 
 from digitalearth.base.spec import DEFAULT_CLASS_COUNT, Scale
@@ -403,6 +406,34 @@ class TestCategorical:
         scale = Scale.categorical([True, 1], ["#f00", "#0f0"])
         assert scale.color_for(True) == "#f00", "True keeps the colour assigned to True"
         assert scale.color_for(1) == "#0f0", "and 1 keeps the one assigned to 1"
+
+    @pytest.mark.parametrize(
+        "lookup", [True, np.True_], ids=["python-bool", "numpy-bool"]
+    )
+    def test_a_numpy_boolean_category_is_the_boolean_label_before_and_after_a_round_trip(
+        self, lookup
+    ):
+        """Boolean categories from a numpy column answer lookups by either kind of boolean, and keep doing so.
+
+        Args:
+            lookup: The boolean looked up.
+
+        Test scenario:
+            The label check tested `isinstance(x, bool)`, which `np.bool_` fails, so a numpy `True` was a number: a
+            scale built from `gdf["flag"].unique()` gave `True` the missing colour, matched `np.True_` against the
+            integer label `1`, and — once written, which turns `np.bool_` into `bool` — answered the two lookups the
+            other way round while comparing equal to the scale it was.
+        """
+        scale = Scale.categorical(
+            [np.True_, np.False_], ["#0f0", "#f00"], missing="#ccc"
+        )
+        rebuilt = Scale.from_dict(json.loads(json.dumps(scale.to_dict())))
+        assert (scale.color_for(lookup), rebuilt.color_for(lookup)) == ("#0f0", "#0f0")
+
+    def test_a_numpy_boolean_is_not_the_integer_label_one(self):
+        """`np.True_` does not find the colour of the integer category `1`, as `True` does not."""
+        scale = Scale.categorical([1], ["#0f0"], missing="#ccc")
+        assert scale.color_for(np.True_) == "#ccc"
 
     def test_a_nan_category_can_still_be_looked_up(self):
         """A category that was stored can be found again, even if it is NaN.

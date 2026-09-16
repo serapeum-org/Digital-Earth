@@ -119,13 +119,42 @@ class TestTheRequest:
         assert ViewRequest(budget=4).side() == 64, "a tiny budget still floors at 64"
 
     def test_side_falls_back_to_the_canvas_then_the_floor(self):
-        """The budget wins, then the canvas, then the floor.
+        """The smaller of the budget and the canvas, then whichever is set, then the floor.
 
         Test scenario:
             A request may carry either, both or neither, and every reader needs an answer.
         """
         assert ViewRequest(width=400, height=400).side() == 400, "the canvas sizes it"
         assert ViewRequest().side() == 64, "with neither, the floor"
+
+    @pytest.mark.parametrize(
+        "request_, side",
+        [
+            (ViewRequest(width=400, height=400, budget=4_000_000), 400),
+            (ViewRequest(width=4000, height=4000, budget=1_000_000), 1000),
+            (
+                ViewRequest(width=400, height=400, pixel_ratio=2.0, budget=4_000_000),
+                800,
+            ),
+        ],
+        ids=["canvas-under-budget", "canvas-over-budget", "retina-canvas"],
+    )
+    def test_with_a_canvas_and_a_budget_the_smaller_sizes_the_read(
+        self, request_, side
+    ):
+        """`width`/`height` say what is wanted and `budget` what is affordable, so the side honours both.
+
+        Args:
+            request_: A request naming both a canvas and a budget.
+            side: The side it must size to.
+
+        Test scenario:
+            The budget alone set the side, so a 400x400 canvas under a 4,000,000-cell budget was sized to 2,000 a
+            side — reading 25 times what it can draw. The windowed read in `SourceView` already reads the canvas
+            when it fits the budget; this is the same rule for the square a decimating reader aims for. The device
+            ratio counts, as it does in `pixels`.
+        """
+        assert request_.side() == side, request_
 
     def test_within_budget_answers_true_when_there_is_no_budget(self):
         """An unbounded request affords anything.

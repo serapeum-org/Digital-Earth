@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from digitalearth.base.registry import register_object, resolve_uri
+from digitalearth.base.spec._serial import plain_text, refuse_unknown, require
 
 __all__ = ["DataRef"]
 
@@ -70,14 +71,26 @@ class DataRef:
     version: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Refuse a reference that names nothing.
+        """Refuse a reference that names nothing, or holds a hint a figure could not store.
 
         Raises:
-            ValueError: if `uri` is empty or blank. An empty reference resolves to whatever the working
-                directory happens to be, which is a failure that only shows on someone else's machine.
+            ValueError: if `uri` is not a string or is empty or blank — an empty reference resolves to whatever the
+                working directory happens to be, which is a failure that only shows on someone else's machine —
+                or if `driver` or `version` is neither a string nor ``None``. A `pathlib.Path` is refused as a
+                `uri` too: pass ``str(path)``.
         """
-        if not self.uri or not self.uri.strip():
-            raise ValueError("DataRef needs a non-empty uri")
+        if not isinstance(self.uri, str) or not self.uri.strip():
+            raise ValueError(
+                f"DataRef needs uri as a non-empty string; got {self.uri!r}"
+            )
+        for hint in ("driver", "version"):
+            value = getattr(self, hint)
+            if value is not None and not isinstance(value, str):
+                # Written by `to_dict` as it is, a non-string hint failed inside `json.dumps`, naming neither
+                # the type nor the field — or, for a number, read back as a number.
+                raise ValueError(
+                    f"DataRef needs {hint} as a string or None; got {value!r}"
+                )
         if self.uri != self.uri.strip():
             # Blank was already refused; surrounding whitespace was not, and " a.tif" is a path that does
             # not exist on any filesystem that would have opened "a.tif".
@@ -145,8 +158,9 @@ class DataRef:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            The fields that are set. `driver` and `version` are omitted when unset, so the common case is one
-            key and a stored figure does not fill with nulls.
+            The fields that are set, each as a Python `str`, a field held as a `numpy.str_` included. `driver` and
+            `version` are omitted when unset, so the common case is one key and a stored figure does not fill with
+            nulls.
 
         Examples:
             - The common case is a single key:
@@ -167,11 +181,11 @@ class DataRef:
 
                 ```
         """
-        out: Dict[str, Any] = {"uri": self.uri}
+        out: Dict[str, Any] = {"uri": plain_text(self.uri)}
         if self.driver is not None:
-            out["driver"] = self.driver
+            out["driver"] = plain_text(self.driver)
         if self.version is not None:
-            out["version"] = self.version
+            out["version"] = plain_text(self.version)
         return out
 
     @classmethod
@@ -185,8 +199,10 @@ class DataRef:
             The reference.
 
         Raises:
-            ValueError: if `uri` is missing or empty, or the mapping carries a key this type does not know —
-                silently dropping an unknown key would lose data a newer writer meant to keep.
+            TypeError: if `data` is not a mapping — a bare path string included, which would otherwise be read as a
+                mapping of its letters.
+            ValueError: if `uri` is missing or empty, a field is not a string, or the mapping carries a key this
+                type does not know — silently dropping an unknown key would lose data a newer writer meant to keep.
 
         Examples:
             - Rebuild a reference a figure stored, and read its fields back:
@@ -207,14 +223,9 @@ class DataRef:
 
                 ```
         """
-        known = {"uri", "driver", "version"}
-        unknown = sorted(set(data) - known)
-        if unknown:
-            raise ValueError(
-                f"DataRef.from_dict got unknown keys {unknown}; known keys are {sorted(known)}"
-            )
+        refuse_unknown("DataRef", data, ("uri", "driver", "version"))
         return cls(
-            uri=data.get("uri", ""),
+            uri=require("DataRef", data, "uri"),
             driver=data.get("driver"),
             version=data.get("version"),
         )

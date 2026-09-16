@@ -121,6 +121,51 @@ The three helpers each tier used to define for itself.
 
 ::: digitalearth.base.display.auto_cmap
 
+## `LayerSpec` and `LayerTree` — a layer described, and addressed by id
+
+Every tier kept a list called `layers`, three of them addressed it by position, and none kept what a layer is.
+`LayerSpec` is that description — kind, source, slice, style — with no data object, viewport or engine handle, and
+`LayerTree` orders layers bottom first and addresses them by id. Every change to a tree returns a new tree.
+
+::: digitalearth.base.spec.layer.LayerSpec
+
+::: digitalearth.base.spec.layer.LayerTree
+
+::: digitalearth.base.spec.layer.LAYER_REFERENCE
+
+## `Viewport` and `Camera` — the view as a value
+
+The view used to be loose state on each facade, mutated in place to animate. These are values: a change of view is
+a new view.
+
+::: digitalearth.base.spec.viewport.Viewport
+
+::: digitalearth.base.spec.viewport.Camera
+
+::: digitalearth.base.spec.viewport.DEFAULT_VIEW_ANGLE
+
+## `RenderTarget` — the output owns the read budget
+
+A layer never chooses how much of its source to read; the output it is rendered to does, and `view_request` is how a
+view becomes a `ViewRequest`.
+
+::: digitalearth.base.spec.target.RenderTarget
+
+::: digitalearth.base.spec.target.TARGET_KINDS
+
+::: digitalearth.base.spec.target.DEFAULT_BUDGETS
+
+## `PanelSpec` and `FigureSpec` — a figure that describes itself
+
+The whole figure — sources, one layer tree, panels with their own views — round-trips through `to_dict` and
+`from_dict` with no renderer imported, and records the schema version it was written in.
+
+::: digitalearth.base.spec.figure.FigureSpec
+
+::: digitalearth.base.spec.figure.PanelSpec
+
+::: digitalearth.base.spec.figure.SCHEMA_VERSION
+
 ## The registries
 
 How a reference becomes data, without `base/` knowing any reader — and how `Scale` reaches a classifier

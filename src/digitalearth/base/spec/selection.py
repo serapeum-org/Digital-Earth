@@ -22,7 +22,14 @@ says *where* from. Materialising both is the data tier's job (`DE-16`, Wave 2).
 
 from dataclasses import dataclass, replace
 from numbers import Integral
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+
+from digitalearth.base.spec._serial import (
+    as_list,
+    frozen_value,
+    refuse_unknown,
+    to_json_value,
+)
 
 __all__ = ["DEFAULT_BAND", "Selection"]
 
@@ -56,15 +63,17 @@ class Selection:
             because an RGB composite's order is the channel order.
         time: Time step or timestamp, or ``None`` for a dataset with no time axis.
         level: Vertical level, for a 3-D or atmospheric dataset.
-        member: Ensemble member.
+        member: Ensemble member. A list in `time`, `level` or `member`, however nested, is stored as a tuple, so a
+            selection hashes whichever spelling it was given and reads back equal from JSON.
         overview: Overview/LOD level to read, where the source has a pyramid. ``None`` reads full resolution.
         budget: Greatest number of cells or features the reader may return, for a large-data path. ``None``
             means unbounded.
 
     Raises:
-        ValueError: if `band` is empty, or any band index is below 1. Bands are 1-based everywhere in this
-            package's public surface — a 0 is almost always a caller who expected 0-based indexing, and
-            silently reading band 1 instead would draw the wrong data with no error.
+        ValueError: if `band` is empty, a band index is not a whole number (`1.0` and `True` are refused), or any
+            band index is below 1. Bands are 1-based everywhere in this package's public surface — a 0 is almost
+            always a caller who expected 0-based indexing, and silently reading band 1 instead would draw the
+            wrong data with no error.
 
     Examples:
         - A scalar band is normalised to a one-tuple, so one code path serves both:
@@ -91,6 +100,14 @@ class Selection:
             ((2,), 850, 4)
 
             ```
+        - A list and a tuple along a free-form axis make one selection:
+            ```python
+            >>> from digitalearth.base.spec import Selection
+            >>> listed = Selection.of(1, time=[1, 2])
+            >>> listed.time, listed == Selection.of(1, time=(1, 2)), len({listed, Selection.of(1, time=(1, 2))})
+            ((1, 2), True, 1)
+
+            ```
     """
 
     band: Tuple[int, ...] = (DEFAULT_BAND,)
@@ -109,6 +126,10 @@ class Selection:
         # A caller reaching the constructor directly can pass a list; stored as given it would leave the
         # selection unhashable, so coerce before the guards read it.
         object.__setattr__(self, "band", tuple(self.band))
+        # The free-form axes are stored canonically — lists as tuples — so a selection hashes whichever spelling it
+        # was given and round-trips equal through JSON, which has no tuple.
+        for axis in ("time", "level", "member"):
+            object.__setattr__(self, axis, frozen_value(getattr(self, axis)))
         if not self.band:
             raise ValueError("Selection needs at least one band")
         bands: List[int] = []
@@ -257,3 +278,93 @@ class Selection:
                 ```
         """
         return tuple(self.with_band(index) for index in self.band)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``band`` as a list, plus each other axis that is set. An unset axis is omitted rather than written as
+            ``None``, so the common single-band selection is one key.
+
+        Raises:
+            TypeError: if an axis other than `band` holds a value with no JSON form — a `datetime`, a set or `nan`,
+                say. Store a `datetime` as its ISO string instead.
+
+        Examples:
+            - The default selection is one key:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection().to_dict()
+                {'band': [1]}
+
+                ```
+            - A slice through time and level keeps both:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of(2, time="2024-01", level=850).to_dict()
+                {'band': [2], 'time': '2024-01', 'level': 850}
+
+                ```
+            - A live `datetime` has no JSON form and is refused where it is written:
+                ```python
+                >>> from datetime import datetime
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of(1, time=datetime(2024, 1, 1)).to_dict()  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                TypeError: Selection.time holds a datetime, which has no JSON form. ...
+
+                ```
+        """
+        out: Dict[str, Any] = {"band": list(self.band)}
+        for name in ("time", "level", "member", "overview", "budget"):
+            value = getattr(self, name)
+            if value is not None:
+                out[name] = to_json_value(value, f"Selection.{name}")
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Selection":
+        """Rebuild a selection from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`. A missing ``band`` means the default band.
+
+        Returns:
+            The selection, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping, or `band` is not a list — a bare number is refused by name,
+                since `to_dict` always writes a list.
+            ValueError: for an unknown key, or a band the constructor refuses.
+
+        Examples:
+            - A stored composite reads back as a band tuple:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.from_dict({"band": [3, 2, 1]}).band
+                (3, 2, 1)
+
+                ```
+            - Without a `band` key the default band is read, and the other axes come back as stored:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> selection = Selection.from_dict({"time": "2024-01-01", "level": 850})
+                >>> selection.band, selection.time, selection.level
+                ((1,), '2024-01-01', 850)
+
+                ```
+        """
+        refuse_unknown(
+            "Selection", data, ("band", "time", "level", "member", "overview", "budget")
+        )
+        return cls(
+            band=as_list("Selection", "band", data.get("band", (DEFAULT_BAND,))),
+            time=data.get("time"),
+            level=data.get("level"),
+            member=data.get("member"),
+            overview=data.get("overview"),
+            budget=data.get("budget"),
+        )

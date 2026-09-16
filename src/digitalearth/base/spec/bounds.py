@@ -18,14 +18,21 @@ Reprojection is pyramids' job, not this package's: :meth:`Bounds.to_crs` delegat
 import warnings
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, List, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
+
+from digitalearth.base.spec._serial import (
+    crs_to_json,
+    finite_number,
+    refuse_unknown,
+    require,
+)
 
 __all__ = ["Bounds"]
 
 
-def _same_crs(one: Any, other: Any) -> bool:
+def same_crs(one: Any, other: Any) -> bool:
     """Whether two CRS spellings name the same reference system.
 
     Args:
@@ -44,10 +51,37 @@ def _same_crs(one: Any, other: Any) -> bool:
         ``==`` shortcut would answer "same CRS" for two rectangles built with ``crs=0``, letting them union
         as though they agreed and letting ``to_crs(0)`` no-op instead of refusing. It already answers
         ``True`` for two unset CRSs, which is the one case a shortcut would have been for.
+
+        A CRS **object** — a pyproj `CRS`, which is what `GeoDataFrame.crs` holds — is first written in the
+        spelling a figure stores it in (``"EPSG:<code>"`` when its definition carries the code, WKT otherwise),
+        because `crs_equal` reads only ``int``/``str``/``None`` and answers ``False`` for an object compared even
+        with itself. Without that, a `Viewport` in an object CRS could never hold bounds, and `to_crs` reprojected a
+        rectangle into the CRS it was already in. The object is not identified against the PROJ database, so it
+        never compares equal to a code PROJ merely guesses for it, and comparing costs a read of its definition
+        rather than a database search.
+
+        A value with no written form — a float, a boolean, a list, an object pyramids cannot read — compares as
+        different, and is never handed to `crs_equal`. Its answers are cached by value regardless of type, so a
+        float `4326.0` would leave a "not the same" answer that `4326` then reads back, and a list cannot be a
+        cache key at all.
+
+    Examples:
+        - Two spellings of one system, and a CRS object against its own EPSG code:
+            ```python
+            >>> from pyramids.base.crs import crs_from_user_input
+            >>> from digitalearth.base.spec.bounds import same_crs
+            >>> same_crs(4326, "EPSG:4326"), same_crs(crs_from_user_input(3857), 3857)
+            (True, True)
+
+            ```
     """
     from pyramids.base.crs import crs_equal
 
-    return bool(crs_equal(one, other))
+    try:
+        first, second = crs_to_json(one, "crs"), crs_to_json(other, "crs")
+    except TypeError:
+        return False
+    return bool(crs_equal(first, second))
 
 
 @dataclass(frozen=True)
@@ -60,12 +94,15 @@ class Bounds:
         xmax: Eastern edge.
         ymax: Northern edge.
         crs: The CRS the four values are expressed in — an EPSG code, a WKT string, or anything pyramids
-            resolves. Kept with the numbers so a rectangle cannot be measured against the wrong one.
+            resolves. Kept with the numbers so a rectangle cannot be measured against the wrong one. A CRS object
+            is held in the spelling it is written in — ``"EPSG:<code>"`` when its definition carries one, WKT
+            otherwise — so a rectangle and its JSON round trip are one value with one hash.
 
     Raises:
         ValueError: if any edge is not finite, or if an edge pair is inverted (``xmax < xmin``). A rectangle
             whose corners are the wrong way round draws nothing and reports no error, which is the failure
-            this refuses up front.
+            this refuses up front. Also for a CRS with no written form — a boolean, a float, a list, an object
+            pyramids cannot read — which the message names. A string is not checked.
 
     Examples:
         - Build one and read back the two orderings that used to be positional conventions:
@@ -108,7 +145,7 @@ class Bounds:
         """Refuse a rectangle that cannot bound anything.
 
         Raises:
-            ValueError: for a non-finite edge, or an inverted pair.
+            ValueError: for a non-finite edge, an inverted pair, or a CRS with no written form.
         """
         for name, value in (
             ("xmin", self.xmin),
@@ -126,6 +163,13 @@ class Bounds:
             raise ValueError(
                 f"Bounds needs ymin <= ymax; got ymin={self.ymin}, ymax={self.ymax}"
             )
+        try:
+            written = crs_to_json(self.crs, "Bounds.crs")
+        except TypeError as error:
+            raise ValueError(str(error)) from error
+        # Held as written. A CRS object equals its own code through pyproj's `__eq__` but hashes by its WKT, so a
+        # rectangle equalled its round trip with a different hash, and could not key a cache it was rebuilt for.
+        object.__setattr__(self, "crs", written)
 
     # ------------------------------------------------------------------ builders
 
@@ -322,7 +366,7 @@ class Bounds:
 
                 ```
         """
-        if not _same_crs(self.crs, other.crs):
+        if not same_crs(self.crs, other.crs):
             raise ValueError(
                 f"union needs both rectangles in one CRS; got {self.crs!r} and {other.crs!r} — "
                 "reproject one with to_crs() first"
@@ -382,7 +426,13 @@ class Bounds:
             crs: The target CRS.
 
         Returns:
-            The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches.
+            The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches. A CRS object
+            given as `crs` is held in its written spelling, as the constructor holds one.
+
+        Raises:
+            ValueError: naming the rectangle and both CRSs, when a corner falls outside the area `crs` can show —
+                the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose;
+                or, as pyramids' `CRSError` (a `ValueError` subclass), when `crs` is not a CRS pyramids can read.
 
         Examples:
             - Reprojecting to the CRS it already has is a no-op:
@@ -393,8 +443,17 @@ class Bounds:
                 True
 
                 ```
+            - A rectangle on the far side of an orthographic globe has no corners to enclose:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(100.0, -10.0, 170.0, 10.0, crs=4326).to_crs("+proj=ortho +lat_0=0 +lon_0=0")
+                Traceback (most recent call last):
+                    ...
+                ValueError: Bounds [100.0, -10.0, 170.0, 10.0] in 4326 cannot be reprojected into ...
+
+                ```
         """
-        if _same_crs(crs, self.crs):
+        if same_crs(crs, self.crs):
             return self
         from pyramids.base.crs import reproject_coordinates
 
@@ -408,4 +467,93 @@ class Bounds:
             # into a degenerate one — and set_extent would hand matplotlib a singular limit.
             precision=None,
         )
+        if not all(isfinite(value) for value in (*xs, *ys)):
+            # pyramids answers a corner the target cannot show with an infinity. Handed on, the constructor would
+            # report an infinite edge without saying a reprojection produced it.
+            raise ValueError(
+                f"Bounds {self.as_bbox()} in {self.crs!r} cannot be reprojected into {crs!r}: part of the "
+                "rectangle falls outside the area that projection can show"
+            )
         return Bounds(min(xs), min(ys), max(xs), max(ys), crs)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            The four edges as Python floats, and the CRS as held: `None`, an EPSG integer or a string, which is not
+            checked. The constructor has already turned a CRS object into `"EPSG:<code>"` (or WKT when its
+            definition carries no EPSG code) and refused a CRS with no written form, so writing a rectangle does
+            not fail on its CRS.
+
+        Examples:
+            - The edges keep their names, so the ordering cannot be misread:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()
+                {'xmin': 0.0, 'ymin': 1.0, 'xmax': 2.0, 'ymax': 3.0, 'crs': 4326}
+
+                ```
+            - A CRS object is written by the EPSG code it is held as:
+                ```python
+                >>> from pyramids.base.crs import crs_from_user_input
+                >>> from digitalearth.base.spec import Bounds
+                >>> box = Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326))
+                >>> box.crs, box.to_dict()["crs"]
+                ('EPSG:4326', 'EPSG:4326')
+
+                ```
+        """
+        return {
+            # The constructor has already refused a non-finite edge, but not a numpy float, which json cannot write.
+            "xmin": float(self.xmin),
+            "ymin": float(self.ymin),
+            "xmax": float(self.xmax),
+            "ymax": float(self.ymax),
+            "crs": crs_to_json(self.crs, "Bounds.crs"),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Bounds":
+        """Rebuild a rectangle from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`. A missing `crs` means `None`.
+
+        Returns:
+            The rectangle, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused
+                by name — a key is unknown, the edges do not bound a rectangle, or the CRS has no written form (a
+                stored `true`, say).
+
+        Examples:
+            - A stored rectangle reads back to the same value:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> box = Bounds.from_dict({"xmin": 0, "ymin": 0, "xmax": 10, "ymax": 5, "crs": 3857})
+                >>> box.as_bbox(), box.crs
+                ([0.0, 0.0, 10.0, 5.0], 3857)
+
+                ```
+            - A missing edge is named:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds.from_dict({"xmin": 0, "ymin": 0, "xmax": 1, "crs": 4326})
+                Traceback (most recent call last):
+                    ...
+                ValueError: Bounds.from_dict needs 'ymax'; got keys ['crs', 'xmax', 'xmin', 'ymin']
+
+                ```
+        """
+        refuse_unknown("Bounds", data, ("xmin", "ymin", "xmax", "ymax", "crs"))
+        return cls(
+            finite_number("Bounds", "xmin", require("Bounds", data, "xmin")),
+            finite_number("Bounds", "ymin", require("Bounds", data, "ymin")),
+            finite_number("Bounds", "xmax", require("Bounds", data, "xmax")),
+            finite_number("Bounds", "ymax", require("Bounds", data, "ymax")),
+            data.get("crs"),
+        )

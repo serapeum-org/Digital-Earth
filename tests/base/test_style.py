@@ -77,18 +77,19 @@ class TestSymbology:
             "two equal symbologies must collapse to one entry"
         )
 
-    def test_a_property_value_is_not_deep_frozen(self):
-        """Only the mapping is frozen; what a caller put in it stays theirs.
+    def test_a_list_property_is_copied_to_a_tuple(self):
+        """A list given as a property is stored as a tuple, so the caller's later changes do not reach it.
 
         Test scenario:
-            Pinned deliberately rather than claimed away. Deep-freezing arbitrary style values is not
-            realistic, so the docstring states the limit and this is the behaviour it states.
+            This used to pin the opposite — the list was shared with the caller, by documented design. Wave 3 made
+            the free-form values canonical (lists as tuples) so a symbology round-trips through JSON equal and
+            hashable; copying the list is part of that. A dict property is copied too, with its values frozen.
         """
         levels = [1.0, 2.0]
         sym = Symbology().with_props(levels=levels)
         levels.append(3.0)
-        assert sym.props["levels"] == [1.0, 2.0, 3.0], (
-            "a mutable property value is shared with the caller, by documented design"
+        assert sym.props["levels"] == (1.0, 2.0), (
+            f"a list property is stored as its own tuple, got {sym.props['levels']!r}"
         )
 
 
