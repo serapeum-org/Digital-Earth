@@ -9,7 +9,8 @@ than being re-spelled — slightly differently — on each type. Three rules:
   object — a dataset, an artist, a `datetime` — cannot cross the seam the design says nothing live may cross, and
   finding that out inside `json.dumps` names neither the type nor the field.
 * **A CRS is written in a spelling that reads back.** An EPSG integer or a string passes through; a CRS *object*
-  is written as ``"EPSG:<code>"``, or as WKT when it carries no authority code.
+  is written as `"EPSG:<code>"` when its own definition carries an EPSG code, and as WKT otherwise — an ESRI code
+  included. `Bounds` and `Viewport` hold a CRS object in that spelling from the moment they are built.
 """
 
 from math import isfinite
@@ -51,8 +52,9 @@ class FrozenDict(Dict[str, Any]):
     """A `dict` that refuses every change after it is built — how the spec types hold a mapping.
 
     A read-only `mappingproxy` view froze the mapping too, but it cannot be copied: `pickle`, `copy.deepcopy` and
-    `dataclasses.asdict` all raised `cannot pickle 'mappingproxy' object`. This is a real `dict` — `asdict` turns it
-    into a plain one, `json` writes it, `==` compares it with a dict — whose mutators all raise.
+    `dataclasses.asdict` all raised `cannot pickle 'mappingproxy' object`. This is a real `dict` whose mutators all
+    raise: `pickle`, `copy.deepcopy` and `dataclasses.asdict` rebuild it as a `FrozenDict`, `json` writes it, and
+    `==` compares it with a plain dict. Like a `dict`, it does not hash.
 
     Examples:
         - It reads as a dict and refuses a change:
@@ -62,6 +64,19 @@ class FrozenDict(Dict[str, Any]):
             >>> frozen == {"levels": (1, 2)}
             True
             >>> frozen["levels"] = (3,)
+            Traceback (most recent call last):
+                ...
+            TypeError: FrozenDict is read-only; build a new value instead
+
+            ```
+        - A copy is still read-only:
+            ```python
+            >>> import copy
+            >>> from digitalearth.base.spec._serial import FrozenDict
+            >>> clone = copy.deepcopy(FrozenDict({"levels": (1, 2)}))
+            >>> clone
+            {'levels': (1, 2)}
+            >>> clone.pop("levels")
             Traceback (most recent call last):
                 ...
             TypeError: FrozenDict is read-only; build a new value instead
@@ -537,7 +552,8 @@ def read_entry(owner: str, key: str, read: Callable[[Any], T], value: Any) -> T:
     Raises:
         TypeError: as `read` raised it, with ``"<owner>.from_dict <key>: "`` in front of its message. Nested reads
             each add their own step, so the message is the path from the outermost dict to the broken part.
-        ValueError: likewise.
+        ValueError: likewise. An error of a subclass of either is raised as `read` raised it, without the step,
+            since a subclass's constructor may not take a plain message.
 
     Examples:
         - A broken source names the figure field it was stored under:
@@ -600,11 +616,11 @@ def crs_to_json(crs: Any, where: str) -> Any:
         where: The field, for the message.
 
     Returns:
-        `None` or a string unchanged — a string is not checked, so one pyramids cannot read is written as
-        given — and an integer (a numpy integer included) as a Python `int`. A CRS object becomes
-        `"EPSG:<code>"` when its own definition carries that code, and its WKT otherwise. Either reads back
-        through the same pyramids parser that read the object, so the system is kept even though the Python
-        type is not.
+        `None` unchanged, a string (a numpy string included) as a Python `str` — not checked, so one pyramids
+        cannot read is written as given — and an integer (a numpy integer included) as a Python `int`. A CRS object
+        becomes `"EPSG:<code>"` when its own definition carries an EPSG code, and its WKT otherwise — an ESRI code
+        included. Either reads back through the same pyramids parser that read the object, so the system is kept
+        even though the Python type is not.
 
         The code is read off the definition, never identified against the PROJ database. Identification is
         slow — tens of milliseconds for a CRS with no code, on every call — and at its default confidence it
@@ -623,7 +639,7 @@ def crs_to_json(crs: Any, where: str) -> Any:
             (4326, '+proj=ortho +lat_0=30')
 
             ```
-        - A CRS object is written by its authority code, or as WKT when it has none:
+        - A CRS object is written by its EPSG code, or as WKT when its definition carries none:
             ```python
             >>> from pyramids.base.crs import crs_from_user_input
             >>> from digitalearth.base.spec._serial import crs_to_json

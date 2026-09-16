@@ -431,8 +431,8 @@ class Encoding:
 
         Returns:
             `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant and
-            `output_range` go through the JSON check, so a tuple is written as a list and a numpy number as a plain
-            Python one.
+            `output_range` go through the JSON check, so a tuple is written as a list and a numpy number or string
+            as a plain Python one. `channel` and `field` are written as Python strings too.
 
         Raises:
             TypeError: if the constant, an `output_range` end, or any field of the scale has no JSON form.
@@ -483,7 +483,8 @@ class Encoding:
             TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the
                 field, rather than failing inside `tuple()`.
             ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the
-                constructor refuses.
+                constructor refuses. An error of either type from the stored scale names where it sits:
+                `Encoding.from_dict scale: Scale.from_dict needs a mapping; got int`.
 
         Examples:
             - A stored constant reads back and resolves as before:

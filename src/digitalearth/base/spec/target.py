@@ -201,6 +201,14 @@ class RenderTarget:
                 (3857, [0, 0, 111319, 111325])
 
                 ```
+            - A view framed by a domain box asks for that box, in the view's CRS:
+                ```python
+                >>> from digitalearth.base.spec import RenderTarget, Viewport
+                >>> request = RenderTarget().view_request(Viewport(3857, domain=(0.0, 0.0, 1.0, 1.0)))
+                >>> request.crs, [round(edge) for edge in request.as_bbox()]
+                (3857, [0, 0, 111319, 111325])
+
+                ```
             - A 3-D camera has no rectangle, so only the canvas and the budget are set:
                 ```python
                 >>> from digitalearth.base.spec import Camera, RenderTarget
@@ -246,7 +254,8 @@ class RenderTarget:
         Raises:
             ValueError: for a named domain. Names resolve in `digitalearth.static.domains`, which `base` cannot
                 import without importing a renderer; a request with no region would read the whole source instead
-                of the region the view names.
+                of the region the view names. Also, from `Bounds.to_crs`, for a box part of which the view's CRS
+                cannot show.
         """
         if isinstance(view.domain, str):
             raise ValueError(

@@ -280,7 +280,10 @@ class LayerSpec:
 
         Raises:
             TypeError: if `data`, or its `selection` or `symbology`, is not a mapping.
-            ValueError: for a missing id or kind, an unknown key, or a field the constructor refuses.
+            ValueError: for a missing id or kind, an unknown key, a `selection` or `symbology` its own `from_dict`
+                refuses, or a field the constructor refuses. An error of either type from the stored selection or
+                symbology names where it sits:
+                `LayerSpec.from_dict selection: Selection.from_dict needs a mapping; got int`.
 
         Examples:
             - A stored layer reads back with its slice:
@@ -372,8 +375,8 @@ def _check_layer(method: str, layer: Any) -> None:
 class LayerTree:
     """The layers of a figure, in draw order, addressed by id.
 
-    Every change returns a new tree and leaves this one as it was, so a renderer can compare the tree it drew with
-    the tree it is asked to draw.
+    Every change returns a new tree of the same type — a subclass stays a subclass — and leaves this one as it was,
+    so a renderer can compare the tree it drew with the tree it is asked to draw.
 
     Attributes:
         layers: The layers, bottom first — the first is drawn first and so sits beneath the rest.
@@ -383,7 +386,9 @@ class LayerTree:
     Raises:
         ValueError: for an entry that is not a `LayerSpec`, two layers sharing an id, a `z_source` naming a layer
             that is not in the tree, a chain of `z_source` references that loops back on itself, `hidden_groups`
-            given as a bare string rather than a collection of names, or a hidden group no layer belongs to.
+            given as a bare string or bytes rather than a collection of names, a hidden-group entry that is not a
+            string (`LayerTree hidden_groups must be group names (strings); got 1`), or a hidden group no layer
+            belongs to.
 
     Examples:
         - Build a tree and address layers by id rather than by position:
@@ -968,7 +973,8 @@ class LayerTree:
             TypeError: if `data` or a stored layer is not a mapping, or `layers` or `hidden_groups` is not a
                 list, naming the field.
             ValueError: for an unknown key, a layer `LayerSpec.from_dict` refuses, or a tree the constructor
-                refuses.
+                refuses. An error of either type from a stored layer names its position, and each nested read adds
+                its own step: `LayerTree.from_dict layers[1]: LayerSpec.from_dict needs 'kind'; got keys ['id']`.
 
         Examples:
             - A stored tree reads back in the same order:

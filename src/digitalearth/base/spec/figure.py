@@ -225,7 +225,8 @@ class PanelSpec:
         Raises:
             TypeError: if `data` or its view is not a mapping, or `layers` is not a list, naming the field.
             ValueError: for a missing id, an unknown key, both or neither of `viewport` and `camera`, a view its own
-                `from_dict` refuses, or a panel the constructor refuses.
+                `from_dict` refuses, or a panel the constructor refuses. An error of either type from the stored view
+                names where it sits: `PanelSpec.from_dict viewport: Viewport.from_dict needs a mapping; got int`.
 
         Examples:
             - A stored 3-D panel reads back with its camera:
@@ -389,9 +390,9 @@ class FigureSpec:
         """Hash by value, like every other type in the vocabulary.
 
         Returns:
-            A hash over every field. `sources` is held as a read-only mapping, which has no hash of its own, so it
-            is hashed as its sorted items — without this `hash(figure)` raised ``unhashable type: 'dict'`` while
-            `LayerTree`, `PanelSpec` and `Viewport` all hashed.
+            A hash over every field. `sources` is held as a read-only `FrozenDict`, which has no hash of its own, so
+            it is hashed as its sorted items — hashed as held, it raises `unhashable type: 'FrozenDict'`, while
+            `LayerTree`, `PanelSpec` and `Viewport` all hash.
 
         Raises:
             TypeError: if a part holds an unhashable value — a dict in a layer's `Symbology` properties, say. A
@@ -695,7 +696,10 @@ class FigureSpec:
             TypeError: if `data` is not a mapping, or a part is the wrong shape — a panel, the layer tree or
                 `sources` that is not a mapping, or `panels` or `size` that is not a list — naming the field.
             ValueError: for a missing or unknown schema version, a missing panel list, an unknown key, a part its own
-                `from_dict` refuses, or a figure the constructor refuses.
+                `from_dict` refuses, or a figure the constructor refuses. An error of either type from a stored
+                panel, source or layer tree names where the part sits — `panels[0]`, `sources['a']`, `layers` — and
+                each nested read adds its own step, so the message is the path from the figure down to the broken
+                entry.
 
         Examples:
             - A figure from a newer schema is refused before it is read:
@@ -705,6 +709,16 @@ class FigureSpec:
                 Traceback (most recent call last):
                     ...
                 ValueError: FigureSpec.from_dict got schema_version 2; this version of digitalearth reads 1
+
+                ```
+            - A broken entry deep in the figure is named by its path:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec
+                >>> stored = {"schema_version": 1, "panels": [{"id": "p", "viewport": {"crs": True}}]}
+                >>> FigureSpec.from_dict(stored)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: FigureSpec.from_dict panels[0]: PanelSpec.from_dict viewport: Viewport needs a display ...
 
                 ```
         """

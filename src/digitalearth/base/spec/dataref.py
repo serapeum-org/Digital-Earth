@@ -158,8 +158,9 @@ class DataRef:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            The fields that are set. `driver` and `version` are omitted when unset, so the common case is one
-            key and a stored figure does not fill with nulls.
+            The fields that are set, each as a Python `str`, a field held as a `numpy.str_` included. `driver` and
+            `version` are omitted when unset, so the common case is one key and a stored figure does not fill with
+            nulls.
 
         Examples:
             - The common case is a single key:

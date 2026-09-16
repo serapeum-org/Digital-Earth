@@ -196,7 +196,7 @@ class Symbology:
         Raises:
             TypeError: if any value in it is itself unhashable — a dict held as a property,
                 say. A list is not among them: lists are stored as tuples, so ``Symbology.of(color=[1, 0, 0])``
-                hashes.
+                hashes. Nor is a numpy array, which is stored as nested tuples of its elements.
         """
         return hash(
             (
@@ -378,7 +378,10 @@ class Symbology:
         Raises:
             TypeError: if `data`, `encodings`, `props` or a stored encoding is not a mapping, naming the field.
             ValueError: for an unknown key, an encoding `Encoding.from_dict` refuses — an undeclared channel, say —
-                or an encoding filed under a channel it does not drive.
+                or an encoding filed under a channel it does not drive. An error of either type from a stored
+                encoding names where it sits:
+                `Symbology.from_dict encodings['color']: Encoding.from_dict needs a mapping; got int`. The
+                misfiled-channel refusal comes from the constructor, and carries no path.
 
         Examples:
             - A stored style reads back channel by channel:

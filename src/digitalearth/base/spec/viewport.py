@@ -92,7 +92,8 @@ class Viewport:
         ValueError: for a `None` or boolean CRS, one a figure could not store (a float, a list — anything that is
             not an EPSG integer, a string or a CRS object pyramids reads), or one pyramids cannot read (`0`, `""`);
             `bounds` that is not a `Bounds`, carries no CRS or is in a different CRS; `bounds` and `domain` together;
-            a `domain` that is neither a non-empty name nor four finite numbers; or a non-boolean `globe`.
+            a `domain` that is neither a non-empty name nor four finite numbers, or a domain box with west past east
+            or south past north — a box cannot cross the antimeridian; or a non-boolean `globe`.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
@@ -319,9 +320,9 @@ class Viewport:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            `crs`, plus `bounds` and `domain` when set and `globe` only when it is `True`. A CRS object is written
-            as `"EPSG:<code>"` or WKT; an EPSG integer or a string is written as given, unchecked. The constructor
-            refuses a CRS with no stored form, so writing a view does not fail on its CRS.
+            `crs`, plus `bounds` and `domain` when set and `globe` only when it is `True`. The CRS is written as
+            held: the constructor has already turned a CRS object into `"EPSG:<code>"` or WKT, and refused a CRS
+            with no stored form or one pyramids cannot read, so writing a view does not fail on its CRS.
 
         Examples:
             - A default view is its CRS:
@@ -364,8 +365,10 @@ class Viewport:
             The view, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data`, or its `bounds`, is not a mapping.
-            ValueError: for a missing CRS, an unknown key, or a view the constructor refuses.
+            TypeError: if `data` is not a mapping, or its `bounds` is not one, named by where it sits:
+                `Viewport.from_dict bounds: Bounds.from_dict needs a mapping; got int`.
+            ValueError: for a missing CRS, an unknown key, bounds `Bounds.from_dict` refuses — named the same way —
+                or a view the constructor refuses.
 
         Examples:
             - A stored globe view reads back:

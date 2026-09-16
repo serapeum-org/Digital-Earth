@@ -560,7 +560,9 @@ class Scale:
         """Return the colour assigned to one category.
 
         Args:
-            category: The category to look up.
+            category: The category to look up. Categories are labels: a boolean — Python's, or numpy's `bool_`, which
+                is what `np.unique` over a boolean column holds — matches only a boolean category, so `True` does not
+                find a category `1`, nor `1` a category `True`.
 
         Returns:
             Its colour, or :attr:`missing` when the scale never saw it.
@@ -572,6 +574,15 @@ class Scale:
                 >>> scale = Scale.categorical(["a"], ["#f00"], missing="#ccc")
                 >>> scale.color_for("zzz")
                 '#ccc'
+
+                ```
+            - A numpy boolean finds the boolean category; the integer `1` does not:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.categorical([True, False], ["#f00", "#00f"], missing="#ccc")
+                >>> scale.color_for(np.bool_(True)), scale.color_for(1)
+                ('#f00', '#ccc')
 
                 ```
         """

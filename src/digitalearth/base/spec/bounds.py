@@ -101,7 +101,8 @@ class Bounds:
     Raises:
         ValueError: if any edge is not finite, or if an edge pair is inverted (``xmax < xmin``). A rectangle
             whose corners are the wrong way round draws nothing and reports no error, which is the failure
-            this refuses up front.
+            this refuses up front. Also for a CRS with no written form — a boolean, a float, a list, an object
+            pyramids cannot read — which the message names. A string is not checked.
 
     Examples:
         - Build one and read back the two orderings that used to be positional conventions:
@@ -425,7 +426,8 @@ class Bounds:
             crs: The target CRS.
 
         Returns:
-            The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches.
+            The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches. A CRS object
+            given as `crs` is held in its written spelling, as the constructor holds one.
 
         Raises:
             ValueError: naming the rectangle and both CRSs, when a corner falls outside the area `crs` can show —
@@ -480,12 +482,10 @@ class Bounds:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            The four edges, as held, and the CRS. A CRS object is written as `"EPSG:<code>"` (or WKT when it has no
-            code), so the CRS survives `json.dumps`; `None`, an EPSG integer or a string is written as given, and a
-            string is not checked.
-
-        Raises:
-            TypeError: if the CRS is a boolean, or an object pyramids cannot read as a CRS.
+            The four edges as Python floats, and the CRS as held: `None`, an EPSG integer or a string, which is not
+            checked. The constructor has already turned a CRS object into `"EPSG:<code>"` (or WKT when its
+            definition carries no EPSG code) and refused a CRS with no written form, so writing a rectangle does
+            not fail on its CRS.
 
         Examples:
             - The edges keep their names, so the ordering cannot be misread:
@@ -495,12 +495,13 @@ class Bounds:
                 {'xmin': 0.0, 'ymin': 1.0, 'xmax': 2.0, 'ymax': 3.0, 'crs': 4326}
 
                 ```
-            - A CRS object is written by its authority code:
+            - A CRS object is written by the EPSG code it is held as:
                 ```python
                 >>> from pyramids.base.crs import crs_from_user_input
                 >>> from digitalearth.base.spec import Bounds
-                >>> Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326)).to_dict()["crs"]
-                'EPSG:4326'
+                >>> box = Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326))
+                >>> box.crs, box.to_dict()["crs"]
+                ('EPSG:4326', 'EPSG:4326')
 
                 ```
         """
@@ -526,7 +527,8 @@ class Bounds:
         Raises:
             TypeError: if `data` is not a mapping.
             ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused
-                by name — a key is unknown, or the edges do not bound a rectangle.
+                by name — a key is unknown, the edges do not bound a rectangle, or the CRS has no written form (a
+                stored `true`, say).
 
         Examples:
             - A stored rectangle reads back to the same value:
