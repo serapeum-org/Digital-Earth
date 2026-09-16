@@ -593,7 +593,10 @@ class Camera:
         """
         dx = self.position[0] - self.focal_point[0]
         dy = self.position[1] - self.focal_point[1]
-        return degrees(atan2(dx, dy)) % 360.0
+        bearing = degrees(atan2(dx, dy)) % 360.0
+        # `%` rounds a tiny negative angle — a camera a rounding error west of due north — up to exactly 360.0,
+        # outside the range this promises. That bearing is due north.
+        return 0.0 if bearing >= 360.0 else bearing
 
     @property
     def elevation(self) -> float:

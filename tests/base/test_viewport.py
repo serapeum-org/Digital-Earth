@@ -357,6 +357,26 @@ class TestLookingAtAPoint:
         )
         assert top.position == pytest.approx((0.0, 0.0, 10.0), abs=1e-9), top.position
 
+    @pytest.mark.parametrize(
+        "camera",
+        [
+            Camera.look_at((0.0, 0.0, 0.0), azimuth=360.0, elevation=0.0, distance=1.0),
+            Camera((-1e-20, 1.0, 0.0)),
+        ],
+        ids=["look-at-360", "a-hair-west-of-north"],
+    )
+    def test_a_bearing_a_hair_west_of_north_is_zero_not_360(self, camera):
+        """The bearing is in `[0, 360)`, so a camera a rounding error west of due north reads as `0`.
+
+        Args:
+            camera: A camera whose x offset is a tiny negative number.
+
+        Test scenario:
+            `degrees(atan2(dx, dy)) % 360.0` rounds a tiny negative angle up to `360.0` — outside the documented
+            range, and a bucket-by-bearing caller's ``< 360`` check fails on it.
+        """
+        assert camera.azimuth == 0.0, camera.azimuth
+
     def test_a_camera_directly_above_reports_azimuth_zero(self):
         """No horizontal offset has no bearing; the property says 0 rather than raising."""
         assert Camera((0.0, 0.0, 10.0), view_up=(0.0, 1.0, 0.0)).azimuth == 0.0
