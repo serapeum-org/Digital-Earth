@@ -206,8 +206,8 @@ class Viewport:
             The name unchanged, the four edges as floats, or ``None``.
 
         Raises:
-            ValueError: for an empty or whitespace-only name, a non-iterable, the wrong number of edges, or an edge
-                that is not a finite number (a boolean included).
+            ValueError: for an empty or whitespace-only name, a non-iterable, the wrong number of edges, an edge
+                that is not a finite number (a boolean included), or a box with west past east or south past north.
         """
         if domain is None:
             return None
@@ -225,6 +225,14 @@ class Viewport:
         west, south, east, north = (
             finite_number("Viewport", "domain", edge) for edge in edges
         )
+        if west > east or south > north:
+            # Refused where the view is built, as the static tier's `set_domain` refuses it: a box read as a
+            # rectangle later failed inside `Bounds`, naming neither the domain nor the antimeridian.
+            raise ValueError(
+                f"Viewport domain {domain!r} has its corners the wrong way round: it takes (west, south, east, north) "
+                "in degrees, and cannot express a region crossing the antimeridian — split it into two views, or "
+                "frame the view with bounds in a CRS that is continuous across it"
+            )
         return west, south, east, north
 
     def framed(self, bounds: Bounds) -> "Viewport":

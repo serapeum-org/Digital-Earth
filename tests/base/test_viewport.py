@@ -86,6 +86,25 @@ class TestViewport:
         view = Viewport({"proj": "longlat", "datum": "WGS84", "no_defs": True})
         assert isinstance(hash(view), int), view
 
+    @pytest.mark.parametrize(
+        "domain",
+        [(170.0, -50.0, -170.0, 50.0), (0.0, 50.0, 10.0, 40.0)],
+        ids=["crosses-the-antimeridian", "south-above-north"],
+    )
+    def test_a_domain_box_with_its_corners_the_wrong_way_round_is_refused(self, domain):
+        """A `(west, south, east, north)` box with west past east, or south past north, is refused by the view.
+
+        Args:
+            domain: An inverted box.
+
+        Test scenario:
+            The view held it, and `RenderTarget.view_request` then failed inside `Bounds` with "Bounds needs xmin <=
+            xmax; got xmin=170.0, xmax=-170.0", naming neither the domain nor why — the static tier's `set_domain`
+            refuses the same box and says it cannot cross the antimeridian.
+        """
+        with pytest.raises(ValueError, match="has its corners the wrong way round"):
+            Viewport(4326, domain=domain)
+
     def test_bounds_and_a_domain_together_are_refused(self):
         """A view holds one region, so `bounds` and `domain` together are refused rather than ranked silently.
 
