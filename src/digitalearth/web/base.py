@@ -423,10 +423,10 @@ class WebMapBase:
         self._issued_ids: set = set()
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
-        #: Every data layer added, in the order it was added, as a :class:`~digitalearth.base.spec.layer.LayerTree`.
-        #: That is not always draw order: a graticule joins the reference band beneath data added before it. The
-        #: id addresses the layer in MapLibre; the label is what a layer switcher shows a viewer. Controls and
-        #: basemaps are not in here — they are not things a viewer turns on and off.
+        #: Every data layer added, in draw order — bottom first, as a :class:`~digitalearth.base.spec.layer.LayerTree`
+        #: lists them — so a graticule, which joins the reference band beneath the data, sits beneath data added
+        #: before it here too. The id addresses the layer in MapLibre; the label is what a layer switcher shows a
+        #: viewer. Controls and basemaps are not in here — they are not things a viewer turns on and off.
         self._layer_tree: LayerTree = LayerTree()
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
@@ -793,7 +793,13 @@ class WebMapBase:
         return list(self._layer_tree.ids)
 
     def _index_layer(
-        self, layer_id: str, label: Optional[str], *, kind: str, visible: bool = True
+        self,
+        layer_id: str,
+        label: Optional[str],
+        *,
+        kind: str,
+        visible: bool = True,
+        reference: bool = False,
     ) -> None:
         """Record a data layer so it can be addressed later.
 
@@ -804,13 +810,22 @@ class WebMapBase:
                 the tree describes the layer rather than only naming it.
             visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
                 tree says what the MapLibre layout says; the builders without one always build visible.
+            reference: Whether the layer is about to join the reference band through :meth:`add_reference`. It
+                then joins the tree at the top of that band — beneath every data layer — rather than on top, so
+                the tree's order stays the order the map draws in. Call this before `add_reference`.
 
         Raises:
             ValueError: when `LayerSpec` refuses the id — a builder's `name=` becomes the id as given, so a name
                 with surrounding whitespace is refused here — or the kind, or when the id is already in the tree.
         """
+        index = None
+        if reference:
+            band = self.layers[: self._underlay_count + self._reference_count]
+            banded = {getattr(layer, "_digitalearth_layer_id", None) for layer in band}
+            index = sum(1 for existing in self._layer_tree.ids if existing in banded)
         self._layer_tree = self._layer_tree.add(
-            LayerSpec(layer_id, kind, label=label or layer_id, visible=visible)
+            LayerSpec(layer_id, kind, label=label or layer_id, visible=visible),
+            index=index,
         )
 
     def remove_layer(self, layer_id: str) -> Self:
@@ -860,6 +875,15 @@ class WebMapBase:
                 f"no layer {layer_id!r} on this map; added layers are {present}"
             )
         self._layer_tree = self._layer_tree.remove(layer_id)
+        # The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the
+        # next `add_reference` inserts one place too high — above data it belongs beneath.
+        self._reference_count -= sum(
+            1
+            for layer in self.layers[
+                self._underlay_count : self._underlay_count + self._reference_count
+            ]
+            if getattr(layer, "_digitalearth_layer_id", None) == layer_id
+        )
         self.layers = [
             layer
             for layer in self.layers

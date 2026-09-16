@@ -111,6 +111,19 @@ def raster():
     )
 
 
+def _drawn(web_map):
+    """Return the ids of a map's addressable layers in the order they are drawn, bottom first.
+
+    Args:
+        web_map: The map.
+
+    Returns:
+        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none.
+    """
+    ids = [getattr(layer, "_digitalearth_layer_id", None) for layer in web_map.layers]
+    return [layer_id for layer_id in ids if layer_id is not None]
+
+
 def _payload(html):
     """Return the page's call payload — what this map does, not what the library contains.
 
@@ -286,6 +299,36 @@ class TestTheRegistryIsAddressable:
         m = WebMap().timeslider(raster_stack)
         recorded = [m._layer_tree.is_visible(layer) for layer in m.layer_ids]
         assert recorded == [True, False, False], recorded
+
+    def test_a_graticule_added_after_data_sits_beneath_it_in_the_tree(self):
+        """The tree lists layers bottom first, so a graticule drawn under earlier data comes first in it too.
+
+        Test scenario:
+            `graticule` joins the reference band beneath the data, but was appended to the tree, so the tree read
+            `('data-1', 'Graticule')` while the map drew `['Graticule', 'data-1']`. A renderer trusting the tree's
+            order — its documented meaning — would draw the graticule over the data.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().text(4.9, 52.4, "A", name="data-1").graticule()
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+        assert _drawn(m) == ["Graticule", "data-1"], _drawn(m)
+
+    def test_a_graticule_re_added_after_removing_one_still_sits_beneath_the_data(self):
+        """Removing a graticule gives its place in the reference band back, so the next one lands under the data.
+
+        Test scenario:
+            `remove_layer` took the graticule off the list but left the reference-band count at one, so the next
+            `add_reference` inserted one slot too high — above the data it should sit under — and the tree, which
+            follows the band, would have agreed with the wrong order.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().text(4.9, 52.4, "A", name="data-1").graticule()
+        m.remove_layer("Graticule").graticule()
+        (graticule,) = [layer for layer in m.layer_ids if layer != "data-1"]
+        assert _drawn(m) == [graticule, "data-1"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
 
     @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
     def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
