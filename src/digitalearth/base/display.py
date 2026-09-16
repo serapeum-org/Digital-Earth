@@ -1,8 +1,8 @@
 """Getting data into the display CRS, and choosing its colours — once, rather than once per tier.
 
 Three helpers were defined on each tier's own base class. The roadmap described them as *"byte-identical in
-two tiers"*; measured by parsing each definition and comparing the AST with docstrings stripped, only one of
-the three actually was:
+two tiers"*; measured at ``b9e067e4`` (the ``main`` this module replaced them on) by parsing each definition
+and comparing the AST with docstrings stripped, only one of the three actually was:
 
 | Helper | Definitions | Distinct bodies |
 |---|---|---|
