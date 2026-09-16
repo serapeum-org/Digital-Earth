@@ -24,7 +24,12 @@ from dataclasses import dataclass, replace
 from numbers import Integral
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
-from digitalearth.base.spec._serial import as_list, refuse_unknown, to_json_value
+from digitalearth.base.spec._serial import (
+    as_list,
+    frozen_value,
+    refuse_unknown,
+    to_json_value,
+)
 
 __all__ = ["DEFAULT_BAND", "Selection"]
 
@@ -111,6 +116,10 @@ class Selection:
         # A caller reaching the constructor directly can pass a list; stored as given it would leave the
         # selection unhashable, so coerce before the guards read it.
         object.__setattr__(self, "band", tuple(self.band))
+        # The free-form axes are stored canonically — lists as tuples — so a selection hashes whichever spelling it
+        # was given and round-trips equal through JSON, which has no tuple.
+        for axis in ("time", "level", "member"):
+            object.__setattr__(self, axis, frozen_value(getattr(self, axis)))
         if not self.band:
             raise ValueError("Selection needs at least one band")
         bands: List[int] = []

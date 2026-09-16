@@ -26,6 +26,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.spec._serial import (
     as_list,
+    frozen_value,
     refuse_unknown,
     require,
     to_json_value,
@@ -168,6 +169,9 @@ class Encoding:
             raise ValueError(
                 f"{self.channel!r} is not a visual channel; declared channels are {sorted(CHANNELS)}"
             )
+        # A constant is stored canonically — lists as tuples — so an encoding round-trips equal through JSON,
+        # which has no tuple, and hashes whichever spelling the caller used.
+        object.__setattr__(self, "value", frozen_value(self.value))
         if (self.value is None) == (self.field is None):
             raise ValueError(
                 f"an Encoding for {self.channel!r} needs exactly one of value= (a constant) or field= "

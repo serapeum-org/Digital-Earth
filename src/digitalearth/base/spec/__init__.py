@@ -4,11 +4,11 @@ These are **value objects**: frozen, comparable, renderer-free. They say *what* 
 rectangle, which slice, which colour rule — and never *how* a backend draws it. Nothing here may import
 matplotlib, pyvista, holoviews or maplibre; :mod:`tests.test_base_is_engine_neutral` enforces that.
 
-"Frozen" covers the structure, not everything a caller puts in it. Every sequence field is copied to a
-tuple and every mapping to a read-only view, so a type cannot be re-shaped from outside — but a field
-holding an arbitrary value (`Selection.time`, `Encoding.value`, a `Symbology` property) keeps whatever
-object it was given. So these hash when their contents do: `Selection.of(1, time="2024-01")` hashes and
-`Selection.of(1, time=[1, 2])` does not.
+"Frozen" covers the structure, and the sequences inside it. Every sequence field is copied to a tuple and
+every mapping to a read-only view, and the free-form values (`Selection.time`, `Encoding.value`, a `Symbology`
+property, a `Scale` category) store their lists as tuples, however nested. So `Selection.of(1, time=[1, 2])` and
+`Selection.of(1, time=(1, 2))` are one value that hashes, and a round trip through JSON — which has no tuple —
+reads back equal. A dict or a numpy array held as such a value is kept as given, and does not hash.
 
 The point of a shared vocabulary is that a value crosses a tier boundary without a convention having to travel
 beside it in a docstring. A bare ``[float, float, float, float]`` cannot say whether it is

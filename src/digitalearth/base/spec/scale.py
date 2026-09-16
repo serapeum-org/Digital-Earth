@@ -36,6 +36,7 @@ from digitalearth.base.registry import get_classifier
 from digitalearth.base.spec._serial import (
     as_list,
     finite_number,
+    frozen_value,
     refuse_unknown,
     require,
     to_json_value,
@@ -132,7 +133,11 @@ class Scale:
         # tiers, so a caller's list really does arrive here; stored as given it would leave the scale
         # unhashable and editable from outside, which is not what "frozen value object" promises.
         object.__setattr__(self, "breaks", tuple(self.breaks))
-        object.__setattr__(self, "categories", tuple(self.categories))
+        object.__setattr__(
+            self,
+            "categories",
+            tuple(frozen_value(category) for category in self.categories),
+        )
         object.__setattr__(self, "_colors", tuple(self._colors))
         if isinstance(self.scheme, set):
             # Class edges are ordered data and a set has no order, so tuple(set) would pick one by hash.
@@ -570,6 +575,7 @@ class Scale:
 
                 ```
         """
+        category = frozen_value(category)
         for index, known in enumerate(self.categories):
             # `in`/`.index` compare with ==, which makes True equal to 1 and leaves a NaN category
             # unreachable. Categories are labels, so `False` and `0` are different labels even though they

@@ -30,7 +30,12 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-from digitalearth.base.spec._serial import as_mapping, refuse_unknown, to_json_value
+from digitalearth.base.spec._serial import (
+    as_mapping,
+    frozen_value,
+    refuse_unknown,
+    to_json_value,
+)
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
 __all__ = ["StyleKey", "StyleSchema", "Symbology"]
@@ -129,9 +134,11 @@ class Symbology:
         The dataclass is frozen, but a plain ``dict`` field is not — a caller holding the dict it passed in
         could still re-key the symbology afterwards. Replacing both with read-only views closes that.
 
-        Only the mapping is frozen, not the values in it: a caller who puts a list of contour levels in
-        `props` keeps a reference to that list and can still change what it holds. Deep-freezing arbitrary
-        style values is not realistic, so this is stated rather than claimed away.
+        Property values are stored in their canonical form: every list and tuple in them, however nested,
+        becomes a tuple (see :func:`~digitalearth.base.spec._serial.frozen_value`). That copies a caller's list —
+        appending to it afterwards no longer changes the symbology — and it is what lets a symbology written with
+        `to_dict`, where tuples become JSON lists, read back equal and hashable. Other mutable values (a numpy
+        array, a custom object) are still held as given.
 
         Raises:
             ValueError: if a key does not match its encoding's channel.
@@ -143,7 +150,13 @@ class Symbology:
                     "a Symbology stores each encoding under the channel it drives"
                 )
         object.__setattr__(self, "encodings", MappingProxyType(dict(self.encodings)))
-        object.__setattr__(self, "props", MappingProxyType(dict(self.props)))
+        object.__setattr__(
+            self,
+            "props",
+            MappingProxyType(
+                {key: frozen_value(value) for key, value in dict(self.props).items()}
+            ),
+        )
 
     def __hash__(self) -> int:
         """Hash by the channels driven and the properties set, so a style can key a cache.
@@ -154,11 +167,9 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if any value in it is itself unhashable. That is a property — a list of contour
-                levels, say — or equally a constant on an encoding: ``Symbology.of(color=[1, 0, 0])`` is an
-                ordinary RGB spelling and fails the same way. Only the mappings are frozen, not what a
-                caller put in them, so an unhashable style is a real possibility rather than something to
-                paper over.
+            TypeError: if any value in it is itself unhashable — a dict or a numpy array held as a property,
+                say. A list is not among them: lists are stored as tuples, so ``Symbology.of(color=[1, 0, 0])``
+                hashes.
         """
         return hash(
             (

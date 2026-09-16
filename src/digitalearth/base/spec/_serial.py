@@ -18,6 +18,7 @@ from typing import Any, Dict, Iterable, Mapping, Tuple
 import numpy as np
 
 __all__ = [
+    "frozen_value",
     "as_list",
     "as_mapping",
     "crs_to_json",
@@ -278,6 +279,38 @@ def _finite(value: Any, where: str) -> Any:
         raise TypeError(
             f"{where} is {value!r}, which has no JSON form; strict JSON readers refuse NaN and Infinity"
         )
+    return value
+
+
+def frozen_value(value: Any) -> Any:
+    """Return `value` with every list and tuple in it, however nested, as a tuple.
+
+    Args:
+        value: A free-form value a spec holds — a `Symbology` property, an `Encoding` constant, a `Selection` axis,
+            a `Scale` category.
+
+    Returns:
+        The value with sequences as tuples and the values inside a dict frozen the same way (the dict itself is a
+        fresh dict). Anything else — a scalar, a string, a numpy array — is returned as it is.
+
+        This is the canonical form the constructors store. JSON has no tuple, so a tuple written by `to_dict`
+        reads back as a list; storing both spellings as a tuple is what makes ``from_dict(to_dict(x)) == x`` and
+        keeps `x` hashable after the round trip. It also means a caller's list is copied, so appending to it later
+        no longer changes the spec that was built from it.
+
+    Examples:
+        - Lists become tuples, inside dicts too:
+            ```python
+            >>> from digitalearth.base.spec._serial import frozen_value
+            >>> frozen_value([1, [2, 3]]), frozen_value({"levels": [1, 2]})
+            ((1, (2, 3)), {'levels': (1, 2)})
+
+            ```
+    """
+    if isinstance(value, (list, tuple)):
+        return tuple(frozen_value(item) for item in value)
+    if isinstance(value, dict):
+        return {key: frozen_value(item) for key, item in value.items()}
     return value
 
 

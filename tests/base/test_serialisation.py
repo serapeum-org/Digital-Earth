@@ -77,6 +77,62 @@ class TestEachTypeRoundTrips:
             f"{type(value).__name__} changed in a round trip: {value!r} -> {rebuilt!r}"
         )
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            Symbology.of(color=(1, 0, 0)),
+            Symbology().with_props(levels=(1, 2, 3)),
+            Selection.of(1, time=("2020", "2021")),
+            Scale.categorical([(1, 2), (3, 4)], ["#f00", "#00f"]),
+            Encoding.constant("color", (0.2, 0.4, 0.6)),
+        ],
+        ids=[
+            "tuple-constant",
+            "tuple-props",
+            "tuple-time",
+            "tuple-categories",
+            "tuple-encoding",
+        ],
+    )
+    def test_a_tuple_value_round_trips_equal_and_stays_hashable(self, value):
+        """A tuple written as a JSON list reads back as the same value, which still hashes.
+
+        Args:
+            value: A spec value holding tuples in a free-form field.
+
+        Test scenario:
+            JSON has no tuple, so `to_dict` writes a list and `from_dict` read the list back as a list: the rebuilt
+            value compared unequal to the one written, and a `Symbology` or `Selection` that had hashed raised
+            `unhashable type: 'list'`. A reconciling renderer would read that as a change that never happened.
+        """
+        rebuilt = _through_json(value)
+        assert rebuilt == value, (
+            f"{type(value).__name__} changed in a round trip: {value!r} -> {rebuilt!r}"
+        )
+        assert hash(rebuilt) == hash(value), (
+            "the rebuilt value must hash as the original did"
+        )
+
+    def test_a_dict_property_with_nested_tuples_round_trips_equal(self):
+        """Sequences inside a dict property are canonical too, so it reads back equal; a dict does not hash."""
+        value = Symbology().with_props(
+            legend={"stops": (0.0, 1.0), "labels": ["lo", "hi"]}
+        )
+        rebuilt = _through_json(value)
+        assert rebuilt == value, f"{rebuilt.props!r} != {value.props!r}"
+
+    def test_a_list_and_a_tuple_spelling_are_one_value(self):
+        """`[1, 0, 0]` and `(1, 0, 0)` build the same symbology, so either spelling hashes and compares equal."""
+        assert Symbology.of(color=[1, 0, 0]) == Symbology.of(color=(1, 0, 0))
+        assert hash(Symbology.of(color=[1, 0, 0])) == hash(
+            Symbology.of(color=(1, 0, 0))
+        )
+
+    def test_a_categorical_scale_looks_up_a_list_spelled_category(self):
+        """A category stored from a list still matches a query spelled as a list."""
+        scale = Scale.categorical([[1, 2], [3, 4]], ["#f00", "#00f"])
+        assert scale.color_for([3, 4]) == "#00f", scale.categories
+
     def test_a_classified_scale_reads_back_without_classifying_again(self, monkeypatch):
         """Stored breaks are the breaks; no classifier is consulted on read.
 
