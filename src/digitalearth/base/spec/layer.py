@@ -20,9 +20,21 @@ Two decisions this module settles:
 """
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
-from typing import Any, Dict, FrozenSet, Iterator, List, Mapping, Optional, Tuple, cast
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    cast,
+)
 
 from digitalearth.base.spec._serial import as_list, refuse_unknown, require
 from digitalearth.base.spec.selection import Selection
@@ -381,8 +393,12 @@ class LayerTree:
                 raise ValueError(
                     f"LayerTree holds LayerSpec values; got {type(layer).__name__}"
                 )
+        # Every check below is linear in the layer count. This runs on every add, move and replace — the web tier
+        # calls it once per builder — so a quadratic check here made building a map cubic.
         ids = [layer.id for layer in self.layers]
-        duplicated = sorted({layer_id for layer_id in ids if ids.count(layer_id) > 1})
+        duplicated = sorted(
+            layer_id for layer_id, count in Counter(ids).items() if count > 1
+        )
         if duplicated:
             raise ValueError(
                 f"LayerTree ids must be unique; {duplicated} appear more than once"
@@ -394,17 +410,22 @@ class LayerTree:
                     f"layer {layer.id!r} takes its elevation from layer {layer.z_layer!r}, which is not in the tree; "
                     f"layers are {ids}"
                 )
+        # A layer whose chain of drapes is already known to end on a surface is not walked again.
+        grounded: Set[str] = set()
         for layer in self.layers:
-            seen = [layer.id]
+            chain = [layer.id]
+            on_chain = {layer.id}
             target = layer.z_layer
-            while target is not None:
-                if target in seen:
+            while target is not None and target not in grounded:
+                if target in on_chain:
                     raise ValueError(
-                        f"z_source references loop: {' -> '.join(seen + [target])}. A draped layer must end on a "
+                        f"z_source references loop: {' -> '.join(chain + [target])}. A draped layer must end on a "
                         "surface that takes its elevation from a source, not from another layer in the loop"
                     )
-                seen.append(target)
+                chain.append(target)
+                on_chain.add(target)
                 target = by_id[target].z_layer
+            grounded.update(chain)
         unknown_groups = sorted(self.hidden_groups - set(self.groups))
         if unknown_groups:
             raise ValueError(
@@ -580,7 +601,7 @@ class LayerTree:
 
                 ```
         """
-        if layer.id in self.ids:
+        if any(existing.id == layer.id for existing in self.layers):
             raise ValueError(
                 f"a layer with id {layer.id!r} is already in the tree; layer ids must be unique"
             )

@@ -409,6 +409,30 @@ class TestLayerTreeChanges:
             tree.set_visible("a", "no")
 
 
+class TestScaling:
+    """A tree is changed once per layer a map adds, so validating it must not be quadratic per change."""
+
+    def test_two_thousand_adds_stay_well_under_a_generous_bound(self):
+        """Building a 2,000-layer tree takes seconds at most, not half a minute.
+
+        Test scenario:
+            Validation counted each id with `ids.count` inside a loop over the ids — quadratic per change, so a tree
+            built one `add` at a time, which is how the web tier builds its index, was cubic overall: 2,000 adds took
+            32 s. With linear checks it is about 1.4 s on the machine that measured both. The bound is set far above
+            that so a slow CI runner does not flake, and far below the old time so the regression cannot come back
+            unnoticed.
+        """
+        import time
+
+        tree = LayerTree()
+        start = time.perf_counter()
+        for index in range(2000):
+            tree = tree.add(LayerSpec(f"layer-{index}", "points"))
+        elapsed = time.perf_counter() - start
+        assert len(tree) == 2000, len(tree)
+        assert elapsed < 10.0, f"2,000 adds took {elapsed:.1f} s"
+
+
 class TestGroupVisibility:
     """A group hides its layers without forgetting their own visibility."""
 
