@@ -290,6 +290,41 @@ class TestTheRegistryIsAddressable:
         m = WebMap().points(points)
         assert m._layer_tree.is_visible(m.layer_ids[0]), m._layer_tree
 
+    @pytest.mark.parametrize(
+        "method, fixture, visible, drawn",
+        [
+            ("points", "points", 0, False),
+            ("points", "points", 1, True),
+            ("add_raster", "raster", None, False),
+            ("graticule", None, 0, False),
+        ],
+        ids=["points-0", "points-1", "raster-none", "graticule-0"],
+    )
+    def test_a_non_boolean_visible_builds_and_is_recorded_as_drawn(
+        self, request, method, fixture, visible, drawn
+    ):
+        """A builder given `visible=0`, `1` or `None` builds as it always did, and the tree records what it drew.
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data, or ``None`` for a builder that takes none.
+            visible: A non-boolean `visible=` value.
+            drawn: Whether the builder draws the layer visible for that value — its truthiness.
+
+        Test scenario:
+            The builders decide the MapLibre layout by the value's truthiness, so `visible=0` built a hidden layer
+            on `main`. Passing the value on to `LayerSpec`, which accepts only a real boolean, turned each of these
+            working calls into "ValueError: LayerSpec visible must be True or False", naming a type the caller never
+            used.
+        """
+        from digitalearth.web import WebMap
+
+        inputs = () if fixture is None else (request.getfixturevalue(fixture),)
+        m = getattr(WebMap().basemap(), method)(*inputs, visible=visible)
+        recorded = [m._layer_tree.get(layer).visible for layer in m.layer_ids]
+        assert recorded == [drawn], recorded
+
     def test_only_the_first_timeslider_frame_is_recorded_visible(self, raster_stack):
         """A raster timeslider builds its first frame visible and the rest hidden, and the tree records that.
 

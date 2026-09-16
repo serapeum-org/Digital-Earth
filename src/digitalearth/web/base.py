@@ -818,17 +818,17 @@ class WebMapBase:
             kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
                 the tree describes the layer rather than only naming it.
             visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
-                tree says what the MapLibre layout says; the builders without one always build visible.
+                tree says what the MapLibre layout says; the builders without one always build visible. It is
+                recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
+                and records one.
             reference: Whether the layer is about to join the reference band through :meth:`add_reference`. It
                 then joins the tree at the top of that band — beneath every data layer — rather than on top, so
                 the tree's order stays the order the map draws in. Call this before `add_reference`.
 
         Raises:
-            ValueError: when `LayerSpec` refuses the id (an empty string), the kind or `visible` (anything but a
-                Python or numpy boolean), or when the id is already in the tree. A builder reaches the `visible`
-                refusal when its caller passes a non-boolean `visible=`, such as `0`. It reaches none of the others:
-                its `name=` becomes the id as given, surrounding whitespace included, and `_layer_id` generates an id
-                for an empty name and suffixes a repeated one.
+            ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
+                the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
+                whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
         index = None
         if reference:
@@ -836,7 +836,9 @@ class WebMapBase:
             banded = {getattr(layer, "_digitalearth_layer_id", None) for layer in band}
             index = sum(1 for existing in self._layer_tree.ids if existing in banded)
         self._layer_tree = self._layer_tree.add(
-            LayerSpec(layer_id, kind, label=label or layer_id, visible=visible),
+            # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
+            # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
+            LayerSpec(layer_id, kind, label=label or layer_id, visible=bool(visible)),
             index=index,
         )
 
