@@ -220,7 +220,9 @@ def to_json_value(value: Any, where: str) -> Any:
     """
     if value is None or isinstance(value, (bool, str)):
         return value
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float)) and not isinstance(value, np.generic):
+        # `np.float64` subclasses `float`, so without the second test it came back as numpy, not as the Python float
+        # the dict promises — `json` copes, but YAML, TOML and msgpack writers do not.
         return _finite(value, where)
     if isinstance(value, (np.datetime64, np.timedelta64)) or (
         isinstance(value, np.ndarray) and value.dtype.kind in "Mm"

@@ -433,6 +433,34 @@ class TestTheSharedRules:
         assert written == {"n": 3, "x": 0.5, "a": [1, 2]}, written
         assert type(written["n"]) is int, type(written["n"])
 
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            (np.float64(0.5), 0.5),
+            (np.float32(0.5), 0.5),
+            (np.int64(3), 3),
+            (np.bool_(True), True),
+        ],
+        ids=["float64", "float32", "int64", "bool_"],
+    )
+    def test_every_numpy_scalar_is_written_as_the_python_type(self, value, expected):
+        """`np.float64` is written as a Python `float`, like every other numpy scalar.
+
+        Args:
+            value: The numpy scalar.
+            expected: The Python value it must become.
+
+        Test scenario:
+            `np.float64` subclasses `float`, so it took the plain-number branch and came back as numpy — contrary to
+            the docstring, and unreadable by a YAML safe dumper. The type is asserted, not only the value, because
+            `np.float64(0.5) == 0.5` holds either way.
+        """
+        written = to_json_value(value, "props")
+        assert type(written) is type(expected), (
+            f"got {type(written).__name__} for {type(value).__name__}"
+        )
+        assert written == expected, written
+
     def test_a_tuple_is_written_as_a_list(self):
         """JSON has no tuple; writing one as a list is what `json.dumps` would do anyway, stated here."""
         assert to_json_value((1, (2, 3)), "value") == [1, [2, 3]]
