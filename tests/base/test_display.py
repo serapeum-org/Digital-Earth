@@ -132,6 +132,23 @@ class TestAutoCmap:
         assert auto_cmap(None, "magma", lookup=consulted.append) == "magma"
         assert consulted == [], "the lookup must not run when there is nothing to resolve"
 
+    def test_a_supplied_lookup_replaces_auto_style_and_an_empty_answer_reaches_the_fallback(self, monkeypatch):
+        """With `lookup=` given, `auto_style` is never asked, and a lookup naming no colormap still falls back.
+
+        Test scenario:
+            The returned colormap alone cannot show that `auto_style` did not also run. Making it fail proves
+            the tier's lookup is the only one consulted, and a lookup answering `{}` is handled exactly as an
+            empty `auto_style` answer would be — by the `fallback` the caller passed.
+        """
+        import digitalearth.base.autostyle as autostyle
+
+        monkeypatch.setattr(
+            autostyle, "auto_style", lambda _: pytest.fail("auto_style must not run when a lookup is supplied")
+        )
+        assert auto_cmap(self._source("t2m"), None, "cividis", lookup=lambda _: {}) == "cividis", (
+            "an empty answer from the supplied lookup must fall back to the caller's fallback"
+        )
+
     def test_a_style_entry_carrying_an_explicit_none_still_yields_a_colormap(
         self, monkeypatch
     ):

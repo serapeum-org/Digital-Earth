@@ -6,6 +6,7 @@ large to hold (#206). These cover the address the view now carries, and the requ
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -61,6 +62,25 @@ def _raster_parts(ref: DataRef) -> tuple:
 def _axis(name: str = "x") -> DimensionInfo:
     """Return a one-value axis, for views whose coordinates are not what is under test."""
     return DimensionInfo(np.array([0.0]), name)
+
+
+class _WindowedReader:
+    """A windowable stand-in that declares no CRS and, unless given one, no geotransform.
+
+    A `Dataset` on disk always has both, so the arms of `_windowed` that handle their absence cannot be reached
+    through a real raster. Each `read_part` call is recorded, so a test can see the window actually asked for.
+    """
+
+    def __init__(self, geotransform=None):
+        self.calls = []
+        self.bbox = (0.0, 0.0, 8.0, 8.0)
+        if geotransform is not None:
+            self.geotransform = geotransform
+
+    def read_part(self, bbox, *, dst_width, dst_height, bbox_crs, band):
+        """Record the window and CRS asked for, and return a zero array of the requested shape."""
+        self.calls.append({"bbox": list(bbox), "bbox_crs": bbox_crs, "band": band})
+        return np.zeros((dst_height, dst_width))
 
 
 class TestTheRequest:
@@ -518,6 +538,40 @@ class TestWhatTheViewRefuses:
             16,
         ), f"only the budget may change, got {folded}"
 
+    @pytest.mark.parametrize(
+        "request_budget, selection_budget",
+        [(None, None), (100, None), (100, 100), (50, 100)],
+        ids=["neither", "request_only", "equal", "request_tighter"],
+    )
+    def test_a_request_the_selection_budget_cannot_tighten_comes_back_untouched(
+        self, request_budget, selection_budget
+    ):
+        """No selection budget, or one no tighter than the request's, returns the very request that was passed.
+
+        Args:
+            request_budget: The budget named on the request.
+            selection_budget: The budget named on the selection.
+
+        Test scenario:
+            Only a strictly tighter selection budget rebuilds the request. Equal budgets are the boundary: a `<`
+            in place of `<=` would rebuild an identical request, which an equality check cannot see and an
+            identity check can.
+        """
+        request = ViewRequest(budget=request_budget)
+        assert SourceView._budgeted(request, selection_budget) is request, (
+            f"a request budget of {request_budget} must not be rebuilt for a selection budget of "
+            f"{selection_budget}"
+        )
+
+    def test_no_request_and_no_selection_budget_leaves_the_read_unbounded(self):
+        """With neither a request nor a selection budget there is nothing to fold, so no request is invented.
+
+        Test scenario:
+            A request is only built from the selection when it names a budget; inventing an empty one here
+            would make every unwindowed view claim to have answered a request nobody made.
+        """
+        assert SourceView._budgeted(None, None) is None, "no request must stay no request"
+
     def test_a_composite_selection_is_refused(self):
         """A view holds one band, so a three-band selection says so.
 
@@ -658,6 +712,41 @@ class TestTheRequestedShape:
         """
         assert SourceView._shape(ViewRequest()) == (64, 64)
 
+    @pytest.mark.parametrize("width, height", [(800, None), (None, 600)])
+    def test_a_canvas_missing_one_dimension_is_sized_by_the_budget_alone(self, width, height):
+        """One named dimension is not a canvas, so the read is the square the budget affords.
+
+        Args:
+            width: The canvas width, or ``None``.
+            height: The canvas height, or ``None``.
+
+        Test scenario:
+            The aspect-ratio arm needs both `width` and `height`; with either missing there is no ratio to keep,
+            so a budget of 100 reads 10x10 rather than a strip sized from the one dimension given.
+        """
+        shape = SourceView._shape(ViewRequest(width=width, height=height, budget=100))
+        assert shape == (10, 10), f"{width}x{height} under a budget of 100 must read 10x10, got {shape}"
+
+    @pytest.mark.parametrize(
+        "width, height, expected",
+        [(10_000, 1, (100, 1)), (5_000, 2, (100, 1)), (1, 10_000, (1, 100))],
+    )
+    def test_an_elongated_canvas_spends_the_whole_budget_on_its_long_axis(self, width, height, expected):
+        """When the short axis scales to nothing, the long axis gets every cell the budget allows.
+
+        Args:
+            width: The canvas width in cells.
+            height: The canvas height in cells.
+            expected: The ``(width, height)`` the budget of 100 should buy.
+
+        Test scenario:
+            The budget tests above assert only that the product fits, which `(1, 1)` would satisfy too. The
+            documented answer for a canvas this elongated is the most detail the limit can buy: the long axis
+            capped at the budget and the short axis at one, in whichever orientation the canvas has.
+        """
+        fitted = SourceView._fitted(width, height, 100)
+        assert fitted == expected, f"{width}x{height} under a budget of 100 must fit as {expected}, got {fitted}"
+
 
 class TestWindowingWhatCannotBeWindowed:
     """The arms of `_windowed` that decline rather than read."""
@@ -791,3 +880,150 @@ class TestTheRemainingWindowArms:
         assert again.x.values[0] > 1000, (
             "and hold projected coordinates, not the degrees the request was written in"
         )
+
+    def test_a_window_with_no_crs_is_read_in_the_rasters_own_coordinates(self, labelled_rasters):
+        """A region naming no CRS is not converted, and its cells are still labelled where they sit.
+
+        Test scenario:
+            Conversion needs a CRS to convert from, so it runs only when the request names one; pyramids reads
+            `bbox_crs=None` as "already in the raster's coordinates". The view falls back to the CRS `reread`
+            passes through, and the labelled raster (`value == column + 10 * row`) shows the window was still
+            snapped and labelled correctly: the top-left cell of the 1..5 window is stored row 3, column 1.
+        """
+        ref = DataRef(str(labelled_rasters["north_up"]))
+        view = SourceView.of(ref.open(), ref=ref)
+        again = view.reread(ViewRequest(bounds=Bounds(1.5, 1.5, 4.5, 4.5, crs=None), width=4, height=4))
+        assert again.crs == 3857, f"the view must report the raster's own CRS, got {again.crs}"
+        assert again.x.values.tolist() == [1.5, 2.5, 3.5, 4.5], f"got x={again.x.values}"
+        assert again.z.values[0][0] == 31.0, f"the top-left cell must be stored row 3, column 1, got {again.z.values}"
+
+    def test_a_reader_declaring_no_crs_keeps_the_window_in_the_requested_one(self):
+        """With no CRS to convert into, the bbox reaches `read_part` as written and the view reports its CRS.
+
+        Test scenario:
+            The conversion needs both ends. A windowable object with neither `epsg` nor `crs` gives no target,
+            so converting would guess; instead the window stays in the CRS the request named, the only one its
+            numbers are known to be in. The window is pixel-aligned, so snapping plays no part in the bbox.
+        """
+        reader = _WindowedReader(geotransform=(0.0, 1.0, 0.0, 8.0, 0.0, -1.0))
+        view = SourceView.of(
+            reader,
+            request=ViewRequest(bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=4, height=4),
+        )
+        assert reader.calls == [{"bbox": [1.0, 2.0, 5.0, 6.0], "bbox_crs": 4326, "band": 0}], (
+            f"the window must be read unconverted, got {reader.calls}"
+        )
+        assert view.crs == 4326, f"and the view must report the request's CRS, got {view.crs}"
+
+    def test_a_reader_with_no_geotransform_reads_the_window_exactly_as_asked(self):
+        """With no grid to snap to, the requested rectangle is the one read, labelled north-up and west-left.
+
+        Test scenario:
+            `_aligned` needs a geotransform to find pixel edges, so without one the window is not snapped. `_axes`
+            then has no step signs to consult and assumes the convention every raster pyramids writes uses: x
+            ascending, y descending, each at the centre of its cell.
+        """
+        reader = _WindowedReader()
+        view = SourceView.of(
+            reader,
+            request=ViewRequest(bounds=Bounds(0.25, 0.5, 4.25, 2.5, crs=3857), width=4, height=2),
+        )
+        assert reader.calls[0]["bbox"] == [0.25, 0.5, 4.25, 2.5], (
+            f"an ungridded window must not be snapped, got {reader.calls[0]['bbox']}"
+        )
+        assert view.x.values.tolist() == [0.75, 1.75, 2.75, 3.75], f"x must ascend, got {view.x.values}"
+        assert view.y.values.tolist() == [2.0, 1.0], f"y must descend, got {view.y.values}"
+
+    @pytest.mark.parametrize(
+        "geotransform",
+        [
+            None,
+            (),
+            (0.0, 1.0, 0.0, 8.0, 0.0),
+            (0.0, 0.0, 0.0, 8.0, 0.0, -1.0),
+            (0.0, 1.0, 0.0, 8.0, 0.0, 0.0),
+        ],
+        ids=["none", "empty", "short", "zero_x_step", "zero_y_step"],
+    )
+    def test_a_geotransform_that_cannot_place_a_cell_is_no_grid(self, geotransform):
+        """A missing, short or zero-step geotransform reads as no grid, and the window is left as it came.
+
+        Args:
+            geotransform: The unusable geotransform under test.
+
+        Test scenario:
+            Fewer than six entries has no step to read, and a zero step would divide by zero in `_snapped`.
+            Aligning against either would crash or snap to nonsense, so both answer as a reader exposing no
+            geotransform at all does.
+        """
+        data = SimpleNamespace(geotransform=geotransform)
+        window = Bounds(0.25, 0.5, 4.25, 2.5, crs=3857)
+        assert SourceView._grid(data) is None, f"{geotransform!r} must not read as a grid"
+        assert SourceView._aligned(window, data) is window, "and the window must come back unchanged"
+
+    def test_a_usable_geotransform_is_read_as_floats_without_its_rotation_terms(self):
+        """`_grid` keeps each axis's origin and step, as floats, and drops the two rotation terms.
+
+        Test scenario:
+            An axis-aligned window cannot describe a rotated raster, so the rotation entries take no part in
+            the grid a window snaps to; integer entries come back as floats for the pixel arithmetic.
+        """
+        grid = SourceView._grid(SimpleNamespace(geotransform=[10, 2, 7, 20, 9, -2]))
+        assert grid == (10.0, 2.0, 20.0, -2.0), f"expected origin and step per axis, got {grid}"
+        assert all(isinstance(entry, float) for entry in grid), f"every entry must be a float, got {grid}"
+
+    @pytest.mark.parametrize(
+        "low, high, origin, step, expected",
+        [
+            (1.3, 4.6, 0.0, 1.0, (1.0, 5.0)),
+            (1.3, 4.6, 8.0, -1.0, (1.0, 5.0)),
+            (1.3, 4.4, 0.0, 0.5, (1.0, 4.5)),
+            (1.3, 4.6, 8.0, -2.0, (0.0, 6.0)),
+            (2.0, 5.0, 8.0, -1.0, (2.0, 5.0)),
+        ],
+        ids=["positive_step", "negative_step", "half_step", "wide_negative_step", "already_aligned"],
+    )
+    def test_an_axis_is_snapped_outward_to_the_enclosing_cell_edges(self, low, high, origin, step, expected):
+        """Each edge moves out to the nearest cell edge beyond it, whichever way the axis is stored.
+
+        Args:
+            low: The lower world coordinate of the window.
+            high: The upper world coordinate.
+            origin: The geotransform origin for the axis.
+            step: The geotransform step, which may be negative.
+            expected: The enclosing ``(low, high)`` cell edges.
+
+        Test scenario:
+            A negative step reverses which pixel index belongs to which world edge, so flooring the low world
+            coordinate directly snaps *inward* there and silently crops. The rows cover both signs, steps other
+            than one, and an axis already on the grid, which must come back as it went in.
+        """
+        snapped = SourceView._snapped(low, high, origin, step)
+        assert snapped == pytest.approx(expected), f"({low}, {high}) on step {step} snapped to {snapped}"
+        assert snapped[0] <= low and snapped[1] >= high, f"{snapped} must enclose ({low}, {high})"
+
+    def test_only_an_empty_variable_is_a_placeholder(self):
+        """`variable=""` is filled from the previous read; an empty `kind` or `standard_name` stands.
+
+        Test scenario:
+            The extractor writes `variable=""` for a bare array, which is a placeholder rather than an answer.
+            The exception is named for that one key; widening it to every describing key would bring back the
+            truthiness test that let an old read overwrite values the new one really wrote.
+        """
+        merged = SourceView._carried(
+            {"variable": "t2m", "kind": "raster", "standard_name": "air_temperature"},
+            {"variable": "", "kind": "", "standard_name": ""},
+        )
+        assert merged == {"variable": "t2m", "kind": "", "standard_name": ""}, (
+            f"only the empty variable may be filled in, got {merged}"
+        )
+
+    def test_a_variable_the_new_read_named_is_not_overwritten(self):
+        """Carrying fills gaps; it does not arbitrate between two reads that both answered.
+
+        Test scenario:
+            A describing key the new read supplied belongs to the new read, even where the previous read said
+            something else — and a describing key neither read supplied is not invented.
+        """
+        merged = SourceView._carried({"variable": "t2m"}, {"variable": "precip"})
+        assert merged == {"variable": "precip"}, f"the new read's variable must stand alone, got {merged}"

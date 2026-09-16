@@ -149,6 +149,24 @@ class TestFromFeatures:
         with pytest.raises(ValueError, match="not all points"):
             PointArrays.from_features(gdf, centroids=False)
 
+    @pytest.mark.parametrize("centroids", [True, False])
+    def test_a_frame_with_no_geometry_present_reads_as_all_nan(self, centroids):
+        """A frame whose every geometry is `null` reads as NaN throughout, rather than raising.
+
+        Args:
+            centroids: The fallback setting, which must not matter when nothing is present.
+
+        Test scenario:
+            The boundary of judging only the geometry that is there: with none present the classification runs
+            over an empty series, which is vacuously all points, so neither setting refuses the frame and
+            `finite` is left with nothing to draw.
+        """
+        gdf = gpd.GeoDataFrame(geometry=[None, None], crs="EPSG:3857")
+        points = PointArrays.from_features(gdf, centroids=centroids)
+        assert len(points) == 2, "every row is kept, so the arrays still align with the frame"
+        assert np.isnan(points.x).all() and np.isnan(points.y).all(), f"got x={points.x}, y={points.y}"
+        assert len(points.finite()[0]) == 0, "and no point survives the finite mask"
+
     def test_a_non_point_geometry_is_checked_before_its_coordinates_are_touched(self):
         """The geometry-type check comes first, because reading `.x` on a polygon raises.
 
@@ -284,6 +302,23 @@ class TestFiniteFiltering:
         """
         with pytest.raises(ValueError, match="at most once, and at least one"):
             PointArrays.of([0.0, float("nan")], [1.0, 2.0]).finite(dims=dims)
+
+    @pytest.mark.parametrize("dims, kept_x", [("y", [1.0, 2.0]), ("zx", [0.0, 2.0]), ("zyx", [2.0])])
+    def test_a_single_or_reordered_dims_string_is_accepted(self, dims, kept_x):
+        """Any non-empty, non-repeating choice of axes filters on exactly those axes, in any order.
+
+        Args:
+            dims: The axis string under test.
+            kept_x: The x of the points expected to survive.
+
+        Test scenario:
+            The guard for `""` and repeated letters must refuse only those. One that compared against the two
+            documented spellings, `"xy"` and `"xyz"`, would pass every refusal test and still reject a caller
+            filtering on `y` alone or naming the axes in another order.
+        """
+        points = PointArrays.of([0.0, 1.0, 2.0], [float("nan"), 1.0, 2.0], [2.0, float("nan"), 2.0])
+        kept, _ = points.finite(dims=dims)
+        assert kept.x.tolist() == kept_x, f"dims={dims!r} must keep x={kept_x}, got {kept.x.tolist()}"
 
     def test_two_equal_readings_compare_equal(self):
         """Comparison works at all, which it did not before round 1.

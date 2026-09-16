@@ -5,6 +5,7 @@ module. Nothing structurally tied a swatch to the colour actually drawn, which i
 named. These cover the type that makes the agreement a construction rather than a maintenance task.
 """
 
+import numpy as np
 import pytest
 
 from digitalearth.base.spec import LegendEntry, LegendSpec, Scale
@@ -210,6 +211,37 @@ class TestFromAContinuousScale:
             LegendSpec.from_scale(
                 Scale.from_limits(0.0, 1.0), colors=["#a"], values=[0.5]
             )
+
+    def test_a_stop_count_beside_handed_over_stops_is_ignored_not_refused(self):
+        """`stops=1` next to three handed-over stops describes a valid three-stop ramp.
+
+        Test scenario:
+            `stops` is documented as ignored when `values` is given, so the two-stop guard has to count the
+            values. Counting `stops` would refuse a perfectly good ramp over a number it never uses.
+        """
+        legend = LegendSpec.from_scale(
+            Scale.from_limits(0.0, 1.0), colors=["#a", "#b", "#c"], stops=1, values=[0.0, 0.5, 1.0]
+        )
+        assert [entry.value for entry in legend.entries] == [0.0, 0.5, 1.0], (
+            "the handed-over stops, not the stop count, must decide the rows"
+        )
+
+    def test_handed_over_stops_are_stored_as_plain_floats(self):
+        """Integer numpy stops come back as built-in floats, as recomputed stops always were.
+
+        Test scenario:
+            A caller typically hands over an array. Kept as numpy integers, the row values would reach
+            `to_dict` as scalars `json` cannot serialise, and compare as a different type from a recomputed
+            legend's.
+        """
+        legend = LegendSpec.from_scale(
+            Scale.from_limits(0.0, 10.0), colors=["#a", "#b", "#c"], values=np.array([0, 5, 10])
+        )
+        values = [entry.value for entry in legend.entries]
+        assert all(isinstance(value, float) for value in values), (
+            f"every stop must be a float, got {[type(value).__name__ for value in values]}"
+        )
+        assert values == [0.0, 5.0, 10.0], f"and hold the value it was given, got {values}"
 
     @pytest.mark.parametrize("stops", [0, 1])
     def test_a_ramp_needs_at_least_two_stops(self, stops):
