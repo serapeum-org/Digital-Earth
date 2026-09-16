@@ -5,6 +5,7 @@ These cover the description that replaces that, and the tree that orders it.
 """
 
 import json
+import re
 
 import pytest
 
@@ -479,6 +480,40 @@ class TestLayerTreeChanges:
             match="hidden_groups must be a collection of group names; got the string",
         ):
             LayerTree(layers, hidden_groups="obs")
+
+
+class TestHiddenGroupInputs:
+    """Hidden groups are group names; anything else is refused naming what was found."""
+
+    @pytest.mark.parametrize(
+        "hidden, found",
+        [(["obs", 1, None], "1"), (b"obs", "b'obs'"), ([["obs"]], "['obs']")],
+        ids=["mixed-types", "bytes", "nested-list"],
+    )
+    def test_a_hidden_group_that_is_not_a_name_is_refused_by_name(self, hidden, found):
+        """A number, `None`, bytes or a list among the hidden groups is refused, naming it.
+
+        Args:
+            hidden: What was passed as `hidden_groups`.
+            found: How the message must show the offending value.
+
+        Test scenario:
+            `["obs", 1, None]` raised a bare "'<' not supported between instances of 'int' and 'NoneType'" from the
+            sort in the unknown-group message, `b"obs"` reported "hides groups [98, 111, 115]", and a nested list
+            raised "unhashable type: 'list'".
+        """
+        layers = (LayerSpec("a", "points", group="obs"),)
+        with pytest.raises(ValueError, match=re.escape(found)):
+            LayerTree(layers, hidden_groups=hidden)
+
+    def test_a_stored_nested_hidden_group_is_refused_by_name(self):
+        """`from_dict` hands the stored list to the constructor, so a nested entry gets the same named refusal."""
+        stored = {
+            "layers": [{"id": "a", "kind": "points", "group": "obs"}],
+            "hidden_groups": [["obs"]],
+        }
+        with pytest.raises(ValueError, match="hidden_groups must be group names"):
+            LayerTree.from_dict(stored)
 
 
 class TestScaling:

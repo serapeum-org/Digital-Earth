@@ -427,13 +427,21 @@ class LayerTree:
             ValueError: as described on the class.
         """
         object.__setattr__(self, "layers", tuple(self.layers))
-        if isinstance(self.hidden_groups, str):
+        if isinstance(self.hidden_groups, (str, bytes)):
             # `frozenset("obs")` is the letters of the name, and a one-letter group would be hidden silently.
             raise ValueError(
                 "LayerTree hidden_groups must be a collection of group names; got the string "
                 f"{self.hidden_groups!r}"
             )
-        object.__setattr__(self, "hidden_groups", frozenset(self.hidden_groups))
+        hidden = list(self.hidden_groups)
+        for group in hidden:
+            if not isinstance(group, str):
+                # Checked before the frozenset and the sorted message below, which raised bare TypeErrors for an
+                # unhashable entry or for names of mixed types.
+                raise ValueError(
+                    f"LayerTree hidden_groups must be group names (strings); got {group!r}"
+                )
+        object.__setattr__(self, "hidden_groups", frozenset(hidden))
         for layer in self.layers:
             if not isinstance(layer, LayerSpec):
                 raise ValueError(
@@ -987,7 +995,5 @@ class LayerTree:
                     as_list("LayerTree", "layers", data.get("layers", ()))
                 )
             ),
-            frozenset(
-                as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ()))
-            ),
+            as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ())),
         )
