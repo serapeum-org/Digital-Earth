@@ -52,6 +52,12 @@ def labelled_rasters(tmp_path_factory) -> dict:
     return {name: _write_labelled(directory, name, geo) for name, geo in STORAGE_ORDERS}
 
 
+def _raster_parts(ref: DataRef) -> tuple:
+    """Return the `(z, x, y, crs)` of the example raster, for building a view with chosen metadata."""
+    view = SourceView.of(ref.open(), ref=ref)
+    return view.z, view.x, view.y, view.crs
+
+
 def _axis(name: str = "x") -> DimensionInfo:
     """Return a one-value axis, for views whose coordinates are not what is under test."""
     return DimensionInfo(np.array([0.0]), name)
@@ -651,6 +657,56 @@ class TestTheRemainingWindowArms:
         assert again.units == "mm", (
             "the units must survive a re-read that supplies none"
         )
+
+    def test_a_falsy_value_from_the_new_read_is_not_replaced_by_the_old_one(self):
+        """`member=0` from the new read stands; it is an answer, not an absence.
+
+        Test scenario:
+            The carry-over tested `not fresh.get(key)`, so every falsy value was overwritten by the previous
+            read's. The collection extractor writes a **0-based** `member`, so re-reading member 0 after a
+            read of member 3 would have reported member 3. `False` and `""` from a caller's own metadata
+            meet the same fate.
+        """
+        merged = SourceView._carried(
+            {"member": 3, "variable": "t2m", "flag": True},
+            {"member": 0, "variable": "t2m", "flag": False},
+        )
+        assert merged["member"] == 0, f"the new read's member must stand, got {merged['member']}"
+        assert merged["flag"] is False, "and so must any other falsy value it wrote"
+
+    def test_only_the_keys_that_describe_the_data_are_carried(self):
+        """A key describing the read itself is never filled in from an earlier read.
+
+        Test scenario:
+            The loop copied **every** key the previous read had. Anything a reader attaches about *this*
+            read — the window, the overview it chose — would have been inherited by a read that did not
+            produce it.
+        """
+        merged = SourceView._carried(
+            {"variable": "t2m", "kind": "raster", "standard_name": "air_temperature", "overview": 2},
+            {"variable": "", "kind": "raster"},
+        )
+        assert merged == {
+            "variable": "t2m",
+            "kind": "raster",
+            "standard_name": "air_temperature",
+        }, f"only the describing keys are carried, and the empty variable is filled, got {merged}"
+
+    def test_a_reread_does_not_write_into_the_view_it_just_read(self):
+        """The carry-over builds a new view, so `again` is never mutated through private attributes.
+
+        Test scenario:
+            It assigned `again._meta[key]` and `again._units` directly, although `Source` presents its state
+            as read-only properties. The observable guarantee is that the original view's metadata is not
+            touched either.
+        """
+        ref = DataRef(str(RASTER))
+        view = SourceView(*_raster_parts(ref), {"variable": "rain"}, "mm", ref=ref)
+        before = dict(view._meta)
+        again = view.reread(ViewRequest(budget=64))
+        assert again.metadata("variable") == "rain", "the variable is carried to the new view"
+        assert view._meta == before, "and the view that was re-read is left exactly as it was"
+        assert again is not view, "a re-read is a new view"
 
     def test_a_budget_only_request_against_an_object_with_no_budget_declines(self):
         """Both halves of the guard are needed: a bbox *and* a budget.

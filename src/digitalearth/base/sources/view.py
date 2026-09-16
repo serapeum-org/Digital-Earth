@@ -28,7 +28,12 @@ from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.selection import Selection
 from digitalearth.base.spec.viewrequest import ViewRequest
 
-__all__ = ["SourceView"]
+__all__ = ["DESCRIBING_KEYS", "SourceView"]
+
+#: Metadata keys that describe the data rather than the read, and so survive a re-read of the same slice. A
+#: windowed read comes back as a bare array that names none of them; everything *not* listed here belongs to
+#: the read that produced it and is never filled in from an earlier one.
+DESCRIBING_KEYS = ("variable", "kind", "standard_name")
 
 
 class SourceView(Source):
@@ -229,15 +234,48 @@ class SourceView(Source):
         )
         # A windowed read returns a bare array, which carries no band name — so the variable, units and kind
         # would be lost by re-reading the very same slice at a different resolution. They describe the data,
-        # not the window, so they are carried over where the new read supplied nothing.
-        for key, value in self._meta.items():
-            # `setdefault` is not enough: the extractor writes an *empty* variable name for a bare array, so
-            # the key exists and would keep winning over the real one.
-            if not again._meta.get(key):
-                again._meta[key] = value
-        if again.units is None:
-            again._units = self.units
-        return again
+        # not the window, so they are carried over where the new read supplied nothing. The result is built
+        # as a new view from public properties rather than by writing into `again`'s private state.
+        return SourceView(
+            again.z,
+            again.x,
+            again.y,
+            again.crs,
+            self._carried(self._meta, again._meta),
+            again.units if again.units is not None else self.units,
+            ref=again.ref,
+            selection=again.selection,
+            request=again.request,
+        )
+
+    @staticmethod
+    def _carried(previous: dict, fresh: dict) -> dict:
+        """Return a re-read's metadata, with what describes the data filled in from the previous read.
+
+        Args:
+            previous: The metadata of the view being re-read.
+            fresh: The metadata the new read produced.
+
+        Returns:
+            `fresh`, plus each key in :data:`DESCRIBING_KEYS` that the new read did not supply. Every other
+            key is the new read's alone.
+
+            Two rules replace a truthiness test that over-reached. First, only a **named** set of keys is
+            carried: the ones that say what the data *is*, which a window cannot change. A key describing
+            the read itself is not the old read's to supply. Second, "did not supply" means *absent*, with
+            one named exception — the extractor writes ``variable=""`` for a bare array, which is a
+            placeholder, not an answer. Testing ``not fresh.get(key)`` instead replaced every falsy value,
+            and falsy values carry meaning: the collection extractor writes a **0-based** ``member``, so a
+            re-read of member ``0`` would have reported whatever member the previous read held.
+        """
+        merged = dict(fresh)
+        for key in DESCRIBING_KEYS:
+            if key not in previous:
+                continue
+            placeholder = key == "variable" and merged.get(key) == ""
+            if key not in merged or placeholder:
+                merged[key] = previous[key]
+        return merged
 
     @classmethod
     def of(
