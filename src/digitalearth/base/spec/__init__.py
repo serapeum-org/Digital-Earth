@@ -43,21 +43,33 @@ cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Sy
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding
+from digitalearth.base.spec.legend import (
+    DEFAULT_RAMP_STOPS,
+    LEGEND_KINDS,
+    LegendEntry,
+    LegendSpec,
+)
 from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 from digitalearth.base.spec.selection import DEFAULT_BAND, Selection
 from digitalearth.base.spec.style import StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec.viewrequest import ViewRequest
 
 __all__ = [
     "Bounds",
     "CHANNELS",
     "DEFAULT_BAND",
     "DEFAULT_CLASS_COUNT",
+    "DEFAULT_RAMP_STOPS",
     "Channel",
     "DataRef",
     "Encoding",
+    "LEGEND_KINDS",
+    "LegendEntry",
+    "LegendSpec",
     "Scale",
     "Selection",
     "StyleKey",
     "StyleSchema",
     "Symbology",
+    "ViewRequest",
 ]

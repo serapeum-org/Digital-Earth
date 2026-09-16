@@ -29,7 +29,11 @@ from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD as _SHARED_BIG_DATA_THRESHOLD,
 )
 from digitalearth.base.crs import OffLimbError, reproject
-from digitalearth.base.sources import get_source
+from digitalearth.base.display import (
+    auto_cmap,
+    needs_reproject,
+    to_display_source,
+)
 from digitalearth.base.sources.source import Source
 from digitalearth.base.symbology import sample_cmap
 
@@ -926,10 +930,14 @@ class WebMapBase:
 
         Returns:
             ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+
+        Note:
+            This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
+            and tests call it. :meth:`_to_display_source` calls the shared function **directly**, so overriding
+            this method no longer changes what *that* method reprojects; the tier's other callers still consult
+            it. Nothing in-tree overrides it.
         """
-        return not (
-            isinstance(self.crs, int) and getattr(data, "epsg", None) == self.crs
-        )
+        return needs_reproject(data, self.crs)
 
     def _to_display_source(self, data: Any, *, band: int = 1) -> Source:
         """Reproject ``data`` to the display CRS through pyramids and wrap it as a :class:`Source`.
@@ -948,15 +956,7 @@ class WebMapBase:
         Returns:
             Source: the display-CRS view (``z``/``x``/``y``/``crs``/``metadata``).
         """
-        if isinstance(data, Source):
-            return data
-        if (
-            hasattr(data, "epsg")
-            and hasattr(data, "to_crs")
-            and self._needs_reproject(data)
-        ):
-            data = reproject(data, self.crs)
-        return get_source(data, band=band)
+        return to_display_source(data, self.crs, band=band)
 
     def _to_display_raster(self, dataset: Any) -> Any:
         """Return ``dataset`` in the display CRS, reprojected through pyramids when it is not already.
@@ -1333,7 +1333,11 @@ class WebMapBase:
         Mirrors the interactive tier's ``_auto_cmap`` so a variable looks the same across tiers (the same
         ``digitalearth.base.autostyle`` variable→style lookup, incl. the ECMWF-Magics match); falls back to
         ``"viridis"`` for an unrecognised field — which is also what the autostyle library's ``default``
-        group carries, so the literal here only covers a library that answered with no colormap at all.
+        group carries, so the `DEFAULT_CMAP` fallback in :func:`~digitalearth.base.display.auto_cmap` only
+        covers a lookup that answered with no colormap at all.
+
+        Goes through :meth:`_style_for`, which its docstring names as the tier's single entry into the
+        style table — so this, :meth:`_auto_levels` and :meth:`_auto_units` see one lookup's answer.
 
         Args:
             source: The display-CRS :class:`Source` whose variable drives the lookup.
@@ -1342,9 +1346,7 @@ class WebMapBase:
         Returns:
             The colormap name to use.
         """
-        if cmap is not None:
-            return cmap
-        return self._style_for(source).get("cmap", "viridis")
+        return auto_cmap(source, cmap, lookup=self._style_for)
 
     def _auto_levels(self, source: Any, levels: Optional[Any]) -> Optional[Any]:
         """Resolve contour levels: the caller's ``levels`` if given, else the autostyle ones.

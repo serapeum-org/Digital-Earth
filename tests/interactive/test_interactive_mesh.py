@@ -68,6 +68,29 @@ class TestTrimesh:
         m.trimesh(point_fc, rasterize=False)
         assert isinstance(m.layers[0], gv.TriMesh)
 
+    def test_a_null_geometry_is_dropped_rather_than_raising(self, m):
+        """A frame with one `null` geometry among points still triangulates.
+
+        `main` read `.x` off the series (NaN for a missing geometry) and the finite mask dropped the row.
+        Routing it through `PointArrays.from_features(..., centroids=False)` classified the frame as "not
+        all points" — a null's `geom_type` is NaN — and raised, turning a drawn mesh into an exception on an
+        ordinary GeoJSON feature. This tier is skipped entirely by the `dev` environment, so nothing else
+        here would have caught it.
+        """
+        import geopandas as gpd
+        from shapely.geometry import Point
+
+        gdf = gpd.GeoDataFrame(
+            {"v": [1.0, 2.0, 3.0, 4.0]},
+            geometry=[Point(0, 0), None, Point(2, 2), Point(0, 2)],
+            crs="EPSG:3857",
+        )
+        m.trimesh(gdf, value_column="v", rasterize=False)
+        assert isinstance(m.layers[0], gv.TriMesh), f"got {type(m.layers[0])}"
+        assert len(m.layers[0].nodes) == 3, (
+            "the null row is dropped by the finite mask and the other three are triangulated"
+        )
+
 
 class TestHexbin:
     """``hexbin`` — equal-area hex density binning."""

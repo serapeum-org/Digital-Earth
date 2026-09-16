@@ -120,6 +120,41 @@ class TestColorExpr:
             f"ramp colours must be hex: {colors}"
         )
 
+    @pytest.mark.parametrize(
+        "lo, hi",
+        [
+            (-3.7, 12.9),
+            (3.5, 91.25),
+            (0.1, 0.7),
+            (-1.0, 1.0),
+            (2.2, 7.7),
+            (-273.15, 100.0),
+        ],
+    )
+    def test_the_continuous_legend_holds_the_stops_that_were_drawn(self, lo, hi):
+        """``last_legend["values"]`` is ``last_breaks``, not a recomputation that usually agrees.
+
+        Test scenario:
+            The ramp stops come from `np.linspace`, which pins its final element to `stop` exactly. The
+            legend recomputed them as `lo + (hi - lo) * i / (stops - 1)`, which does not: for
+            `lo=-3.7, hi=12.9` the top swatch read `12.900000000000002` while the MapLibre `interpolate`
+            stop and `last_breaks` both read `12.9`. A legend value that is not a value the layer draws is
+            the exact disagreement `LegendSpec` was introduced to remove.
+
+            Six pairs, because the drift depends on the arithmetic of the particular limits — five of these
+            agree either way, which is how a single hand-picked sample passed while the property did not
+            hold.
+        """
+        m = WebMap()
+        expr = m._color_expr(np.array([lo, hi]), "v", None, 5, "viridis")
+        drawn = [expr[i] for i in range(3, len(expr), 2)]
+        assert m.last_legend["values"] == m.last_breaks, (
+            f"legend {m.last_legend['values']} must be the recorded breaks {m.last_breaks}"
+        )
+        assert m.last_legend["values"] == drawn, (
+            f"and the stops the expression draws {drawn}"
+        )
+
     def test_constant_values_do_not_crash_continuous(self):
         """A constant column widens the range instead of producing a zero-width ramp."""
         expr = WebMap()._color_expr(np.full(5, 3.0), "v", None, 5, "viridis")

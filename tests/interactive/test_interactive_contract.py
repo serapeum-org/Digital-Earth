@@ -82,7 +82,15 @@ def off_limb(monkeypatch):
         """
         raise OffLimbError(f"the data lies outside what {crs!r} can show")
 
-    for module in (interactive_base, interactive_raster, interactive_vector):
+    # base.display is where the warp now happens: DE-17 (#277) lifted _to_display_source out of the tier
+    # base classes, so the tier modules no longer import `reproject` themselves. The two tier modules that
+    # still call it directly are patched as well.
+    from digitalearth.base import display as base_display
+
+    # No hasattr guard: if a later refactor moves the warp again, a silently-skipped patch would leave these
+    # tests passing while simulating nothing. monkeypatch.setattr raises on a missing attribute, which is the
+    # signal we want. base_display is where _to_display_source warps; the other two call reproject directly.
+    for module in (base_display, interactive_raster, interactive_vector):
         monkeypatch.setattr(module, "reproject", _raise)
 
 
@@ -297,6 +305,20 @@ class TestAutoCmap:
         assert m._auto_cmap_for_band(dataset, 9, None) == "viridis", (
             "an unnamed band falls back to the tier's previous literal"
         )
+
+    def test_overriding_the_style_lookup_reaches_the_colormap(self):
+        """``_auto_style`` is the tier's single lookup, so replacing it changes the colormap too.
+
+        Test scenario:
+            ``_auto_cmap`` called the shared ``auto_cmap`` without the tier's lookup, so an override of
+            ``_auto_style`` reached ``_auto_levels`` and ``_auto_clabel`` but not the colormap.
+        """
+
+        class Restyled(InteractiveMap):
+            def _auto_style(self, source):
+                return {"cmap": "restyled"}
+
+        assert Restyled()._auto_cmap(_source("t2m"), None) == "restyled"
 
 
 class TestAutoLevelsAndUnits:

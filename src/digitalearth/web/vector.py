@@ -14,12 +14,12 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, List, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
-from digitalearth.base.spec import Scale
+from digitalearth.base.spec import LegendSpec, Scale
 from digitalearth.web.base import _require_layer_api
 
 
@@ -132,6 +132,31 @@ class VectorMixin(_MixinBase):
         digitalearth.web.base.WebMapBase: the typing-only base declared above the class.
     """
 
+    @staticmethod
+    def _legend_dict(legend: LegendSpec, column: str, values: Any = None) -> dict:
+        """Return the ``last_legend`` shape this tier has always stored, derived from a `LegendSpec`.
+
+        The dict is unchanged — it is public-ish, asserted by tests, and read by the legend control — but it
+        is now *derived* from the spec rather than assembled a fourth time. Replacing the attribute itself is
+        a follow-up; producing it from one place is what DE-19 is for.
+
+        Args:
+            legend: The spec the colours and labels come from.
+            column: The column the layer was coloured by.
+            values: Override for the ``values`` list, where the stored shape carries the class *edges*
+                rather than one value per entry.
+
+        Returns:
+            The legend dict, with ``kind``/``column``/``values``/``colors`` exactly as before.
+        """
+        payload = legend.to_dict()
+        return {
+            "kind": payload["kind"],
+            "column": column,
+            "values": payload["values"] if values is None else values,
+            "colors": payload["colors"],
+        }
+
     def _color_expr(
         self,
         values: Any,
@@ -204,13 +229,14 @@ class VectorMixin(_MixinBase):
             expr.append(
                 MISSING_COLOR
             )  # fallback for values outside the known categories (shared by all tiers)
+            # Derived from the scale that produced the colours, not assembled a second time beside it:
+            # that is what makes the swatches equal what was drawn (#185, DE-19).
+            legend = LegendSpec.from_scale(
+                Scale.categorical([_native(c) for c in categories], list(colors)),
+                title=column,
+            )
             self.last_breaks = [_native(c) for c in categories]
-            self.last_legend = {
-                "kind": "categorical",
-                "column": column,
-                "values": [_native(c) for c in categories],
-                "colors": list(colors),
-            }
+            self.last_legend = self._legend_dict(legend, column)
             return expr
 
         if scheme is not None:
@@ -236,12 +262,24 @@ class VectorMixin(_MixinBase):
                 MISSING_COLOR,
             ]
             self.last_breaks = [float(e) for e in edges]
-            self.last_legend = {
-                "kind": "graduated",
-                "column": column,
-                "values": [float(e) for e in edges],
-                "colors": list(colors),
-            }
+            # Through from_scale, like the categorical arm: building the rows by hand here was the same
+            # assembly this wave set out to remove, routed through an extra type for no new guarantee — and
+            # it re-spelled the range label a fourth time. Going through the Scale exercises class_ranges()'s
+            # k-classes-from-k+1-edges arithmetic in production rather than only in its own test.
+            self.last_legend = self._legend_dict(
+                LegendSpec.from_scale(
+                    Scale(
+                        self.last_breaks[0],
+                        self.last_breaks[-1],
+                        scheme=scheme,
+                        breaks=tuple(self.last_breaks),
+                    ),
+                    colors=list(colors),
+                    title=column,
+                ),
+                column,
+                values=self.last_breaks,
+            )
             return expr
 
         finite = np.asarray(values, dtype=float)
@@ -255,12 +293,19 @@ class VectorMixin(_MixinBase):
         for stop, color in zip(stops, colors):
             expr.extend([float(stop), color])
         self.last_breaks = [float(s) for s in stops]
-        self.last_legend = {
-            "kind": "continuous",
-            "column": column,
-            "values": [float(s) for s in stops],
-            "colors": list(colors),
-        }
+        # The stops are handed over rather than recomputed from the limits: np.linspace pins its last
+        # element to `hi` exactly and the arithmetic in `from_scale` does not, so for lo=-3.7, hi=12.9 the
+        # top swatch was labelled 12.900000000000002 while the ramp drew 12.9. The legend must be the stops
+        # that were drawn, not a second computation that usually agrees with them.
+        self.last_legend = self._legend_dict(
+            LegendSpec.from_scale(
+                Scale.from_limits(lo, hi),
+                colors=list(colors),
+                title=column,
+                values=self.last_breaks,
+            ),
+            column,
+        )
         return expr
 
     def labels(

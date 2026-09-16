@@ -65,6 +65,28 @@ def test_point_cloud_from_geodataframe(points):
     scene.close()
 
 
+def test_a_null_geometry_reads_as_nan_rather_than_raising():
+    """A frame with one `null` geometry still builds a cloud, as it did before the PointArrays migration.
+
+    `main` read `.x` straight off the series, and geopandas answers NaN there for a missing geometry.
+    Routing the read through `PointArrays.from_features(..., centroids=False)` classified such a frame as
+    "not all points" — a null's `geom_type` is NaN — and raised instead, turning a cloud that rendered into
+    an exception on an ordinary GeoJSON feature.
+    """
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    from digitalearth.three_d.point_cloud import _coords_from_geodataframe
+
+    gdf = gpd.GeoDataFrame(geometry=[Point(0, 0), None, Point(2, 2)], crs="EPSG:3857")
+    coords, values = _coords_from_geodataframe(gdf, None)
+    assert coords.shape == (3, 3), f"every row survives the read, got {coords.shape}"
+    assert np.isnan(coords[1, 0]), (
+        "the missing row reads as NaN, the way geopandas answers for it"
+    )
+    assert values is None, "and no value column was asked for"
+
+
 def test_renders_a_nonempty_frame():
     """The point cloud produces a real off-screen frame with content."""
     pts = np.random.default_rng(2).random((300, 3)) * 10
