@@ -56,6 +56,36 @@ class TestViewport:
         ):
             Viewport(crs)
 
+    @pytest.mark.parametrize("crs", [0, "", "junk"], ids=["zero", "empty", "junk"])
+    def test_a_crs_that_names_no_reference_system_is_refused(self, crs):
+        """A display CRS pyramids cannot read names nothing a map could be drawn in, so the view refuses it.
+
+        Args:
+            crs: A value with a written form that names no CRS.
+
+        Test scenario:
+            `Viewport(0)`, `Viewport("")` and `Viewport("junk")` built — `crs_to_json` writes any int or string as
+            given — and failed only later, when `framed` asked pyramids to reproject into them.
+        """
+        with pytest.raises(ValueError, match="names no coordinate reference system"):
+            Viewport(crs)
+
+    def test_bounds_with_no_crs_are_named_as_such(self):
+        """Stored bounds without a `crs` are refused for having none, not pointed at `framed`, which cannot help.
+
+        Test scenario:
+            A missing bounds `crs` reads as `None`, which is not the view's CRS, so the refusal said "use
+            Viewport.framed(bounds), which reprojects" — and `framed` cannot reproject from no CRS.
+        """
+        stored = {"crs": 4326, "bounds": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1}}
+        with pytest.raises(ValueError, match="bounds carry no CRS"):
+            Viewport.from_dict(stored)
+
+    def test_a_crs_given_as_a_dict_builds_a_hashable_view(self):
+        """A proj dict pyramids reads is held in its written spelling, so the view hashes."""
+        view = Viewport({"proj": "longlat", "datum": "WGS84", "no_defs": True})
+        assert isinstance(hash(view), int), view
+
     def test_bounds_and_a_domain_together_are_refused(self):
         """A view holds one region, so `bounds` and `domain` together are refused rather than ranked silently.
 

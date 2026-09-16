@@ -89,10 +89,10 @@ class Viewport:
         globe: Whether the map is drawn on a globe frame rather than a flat projection.
 
     Raises:
-        ValueError: for a `None` or boolean CRS, or one a figure could not store (a float, a list — anything that is
-            not an EPSG integer, a string or a CRS object pyramids reads); `bounds` that is not a `Bounds` or is in a
-            different CRS; `bounds` and `domain` together; a `domain` that is neither a non-empty name nor four
-            finite numbers; or a non-boolean `globe`.
+        ValueError: for a `None` or boolean CRS, one a figure could not store (a float, a list — anything that is
+            not an EPSG integer, a string or a CRS object pyramids reads), or one pyramids cannot read (`0`, `""`);
+            `bounds` that is not a `Bounds`, carries no CRS or is in a different CRS; `bounds` and `domain` together;
+            a `domain` that is neither a non-empty name nor four finite numbers; or a non-boolean `globe`.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
@@ -140,6 +140,17 @@ class Viewport:
             # Checked here, not only when the view is written: a CRS a figure cannot store was otherwise found by
             # `to_dict`, at save time, far from the line that built the view.
             raise ValueError(str(error)) from error
+        # Written spellings are an int or a string, which `crs_to_json` passes through unread: `0`, `""` and "junk"
+        # built a view that failed only when `framed` asked pyramids to reproject into it.
+        from pyramids.base.crs import crs_from_user_input
+
+        try:
+            crs_from_user_input(written)
+        # Whatever pyramids cannot read names no system a map could be drawn in.
+        except Exception as error:  # noqa: BLE001
+            raise ValueError(
+                f"Viewport.crs {self.crs!r} names no coordinate reference system pyramids can read"
+            ) from error
         object.__setattr__(self, "crs", written)
         self._check_bounds()
         object.__setattr__(self, "domain", self._checked_domain(self.domain))
@@ -168,6 +179,11 @@ class Viewport:
         if not isinstance(self.bounds, Bounds):
             raise ValueError(
                 f"Viewport bounds must be a Bounds; got {type(self.bounds).__name__}"
+            )
+        if self.bounds.crs is None:
+            raise ValueError(
+                f"Viewport bounds carry no CRS, so they cannot be placed in {self.crs!r}; build them in the view's "
+                "CRS, or in another and pass them to Viewport.framed"
             )
         if not same_crs(self.bounds.crs, self.crs):
             # A rectangle in one CRS read as another draws the wrong place, silently. `framed` reprojects; the
