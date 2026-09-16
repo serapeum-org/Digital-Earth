@@ -12024,7 +12024,9 @@ widening by hand.</p>
 <span class="normal"><a href="#__codelineno-0-775">775</a></span>
 <span class="normal"><a href="#__codelineno-0-776">776</a></span>
 <span class="normal"><a href="#__codelineno-0-777">777</a></span>
-<span class="normal"><a href="#__codelineno-0-778">778</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-778">778</a></span>
+<span class="normal"><a href="#__codelineno-0-779">779</a></span>
+<span class="normal"><a href="#__codelineno-0-780">780</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-52" name="__codelineno-0-52"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-53" name="__codelineno-0-53"></a><span class="k">class</span><span class="w"> </span><span class="nc">Scale</span><span class="p">:</span>
 <a id="__codelineno-0-54" name="__codelineno-0-54"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;A resolved mapping from values to colours, and the domain it covers.</span>
 <a id="__codelineno-0-55" name="__codelineno-0-55"></a>
@@ -12555,202 +12557,204 @@ widening by hand.</p>
 <a id="__codelineno-0-580" name="__codelineno-0-580"></a>            <span class="c1"># `in`/`.index` compare with ==, which makes True equal to 1 and leaves a NaN category</span>
 <a id="__codelineno-0-581" name="__codelineno-0-581"></a>            <span class="c1"># unreachable. Categories are labels, so `False` and `0` are different labels even though they</span>
 <a id="__codelineno-0-582" name="__codelineno-0-582"></a>            <span class="c1"># compare equal, and an identity check is what finds a NaN that was actually stored.</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583"></a>            <span class="k">if</span> <span class="n">known</span> <span class="ow">is</span> <span class="n">category</span> <span class="ow">or</span> <span class="p">(</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584"></a>                <span class="nb">isinstance</span><span class="p">(</span><span class="n">known</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">==</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585"></a>                <span class="ow">and</span> <span class="n">known</span> <span class="o">==</span> <span class="n">category</span>
-<a id="__codelineno-0-586" name="__codelineno-0-586"></a>            <span class="p">):</span>
-<a id="__codelineno-0-587" name="__codelineno-0-587"></a>                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span>
-<a id="__codelineno-0-589" name="__codelineno-0-589"></a>
-<a id="__codelineno-0-590" name="__codelineno-0-590"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">class_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the 0-based class a value falls in, for a classified scale.</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a><span class="sd">            value: The value to place.</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a>
-<a id="__codelineno-0-596" name="__codelineno-0-596"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597"></a><span class="sd">            Its class index, or ``None`` when the scale is not classified or the value is not finite. A value</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a><span class="sd">            outside the edges is clamped to the first or last class rather than dropped, matching what a</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="sd">            renderer does with a value outside its domain.</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><span class="sd">            - Three classes cut from ten values, and where 5 lands:</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><span class="sd">                &gt;&gt;&gt; scale = Scale.from_values(list(range(10)), scheme=&quot;equal_interval&quot;, k=3)</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">                &gt;&gt;&gt; scale.class_of(5.0) in (0, 1, 2)</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><span class="sd">                True</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_classified</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a>            <span class="k">return</span> <span class="kc">None</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a>        <span class="n">upper</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a>        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">upper</span><span class="p">):</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a>            <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="n">edge</span><span class="p">:</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a>                <span class="k">return</span> <span class="n">index</span>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">upper</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-<a id="__codelineno-0-618" name="__codelineno-0-618"></a>
-<a id="__codelineno-0-619" name="__codelineno-0-619"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">class_ranges</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
-<a id="__codelineno-0-620" name="__codelineno-0-620"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return each class as a ``(low, high)`` pair, which is what a legend row shows.</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621"></a>
-<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-623" name="__codelineno-0-623"></a><span class="sd">            One pair per class, empty when the scale is not classified.</span>
-<a id="__codelineno-0-624" name="__codelineno-0-624"></a>
-<a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-626" name="__codelineno-0-626"></a><span class="sd">            - Two classes give two ranges:</span>
-<a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">                &gt;&gt;&gt; scale = Scale.from_values([0.0, 1.0, 2.0, 3.0], scheme=&quot;equal_interval&quot;, k=2)</span>
-<a id="__codelineno-0-630" name="__codelineno-0-630"></a><span class="sd">                &gt;&gt;&gt; len(scale.class_ranges())</span>
-<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">                2</span>
-<a id="__codelineno-0-632" name="__codelineno-0-632"></a>
-<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-634" name="__codelineno-0-634"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a>        <span class="n">edges</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)</span>
-<a id="__codelineno-0-636" name="__codelineno-0-636"></a>        <span class="k">return</span> <span class="p">[(</span><span class="n">edges</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">edges</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
-<a id="__codelineno-0-637" name="__codelineno-0-637"></a>
-<a id="__codelineno-0-638" name="__codelineno-0-638"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">freeze</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-639" name="__codelineno-0-639"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a scale whose domain will not be re-derived from later data.</span>
-<a id="__codelineno-0-640" name="__codelineno-0-640"></a>
-<a id="__codelineno-0-641" name="__codelineno-0-641"></a><span class="sd">        `Scale` is already immutable, so this returns ``self``; it exists to say at a call site that the range</span>
-<a id="__codelineno-0-642" name="__codelineno-0-642"></a><span class="sd">        is deliberately fixed — the thing a time sequence needs so its colours do not move between frames.</span>
-<a id="__codelineno-0-643" name="__codelineno-0-643"></a>
-<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-645" name="__codelineno-0-645"></a><span class="sd">            This scale.</span>
-<a id="__codelineno-0-646" name="__codelineno-0-646"></a>
-<a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-648" name="__codelineno-0-648"></a><span class="sd">            - Freezing is explicit at the call site:</span>
-<a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="sd">                &gt;&gt;&gt; Scale.from_limits(0.0, 1.0).freeze().as_limits()</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a><span class="sd">                (0.0, 1.0)</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a>
-<a id="__codelineno-0-654" name="__codelineno-0-654"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-655" name="__codelineno-0-655"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-656" name="__codelineno-0-656"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-657" name="__codelineno-0-657"></a>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a>    <span class="c1"># ------------------------------------------------------------------ serialisation</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a>            <span class="c1"># A numpy boolean — what a boolean column&#39;s `.unique()` holds — is a boolean label too.</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a>            <span class="k">if</span> <span class="n">known</span> <span class="ow">is</span> <span class="n">category</span> <span class="ow">or</span> <span class="p">(</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a>                <span class="nb">isinstance</span><span class="p">(</span><span class="n">known</span><span class="p">,</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">))</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a>                <span class="o">==</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">))</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a>                <span class="ow">and</span> <span class="n">known</span> <span class="o">==</span> <span class="n">category</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a>            <span class="p">):</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a>                <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">class_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the 0-based class a value falls in, for a classified scale.</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a><span class="sd">            value: The value to place.</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a>
+<a id="__codelineno-0-598" name="__codelineno-0-598"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="sd">            Its class index, or ``None`` when the scale is not classified or the value is not finite. A value</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a><span class="sd">            outside the edges is clamped to the first or last class rather than dropped, matching what a</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a><span class="sd">            renderer does with a value outside its domain.</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="sd">            - Three classes cut from ten values, and where 5 lands:</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a><span class="sd">                &gt;&gt;&gt; scale = Scale.from_values(list(range(10)), scheme=&quot;equal_interval&quot;, k=3)</span>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a><span class="sd">                &gt;&gt;&gt; scale.class_of(5.0) in (0, 1, 2)</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609"></a><span class="sd">                True</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_classified</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a>            <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a>        <span class="n">upper</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a>        <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">upper</span><span class="p">):</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a>            <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="n">edge</span><span class="p">:</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>                <span class="k">return</span> <span class="n">index</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a>        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">upper</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">class_ranges</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return each class as a ``(low, high)`` pair, which is what a legend row shows.</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a>
+<a id="__codelineno-0-624" name="__codelineno-0-624"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">            One pair per class, empty when the scale is not classified.</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">            - Two classes give two ranges:</span>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">                &gt;&gt;&gt; scale = Scale.from_values([0.0, 1.0, 2.0, 3.0], scheme=&quot;equal_interval&quot;, k=2)</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><span class="sd">                &gt;&gt;&gt; len(scale.class_ranges())</span>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">                2</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a>        <span class="n">edges</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a>        <span class="k">return</span> <span class="p">[(</span><span class="n">edges</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">edges</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">freeze</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return a scale whose domain will not be re-derived from later data.</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><span class="sd">        `Scale` is already immutable, so this returns ``self``; it exists to say at a call site that the range</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">        is deliberately fixed — the thing a time sequence needs so its colours do not move between frames.</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">            This scale.</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a><span class="sd">            - Freezing is explicit at the call site:</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><span class="sd">                &gt;&gt;&gt; Scale.from_limits(0.0, 1.0).freeze().as_limits()</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a><span class="sd">                (0.0, 1.0)</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="k">return</span> <span class="bp">self</span>
 <a id="__codelineno-0-659" name="__codelineno-0-659"></a>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">            field goes through the JSON check, so a numpy number is written as a plain Python one.</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">                the field.</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">            - A continuous scale is its domain:</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">                &gt;&gt;&gt; Scale.from_limits(0.0, 10.0).to_dict()</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">                {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0}</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678"></a>
-<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">            - A categorical scale carries its colours:</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">                &gt;&gt;&gt; stored = Scale.categorical([&quot;a&quot;, &quot;b&quot;], [&quot;#f00&quot;, &quot;#00f&quot;]).to_dict()</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">                &gt;&gt;&gt; stored[&quot;categories&quot;], stored[&quot;colors&quot;]</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">                ([&#39;a&#39;, &#39;b&#39;], [&#39;#f00&#39;, &#39;#00f&#39;])</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">            - A classified scale carries its scheme and its class edges:</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">                &gt;&gt;&gt; Scale(0.0, 10.0, scheme=&quot;quantiles&quot;, breaks=(0.0, 4.0, 10.0)).to_dict()</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">                {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0, &#39;scheme&#39;: &#39;quantiles&#39;, &#39;breaks&#39;: [0.0, 4.0, 10.0]}</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a>        <span class="c1"># Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a>        <span class="c1"># finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a>        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a>            <span class="s2">&quot;vmin&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmin</span><span class="p">,</span> <span class="s2">&quot;Scale.vmin&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a>            <span class="s2">&quot;vmax&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmax</span><span class="p">,</span> <span class="s2">&quot;Scale.vmax&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a>        <span class="p">}</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scheme</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scheme</span><span class="p">,</span> <span class="s2">&quot;Scale.scheme&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">:</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;breaks&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">,</span> <span class="s2">&quot;Scale.breaks&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">:</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">,</span> <span class="s2">&quot;Scale.categories&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;colors&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">,</span> <span class="s2">&quot;Scale.colors&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;missing&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">missing</span><span class="p">,</span> <span class="s2">&quot;Scale.missing&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a>        <span class="k">return</span> <span class="n">out</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a scale from its dict form.</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`.</span>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">            The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">            breaks, which is what makes a frozen scale reproduce the colours it was drawn with.</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">            TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">                the field.</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">            ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">                key, or a scale the constructor refuses — a</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">                non-finite or degenerate domain, a single class edge, or a colour count that does not match the</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">                categories.</span>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a>
-<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">            - Stored class edges come back without re-classifying anything:</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">                &gt;&gt;&gt; scale = Scale.from_dict({&quot;vmin&quot;: 0, &quot;vmax&quot;: 10, &quot;breaks&quot;: [0, 5, 10]})</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">                &gt;&gt;&gt; scale.class_ranges()</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a><span class="sd">                [(0.0, 5.0), (5.0, 10.0)]</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a><span class="sd">            - A categorical scale keeps each category&#39;s colour across a round trip:</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="sd">                &gt;&gt;&gt; stored = Scale.categorical([&quot;forest&quot;, &quot;water&quot;], [&quot;#228b22&quot;, &quot;#1e90ff&quot;]).to_dict()</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="sd">                &gt;&gt;&gt; Scale.from_dict(stored).color_for(&quot;water&quot;)</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a><span class="sd">                &#39;#1e90ff&#39;</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a><span class="sd">            - A domain with no width is refused:</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="sd">                &gt;&gt;&gt; Scale.from_dict({&quot;vmin&quot;: 1, &quot;vmax&quot;: 1})  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="sd">                Traceback (most recent call last):</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="sd">                    ...</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">                ValueError: Scale needs vmax &gt; vmin; got vmin=1.0, vmax=1.0. ...</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a>            <span class="s2">&quot;Scale&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a>            <span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>            <span class="p">(</span><span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="s2">&quot;scheme&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="s2">&quot;missing&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-763" name="__codelineno-0-763"></a>        <span class="p">)</span>
-<a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="n">scheme</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scheme&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>            <span class="n">scheme</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="n">scheme</span><span class="p">,</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>            <span class="n">breaks</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>                <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;breaks[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">,</span> <span class="n">edge</span><span class="p">)</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a>                <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a>                    <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="p">()))</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>                <span class="p">)</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a>            <span class="p">),</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a>            <span class="n">categories</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="p">())),</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>            <span class="n">missing</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;missing&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a>            <span class="n">_colors</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="p">())),</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="p">)</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="c1"># ------------------------------------------------------------------ serialisation</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">            field goes through the JSON check, so a numpy number is written as a plain Python one.</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">                the field.</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">            - A continuous scale is its domain:</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><span class="sd">                &gt;&gt;&gt; Scale.from_limits(0.0, 10.0).to_dict()</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">                {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0}</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">            - A categorical scale carries its colours:</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">                &gt;&gt;&gt; stored = Scale.categorical([&quot;a&quot;, &quot;b&quot;], [&quot;#f00&quot;, &quot;#00f&quot;]).to_dict()</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">                &gt;&gt;&gt; stored[&quot;categories&quot;], stored[&quot;colors&quot;]</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">                ([&#39;a&#39;, &#39;b&#39;], [&#39;#f00&#39;, &#39;#00f&#39;])</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">            - A classified scale carries its scheme and its class edges:</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">                &gt;&gt;&gt; Scale(0.0, 10.0, scheme=&quot;quantiles&quot;, breaks=(0.0, 4.0, 10.0)).to_dict()</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">                {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0, &#39;scheme&#39;: &#39;quantiles&#39;, &#39;breaks&#39;: [0.0, 4.0, 10.0]}</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a>        <span class="c1"># Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a>        <span class="c1"># finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a>        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a>            <span class="s2">&quot;vmin&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmin</span><span class="p">,</span> <span class="s2">&quot;Scale.vmin&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a>            <span class="s2">&quot;vmax&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmax</span><span class="p">,</span> <span class="s2">&quot;Scale.vmax&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a>        <span class="p">}</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scheme</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scheme</span><span class="p">,</span> <span class="s2">&quot;Scale.scheme&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">:</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;breaks&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">,</span> <span class="s2">&quot;Scale.breaks&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">:</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">,</span> <span class="s2">&quot;Scale.categories&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;colors&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">,</span> <span class="s2">&quot;Scale.colors&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;missing&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">missing</span><span class="p">,</span> <span class="s2">&quot;Scale.missing&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a>        <span class="k">return</span> <span class="n">out</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a scale from its dict form.</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`.</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">            The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">            breaks, which is what makes a frozen scale reproduce the colours it was drawn with.</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">            TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">                the field.</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">                key, or a scale the constructor refuses — a</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">                non-finite or degenerate domain, a single class edge, or a colour count that does not match the</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">                categories.</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">            - Stored class edges come back without re-classifying anything:</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a><span class="sd">                &gt;&gt;&gt; scale = Scale.from_dict({&quot;vmin&quot;: 0, &quot;vmax&quot;: 10, &quot;breaks&quot;: [0, 5, 10]})</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a><span class="sd">                &gt;&gt;&gt; scale.class_ranges()</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a><span class="sd">                [(0.0, 5.0), (5.0, 10.0)]</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a><span class="sd">            - A categorical scale keeps each category&#39;s colour across a round trip:</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a><span class="sd">                &gt;&gt;&gt; stored = Scale.categorical([&quot;forest&quot;, &quot;water&quot;], [&quot;#228b22&quot;, &quot;#1e90ff&quot;]).to_dict()</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a><span class="sd">                &gt;&gt;&gt; Scale.from_dict(stored).color_for(&quot;water&quot;)</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="sd">                &#39;#1e90ff&#39;</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="sd">            - A domain with no width is refused:</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="sd">                &gt;&gt;&gt; Scale.from_dict({&quot;vmin&quot;: 1, &quot;vmax&quot;: 1})  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">                Traceback (most recent call last):</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a><span class="sd">                    ...</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="sd">                ValueError: Scale needs vmax &gt; vmin; got vmin=1.0, vmax=1.0. ...</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a>            <span class="s2">&quot;Scale&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a>            <span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>            <span class="p">(</span><span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="s2">&quot;scheme&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="s2">&quot;missing&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>        <span class="p">)</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="n">scheme</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scheme&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>            <span class="n">scheme</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="n">scheme</span><span class="p">,</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>            <span class="n">breaks</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>                <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;breaks[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">,</span> <span class="n">edge</span><span class="p">)</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a>                <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a>                    <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="p">()))</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>                <span class="p">)</span>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a>            <span class="p">),</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a>            <span class="n">categories</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="p">())),</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>            <span class="n">missing</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;missing&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a>            <span class="n">_colors</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="p">())),</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a>        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -13720,9 +13724,7 @@ message names the scheme and the count, exactly as :meth:<code>from_values</code
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/scale.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-590">590</a></span>
-<span class="normal"><a href="#__codelineno-0-591">591</a></span>
-<span class="normal"><a href="#__codelineno-0-592">592</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-592">592</a></span>
 <span class="normal"><a href="#__codelineno-0-593">593</a></span>
 <span class="normal"><a href="#__codelineno-0-594">594</a></span>
 <span class="normal"><a href="#__codelineno-0-595">595</a></span>
@@ -13747,34 +13749,36 @@ message names the scheme and the count, exactly as :meth:<code>from_values</code
 <span class="normal"><a href="#__codelineno-0-614">614</a></span>
 <span class="normal"><a href="#__codelineno-0-615">615</a></span>
 <span class="normal"><a href="#__codelineno-0-616">616</a></span>
-<span class="normal"><a href="#__codelineno-0-617">617</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-590" name="__codelineno-0-590"></a><span class="k">def</span><span class="w"> </span><span class="nf">class_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the 0-based class a value falls in, for a classified scale.</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a><span class="sd">        value: The value to place.</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a>
-<a id="__codelineno-0-596" name="__codelineno-0-596"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597"></a><span class="sd">        Its class index, or ``None`` when the scale is not classified or the value is not finite. A value</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a><span class="sd">        outside the edges is clamped to the first or last class rather than dropped, matching what a</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="sd">        renderer does with a value outside its domain.</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a><span class="sd">        - Three classes cut from ten values, and where 5 lands:</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a><span class="sd">            &gt;&gt;&gt; scale = Scale.from_values(list(range(10)), scheme=&quot;equal_interval&quot;, k=3)</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">            &gt;&gt;&gt; scale.class_of(5.0) in (0, 1, 2)</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><span class="sd">            True</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_classified</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a>        <span class="k">return</span> <span class="kc">None</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="n">upper</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">upper</span><span class="p">):</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a>        <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="n">edge</span><span class="p">:</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a>            <span class="k">return</span> <span class="n">index</span>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">upper</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="normal"><a href="#__codelineno-0-617">617</a></span>
+<span class="normal"><a href="#__codelineno-0-618">618</a></span>
+<span class="normal"><a href="#__codelineno-0-619">619</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-592" name="__codelineno-0-592"></a><span class="k">def</span><span class="w"> </span><span class="nf">class_of</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">value</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the 0-based class a value falls in, for a classified scale.</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a><span class="sd">        value: The value to place.</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a>
+<a id="__codelineno-0-598" name="__codelineno-0-598"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="sd">        Its class index, or ``None`` when the scale is not classified or the value is not finite. A value</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a><span class="sd">        outside the edges is clamped to the first or last class rather than dropped, matching what a</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a><span class="sd">        renderer does with a value outside its domain.</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="sd">        - Three classes cut from ten values, and where 5 lands:</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a><span class="sd">            &gt;&gt;&gt; scale = Scale.from_values(list(range(10)), scheme=&quot;equal_interval&quot;, k=3)</span>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a><span class="sd">            &gt;&gt;&gt; scale.class_of(5.0) in (0, 1, 2)</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609"></a><span class="sd">            True</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_classified</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">):</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a>        <span class="k">return</span> <span class="kc">None</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a>    <span class="n">upper</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a>    <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">upper</span><span class="p">):</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a>        <span class="k">if</span> <span class="n">value</span> <span class="o">&lt;=</span> <span class="n">edge</span><span class="p">:</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>            <span class="k">return</span> <span class="n">index</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a>    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">upper</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13831,9 +13835,7 @@ message names the scheme and the count, exactly as :meth:<code>from_values</code
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/scale.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-619">619</a></span>
-<span class="normal"><a href="#__codelineno-0-620">620</a></span>
-<span class="normal"><a href="#__codelineno-0-621">621</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-621">621</a></span>
 <span class="normal"><a href="#__codelineno-0-622">622</a></span>
 <span class="normal"><a href="#__codelineno-0-623">623</a></span>
 <span class="normal"><a href="#__codelineno-0-624">624</a></span>
@@ -13848,24 +13850,26 @@ message names the scheme and the count, exactly as :meth:<code>from_values</code
 <span class="normal"><a href="#__codelineno-0-633">633</a></span>
 <span class="normal"><a href="#__codelineno-0-634">634</a></span>
 <span class="normal"><a href="#__codelineno-0-635">635</a></span>
-<span class="normal"><a href="#__codelineno-0-636">636</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-619" name="__codelineno-0-619"></a><span class="k">def</span><span class="w"> </span><span class="nf">class_ranges</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
-<a id="__codelineno-0-620" name="__codelineno-0-620"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return each class as a ``(low, high)`` pair, which is what a legend row shows.</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621"></a>
-<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-623" name="__codelineno-0-623"></a><span class="sd">        One pair per class, empty when the scale is not classified.</span>
-<a id="__codelineno-0-624" name="__codelineno-0-624"></a>
-<a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-626" name="__codelineno-0-626"></a><span class="sd">        - Two classes give two ranges:</span>
-<a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">            &gt;&gt;&gt; scale = Scale.from_values([0.0, 1.0, 2.0, 3.0], scheme=&quot;equal_interval&quot;, k=2)</span>
-<a id="__codelineno-0-630" name="__codelineno-0-630"></a><span class="sd">            &gt;&gt;&gt; len(scale.class_ranges())</span>
-<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">            2</span>
-<a id="__codelineno-0-632" name="__codelineno-0-632"></a>
-<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-634" name="__codelineno-0-634"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a>    <span class="n">edges</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)</span>
-<a id="__codelineno-0-636" name="__codelineno-0-636"></a>    <span class="k">return</span> <span class="p">[(</span><span class="n">edges</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">edges</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
+<span class="normal"><a href="#__codelineno-0-636">636</a></span>
+<span class="normal"><a href="#__codelineno-0-637">637</a></span>
+<span class="normal"><a href="#__codelineno-0-638">638</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-621" name="__codelineno-0-621"></a><span class="k">def</span><span class="w"> </span><span class="nf">class_ranges</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return each class as a ``(low, high)`` pair, which is what a legend row shows.</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a>
+<a id="__codelineno-0-624" name="__codelineno-0-624"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">        One pair per class, empty when the scale is not classified.</span>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">        - Two classes give two ranges:</span>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">            &gt;&gt;&gt; scale = Scale.from_values([0.0, 1.0, 2.0, 3.0], scheme=&quot;equal_interval&quot;, k=2)</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a><span class="sd">            &gt;&gt;&gt; len(scale.class_ranges())</span>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">            2</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a>    <span class="n">edges</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">)</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a>    <span class="k">return</span> <span class="p">[(</span><span class="n">edges</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">edges</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">edges</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)]</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -13982,7 +13986,9 @@ message names the scheme and the count, exactly as :meth:<code>from_values</code
 <span class="normal"><a href="#__codelineno-0-585">585</a></span>
 <span class="normal"><a href="#__codelineno-0-586">586</a></span>
 <span class="normal"><a href="#__codelineno-0-587">587</a></span>
-<span class="normal"><a href="#__codelineno-0-588">588</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="k">def</span><span class="w"> </span><span class="nf">color_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-588">588</a></span>
+<span class="normal"><a href="#__codelineno-0-589">589</a></span>
+<span class="normal"><a href="#__codelineno-0-590">590</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="k">def</span><span class="w"> </span><span class="nf">color_for</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">category</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the colour assigned to one category.</span>
 <a id="__codelineno-0-561" name="__codelineno-0-561"></a>
 <a id="__codelineno-0-562" name="__codelineno-0-562"></a><span class="sd">    Args:</span>
@@ -14006,12 +14012,14 @@ message names the scheme and the count, exactly as :meth:<code>from_values</code
 <a id="__codelineno-0-580" name="__codelineno-0-580"></a>        <span class="c1"># `in`/`.index` compare with ==, which makes True equal to 1 and leaves a NaN category</span>
 <a id="__codelineno-0-581" name="__codelineno-0-581"></a>        <span class="c1"># unreachable. Categories are labels, so `False` and `0` are different labels even though they</span>
 <a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="c1"># compare equal, and an identity check is what finds a NaN that was actually stored.</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583"></a>        <span class="k">if</span> <span class="n">known</span> <span class="ow">is</span> <span class="n">category</span> <span class="ow">or</span> <span class="p">(</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584"></a>            <span class="nb">isinstance</span><span class="p">(</span><span class="n">known</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span> <span class="o">==</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="nb">bool</span><span class="p">)</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585"></a>            <span class="ow">and</span> <span class="n">known</span> <span class="o">==</span> <span class="n">category</span>
-<a id="__codelineno-0-586" name="__codelineno-0-586"></a>        <span class="p">):</span>
-<a id="__codelineno-0-587" name="__codelineno-0-587"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a>        <span class="c1"># A numpy boolean — what a boolean column&#39;s `.unique()` holds — is a boolean label too.</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a>        <span class="k">if</span> <span class="n">known</span> <span class="ow">is</span> <span class="n">category</span> <span class="ow">or</span> <span class="p">(</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a>            <span class="nb">isinstance</span><span class="p">(</span><span class="n">known</span><span class="p">,</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">))</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a>            <span class="o">==</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">category</span><span class="p">,</span> <span class="p">(</span><span class="nb">bool</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">))</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a>            <span class="ow">and</span> <span class="n">known</span> <span class="o">==</span> <span class="n">category</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a>        <span class="p">):</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a>            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -14074,9 +14082,7 @@ is deliberately fixed — the thing a time sequence needs so its colours do not 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/scale.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-638">638</a></span>
-<span class="normal"><a href="#__codelineno-0-639">639</a></span>
-<span class="normal"><a href="#__codelineno-0-640">640</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-640">640</a></span>
 <span class="normal"><a href="#__codelineno-0-641">641</a></span>
 <span class="normal"><a href="#__codelineno-0-642">642</a></span>
 <span class="normal"><a href="#__codelineno-0-643">643</a></span>
@@ -14092,25 +14098,27 @@ is deliberately fixed — the thing a time sequence needs so its colours do not 
 <span class="normal"><a href="#__codelineno-0-653">653</a></span>
 <span class="normal"><a href="#__codelineno-0-654">654</a></span>
 <span class="normal"><a href="#__codelineno-0-655">655</a></span>
-<span class="normal"><a href="#__codelineno-0-656">656</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-638" name="__codelineno-0-638"></a><span class="k">def</span><span class="w"> </span><span class="nf">freeze</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-639" name="__codelineno-0-639"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a scale whose domain will not be re-derived from later data.</span>
-<a id="__codelineno-0-640" name="__codelineno-0-640"></a>
-<a id="__codelineno-0-641" name="__codelineno-0-641"></a><span class="sd">    `Scale` is already immutable, so this returns ``self``; it exists to say at a call site that the range</span>
-<a id="__codelineno-0-642" name="__codelineno-0-642"></a><span class="sd">    is deliberately fixed — the thing a time sequence needs so its colours do not move between frames.</span>
-<a id="__codelineno-0-643" name="__codelineno-0-643"></a>
-<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-645" name="__codelineno-0-645"></a><span class="sd">        This scale.</span>
-<a id="__codelineno-0-646" name="__codelineno-0-646"></a>
-<a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-648" name="__codelineno-0-648"></a><span class="sd">        - Freezing is explicit at the call site:</span>
-<a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="sd">            &gt;&gt;&gt; Scale.from_limits(0.0, 1.0).freeze().as_limits()</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a><span class="sd">            (0.0, 1.0)</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a>
-<a id="__codelineno-0-654" name="__codelineno-0-654"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-655" name="__codelineno-0-655"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-656" name="__codelineno-0-656"></a>    <span class="k">return</span> <span class="bp">self</span>
+<span class="normal"><a href="#__codelineno-0-656">656</a></span>
+<span class="normal"><a href="#__codelineno-0-657">657</a></span>
+<span class="normal"><a href="#__codelineno-0-658">658</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-640" name="__codelineno-0-640"></a><span class="k">def</span><span class="w"> </span><span class="nf">freeze</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return a scale whose domain will not be re-derived from later data.</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a>
+<a id="__codelineno-0-643" name="__codelineno-0-643"></a><span class="sd">    `Scale` is already immutable, so this returns ``self``; it exists to say at a call site that the range</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">    is deliberately fixed — the thing a time sequence needs so its colours do not move between frames.</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">        This scale.</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a><span class="sd">        - Freezing is explicit at the call site:</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a><span class="sd">            &gt;&gt;&gt; Scale.from_limits(0.0, 1.0).freeze().as_limits()</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a><span class="sd">            (0.0, 1.0)</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -14272,9 +14280,7 @@ categories.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/scale.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-713">713</a></span>
-<span class="normal"><a href="#__codelineno-0-714">714</a></span>
-<span class="normal"><a href="#__codelineno-0-715">715</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-715">715</a></span>
 <span class="normal"><a href="#__codelineno-0-716">716</a></span>
 <span class="normal"><a href="#__codelineno-0-717">717</a></span>
 <span class="normal"><a href="#__codelineno-0-718">718</a></span>
@@ -14337,72 +14343,74 @@ categories.</p>
 <span class="normal"><a href="#__codelineno-0-775">775</a></span>
 <span class="normal"><a href="#__codelineno-0-776">776</a></span>
 <span class="normal"><a href="#__codelineno-0-777">777</a></span>
-<span class="normal"><a href="#__codelineno-0-778">778</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a scale from its dict form.</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`.</span>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">        The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">        breaks, which is what makes a frozen scale reproduce the colours it was drawn with.</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">        TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">            the field.</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">        ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">            key, or a scale the constructor refuses — a</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            non-finite or degenerate domain, a single class edge, or a colour count that does not match the</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">            categories.</span>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a>
-<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">        - Stored class edges come back without re-classifying anything:</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">            &gt;&gt;&gt; scale = Scale.from_dict({&quot;vmin&quot;: 0, &quot;vmax&quot;: 10, &quot;breaks&quot;: [0, 5, 10]})</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">            &gt;&gt;&gt; scale.class_ranges()</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a><span class="sd">            [(0.0, 5.0), (5.0, 10.0)]</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a><span class="sd">        - A categorical scale keeps each category&#39;s colour across a round trip:</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="sd">            &gt;&gt;&gt; stored = Scale.categorical([&quot;forest&quot;, &quot;water&quot;], [&quot;#228b22&quot;, &quot;#1e90ff&quot;]).to_dict()</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="sd">            &gt;&gt;&gt; Scale.from_dict(stored).color_for(&quot;water&quot;)</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a><span class="sd">            &#39;#1e90ff&#39;</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a><span class="sd">        - A domain with no width is refused:</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="sd">            &gt;&gt;&gt; Scale.from_dict({&quot;vmin&quot;: 1, &quot;vmax&quot;: 1})  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">            ValueError: Scale needs vmax &gt; vmin; got vmin=1.0, vmax=1.0. ...</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a>        <span class="s2">&quot;Scale&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>        <span class="p">(</span><span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="s2">&quot;scheme&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="s2">&quot;missing&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-763" name="__codelineno-0-763"></a>    <span class="p">)</span>
-<a id="__codelineno-0-764" name="__codelineno-0-764"></a>    <span class="n">scheme</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scheme&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="n">scheme</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="n">scheme</span><span class="p">,</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="n">breaks</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;breaks[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">,</span> <span class="n">edge</span><span class="p">)</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a>            <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a>                <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="p">()))</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="p">)</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a>        <span class="p">),</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a>        <span class="n">categories</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="p">())),</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>        <span class="n">missing</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;missing&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="n">_colors</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="p">())),</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-778">778</a></span>
+<span class="normal"><a href="#__codelineno-0-779">779</a></span>
+<span class="normal"><a href="#__codelineno-0-780">780</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Scale&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a scale from its dict form.</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`.</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">        The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">        breaks, which is what makes a frozen scale reproduce the colours it was drawn with.</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">        TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">            the field.</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">        ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">            key, or a scale the constructor refuses — a</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">            non-finite or degenerate domain, a single class edge, or a colour count that does not match the</span>
+<a id="__codelineno-0-732" name="__codelineno-0-732"></a><span class="sd">            categories.</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">        - Stored class edges come back without re-classifying anything:</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a><span class="sd">            &gt;&gt;&gt; scale = Scale.from_dict({&quot;vmin&quot;: 0, &quot;vmax&quot;: 10, &quot;breaks&quot;: [0, 5, 10]})</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a><span class="sd">            &gt;&gt;&gt; scale.class_ranges()</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a><span class="sd">            [(0.0, 5.0), (5.0, 10.0)]</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a><span class="sd">        - A categorical scale keeps each category&#39;s colour across a round trip:</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a><span class="sd">            &gt;&gt;&gt; stored = Scale.categorical([&quot;forest&quot;, &quot;water&quot;], [&quot;#228b22&quot;, &quot;#1e90ff&quot;]).to_dict()</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a><span class="sd">            &gt;&gt;&gt; Scale.from_dict(stored).color_for(&quot;water&quot;)</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a><span class="sd">            &#39;#1e90ff&#39;</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a><span class="sd">        - A domain with no width is refused:</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a><span class="sd">            &gt;&gt;&gt; Scale.from_dict({&quot;vmin&quot;: 1, &quot;vmax&quot;: 1})  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a><span class="sd">            ValueError: Scale needs vmax &gt; vmin; got vmin=1.0, vmax=1.0. ...</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a>        <span class="s2">&quot;Scale&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a>        <span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="p">(</span><span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="s2">&quot;scheme&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="s2">&quot;missing&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="p">)</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="n">scheme</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scheme&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmin&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;vmax&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>        <span class="n">scheme</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">scheme</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">scheme</span><span class="p">,</span> <span class="nb">list</span><span class="p">)</span> <span class="k">else</span> <span class="n">scheme</span><span class="p">,</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>        <span class="n">breaks</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;breaks[</span><span class="si">{</span><span class="n">index</span><span class="si">}</span><span class="s2">]&quot;</span><span class="p">,</span> <span class="n">edge</span><span class="p">)</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">edge</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a>                <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;breaks&quot;</span><span class="p">,</span> <span class="p">()))</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>            <span class="p">)</span>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a>        <span class="p">),</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="n">categories</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;categories&quot;</span><span class="p">,</span> <span class="p">())),</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="n">missing</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;missing&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a>        <span class="n">_colors</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Scale&quot;</span><span class="p">,</span> <span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;colors&quot;</span><span class="p">,</span> <span class="p">())),</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -15294,9 +15302,7 @@ the field.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/scale.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-660">660</a></span>
-<span class="normal"><a href="#__codelineno-0-661">661</a></span>
-<span class="normal"><a href="#__codelineno-0-662">662</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-662">662</a></span>
 <span class="normal"><a href="#__codelineno-0-663">663</a></span>
 <span class="normal"><a href="#__codelineno-0-664">664</a></span>
 <span class="normal"><a href="#__codelineno-0-665">665</a></span>
@@ -15345,58 +15351,60 @@ the field.</p>
 <span class="normal"><a href="#__codelineno-0-708">708</a></span>
 <span class="normal"><a href="#__codelineno-0-709">709</a></span>
 <span class="normal"><a href="#__codelineno-0-710">710</a></span>
-<span class="normal"><a href="#__codelineno-0-711">711</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-660" name="__codelineno-0-660"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">        `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">        field goes through the JSON check, so a numpy number is written as a plain Python one.</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">        TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">            the field.</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">        - A continuous scale is its domain:</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">            &gt;&gt;&gt; Scale.from_limits(0.0, 10.0).to_dict()</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">            {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0}</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678"></a>
-<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">        - A categorical scale carries its colours:</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">            &gt;&gt;&gt; stored = Scale.categorical([&quot;a&quot;, &quot;b&quot;], [&quot;#f00&quot;, &quot;#00f&quot;]).to_dict()</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">            &gt;&gt;&gt; stored[&quot;categories&quot;], stored[&quot;colors&quot;]</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">            ([&#39;a&#39;, &#39;b&#39;], [&#39;#f00&#39;, &#39;#00f&#39;])</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">        - A classified scale carries its scheme and its class edges:</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">            &gt;&gt;&gt; Scale(0.0, 10.0, scheme=&quot;quantiles&quot;, breaks=(0.0, 4.0, 10.0)).to_dict()</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">            {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0, &#39;scheme&#39;: &#39;quantiles&#39;, &#39;breaks&#39;: [0.0, 4.0, 10.0]}</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a>    <span class="c1"># Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="c1"># finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a>        <span class="s2">&quot;vmin&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmin</span><span class="p">,</span> <span class="s2">&quot;Scale.vmin&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a>        <span class="s2">&quot;vmax&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmax</span><span class="p">,</span> <span class="s2">&quot;Scale.vmax&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="p">}</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scheme</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scheme</span><span class="p">,</span> <span class="s2">&quot;Scale.scheme&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">:</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;breaks&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">,</span> <span class="s2">&quot;Scale.breaks&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">:</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">,</span> <span class="s2">&quot;Scale.categories&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;colors&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">,</span> <span class="s2">&quot;Scale.colors&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;missing&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">missing</span><span class="p">,</span> <span class="s2">&quot;Scale.missing&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="k">return</span> <span class="n">out</span>
+<span class="normal"><a href="#__codelineno-0-711">711</a></span>
+<span class="normal"><a href="#__codelineno-0-712">712</a></span>
+<span class="normal"><a href="#__codelineno-0-713">713</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">        `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">        field goes through the JSON check, so a numpy number is written as a plain Python one.</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">        TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">            the field.</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        - A continuous scale is its domain:</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><span class="sd">            &gt;&gt;&gt; Scale.from_limits(0.0, 10.0).to_dict()</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">            {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0}</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a>
+<a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">        - A categorical scale carries its colours:</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">            &gt;&gt;&gt; stored = Scale.categorical([&quot;a&quot;, &quot;b&quot;], [&quot;#f00&quot;, &quot;#00f&quot;]).to_dict()</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">            &gt;&gt;&gt; stored[&quot;categories&quot;], stored[&quot;colors&quot;]</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">            ([&#39;a&#39;, &#39;b&#39;], [&#39;#f00&#39;, &#39;#00f&#39;])</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">        - A classified scale carries its scheme and its class edges:</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Scale</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">            &gt;&gt;&gt; Scale(0.0, 10.0, scheme=&quot;quantiles&quot;, breaks=(0.0, 4.0, 10.0)).to_dict()</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="sd">            {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 10.0, &#39;scheme&#39;: &#39;quantiles&#39;, &#39;breaks&#39;: [0.0, 4.0, 10.0]}</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a>    <span class="c1"># Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a>    <span class="c1"># finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a>        <span class="s2">&quot;vmin&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmin</span><span class="p">,</span> <span class="s2">&quot;Scale.vmin&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a>        <span class="s2">&quot;vmax&quot;</span><span class="p">:</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">vmax</span><span class="p">,</span> <span class="s2">&quot;Scale.vmax&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a>    <span class="p">}</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scheme</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scheme&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">scheme</span><span class="p">,</span> <span class="s2">&quot;Scale.scheme&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">:</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;breaks&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">breaks</span><span class="p">,</span> <span class="s2">&quot;Scale.breaks&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">:</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;categories&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">categories</span><span class="p">,</span> <span class="s2">&quot;Scale.categories&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;colors&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_colors</span><span class="p">,</span> <span class="s2">&quot;Scale.colors&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">missing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;missing&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">missing</span><span class="p">,</span> <span class="s2">&quot;Scale.missing&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a>    <span class="k">return</span> <span class="n">out</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
