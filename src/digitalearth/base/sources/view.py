@@ -18,7 +18,7 @@ touching every reader in the package to gain a capability none of them uses yet.
 """
 
 from dataclasses import replace
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, cast
 
 import numpy as np
 
@@ -395,7 +395,7 @@ class SourceView(Source):
             return ViewRequest(budget=budget)
         if request.budget is not None and request.budget <= budget:
             return request
-        return replace(request, budget=budget)
+        return cast(ViewRequest, replace(request, budget=budget))
 
     @classmethod
     def _shape(cls, request: ViewRequest) -> Tuple[int, int]:
