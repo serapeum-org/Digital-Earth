@@ -29,7 +29,6 @@ from typing import (
     Dict,
     FrozenSet,
     Iterator,
-    List,
     Mapping,
     Optional,
     Set,
@@ -471,7 +470,9 @@ class LayerTree:
                 on_chain.add(target)
                 target = by_id[target].z_layer
             grounded.update(chain)
-        unknown_groups = sorted(self.hidden_groups - set(self.groups))
+        unknown_groups = sorted(
+            self.hidden_groups - {layer.group for layer in self.layers}
+        )
         if unknown_groups:
             raise ValueError(
                 f"LayerTree hides groups {unknown_groups} that no layer belongs to; groups are {list(self.groups)}"
@@ -514,11 +515,13 @@ class LayerTree:
 
                 ```
         """
-        seen: List[str] = []
-        for layer in self.layers:
-            if layer.group is not None and layer.group not in seen:
-                seen.append(layer.group)
-        return tuple(seen)
+        # A dict keeps first-seen order and tests membership by hash; a list tested it by comparing against every
+        # group seen so far, which made each change quadratic in the number of groups.
+        return tuple(
+            dict.fromkeys(
+                layer.group for layer in self.layers if layer.group is not None
+            )
+        )
 
     def __len__(self) -> int:
         """Return how many layers the tree holds.

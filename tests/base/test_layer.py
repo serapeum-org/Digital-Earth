@@ -520,6 +520,34 @@ class TestScaling:
         )
 
 
+class TestScalingWithGroups:
+    """Groups are part of what every change validates, so they must not bring the quadratic cost back."""
+
+    def test_one_add_to_a_tree_of_distinct_groups_compares_names_a_few_times_per_layer(
+        self,
+    ):
+        """Adding a layer to a 400-layer tree with a group per layer compares group names a few times per layer.
+
+        Test scenario:
+            The id and drape checks were made linear, but every change also listed the tree's groups by testing
+            each group against a growing list — quadratic in the number of groups. A group per time step or per
+            ensemble member brought the cubic build back: 2,000 adds with a group each took 16 s against 1.3 s
+            without groups. On this tree the list made 160,400 group-name comparisons for one `add`.
+        """
+        size = 400
+        layers = tuple(
+            LayerSpec(f"layer-{index}", "points", group=_CountedId(f"group-{index}"))
+            for index in range(size)
+        )
+        tree = LayerTree(layers)
+        _WORK.update(compared=0, surface=0)
+        grown = tree.add(LayerSpec("top", "points", group=_CountedId("group-top")))
+        assert len(grown.groups) == size + 1, len(grown.groups)
+        assert _WORK["compared"] <= 4 * size, (
+            f"one add compared group names {_WORK['compared']} times"
+        )
+
+
 class TestGroupVisibility:
     """A group hides its layers without forgetting their own visibility."""
 
