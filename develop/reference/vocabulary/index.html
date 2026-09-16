@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -12487,12 +12487,12 @@ widening by hand.</p>
 <a id="__codelineno-0-662" name="__codelineno-0-662"></a>
 <a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="sd">        Returns:</span>
 <a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">            `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Only</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">            `scheme` and `categories` go through the JSON check; the limits, the edges, the colours and `missing`</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">            are written without it.</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">            TypeError: if `scheme` or a category has no JSON form.</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">            field goes through the JSON check, so a numpy number is written as a plain Python one.</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">                the field.</span>
 <a id="__codelineno-0-671" name="__codelineno-0-671"></a>
 <a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">        Examples:</span>
 <a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">            - A continuous scale is its domain:</span>
@@ -15079,7 +15079,7 @@ message names the scheme and the count, since a classifier error alone says neit
             </td>
             <td>
               <div class="doc-md-description">
-                <p>that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Only</p>
+                <p>that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</p>
               </div>
             </td>
           </tr>
@@ -15089,17 +15089,7 @@ message names the scheme and the count, since a classifier error alone says neit
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>scheme</code> and <code>categories</code> go through the JSON check; the limits, the edges, the colours and <code>missing</code></p>
-              </div>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                  <code><span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>are written without it.</p>
+                <p>field goes through the JSON check, so a numpy number is written as a plain Python one.</p>
               </div>
             </td>
           </tr>
@@ -15122,7 +15112,8 @@ message names the scheme and the count, since a classifier error alone says neit
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if <code>scheme</code> or a category has no JSON form.</p>
+                <p>if any field — <code>scheme</code>, an edge, a category, a colour or <code>missing</code> — has no JSON form, naming
+the field.</p>
               </div>
             </td>
           </tr>
@@ -15209,12 +15200,12 @@ message names the scheme and the count, since a classifier error alone says neit
 <a id="__codelineno-0-662" name="__codelineno-0-662"></a>
 <a id="__codelineno-0-663" name="__codelineno-0-663"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-664" name="__codelineno-0-664"></a><span class="sd">        `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Only</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">        `scheme` and `categories` go through the JSON check; the limits, the edges, the colours and `missing`</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a><span class="sd">        are written without it.</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">        TypeError: if `scheme` or a category has no JSON form.</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="sd">        that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="sd">        field goes through the JSON check, so a numpy number is written as a plain Python one.</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">        TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a><span class="sd">            the field.</span>
 <a id="__codelineno-0-671" name="__codelineno-0-671"></a>
 <a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">    Examples:</span>
 <a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">        - A continuous scale is its domain:</span>
@@ -19120,7 +19111,8 @@ colour.</p>
 <span class="normal"><a href="#__codelineno-0-520">520</a></span>
 <span class="normal"><a href="#__codelineno-0-521">521</a></span>
 <span class="normal"><a href="#__codelineno-0-522">522</a></span>
-<span class="normal"><a href="#__codelineno-0-523">523</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-523">523</a></span>
+<span class="normal"><a href="#__codelineno-0-524">524</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-108" name="__codelineno-0-108"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-109" name="__codelineno-0-109"></a><span class="k">class</span><span class="w"> </span><span class="nc">Encoding</span><span class="p">:</span>
 <a id="__codelineno-0-110" name="__codelineno-0-110"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;What drives one visual channel: a constant, or a field read through a scale.</span>
 <a id="__codelineno-0-111" name="__codelineno-0-111"></a>
@@ -19442,100 +19434,101 @@ colour.</p>
 <a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
 <a id="__codelineno-0-428" name="__codelineno-0-428"></a>
 <a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant goes</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">            through the JSON check (a tuple is written as a list); `output_range` is written as a list, as held.</span>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">            TypeError: if the constant, or the scale&#39;s scheme or a category, has no JSON form.</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">            - A constant is its channel and its value:</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">                &gt;&gt;&gt; Encoding.constant(&quot;opacity&quot;, 0.5).to_dict()</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">                {&#39;channel&#39;: &#39;opacity&#39;, &#39;value&#39;: 0.5}</span>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">            - A field-driven channel carries its scale:</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding, Scale</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">                &gt;&gt;&gt; stored = Encoding.by_field(&quot;size&quot;, &quot;pop&quot;, scale=Scale.from_limits(0, 100)).to_dict()</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">                &gt;&gt;&gt; stored[&quot;field&quot;], stored[&quot;scale&quot;]</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">                (&#39;pop&#39;, {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 100.0})</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-453" name="__codelineno-0-453"></a>        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;channel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="p">}</span>
-<a id="__codelineno-0-454" name="__codelineno-0-454"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-455" name="__codelineno-0-455"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
-<a id="__codelineno-0-456" name="__codelineno-0-456"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].value&quot;</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a>            <span class="p">)</span>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;field&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;output_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].output_range&quot;</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a>            <span class="p">)</span>
-<a id="__codelineno-0-466" name="__codelineno-0-466"></a>        <span class="k">return</span> <span class="n">out</span>
-<a id="__codelineno-0-467" name="__codelineno-0-467"></a>
-<a id="__codelineno-0-468" name="__codelineno-0-468"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Encoding&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild an encoding from its dict form.</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`.</span>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">            The encoding, validated as the constructor validates it.</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">            TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the</span>
-<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">                field, rather than failing inside `tuple()`.</span>
-<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">            ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the</span>
-<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">                constructor refuses.</span>
-<a id="__codelineno-0-483" name="__codelineno-0-483"></a>
-<a id="__codelineno-0-484" name="__codelineno-0-484"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">            - A stored constant reads back and resolves as before:</span>
-<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">                &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;}).resolve()</span>
-<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">                &#39;#f00&#39;</span>
-<a id="__codelineno-0-490" name="__codelineno-0-490"></a>
-<a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">            - A stored field-driven size reads back with its scale and output range:</span>
-<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">                &gt;&gt;&gt; stored = {&quot;channel&quot;: &quot;size&quot;, &quot;field&quot;: &quot;pop&quot;, &quot;scale&quot;: {&quot;vmin&quot;: 0, &quot;vmax&quot;: 100}}</span>
-<a id="__codelineno-0-496" name="__codelineno-0-496"></a><span class="sd">                &gt;&gt;&gt; Encoding.from_dict({**stored, &quot;output_range&quot;: [4, 20]}).resolve([0.0, 50.0, 100.0])</span>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">                [4.0, 12.0, 20.0]</span>
-<a id="__codelineno-0-498" name="__codelineno-0-498"></a>
-<a id="__codelineno-0-499" name="__codelineno-0-499"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">            - A binding with both a constant and a field is refused:</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">                &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;, &quot;field&quot;: &quot;class&quot;})  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">                Traceback (most recent call last):</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">                    ...</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">                ValueError: an Encoding for &#39;color&#39; needs exactly one of value= (a constant) or field= ...</span>
-<a id="__codelineno-0-507" name="__codelineno-0-507"></a>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a>            <span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;channel&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="s2">&quot;scale&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a>        <span class="p">)</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scale&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a>        <span class="n">output_range</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a>            <span class="n">channel</span><span class="o">=</span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;channel&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a>            <span class="n">value</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a>            <span class="n">field</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;field&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a>            <span class="n">scale</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Scale</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">scale</span><span class="p">),</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a>            <span class="n">output_range</span><span class="o">=</span><span class="kc">None</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a>            <span class="k">if</span> <span class="n">output_range</span> <span class="ow">is</span> <span class="kc">None</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a>            <span class="k">else</span> <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">,</span> <span class="n">output_range</span><span class="p">),</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a>        <span class="p">)</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant and</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">            `output_range` go through the JSON check, so a tuple is written as a list and a numpy number as a plain</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">            Python one.</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">            TypeError: if the constant, an `output_range` end, or any field of the scale has no JSON form.</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">            - A constant is its channel and its value:</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">                &gt;&gt;&gt; Encoding.constant(&quot;opacity&quot;, 0.5).to_dict()</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">                {&#39;channel&#39;: &#39;opacity&#39;, &#39;value&#39;: 0.5}</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">            - A field-driven channel carries its scale:</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding, Scale</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">                &gt;&gt;&gt; stored = Encoding.by_field(&quot;size&quot;, &quot;pop&quot;, scale=Scale.from_limits(0, 100)).to_dict()</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">                &gt;&gt;&gt; stored[&quot;field&quot;], stored[&quot;scale&quot;]</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="sd">                (&#39;pop&#39;, {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 100.0})</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;channel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="p">}</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].value&quot;</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>            <span class="p">)</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;field&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;output_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a>                <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].output_range&quot;</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a>            <span class="p">)</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a>        <span class="k">return</span> <span class="n">out</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Encoding&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild an encoding from its dict form.</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`.</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">            The encoding, validated as the constructor validates it.</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">            TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">                field, rather than failing inside `tuple()`.</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">            ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">                constructor refuses.</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">            - A stored constant reads back and resolves as before:</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">                &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;}).resolve()</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a><span class="sd">                &#39;#f00&#39;</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">            - A stored field-driven size reads back with its scale and output range:</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a><span class="sd">                &gt;&gt;&gt; stored = {&quot;channel&quot;: &quot;size&quot;, &quot;field&quot;: &quot;pop&quot;, &quot;scale&quot;: {&quot;vmin&quot;: 0, &quot;vmax&quot;: 100}}</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">                &gt;&gt;&gt; Encoding.from_dict({**stored, &quot;output_range&quot;: [4, 20]}).resolve([0.0, 50.0, 100.0])</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a><span class="sd">                [4.0, 12.0, 20.0]</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">            - A binding with both a constant and a field is refused:</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">                &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;, &quot;field&quot;: &quot;class&quot;})  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">                Traceback (most recent call last):</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">                    ...</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">                ValueError: an Encoding for &#39;color&#39; needs exactly one of value= (a constant) or field= ...</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a>            <span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;channel&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="s2">&quot;scale&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a>        <span class="p">)</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a>        <span class="n">scale</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scale&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a>        <span class="n">output_range</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a>            <span class="n">channel</span><span class="o">=</span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;channel&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a>            <span class="n">value</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a>            <span class="n">field</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;field&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a>            <span class="n">scale</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Scale</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">scale</span><span class="p">),</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a>            <span class="n">output_range</span><span class="o">=</span><span class="kc">None</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a>            <span class="k">if</span> <span class="n">output_range</span> <span class="ow">is</span> <span class="kc">None</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a>            <span class="k">else</span> <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">,</span> <span class="n">output_range</span><span class="p">),</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a>        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -20400,8 +20393,7 @@ constructor refuses.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/encoding.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-468">468</a></span>
-<span class="normal"><a href="#__codelineno-0-469">469</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-469">469</a></span>
 <span class="normal"><a href="#__codelineno-0-470">470</a></span>
 <span class="normal"><a href="#__codelineno-0-471">471</a></span>
 <span class="normal"><a href="#__codelineno-0-472">472</a></span>
@@ -20455,62 +20447,63 @@ constructor refuses.</p>
 <span class="normal"><a href="#__codelineno-0-520">520</a></span>
 <span class="normal"><a href="#__codelineno-0-521">521</a></span>
 <span class="normal"><a href="#__codelineno-0-522">522</a></span>
-<span class="normal"><a href="#__codelineno-0-523">523</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Encoding&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild an encoding from its dict form.</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`.</span>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">        The encoding, validated as the constructor validates it.</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">        TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the</span>
-<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">            field, rather than failing inside `tuple()`.</span>
-<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">        ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the</span>
-<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">            constructor refuses.</span>
-<a id="__codelineno-0-483" name="__codelineno-0-483"></a>
-<a id="__codelineno-0-484" name="__codelineno-0-484"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">        - A stored constant reads back and resolves as before:</span>
-<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">            &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;}).resolve()</span>
-<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">            &#39;#f00&#39;</span>
-<a id="__codelineno-0-490" name="__codelineno-0-490"></a>
-<a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">        - A stored field-driven size reads back with its scale and output range:</span>
-<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">            &gt;&gt;&gt; stored = {&quot;channel&quot;: &quot;size&quot;, &quot;field&quot;: &quot;pop&quot;, &quot;scale&quot;: {&quot;vmin&quot;: 0, &quot;vmax&quot;: 100}}</span>
-<a id="__codelineno-0-496" name="__codelineno-0-496"></a><span class="sd">            &gt;&gt;&gt; Encoding.from_dict({**stored, &quot;output_range&quot;: [4, 20]}).resolve([0.0, 50.0, 100.0])</span>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">            [4.0, 12.0, 20.0]</span>
-<a id="__codelineno-0-498" name="__codelineno-0-498"></a>
-<a id="__codelineno-0-499" name="__codelineno-0-499"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">        - A binding with both a constant and a field is refused:</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">            &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;, &quot;field&quot;: &quot;class&quot;})  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">            ValueError: an Encoding for &#39;color&#39; needs exactly one of value= (a constant) or field= ...</span>
-<a id="__codelineno-0-507" name="__codelineno-0-507"></a>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a>        <span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;channel&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="s2">&quot;scale&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a>    <span class="p">)</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a>    <span class="n">scale</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scale&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a>    <span class="n">output_range</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a>        <span class="n">channel</span><span class="o">=</span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;channel&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a>        <span class="n">value</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a>        <span class="n">field</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;field&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a>        <span class="n">scale</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Scale</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">scale</span><span class="p">),</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a>        <span class="n">output_range</span><span class="o">=</span><span class="kc">None</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a>        <span class="k">if</span> <span class="n">output_range</span> <span class="ow">is</span> <span class="kc">None</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a>        <span class="k">else</span> <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">,</span> <span class="n">output_range</span><span class="p">),</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a>    <span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-523">523</a></span>
+<span class="normal"><a href="#__codelineno-0-524">524</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Encoding&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild an encoding from its dict form.</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`.</span>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">        The encoding, validated as the constructor validates it.</span>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">        TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">            field, rather than failing inside `tuple()`.</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">        ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">            constructor refuses.</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">        - A stored constant reads back and resolves as before:</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">            &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;}).resolve()</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a><span class="sd">            &#39;#f00&#39;</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">        - A stored field-driven size reads back with its scale and output range:</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a><span class="sd">            &gt;&gt;&gt; stored = {&quot;channel&quot;: &quot;size&quot;, &quot;field&quot;: &quot;pop&quot;, &quot;scale&quot;: {&quot;vmin&quot;: 0, &quot;vmax&quot;: 100}}</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">            &gt;&gt;&gt; Encoding.from_dict({**stored, &quot;output_range&quot;: [4, 20]}).resolve([0.0, 50.0, 100.0])</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a><span class="sd">            [4.0, 12.0, 20.0]</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">        - A binding with both a constant and a field is refused:</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">            &gt;&gt;&gt; Encoding.from_dict({&quot;channel&quot;: &quot;color&quot;, &quot;value&quot;: &quot;#f00&quot;, &quot;field&quot;: &quot;class&quot;})  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="sd">            ValueError: an Encoding for &#39;color&#39; needs exactly one of value= (a constant) or field= ...</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a>        <span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;channel&quot;</span><span class="p">,</span> <span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;field&quot;</span><span class="p">,</span> <span class="s2">&quot;scale&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a>    <span class="p">)</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a>    <span class="n">scale</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;scale&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a>    <span class="n">output_range</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;output_range&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a>        <span class="n">channel</span><span class="o">=</span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;channel&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a>        <span class="n">value</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a>        <span class="n">field</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;field&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a>        <span class="n">scale</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">scale</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">Scale</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">scale</span><span class="p">),</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a>        <span class="n">output_range</span><span class="o">=</span><span class="kc">None</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a>        <span class="k">if</span> <span class="n">output_range</span> <span class="ow">is</span> <span class="kc">None</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a>        <span class="k">else</span> <span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Encoding&quot;</span><span class="p">,</span> <span class="s2">&quot;output_range&quot;</span><span class="p">,</span> <span class="n">output_range</span><span class="p">),</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -20823,7 +20816,7 @@ position, so the picture matches the legend's swatches.</li>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>channel</code>, plus whichever of <code>value</code>, <code>field</code>, <code>scale</code> and <code>output_range</code> is set. The constant goes</p>
+                <p><code>channel</code>, plus whichever of <code>value</code>, <code>field</code>, <code>scale</code> and <code>output_range</code> is set. The constant and</p>
               </div>
             </td>
           </tr>
@@ -20833,7 +20826,17 @@ position, so the picture matches the legend's swatches.</li>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>through the JSON check (a tuple is written as a list); <code>output_range</code> is written as a list, as held.</p>
+                <p><code>output_range</code> go through the JSON check, so a tuple is written as a list and a numpy number as a plain</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="typing.Dict">Dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Python one.</p>
               </div>
             </td>
           </tr>
@@ -20856,7 +20859,7 @@ position, so the picture matches the legend's swatches.</li>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if the constant, or the scale's scheme or a category, has no JSON form.</p>
+                <p>if the constant, an <code>output_range</code> end, or any field of the scale has no JSON form.</p>
               </div>
             </td>
           </tr>
@@ -20922,47 +20925,49 @@ position, so the picture matches the legend's swatches.</li>
 <span class="normal"><a href="#__codelineno-0-463">463</a></span>
 <span class="normal"><a href="#__codelineno-0-464">464</a></span>
 <span class="normal"><a href="#__codelineno-0-465">465</a></span>
-<span class="normal"><a href="#__codelineno-0-466">466</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-466">466</a></span>
+<span class="normal"><a href="#__codelineno-0-467">467</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <a id="__codelineno-0-427" name="__codelineno-0-427"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
 <a id="__codelineno-0-428" name="__codelineno-0-428"></a>
 <a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">        `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant goes</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">        through the JSON check (a tuple is written as a list); `output_range` is written as a list, as held.</span>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">        TypeError: if the constant, or the scale&#39;s scheme or a category, has no JSON form.</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">        - A constant is its channel and its value:</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">            &gt;&gt;&gt; Encoding.constant(&quot;opacity&quot;, 0.5).to_dict()</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">            {&#39;channel&#39;: &#39;opacity&#39;, &#39;value&#39;: 0.5}</span>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">        - A field-driven channel carries its scale:</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding, Scale</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">            &gt;&gt;&gt; stored = Encoding.by_field(&quot;size&quot;, &quot;pop&quot;, scale=Scale.from_limits(0, 100)).to_dict()</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">            &gt;&gt;&gt; stored[&quot;field&quot;], stored[&quot;scale&quot;]</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">            (&#39;pop&#39;, {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 100.0})</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-453" name="__codelineno-0-453"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;channel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="p">}</span>
-<a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
-<a id="__codelineno-0-456" name="__codelineno-0-456"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].value&quot;</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a>        <span class="p">)</span>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;field&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;output_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].output_range&quot;</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a>        <span class="p">)</span>
-<a id="__codelineno-0-466" name="__codelineno-0-466"></a>    <span class="k">return</span> <span class="n">out</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">        `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant and</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">        `output_range` go through the JSON check, so a tuple is written as a list and a numpy number as a plain</span>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">        Python one.</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">        TypeError: if the constant, an `output_range` end, or any field of the scale has no JSON form.</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">        - A constant is its channel and its value:</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">            &gt;&gt;&gt; Encoding.constant(&quot;opacity&quot;, 0.5).to_dict()</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a><span class="sd">            {&#39;channel&#39;: &#39;opacity&#39;, &#39;value&#39;: 0.5}</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a><span class="sd">        - A field-driven channel carries its scale:</span>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Encoding, Scale</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a><span class="sd">            &gt;&gt;&gt; stored = Encoding.by_field(&quot;size&quot;, &quot;pop&quot;, scale=Scale.from_limits(0, 100)).to_dict()</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a><span class="sd">            &gt;&gt;&gt; stored[&quot;field&quot;], stored[&quot;scale&quot;]</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a><span class="sd">            (&#39;pop&#39;, {&#39;vmin&#39;: 0.0, &#39;vmax&#39;: 100.0})</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;channel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="p">}</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].value&quot;</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>        <span class="p">)</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;field&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">field</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;scale&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">scale</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;output_range&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_json_value</span><span class="p">(</span>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">output_range</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Encoding[</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">channel</span><span class="si">!r}</span><span class="s2">].output_range&quot;</span>
+<a id="__codelineno-0-466" name="__codelineno-0-466"></a>        <span class="p">)</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a>    <span class="k">return</span> <span class="n">out</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
