@@ -17,6 +17,31 @@ from digitalearth.base.spec import (
     Symbology,
 )
 
+#: Work the counting doubles below record — equality comparisons made against a layer id, and reads of the layer a
+#: layer is draped over. The scaling test resets it before the change it measures.
+_WORK = {"compared": 0, "surface": 0}
+
+
+class _CountedId(str):
+    """A layer id that records each equality comparison made against it."""
+
+    __hash__ = str.__hash__
+
+    def __eq__(self, other):
+        """Compare as a string, and count the comparison."""
+        _WORK["compared"] += 1
+        return str.__eq__(self, other)
+
+
+class _CountedLayer(LayerSpec):
+    """A layer that records each read of the layer it is draped over."""
+
+    @property
+    def z_layer(self):
+        """The layer this one is draped over, counting the read."""
+        _WORK["surface"] += 1
+        return super().z_layer
+
 
 def _tree(*ids):
     """Return a tree of plain point layers with these ids, bottom first."""
@@ -457,27 +482,42 @@ class TestLayerTreeChanges:
 
 
 class TestScaling:
-    """A tree is changed once per layer a map adds, so validating it must not be quadratic per change."""
+    """A tree is changed once per layer a map adds, so validating a change must be linear in the layer count."""
 
-    def test_two_thousand_adds_stay_well_under_a_generous_bound(self):
-        """Building a 2,000-layer tree takes seconds at most, not half a minute.
+    def test_one_add_does_work_linear_in_the_size_of_the_tree(self):
+        """Adding a layer to a 400-layer chain of drapes compares ids and reads surfaces a few times per layer.
 
         Test scenario:
-            Validation counted each id with `ids.count` inside a loop over the ids — quadratic per change, so a tree
-            built one `add` at a time, which is how the web tier builds its index, was cubic overall: 2,000 adds took
-            32 s. With linear checks it is about 1.4 s on the machine that measured both. The bound is set far above
-            that so a slow CI runner does not flake, and far below the old time so the regression cannot come back
-            unnoticed.
+            Validation counted each id with `ids.count` inside a loop over the ids, and walked every layer's drape
+            chain back to its surface from scratch — both quadratic per change, so a tree built one `add` at a time,
+            as the web tier builds its index, was cubic overall. On this 400-layer chain that validation made
+            321,601 id comparisons and 81,402 surface reads for one `add`; the linear checks make 1,201 and 1,202.
+            The work is counted rather than timed, so the bound is exact on any machine: a wall-clock bound failed on
+            a Windows CI runner under coverage.
         """
-        import time
-
-        tree = LayerTree()
-        start = time.perf_counter()
-        for index in range(2000):
-            tree = tree.add(LayerSpec(f"layer-{index}", "points"))
-        elapsed = time.perf_counter() - start
-        assert len(tree) == 2000, len(tree)
-        assert elapsed < 10.0, f"2,000 adds took {elapsed:.1f} s"
+        size = 400
+        layers = [_CountedLayer(_CountedId("layer-0"), "raster")]
+        for index in range(1, size):
+            layers.append(
+                _CountedLayer(
+                    _CountedId(f"layer-{index}"),
+                    "rgb",
+                    z_source=f"layer:layer-{index - 1}",
+                )
+            )
+        tree = LayerTree(tuple(layers))
+        top = _CountedLayer(
+            _CountedId("top"), "rgb", z_source=f"layer:layer-{size - 1}"
+        )
+        _WORK.update(compared=0, surface=0)
+        grown = tree.add(top)
+        assert len(grown) == size + 1, len(grown)
+        assert _WORK["compared"] <= 4 * size, (
+            f"one add compared ids {_WORK['compared']} times"
+        )
+        assert _WORK["surface"] <= 4 * size, (
+            f"one add read drape surfaces {_WORK['surface']} times"
+        )
 
 
 class TestGroupVisibility:
