@@ -443,10 +443,11 @@ class Bounds:
                 ```
         """
         return {
-            "xmin": self.xmin,
-            "ymin": self.ymin,
-            "xmax": self.xmax,
-            "ymax": self.ymax,
+            # The constructor has already refused a non-finite edge, but not a numpy float, which json cannot write.
+            "xmin": float(self.xmin),
+            "ymin": float(self.ymin),
+            "xmax": float(self.xmax),
+            "ymax": float(self.ymax),
             "crs": crs_to_json(self.crs, "Bounds.crs"),
         }
 

@@ -681,16 +681,21 @@ class Scale:
 
                 ```
         """
-        out: Dict[str, Any] = {"vmin": self.vmin, "vmax": self.vmax}
+        # Every field goes through the shared JSON rules, typed or not: the constructor checks the domain is
+        # finite but not its type (np.float32 is not JSON), and checks neither the class edges nor `missing`.
+        out: Dict[str, Any] = {
+            "vmin": to_json_value(self.vmin, "Scale.vmin"),
+            "vmax": to_json_value(self.vmax, "Scale.vmax"),
+        }
         if self.scheme is not None:
             out["scheme"] = to_json_value(self.scheme, "Scale.scheme")
         if self.breaks:
-            out["breaks"] = list(self.breaks)
+            out["breaks"] = to_json_value(self.breaks, "Scale.breaks")
         if self.categories:
             out["categories"] = to_json_value(self.categories, "Scale.categories")
-            out["colors"] = list(self._colors)
+            out["colors"] = to_json_value(self._colors, "Scale.colors")
         if self.missing is not None:
-            out["missing"] = self.missing
+            out["missing"] = to_json_value(self.missing, "Scale.missing")
         return out
 
     @classmethod

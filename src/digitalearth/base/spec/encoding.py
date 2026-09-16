@@ -447,7 +447,9 @@ class Encoding:
         if self.scale is not None:
             out["scale"] = self.scale.to_dict()
         if self.output_range is not None:
-            out["output_range"] = list(self.output_range)
+            out["output_range"] = to_json_value(
+                self.output_range, f"Encoding[{self.channel!r}].output_range"
+            )
         return out
 
     @classmethod

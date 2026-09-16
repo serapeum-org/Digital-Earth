@@ -214,6 +214,62 @@ class TestWhatWritingRefuses:
         ):
             symbology.to_dict()
 
+    @pytest.mark.parametrize(
+        "build, field",
+        [
+            (
+                lambda: Scale(0.0, 1.0, breaks=(0.0, float("nan"), 1.0)),
+                r"Scale\.breaks\[1\] is nan",
+            ),
+            (
+                lambda: Scale(0.0, 1.0, missing=object()),
+                r"Scale\.missing holds a object",
+            ),
+            (
+                lambda: Encoding.by_field(
+                    "size", "p", output_range=(0.0, float("inf"))
+                ),
+                r"output_range\[1\] is inf",
+            ),
+        ],
+        ids=["scale-nan-edge", "scale-live-missing", "encoding-inf-range"],
+    )
+    def test_typed_fields_are_checked_like_free_form_ones(self, build, field):
+        """A field with a declared type still goes through the JSON rules when it is written.
+
+        Args:
+            build: Builds a value whose typed field holds something JSON cannot write.
+            field: A pattern naming that field in the message.
+
+        Test scenario:
+            The constructors check a domain is finite but not the class edges, `missing` or `output_range`, and
+            `to_dict` wrote those three straight into the dict — a NaN edge, an infinite range and a live object all
+            came out of `to_dict` and failed later inside `json.dumps`, naming neither the type nor the field.
+        """
+        value = build()
+        with pytest.raises(TypeError, match=field):
+            value.to_dict()
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            Scale(np.float32(0.0), np.float32(1.0)),
+            Bounds(np.float32(0.0), 0.0, np.float32(1.0), 1.0, crs=4326),
+        ],
+        ids=["scale-np-float32", "bounds-np-float32"],
+    )
+    def test_numpy_floats_in_typed_fields_are_written_as_python_floats(self, value):
+        """A domain or edge held as `np.float32` is written in a form strict JSON accepts.
+
+        Args:
+            value: A value built with numpy floats, which the constructor accepts.
+
+        Test scenario:
+            `np.float32` is not a `float` subclass, so `json.dumps` raised `TypeError` on the dict `to_dict` returned.
+        """
+        stored = value.to_dict()
+        assert json.loads(json.dumps(stored, allow_nan=False)) == stored, stored
+
     def test_a_written_figure_is_strict_json(self):
         """What `to_dict` produces passes `json.dumps(allow_nan=False)`, the strict writer."""
         stored = Symbology.of(opacity=0.5).with_props(levels=[1.5, 2.5]).to_dict()
