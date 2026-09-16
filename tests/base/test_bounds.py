@@ -276,6 +276,21 @@ class TestOperations:
 class TestReprojection:
     """`to_crs` delegates to pyramids; this package does no coordinate maths."""
 
+    def test_a_rectangle_outside_the_target_projection_names_both_crss(self):
+        """A rectangle on the far side of an orthographic globe is refused as a failed reprojection.
+
+        Test scenario:
+            pyramids returns infinite coordinates for a corner the target projection cannot show, and the enclosing
+            rectangle was handed straight to the constructor, which reported "Bounds needs finite edges; got
+            xmin=inf" — naming neither CRS nor the reprojection that produced the infinity.
+        """
+        far_side = Bounds(170.0, -10.0, 180.0, 10.0, crs=4326)
+        with pytest.raises(
+            ValueError,
+            match=r"in 4326 cannot be reprojected into '\+proj=ortho \+lat_0=0 \+lon_0=0'",
+        ):
+            far_side.to_crs("+proj=ortho +lat_0=0 +lon_0=0")
+
     def test_the_same_crs_is_returned_unchanged(self):
         """Reprojecting to the CRS it already has does no work.
 

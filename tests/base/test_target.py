@@ -170,6 +170,18 @@ class TestTheRequestAViewMakes:
             4_000_000,
         ), request
 
+    def test_bounds_the_view_projection_cannot_show_are_refused_as_a_reprojection(self):
+        """`view_request` for a region off an orthographic view's globe says the reprojection failed.
+
+        Test scenario:
+            The docstring promises a `ValueError` when the bounds "cannot be reprojected into the viewport's CRS",
+            but the one that surfaced was the `Bounds` constructor's "needs finite edges; got xmin=inf".
+        """
+        view = Viewport("+proj=ortho +lat_0=0 +lon_0=0")
+        region = Bounds(170.0, -10.0, 180.0, 10.0, crs=4326)
+        with pytest.raises(ValueError, match="cannot be reprojected into"):
+            RenderTarget().view_request(view, bounds=region)
+
     def test_with_no_view_explicit_bounds_are_used_as_given(self):
         """Without a view there is no CRS to reproject into, so the bounds pass through."""
         region = Bounds(0.0, 0.0, 1.0, 1.0, crs=32618)

@@ -425,6 +425,10 @@ class Bounds:
         Returns:
             The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches.
 
+        Raises:
+            ValueError: naming the rectangle and both CRSs, when a corner falls outside the area `crs` can show —
+                the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose.
+
         Examples:
             - Reprojecting to the CRS it already has is a no-op:
                 ```python
@@ -449,6 +453,13 @@ class Bounds:
             # into a degenerate one — and set_extent would hand matplotlib a singular limit.
             precision=None,
         )
+        if not all(isfinite(value) for value in (*xs, *ys)):
+            # pyramids answers a corner the target cannot show with an infinity. Handed on, the constructor would
+            # report an infinite edge without saying a reprojection produced it.
+            raise ValueError(
+                f"Bounds {self.as_bbox()} in {self.crs!r} cannot be reprojected into {crs!r}: part of the "
+                "rectangle falls outside the area that projection can show"
+            )
         return Bounds(min(xs), min(ys), max(xs), max(ys), crs)
 
     # ------------------------------------------------------------------ serialisation
