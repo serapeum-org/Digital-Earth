@@ -14,13 +14,24 @@ than being re-spelled — slightly differently — on each type. Three rules:
 
 from math import isfinite
 from numbers import Real
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Mapping,
+    NoReturn,
+    Optional,
+    Tuple,
+    TypeVar,
+)
 
 import numpy as np
 
 T = TypeVar("T")
 
 __all__ = [
+    "FrozenDict",
     "frozen_value",
     "as_list",
     "as_mapping",
@@ -34,6 +45,63 @@ __all__ = [
     "to_json_value",
     "true_or_false",
 ]
+
+
+class FrozenDict(Dict[str, Any]):
+    """A `dict` that refuses every change after it is built — how the spec types hold a mapping.
+
+    A read-only `mappingproxy` view froze the mapping too, but it cannot be copied: `pickle`, `copy.deepcopy` and
+    `dataclasses.asdict` all raised `cannot pickle 'mappingproxy' object`. This is a real `dict` — `asdict` turns it
+    into a plain one, `json` writes it, `==` compares it with a dict — whose mutators all raise.
+
+    Examples:
+        - It reads as a dict and refuses a change:
+            ```python
+            >>> from digitalearth.base.spec._serial import FrozenDict
+            >>> frozen = FrozenDict({"levels": (1, 2)})
+            >>> frozen == {"levels": (1, 2)}
+            True
+            >>> frozen["levels"] = (3,)
+            Traceback (most recent call last):
+                ...
+            TypeError: FrozenDict is read-only; build a new value instead
+
+            ```
+    """
+
+    __slots__ = ()
+
+    def _refuse(self, *args: Any, **kwargs: Any) -> NoReturn:
+        """Refuse a change.
+
+        Args:
+            *args: Whatever the mutator was given.
+            **kwargs: Likewise.
+
+        Raises:
+            TypeError: always.
+        """
+        raise TypeError(
+            f"{type(self).__name__} is read-only; build a new value instead"
+        )
+
+    __setitem__ = _refuse  # type: ignore[assignment]
+    __delitem__ = _refuse  # type: ignore[assignment]
+    __ior__ = _refuse  # type: ignore[assignment]
+    update = _refuse  # type: ignore[assignment]
+    setdefault = _refuse  # type: ignore[assignment]
+    pop = _refuse  # type: ignore[assignment]
+    popitem = _refuse  # type: ignore[assignment]
+    clear = _refuse  # type: ignore[assignment]
+
+    def __reduce__(self) -> Tuple[Any, Tuple[Dict[str, Any]]]:
+        """Pickle and copy by rebuilding from a plain dict.
+
+        Returns:
+            ``(type(self), (dict(self),))``. The default reduction for a `dict` subclass refills the new object
+            item by item through `__setitem__`, which this refuses.
+        """
+        return type(self), (dict(self),)
 
 
 def refuse_unknown(owner: str, data: Any, known: Iterable[str]) -> None:

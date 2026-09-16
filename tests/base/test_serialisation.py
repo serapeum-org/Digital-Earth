@@ -6,6 +6,7 @@ the pairs `Bounds`, `Selection`, `Scale`, `Encoding` and `Symbology` gained, and
 """
 
 import copy
+import dataclasses
 import datetime
 import json
 import pickle
@@ -36,6 +37,22 @@ from digitalearth.base.spec._serial import crs_to_json, finite_number, to_json_v
 
 #: A minimal valid panel list, for the figure reads that fail on another field.
 _PANELS = [{"id": "p", "viewport": {"crs": 3857}}]
+
+
+class _SubSymbology(Symbology):
+    """A caller's subclass of `Symbology`, to check copies keep it."""
+
+
+class _SubStyleSchema(StyleSchema):
+    """A caller's subclass of `StyleSchema`, to check copies keep it."""
+
+
+class _SubFigure(FigureSpec):
+    """A caller's subclass of `FigureSpec`, to check copies keep it."""
+
+
+class _SubTree(LayerTree):
+    """A caller's subclass of `LayerTree`, to check its changes keep it."""
 
 
 def _foreign_types(written, where="to_dict()"):
@@ -509,6 +526,134 @@ class TestCopyingAndPickling:
             "copy": lambda: copy.copy(value),
         }[how]()
         assert copied == value, f"{how} changed the value: {copied!r}"
+
+
+class TestAsdictAndSubclasses:
+    """`dataclasses.asdict` works on every type, and copying or changing a value keeps a caller's subclass."""
+
+    @pytest.mark.parametrize(
+        "build, reach",
+        [
+            (lambda: LayerSpec("a", "points"), lambda d: d["symbology"]["props"]),
+            (
+                lambda: LayerSpec("a", "points", symbology=Symbology.of(color="#f00")),
+                lambda d: d["symbology"]["encodings"]["color"],
+            ),
+            (
+                lambda: FigureSpec(
+                    panels=(PanelSpec("p"),), sources={"s": DataRef("a.tif")}
+                ),
+                lambda d: d["sources"]["s"],
+            ),
+            (
+                lambda: StyleSchema.of(StyleKey("cmap", "Colormap name.")),
+                lambda d: d["keys"]["cmap"],
+            ),
+        ],
+        ids=["plain-layer", "styled-layer", "figure-sources", "style-schema"],
+    )
+    def test_asdict_turns_the_frozen_mappings_into_dicts(self, build, reach):
+        """`dataclasses.asdict` gives dicts all the way down, through the mappings the types freeze.
+
+        A frozen mapping comes back as its own `dict` subclass, as `asdict` returns any dict subclass; the values in
+        it are converted like any others.
+
+        Args:
+            build: Builds a value holding a frozen mapping.
+            reach: Picks a part inside such a mapping out of the `asdict` result.
+
+        Test scenario:
+            The mappings were read-only `mappingproxy` views, which cannot be deep-copied, so `asdict` raised
+            `cannot pickle 'mappingproxy' object` — for every `LayerSpec`, a plain one included, since an empty
+            `Symbology` still holds two views. The `__reduce__` fix covered `pickle` and `copy` only.
+        """
+        part = reach(dataclasses.asdict(build()))
+        assert isinstance(part, dict), type(part).__name__
+
+    @pytest.mark.parametrize("how", ["pickle", "deepcopy"])
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda: _SubSymbology.of(color="#f00"),
+            lambda: _SubStyleSchema.of(StyleKey("cmap", "Colormap name.")),
+            lambda: _SubFigure(panels=(PanelSpec("p"),)),
+        ],
+        ids=["symbology", "style-schema", "figure"],
+    )
+    def test_a_copy_keeps_a_callers_subclass(self, build, how):
+        """Copying a subclass of a type that holds a frozen mapping gives back the subclass.
+
+        Args:
+            build: Builds an instance of a subclass.
+            how: `pickle` or `copy.deepcopy`.
+
+        Test scenario:
+            Each `__reduce__` rebuilt the base class by name, so a caller's subclass copied back as the base.
+        """
+        value = build()
+        copied = (
+            pickle.loads(pickle.dumps(value))
+            if how == "pickle"
+            else copy.deepcopy(value)
+        )
+        assert type(copied) is type(value), type(copied).__name__
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            lambda tree: tree.remove("b"),
+            lambda tree: tree.replace(LayerSpec("a", "lines")),
+            lambda tree: tree.add(LayerSpec("c", "points")),
+            lambda tree: tree.move("a", -1),
+        ],
+        ids=["remove", "replace", "add", "move"],
+    )
+    def test_a_tree_change_keeps_a_callers_subclass(self, change):
+        """Every change to a `LayerTree` subclass returns the subclass.
+
+        Args:
+            change: One tree change.
+
+        Test scenario:
+            `add` and `move` rebuilt the tree with `dataclasses.replace` and kept the subclass; `remove` and
+            `replace` called `LayerTree(...)` by name and dropped it.
+        """
+        tree = _SubTree((LayerSpec("a", "points"), LayerSpec("b", "points")))
+        assert type(change(tree)) is _SubTree
+
+    @pytest.mark.parametrize(
+        "mutate",
+        [
+            lambda props: props.__setitem__("x", 1),
+            lambda props: props.__delitem__("levels"),
+            lambda props: props.update(x=1),
+            lambda props: props.setdefault("x", 1),
+            lambda props: props.pop("levels"),
+            lambda props: props.popitem(),
+            lambda props: props.clear(),
+            lambda props: props.__ior__({"x": 1}),
+        ],
+        ids=[
+            "setitem",
+            "delitem",
+            "update",
+            "setdefault",
+            "pop",
+            "popitem",
+            "clear",
+            "ior",
+        ],
+    )
+    def test_a_frozen_mapping_refuses_every_change(self, mutate):
+        """Every way of changing a dict is refused on the mappings the types freeze.
+
+        Args:
+            mutate: One dict mutator, applied to a symbology's properties.
+        """
+        symbology = Symbology().with_props(levels=(1, 2))
+        with pytest.raises(TypeError, match="read-only"):
+            mutate(symbology.props)
+        assert dict(symbology.props) == {"levels": (1, 2)}, symbology.props
 
 
 class TestWhatWritingRefuses:

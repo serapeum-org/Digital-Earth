@@ -5,7 +5,7 @@ rectangle, which slice, which colour rule — and never *how* a backend draws it
 matplotlib, pyvista, holoviews or maplibre; :mod:`tests.test_base_is_engine_neutral` enforces that.
 
 "Frozen" covers the structure, and the sequences inside it. Every sequence field is copied to a tuple and
-every mapping to a read-only view, and the free-form values (`Selection.time`, `Encoding.value`, a `Symbology`
+every mapping to a read-only `FrozenDict`, and the free-form values (`Selection.time`, `Encoding.value`, a `Symbology`
 property, a `Scale` category) store their lists as tuples, however nested. So `Selection.of(1, time=[1, 2])` and
 `Selection.of(1, time=(1, 2))` are one value that hashes, and a round trip through JSON — which has no tuple —
 reads back equal. A numpy array held as such a value is stored the same way, as nested tuples of its elements.

@@ -16,11 +16,11 @@ layers it shows. Two decisions:
 """
 
 from dataclasses import dataclass, field
-from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple, Union
 
 from digitalearth.base.registry import OBJECT_SCHEME
 from digitalearth.base.spec._serial import (
+    FrozenDict,
     as_list,
     as_mapping,
     plain_text,
@@ -344,7 +344,7 @@ class FigureSpec:
             )
         object.__setattr__(self, "panels", self._checked_panels(self.panels))
         object.__setattr__(
-            self, "sources", MappingProxyType(self._checked_sources(self.sources))
+            self, "sources", FrozenDict(self._checked_sources(self.sources))
         )
         if not isinstance(self.layers, LayerTree):
             raise ValueError(
@@ -360,12 +360,9 @@ class FigureSpec:
         """Pickle and copy by rebuilding through the constructor.
 
         Returns:
-            ``(FigureSpec, (panels, dict(sources), layers, size, title, schema_version))``.
-
-            `sources` is stored as a read-only mapping view, which cannot be pickled, so `pickle`, `copy.copy` and
-            `copy.deepcopy` raised `cannot pickle 'mappingproxy' object` for every figure, one with no sources
-            included. Rebuilding from a plain dict goes through the same validation and freezing as any other
-            construction.
+            ``(type(self), (panels, dict(sources), layers, size, title, schema_version))`` — the caller's
+            subclass, not `FigureSpec` by name. Rebuilding from a plain dict goes through the same validation and
+            freezing as any other construction.
 
         Examples:
             - A copy is equal to the original, and is a separate object:
@@ -379,7 +376,7 @@ class FigureSpec:
 
                 ```
         """
-        return FigureSpec, (
+        return type(self), (
             self.panels,
             dict(self.sources),
             self.layers,
@@ -397,8 +394,8 @@ class FigureSpec:
             `LayerTree`, `PanelSpec` and `Viewport` all hashed.
 
         Raises:
-            TypeError: if a part holds an unhashable value — a dict or a numpy array in a layer's `Symbology`
-                properties, say. A list is not among them: the vocabulary stores lists as tuples.
+            TypeError: if a part holds an unhashable value — a dict in a layer's `Symbology` properties, say. A
+                list or a numpy array is not among them: the vocabulary stores both as tuples.
 
         Examples:
             - Two figures built alike hash alike, so a figure can key a cache:

@@ -27,10 +27,10 @@ backend's job, and in the static tier there is exactly one place it happens.
 
 from dataclasses import dataclass, field
 from difflib import get_close_matches
-from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.spec._serial import (
+    FrozenDict,
     as_mapping,
     frozen_value,
     plain_text,
@@ -135,13 +135,15 @@ class Symbology:
         """Check every encoding is filed under its own channel, then freeze both mappings.
 
         The dataclass is frozen, but a plain ``dict`` field is not — a caller holding the dict it passed in
-        could still re-key the symbology afterwards. Replacing both with read-only views closes that.
+        could still re-key the symbology afterwards. Holding both as a read-only
+        :class:`~digitalearth.base.spec._serial.FrozenDict` closes that, and still copies, pickles and converts
+        under `dataclasses.asdict`.
 
         Property values are stored in their canonical form: every list and tuple in them, however nested,
         becomes a tuple (see :func:`~digitalearth.base.spec._serial.frozen_value`). That copies a caller's list —
         appending to it afterwards no longer changes the symbology — and it is what lets a symbology written with
-        `to_dict`, where tuples become JSON lists, read back equal and hashable. Other mutable values (a numpy
-        array, a custom object) are still held as given.
+        `to_dict`, where tuples become JSON lists, read back equal and hashable. A numpy array is stored as nested
+        tuples too; any other mutable value, a custom object say, is held as given.
 
         Raises:
             ValueError: if a key does not match its encoding's channel.
@@ -152,11 +154,11 @@ class Symbology:
                     f"encoding filed under {key!r} drives channel {encoding.channel!r}; "
                     "a Symbology stores each encoding under the channel it drives"
                 )
-        object.__setattr__(self, "encodings", MappingProxyType(dict(self.encodings)))
+        object.__setattr__(self, "encodings", FrozenDict(dict(self.encodings)))
         object.__setattr__(
             self,
             "props",
-            MappingProxyType(
+            FrozenDict(
                 {key: frozen_value(value) for key, value in dict(self.props).items()}
             ),
         )
@@ -165,12 +167,9 @@ class Symbology:
         """Pickle and copy by rebuilding through the constructor.
 
         Returns:
-            ``(Symbology, (dict(encodings), dict(props)))``.
+            ``(type(self), (dict(encodings), dict(props)))`` — the caller's subclass, not `Symbology` by name.
 
-            The read-only mapping views this type stores cannot be pickled, so
-            `pickle`, `copy.copy` and `copy.deepcopy` raised ``cannot pickle 'mappingproxy' object`` — for this
-            type and for everything holding one, a `LayerTree` and a web map with a layer included. Rebuilding
-            from plain dicts goes through the same validation and freezing as any other construction.
+            Rebuilding from plain dicts goes through the same validation and freezing as any other construction.
 
         Examples:
             - A copy is equal to the original, and is a separate object:
@@ -184,7 +183,7 @@ class Symbology:
 
                 ```
         """
-        return Symbology, (dict(self.encodings), dict(self.props))
+        return type(self), (dict(self.encodings), dict(self.props))
 
     def __hash__(self) -> int:
         """Hash by the channels driven and the properties set, so a style can key a cache.
@@ -450,17 +449,14 @@ class StyleSchema:
 
     def __post_init__(self) -> None:
         """Freeze the table, so a schema handed around cannot be extended behind a caller's back."""
-        object.__setattr__(self, "keys", MappingProxyType(dict(self.keys)))
+        object.__setattr__(self, "keys", FrozenDict(dict(self.keys)))
 
     def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
         """Pickle and copy by rebuilding through the constructor.
 
         Returns:
-            ``(StyleSchema, (dict(keys),))``.
-
-            `keys` is stored as a read-only mapping view, which cannot be pickled, so `pickle`, `copy.copy` and
-            `copy.deepcopy` raised `cannot pickle 'mappingproxy' object` for every schema. Rebuilding from a plain
-            dict goes through the same freezing as any other construction.
+            ``(type(self), (dict(keys),))`` — the caller's subclass, not `StyleSchema` by name. Rebuilding from a
+            plain dict goes through the same freezing as any other construction.
 
         Examples:
             - A copy is equal to the original, and is a separate object:
@@ -474,7 +470,7 @@ class StyleSchema:
 
                 ```
         """
-        return StyleSchema, (dict(self.keys),)
+        return type(self), (dict(self.keys),)
 
     @classmethod
     def of(cls, *keys: StyleKey) -> "StyleSchema":

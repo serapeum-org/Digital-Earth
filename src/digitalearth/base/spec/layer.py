@@ -719,8 +719,13 @@ class LayerTree:
             )
         layers = tuple(layer for layer in self.layers if layer.id != layer_id)
         groups = {layer.group for layer in layers}
-        return LayerTree(
-            layers, frozenset(group for group in self.hidden_groups if group in groups)
+        # `with_fields`, not `LayerTree(...)`: a caller's subclass stays a subclass, as it does through add and move.
+        return with_fields(
+            self,
+            layers=layers,
+            hidden_groups=frozenset(
+                group for group in self.hidden_groups if group in groups
+            ),
         )
 
     def move(self, layer_id: str, index: int) -> "LayerTree":
@@ -821,8 +826,12 @@ class LayerTree:
             layer if existing.id == layer.id else existing for existing in self.layers
         )
         groups = {existing.group for existing in layers}
-        return LayerTree(
-            layers, frozenset(group for group in self.hidden_groups if group in groups)
+        return with_fields(
+            self,
+            layers=layers,
+            hidden_groups=frozenset(
+                group for group in self.hidden_groups if group in groups
+            ),
         )
 
     def set_visible(self, layer_id: str, visible: bool) -> "LayerTree":
