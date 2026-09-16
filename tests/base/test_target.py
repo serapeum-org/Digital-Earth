@@ -158,6 +158,44 @@ class TestTheRequestAViewMakes:
         request = RenderTarget(kind, width=width, height=height).view_request()
         assert request.side() == side, request
 
+    @pytest.mark.parametrize(
+        "crs, expected",
+        [
+            (4326, [-10.0, 35.0, 30.0, 60.0]),
+            (3857, [-1113194.9, 4163881.1, 3339584.7, 8399737.9]),
+        ],
+        ids=["in-degrees", "reprojected"],
+    )
+    def test_a_box_domain_is_the_region_asked_for(self, crs, expected):
+        """A view framed by a `(west, south, east, north)` domain asks for that box, in the view's CRS.
+
+        Args:
+            crs: The view's CRS.
+            expected: The requested bbox, rounded to a decimetre.
+
+        Test scenario:
+            `view_request` read only `view.bounds`, and a view holds bounds or a domain, never both — so every
+            domain-framed view sent the reader for the whole source.
+        """
+        request = RenderTarget().view_request(
+            Viewport(crs, domain=(-10.0, 35.0, 30.0, 60.0))
+        )
+        assert [round(edge, 1) for edge in request.as_bbox()] == expected, (
+            request.bounds
+        )
+        assert request.crs == crs, request.crs
+
+    def test_a_named_domain_is_refused_rather_than_read_as_the_whole_source(self):
+        """A region name resolves in the static tier, which `base` cannot import, so the request says so.
+
+        Test scenario:
+            ``Viewport(3857, domain="europe")`` made a request with no region at all, reading the whole source for a
+            view of Europe without a word.
+        """
+        view = Viewport(3857, domain="europe")
+        with pytest.raises(ValueError, match="named domain 'europe'"):
+            RenderTarget().view_request(view)
+
     def test_a_camera_supplies_no_region(self):
         """A 3-D view has no rectangle to read; the target's budget is what limits it."""
         request = RenderTarget("image", width=1024, height=768).view_request(

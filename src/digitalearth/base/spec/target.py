@@ -171,15 +171,17 @@ class RenderTarget:
                 given.
 
         Returns:
-            The request: region, canvas, pixel ratio and :attr:`effective_budget`. With a canvas named, the
-            request's :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the canvas,
-            within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed
+            The request: region, canvas, pixel ratio and :attr:`effective_budget`. A view framed by a
+            `(west, south, east, north)` domain asks for that box, reprojected into the view's CRS. With a canvas
+            named, the request's :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the
+            canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed
             `Viewport` included — and a request with no region carries no CRS either: the reader returns the source
             in its own CRS, and the renderer reprojects it into the view's.
 
         Raises:
-            ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, or
-                if `bounds` cannot be reprojected into the viewport's CRS.
+            ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, if
+                `bounds` or a domain box cannot be reprojected into the viewport's CRS, or if the view is framed by a
+                named domain, which `base` cannot resolve.
 
         Examples:
             - The view's region, the target's canvas and budget:
@@ -217,8 +219,10 @@ class RenderTarget:
                 f"RenderTarget.view_request needs bounds as a Bounds; got {type(bounds).__name__}"
             )
         region: Optional[Bounds] = None
-        if isinstance(view, Viewport):
-            region = view.framed(bounds).bounds if bounds is not None else view.bounds
+        if isinstance(view, Viewport) and bounds is not None:
+            region = view.framed(bounds).bounds
+        elif isinstance(view, Viewport):
+            region = view.bounds if view.domain is None else self._domain_region(view)
         elif bounds is not None:
             region = bounds
         return ViewRequest(
@@ -228,6 +232,28 @@ class RenderTarget:
             pixel_ratio=self.pixel_ratio,
             budget=self.effective_budget,
         )
+
+    @staticmethod
+    def _domain_region(view: Viewport) -> Bounds:
+        """Return the region a domain-framed view shows, in the view's CRS.
+
+        Args:
+            view: A view framed by `domain` rather than `bounds`.
+
+        Returns:
+            The `(west, south, east, north)` box, read in degrees and reprojected into the view's CRS.
+
+        Raises:
+            ValueError: for a named domain. Names resolve in `digitalearth.static.domains`, which `base` cannot
+                import without importing a renderer; a request with no region would read the whole source instead
+                of the region the view names.
+        """
+        if isinstance(view.domain, str):
+            raise ValueError(
+                f"RenderTarget.view_request cannot resolve the named domain {view.domain!r}; frame the view with "
+                "Viewport.framed(bounds), or give the domain as (west, south, east, north)"
+            )
+        return Bounds.from_bbox(list(view.domain), crs=4326).to_crs(view.crs)  # type: ignore[arg-type]
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a figure stores.
