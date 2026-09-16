@@ -10,6 +10,39 @@ import pytest
 from digitalearth.base.spec import Bounds
 from digitalearth.base.spec.bounds import same_crs
 
+#: A projected CRS with no authority code of its own — the kind a `.prj` file gives a `GeoDataFrame`. PROJ's
+#: identification guesses EPSG:23031 (ED50 / UTM 31N) for it at 70% confidence, which is a different datum.
+_CODELESS_UTM = "+proj=utm +zone=31 +ellps=intl +units=m +no_defs"
+
+
+@pytest.fixture
+def identifications(monkeypatch):
+    """Count every PROJ identification (`CRS.to_epsg` / `CRS.to_authority`) made while a test runs.
+
+    Args:
+        monkeypatch: pytest's patcher, used to wrap the two pyproj methods.
+
+    Returns:
+        A dict whose ``"count"`` the wrapped methods increment.
+    """
+    import pyproj
+
+    seen = {"count": 0}
+    for name in ("to_epsg", "to_authority"):
+        original = getattr(pyproj.CRS, name)
+        monkeypatch.setattr(pyproj.CRS, name, _counted(original, seen))
+    return seen
+
+
+def _counted(method, seen):
+    """Wrap a pyproj method so each call increments ``seen["count"]``."""
+
+    def wrapper(self, *args, **kwargs):
+        seen["count"] += 1
+        return method(self, *args, **kwargs)
+
+    return wrapper
+
 
 class TestTheOrderingIsNamed:
     """The two conventions are methods, so a call site states which it wants."""
@@ -236,6 +269,48 @@ class TestOperations:
             "the same CRS object must be recognised as the same CRS"
         )
         assert box.to_crs(3857) is box, "and so must its EPSG code"
+
+    def test_a_crs_object_without_a_code_is_not_the_code_proj_guesses_for_it(self):
+        """A code-less CRS object is the same CRS as its own definition, and not the EPSG code PROJ guesses for it.
+
+        Test scenario:
+            `same_crs` wrote a CRS object through PROJ's identification at 70% confidence, so this UTM zone on the
+            International ellipsoid compared equal to EPSG:23031 (ED50 / UTM 31N, another datum) — while its own WKT,
+            which names the same definition, did not. Two spellings of one CRS disagreed, and a `Viewport` in the
+            object accepted a rectangle in the guessed code without reprojecting it.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        obj = crs_from_user_input(_CODELESS_UTM)
+        assert same_crs(obj, 23031) is False, "a guessed code is not the object's CRS"
+        assert same_crs(obj, obj.to_wkt()) is True, (
+            "the object's own definition is its CRS"
+        )
+
+    def test_comparing_and_reprojecting_crs_objects_runs_no_proj_identification(
+        self, identifications
+    ):
+        """`same_crs`, a no-op `to_crs` and `Viewport.framed` read a CRS object's definition, not the PROJ database.
+
+        Args:
+            identifications: Counts PROJ identification calls.
+
+        Test scenario:
+            Each comparison identified the object against the PROJ database, uncached — about 50-130 ms per call for a
+            code-less CRS — so the static tier's `set_domain` on a `GeoDataFrame.crs` went from 0.008 s to 0.3 s. It
+            made 2 identifications for one `same_crs`, 2 for a no-op `to_crs` and 5 for `framed`.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        from digitalearth.base.spec import Viewport
+
+        obj = crs_from_user_input(_CODELESS_UTM)
+        same_crs(obj, obj)
+        Bounds(0.0, 0.0, 1.0, 1.0, crs=obj).to_crs(obj)
+        Viewport(obj).framed(Bounds(2.0, 50.0, 3.0, 51.0, crs=4326))
+        assert identifications["count"] == 0, (
+            f"{identifications['count']} PROJ identifications"
+        )
 
     def test_an_unreadable_crs_spelling_falls_back_to_plain_inequality(self):
         """A CRS neither pyramids nor equality can match is treated as different, not as an error.

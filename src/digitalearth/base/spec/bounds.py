@@ -53,10 +53,12 @@ def same_crs(one: Any, other: Any) -> bool:
         ``True`` for two unset CRSs, which is the one case a shortcut would have been for.
 
         A CRS **object** — a pyproj `CRS`, which is what `GeoDataFrame.crs` holds — is first written in the
-        spelling a figure stores it in (``"EPSG:<code>"``, or WKT when it has no code), because `crs_equal` reads
-        only ``int``/``str``/``None`` and answers ``False`` for an object compared even with itself. Without that,
-        a `Viewport` in an object CRS could never hold bounds, and `to_crs` reprojected a rectangle into the CRS it
-        was already in.
+        spelling a figure stores it in (``"EPSG:<code>"`` when its definition carries the code, WKT otherwise),
+        because `crs_equal` reads only ``int``/``str``/``None`` and answers ``False`` for an object compared even
+        with itself. Without that, a `Viewport` in an object CRS could never hold bounds, and `to_crs` reprojected a
+        rectangle into the CRS it was already in. The object is not identified against the PROJ database, so it
+        never compares equal to a code PROJ merely guesses for it, and comparing costs a read of its definition
+        rather than a database search.
 
         A value with no written form — a float, a boolean, a list, an object pyramids cannot read — compares as
         different, and is never handed to `crs_equal`. Its answers are cached by value regardless of type, so a

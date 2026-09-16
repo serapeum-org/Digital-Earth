@@ -449,9 +449,14 @@ def crs_to_json(crs: Any, where: str) -> Any:
     Returns:
         `None` or a string unchanged — a string is not checked, so one pyramids cannot read is written as
         given — and an integer (a numpy integer included) as a Python `int`. A CRS object becomes
-        `"EPSG:<code>"` when pyramids reads an authority code out of it, and its WKT otherwise. Either reads
-        back through the same pyramids parser that read the object, so the system is kept even though the
-        Python type is not.
+        `"EPSG:<code>"` when its own definition carries that code, and its WKT otherwise. Either reads back
+        through the same pyramids parser that read the object, so the system is kept even though the Python
+        type is not.
+
+        The code is read off the definition, never identified against the PROJ database. Identification is
+        slow — tens of milliseconds for a CRS with no code, on every call — and at its default confidence it
+        guesses: a UTM zone on the International ellipsoid comes back as EPSG:23031, which is ED50, another
+        datum, so a stored figure would read back in a CRS it was not built in.
 
     Raises:
         TypeError: for a boolean — `True` is an `int` and would be written as EPSG code 1 — or for any other
@@ -475,6 +480,14 @@ def crs_to_json(crs: Any, where: str) -> Any:
             'PROJCRS'
 
             ```
+        - A CRS with no code of its own is not written as the code PROJ would guess for it:
+            ```python
+            >>> from pyramids.base.crs import crs_from_user_input
+            >>> from digitalearth.base.spec._serial import crs_to_json
+            >>> crs_to_json(crs_from_user_input("+proj=utm +zone=31 +ellps=intl"), "Bounds.crs")[:7]
+            'PROJCRS'
+
+            ```
         - A boolean names no reference system:
             ```python
             >>> from digitalearth.base.spec._serial import crs_to_json
@@ -493,16 +506,24 @@ def crs_to_json(crs: Any, where: str) -> Any:
         )
     if isinstance(crs, (int, np.integer)):
         return int(crs)
-    # Imported here: resolving a CRS object is pyramids' job, and a spec holding only EPSG ints or strings should
+    # Imported here: reading a CRS object is pyramids' job, and a spec holding only EPSG ints or strings should
     # not pay for importing it.
-    from digitalearth.base.crs import authority_code
+    from pyramids.base.crs import crs_from_user_input
 
-    code = authority_code(crs)
-    if code is not None:
-        return f"EPSG:{code}"
-    to_wkt = getattr(crs, "to_wkt", None)
-    if callable(to_wkt):
-        return str(to_wkt())
-    raise TypeError(
-        f"{where} holds a {type(crs).__name__} that is not a readable CRS; store an EPSG integer or a CRS string"
-    )
+    try:
+        parsed = crs_from_user_input(crs)
+    # Whatever pyramids cannot read as a CRS — a float, a list, an arbitrary object — has no written form.
+    except Exception:  # noqa: BLE001
+        parsed = None
+    definition = getattr(parsed, "to_json_dict", None)
+    if not callable(definition):
+        raise TypeError(
+            f"{where} holds a {type(crs).__name__} that is not a readable CRS; store an EPSG integer or a CRS "
+            "string"
+        )
+    identifier = definition().get("id") or {}
+    if identifier.get("authority") == "EPSG" and isinstance(
+        identifier.get("code"), int
+    ):
+        return f"EPSG:{identifier['code']}"
+    return str(parsed.to_wkt())

@@ -652,6 +652,27 @@ class TestNumpyInputs:
 class TestTheSharedRules:
     """`base/spec/_serial.py` on its own."""
 
+    def test_a_code_less_crs_object_is_written_as_its_own_definition(self):
+        """A CRS object with no authority code is written as its WKT, which reads back to the same definition.
+
+        Test scenario:
+            `crs_to_json` wrote a CRS object as the EPSG code PROJ identified at 70% confidence. For this UTM zone on
+            the International ellipsoid that was "EPSG:23031" — ED50, a different datum — so a stored figure read
+            back in another CRS, and a corner warped from it landed about 148 m from where the view put it.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        obj = crs_from_user_input("+proj=utm +zone=31 +ellps=intl +units=m +no_defs")
+        written = crs_to_json(obj, "crs")
+        assert not written.startswith("EPSG:"), written
+        assert crs_from_user_input(written).to_wkt() == obj.to_wkt(), written
+
+    def test_a_crs_object_carrying_its_code_is_written_by_that_code(self):
+        """An object built from an EPSG code keeps that code as its written form."""
+        from pyramids.base.crs import crs_from_user_input
+
+        assert crs_to_json(crs_from_user_input("EPSG:3857"), "crs") == "EPSG:3857"
+
     def test_numpy_values_are_written_as_python_values(self):
         """A numpy scalar or array is written in the form JSON reads back."""
         written = to_json_value(
