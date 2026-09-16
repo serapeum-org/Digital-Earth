@@ -120,9 +120,10 @@ class Encoding:
             positions the backend's ramp consumes.
 
     Raises:
-        ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, or if a
-            scale or an output range is attached to a constant — a constant that carries a mapping is a
-            caller who expected the mapping to apply, and silently ignoring it would draw one colour.
+        ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, if `field` is
+            not a non-empty string, or if a scale or an output range is attached to a constant — a constant that
+            carries a mapping is a caller who expected the mapping to apply, and silently ignoring it would draw one
+            colour.
 
     Examples:
         - A constant, which is what a plain ``color="#f00"`` means:
@@ -162,8 +163,8 @@ class Encoding:
         """Refuse an encoding that names no channel, or names both a constant and a field.
 
         Raises:
-            ValueError: for an undeclared channel, an ambiguous or empty binding, or a mapping attached to a
-                constant.
+            ValueError: for an undeclared channel, an ambiguous or empty binding, a field that is not a string, or
+                a mapping attached to a constant.
         """
         if self.channel not in CHANNELS:
             raise ValueError(
@@ -177,11 +178,14 @@ class Encoding:
                 f"an Encoding for {self.channel!r} needs exactly one of value= (a constant) or field= "
                 "(driven by the data); a constant of None reads as no binding at all"
             )
-        if self.field is not None and not str(self.field).strip():
-            # `by_field` refuses this, but the constructor is public too — and an empty field name reports
-            # is_constant == False while naming a column nobody can look up.
+        if self.field is not None and (
+            not isinstance(self.field, str) or not self.field.strip()
+        ):
+            # `by_field` refuses an empty name, but the constructor is public too — and an empty field name reports
+            # is_constant == False while naming a column nobody can look up. A field that is not a string at all —
+            # a datetime, NaN, a number — would be written by `to_dict` as it is, and fail inside `json.dumps`.
             raise ValueError(
-                f"an Encoding for {self.channel!r} needs a non-empty field name; got {self.field!r}"
+                f"an Encoding for {self.channel!r} needs a field name that is a non-empty string; got {self.field!r}"
             )
         if self.output_range is not None:
             if isinstance(self.output_range, (str, bytes)) or not hasattr(
@@ -298,7 +302,7 @@ class Encoding:
         """
         if not field:
             raise ValueError(
-                f"an Encoding for {channel!r} needs a non-empty field name"
+                f"an Encoding for {channel!r} needs a field name that is a non-empty string"
             )
         return cls(channel=channel, field=field, scale=scale, output_range=output_range)
 

@@ -70,14 +70,26 @@ class DataRef:
     version: Optional[str] = None
 
     def __post_init__(self) -> None:
-        """Refuse a reference that names nothing.
+        """Refuse a reference that names nothing, or holds a hint a figure could not store.
 
         Raises:
-            ValueError: if `uri` is empty or blank. An empty reference resolves to whatever the working
-                directory happens to be, which is a failure that only shows on someone else's machine.
+            ValueError: if `uri` is not a string or is empty or blank — an empty reference resolves to whatever the
+                working directory happens to be, which is a failure that only shows on someone else's machine —
+                or if `driver` or `version` is neither a string nor ``None``. A `pathlib.Path` is refused as a
+                `uri` too: pass ``str(path)``.
         """
-        if not self.uri or not self.uri.strip():
-            raise ValueError("DataRef needs a non-empty uri")
+        if not isinstance(self.uri, str) or not self.uri.strip():
+            raise ValueError(
+                f"DataRef needs uri as a non-empty string; got {self.uri!r}"
+            )
+        for hint in ("driver", "version"):
+            value = getattr(self, hint)
+            if value is not None and not isinstance(value, str):
+                # Written by `to_dict` as it is, a non-string hint failed inside `json.dumps`, naming neither
+                # the type nor the field — or, for a number, read back as a number.
+                raise ValueError(
+                    f"DataRef needs {hint} as a string or None; got {value!r}"
+                )
         if self.uri != self.uri.strip():
             # Blank was already refused; surrounding whitespace was not, and " a.tif" is a path that does
             # not exist on any filesystem that would have opened "a.tif".
