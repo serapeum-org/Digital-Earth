@@ -186,6 +186,7 @@ class TestTheRegistryIsAddressable:
             ("extrusion", "polygons", (), {"height": "pop"}, "extrusion"),
             ("text", None, (4.9, 52.4, "Amsterdam"), {}, "text"),
             ("graticule", None, (), {}, "graticule"),
+            ("labels", "points", ("v",), {}, "label"),
         ],
         ids=[
             "add_raster",
@@ -195,6 +196,7 @@ class TestTheRegistryIsAddressable:
             "extrusion",
             "text",
             "graticule",
+            "labels",
         ],
     )
     def test_every_other_builder_records_the_kind_of_layer_it_adds(
@@ -213,7 +215,8 @@ class TestTheRegistryIsAddressable:
         Test scenario:
             The vector builders record their paint type, asserted above. The raster, composite, big-data, 3-D and
             decoration builders each pass their own kind, and a wrong one would describe the layer as something
-            it is not in any later export.
+            it is not in any later export. `labels` builds a symbol layer and records `"label"`, the one vector
+            kind that is not a paint type.
         """
         from digitalearth.web import WebMap
 
