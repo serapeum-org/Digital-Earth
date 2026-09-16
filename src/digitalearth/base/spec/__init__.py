@@ -53,6 +53,7 @@ from digitalearth.base.spec.legend import (
 from digitalearth.base.spec.scale import DEFAULT_CLASS_COUNT, Scale
 from digitalearth.base.spec.selection import DEFAULT_BAND, Selection
 from digitalearth.base.spec.style import StyleKey, StyleSchema, Symbology
+from digitalearth.base.spec.target import DEFAULT_BUDGETS, TARGET_KINDS, RenderTarget
 from digitalearth.base.spec.viewport import DEFAULT_VIEW_ANGLE, Camera, Viewport
 from digitalearth.base.spec.viewrequest import ViewRequest
 
@@ -61,6 +62,7 @@ __all__ = [
     "CHANNELS",
     "Camera",
     "DEFAULT_BAND",
+    "DEFAULT_BUDGETS",
     "DEFAULT_CLASS_COUNT",
     "DEFAULT_RAMP_STOPS",
     "DEFAULT_VIEW_ANGLE",
@@ -73,11 +75,13 @@ __all__ = [
     "LayerSpec",
     "LayerTree",
     "LegendSpec",
+    "RenderTarget",
     "Scale",
     "Selection",
     "StyleKey",
     "StyleSchema",
     "Symbology",
+    "TARGET_KINDS",
     "ViewRequest",
     "Viewport",
 ]
