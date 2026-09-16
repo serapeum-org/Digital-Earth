@@ -8,6 +8,7 @@ These cover the type that replaces all three.
 import pytest
 
 from digitalearth.base.spec import Bounds
+from digitalearth.base.spec.bounds import same_crs
 
 
 class TestTheOrderingIsNamed:
@@ -253,15 +254,40 @@ class TestOperations:
         """A CRS value `crs_to_json` refuses compares as different, instead of raising its TypeError.
 
         Test scenario:
-            `same_crs` first writes a non-int/str CRS in its stored spelling. A float is not writable, and the
-            TypeError that raises must not escape `union`: the rectangle keeps the value and the caller gets the
-            mismatched-CRS message naming both CRSs. The float is non-integral on purpose: pyramids' `crs_equal`
-            is an untyped `lru_cache`, so `4326.0` would share a cache entry with `4326` across tests.
+            `same_crs` first writes a CRS in its stored spelling. A float is not writable, and the TypeError that
+            raises must not escape `union`: the rectangle keeps the value and the caller gets the mismatched-CRS
+            message naming both CRSs.
         """
         box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326.5)
         other = Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
         with pytest.raises(ValueError, match=r"one CRS; got 4326\.5 and 4326"):
             box.union(other)
+
+    def test_comparing_a_float_crs_does_not_change_how_its_integer_compares(self):
+        """After a float CRS is compared, the integer with the same value still matches itself.
+
+        Test scenario:
+            A CRS value with no written form was handed to pyramids' `crs_equal`, whose answers are cached by value
+            without regard to type: `32634.0 == 32634` and they hash alike, so the float's "not the same" answer was
+            reused for the integer. After `same_crs(32634.0, 32634)`, two rectangles in `crs=32634` refused to union
+            ("got 32634 and 32634") and `to_crs(32634)` reprojected a rectangle into its own CRS. `32634` is used
+            because no other test compares it, so the cache holds no earlier answer for it.
+        """
+        assert same_crs(32634.0, 32634) is False
+        assert same_crs(32634, 32634) is True, "the integer CRS must still match itself"
+
+    @pytest.mark.parametrize("value", [[4326], {4326}], ids=["list", "set"])
+    def test_an_unhashable_crs_value_compares_as_different(self, value):
+        """A list or a set names no CRS this can write, so it compares as different rather than raising.
+
+        Args:
+            value: An unhashable CRS value.
+
+        Test scenario:
+            It reached `crs_equal`, which caches by argument, and raised `TypeError: unhashable type: 'list'` —
+            from `same_crs`, `union` and `to_crs` — where the docstring says such a value compares as different.
+        """
+        assert same_crs(value, 4326) is False
 
     def test_a_value_that_names_no_crs_is_not_equal_to_itself(self):
         """`crs=0` does not match `crs=0`, because neither names a reference system.

@@ -56,7 +56,12 @@ def same_crs(one: Any, other: Any) -> bool:
         spelling a figure stores it in (``"EPSG:<code>"``, or WKT when it has no code), because `crs_equal` reads
         only ``int``/``str``/``None`` and answers ``False`` for an object compared even with itself. Without that,
         a `Viewport` in an object CRS could never hold bounds, and `to_crs` reprojected a rectangle into the CRS it
-        was already in. An object that cannot be written is left as it is, and so compares as different.
+        was already in.
+
+        A value with no written form — a float, a boolean, a list, an object pyramids cannot read — compares as
+        different, and is never handed to `crs_equal`. Its answers are cached by value regardless of type, so a
+        float `4326.0` would leave a "not the same" answer that `4326` then reads back, and a list cannot be a
+        cache key at all.
 
     Examples:
         - Two spellings of one system, and a CRS object against its own EPSG code:
@@ -70,25 +75,11 @@ def same_crs(one: Any, other: Any) -> bool:
     """
     from pyramids.base.crs import crs_equal
 
-    return bool(crs_equal(_comparable_crs(one), _comparable_crs(other)))
-
-
-def _comparable_crs(crs: Any) -> Any:
-    """Return a CRS in a spelling `crs_equal` can read.
-
-    Args:
-        crs: A CRS in any spelling.
-
-    Returns:
-        ``None``, an ``int`` or a ``str`` unchanged; a CRS object as its serialised spelling; anything that cannot be
-        written, unchanged — `crs_equal` then answers ``False`` for it, which is the "not the same" this needs.
-    """
-    if crs is None or isinstance(crs, (int, str)):
-        return crs
     try:
-        return crs_to_json(crs, "crs")
+        first, second = crs_to_json(one, "crs"), crs_to_json(other, "crs")
     except TypeError:
-        return crs
+        return False
+    return bool(crs_equal(first, second))
 
 
 @dataclass(frozen=True)
