@@ -480,6 +480,9 @@ class InteractiveMapBase:
         ``Map`` uses, incl. the ECMWF-Magics match) so a variable looks the same across tiers; falls
         back to ``"viridis"`` for an unrecognised field.
 
+        Goes through :meth:`_auto_style`, like :meth:`_auto_levels` and :meth:`_auto_clabel`, so the three
+        readers see one lookup and a subclass overriding it changes all three together.
+
         Args:
             source: The display-CRS source whose variable drives the lookup.
             cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
@@ -487,7 +490,7 @@ class InteractiveMapBase:
         Returns:
             The colormap name to use.
         """
-        return auto_cmap(source, cmap)
+        return auto_cmap(source, cmap, lookup=self._auto_style)
 
     def _auto_cmap_for_band(self, dataset: Any, band: int, cmap: Optional[str]) -> str:
         """Resolve a colormap from a raster band's **name**, without reading the band (#249).

@@ -1329,6 +1329,9 @@ class WebMapBase:
         ``"viridis"`` for an unrecognised field — which is also what the autostyle library's ``default``
         group carries, so the literal here only covers a library that answered with no colormap at all.
 
+        Goes through :meth:`_style_for`, which its docstring names as the tier's single entry into the
+        style table — so this, :meth:`_auto_levels` and :meth:`_auto_units` see one lookup's answer.
+
         Args:
             source: The display-CRS :class:`Source` whose variable drives the lookup.
             cmap: The caller-supplied colormap, or ``None`` to auto-resolve.
@@ -1336,7 +1339,7 @@ class WebMapBase:
         Returns:
             The colormap name to use.
         """
-        return auto_cmap(source, cmap)
+        return auto_cmap(source, cmap, lookup=self._style_for)
 
     def _auto_levels(self, source: Any, levels: Optional[Any]) -> Optional[Any]:
         """Resolve contour levels: the caller's ``levels`` if given, else the autostyle ones.

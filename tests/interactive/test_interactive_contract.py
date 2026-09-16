@@ -307,6 +307,21 @@ class TestAutoCmap:
         )
 
 
+    def test_overriding_the_style_lookup_reaches_the_colormap(self):
+        """``_auto_style`` is the tier's single lookup, so replacing it changes the colormap too.
+
+        Test scenario:
+            ``_auto_cmap`` called the shared ``auto_cmap`` without the tier's lookup, so an override of
+            ``_auto_style`` reached ``_auto_levels`` and ``_auto_clabel`` but not the colormap.
+        """
+
+        class Restyled(InteractiveMap):
+            def _auto_style(self, source):
+                return {"cmap": "restyled"}
+
+        assert Restyled()._auto_cmap(_source("t2m"), None) == "restyled"
+
+
 class TestAutoLevelsAndUnits:
     """C6 (#230) — ``auto_style``'s ``levels`` and ``units`` are consumed, not just its ``cmap``."""
 

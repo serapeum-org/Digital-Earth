@@ -544,6 +544,23 @@ class TestC5CmapResolvesThroughAutostyle:
         assert WebMap()._auto_cmap(_source("t2m"), "magma") == "magma"
 
 
+    def test_overriding_the_style_lookup_reaches_the_colormap(self):
+        """``_style_for`` is the tier's single lookup, so replacing it changes the colormap too.
+
+        Test scenario:
+            ``_auto_cmap`` called the shared ``auto_cmap`` without the tier's lookup, so an override of
+            ``_style_for`` reached ``levels`` and ``units`` but not the colormap — contradicting the docstring
+            that names ``_style_for`` the tier's single entry into the style table.
+        """
+
+        class Restyled(WebMap):
+            @staticmethod
+            def _style_for(source):
+                return {"cmap": "restyled"}
+
+        assert Restyled()._auto_cmap(_source("t2m"), None) == "restyled"
+
+
 class TestC6LevelsAndUnitsAreConsumed:
     """``auto_style`` carries more than a colormap, and the tier now reads the rest of it."""
 

@@ -25,7 +25,7 @@ These are free functions taking the display CRS as an argument rather than readi
 that is not a scene class can use them too, and so they can be tested without one.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources import Source, get_source
@@ -117,7 +117,13 @@ def to_display_source(data: Any, crs: Any, *, band: int = 1) -> Source:
     return get_source(data, band=band)
 
 
-def auto_cmap(source: Any, cmap: Optional[str], fallback: str = DEFAULT_CMAP) -> str:
+def auto_cmap(
+    source: Any,
+    cmap: Optional[str],
+    fallback: str = DEFAULT_CMAP,
+    *,
+    lookup: Optional[Callable[[Any], Dict[str, Any]]] = None,
+) -> str:
     """Return the colormap to draw `source` with, resolving from its variable when the caller named none.
 
     Defers to :func:`digitalearth.base.autostyle.auto_style` — the same variable→style table the static
@@ -128,6 +134,13 @@ def auto_cmap(source: Any, cmap: Optional[str], fallback: str = DEFAULT_CMAP) ->
         source: The display-CRS source whose variable drives the lookup.
         cmap: The caller's colormap, or ``None`` to resolve one.
         fallback: Colormap to use when the lookup recognises nothing.
+        lookup: The style lookup to consult, taking `source` and returning the style dict. ``None`` calls
+            :func:`~digitalearth.base.autostyle.auto_style` directly. A tier passes its own lookup method
+            here — the interactive tier's ``_auto_style``, the web tier's ``_style_for`` — because those
+            methods are documented as the tier's *single* entry into the style table, and the tier's
+            ``levels`` and ``units`` readers go through them. Calling ``auto_style`` directly instead made
+            the colormap a separate lookup from the other two, and took away the one hook a subclass or a
+            test had for replacing the lookup across all three.
 
     Returns:
         The caller's `cmap` when they named one, else the lookup's answer, else `fallback`.
@@ -149,7 +162,9 @@ def auto_cmap(source: Any, cmap: Optional[str], fallback: str = DEFAULT_CMAP) ->
     """
     if cmap is not None:
         return cmap
-    from digitalearth.base.autostyle import auto_style
+    if lookup is None:
+        from digitalearth.base.autostyle import auto_style
 
-    style: Dict[str, Any] = auto_style(source)
+        lookup = auto_style
+    style: Dict[str, Any] = lookup(source)
     return style.get("cmap") or fallback

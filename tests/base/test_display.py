@@ -102,6 +102,36 @@ class TestAutoCmap:
         monkeypatch.setattr(autostyle, "auto_style", lambda source: {})
         assert auto_cmap(self._source("anything"), None, "cividis") == "cividis"
 
+    def test_a_supplied_lookup_is_consulted_instead_of_auto_style(self):
+        """`lookup=` is how a tier keeps its colormap on the same lookup as its levels and units.
+
+        Test scenario:
+            The tiers' `_auto_style` / `_style_for` are documented as their single entry into the style
+            table, and their `levels`/`units` readers go through them. Calling `auto_style` directly made the
+            colormap a separate lookup and removed the one hook a subclass had for replacing all three.
+        """
+        consulted = []
+
+        def lookup(source):
+            consulted.append(source)
+            return {"cmap": "from-the-tier"}
+
+        source = self._source("t2m")
+        assert auto_cmap(source, None, lookup=lookup) == "from-the-tier", (
+            "the supplied lookup's answer must be used"
+        )
+        assert consulted == [source], "and it must be asked exactly once, about this source"
+
+    def test_a_supplied_lookup_is_not_consulted_when_the_caller_named_a_colormap(self):
+        """The caller's `cmap` still short-circuits, whichever lookup is in play.
+
+        Test scenario:
+            A lookup can be expensive (it may read CF attributes); a named colormap makes it unnecessary.
+        """
+        consulted = []
+        assert auto_cmap(None, "magma", lookup=consulted.append) == "magma"
+        assert consulted == [], "the lookup must not run when there is nothing to resolve"
+
     def test_a_style_entry_carrying_an_explicit_none_still_yields_a_colormap(
         self, monkeypatch
     ):
