@@ -46,9 +46,9 @@ What lives here:
   renderer imported.
 
 Every type here that a figure stores has a `to_dict`/`from_dict` pair, and each pair refuses an unknown key rather
-than dropping it. All but `DataRef`'s, which predates them, are built on the shared rules in `_serial.py`, which
-also refuse a free-form value — a constant, a style property, a category, a slice axis — with no JSON form where it
-is written.
+than dropping it. All of them, `DataRef`'s included, are built on the shared rules in `_serial.py`, which also
+refuse a free-form value — a constant, a style property, a category, a slice axis — with no JSON form where it is
+written.
 
 Note the neighbour: :mod:`digitalearth.base.symbology` is the colour *arithmetic* (resolving a categorical
 cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Symbology` here is the

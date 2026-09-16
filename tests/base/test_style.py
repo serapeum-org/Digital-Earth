@@ -83,7 +83,7 @@ class TestSymbology:
         Test scenario:
             This used to pin the opposite — the list was shared with the caller, by documented design. Wave 3 made
             the free-form values canonical (lists as tuples) so a symbology round-trips through JSON equal and
-            hashable; copying the list is part of that. A dict property is still held as given.
+            hashable; copying the list is part of that. A dict property is copied too, with its values frozen.
         """
         levels = [1.0, 2.0]
         sym = Symbology().with_props(levels=levels)
