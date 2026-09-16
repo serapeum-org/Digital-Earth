@@ -362,13 +362,17 @@ class Camera:
             projection, which has no perspective.
         parallel: Whether the projection is parallel (orthographic) rather than perspective — for a figure whose
             distances should be measurable.
+        parallel_scale: How much of the scene a parallel projection shows: half the view's height, in scene units,
+            as VTK's `parallel_scale` is. In a parallel projection this — not the distance or the view angle — is
+            the zoom, so two views that differ only in it are different cameras. ``None``, the default, leaves the
+            renderer to fit the scene. Ignored by a perspective projection, as `view_angle` is by a parallel one.
         vertical_exaggeration: The factor applied to the z axis, strictly positive. It lives on the view, as the 3-D
             tier already keeps it, rather than in the mesh coordinates.
 
     Raises:
         ValueError: for a vector that is not three finite numbers, a camera placed at its own focal point, a zero or
-            parallel `view_up`, a view angle outside ``(0, 180)``, a non-positive exaggeration, or a non-boolean
-            `parallel`.
+            parallel `view_up`, a view angle outside ``(0, 180)``, a non-positive exaggeration or parallel scale,
+            or a non-boolean `parallel`.
 
     Examples:
         - A camera south-west of a scene, 30 degrees up:
@@ -403,6 +407,7 @@ class Camera:
     view_up: Vector3 = (0.0, 0.0, 1.0)
     view_angle: float = DEFAULT_VIEW_ANGLE
     parallel: bool = False
+    parallel_scale: Optional[float] = None
     vertical_exaggeration: float = 1.0
 
     def __post_init__(self) -> None:
@@ -459,6 +464,11 @@ class Camera:
             raise ValueError(
                 f"Camera parallel must be True or False; got {self.parallel!r}"
             )
+        if self.parallel_scale is not None:
+            scale = finite_number("Camera", "parallel_scale", self.parallel_scale)
+            if scale <= 0.0:
+                raise ValueError(f"Camera parallel_scale must be positive; got {scale}")
+            object.__setattr__(self, "parallel_scale", scale)
 
     @classmethod
     def look_at(
@@ -471,6 +481,7 @@ class Camera:
         view_up: Sequence[float] = (0.0, 0.0, 1.0),
         view_angle: float = DEFAULT_VIEW_ANGLE,
         parallel: bool = False,
+        parallel_scale: Optional[float] = None,
         vertical_exaggeration: float = 1.0,
     ) -> "Camera":
         """Place a camera by the direction it looks from, in the terms a map reader uses.
@@ -486,6 +497,8 @@ class Camera:
             view_up: Which way is up on the screen.
             view_angle: The vertical field of view, in degrees.
             parallel: Whether the projection is parallel rather than perspective.
+            parallel_scale: Half the view's height in scene units, for a parallel projection; ``None`` fits the
+                scene.
             vertical_exaggeration: The z-axis factor.
 
         Returns:
@@ -531,6 +544,7 @@ class Camera:
             view_up=_vector(_LOOK_AT, "view_up", view_up),
             view_angle=view_angle,
             parallel=parallel,
+            parallel_scale=parallel_scale,
             vertical_exaggeration=vertical_exaggeration,
         )
 
@@ -641,6 +655,7 @@ class Camera:
             "view_up": list(self.view_up),
             "view_angle": self.view_angle,
             "parallel": self.parallel,
+            "parallel_scale": self.parallel_scale,
             "vertical_exaggeration": self.vertical_exaggeration,
         }
 
@@ -694,6 +709,7 @@ class Camera:
                 "view_up",
                 "view_angle",
                 "parallel",
+                "parallel_scale",
                 "vertical_exaggeration",
             ),
         )
@@ -705,5 +721,6 @@ class Camera:
             view_up=as_list("Camera", "view_up", data.get("view_up", (0.0, 0.0, 1.0))),
             view_angle=data.get("view_angle", DEFAULT_VIEW_ANGLE),
             parallel=data.get("parallel", False),
+            parallel_scale=data.get("parallel_scale"),
             vertical_exaggeration=data.get("vertical_exaggeration", 1.0),
         )

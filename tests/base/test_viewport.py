@@ -253,6 +253,36 @@ class TestCameraConstruction:
         with pytest.raises(ValueError, match="vertical_exaggeration must be positive"):
             Camera((0.0, -10.0, 0.0), vertical_exaggeration=factor)
 
+    def test_two_parallel_views_at_different_scales_are_different_cameras(self):
+        """A parallel projection's zoom is its scale, so two scales are two views.
+
+        Test scenario:
+            In a parallel projection neither the distance nor the view angle sets the zoom; VTK's
+            `parallel_scale` does — half the view's height in world units. Without the field, a camera zoomed to
+            a street and one zoomed to a country, placed at the same point, stored identically.
+        """
+        street = Camera((0.0, -10.0, 5.0), parallel=True, parallel_scale=50.0)
+        country = Camera((0.0, -10.0, 5.0), parallel=True, parallel_scale=500_000.0)
+        assert street != country, (
+            "two parallel scales must describe two different views"
+        )
+        assert (street.parallel_scale, country.parallel_scale) == (50.0, 500_000.0)
+
+    def test_parallel_scale_defaults_to_none_and_accepts_an_int(self):
+        """Unset, the scale is `None` — the renderer fits the scene; given, it is stored as a float."""
+        assert Camera((0.0, -10.0, 5.0), parallel=True).parallel_scale is None
+        assert Camera((0.0, -10.0, 5.0), parallel_scale=20).parallel_scale == 20.0
+
+    @pytest.mark.parametrize("scale", [0.0, -1.0, float("nan"), float("inf")])
+    def test_parallel_scale_must_be_a_positive_finite_number(self, scale):
+        """A scale of zero or less, or one that is not finite, frames nothing.
+
+        Args:
+            scale: The rejected scale.
+        """
+        with pytest.raises(ValueError, match="parallel_scale"):
+            Camera((0.0, -10.0, 5.0), parallel=True, parallel_scale=scale)
+
     def test_parallel_must_be_a_boolean(self):
         """`1` is truthy and says nothing."""
         with pytest.raises(ValueError, match="parallel must be True or False"):
@@ -352,13 +382,15 @@ class TestLookingAtAPoint:
             distance=3,
             view_angle=45,
             parallel=True,
+            parallel_scale=12,
             vertical_exaggeration=4,
         )
-        assert (camera.view_angle, camera.parallel, camera.vertical_exaggeration) == (
-            45.0,
-            True,
-            4.0,
-        )
+        assert (
+            camera.view_angle,
+            camera.parallel,
+            camera.parallel_scale,
+            camera.vertical_exaggeration,
+        ) == (45.0, True, 12.0, 4.0)
 
 
 class TestCameraSerialisation:
@@ -377,6 +409,7 @@ class TestCameraSerialisation:
                 view_up=(0.0, 1.0, 0.0),
                 view_angle=45.0,
                 parallel=True,
+                parallel_scale=250.0,
                 vertical_exaggeration=3.0,
             ),
         ],
@@ -404,6 +437,7 @@ class TestCameraSerialisation:
             "view_up": [0.0, 0.0, 1.0],
             "view_angle": 30.0,
             "parallel": False,
+            "parallel_scale": None,
             "vertical_exaggeration": 1.0,
         }
 
