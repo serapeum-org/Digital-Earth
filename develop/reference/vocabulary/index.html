@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -44620,7 +44620,33 @@ budget, or a pixel ratio that is a boolean, not a number, not finite or not posi
 <span class="normal"><a href="#__codelineno-0-303">303</a></span>
 <span class="normal"><a href="#__codelineno-0-304">304</a></span>
 <span class="normal"><a href="#__codelineno-0-305">305</a></span>
-<span class="normal"><a href="#__codelineno-0-306">306</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+<span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span>
+<span class="normal"><a href="#__codelineno-0-313">313</a></span>
+<span class="normal"><a href="#__codelineno-0-314">314</a></span>
+<span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-64" name="__codelineno-0-64"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-65" name="__codelineno-0-65"></a><span class="k">class</span><span class="w"> </span><span class="nc">RenderTarget</span><span class="p">:</span>
 <a id="__codelineno-0-66" name="__codelineno-0-66"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;An output a figure is rendered to: its kind, its canvas and its read budget.</span>
 <a id="__codelineno-0-67" name="__codelineno-0-67"></a>
@@ -44730,139 +44756,165 @@ budget, or a pixel ratio that is a boolean, not a number, not finite or not posi
 <a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">                given.</span>
 <a id="__codelineno-0-172" name="__codelineno-0-172"></a>
 <a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">            The request: region, canvas, pixel ratio and :attr:`effective_budget`. With a canvas named, the</span>
-<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">            request&#39;s :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the canvas,</span>
-<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">            within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">            `Viewport` included — and a request with no region carries no CRS either: the reader returns the source</span>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">            in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a>
-<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">            ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, or</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">                if `bounds` cannot be reprojected into the viewport&#39;s CRS.</span>
-<a id="__codelineno-0-183" name="__codelineno-0-183"></a>
-<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">            - The view&#39;s region, the target&#39;s canvas and budget:</span>
-<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
-<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">                &gt;&gt;&gt; view = Viewport(4326, bounds=Bounds(0.0, 0.0, 10.0, 5.0, crs=4326))</span>
-<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">                &gt;&gt;&gt; request = RenderTarget(&quot;html&quot;, width=800, height=400).view_request(view)</span>
-<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">                &gt;&gt;&gt; request.as_bbox(), request.width, request.budget</span>
-<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">                ((0.0, 0.0, 10.0, 5.0), 800, 1000000)</span>
-<a id="__codelineno-0-192" name="__codelineno-0-192"></a>
-<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">            - A region given in another CRS is asked for in the view&#39;s:</span>
-<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">                &gt;&gt;&gt; request = RenderTarget().view_request(Viewport(3857), bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))</span>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">                &gt;&gt;&gt; request.crs, [round(edge) for edge in request.as_bbox()]</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">                (3857, [0, 0, 111319, 111325])</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">            - A 3-D camera has no rectangle, so only the canvas and the budget are set:</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera, RenderTarget</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">                &gt;&gt;&gt; request = RenderTarget(&quot;image&quot;, width=640, height=480).view_request(Camera((0.0, -10.0, 5.0)))</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">                &gt;&gt;&gt; request.bounds, request.width, request.budget</span>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">                (None, 640, 4000000)</span>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a>        <span class="k">if</span> <span class="n">view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="p">(</span><span class="n">Viewport</span><span class="p">,</span> <span class="n">Camera</span><span class="p">)):</span>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a>                <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs a Viewport, a Camera or None; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">view</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a>            <span class="p">)</span>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a>        <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">Bounds</span><span class="p">):</span>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a>                <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs bounds as a Bounds; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a>            <span class="p">)</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a>        <span class="n">region</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Bounds</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="n">Viewport</span><span class="p">):</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a>            <span class="n">region</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">framed</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="n">bounds</span> <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">view</span><span class="o">.</span><span class="n">bounds</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a>        <span class="k">elif</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a>            <span class="n">region</span> <span class="o">=</span> <span class="n">bounds</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a>        <span class="k">return</span> <span class="n">ViewRequest</span><span class="p">(</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a>            <span class="n">bounds</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a>            <span class="n">width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a>            <span class="n">height</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">,</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a>            <span class="n">pixel_ratio</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span><span class="p">,</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a>            <span class="n">budget</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_budget</span><span class="p">,</span>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a>        <span class="p">)</span>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a>
-<a id="__codelineno-0-232" name="__codelineno-0-232"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">            ``kind`` and ``pixel_ratio``, plus the canvas and the budget when set. An unset budget is written as</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">            unset, not as the kind&#39;s default, so a stored target keeps following the default if the default changes.</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">            - A retina image target:</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">                &gt;&gt;&gt; RenderTarget(&quot;image&quot;, width=1200, height=800, pixel_ratio=2.0).to_dict()</span>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">                {&#39;kind&#39;: &#39;image&#39;, &#39;width&#39;: 1200, &#39;height&#39;: 800, &#39;pixel_ratio&#39;: 2.0}</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">            The request: region, canvas, pixel ratio and :attr:`effective_budget`. A view framed by a</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">            `(west, south, east, north)` domain asks for that box, reprojected into the view&#39;s CRS. With a canvas</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">            named, the request&#39;s :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">            canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">            `Viewport` included — and a request with no region carries no CRS either: the reader returns the source</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">            in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">            ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, if</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">                `bounds` or a domain box cannot be reprojected into the viewport&#39;s CRS, or if the view is framed by a</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">                named domain, which `base` cannot resolve.</span>
+<a id="__codelineno-0-185" name="__codelineno-0-185"></a>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">            - The view&#39;s region, the target&#39;s canvas and budget:</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">                &gt;&gt;&gt; view = Viewport(4326, bounds=Bounds(0.0, 0.0, 10.0, 5.0, crs=4326))</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">                &gt;&gt;&gt; request = RenderTarget(&quot;html&quot;, width=800, height=400).view_request(view)</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">                &gt;&gt;&gt; request.as_bbox(), request.width, request.budget</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">                ((0.0, 0.0, 10.0, 5.0), 800, 1000000)</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">            - A region given in another CRS is asked for in the view&#39;s:</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">                &gt;&gt;&gt; request = RenderTarget().view_request(Viewport(3857), bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">                &gt;&gt;&gt; request.crs, [round(edge) for edge in request.as_bbox()]</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">                (3857, [0, 0, 111319, 111325])</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">            - A 3-D camera has no rectangle, so only the canvas and the budget are set:</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera, RenderTarget</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">                &gt;&gt;&gt; request = RenderTarget(&quot;image&quot;, width=640, height=480).view_request(Camera((0.0, -10.0, 5.0)))</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">                &gt;&gt;&gt; request.bounds, request.width, request.budget</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">                (None, 640, 4000000)</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>        <span class="k">if</span> <span class="n">view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="p">(</span><span class="n">Viewport</span><span class="p">,</span> <span class="n">Camera</span><span class="p">)):</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>                <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs a Viewport, a Camera or None; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">view</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>            <span class="p">)</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>        <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">Bounds</span><span class="p">):</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a>                <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs bounds as a Bounds; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a>            <span class="p">)</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>        <span class="n">region</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Bounds</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="n">Viewport</span><span class="p">)</span> <span class="ow">and</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>            <span class="n">region</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">framed</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="n">bounds</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a>        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="n">Viewport</span><span class="p">):</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>            <span class="n">region</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">bounds</span> <span class="k">if</span> <span class="n">view</span><span class="o">.</span><span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain_region</span><span class="p">(</span><span class="n">view</span><span class="p">)</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a>        <span class="k">elif</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>            <span class="n">region</span> <span class="o">=</span> <span class="n">bounds</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>        <span class="k">return</span> <span class="n">ViewRequest</span><span class="p">(</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a>            <span class="n">bounds</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a>            <span class="n">width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a>            <span class="n">height</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">,</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a>            <span class="n">pixel_ratio</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span><span class="p">,</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a>            <span class="n">budget</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_budget</span><span class="p">,</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a>        <span class="p">)</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>    <span class="nd">@staticmethod</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">_domain_region</span><span class="p">(</span><span class="n">view</span><span class="p">:</span> <span class="n">Viewport</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Bounds</span><span class="p">:</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the region a domain-framed view shows, in the view&#39;s CRS.</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">            view: A view framed by `domain` rather than `bounds`.</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">            The `(west, south, east, north)` box, read in degrees and reprojected into the view&#39;s CRS.</span>
 <a id="__codelineno-0-245" name="__codelineno-0-245"></a>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">            - The pixel ratio is written even at its default, and an unset budget stays unset:</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">                &gt;&gt;&gt; RenderTarget(&quot;html&quot;).to_dict()</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">                {&#39;kind&#39;: &#39;html&#39;, &#39;pixel_ratio&#39;: 1.0}</span>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a>        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="n">plain_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">)}</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a>        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">):</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a>            <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a>            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a>                <span class="n">out</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;budget&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a>        <span class="k">return</span> <span class="n">out</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">            ValueError: for a named domain. Names resolve in `digitalearth.static.domains`, which `base` cannot</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">                import without importing a renderer; a request with no region would read the whole source instead</span>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">                of the region the view names.</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a>        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="o">.</span><span class="n">domain</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a>                <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request cannot resolve the named domain </span><span class="si">{</span><span class="n">view</span><span class="o">.</span><span class="n">domain</span><span class="si">!r}</span><span class="s2">; frame the view with &quot;</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a>                <span class="s2">&quot;Viewport.framed(bounds), or give the domain as (west, south, east, north)&quot;</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a>            <span class="p">)</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a>        <span class="k">return</span> <span class="n">Bounds</span><span class="o">.</span><span class="n">from_bbox</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">view</span><span class="o">.</span><span class="n">domain</span><span class="p">),</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span><span class="o">.</span><span class="n">to_crs</span><span class="p">(</span><span class="n">view</span><span class="o">.</span><span class="n">crs</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">            ``kind`` and ``pixel_ratio``, plus the canvas and the budget when set. An unset budget is written as</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">            unset, not as the kind&#39;s default, so a stored target keeps following the default if the default changes.</span>
 <a id="__codelineno-0-264" name="__codelineno-0-264"></a>
-<a id="__codelineno-0-265" name="__codelineno-0-265"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;RenderTarget&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a target from its dict form.</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a>
-<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`. A missing ``kind`` means ``&quot;window&quot;``.</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">            - A retina image target:</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">                &gt;&gt;&gt; RenderTarget(&quot;image&quot;, width=1200, height=800, pixel_ratio=2.0).to_dict()</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">                {&#39;kind&#39;: &#39;image&#39;, &#39;width&#39;: 1200, &#39;height&#39;: 800, &#39;pixel_ratio&#39;: 2.0}</span>
 <a id="__codelineno-0-271" name="__codelineno-0-271"></a>
-<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">            The target, validated as the constructor validates it.</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">            TypeError: if `data` is not a mapping.</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">            ValueError: for an unknown key, or a target the constructor refuses.</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">            - The pixel ratio is written even at its default, and an unset budget stays unset:</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">                &gt;&gt;&gt; RenderTarget(&quot;html&quot;).to_dict()</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">                {&#39;kind&#39;: &#39;html&#39;, &#39;pixel_ratio&#39;: 1.0}</span>
 <a id="__codelineno-0-278" name="__codelineno-0-278"></a>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">            - A stored page target reads back with its budget:</span>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">                &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;budget&quot;: 500000}).effective_budget</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">                500000</span>
-<a id="__codelineno-0-285" name="__codelineno-0-285"></a>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">            - A key this version does not know is refused rather than dropped:</span>
-<a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">                &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;dpi&quot;: 2})  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">                Traceback (most recent call last):</span>
-<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">                    ...</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">                ValueError: RenderTarget.from_dict got unknown keys [&#39;dpi&#39;]; known keys are [&#39;budget&#39;, &#39;height&#39;, ...]</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>        <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="n">plain_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">)}</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">):</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>            <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>            <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>                <span class="n">out</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>            <span class="n">out</span><span class="p">[</span><span class="s2">&quot;budget&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="k">return</span> <span class="n">out</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;RenderTarget&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a target from its dict form.</span>
 <a id="__codelineno-0-294" name="__codelineno-0-294"></a>
-<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-297" name="__codelineno-0-297"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>            <span class="s2">&quot;RenderTarget&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="s2">&quot;budget&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="p">)</span>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a>            <span class="n">kind</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a>            <span class="n">width</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a>            <span class="n">height</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>            <span class="n">pixel_ratio</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a>            <span class="n">budget</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;budget&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a>        <span class="p">)</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`. A missing ``kind`` means ``&quot;window&quot;``.</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">            The target, validated as the constructor validates it.</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">            TypeError: if `data` is not a mapping.</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">            ValueError: for an unknown key, or a target the constructor refuses.</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">            - A stored page target reads back with its budget:</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">                &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;budget&quot;: 500000}).effective_budget</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">                500000</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">            - A key this version does not know is refused rather than dropped:</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">                &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;dpi&quot;: 2})  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">                Traceback (most recent call last):</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">                    ...</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">                ValueError: RenderTarget.from_dict got unknown keys [&#39;dpi&#39;]; known keys are [&#39;budget&#39;, &#39;height&#39;, ...]</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>            <span class="s2">&quot;RenderTarget&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="s2">&quot;budget&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="p">)</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>            <span class="n">kind</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>            <span class="n">width</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>            <span class="n">height</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>            <span class="n">pixel_ratio</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>            <span class="n">budget</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;budget&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -45148,33 +45200,7 @@ budget, or a pixel ratio that is a boolean, not a number, not finite or not posi
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/target.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-265">265</a></span>
-<span class="normal"><a href="#__codelineno-0-266">266</a></span>
-<span class="normal"><a href="#__codelineno-0-267">267</a></span>
-<span class="normal"><a href="#__codelineno-0-268">268</a></span>
-<span class="normal"><a href="#__codelineno-0-269">269</a></span>
-<span class="normal"><a href="#__codelineno-0-270">270</a></span>
-<span class="normal"><a href="#__codelineno-0-271">271</a></span>
-<span class="normal"><a href="#__codelineno-0-272">272</a></span>
-<span class="normal"><a href="#__codelineno-0-273">273</a></span>
-<span class="normal"><a href="#__codelineno-0-274">274</a></span>
-<span class="normal"><a href="#__codelineno-0-275">275</a></span>
-<span class="normal"><a href="#__codelineno-0-276">276</a></span>
-<span class="normal"><a href="#__codelineno-0-277">277</a></span>
-<span class="normal"><a href="#__codelineno-0-278">278</a></span>
-<span class="normal"><a href="#__codelineno-0-279">279</a></span>
-<span class="normal"><a href="#__codelineno-0-280">280</a></span>
-<span class="normal"><a href="#__codelineno-0-281">281</a></span>
-<span class="normal"><a href="#__codelineno-0-282">282</a></span>
-<span class="normal"><a href="#__codelineno-0-283">283</a></span>
-<span class="normal"><a href="#__codelineno-0-284">284</a></span>
-<span class="normal"><a href="#__codelineno-0-285">285</a></span>
-<span class="normal"><a href="#__codelineno-0-286">286</a></span>
-<span class="normal"><a href="#__codelineno-0-287">287</a></span>
-<span class="normal"><a href="#__codelineno-0-288">288</a></span>
-<span class="normal"><a href="#__codelineno-0-289">289</a></span>
-<span class="normal"><a href="#__codelineno-0-290">290</a></span>
-<span class="normal"><a href="#__codelineno-0-291">291</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-291">291</a></span>
 <span class="normal"><a href="#__codelineno-0-292">292</a></span>
 <span class="normal"><a href="#__codelineno-0-293">293</a></span>
 <span class="normal"><a href="#__codelineno-0-294">294</a></span>
@@ -45189,48 +45215,74 @@ budget, or a pixel ratio that is a boolean, not a number, not finite or not posi
 <span class="normal"><a href="#__codelineno-0-303">303</a></span>
 <span class="normal"><a href="#__codelineno-0-304">304</a></span>
 <span class="normal"><a href="#__codelineno-0-305">305</a></span>
-<span class="normal"><a href="#__codelineno-0-306">306</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;RenderTarget&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a target from its dict form.</span>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a>
-<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`. A missing ``kind`` means ``&quot;window&quot;``.</span>
-<a id="__codelineno-0-271" name="__codelineno-0-271"></a>
-<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">        The target, validated as the constructor validates it.</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">        TypeError: if `data` is not a mapping.</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">        ValueError: for an unknown key, or a target the constructor refuses.</span>
-<a id="__codelineno-0-278" name="__codelineno-0-278"></a>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">        - A stored page target reads back with its budget:</span>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-282" name="__codelineno-0-282"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-283" name="__codelineno-0-283"></a><span class="sd">            &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;budget&quot;: 500000}).effective_budget</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a><span class="sd">            500000</span>
-<a id="__codelineno-0-285" name="__codelineno-0-285"></a>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-287" name="__codelineno-0-287"></a><span class="sd">        - A key this version does not know is refused rather than dropped:</span>
-<a id="__codelineno-0-288" name="__codelineno-0-288"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-289" name="__codelineno-0-289"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-290" name="__codelineno-0-290"></a><span class="sd">            &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;dpi&quot;: 2})  # doctest: +ELLIPSIS</span>
-<a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="sd">            ValueError: RenderTarget.from_dict got unknown keys [&#39;dpi&#39;]; known keys are [&#39;budget&#39;, &#39;height&#39;, ...]</span>
+<span class="normal"><a href="#__codelineno-0-306">306</a></span>
+<span class="normal"><a href="#__codelineno-0-307">307</a></span>
+<span class="normal"><a href="#__codelineno-0-308">308</a></span>
+<span class="normal"><a href="#__codelineno-0-309">309</a></span>
+<span class="normal"><a href="#__codelineno-0-310">310</a></span>
+<span class="normal"><a href="#__codelineno-0-311">311</a></span>
+<span class="normal"><a href="#__codelineno-0-312">312</a></span>
+<span class="normal"><a href="#__codelineno-0-313">313</a></span>
+<span class="normal"><a href="#__codelineno-0-314">314</a></span>
+<span class="normal"><a href="#__codelineno-0-315">315</a></span>
+<span class="normal"><a href="#__codelineno-0-316">316</a></span>
+<span class="normal"><a href="#__codelineno-0-317">317</a></span>
+<span class="normal"><a href="#__codelineno-0-318">318</a></span>
+<span class="normal"><a href="#__codelineno-0-319">319</a></span>
+<span class="normal"><a href="#__codelineno-0-320">320</a></span>
+<span class="normal"><a href="#__codelineno-0-321">321</a></span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-291" name="__codelineno-0-291"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;RenderTarget&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a target from its dict form.</span>
 <a id="__codelineno-0-294" name="__codelineno-0-294"></a>
-<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-297" name="__codelineno-0-297"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>        <span class="s2">&quot;RenderTarget&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="s2">&quot;budget&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a>    <span class="p">)</span>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a>        <span class="n">kind</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a>        <span class="n">width</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a>        <span class="n">height</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>        <span class="n">pixel_ratio</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a>        <span class="n">budget</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;budget&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="p">)</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`. A missing ``kind`` means ``&quot;window&quot;``.</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a><span class="sd">        The target, validated as the constructor validates it.</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a><span class="sd">        TypeError: if `data` is not a mapping.</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a><span class="sd">        ValueError: for an unknown key, or a target the constructor refuses.</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a><span class="sd">        - A stored page target reads back with its budget:</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a><span class="sd">            &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;budget&quot;: 500000}).effective_budget</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a><span class="sd">            500000</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a><span class="sd">        - A key this version does not know is refused rather than dropped:</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a><span class="sd">            &gt;&gt;&gt; RenderTarget.from_dict({&quot;kind&quot;: &quot;html&quot;, &quot;dpi&quot;: 2})  # doctest: +ELLIPSIS</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a><span class="sd">            ValueError: RenderTarget.from_dict got unknown keys [&#39;dpi&#39;]; known keys are [&#39;budget&#39;, &#39;height&#39;, ...]</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="s2">&quot;RenderTarget&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">,</span> <span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="s2">&quot;budget&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>    <span class="p">)</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>        <span class="n">kind</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;kind&quot;</span><span class="p">,</span> <span class="s2">&quot;window&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>        <span class="n">width</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>        <span class="n">height</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;height&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="n">pixel_ratio</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="n">budget</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;budget&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -45301,69 +45353,69 @@ budget, or a pixel ratio that is a boolean, not a number, not finite or not posi
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/target.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-232">232</a></span>
-<span class="normal"><a href="#__codelineno-0-233">233</a></span>
-<span class="normal"><a href="#__codelineno-0-234">234</a></span>
-<span class="normal"><a href="#__codelineno-0-235">235</a></span>
-<span class="normal"><a href="#__codelineno-0-236">236</a></span>
-<span class="normal"><a href="#__codelineno-0-237">237</a></span>
-<span class="normal"><a href="#__codelineno-0-238">238</a></span>
-<span class="normal"><a href="#__codelineno-0-239">239</a></span>
-<span class="normal"><a href="#__codelineno-0-240">240</a></span>
-<span class="normal"><a href="#__codelineno-0-241">241</a></span>
-<span class="normal"><a href="#__codelineno-0-242">242</a></span>
-<span class="normal"><a href="#__codelineno-0-243">243</a></span>
-<span class="normal"><a href="#__codelineno-0-244">244</a></span>
-<span class="normal"><a href="#__codelineno-0-245">245</a></span>
-<span class="normal"><a href="#__codelineno-0-246">246</a></span>
-<span class="normal"><a href="#__codelineno-0-247">247</a></span>
-<span class="normal"><a href="#__codelineno-0-248">248</a></span>
-<span class="normal"><a href="#__codelineno-0-249">249</a></span>
-<span class="normal"><a href="#__codelineno-0-250">250</a></span>
-<span class="normal"><a href="#__codelineno-0-251">251</a></span>
-<span class="normal"><a href="#__codelineno-0-252">252</a></span>
-<span class="normal"><a href="#__codelineno-0-253">253</a></span>
-<span class="normal"><a href="#__codelineno-0-254">254</a></span>
-<span class="normal"><a href="#__codelineno-0-255">255</a></span>
-<span class="normal"><a href="#__codelineno-0-256">256</a></span>
-<span class="normal"><a href="#__codelineno-0-257">257</a></span>
-<span class="normal"><a href="#__codelineno-0-258">258</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-258">258</a></span>
 <span class="normal"><a href="#__codelineno-0-259">259</a></span>
 <span class="normal"><a href="#__codelineno-0-260">260</a></span>
 <span class="normal"><a href="#__codelineno-0-261">261</a></span>
 <span class="normal"><a href="#__codelineno-0-262">262</a></span>
-<span class="normal"><a href="#__codelineno-0-263">263</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">        ``kind`` and ``pixel_ratio``, plus the canvas and the budget when set. An unset budget is written as</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">        unset, not as the kind&#39;s default, so a stored target keeps following the default if the default changes.</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">        - A retina image target:</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">            &gt;&gt;&gt; RenderTarget(&quot;image&quot;, width=1200, height=800, pixel_ratio=2.0).to_dict()</span>
-<a id="__codelineno-0-244" name="__codelineno-0-244"></a><span class="sd">            {&#39;kind&#39;: &#39;image&#39;, &#39;width&#39;: 1200, &#39;height&#39;: 800, &#39;pixel_ratio&#39;: 2.0}</span>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">        - The pixel ratio is written even at its default, and an unset budget stays unset:</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">            &gt;&gt;&gt; RenderTarget(&quot;html&quot;).to_dict()</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">            {&#39;kind&#39;: &#39;html&#39;, &#39;pixel_ratio&#39;: 1.0}</span>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="n">plain_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">)}</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a>    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">):</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a>        <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a>        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a>            <span class="n">out</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a>    <span class="n">out</span><span class="p">[</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;budget&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a>    <span class="k">return</span> <span class="n">out</span>
+<span class="normal"><a href="#__codelineno-0-263">263</a></span>
+<span class="normal"><a href="#__codelineno-0-264">264</a></span>
+<span class="normal"><a href="#__codelineno-0-265">265</a></span>
+<span class="normal"><a href="#__codelineno-0-266">266</a></span>
+<span class="normal"><a href="#__codelineno-0-267">267</a></span>
+<span class="normal"><a href="#__codelineno-0-268">268</a></span>
+<span class="normal"><a href="#__codelineno-0-269">269</a></span>
+<span class="normal"><a href="#__codelineno-0-270">270</a></span>
+<span class="normal"><a href="#__codelineno-0-271">271</a></span>
+<span class="normal"><a href="#__codelineno-0-272">272</a></span>
+<span class="normal"><a href="#__codelineno-0-273">273</a></span>
+<span class="normal"><a href="#__codelineno-0-274">274</a></span>
+<span class="normal"><a href="#__codelineno-0-275">275</a></span>
+<span class="normal"><a href="#__codelineno-0-276">276</a></span>
+<span class="normal"><a href="#__codelineno-0-277">277</a></span>
+<span class="normal"><a href="#__codelineno-0-278">278</a></span>
+<span class="normal"><a href="#__codelineno-0-279">279</a></span>
+<span class="normal"><a href="#__codelineno-0-280">280</a></span>
+<span class="normal"><a href="#__codelineno-0-281">281</a></span>
+<span class="normal"><a href="#__codelineno-0-282">282</a></span>
+<span class="normal"><a href="#__codelineno-0-283">283</a></span>
+<span class="normal"><a href="#__codelineno-0-284">284</a></span>
+<span class="normal"><a href="#__codelineno-0-285">285</a></span>
+<span class="normal"><a href="#__codelineno-0-286">286</a></span>
+<span class="normal"><a href="#__codelineno-0-287">287</a></span>
+<span class="normal"><a href="#__codelineno-0-288">288</a></span>
+<span class="normal"><a href="#__codelineno-0-289">289</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">        ``kind`` and ``pixel_ratio``, plus the canvas and the budget when set. An unset budget is written as</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">        unset, not as the kind&#39;s default, so a stored target keeps following the default if the default changes.</span>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">        - A retina image target:</span>
+<a id="__codelineno-0-267" name="__codelineno-0-267"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">            &gt;&gt;&gt; RenderTarget(&quot;image&quot;, width=1200, height=800, pixel_ratio=2.0).to_dict()</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">            {&#39;kind&#39;: &#39;image&#39;, &#39;width&#39;: 1200, &#39;height&#39;: 800, &#39;pixel_ratio&#39;: 2.0}</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a><span class="sd">        - The pixel ratio is written even at its default, and an unset budget stays unset:</span>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import RenderTarget</span>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">            &gt;&gt;&gt; RenderTarget(&quot;html&quot;).to_dict()</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">            {&#39;kind&#39;: &#39;html&#39;, &#39;pixel_ratio&#39;: 1.0}</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>    <span class="n">out</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;kind&quot;</span><span class="p">:</span> <span class="n">plain_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">kind</span><span class="p">)}</span>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>    <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;width&quot;</span><span class="p">,</span> <span class="s2">&quot;height&quot;</span><span class="p">):</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="n">value</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>        <span class="k">if</span> <span class="n">value</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>            <span class="n">out</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">value</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="n">out</span><span class="p">[</span><span class="s2">&quot;pixel_ratio&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>        <span class="n">out</span><span class="p">[</span><span class="s2">&quot;budget&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">budget</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>    <span class="k">return</span> <span class="n">out</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -45471,7 +45523,7 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The request: region, canvas, pixel ratio and :attr:<code>effective_budget</code>. With a canvas named, the</p>
+                <p>The request: region, canvas, pixel ratio and :attr:<code>effective_budget</code>. A view framed by a</p>
               </div>
             </td>
           </tr>
@@ -45486,7 +45538,7 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>request's :meth:<code>~digitalearth.base.spec.viewrequest.ViewRequest.side</code> sizes a read to the canvas,</p>
+                <p><code>(west, south, east, north)</code> domain asks for that box, reprojected into the view's CRS. With a canvas</p>
               </div>
             </td>
           </tr>
@@ -45501,7 +45553,22 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>within the budget. The region is <code>None</code> when neither the view nor <code>bounds</code> supplies one — an unframed</p>
+                <p>named, the request's :meth:<code>~digitalearth.base.spec.viewrequest.ViewRequest.side</code> sizes a read to the</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="&lt;code&gt;digitalearth.base.spec.viewrequest.ViewRequest&lt;/code&gt;
+
+
+  &lt;span class=&quot;doc doc-labels&quot;&gt;
+      &lt;small class=&quot;doc doc-label doc-label-dataclass&quot;&gt;&lt;code&gt;dataclass&lt;/code&gt;&lt;/small&gt;
+  &lt;/span&gt;" href="#digitalearth.base.spec.viewrequest.ViewRequest">ViewRequest</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>canvas, within the budget. The region is <code>None</code> when neither the view nor <code>bounds</code> supplies one — an unframed</p>
               </div>
             </td>
           </tr>
@@ -45554,8 +45621,9 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>if <code>view</code> is neither a <code>Viewport</code>, a <code>Camera</code> nor <code>None</code>, if <code>bounds</code> is not a <code>Bounds</code>, or
-if <code>bounds</code> cannot be reprojected into the viewport's CRS.</p>
+                <p>if <code>view</code> is neither a <code>Viewport</code>, a <code>Camera</code> nor <code>None</code>, if <code>bounds</code> is not a <code>Bounds</code>, if
+<code>bounds</code> or a domain box cannot be reprojected into the viewport's CRS, or if the view is framed by a
+named domain, which <code>base</code> cannot resolve.</p>
               </div>
             </td>
           </tr>
@@ -45664,7 +45732,11 @@ if <code>bounds</code> cannot be reprojected into the viewport's CRS.</p>
 <span class="normal"><a href="#__codelineno-0-227">227</a></span>
 <span class="normal"><a href="#__codelineno-0-228">228</a></span>
 <span class="normal"><a href="#__codelineno-0-229">229</a></span>
-<span class="normal"><a href="#__codelineno-0-230">230</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="k">def</span><span class="w"> </span><span class="nf">view_request</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-230">230</a></span>
+<span class="normal"><a href="#__codelineno-0-231">231</a></span>
+<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+<span class="normal"><a href="#__codelineno-0-233">233</a></span>
+<span class="normal"><a href="#__codelineno-0-234">234</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-155" name="__codelineno-0-155"></a><span class="k">def</span><span class="w"> </span><span class="nf">view_request</span><span class="p">(</span>
 <a id="__codelineno-0-156" name="__codelineno-0-156"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-157" name="__codelineno-0-157"></a>    <span class="n">view</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Union</span><span class="p">[</span><span class="n">Viewport</span><span class="p">,</span> <span class="n">Camera</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <a id="__codelineno-0-158" name="__codelineno-0-158"></a>    <span class="o">*</span><span class="p">,</span>
@@ -45683,63 +45755,67 @@ if <code>bounds</code> cannot be reprojected into the viewport's CRS.</p>
 <a id="__codelineno-0-171" name="__codelineno-0-171"></a><span class="sd">            given.</span>
 <a id="__codelineno-0-172" name="__codelineno-0-172"></a>
 <a id="__codelineno-0-173" name="__codelineno-0-173"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">        The request: region, canvas, pixel ratio and :attr:`effective_budget`. With a canvas named, the</span>
-<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">        request&#39;s :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the canvas,</span>
-<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">        within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">        `Viewport` included — and a request with no region carries no CRS either: the reader returns the source</span>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">        in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a>
-<a id="__codelineno-0-180" name="__codelineno-0-180"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">        ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, or</span>
-<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">            if `bounds` cannot be reprojected into the viewport&#39;s CRS.</span>
-<a id="__codelineno-0-183" name="__codelineno-0-183"></a>
-<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-185" name="__codelineno-0-185"></a><span class="sd">        - The view&#39;s region, the target&#39;s canvas and budget:</span>
-<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
-<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">            &gt;&gt;&gt; view = Viewport(4326, bounds=Bounds(0.0, 0.0, 10.0, 5.0, crs=4326))</span>
-<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">            &gt;&gt;&gt; request = RenderTarget(&quot;html&quot;, width=800, height=400).view_request(view)</span>
-<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">            &gt;&gt;&gt; request.as_bbox(), request.width, request.budget</span>
-<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">            ((0.0, 0.0, 10.0, 5.0), 800, 1000000)</span>
-<a id="__codelineno-0-192" name="__codelineno-0-192"></a>
-<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-194" name="__codelineno-0-194"></a><span class="sd">        - A region given in another CRS is asked for in the view&#39;s:</span>
-<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
-<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">            &gt;&gt;&gt; request = RenderTarget().view_request(Viewport(3857), bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))</span>
-<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">            &gt;&gt;&gt; request.crs, [round(edge) for edge in request.as_bbox()]</span>
-<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">            (3857, [0, 0, 111319, 111325])</span>
-<a id="__codelineno-0-200" name="__codelineno-0-200"></a>
-<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-202" name="__codelineno-0-202"></a><span class="sd">        - A 3-D camera has no rectangle, so only the canvas and the budget are set:</span>
-<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera, RenderTarget</span>
-<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">            &gt;&gt;&gt; request = RenderTarget(&quot;image&quot;, width=640, height=480).view_request(Camera((0.0, -10.0, 5.0)))</span>
-<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">            &gt;&gt;&gt; request.bounds, request.width, request.budget</span>
-<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">            (None, 640, 4000000)</span>
-<a id="__codelineno-0-208" name="__codelineno-0-208"></a>
-<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-210" name="__codelineno-0-210"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-211" name="__codelineno-0-211"></a>    <span class="k">if</span> <span class="n">view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="p">(</span><span class="n">Viewport</span><span class="p">,</span> <span class="n">Camera</span><span class="p">)):</span>
-<a id="__codelineno-0-212" name="__codelineno-0-212"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-213" name="__codelineno-0-213"></a>            <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs a Viewport, a Camera or None; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">view</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-214" name="__codelineno-0-214"></a>        <span class="p">)</span>
-<a id="__codelineno-0-215" name="__codelineno-0-215"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">Bounds</span><span class="p">):</span>
-<a id="__codelineno-0-216" name="__codelineno-0-216"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-217" name="__codelineno-0-217"></a>            <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs bounds as a Bounds; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-218" name="__codelineno-0-218"></a>        <span class="p">)</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="n">region</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Bounds</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="n">Viewport</span><span class="p">):</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a>        <span class="n">region</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">framed</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="n">bounds</span> <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">view</span><span class="o">.</span><span class="n">bounds</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="k">elif</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a>        <span class="n">region</span> <span class="o">=</span> <span class="n">bounds</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="k">return</span> <span class="n">ViewRequest</span><span class="p">(</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a>        <span class="n">bounds</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a>        <span class="n">width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a>        <span class="n">height</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">,</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a>        <span class="n">pixel_ratio</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span><span class="p">,</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a>        <span class="n">budget</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_budget</span><span class="p">,</span>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a>    <span class="p">)</span>
+<a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">        The request: region, canvas, pixel ratio and :attr:`effective_budget`. A view framed by a</span>
+<a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">        `(west, south, east, north)` domain asks for that box, reprojected into the view&#39;s CRS. With a canvas</span>
+<a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">        named, the request&#39;s :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">        canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">        `Viewport` included — and a request with no region carries no CRS either: the reader returns the source</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">        in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
+<a id="__codelineno-0-180" name="__codelineno-0-180"></a>
+<a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">        ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, if</span>
+<a id="__codelineno-0-183" name="__codelineno-0-183"></a><span class="sd">            `bounds` or a domain box cannot be reprojected into the viewport&#39;s CRS, or if the view is framed by a</span>
+<a id="__codelineno-0-184" name="__codelineno-0-184"></a><span class="sd">            named domain, which `base` cannot resolve.</span>
+<a id="__codelineno-0-185" name="__codelineno-0-185"></a>
+<a id="__codelineno-0-186" name="__codelineno-0-186"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-187" name="__codelineno-0-187"></a><span class="sd">        - The view&#39;s region, the target&#39;s canvas and budget:</span>
+<a id="__codelineno-0-188" name="__codelineno-0-188"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-189" name="__codelineno-0-189"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
+<a id="__codelineno-0-190" name="__codelineno-0-190"></a><span class="sd">            &gt;&gt;&gt; view = Viewport(4326, bounds=Bounds(0.0, 0.0, 10.0, 5.0, crs=4326))</span>
+<a id="__codelineno-0-191" name="__codelineno-0-191"></a><span class="sd">            &gt;&gt;&gt; request = RenderTarget(&quot;html&quot;, width=800, height=400).view_request(view)</span>
+<a id="__codelineno-0-192" name="__codelineno-0-192"></a><span class="sd">            &gt;&gt;&gt; request.as_bbox(), request.width, request.budget</span>
+<a id="__codelineno-0-193" name="__codelineno-0-193"></a><span class="sd">            ((0.0, 0.0, 10.0, 5.0), 800, 1000000)</span>
+<a id="__codelineno-0-194" name="__codelineno-0-194"></a>
+<a id="__codelineno-0-195" name="__codelineno-0-195"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-196" name="__codelineno-0-196"></a><span class="sd">        - A region given in another CRS is asked for in the view&#39;s:</span>
+<a id="__codelineno-0-197" name="__codelineno-0-197"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-198" name="__codelineno-0-198"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds, RenderTarget, Viewport</span>
+<a id="__codelineno-0-199" name="__codelineno-0-199"></a><span class="sd">            &gt;&gt;&gt; request = RenderTarget().view_request(Viewport(3857), bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))</span>
+<a id="__codelineno-0-200" name="__codelineno-0-200"></a><span class="sd">            &gt;&gt;&gt; request.crs, [round(edge) for edge in request.as_bbox()]</span>
+<a id="__codelineno-0-201" name="__codelineno-0-201"></a><span class="sd">            (3857, [0, 0, 111319, 111325])</span>
+<a id="__codelineno-0-202" name="__codelineno-0-202"></a>
+<a id="__codelineno-0-203" name="__codelineno-0-203"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-204" name="__codelineno-0-204"></a><span class="sd">        - A 3-D camera has no rectangle, so only the canvas and the budget are set:</span>
+<a id="__codelineno-0-205" name="__codelineno-0-205"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-206" name="__codelineno-0-206"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera, RenderTarget</span>
+<a id="__codelineno-0-207" name="__codelineno-0-207"></a><span class="sd">            &gt;&gt;&gt; request = RenderTarget(&quot;image&quot;, width=640, height=480).view_request(Camera((0.0, -10.0, 5.0)))</span>
+<a id="__codelineno-0-208" name="__codelineno-0-208"></a><span class="sd">            &gt;&gt;&gt; request.bounds, request.width, request.budget</span>
+<a id="__codelineno-0-209" name="__codelineno-0-209"></a><span class="sd">            (None, 640, 4000000)</span>
+<a id="__codelineno-0-210" name="__codelineno-0-210"></a>
+<a id="__codelineno-0-211" name="__codelineno-0-211"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-212" name="__codelineno-0-212"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-213" name="__codelineno-0-213"></a>    <span class="k">if</span> <span class="n">view</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="p">(</span><span class="n">Viewport</span><span class="p">,</span> <span class="n">Camera</span><span class="p">)):</span>
+<a id="__codelineno-0-214" name="__codelineno-0-214"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-215" name="__codelineno-0-215"></a>            <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs a Viewport, a Camera or None; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">view</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-216" name="__codelineno-0-216"></a>        <span class="p">)</span>
+<a id="__codelineno-0-217" name="__codelineno-0-217"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">Bounds</span><span class="p">):</span>
+<a id="__codelineno-0-218" name="__codelineno-0-218"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-219" name="__codelineno-0-219"></a>            <span class="sa">f</span><span class="s2">&quot;RenderTarget.view_request needs bounds as a Bounds; got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-220" name="__codelineno-0-220"></a>        <span class="p">)</span>
+<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="n">region</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Bounds</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="n">Viewport</span><span class="p">)</span> <span class="ow">and</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-223" name="__codelineno-0-223"></a>        <span class="n">region</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">framed</span><span class="p">(</span><span class="n">bounds</span><span class="p">)</span><span class="o">.</span><span class="n">bounds</span>
+<a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">view</span><span class="p">,</span> <span class="n">Viewport</span><span class="p">):</span>
+<a id="__codelineno-0-225" name="__codelineno-0-225"></a>        <span class="n">region</span> <span class="o">=</span> <span class="n">view</span><span class="o">.</span><span class="n">bounds</span> <span class="k">if</span> <span class="n">view</span><span class="o">.</span><span class="n">domain</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_domain_region</span><span class="p">(</span><span class="n">view</span><span class="p">)</span>
+<a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="k">elif</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-227" name="__codelineno-0-227"></a>        <span class="n">region</span> <span class="o">=</span> <span class="n">bounds</span>
+<a id="__codelineno-0-228" name="__codelineno-0-228"></a>    <span class="k">return</span> <span class="n">ViewRequest</span><span class="p">(</span>
+<a id="__codelineno-0-229" name="__codelineno-0-229"></a>        <span class="n">bounds</span><span class="o">=</span><span class="n">region</span><span class="p">,</span>
+<a id="__codelineno-0-230" name="__codelineno-0-230"></a>        <span class="n">width</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-231" name="__codelineno-0-231"></a>        <span class="n">height</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">height</span><span class="p">,</span>
+<a id="__codelineno-0-232" name="__codelineno-0-232"></a>        <span class="n">pixel_ratio</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">pixel_ratio</span><span class="p">,</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a>        <span class="n">budget</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">effective_budget</span><span class="p">,</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
