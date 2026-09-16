@@ -126,14 +126,17 @@ def auto_cmap(
 ) -> str:
     """Return the colormap to draw `source` with, resolving from its variable when the caller named none.
 
-    Defers to :func:`digitalearth.base.autostyle.auto_style` — the same variable→style table the static
-    ``Map`` consults, ECMWF-Magics match included — so a recognised field is coloured the same way whichever
-    tier renders it.
+    Defers to `lookup`, which by default is :func:`digitalearth.base.autostyle.auto_style` — the same
+    variable→style table the static ``Map`` consults, ECMWF-Magics match included — so a recognised field is
+    coloured the same way whichever tier renders it. Neither `source` nor the lookup is consulted when the
+    caller named a colormap.
 
     Args:
         source: The display-CRS source whose variable drives the lookup.
         cmap: The caller's colormap, or ``None`` to resolve one.
-        fallback: Colormap to use when the lookup recognises nothing.
+        fallback: Colormap to use when the lookup's answer has no `cmap`, or an empty one. The default
+            lookup always answers one — `viridis` for a variable it does not recognise — so with
+            `lookup=None` this is not reached.
         lookup: The style lookup to consult, taking `source` and returning the style dict. ``None`` calls
             :func:`~digitalearth.base.autostyle.auto_style` directly. A tier passes its own lookup method
             here — the interactive tier's ``_auto_style``, the web tier's ``_style_for`` — because those
@@ -157,6 +160,24 @@ def auto_cmap(
             >>> from digitalearth.base.display import auto_cmap
             >>> auto_cmap(None, "magma")
             'magma'
+
+            ```
+        - A tier hands in its own lookup, and the colormap is whatever that lookup answers:
+            ```python
+            >>> from digitalearth.base.display import auto_cmap
+            >>> auto_cmap(None, None, lookup=lambda source: {"cmap": "RdBu_r", "units": "K"})
+            'RdBu_r'
+
+            ```
+        - `fallback` is used only when the answer names no colormap; the default lookup always names one:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.display import auto_cmap
+            >>> from digitalearth.base.sources import get_source
+            >>> auto_cmap(None, None, "gray", lookup=lambda source: {})
+            'gray'
+            >>> auto_cmap(get_source(np.zeros((2, 2))), None, "gray")
+            'viridis'
 
             ```
     """

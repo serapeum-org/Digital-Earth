@@ -84,13 +84,47 @@ class Source:
     def x(self) -> DimensionInfo:
         """The x / longitude dimension.
 
+        Returns:
+            The :class:`DimensionInfo` holding the x coordinates: one per column for a raster, one per point
+            for a vector source.
+
         Note:
             For a **vector** source the coordinate array is read-only: it comes from
             :class:`~digitalearth.base.points.PointArrays`, which freezes its arrays so one reading cannot be
             changed under another holder of it. Copy it (``np.array(source.x.values)``) before modifying in
             place. This is not new under pandas 3, whose copy-on-write already made the geometry's ``.x``
-            read-only; it is new, and unconditional, for an install on pandas 2. Raster and plain-array
-            sources build their axes fresh and stay writable.
+            read-only; it is new, and unconditional, for an install on pandas 2. A raster source builds its
+            axes fresh, and they are writable. So are a plain array's pixel-index axes — but coordinates the
+            caller passed as `x` / `y` are wrapped without a copy, sharing the caller's buffer and keeping
+            its writability.
+
+        Examples:
+            - A plain array's x holds one pixel index per column, and can be modified in place:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> src = get_source(np.zeros((2, 3)))
+                >>> src.x.values.tolist(), src.x.values.flags.writeable
+                ([0.0, 1.0, 2.0], True)
+
+                ```
+            - A vector source's x is read-only, so it is copied before being changed:
+                ```python
+                >>> import geopandas as gpd
+                >>> import numpy as np
+                >>> from pyramids.feature import FeatureCollection
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.base.sources import get_source
+                >>> frame = gpd.GeoDataFrame(geometry=[Point(0, 1), Point(2, 3)], crs="EPSG:4326")
+                >>> src = get_source(FeatureCollection(frame))
+                >>> src.x.values.flags.writeable
+                False
+                >>> shifted = np.array(src.x.values)
+                >>> shifted += 10.0
+                >>> shifted.tolist(), src.x.values.tolist()
+                ([10.0, 12.0], [0.0, 2.0])
+
+                ```
         """
         return self._x
 
@@ -98,8 +132,40 @@ class Source:
     def y(self) -> DimensionInfo:
         """The y / latitude dimension.
 
+        Returns:
+            The :class:`DimensionInfo` holding the y coordinates: one per row for a raster, one per point for
+            a vector source.
+
         Note:
             Read-only for a vector source, for the reason given on :attr:`x`.
+
+        Examples:
+            - A north-up raster's y runs from the top row's cell centre down:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.georeference import GeoReference
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.base.sources import get_source
+                >>> grid = Dataset.from_array(
+                ...     np.zeros((2, 3)),
+                ...     geo_ref=GeoReference(top_left_corner=(0.0, 2.0), cell_size=1.0, epsg=4326),
+                ... )
+                >>> get_source(grid).y.values.tolist()
+                [1.5, 0.5]
+
+                ```
+            - A vector source's y is read-only, like its x:
+                ```python
+                >>> import geopandas as gpd
+                >>> from pyramids.feature import FeatureCollection
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.base.sources import get_source
+                >>> frame = gpd.GeoDataFrame(geometry=[Point(0, 1), Point(2, 3)], crs="EPSG:4326")
+                >>> src = get_source(FeatureCollection(frame))
+                >>> src.y.values.tolist(), src.y.values.flags.writeable
+                ([1.0, 3.0], False)
+
+                ```
         """
         return self._y
 

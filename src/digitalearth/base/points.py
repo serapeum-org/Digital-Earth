@@ -166,6 +166,35 @@ class PointArrays:
                 ([0.0, 2.0], 4326)
 
                 ```
+            - A missing geometry reads as `NaN` even with `centroids=False`, keeps the other points'
+              heights, and is dropped by :meth:`finite`:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.base.points import PointArrays
+                >>> gdf = gpd.GeoDataFrame(geometry=[Point(0, 1, 5), None, Point(2, 3, 7)])
+                >>> pts = PointArrays.from_features(gdf, centroids=False)
+                >>> pts.x.tolist(), pts.z.tolist()
+                ([0.0, nan, 2.0], [5.0, nan, 7.0])
+                >>> pts.finite()[0].z.tolist()
+                [5.0, 7.0]
+
+                ```
+            - A polygon falls back to its centroid, or is refused when `centroids=False`:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth.base.points import PointArrays
+                >>> square = gpd.GeoDataFrame(geometry=[Polygon([(0, 0), (2, 0), (2, 2), (0, 2)])])
+                >>> centre = PointArrays.from_features(square)
+                >>> centre.x.tolist(), centre.y.tolist()
+                ([1.0], [1.0])
+                >>> PointArrays.from_features(square, centroids=False)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: PointArrays.from_features got geometry that is not all points, and centroids=False...
+
+                ```
         """
         frame = (
             features.to_geodataframe()
@@ -269,6 +298,11 @@ class PointArrays:
         Returns:
             A ``(points, aligned)`` pair: the surviving points, and the filtered arrays in the order given.
 
+        Raises:
+            ValueError: if `dims` names a letter other than `x`, `y` and `z`, is empty, or names an axis twice.
+            IndexError: if an array in `aligned` is not the same length as the points, raised by numpy when
+                the mask is applied to it.
+
         Examples:
             - Points on the far side of a globe are removed:
                 ```python
@@ -285,6 +319,15 @@ class PointArrays:
                 >>> pts = PointArrays.of([0.0, 1.0], [2.0, 3.0], [9.0, float("nan")])
                 >>> len(pts.finite()[0]), len(pts.finite(dims="xyz")[0])
                 (2, 1)
+
+                ```
+            - A repeated axis is refused rather than read as the axis the caller probably meant:
+                ```python
+                >>> from digitalearth.base.points import PointArrays
+                >>> PointArrays.of([0.0], [1.0]).finite(dims="xx")
+                Traceback (most recent call last):
+                    ...
+                ValueError: finite() needs each of 'x', 'y' and 'z' named at most once, and at least one; got 'xx'
 
                 ```
         """

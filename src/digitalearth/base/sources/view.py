@@ -32,8 +32,9 @@ from digitalearth.base.spec.viewrequest import ViewRequest
 __all__ = ["DESCRIBING_KEYS", "SourceView"]
 
 #: Metadata keys that describe the data rather than the read, and so survive a re-read of the same slice. A
-#: windowed read comes back as a bare array that names none of them; everything *not* listed here belongs to
-#: the read that produced it and is never filled in from an earlier one.
+#: windowed read comes back as a bare array, for which the extractor writes only `kind="raster"` and an empty
+#: `variable` placeholder, so the band's name and `standard_name` would otherwise be lost. Everything *not*
+#: listed here belongs to the read that produced it and is never filled in from an earlier one.
 DESCRIBING_KEYS = ("variable", "kind", "standard_name")
 
 
@@ -198,15 +199,62 @@ class SourceView(Source):
 
         Returns:
             A new view of the same slice, carrying the same reference and selection plus the request it
-            answered.
+            answered. Its metadata is the new read's, with each key in :data:`DESCRIBING_KEYS` the new read
+            did not supply filled in from this view — see :meth:`_carried` — and its `units` are this view's
+            when the new read found none.
 
         Raises:
             RuntimeError: if this view has no reference to read from — see :attr:`rereadable`. Raised here,
                 naming the view, rather than surfacing as an `AttributeError` from inside a reader. Build the
                 view from a `DataRef`, or register the object with
                 :meth:`~digitalearth.base.spec.dataref.DataRef.to_object`, to make it re-readable.
+            KeyError: if the reference no longer resolves — an `object:` id not registered in this process,
+                or a scheme no resolver handles. Raised by
+                :meth:`~digitalearth.base.spec.dataref.DataRef.open`.
+            ValueError: if this view's selection is one :meth:`of` refuses.
 
         Examples:
+            - Re-reading within a budget keeps the address, and the band name the bare windowed array lacks:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.georeference import GeoReference
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> from digitalearth.base.spec import DataRef, ViewRequest
+                >>> dem = Dataset.from_array(
+                ...     np.arange(16.0).reshape(4, 4),
+                ...     geo_ref=GeoReference(top_left_corner=(0.0, 4.0), cell_size=1.0, epsg=4326),
+                ... )
+                >>> ref = DataRef.to_object(dem, name="doc-reread")
+                >>> view = SourceView.of(ref.open(), ref=ref)
+                >>> view.z.values.shape, view.metadata("variable"), view.metadata("band")
+                ((4, 4), 'Band_1', 1)
+                >>> coarse = view.reread(ViewRequest(budget=4))
+                >>> coarse.z.values.shape, coarse.ref.uri, coarse.request.budget
+                ((2, 2), 'object:doc-reread', 4)
+                >>> coarse.x.values.tolist(), coarse.y.values.tolist()
+                ([1.0, 3.0], [3.0, 1.0])
+
+                ```
+            - Only the describing keys are carried; `band` belongs to the first read, so it is not:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.georeference import GeoReference
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.base.sources.view import DESCRIBING_KEYS, SourceView
+                >>> from digitalearth.base.spec import DataRef, ViewRequest
+                >>> dem = Dataset.from_array(
+                ...     np.arange(16.0).reshape(4, 4),
+                ...     geo_ref=GeoReference(top_left_corner=(0.0, 4.0), cell_size=1.0, epsg=4326),
+                ... )
+                >>> ref = DataRef.to_object(dem, name="doc-reread-keys")
+                >>> coarse = SourceView.of(ref.open(), ref=ref).reread(ViewRequest(budget=4))
+                >>> DESCRIBING_KEYS
+                ('variable', 'kind', 'standard_name')
+                >>> coarse.metadata("variable"), coarse.metadata("kind"), coarse.metadata("band")
+                ('Band_1', 'raster', None)
+
+                ```
             - A view built from a held object refuses, and says why:
                 ```python
                 >>> import numpy as np
@@ -233,10 +281,11 @@ class SourceView(Source):
             request=request,
             crs=self.crs,
         )
-        # A windowed read returns a bare array, which carries no band name — so the variable, units and kind
-        # would be lost by re-reading the very same slice at a different resolution. They describe the data,
-        # not the window, so they are carried over where the new read supplied nothing. The result is built
-        # as a new view from public properties rather than by writing into `again`'s private state.
+        # A windowed read returns a bare array, which carries no band name — so the variable, units and
+        # standard_name would be lost by re-reading the very same slice at a different resolution. They
+        # describe the data, not the window, so they are carried over where the new read supplied nothing.
+        # The result is built as a new view from public properties rather than by writing into `again`'s
+        # private state.
         return SourceView(
             again.z,
             again.x,
@@ -258,8 +307,8 @@ class SourceView(Source):
             fresh: The metadata the new read produced.
 
         Returns:
-            `fresh`, plus each key in :data:`DESCRIBING_KEYS` that the new read did not supply. Every other
-            key is the new read's alone.
+            A copy of `fresh` — neither argument is modified — plus each key in :data:`DESCRIBING_KEYS` that
+            `previous` holds and the new read did not supply. Every other key is the new read's alone.
 
             Two rules replace a truthiness test that over-reached. First, only a **named** set of keys is
             carried: the ones that say what the data *is*, which a window cannot change. A key describing
@@ -294,22 +343,27 @@ class SourceView(Source):
             data: The opened data — a pyramids ``Dataset``, ``FeatureCollection``, or anything
                 :func:`~digitalearth.base.sources.get_source` accepts.
             ref: The reference `data` was opened from, recorded so the view can be re-read.
-            selection: Which slice to read. Defaults to the default band.
+            selection: Which slice to read. Defaults to the default band. Only its band and its `budget`
+                are honoured; the axes it may not name are listed under Raises.
             request: The region/resolution/budget wanted. Applied through pyramids' windowed read when the
-                object exposes one — including a budget with no region, which windows against the source's
-                own extent. Otherwise recorded but not enforced: a reader that cannot window is not a reason
-                to refuse the read. A `budget` on `selection` is folded in here — see :meth:`_budgeted` —
-                and the view records the request as applied.
-            crs: The CRS to record for the coordinates, passed through to the extractor.
+                object exposes one (`read_part`) and the request names a region or a budget — a budget with
+                no region windows against the source's own `bbox`. A request naming only a canvas size, or
+                one given for an object that cannot window, is recorded but not enforced: a reader that
+                cannot window is not a reason to refuse the read. A `budget` on `selection` is folded in
+                first, the smaller of the two winning — see :meth:`_budgeted` — and the view records the
+                request as it stands after that.
+            crs: The CRS to record for the coordinates, passed through to the extractor. A windowed read
+                records the window's CRS instead, when the window has one.
 
         Returns:
-            The view.
+            The view, carrying `ref`, the selection, and the request as recorded under `request` above.
 
         Raises:
-            ValueError: if `selection` names more than a band. Only the band is honoured, so a view that
-                stored `time`, `level`, `member` or `overview` would report a slice it does not hold; a
-                composite selection is refused for the same reason.
-            Exception: whatever the extractor raises for data it cannot read.
+            ValueError: if `selection` names a `time`, `level`, `member` or `overview`, or more than one
+                band. Nothing but the band and the budget is honoured, so a view that stored the rest would
+                report a slice it does not hold; a composite selection is refused for the same reason.
+            Exception: whatever the extractor raises for data it cannot read, or pyramids for a window it
+                cannot read.
 
         Examples:
             - A plain array becomes a view with no address, which is a legitimate state:
@@ -319,6 +373,42 @@ class SourceView(Source):
                 >>> view = SourceView.of(np.arange(6.0).reshape(2, 3), crs=4326)
                 >>> view.z.values.shape, view.rereadable
                 ((2, 3), False)
+
+                ```
+            - A budget with no region windows the raster's own extent, labelled with real cell centres:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.georeference import GeoReference
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> from digitalearth.base.spec import ViewRequest
+                >>> dem = Dataset.from_array(
+                ...     np.arange(16.0).reshape(4, 4),
+                ...     geo_ref=GeoReference(top_left_corner=(0.0, 4.0), cell_size=1.0, epsg=4326),
+                ... )
+                >>> view = SourceView.of(dem, request=ViewRequest(budget=4))
+                >>> view.z.values.shape, view.crs
+                ((2, 2), 4326)
+                >>> view.x.values.tolist(), view.y.values.tolist()
+                ([1.0, 3.0], [3.0, 1.0])
+
+                ```
+            - A budget on the selection is applied too, and the tighter of the two budgets wins:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.base.georeference import GeoReference
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> from digitalearth.base.spec import Selection, ViewRequest
+                >>> dem = Dataset.from_array(
+                ...     np.arange(16.0).reshape(4, 4),
+                ...     geo_ref=GeoReference(top_left_corner=(0.0, 4.0), cell_size=1.0, epsg=4326),
+                ... )
+                >>> view = SourceView.of(
+                ...     dem, selection=Selection.of(1, budget=4), request=ViewRequest(budget=100)
+                ... )
+                >>> view.request.budget, view.selection.budget, view.z.values.shape
+                (4, 4, (2, 2))
 
                 ```
         """
@@ -407,8 +497,10 @@ class SourceView(Source):
         Returns:
             The caller's canvas when they named both dimensions **and it fits the budget** — reading a square
             for a request that says ``800x600`` distorts the aspect ratio of the very canvas those fields
-            exist to describe. Otherwise a square of :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side`,
-            which is what a budget alone can say.
+            exist to describe. A request missing either dimension gets a square, which is what a budget
+            alone can say: `int(sqrt(budget))` cells on a side (at least one) when it has a budget, and
+            :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side`, with its floor of 64, when it has
+            none.
 
             The canvas is measured in **device** pixels, so a request carrying ``pixel_ratio=2.0`` reads the
             1600x1200 it will draw rather than the 800x600 it is laid out at. That is the whole purpose of
@@ -484,11 +576,14 @@ class SourceView(Source):
             request: What was asked for, or ``None``.
 
         Returns:
-            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s — there
-            is nothing to narrow, or the reader has no windowed read.
+            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s: when
+            there is no request, the object has no `read_part`, or the request names no region and either
+            has no budget (a canvas size alone) or meets an object with no `bbox` to window the budget
+            against.
 
-            Windowed, it is the **array** ``read_part`` returns plus the coordinates of its cell centres and
-            the CRS they are in. The coordinates have to be computed here because ``read_part`` is an array
+            Windowed, the window is first grown to whole source pixels by :meth:`_aligned`, and the result is
+            the **array** ``read_part`` returns for it plus the coordinates of its cell centres and the CRS
+            they are in. The coordinates have to be computed here because ``read_part`` is an array
             reader, not a dataset reader: pyramids' own docstring says *"Pixel values only — no transform,
             bounds, or CRS is attached"*. Without them the extractor falls back to ``np.arange`` axes and the
             view claims a projected CRS while holding pixel indices.
@@ -545,15 +640,17 @@ class SourceView(Source):
             data: The object being read, for its geotransform.
 
         Returns:
-            The smallest pixel-aligned window containing `window`, or `window` unchanged when the source
-            exposes no geotransform to align against.
+            The smallest pixel-aligned window containing `window`, or `window` itself when :meth:`_grid`
+            finds no grid to align against (no geotransform, or a zero step).
 
-            This is the same outward snap ``read_part`` performs internally. Doing it here rather than
-            reproducing its arithmetic afterwards is what keeps the labels honest: the caller's bbox and the
-            rectangle actually read become one rectangle, so there is no second window to get wrong.
+            On an axis-aligned grid this is the same outward snap ``read_part`` performs internally — the
+            floor and ceiling of the corners' pixel coordinates. Doing it here rather than reproducing its
+            arithmetic afterwards is what keeps the labels honest: the caller's bbox and the rectangle
+            actually read become one rectangle, so there is no second window to get wrong. A rotated grid is
+            snapped as if unrotated, because :meth:`_grid` drops the rotation terms.
 
-            The long-term answer is for the reader to return the window's transform alongside the array —
-            an upstream change, not one to make here.
+            The long-term answer is for the reader to report the window it actually read alongside the
+            array, which is https://github.com/serapeum-org/pyramids/issues/1149.
         """
         transform = cls._grid(data)
         if transform is None:
@@ -572,9 +669,11 @@ class SourceView(Source):
             data: The object being read.
 
         Returns:
-            The four geotransform entries that place a cell, with the rotation terms dropped — a rotated
-            raster is not something an axis-aligned window can describe, and pyramids does not produce one.
-            ``None`` when there is no geotransform, or a step is zero and the grid degenerate.
+            The four geotransform entries that place a cell on an axis-aligned grid. The rotation terms
+            (`geotransform[2]` and `geotransform[4]`) are dropped without being checked: an axis-aligned
+            window cannot describe a rotated raster, so one — which pyramids can hold, for instance from
+            `GeoReference(geo=...)` — is windowed and labelled as if it were unrotated. ``None`` when there
+            is no geotransform, it has fewer than six entries, or a step is zero and the grid degenerate.
         """
         transform = getattr(data, "geotransform", None)
         if not transform or len(transform) < 6:
@@ -635,14 +734,15 @@ class SourceView(Source):
             hands back ascending y, and one stored east-left (``step_x < 0``) descending x; labelling
             either the usual way round renders it mirrored, silently, since a flipped raster draws
             perfectly happily. With no geotransform to consult the north-up, west-left convention is
-            assumed, which is what every raster pyramids writes itself uses.
+            assumed, which is the transform pyramids builds from a `GeoReference` corner and cell size.
 
         Note:
             Only this windowed path derives the y direction. pyramids' own ``Dataset.y`` measures rows
             downward from ``geotransform[3]`` whatever the sign of ``geotransform[5]``, so a south-up source
             read through any other extractor is labelled outside its own extent (a raster spanning y 0..8
-            reports ``y = [-0.5, -1.5, ...]``), and its ``bbox`` comes back with ``ymin > ymax``. Fixing
-            that is an upstream change; this method only avoids adding a second, differently-wrong answer.
+            reports ``y = [-0.5, -1.5, ...]``), and its ``bbox`` comes back with ``ymin > ymax``. That is
+            https://github.com/serapeum-org/pyramids/issues/1148; this method only avoids adding a second,
+            differently-wrong answer.
         """
         xmin, ymin, xmax, ymax = window.as_bbox()
         grid = cls._grid(data)

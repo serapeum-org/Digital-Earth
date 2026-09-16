@@ -1327,7 +1327,8 @@ class WebMapBase:
         Mirrors the interactive tier's ``_auto_cmap`` so a variable looks the same across tiers (the same
         ``digitalearth.base.autostyle`` variable→style lookup, incl. the ECMWF-Magics match); falls back to
         ``"viridis"`` for an unrecognised field — which is also what the autostyle library's ``default``
-        group carries, so the literal here only covers a library that answered with no colormap at all.
+        group carries, so the `DEFAULT_CMAP` fallback in :func:`~digitalearth.base.display.auto_cmap` only
+        covers a lookup that answered with no colormap at all.
 
         Goes through :meth:`_style_for`, which its docstring names as the tier's single entry into the
         style table — so this, :meth:`_auto_levels` and :meth:`_auto_units` see one lookup's answer.

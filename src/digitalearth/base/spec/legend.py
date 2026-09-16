@@ -147,14 +147,16 @@ class LegendSpec:
             units: Unit string for the values.
             format: Format spec for numeric labels.
             orientation: ``"vertical"`` or ``"horizontal"``.
-            stops: How many stops describe a continuous ramp. Ignored when `values` is given.
-            values: The stop values the ramp was actually drawn with, for the continuous arm. Pass them
-                whenever the caller already holds them. Recomputing them here from the limits is a second
-                computation that *usually* agrees: ``numpy.linspace`` pins its final element to ``stop``
-                exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For ``lo=-3.7, hi=12.9`` the
-                recomputed top stop is ``12.900000000000002`` while the drawn one is ``12.9`` — so the top
-                swatch is labelled with a value the layer never draws, which is the disagreement this type
-                exists to remove.
+            stops: How many stops describe a continuous ramp, spaced evenly between the scale's limits.
+                Ignored for a categorical or graduated scale, and when `values` is given.
+            values: The stop values the ramp was actually drawn with, for the continuous arm; each becomes
+                one row, converted to `float`, in the order given. Ignored for a categorical or graduated
+                scale. Pass them whenever the caller already holds them. Recomputing them here from the
+                limits is a second computation that *usually* agrees: ``numpy.linspace`` pins its final
+                element to ``stop`` exactly, and ``lo + (hi - lo) * i / (stops - 1)`` does not. For
+                ``lo=-3.7, hi=12.9`` the recomputed top stop is ``12.900000000000002`` while the drawn one is
+                ``12.9`` — so the top swatch is labelled with a value the layer never draws, which is the
+                disagreement this type exists to remove.
 
         Returns:
             The legend.
@@ -162,7 +164,9 @@ class LegendSpec:
         Raises:
             ValueError: if `colors` is missing or the wrong length for a scale that needs it. A short list
                 leaves classes sharing a colour and a long one leaves colours unused — either way the legend
-                stops matching the picture, which is the failure this type exists to prevent.
+                stops matching the picture, which is the failure this type exists to prevent. Also raised
+                for a continuous scale described by fewer than two stops — `stops` below two, or fewer than
+                two `values` — which cannot describe a ramp.
 
         Examples:
             - A categorical scale needs no colours passed, because it has them:
@@ -181,6 +185,19 @@ class LegendSpec:
                 Traceback (most recent call last):
                     ...
                 ValueError: a graduated legend needs one colour per class; got 2 colours for 3 classes
+
+                ```
+            - A ramp's rows are exactly the stops passed in `values`; without them, `DEFAULT_RAMP_STOPS`
+              evenly spaced stops are computed from the limits instead:
+                ```python
+                >>> from digitalearth.base.spec import DEFAULT_RAMP_STOPS, LegendSpec, Scale
+                >>> scale = Scale.from_limits(0.0, 10.0)
+                >>> drawn = LegendSpec.from_scale(scale, colors=["#000", "#888", "#fff"], values=[0.0, 2.5, 10.0])
+                >>> [entry.value for entry in drawn.entries], drawn.kind
+                ([0.0, 2.5, 10.0], 'continuous')
+                >>> computed = LegendSpec.from_scale(scale, colors=["#000"] * DEFAULT_RAMP_STOPS)
+                >>> [entry.value for entry in computed.entries]
+                [0.0, 2.5, 5.0, 7.5, 10.0]
 
                 ```
         """
