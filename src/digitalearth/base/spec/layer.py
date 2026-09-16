@@ -29,6 +29,7 @@ from typing import (
     Dict,
     FrozenSet,
     Iterator,
+    List,
     Mapping,
     Optional,
     Set,
@@ -432,21 +433,9 @@ class LayerTree:
             ValueError: as described on the class.
         """
         object.__setattr__(self, "layers", tuple(self.layers))
-        if isinstance(self.hidden_groups, (str, bytes)):
-            # `frozenset("obs")` is the letters of the name, and a one-letter group would be hidden silently.
-            raise ValueError(
-                "LayerTree hidden_groups must be a collection of group names; got the string "
-                f"{self.hidden_groups!r}"
-            )
-        hidden = list(self.hidden_groups)
-        for group in hidden:
-            if not isinstance(group, str):
-                # Checked before the frozenset and the sorted message below, which raised bare TypeErrors for an
-                # unhashable entry or for names of mixed types.
-                raise ValueError(
-                    f"LayerTree hidden_groups must be group names (strings); got {group!r}"
-                )
-        object.__setattr__(self, "hidden_groups", frozenset(hidden))
+        object.__setattr__(
+            self, "hidden_groups", self._checked_hidden_groups(self.hidden_groups)
+        )
         for layer in self.layers:
             if not isinstance(layer, LayerSpec):
                 raise ValueError(
@@ -462,6 +451,53 @@ class LayerTree:
             raise ValueError(
                 f"LayerTree ids must be unique; {duplicated} appear more than once"
             )
+        self._check_drapes(ids)
+        unknown_groups = sorted(
+            self.hidden_groups - {layer.group for layer in self.layers}
+        )
+        if unknown_groups:
+            raise ValueError(
+                f"LayerTree hides groups {unknown_groups} that no layer belongs to; groups are {list(self.groups)}"
+            )
+
+    @staticmethod
+    def _checked_hidden_groups(hidden_groups: Any) -> FrozenSet[str]:
+        """Return the hidden groups as a frozenset of names, refusing anything that is not one.
+
+        Args:
+            hidden_groups: What the constructor was given.
+
+        Returns:
+            The names, frozen.
+
+        Raises:
+            ValueError: for a bare string or bytes, or an entry that is not a string.
+        """
+        if isinstance(hidden_groups, (str, bytes)):
+            # `frozenset("obs")` is the letters of the name, and a one-letter group would be hidden silently.
+            raise ValueError(
+                "LayerTree hidden_groups must be a collection of group names; got the string "
+                f"{hidden_groups!r}"
+            )
+        hidden = list(hidden_groups)
+        for group in hidden:
+            if not isinstance(group, str):
+                # Checked before the frozenset and the sorted message in the constructor, which raised bare
+                # TypeErrors for an unhashable entry or for names of mixed types.
+                raise ValueError(
+                    f"LayerTree hidden_groups must be group names (strings); got {group!r}"
+                )
+        return frozenset(hidden)
+
+    def _check_drapes(self, ids: List[str]) -> None:
+        """Refuse a drape over a layer the tree does not hold, or a chain of drapes that loops.
+
+        Args:
+            ids: The layer ids, bottom first, for the message.
+
+        Raises:
+            ValueError: naming the draped layer and the missing surface, or the loop.
+        """
         by_id = {layer.id: layer for layer in self.layers}
         for layer in self.layers:
             if layer.z_layer is not None and layer.z_layer not in by_id:
@@ -485,13 +521,6 @@ class LayerTree:
                 on_chain.add(target)
                 target = by_id[target].z_layer
             grounded.update(chain)
-        unknown_groups = sorted(
-            self.hidden_groups - {layer.group for layer in self.layers}
-        )
-        if unknown_groups:
-            raise ValueError(
-                f"LayerTree hides groups {unknown_groups} that no layer belongs to; groups are {list(self.groups)}"
-            )
 
     # ------------------------------------------------------------------ reading
 

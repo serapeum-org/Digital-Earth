@@ -337,6 +337,40 @@ def positive_number(value: Any) -> Optional[float]:
     return number if isfinite(number) and number > 0 else None
 
 
+#: What `_json_scalar` answers for a value that is not a JSON scalar, so `None` can be a scalar it returns.
+_NOT_A_SCALAR = object()
+
+
+def _json_scalar(value: Any, where: str) -> Any:
+    """Return a scalar in the form `json` writes, or `_NOT_A_SCALAR` for anything that is not one.
+
+    Args:
+        value: A field's value. A numpy time has already been refused by the caller.
+        where: The field, for the message.
+
+    Returns:
+        `None` or a boolean unchanged; a string — a `numpy.str_` included — as `str`; a finite number, Python's or
+        numpy's, as a Python number; `_NOT_A_SCALAR` otherwise.
+
+    Raises:
+        ValueError: for a non-finite number.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        # `numpy.str_` is a `str`, so it was returned as numpy — as `np.float64` was before it was written as a float.
+        return str(value)
+    if isinstance(value, (int, float)) and not isinstance(value, np.generic):
+        # `np.float64` subclasses `float`, so without the second test it came back as numpy, not as the Python float
+        # the dict promises — `json` copes, but YAML, TOML and msgpack writers do not.
+        return _finite(value, where)
+    if isinstance(value, np.generic):
+        native = value.item()
+        if isinstance(native, (bool, int, float, str)):
+            return _finite(native, where)
+    return _NOT_A_SCALAR
+
+
 def to_json_value(value: Any, where: str) -> Any:
     """Return `value` in the form `json.dumps` writes and `json.loads` reads back.
 
@@ -387,15 +421,6 @@ def to_json_value(value: Any, where: str) -> Any:
 
             ```
     """
-    if value is None or isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        # `numpy.str_` is a `str`, so it was returned as numpy — as `np.float64` was before it was written as a float.
-        return str(value)
-    if isinstance(value, (int, float)) and not isinstance(value, np.generic):
-        # `np.float64` subclasses `float`, so without the second test it came back as numpy, not as the Python float
-        # the dict promises — `json` copes, but YAML, TOML and msgpack writers do not.
-        return _finite(value, where)
     if isinstance(value, (np.datetime64, np.timedelta64)) or (
         isinstance(value, np.ndarray) and value.dtype.kind in "Mm"
     ):
@@ -405,10 +430,9 @@ def to_json_value(value: Any, where: str) -> Any:
             f"{where} holds a {type(value).__name__}, which has no JSON form ({value.dtype}); store a time as an "
             "ISO 8601 string"
         )
-    if isinstance(value, np.generic):
-        native = value.item()
-        if isinstance(native, (bool, int, float, str)):
-            return _finite(native, where)
+    scalar = _json_scalar(value, where)
+    if scalar is not _NOT_A_SCALAR:
+        return scalar
     if isinstance(value, np.ndarray):
         return [
             to_json_value(item, f"{where}[{index}]")

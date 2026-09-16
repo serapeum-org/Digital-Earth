@@ -190,21 +190,7 @@ class Encoding:
             raise ValueError(
                 f"an Encoding for {self.channel!r} needs a field name that is a non-empty string; got {self.field!r}"
             )
-        if self.output_range is not None:
-            if isinstance(self.output_range, (str, bytes)) or not hasattr(
-                self.output_range, "__iter__"
-            ):
-                # tuple(5) raises TypeError about ints, which names neither the argument nor the channel.
-                raise ValueError(
-                    f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
-                    f"{self.output_range!r}"
-                )
-            object.__setattr__(self, "output_range", tuple(self.output_range))
-            if len(self.output_range) != 2:
-                raise ValueError(
-                    f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
-                    f"{self.output_range!r}"
-                )
+        self._check_output_range()
         if self.field is None and (
             self.scale is not None or self.output_range is not None
         ):
@@ -222,6 +208,30 @@ class Encoding:
             raise ValueError(
                 f"the {self.channel!r} encoding cannot combine a categorical scale with an output range: "
                 "a category resolves to its assigned colour, not to a position a range can stretch"
+            )
+
+    def _check_output_range(self) -> None:
+        """Store `output_range` as a tuple, refusing anything that is not a `(low, high)` pair.
+
+        Raises:
+            ValueError: for a string, a non-iterable or an iterable that does not hold exactly two items, naming the
+                channel.
+        """
+        if self.output_range is None:
+            return
+        if isinstance(self.output_range, (str, bytes)) or not hasattr(
+            self.output_range, "__iter__"
+        ):
+            # tuple(5) raises TypeError about ints, which names neither the argument nor the channel.
+            raise ValueError(
+                f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
+                f"{self.output_range!r}"
+            )
+        object.__setattr__(self, "output_range", tuple(self.output_range))
+        if len(self.output_range) != 2:
+            raise ValueError(
+                f"the {self.channel!r} encoding needs output_range as a (low, high) pair; got "
+                f"{self.output_range!r}"
             )
 
     # ------------------------------------------------------------------ builders
