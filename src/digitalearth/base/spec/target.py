@@ -174,9 +174,9 @@ class RenderTarget:
             The request: region, canvas, pixel ratio and :attr:`effective_budget`. A view framed by a
             `(west, south, east, north)` domain asks for that box, reprojected into the view's CRS. With a canvas
             named, the request's :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the
-            canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed
-            `Viewport` included — and a request with no region carries no CRS either: the reader returns the source
-            in its own CRS, and the renderer reprojects it into the view's.
+            canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an
+            unframed `Viewport` included — and a request with no region carries no CRS either: the reader returns the
+            source in its own CRS, and the renderer reprojects it into the view's.
 
         Raises:
             ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, if
