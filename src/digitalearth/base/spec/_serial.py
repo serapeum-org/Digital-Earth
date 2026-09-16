@@ -222,6 +222,15 @@ def to_json_value(value: Any, where: str) -> Any:
         return value
     if isinstance(value, (int, float)):
         return _finite(value, where)
+    if isinstance(value, (np.datetime64, np.timedelta64)) or (
+        isinstance(value, np.ndarray) and value.dtype.kind in "Mm"
+    ):
+        # Refused by type, before `.item()`: at nanosecond precision `.item()` returns an *int*, because a Python
+        # datetime cannot hold nanoseconds, and that int would be written as though it were a plain number.
+        raise TypeError(
+            f"{where} holds a {type(value).__name__}, which has no JSON form ({value.dtype}); store a time as an "
+            "ISO 8601 string"
+        )
     if isinstance(value, np.generic):
         native = value.item()
         if isinstance(native, (bool, int, float, str)):

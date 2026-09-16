@@ -385,6 +385,37 @@ class TestWhatWritingRefuses:
         stored = Symbology.of(opacity=0.5).with_props(levels=[1.5, 2.5]).to_dict()
         assert json.loads(json.dumps(stored, allow_nan=False)) == stored
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            np.datetime64("2020-01-01T00:00:00.000000000"),
+            np.timedelta64(5, "ns"),
+            np.array(["2020-01-01T00:00"], dtype="datetime64[ns]"),
+            np.array([5], dtype="timedelta64[ns]"),
+        ],
+        ids=[
+            "datetime64-ns",
+            "timedelta64-ns",
+            "datetime64-ns-array",
+            "timedelta64-ns-array",
+        ],
+    )
+    def test_a_nanosecond_time_is_refused_not_written_as_an_integer(self, value):
+        """A `datetime64[ns]` is refused like a coarser one, instead of being written as an int.
+
+        Args:
+            value: A nanosecond-precision time or duration, scalar or array.
+
+        Test scenario:
+            `np.datetime64(...).item()` returns a `date` at day precision, which the writer already refused — but at
+            nanosecond precision it returns an int, because `datetime` cannot hold nanoseconds, and the int was
+            written as a plain number. Nanosecond is the default for pandas and netCDF time coordinates, which is
+            where `Selection.time` values come from; the stored figure would read back an int and select the wrong
+            step.
+        """
+        with pytest.raises(TypeError, match="store a time as an ISO 8601 string"):
+            to_json_value(value, "Selection.time")
+
     def test_a_non_string_mapping_key_is_refused(self):
         """A JSON object's keys are strings, so an int key is refused rather than stringified."""
         with pytest.raises(TypeError, match="non-string key 1"):
