@@ -33,7 +33,13 @@ from digitalearth.base.spec import (
     Viewport,
     ViewRequest,
 )
-from digitalearth.base.spec._serial import crs_to_json, finite_number, to_json_value
+from digitalearth.base.spec._serial import (
+    FrozenDict,
+    crs_to_json,
+    finite_number,
+    read_entry,
+    to_json_value,
+)
 
 #: A minimal valid panel list, for the figure reads that fail on another field.
 _PANELS = [{"id": "p", "viewport": {"crs": 3857}}]
@@ -88,6 +94,18 @@ def _foreign_types(written, where="to_dict()"):
 def _through_json(value):
     """Round-trip `value` through its dict form and real JSON text."""
     return type(value).from_dict(json.loads(json.dumps(value.to_dict())))
+
+
+def _raise_a_decode_error(value):
+    """Refuse `value` with a `ValueError` subclass whose constructor needs more than a message.
+
+    Args:
+        value: Ignored.
+
+    Raises:
+        json.JSONDecodeError: always.
+    """
+    raise json.JSONDecodeError("Expecting value", "doc", 0)
 
 
 class TestEachTypeRoundTrips:
@@ -475,6 +493,20 @@ class TestWhatReadingRefuses:
         with pytest.raises((TypeError, ValueError), match=re.escape(where)):
             read()
 
+    def test_a_reader_error_of_a_subclass_is_raised_as_it_was(self):
+        """A reader's `ValueError` subclass passes through `read_entry` with its own type and message.
+
+        Test scenario:
+            `read_entry` rebuilds a plain `TypeError` or `ValueError` from its message with the path in front.
+            `json.JSONDecodeError` also needs `doc` and `pos`, so rebuilding it from a message alone raises a
+            `TypeError` about its constructor in place of the reader's error.
+        """
+        with pytest.raises(json.JSONDecodeError) as caught:
+            read_entry("FigureSpec", "sources['a']", _raise_a_decode_error, {})
+        assert str(caught.value) == "Expecting value: line 1 column 1 (char 0)", str(
+            caught.value
+        )
+
     @pytest.mark.parametrize("edge", [None, "0"])
     def test_a_bounds_edge_that_is_not_a_number_is_named(self, edge):
         """`None` or a numeric string for an edge is refused naming the edge, not from inside `float()`.
@@ -526,6 +558,29 @@ class TestCopyingAndPickling:
             "copy": lambda: copy.copy(value),
         }[how]()
         assert copied == value, f"{how} changed the value: {copied!r}"
+
+    @pytest.mark.parametrize("how", ["pickle", "deepcopy", "copy"])
+    def test_a_frozen_mapping_copies_as_a_frozen_mapping(self, how):
+        """A bare `FrozenDict` pickles and copies to an equal `FrozenDict` that still refuses a change.
+
+        Args:
+            how: `pickle`, `copy.deepcopy` or `copy.copy`.
+
+        Test scenario:
+            The types holding one copy it as a plain dict through their own `__reduce__`, which never calls this
+            one. The default reduction for a dict subclass refills the copy through `__setitem__`, which a
+            `FrozenDict` refuses, so all three raised "read-only" without it.
+        """
+        original = FrozenDict({"levels": (1, 2)})
+        copied = {
+            "pickle": lambda: pickle.loads(pickle.dumps(original)),
+            "deepcopy": lambda: copy.deepcopy(original),
+            "copy": lambda: copy.copy(original),
+        }[how]()
+        assert type(copied) is FrozenDict, type(copied).__name__
+        assert copied == {"levels": (1, 2)}, copied
+        with pytest.raises(TypeError, match="read-only"):
+            copied["levels"] = (3,)
 
 
 class TestAsdictAndSubclasses:
