@@ -28,6 +28,7 @@ from digitalearth.base.spec._serial import (
     as_list,
     frozen_value,
     plain_text,
+    read_entry,
     refuse_unknown,
     require,
     to_json_value,
@@ -519,7 +520,9 @@ class Encoding:
             channel=require("Encoding", data, "channel"),
             value=data.get("value"),
             field=data.get("field"),
-            scale=None if scale is None else Scale.from_dict(scale),
+            scale=None
+            if scale is None
+            else read_entry("Encoding", "scale", Scale.from_dict, scale),
             output_range=None
             if output_range is None
             else as_list("Encoding", "output_range", output_range),

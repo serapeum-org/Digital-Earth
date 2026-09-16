@@ -25,6 +25,7 @@ from digitalearth.base.spec._serial import (
     as_mapping,
     plain_text,
     positive_number,
+    read_entry,
     refuse_unknown,
     require,
 )
@@ -254,9 +255,11 @@ class PanelSpec:
                 f"got keys {sorted(data)}"
             )
         view: Union[Viewport, Camera] = (
-            Camera.from_dict(data["camera"])
+            read_entry("PanelSpec", "camera", Camera.from_dict, data["camera"])
             if "camera" in data
-            else Viewport.from_dict(data["viewport"])
+            else read_entry(
+                "PanelSpec", "viewport", Viewport.from_dict, data["viewport"]
+            )
         )
         return cls(
             id=require("PanelSpec", data, "id"),
@@ -727,18 +730,24 @@ class FigureSpec:
         layers = data.get("layers")
         return cls(
             panels=tuple(
-                PanelSpec.from_dict(panel)
-                for panel in as_list(
-                    "FigureSpec", "panels", require("FigureSpec", data, "panels")
+                read_entry("FigureSpec", f"panels[{index}]", PanelSpec.from_dict, panel)
+                for index, panel in enumerate(
+                    as_list(
+                        "FigureSpec", "panels", require("FigureSpec", data, "panels")
+                    )
                 )
             ),
             sources={
-                source_id: DataRef.from_dict(ref)
+                source_id: read_entry(
+                    "FigureSpec", f"sources[{source_id!r}]", DataRef.from_dict, ref
+                )
                 for source_id, ref in as_mapping(
                     "FigureSpec", "sources", data.get("sources", {})
                 ).items()
             },
-            layers=LayerTree() if layers is None else LayerTree.from_dict(layers),
+            layers=LayerTree()
+            if layers is None
+            else read_entry("FigureSpec", "layers", LayerTree.from_dict, layers),
             size=None if size is None else as_list("FigureSpec", "size", size),
             title=data.get("title"),
             schema_version=version,

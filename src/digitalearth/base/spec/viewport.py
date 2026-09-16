@@ -23,6 +23,7 @@ from digitalearth.base.spec._serial import (
     crs_to_json,
     finite_number,
     plain_text,
+    read_entry,
     refuse_unknown,
     require,
     true_or_false,
@@ -373,7 +374,9 @@ class Viewport:
         domain = data.get("domain")
         return cls(
             crs=require("Viewport", data, "crs"),
-            bounds=None if bounds is None else Bounds.from_dict(bounds),
+            bounds=None
+            if bounds is None
+            else read_entry("Viewport", "bounds", Bounds.from_dict, bounds),
             domain=tuple(domain) if isinstance(domain, list) else domain,
             globe=data.get("globe", False),
         )

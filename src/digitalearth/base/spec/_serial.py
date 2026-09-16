@@ -14,9 +14,11 @@ than being re-spelled — slightly differently — on each type. Three rules:
 
 from math import isfinite
 from numbers import Real
-from typing import Any, Dict, Iterable, Mapping, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, Tuple, TypeVar
 
 import numpy as np
+
+T = TypeVar("T")
 
 __all__ = [
     "frozen_value",
@@ -26,6 +28,7 @@ __all__ = [
     "finite_number",
     "plain_text",
     "positive_number",
+    "read_entry",
     "refuse_unknown",
     "require",
     "to_json_value",
@@ -432,6 +435,44 @@ def as_list(owner: str, key: str, value: Any) -> Tuple[Any, ...]:
     raise TypeError(
         f"{owner}.from_dict needs {key!r} as a list; got {type(value).__name__} {value!r}"
     )
+
+
+def read_entry(owner: str, key: str, read: Callable[[Any], T], value: Any) -> T:
+    """Read one stored part with its own `from_dict`, naming where it sits if that refuses it.
+
+    Args:
+        owner: The type reading the enclosing dict — ``"FigureSpec"``.
+        key: Where the part sits in it — ``"sources['a']"``, ``"panels[1]"``, ``"viewport"``.
+        read: The part's reader, such as `DataRef.from_dict`.
+        value: The stored part.
+
+    Returns:
+        What `read` returns.
+
+    Raises:
+        TypeError: as `read` raised it, with ``"<owner>.from_dict <key>: "`` in front of its message. Nested reads
+            each add their own step, so the message is the path from the outermost dict to the broken part.
+        ValueError: likewise.
+
+    Examples:
+        - A broken source names the figure field it was stored under:
+            ```python
+            >>> from digitalearth.base.spec import DataRef
+            >>> from digitalearth.base.spec._serial import read_entry
+            >>> read_entry("FigureSpec", "sources['b']", DataRef.from_dict, None)
+            Traceback (most recent call last):
+                ...
+            TypeError: FigureSpec.from_dict sources['b']: DataRef.from_dict needs a mapping; got NoneType
+
+            ```
+    """
+    try:
+        return read(value)
+    except (TypeError, ValueError) as error:
+        if type(error) not in (TypeError, ValueError):
+            # A subclass may not take a plain message; it is raised as it was, still naming its own type.
+            raise
+        raise type(error)(f"{owner}.from_dict {key}: {error}") from error
 
 
 def as_mapping(owner: str, key: str, value: Any) -> Dict[str, Any]:

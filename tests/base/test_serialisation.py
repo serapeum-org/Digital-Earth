@@ -390,6 +390,74 @@ class TestWhatReadingRefuses:
         ):
             DataRef.from_dict(stored)
 
+    @pytest.mark.parametrize(
+        "read, where",
+        [
+            (
+                lambda: FigureSpec.from_dict(
+                    {
+                        "schema_version": 1,
+                        "panels": _PANELS,
+                        "sources": {"a": {"uri": "a.tif"}, "b": None},
+                    }
+                ),
+                "FigureSpec.from_dict sources['b']: DataRef.from_dict needs a mapping",
+            ),
+            (
+                lambda: FigureSpec.from_dict(
+                    {"schema_version": 1, "panels": [*_PANELS, None]}
+                ),
+                "FigureSpec.from_dict panels[1]: PanelSpec.from_dict needs a mapping",
+            ),
+            (
+                lambda: LayerTree.from_dict(
+                    {"layers": [{"id": "a", "kind": "points"}, None]}
+                ),
+                "LayerTree.from_dict layers[1]: LayerSpec.from_dict needs a mapping",
+            ),
+            (
+                lambda: Symbology.from_dict({"encodings": {"color": None}}),
+                "Symbology.from_dict encodings['color']: Encoding.from_dict needs a mapping",
+            ),
+            (
+                lambda: FigureSpec.from_dict(
+                    {
+                        "schema_version": 1,
+                        "panels": [
+                            {
+                                "id": "p",
+                                "viewport": {"crs": 3857, "bounds": {"xmin": 0}},
+                            }
+                        ],
+                    }
+                ),
+                "FigureSpec.from_dict panels[0]: PanelSpec.from_dict viewport: Viewport.from_dict bounds: "
+                "Bounds.from_dict needs 'ymin'",
+            ),
+        ],
+        ids=[
+            "figure-source",
+            "figure-panel",
+            "tree-layer",
+            "symbology-encoding",
+            "nested-path",
+        ],
+    )
+    def test_a_refused_nested_entry_names_where_it_sits(self, read, where):
+        """A stored part that is refused says which entry it was, down through every level it is nested in.
+
+        Args:
+            read: A `from_dict` call over a dict with one broken nested entry.
+            where: The start of the message, naming the path to that entry.
+
+        Test scenario:
+            Each entry was handed straight to the reader for its type, whose message names only that type:
+            "DataRef.from_dict needs a mapping; got NoneType" does not say which of a figure's sources is broken,
+            and an error three levels down named only the innermost type.
+        """
+        with pytest.raises((TypeError, ValueError), match=re.escape(where)):
+            read()
+
     @pytest.mark.parametrize("edge", [None, "0"])
     def test_a_bounds_edge_that_is_not_a_number_is_named(self, edge):
         """`None` or a numeric string for an edge is refused naming the edge, not from inside `float()`.

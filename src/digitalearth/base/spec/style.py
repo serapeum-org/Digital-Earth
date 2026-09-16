@@ -34,6 +34,7 @@ from digitalearth.base.spec._serial import (
     as_mapping,
     frozen_value,
     plain_text,
+    read_entry,
     refuse_unknown,
     to_json_value,
 )
@@ -404,7 +405,9 @@ class Symbology:
         refuse_unknown("Symbology", data, ("encodings", "props"))
         return cls(
             encodings={
-                channel: Encoding.from_dict(encoding)
+                channel: read_entry(
+                    "Symbology", f"encodings[{channel!r}]", Encoding.from_dict, encoding
+                )
                 for channel, encoding in as_mapping(
                     "Symbology", "encodings", data.get("encodings", {})
                 ).items()

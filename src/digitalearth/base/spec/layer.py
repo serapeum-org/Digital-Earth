@@ -39,6 +39,7 @@ from typing import (
 from digitalearth.base.spec._serial import (
     as_list,
     plain_text,
+    read_entry,
     refuse_unknown,
     require,
     true_or_false,
@@ -324,10 +325,10 @@ class LayerSpec:
             source_id=data.get("source_id"),
             selection=Selection()
             if selection is None
-            else Selection.from_dict(selection),
+            else read_entry("LayerSpec", "selection", Selection.from_dict, selection),
             symbology=Symbology()
             if symbology is None
-            else Symbology.from_dict(symbology),
+            else read_entry("LayerSpec", "symbology", Symbology.from_dict, symbology),
             z_source=data.get("z_source"),
             visible=data.get("visible", True),
             label=data.get("label"),
@@ -972,8 +973,10 @@ class LayerTree:
         refuse_unknown("LayerTree", data, ("layers", "hidden_groups"))
         return cls(
             tuple(
-                LayerSpec.from_dict(layer)
-                for layer in as_list("LayerTree", "layers", data.get("layers", ()))
+                read_entry("LayerTree", f"layers[{index}]", LayerSpec.from_dict, layer)
+                for index, layer in enumerate(
+                    as_list("LayerTree", "layers", data.get("layers", ()))
+                )
             ),
             frozenset(
                 as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ()))
