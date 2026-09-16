@@ -22,6 +22,7 @@ from digitalearth.base.spec._serial import (
     as_list,
     crs_to_json,
     finite_number,
+    plain_text,
     refuse_unknown,
     require,
     true_or_false,
@@ -319,7 +320,9 @@ class Viewport:
             out["bounds"] = self.bounds.to_dict()
         if self.domain is not None:
             out["domain"] = (
-                self.domain if isinstance(self.domain, str) else list(self.domain)
+                plain_text(self.domain)
+                if isinstance(self.domain, str)
+                else list(self.domain)
             )
         if self.globe:
             out["globe"] = True

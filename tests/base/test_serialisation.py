@@ -38,6 +38,36 @@ from digitalearth.base.spec._serial import crs_to_json, finite_number, to_json_v
 _PANELS = [{"id": "p", "viewport": {"crs": 3857}}]
 
 
+def _foreign_types(written, where="to_dict()"):
+    """List every value in a written dict that is not a plain Python JSON type, with where it sits.
+
+    Args:
+        written: A `to_dict` result, or any part of one.
+        where: The path to `written`, for the report.
+
+    Returns:
+        ``(path, type name)`` pairs — a `numpy.str_` key or value among them — empty when the dict is plain.
+    """
+    if isinstance(written, dict):
+        found = [
+            (f"{where} key {key!r}", type(key).__name__)
+            for key in written
+            if type(key) is not str
+        ]
+        for key, item in written.items():
+            found.extend(_foreign_types(item, f"{where}[{key!r}]"))
+        return found
+    if isinstance(written, list):
+        return [
+            pair
+            for index, item in enumerate(written)
+            for pair in _foreign_types(item, f"{where}[{index}]")
+        ]
+    if written is None or type(written) in (bool, int, float, str):
+        return []
+    return [(where, type(written).__name__)]
+
+
 def _through_json(value):
     """Round-trip `value` through its dict form and real JSON text."""
     return type(value).from_dict(json.loads(json.dumps(value.to_dict())))
@@ -695,6 +725,73 @@ class TestNumpyInputs:
             survive `json.dumps`.
         """
         assert repr(read(build())) == repr(stored)
+
+
+class TestNumpyStrings:
+    """A string computed with numpy — `np.unique` over a column gives `numpy.str_` — is written as a Python string."""
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda text: LayerSpec(
+                text("dem"),
+                text("raster"),
+                source_id=text("srtm"),
+                label=text("Elevation"),
+                group=text("terrain"),
+                filter=text("v > 0"),
+            ),
+            lambda text: LayerTree(
+                (LayerSpec("dem", "raster", group=text("terrain")),),
+                frozenset({text("terrain")}),
+            ),
+            lambda text: PanelSpec(
+                text("p"), layers=(text("dem"),), title=text("Left")
+            ),
+            lambda text: FigureSpec(
+                panels=(PanelSpec("p"),),
+                sources={text("srtm"): DataRef("dem.tif")},
+                title=text("Figure"),
+            ),
+            lambda text: DataRef(
+                text("dem.tif"), driver=text("GTiff"), version=text("v1")
+            ),
+            lambda text: Encoding(text("color"), field=text("elevation")),
+            lambda text: Symbology.of(color=text("#f00")),
+            lambda text: Scale.categorical([text("a"), text("b")], ["#f00", "#0f0"]),
+            lambda text: RenderTarget(text("html")),
+            lambda text: Viewport(text("EPSG:4326"), domain=text("europe")),
+            lambda text: Bounds(0.0, 0.0, 1.0, 1.0, crs=text("EPSG:4326")),
+            lambda text: Selection.of(1, time=text("2024-01")),
+        ],
+        ids=[
+            "layer",
+            "tree-hidden-groups",
+            "panel",
+            "figure",
+            "dataref",
+            "encoding",
+            "symbology",
+            "scale-categories",
+            "target-kind",
+            "viewport",
+            "bounds-crs",
+            "selection-time",
+        ],
+    )
+    def test_a_numpy_string_is_written_as_a_python_string(self, build):
+        """Every string field and key a spec writes comes out as `str`, whatever string type it was built from.
+
+        Args:
+            build: Builds a spec whose string fields are made by the function it is given.
+
+        Test scenario:
+            `to_json_value` returned any `str` subclass unchanged, and the typed string fields — ids, kinds, labels,
+            titles, source ids, a target's kind — were written as held. `json` copes with `numpy.str_`, but YAML,
+            TOML and msgpack writers refuse it: the same failure `np.float64` had before it was written as a float.
+        """
+        written = build(np.str_).to_dict()
+        assert _foreign_types(written) == [], written
 
 
 class TestTheSharedRules:

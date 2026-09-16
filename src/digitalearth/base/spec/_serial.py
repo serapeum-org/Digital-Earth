@@ -24,6 +24,7 @@ __all__ = [
     "as_mapping",
     "crs_to_json",
     "finite_number",
+    "plain_text",
     "positive_number",
     "refuse_unknown",
     "require",
@@ -199,6 +200,29 @@ def true_or_false(value: Any) -> Optional[bool]:
     return None
 
 
+def plain_text(value: Optional[str]) -> Optional[str]:
+    """Return a string field as a Python `str`, or ``None`` unchanged.
+
+    Args:
+        value: A string the spec holds — any `str` subclass, `numpy.str_` among them — or ``None``.
+
+    Returns:
+        The same text as a plain `str`. `np.unique` over a column gives `numpy.str_`, which `json` writes but YAML,
+        TOML and msgpack writers refuse, so the typed string fields a `to_dict` writes go through this.
+
+    Examples:
+        - A numpy string comes back as Python's:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import plain_text
+            >>> type(plain_text(np.str_("dem"))).__name__, plain_text(None)
+            ('str', None)
+
+            ```
+    """
+    return None if value is None else str(value)
+
+
 def positive_number(value: Any) -> Optional[float]:
     """Return `value` as a float when it is a positive finite real number, numpy's included, and ``None`` otherwise.
 
@@ -277,8 +301,11 @@ def to_json_value(value: Any, where: str) -> Any:
 
             ```
     """
-    if value is None or isinstance(value, (bool, str)):
+    if value is None or isinstance(value, bool):
         return value
+    if isinstance(value, str):
+        # `numpy.str_` is a `str`, so it was returned as numpy — as `np.float64` was before it was written as a float.
+        return str(value)
     if isinstance(value, (int, float)) and not isinstance(value, np.generic):
         # `np.float64` subclasses `float`, so without the second test it came back as numpy, not as the Python float
         # the dict promises — `json` copes, but YAML, TOML and msgpack writers do not.
@@ -312,7 +339,7 @@ def to_json_value(value: Any, where: str) -> Any:
                 raise TypeError(
                     f"{where} has the non-string key {key!r}; a JSON object's keys are strings"
                 )
-            out[key] = to_json_value(item, f"{where}[{key!r}]")
+            out[str(key)] = to_json_value(item, f"{where}[{key!r}]")
         return out
     raise TypeError(
         f"{where} holds a {type(value).__name__}, which has no JSON form. A figure description holds plain "
@@ -499,7 +526,7 @@ def crs_to_json(crs: Any, where: str) -> Any:
             ```
     """
     if crs is None or isinstance(crs, str):
-        return crs
+        return plain_text(crs)
     if isinstance(crs, bool):
         raise TypeError(
             f"{where} is {crs!r}, which names no coordinate reference system"

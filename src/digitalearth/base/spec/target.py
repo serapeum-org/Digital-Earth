@@ -16,7 +16,11 @@ from numbers import Integral
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Union
 
-from digitalearth.base.spec._serial import positive_number, refuse_unknown
+from digitalearth.base.spec._serial import (
+    plain_text,
+    positive_number,
+    refuse_unknown,
+)
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.viewport import Camera, Viewport
 from digitalearth.base.spec.viewrequest import ViewRequest
@@ -248,7 +252,7 @@ class RenderTarget:
 
                 ```
         """
-        out: Dict[str, Any] = {"kind": self.kind}
+        out: Dict[str, Any] = {"kind": plain_text(self.kind)}
         for name in ("width", "height"):
             value = getattr(self, name)
             if value is not None:

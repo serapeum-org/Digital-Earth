@@ -27,6 +27,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 from digitalearth.base.spec._serial import (
     as_list,
     frozen_value,
+    plain_text,
     refuse_unknown,
     require,
     to_json_value,
@@ -452,13 +453,13 @@ class Encoding:
 
                 ```
         """
-        out: Dict[str, Any] = {"channel": self.channel}
+        out: Dict[str, Any] = {"channel": plain_text(self.channel)}
         if self.value is not None:
             out["value"] = to_json_value(
                 self.value, f"Encoding[{self.channel!r}].value"
             )
         if self.field is not None:
-            out["field"] = self.field
+            out["field"] = plain_text(self.field)
         if self.scale is not None:
             out["scale"] = self.scale.to_dict()
         if self.output_range is not None:

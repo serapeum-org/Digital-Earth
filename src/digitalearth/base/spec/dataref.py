@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from digitalearth.base.registry import register_object, resolve_uri
-from digitalearth.base.spec._serial import refuse_unknown, require
+from digitalearth.base.spec._serial import plain_text, refuse_unknown, require
 
 __all__ = ["DataRef"]
 
@@ -180,11 +180,11 @@ class DataRef:
 
                 ```
         """
-        out: Dict[str, Any] = {"uri": self.uri}
+        out: Dict[str, Any] = {"uri": plain_text(self.uri)}
         if self.driver is not None:
-            out["driver"] = self.driver
+            out["driver"] = plain_text(self.driver)
         if self.version is not None:
-            out["version"] = self.version
+            out["version"] = plain_text(self.version)
         return out
 
     @classmethod

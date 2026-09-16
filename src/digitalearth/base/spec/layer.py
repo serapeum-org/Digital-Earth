@@ -38,6 +38,7 @@ from typing import (
 
 from digitalearth.base.spec._serial import (
     as_list,
+    plain_text,
     refuse_unknown,
     require,
     true_or_false,
@@ -250,9 +251,9 @@ class LayerSpec:
 
                 ```
         """
-        out: Dict[str, Any] = {"id": self.id, "kind": self.kind}
+        out: Dict[str, Any] = {"id": plain_text(self.id), "kind": plain_text(self.kind)}
         if self.source_id is not None:
-            out["source_id"] = self.source_id
+            out["source_id"] = plain_text(self.source_id)
         if self.selection != Selection():
             out["selection"] = self.selection.to_dict()
         styled = self.symbology.to_dict()
@@ -261,7 +262,7 @@ class LayerSpec:
         for name in ("z_source", "label", "group", "filter"):
             value = getattr(self, name)
             if value is not None:
-                out[name] = value
+                out[name] = plain_text(value)
         if not self.visible:
             out["visible"] = False
         return out
@@ -930,7 +931,9 @@ class LayerTree:
         """
         out: Dict[str, Any] = {"layers": [layer.to_dict() for layer in self.layers]}
         if self.hidden_groups:
-            out["hidden_groups"] = sorted(self.hidden_groups)
+            out["hidden_groups"] = sorted(
+                plain_text(group) for group in self.hidden_groups
+            )
         return out
 
     @classmethod

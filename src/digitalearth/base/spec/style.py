@@ -33,6 +33,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 from digitalearth.base.spec._serial import (
     as_mapping,
     frozen_value,
+    plain_text,
     refuse_unknown,
     to_json_value,
 )
@@ -357,7 +358,7 @@ class Symbology:
         out: Dict[str, Any] = {}
         if self.encodings:
             out["encodings"] = {
-                channel: encoding.to_dict()
+                plain_text(channel): encoding.to_dict()
                 for channel, encoding in self.encodings.items()
             }
         if self.props:

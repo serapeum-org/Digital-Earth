@@ -23,6 +23,7 @@ from digitalearth.base.registry import OBJECT_SCHEME
 from digitalearth.base.spec._serial import (
     as_list,
     as_mapping,
+    plain_text,
     positive_number,
     refuse_unknown,
     require,
@@ -199,15 +200,15 @@ class PanelSpec:
 
                 ```
         """
-        out: Dict[str, Any] = {"id": self.id}
+        out: Dict[str, Any] = {"id": plain_text(self.id)}
         if isinstance(self.view, Camera):
             out["camera"] = self.view.to_dict()
         else:
             out["viewport"] = self.view.to_dict()
         if self.layers:
-            out["layers"] = list(self.layers)
+            out["layers"] = [plain_text(layer_id) for layer_id in self.layers]
         if self.title is not None:
-            out["title"] = self.title
+            out["title"] = plain_text(self.title)
         return out
 
     @classmethod
@@ -666,14 +667,15 @@ class FigureSpec:
                         "it, so FigureSpec.to_dict cannot store it. Save the data and reference it by path or URL"
                     )
             out["sources"] = {
-                source_id: ref.to_dict() for source_id, ref in self.sources.items()
+                plain_text(source_id): ref.to_dict()
+                for source_id, ref in self.sources.items()
             }
         if len(self.layers):
             out["layers"] = self.layers.to_dict()
         if self.size is not None:
             out["size"] = list(self.size)
         if self.title is not None:
-            out["title"] = self.title
+            out["title"] = plain_text(self.title)
         return out
 
     @classmethod
