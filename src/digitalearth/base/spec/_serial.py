@@ -13,11 +13,19 @@ than being re-spelled — slightly differently — on each type. Three rules:
 """
 
 from math import isfinite
-from typing import Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, Mapping, Tuple
 
 import numpy as np
 
-__all__ = ["crs_to_json", "finite_number", "refuse_unknown", "require", "to_json_value"]
+__all__ = [
+    "as_list",
+    "as_mapping",
+    "crs_to_json",
+    "finite_number",
+    "refuse_unknown",
+    "require",
+    "to_json_value",
+]
 
 
 def refuse_unknown(owner: str, data: Any, known: Iterable[str]) -> None:
@@ -260,6 +268,73 @@ def _finite(value: Any, where: str) -> Any:
             f"{where} is {value!r}, which has no JSON form; strict JSON readers refuse NaN and Infinity"
         )
     return value
+
+
+def as_list(owner: str, key: str, value: Any) -> Tuple[Any, ...]:
+    """Return a stored list as a tuple, refusing a value of another shape by the key it was stored under.
+
+    Args:
+        owner: The type reading, for the message — ``"Camera"``.
+        key: The key the value was stored under.
+        value: The stored value.
+
+    Returns:
+        The items as a tuple. A tuple is accepted as well as a list, so a dict built in Python reads too.
+
+    Raises:
+        TypeError: for anything else, naming the key and what was found. `tuple(5)` would raise
+            ``'int' object is not iterable``, which names neither the type being read nor the field.
+
+    Examples:
+        - A stored list reads back as a tuple; a scalar names the key:
+            ```python
+            >>> from digitalearth.base.spec._serial import as_list
+            >>> as_list("Camera", "position", [0, -10, 5])
+            (0, -10, 5)
+            >>> as_list("Camera", "position", 5)
+            Traceback (most recent call last):
+                ...
+            TypeError: Camera.from_dict needs 'position' as a list; got int 5
+
+            ```
+    """
+    if isinstance(value, (list, tuple)):
+        return tuple(value)
+    raise TypeError(
+        f"{owner}.from_dict needs {key!r} as a list; got {type(value).__name__} {value!r}"
+    )
+
+
+def as_mapping(owner: str, key: str, value: Any) -> Dict[str, Any]:
+    """Return a stored mapping as a dict, refusing a value of another shape by the key it was stored under.
+
+    Args:
+        owner: The type reading, for the message.
+        key: The key the value was stored under.
+        value: The stored value.
+
+    Returns:
+        A fresh dict of the mapping.
+
+    Raises:
+        TypeError: for anything that is not a mapping, naming the key and what was found.
+
+    Examples:
+        - A list where a mapping belongs names the key:
+            ```python
+            >>> from digitalearth.base.spec._serial import as_mapping
+            >>> as_mapping("FigureSpec", "sources", ["dem.tif"])
+            Traceback (most recent call last):
+                ...
+            TypeError: FigureSpec.from_dict needs 'sources' as a mapping; got list ['dem.tif']
+
+            ```
+    """
+    if isinstance(value, Mapping):
+        return dict(value)
+    raise TypeError(
+        f"{owner}.from_dict needs {key!r} as a mapping; got {type(value).__name__} {value!r}"
+    )
 
 
 def crs_to_json(crs: Any, where: str) -> Any:

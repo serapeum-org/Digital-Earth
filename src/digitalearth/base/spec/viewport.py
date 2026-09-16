@@ -19,6 +19,7 @@ from math import atan2, cos, degrees, hypot, radians, sin, sqrt
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, Union
 
 from digitalearth.base.spec._serial import (
+    as_list,
     crs_to_json,
     finite_number,
     refuse_unknown,
@@ -654,8 +655,8 @@ class Camera:
             The camera, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not iterable — a
-                bare number is rejected by `tuple()` before the constructor can name the field.
+            TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not a list,
+                naming the field.
             ValueError: for a missing position, an unknown key, or a camera the constructor refuses.
 
         Examples:
@@ -697,9 +698,11 @@ class Camera:
             ),
         )
         return cls(
-            position=tuple(require("Camera", data, "position")),
-            focal_point=tuple(data.get("focal_point", (0.0, 0.0, 0.0))),
-            view_up=tuple(data.get("view_up", (0.0, 0.0, 1.0))),
+            position=as_list("Camera", "position", require("Camera", data, "position")),
+            focal_point=as_list(
+                "Camera", "focal_point", data.get("focal_point", (0.0, 0.0, 0.0))
+            ),
+            view_up=as_list("Camera", "view_up", data.get("view_up", (0.0, 0.0, 1.0))),
             view_angle=data.get("view_angle", DEFAULT_VIEW_ANGLE),
             parallel=data.get("parallel", False),
             vertical_exaggeration=data.get("vertical_exaggeration", 1.0),

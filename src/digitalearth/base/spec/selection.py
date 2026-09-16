@@ -24,7 +24,7 @@ from dataclasses import dataclass, replace
 from numbers import Integral
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 
-from digitalearth.base.spec._serial import refuse_unknown, to_json_value
+from digitalearth.base.spec._serial import as_list, refuse_unknown, to_json_value
 
 __all__ = ["DEFAULT_BAND", "Selection"]
 
@@ -317,8 +317,8 @@ class Selection:
             The selection, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping, or `band` is not iterable — a bare number is rejected by
-                `tuple()` before the constructor sees it.
+            TypeError: if `data` is not a mapping, or `band` is not a list — a bare number is refused by name,
+                since `to_dict` always writes a list.
             ValueError: for an unknown key, or a band the constructor refuses.
 
         Examples:
@@ -342,7 +342,7 @@ class Selection:
             "Selection", data, ("band", "time", "level", "member", "overview", "budget")
         )
         return cls(
-            band=tuple(data.get("band", (DEFAULT_BAND,))),
+            band=as_list("Selection", "band", data.get("band", (DEFAULT_BAND,))),
             time=data.get("time"),
             level=data.get("level"),
             member=data.get("member"),

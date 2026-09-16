@@ -20,7 +20,7 @@ from math import isfinite
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple, Union
 
-from digitalearth.base.spec._serial import refuse_unknown, require
+from digitalearth.base.spec._serial import as_list, as_mapping, refuse_unknown, require
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.spec.viewport import Camera, Viewport
@@ -203,7 +203,7 @@ class PanelSpec:
             The panel, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` or its view is not a mapping, or `layers` is not iterable.
+            TypeError: if `data` or its view is not a mapping, or `layers` is not a list, naming the field.
             ValueError: for a missing id, an unknown key, both or neither of `viewport` and `camera`, a view its own
                 `from_dict` refuses, or a panel the constructor refuses.
 
@@ -242,7 +242,7 @@ class PanelSpec:
         return cls(
             id=require("PanelSpec", data, "id"),
             view=view,
-            layers=tuple(data.get("layers", ())),
+            layers=as_list("PanelSpec", "layers", data.get("layers", ())),
             title=data.get("title"),
         )
 
@@ -588,8 +588,8 @@ class FigureSpec:
             The figure, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping, or a part is the wrong shape — a panel or the layer tree that is
-                not a mapping, or `panels` or `size` that is not iterable.
+            TypeError: if `data` is not a mapping, or a part is the wrong shape — a panel, the layer tree or
+                `sources` that is not a mapping, or `panels` or `size` that is not a list — naming the field.
             ValueError: for a missing or unknown schema version, a missing panel list, an unknown key, a part its own
                 `from_dict` refuses, or a figure the constructor refuses.
 
@@ -624,14 +624,18 @@ class FigureSpec:
         return cls(
             panels=tuple(
                 PanelSpec.from_dict(panel)
-                for panel in require("FigureSpec", data, "panels")
+                for panel in as_list(
+                    "FigureSpec", "panels", require("FigureSpec", data, "panels")
+                )
             ),
             sources={
                 source_id: DataRef.from_dict(ref)
-                for source_id, ref in dict(data.get("sources", {})).items()
+                for source_id, ref in as_mapping(
+                    "FigureSpec", "sources", data.get("sources", {})
+                ).items()
             },
             layers=LayerTree() if layers is None else LayerTree.from_dict(layers),
-            size=None if size is None else tuple(size),
+            size=None if size is None else as_list("FigureSpec", "size", size),
             title=data.get("title"),
             schema_version=version,
         )

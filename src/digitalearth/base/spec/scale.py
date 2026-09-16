@@ -33,7 +33,13 @@ import numpy as np
 
 from digitalearth.base.arrays import finite
 from digitalearth.base.registry import get_classifier
-from digitalearth.base.spec._serial import refuse_unknown, require, to_json_value
+from digitalearth.base.spec._serial import (
+    as_list,
+    finite_number,
+    refuse_unknown,
+    require,
+    to_json_value,
+)
 
 __all__ = ["DEFAULT_CLASS_COUNT", "Scale"]
 
@@ -710,9 +716,10 @@ class Scale:
             breaks, which is what makes a frozen scale reproduce the colours it was drawn with.
 
         Raises:
-            TypeError: if `data` is not a mapping, or a limit or an edge is of a type `float()` does not take, such
-                as `None`.
-            ValueError: for a missing `vmin` or `vmax`, an unknown key, or a scale the constructor refuses — a
+            TypeError: if `data` is not a mapping, or `breaks`, `categories` or `colors` is not a list, naming
+                the field.
+            ValueError: for a missing `vmin` or `vmax`, a limit or edge that is not a finite number, an unknown
+                key, or a scale the constructor refuses — a
                 non-finite or degenerate domain, a single class edge, or a colour count that does not match the
                 categories.
 
@@ -750,11 +757,16 @@ class Scale:
         )
         scheme = data.get("scheme")
         return cls(
-            float(require("Scale", data, "vmin")),
-            float(require("Scale", data, "vmax")),
+            finite_number("Scale", "vmin", require("Scale", data, "vmin")),
+            finite_number("Scale", "vmax", require("Scale", data, "vmax")),
             scheme=tuple(scheme) if isinstance(scheme, list) else scheme,
-            breaks=tuple(float(edge) for edge in data.get("breaks", ())),
-            categories=tuple(data.get("categories", ())),
+            breaks=tuple(
+                finite_number("Scale", f"breaks[{index}]", edge)
+                for index, edge in enumerate(
+                    as_list("Scale", "breaks", data.get("breaks", ()))
+                )
+            ),
+            categories=as_list("Scale", "categories", data.get("categories", ())),
             missing=data.get("missing"),
-            _colors=tuple(data.get("colors", ())),
+            _colors=as_list("Scale", "colors", data.get("colors", ())),
         )

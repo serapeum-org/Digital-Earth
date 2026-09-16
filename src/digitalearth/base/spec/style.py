@@ -30,7 +30,7 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-from digitalearth.base.spec._serial import refuse_unknown, to_json_value
+from digitalearth.base.spec._serial import as_mapping, refuse_unknown, to_json_value
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
 __all__ = ["StyleKey", "StyleSchema", "Symbology"]
@@ -338,7 +338,7 @@ class Symbology:
             The symbology, with every encoding checked against the channel it is filed under.
 
         Raises:
-            TypeError: if `data`, or a stored encoding, is not a mapping.
+            TypeError: if `data`, `encodings`, `props` or a stored encoding is not a mapping, naming the field.
             ValueError: for an unknown key, an encoding `Encoding.from_dict` refuses — an undeclared channel, say —
                 or an encoding filed under a channel it does not drive.
 
@@ -367,9 +367,11 @@ class Symbology:
         return cls(
             encodings={
                 channel: Encoding.from_dict(encoding)
-                for channel, encoding in dict(data.get("encodings", {})).items()
+                for channel, encoding in as_mapping(
+                    "Symbology", "encodings", data.get("encodings", {})
+                ).items()
             },
-            props=dict(data.get("props", {})),
+            props=as_mapping("Symbology", "props", data.get("props", {})),
         )
 
 

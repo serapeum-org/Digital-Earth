@@ -7,12 +7,26 @@ the pairs `Bounds`, `Selection`, `Scale`, `Encoding` and `Symbology` gained, and
 
 import datetime
 import json
+import re
 
 import numpy as np
 import pytest
 
-from digitalearth.base.spec import Bounds, Encoding, Scale, Selection, Symbology
+from digitalearth.base.spec import (
+    Bounds,
+    Camera,
+    Encoding,
+    FigureSpec,
+    LayerTree,
+    PanelSpec,
+    Scale,
+    Selection,
+    Symbology,
+)
 from digitalearth.base.spec._serial import crs_to_json, finite_number, to_json_value
+
+#: A minimal valid panel list, for the figure reads that fail on another field.
+_PANELS = [{"id": "p", "viewport": {"crs": 3857}}]
 
 
 def _through_json(value):
@@ -157,6 +171,102 @@ class TestWhatReadingRefuses:
         """
         stored = {"xmin": 5, "ymin": 0, "xmax": 1, "ymax": 1, "crs": 4326}
         with pytest.raises(ValueError, match="xmin <= xmax"):
+            Bounds.from_dict(stored)
+
+    @pytest.mark.parametrize(
+        "read, message",
+        [
+            (
+                lambda: Camera.from_dict({"position": 5}),
+                "Camera.from_dict needs 'position' as a list; got int 5",
+            ),
+            (
+                lambda: PanelSpec.from_dict(
+                    {"id": "p", "viewport": {"crs": 3857}, "layers": 5}
+                ),
+                "PanelSpec.from_dict needs 'layers' as a list",
+            ),
+            (
+                lambda: FigureSpec.from_dict(
+                    {"schema_version": 1, "panels": _PANELS, "size": 5}
+                ),
+                "FigureSpec.from_dict needs 'size' as a list",
+            ),
+            (
+                lambda: FigureSpec.from_dict({"schema_version": 1, "panels": 5}),
+                "FigureSpec.from_dict needs 'panels' as a list",
+            ),
+            (
+                lambda: FigureSpec.from_dict(
+                    {"schema_version": 1, "panels": _PANELS, "sources": 5}
+                ),
+                "FigureSpec.from_dict needs 'sources' as a mapping",
+            ),
+            (
+                lambda: Selection.from_dict({"band": 2}),
+                "Selection.from_dict needs 'band' as a list",
+            ),
+            (
+                lambda: LayerTree.from_dict({"layers": 5}),
+                "LayerTree.from_dict needs 'layers' as a list",
+            ),
+            (
+                lambda: LayerTree.from_dict({"layers": [], "hidden_groups": "obs"}),
+                "LayerTree.from_dict needs 'hidden_groups' as a list",
+            ),
+            (
+                lambda: Scale.from_dict({"vmin": 0, "vmax": 1, "breaks": 5}),
+                "Scale.from_dict needs 'breaks' as a list",
+            ),
+            (
+                lambda: Encoding.from_dict(
+                    {"channel": "size", "field": "p", "output_range": 5}
+                ),
+                "Encoding.from_dict needs 'output_range' as a list",
+            ),
+            (
+                lambda: Symbology.from_dict({"encodings": 5}),
+                "Symbology.from_dict needs 'encodings' as a mapping",
+            ),
+        ],
+        ids=[
+            "camera-position",
+            "panel-layers",
+            "figure-size",
+            "figure-panels",
+            "figure-sources",
+            "selection-band",
+            "tree-layers",
+            "tree-hidden-groups",
+            "scale-breaks",
+            "encoding-output-range",
+            "symbology-encodings",
+        ],
+    )
+    def test_a_field_of_the_wrong_shape_is_named(self, read, message):
+        """A stored value of the wrong shape is refused naming the type and the field.
+
+        Args:
+            read: A `from_dict` call over a dict with one wrongly shaped field.
+            message: The start of the message that must name it.
+
+        Test scenario:
+            Each of these raised `TypeError: 'int' object is not iterable` from inside `tuple()` or `dict()`, naming
+            neither the type being read nor the field. `"obs"` for `hidden_groups` is a string, which is iterable and
+            would have become a set of letters, so it is refused as not a list too.
+        """
+        with pytest.raises(TypeError, match=re.escape(message)):
+            read()
+
+    @pytest.mark.parametrize("edge", [None, "0"])
+    def test_a_bounds_edge_that_is_not_a_number_is_named(self, edge):
+        """`None` or a numeric string for an edge is refused naming the edge, not from inside `float()`.
+
+        Args:
+            edge: The stored value for `xmin`.
+        """
+        stored = {"xmin": edge, "ymin": 0, "xmax": 1, "ymax": 1, "crs": 4326}
+        with pytest.raises(ValueError, match="Bounds needs xmin as a number"):
             Bounds.from_dict(stored)
 
 

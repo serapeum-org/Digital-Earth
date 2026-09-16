@@ -22,7 +22,12 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
 
-from digitalearth.base.spec._serial import crs_to_json, refuse_unknown, require
+from digitalearth.base.spec._serial import (
+    crs_to_json,
+    finite_number,
+    refuse_unknown,
+    require,
+)
 
 __all__ = ["Bounds"]
 
@@ -456,16 +461,15 @@ class Bounds:
         """Rebuild a rectangle from its dict form.
 
         Args:
-            data: A mapping as produced by :meth:`to_dict`. Each edge goes through `float()`; a missing `crs`
-                means `None`.
+            data: A mapping as produced by :meth:`to_dict`. A missing `crs` means `None`.
 
         Returns:
             The rectangle, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` is not a mapping, or an edge is of a type `float()` does not take, such as `None`.
-            ValueError: if an edge is missing or is a string that is not a number, a key is unknown, or the edges
-                are not finite or do not bound a rectangle.
+            TypeError: if `data` is not a mapping.
+            ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused
+                by name — a key is unknown, or the edges do not bound a rectangle.
 
         Examples:
             - A stored rectangle reads back to the same value:
@@ -488,9 +492,9 @@ class Bounds:
         """
         refuse_unknown("Bounds", data, ("xmin", "ymin", "xmax", "ymax", "crs"))
         return cls(
-            float(require("Bounds", data, "xmin")),
-            float(require("Bounds", data, "ymin")),
-            float(require("Bounds", data, "xmax")),
-            float(require("Bounds", data, "ymax")),
+            finite_number("Bounds", "xmin", require("Bounds", data, "xmin")),
+            finite_number("Bounds", "ymin", require("Bounds", data, "ymin")),
+            finite_number("Bounds", "xmax", require("Bounds", data, "xmax")),
+            finite_number("Bounds", "ymax", require("Bounds", data, "ymax")),
             data.get("crs"),
         )

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
 from typing import Any, Dict, FrozenSet, Iterator, List, Mapping, Optional, Tuple, cast
 
-from digitalearth.base.spec._serial import refuse_unknown, require
+from digitalearth.base.spec._serial import as_list, refuse_unknown, require
 from digitalearth.base.spec.selection import Selection
 from digitalearth.base.spec.style import Symbology
 
@@ -861,7 +861,8 @@ class LayerTree:
             The tree, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data`, or a stored layer, is not a mapping.
+            TypeError: if `data` or a stored layer is not a mapping, or `layers` or `hidden_groups` is not a
+                list, naming the field.
             ValueError: for an unknown key, a layer `LayerSpec.from_dict` refuses, or a tree the constructor
                 refuses.
 
@@ -884,6 +885,11 @@ class LayerTree:
         """
         refuse_unknown("LayerTree", data, ("layers", "hidden_groups"))
         return cls(
-            tuple(LayerSpec.from_dict(layer) for layer in data.get("layers", ())),
-            frozenset(data.get("hidden_groups", ())),
+            tuple(
+                LayerSpec.from_dict(layer)
+                for layer in as_list("LayerTree", "layers", data.get("layers", ()))
+            ),
+            frozenset(
+                as_list("LayerTree", "hidden_groups", data.get("hidden_groups", ()))
+            ),
         )

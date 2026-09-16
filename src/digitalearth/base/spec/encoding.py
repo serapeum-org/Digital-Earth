@@ -24,7 +24,12 @@ from math import isfinite
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
-from digitalearth.base.spec._serial import refuse_unknown, require, to_json_value
+from digitalearth.base.spec._serial import (
+    as_list,
+    refuse_unknown,
+    require,
+    to_json_value,
+)
 from digitalearth.base.spec.scale import Scale
 
 __all__ = ["CHANNELS", "Channel", "Encoding"]
@@ -463,7 +468,8 @@ class Encoding:
             The encoding, validated as the constructor validates it.
 
         Raises:
-            TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not iterable.
+            TypeError: if `data` or its `scale` is not a mapping, or `output_range` is not a list — naming the
+                field, rather than failing inside `tuple()`.
             ValueError: for a missing channel, an unknown key, a scale `Scale.from_dict` refuses, or a binding the
                 constructor refuses.
 
@@ -503,5 +509,7 @@ class Encoding:
             value=data.get("value"),
             field=data.get("field"),
             scale=None if scale is None else Scale.from_dict(scale),
-            output_range=None if output_range is None else tuple(output_range),
+            output_range=None
+            if output_range is None
+            else as_list("Encoding", "output_range", output_range),
         )
