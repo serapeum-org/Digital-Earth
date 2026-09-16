@@ -75,6 +75,25 @@ def raster_stack(tmp_path):
     return DatasetCollection.from_files(paths)
 
 
+@pytest.fixture
+def raster():
+    """A small single-band in-memory raster.
+
+    Returns:
+        A pyramids ``Dataset`` in EPSG:4326.
+    """
+    pytest.importorskip("pyramids")
+    import numpy as np
+    from pyramids.base.georeference import GeoReference
+    from pyramids.dataset import Dataset
+
+    geo_ref = GeoReference(top_left_corner=(4.0, 53.0), cell_size=0.02, epsg=4326)
+    _, xx = np.mgrid[0:8, 0:9]
+    return Dataset.from_array(
+        (xx / 10.0).astype("float32"), geo_ref=geo_ref, no_data_value=-9999.0
+    )
+
+
 def _payload(html):
     """Return the page's call payload — what this map does, not what the library contains.
 
@@ -126,6 +145,57 @@ class TestTheRegistryIsAddressable:
             fill
         )
         assert m._layer_tree.get(circle).kind == "circle", m._layer_tree.get(circle)
+
+    @pytest.mark.parametrize(
+        "method, fixture, args, kwargs, kind",
+        [
+            ("add_raster", "raster", (), {}, "raster"),
+            ("rgb_composite", "raster", (), {"bands": (1, 1, 1)}, "rgb"),
+            ("heatmap", "points", (), {}, "heatmap"),
+            ("cluster", "points", (), {}, "clusters"),
+            ("extrusion", "polygons", (), {"height": "pop"}, "extrusion"),
+            ("text", None, (4.9, 52.4, "Amsterdam"), {}, "text"),
+            ("graticule", None, (), {}, "graticule"),
+        ],
+        ids=[
+            "add_raster",
+            "rgb_composite",
+            "heatmap",
+            "cluster",
+            "extrusion",
+            "text",
+            "graticule",
+        ],
+    )
+    def test_every_other_builder_records_the_kind_of_layer_it_adds(
+        self, request, method, fixture, args, kwargs, kind
+    ):
+        """Each builder beyond the vector ones names its layer's kind in the tree.
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data, or ``None`` for a builder that takes none.
+            args: Positional arguments after the data.
+            kwargs: Keyword arguments the builder needs.
+            kind: The kind the builder must record.
+
+        Test scenario:
+            The vector builders record their paint type, asserted above. The raster, composite, big-data, 3-D and
+            decoration builders each pass their own kind, and a wrong one would describe the layer as something
+            it is not in any later export.
+        """
+        from digitalearth.web import WebMap
+
+        inputs = () if fixture is None else (request.getfixturevalue(fixture),)
+        m = getattr(WebMap().basemap(), method)(*inputs, *args, **kwargs)
+        assert len(m.layer_ids) == 1, (
+            f"{method} should index one layer; got {m.layer_ids}"
+        )
+        recorded = m._layer_tree.get(m.layer_ids[0])
+        assert recorded.kind == kind, (
+            f"{method} recorded kind {recorded.kind!r}, expected {kind!r}"
+        )
 
     def test_removing_a_layer_removes_it_from_the_tree(self, points):
         """`remove_layer` and the tree agree, so the description never outlives the layer."""

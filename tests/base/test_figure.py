@@ -167,6 +167,19 @@ class TestFigureReferences:
         with pytest.raises(ValueError, match="at least one panel"):
             FigureSpec(panels=())
 
+    def test_a_panel_that_is_not_a_panel_spec_is_refused(self):
+        """A panel's stored dict form is not a panel; only `from_dict` turns one into a `PanelSpec`.
+
+        Test scenario:
+            Passing the dict straight to the constructor would otherwise fail later on `panel.id`, naming neither
+            the field nor the type that was wrong.
+        """
+        panels = ({"id": "p", "viewport": {"crs": 3857}},)
+        with pytest.raises(
+            ValueError, match="panels must be PanelSpec values; got dict"
+        ):
+            FigureSpec(panels=panels)
+
     def test_panel_ids_must_be_unique(self):
         """Two panels named alike cannot be told apart."""
         panels = (PanelSpec("p"), PanelSpec("p"))
@@ -230,6 +243,14 @@ class TestFigureReferences:
         panels = (PanelSpec("p"),)
         with pytest.raises(ValueError, match="size must be"):
             FigureSpec(panels=panels, size=size)
+
+    def test_a_non_string_figure_title_is_refused(self):
+        """A figure's title is text, as a panel's is."""
+        panels = (PanelSpec("p"),)
+        with pytest.raises(
+            ValueError, match="FigureSpec title must be a string or None"
+        ):
+            FigureSpec(panels=panels, title=5)
 
     def test_sources_cannot_be_changed_after_construction(self):
         """The sources mapping is read-only, so a figure cannot be re-pointed from outside."""

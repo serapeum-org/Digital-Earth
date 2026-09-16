@@ -206,6 +206,27 @@ class TestTheSharedRules:
         assert to_json_value((1, (2, 3)), "value") == [1, [2, 3]]
 
     @pytest.mark.parametrize(
+        "value",
+        [np.datetime64("2024-01-01"), np.complex128(1 + 2j), np.bytes_(b"x")],
+        ids=["datetime64", "complex128", "bytes_"],
+    )
+    def test_a_numpy_scalar_with_no_json_form_is_refused_naming_its_type(self, value):
+        """A numpy scalar whose Python value is not a JSON scalar is refused, not passed through.
+
+        Args:
+            value: A numpy scalar whose `.item()` is a `date`, a `complex` or `bytes`.
+
+        Test scenario:
+            Unwrapping with `.item()` is only safe for bool, int, float and str. The others fall through to the
+            refusal, which names the field and the numpy type rather than the unwrapped Python one.
+        """
+        expected = (
+            rf"Selection\.time holds a {type(value).__name__}, which has no JSON form"
+        )
+        with pytest.raises(TypeError, match=expected):
+            to_json_value(value, "Selection.time")
+
+    @pytest.mark.parametrize(
         "crs", [None, 4326, "EPSG:3857", "+proj=longlat +datum=WGS84 +no_defs"]
     )
     def test_a_crs_already_in_json_form_passes_through(self, crs):
@@ -235,6 +256,27 @@ class TestTheSharedRules:
         assert written == "EPSG:32618", written
         assert crs_from_user_input(written) == crs, (
             f"{written!r} must read back to the same system as the object"
+        )
+
+    def test_a_crs_object_with_no_authority_code_is_written_as_wkt(self):
+        """A CRS object that names no EPSG code is written as its WKT, which reads back to the same system.
+
+        Test scenario:
+            An orthographic projection built from a PROJ string carries no authority, so `"EPSG:<code>"` is not
+            available. The WKT is the fallback; it must be a string and must parse back to an equal CRS.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        crs = crs_from_user_input("+proj=ortho +lat_0=53 +lon_0=4")
+        written = crs_to_json(crs, "Viewport.crs")
+        assert isinstance(written, str), (
+            f"expected WKT text, got {type(written).__name__}"
+        )
+        assert not written.startswith("EPSG:"), (
+            f"a CRS with no code was written as {written!r}"
+        )
+        assert crs_from_user_input(written) == crs, (
+            f"the WKT must read back to the same system as the object; got {written[:80]!r}"
         )
 
     def test_a_boolean_crs_is_refused(self):
