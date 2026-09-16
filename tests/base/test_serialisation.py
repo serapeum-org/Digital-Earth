@@ -184,6 +184,41 @@ class TestWhatWritingRefuses:
         with pytest.raises(TypeError, match=r"props\['classes'\] holds a set"):
             symbology.to_dict()
 
+    @pytest.mark.parametrize(
+        "value",
+        [
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            np.float64("nan"),
+            np.float32("inf"),
+        ],
+        ids=["nan", "inf", "-inf", "np-nan", "np32-inf"],
+    )
+    def test_nan_and_infinity_are_refused_because_strict_json_cannot_spell_them(
+        self, value
+    ):
+        """A non-finite number is refused where it is written, even though Python's `json` would write it.
+
+        Args:
+            value: The non-finite number under test.
+
+        Test scenario:
+            `json.dumps` writes `NaN` and `Infinity` by default, and Python reads them back — but
+            `json.dumps(allow_nan=False)` refuses them and so does JavaScript's `JSON.parse`, which reads an exported
+            page. A description that only Python can read back is not the portable form the seam promises.
+        """
+        symbology = Symbology().with_props(levels=[1.0, value])
+        with pytest.raises(
+            TypeError, match=r"props\['levels'\]\[1\] is .*no JSON form"
+        ):
+            symbology.to_dict()
+
+    def test_a_written_figure_is_strict_json(self):
+        """What `to_dict` produces passes `json.dumps(allow_nan=False)`, the strict writer."""
+        stored = Symbology.of(opacity=0.5).with_props(levels=[1.5, 2.5]).to_dict()
+        assert json.loads(json.dumps(stored, allow_nan=False)) == stored
+
     def test_a_non_string_mapping_key_is_refused(self):
         """A JSON object's keys are strings, so an int key is refused rather than stringified."""
         with pytest.raises(TypeError, match="non-string key 1"):

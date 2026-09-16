@@ -101,16 +101,19 @@ def to_json_value(value: Any, where: str) -> Any:
 
     Raises:
         TypeError: for anything else — a dataset, a `datetime`, a set, a mapping with a non-string key — naming
-            `where`. A set is refused rather than listed because it has no order to write down.
+            `where`. A set is refused rather than listed because it has no order to write down. `nan` and the
+            infinities are refused too: JSON has no spelling for them, and the ``NaN``/``Infinity`` tokens Python's
+            `json` writes by default are rejected by strict readers — ``json.dumps(allow_nan=False)``, and
+            JavaScript's ``JSON.parse``, which is what reads an exported page.
     """
     if value is None or isinstance(value, (bool, str)):
         return value
     if isinstance(value, (int, float)):
-        return value
+        return _finite(value, where)
     if isinstance(value, np.generic):
         native = value.item()
         if isinstance(native, (bool, int, float, str)):
-            return native
+            return _finite(native, where)
     if isinstance(value, np.ndarray):
         return [
             to_json_value(item, f"{where}[{index}]")
@@ -133,6 +136,26 @@ def to_json_value(value: Any, where: str) -> Any:
         f"{where} holds a {type(value).__name__}, which has no JSON form. A figure description holds plain "
         "values — numbers, strings, lists and dicts — not live objects"
     )
+
+
+def _finite(value: Any, where: str) -> Any:
+    """Return a number unchanged, refusing one JSON cannot spell.
+
+    Args:
+        value: A number, or a boolean or string passed through from a numpy scalar.
+        where: The field, for the message.
+
+    Returns:
+        `value` unchanged.
+
+    Raises:
+        TypeError: for `nan`, `inf` or `-inf`.
+    """
+    if isinstance(value, float) and not isfinite(value):
+        raise TypeError(
+            f"{where} is {value!r}, which has no JSON form; strict JSON readers refuse NaN and Infinity"
+        )
+    return value
 
 
 def crs_to_json(crs: Any, where: str) -> Any:
