@@ -580,8 +580,10 @@ class Scale:
             # `in`/`.index` compare with ==, which makes True equal to 1 and leaves a NaN category
             # unreachable. Categories are labels, so `False` and `0` are different labels even though they
             # compare equal, and an identity check is what finds a NaN that was actually stored.
+            # A numpy boolean — what a boolean column's `.unique()` holds — is a boolean label too.
             if known is category or (
-                isinstance(known, bool) == isinstance(category, bool)
+                isinstance(known, (bool, np.bool_))
+                == isinstance(category, (bool, np.bool_))
                 and known == category
             ):
                 return self._colors[index]
