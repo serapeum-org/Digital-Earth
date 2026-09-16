@@ -193,8 +193,9 @@ class TestTheRequestAViewMakes:
             view of Europe without a word.
         """
         view = Viewport(3857, domain="europe")
+        target = RenderTarget()
         with pytest.raises(ValueError, match="named domain 'europe'"):
-            RenderTarget().view_request(view)
+            target.view_request(view)
 
     def test_a_camera_supplies_no_region(self):
         """A 3-D view has no rectangle to read; the target's budget is what limits it."""
@@ -217,8 +218,9 @@ class TestTheRequestAViewMakes:
         """
         view = Viewport("+proj=ortho +lat_0=0 +lon_0=0")
         region = Bounds(170.0, -10.0, 180.0, 10.0, crs=4326)
+        target = RenderTarget()
         with pytest.raises(ValueError, match="cannot be reprojected into"):
-            RenderTarget().view_request(view, bounds=region)
+            target.view_request(view, bounds=region)
 
     def test_with_no_view_explicit_bounds_are_used_as_given(self):
         """Without a view there is no CRS to reproject into, so the bounds pass through."""

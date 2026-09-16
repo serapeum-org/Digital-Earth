@@ -336,11 +336,11 @@ class TestLayerTreeChanges:
             ``tree.add("c")`` raised ``AttributeError: 'str' object has no attribute 'id'`` from inside the method,
             while the docstring promises a `ValueError` and the constructor refuses a non-layer by name.
         """
-        tree = _tree("a", "c")
+        change = getattr(_tree("a", "c"), method)
         with pytest.raises(
             ValueError, match=f"LayerTree.{method} needs a LayerSpec; got str"
         ):
-            getattr(tree, method)("c")
+            change("c")
 
     def test_add_refuses_a_duplicate_id(self):
         """Adding an id already in the tree is refused rather than shadowing the first layer."""
