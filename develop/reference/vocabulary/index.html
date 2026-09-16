@@ -8669,7 +8669,18 @@ this refuses up front.</p>
 <span class="normal"><a href="#__codelineno-0-531">531</a></span>
 <span class="normal"><a href="#__codelineno-0-532">532</a></span>
 <span class="normal"><a href="#__codelineno-0-533">533</a></span>
-<span class="normal"><a href="#__codelineno-0-534">534</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#__codelineno-0-536">536</a></span>
+<span class="normal"><a href="#__codelineno-0-537">537</a></span>
+<span class="normal"><a href="#__codelineno-0-538">538</a></span>
+<span class="normal"><a href="#__codelineno-0-539">539</a></span>
+<span class="normal"><a href="#__codelineno-0-540">540</a></span>
+<span class="normal"><a href="#__codelineno-0-541">541</a></span>
+<span class="normal"><a href="#__codelineno-0-542">542</a></span>
+<span class="normal"><a href="#__codelineno-0-543">543</a></span>
+<span class="normal"><a href="#__codelineno-0-544">544</a></span>
+<span class="normal"><a href="#__codelineno-0-545">545</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-94" name="__codelineno-0-94"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-95" name="__codelineno-0-95"></a><span class="k">class</span><span class="w"> </span><span class="nc">Bounds</span><span class="p">:</span>
 <a id="__codelineno-0-96" name="__codelineno-0-96"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;An axis-aligned rectangle in one CRS.</span>
 <a id="__codelineno-0-97" name="__codelineno-0-97"></a>
@@ -9003,113 +9014,124 @@ this refuses up front.</p>
 <a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">        Returns:</span>
 <a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">            The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches.</span>
 <a id="__codelineno-0-427" name="__codelineno-0-427"></a>
-<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">            - Reprojecting to the CRS it already has is a no-op:</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">                &gt;&gt;&gt; box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)</span>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">                &gt;&gt;&gt; box.to_crs(4326) is box</span>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">                True</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a>        <span class="k">if</span> <span class="n">same_crs</span><span class="p">(</span><span class="n">crs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">):</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a>            <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base.crs</span><span class="w"> </span><span class="kn">import</span> <span class="n">reproject_coordinates</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a>        <span class="c1"># (x, y) order throughout, matching pyramids&#39; own contract — the four corners, not the four edges.</span>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a>        <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="n">reproject_coordinates</span><span class="p">(</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a>            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">],</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a>            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">],</span>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a>            <span class="n">from_crs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a>            <span class="n">to_crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a>            <span class="c1"># pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a>            <span class="c1"># into a degenerate one — and set_extent would hand matplotlib a singular limit.</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a>            <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a>        <span class="p">)</span>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a>        <span class="k">return</span> <span class="n">Bounds</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
-<a id="__codelineno-0-453" name="__codelineno-0-453"></a>
-<a id="__codelineno-0-454" name="__codelineno-0-454"></a>    <span class="c1"># ------------------------------------------------------------------ serialisation</span>
-<a id="__codelineno-0-455" name="__codelineno-0-455"></a>
-<a id="__codelineno-0-456" name="__codelineno-0-456"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="sd">            The four edges, as held, and the CRS. A CRS object is written as `&quot;EPSG:&lt;code&gt;&quot;` (or WKT when it has no</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a><span class="sd">            code), so the CRS survives `json.dumps`; `None`, an EPSG integer or a string is written as given, and a</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a><span class="sd">            string is not checked.</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a><span class="sd">            TypeError: if the CRS is a boolean, or an object pyramids cannot read as a CRS.</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">            ValueError: naming the rectangle and both CRSs, when a corner falls outside the area `crs` can show —</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">                the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose.</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">            - Reprojecting to the CRS it already has is a no-op:</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">                &gt;&gt;&gt; box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">                &gt;&gt;&gt; box.to_crs(4326) is box</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">                True</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a>        <span class="k">if</span> <span class="n">same_crs</span><span class="p">(</span><span class="n">crs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">):</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>            <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a>        <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base.crs</span><span class="w"> </span><span class="kn">import</span> <span class="n">reproject_coordinates</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a>        <span class="c1"># (x, y) order throughout, matching pyramids&#39; own contract — the four corners, not the four edges.</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a>        <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="n">reproject_coordinates</span><span class="p">(</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a>            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">],</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a>            <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">],</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a>            <span class="n">from_crs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>            <span class="n">to_crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a>            <span class="c1"># pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a>            <span class="c1"># into a degenerate one — and set_extent would hand matplotlib a singular limit.</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>            <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>        <span class="p">)</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="o">*</span><span class="n">ys</span><span class="p">)):</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>            <span class="c1"># pyramids answers a corner the target cannot show with an infinity. Handed on, the constructor would</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>            <span class="c1"># report an infinite edge without saying a reprojection produced it.</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>                <span class="sa">f</span><span class="s2">&quot;Bounds </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="si">!r}</span><span class="s2"> cannot be reprojected into </span><span class="si">{</span><span class="n">crs</span><span class="si">!r}</span><span class="s2">: part of the &quot;</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>                <span class="s2">&quot;rectangle falls outside the area that projection can show&quot;</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>            <span class="p">)</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>        <span class="k">return</span> <span class="n">Bounds</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
+<a id="__codelineno-0-464" name="__codelineno-0-464"></a>
+<a id="__codelineno-0-465" name="__codelineno-0-465"></a>    <span class="c1"># ------------------------------------------------------------------ serialisation</span>
 <a id="__codelineno-0-466" name="__codelineno-0-466"></a>
-<a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">            - The edges keep their names, so the ordering cannot be misread:</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">                &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()</span>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">                {&#39;xmin&#39;: 0.0, &#39;ymin&#39;: 1.0, &#39;xmax&#39;: 2.0, &#39;ymax&#39;: 3.0, &#39;crs&#39;: 4326}</span>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">            - A CRS object is written by its authority code:</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">                &gt;&gt;&gt; from pyramids.base.crs import crs_from_user_input</span>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">                &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326)).to_dict()[&quot;crs&quot;]</span>
-<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">                &#39;EPSG:4326&#39;</span>
-<a id="__codelineno-0-481" name="__codelineno-0-481"></a>
-<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-484" name="__codelineno-0-484"></a>        <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-485" name="__codelineno-0-485"></a>            <span class="c1"># The constructor has already refused a non-finite edge, but not a numpy float, which json cannot write.</span>
-<a id="__codelineno-0-486" name="__codelineno-0-486"></a>            <span class="s2">&quot;xmin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">),</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a>            <span class="s2">&quot;ymin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">),</span>
-<a id="__codelineno-0-488" name="__codelineno-0-488"></a>            <span class="s2">&quot;xmax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">),</span>
-<a id="__codelineno-0-489" name="__codelineno-0-489"></a>            <span class="s2">&quot;ymax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">),</span>
-<a id="__codelineno-0-490" name="__codelineno-0-490"></a>            <span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="n">crs_to_json</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span> <span class="s2">&quot;Bounds.crs&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-491" name="__codelineno-0-491"></a>        <span class="p">}</span>
+<a id="__codelineno-0-467" name="__codelineno-0-467"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">            The four edges, as held, and the CRS. A CRS object is written as `&quot;EPSG:&lt;code&gt;&quot;` (or WKT when it has no</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">            code), so the CRS survives `json.dumps`; `None`, an EPSG integer or a string is written as given, and a</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">            string is not checked.</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">            TypeError: if the CRS is a boolean, or an object pyramids cannot read as a CRS.</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">            - The edges keep their names, so the ordering cannot be misread:</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">                &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">                {&#39;xmin&#39;: 0.0, &#39;ymin&#39;: 1.0, &#39;xmax&#39;: 2.0, &#39;ymax&#39;: 3.0, &#39;crs&#39;: 4326}</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">            - A CRS object is written by its authority code:</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">                &gt;&gt;&gt; from pyramids.base.crs import crs_from_user_input</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a><span class="sd">                &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326)).to_dict()[&quot;crs&quot;]</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="sd">                &#39;EPSG:4326&#39;</span>
 <a id="__codelineno-0-492" name="__codelineno-0-492"></a>
-<a id="__codelineno-0-493" name="__codelineno-0-493"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Bounds&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a rectangle from its dict form.</span>
-<a id="__codelineno-0-496" name="__codelineno-0-496"></a>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-498" name="__codelineno-0-498"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`. A missing `crs` means `None`.</span>
-<a id="__codelineno-0-499" name="__codelineno-0-499"></a>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">            The rectangle, validated as the constructor validates it.</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">            TypeError: if `data` is not a mapping.</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">            ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">                by name — a key is unknown, or the edges do not bound a rectangle.</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a>        <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a>            <span class="c1"># The constructor has already refused a non-finite edge, but not a numpy float, which json cannot write.</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a>            <span class="s2">&quot;xmin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">),</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a>            <span class="s2">&quot;ymin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">),</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>            <span class="s2">&quot;xmax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">),</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a>            <span class="s2">&quot;ymax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">),</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a>            <span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="n">crs_to_json</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span> <span class="s2">&quot;Bounds.crs&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a>        <span class="p">}</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Bounds&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a rectangle from its dict form.</span>
 <a id="__codelineno-0-507" name="__codelineno-0-507"></a>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">            - A stored rectangle reads back to the same value:</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">                &gt;&gt;&gt; box = Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 10, &quot;ymax&quot;: 5, &quot;crs&quot;: 3857})</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">                &gt;&gt;&gt; box.as_bbox(), box.crs</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">                ([0.0, 0.0, 10.0, 5.0], 3857)</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">            - A missing edge is named:</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">                &gt;&gt;&gt; Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 1, &quot;crs&quot;: 4326})</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">                Traceback (most recent call last):</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">                    ...</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">                ValueError: Bounds.from_dict needs &#39;ymax&#39;; got keys [&#39;crs&#39;, &#39;xmax&#39;, &#39;xmin&#39;, &#39;ymin&#39;]</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524"></a>
-<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527"></a>        <span class="n">refuse_unknown</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">))</span>
-<a id="__codelineno-0-528" name="__codelineno-0-528"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-531" name="__codelineno-0-531"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a>            <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534"></a>        <span class="p">)</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`. A missing `crs` means `None`.</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">            The rectangle, validated as the constructor validates it.</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">            TypeError: if `data` is not a mapping.</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">            ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">                by name — a key is unknown, or the edges do not bound a rectangle.</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            - A stored rectangle reads back to the same value:</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">                &gt;&gt;&gt; box = Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 10, &quot;ymax&quot;: 5, &quot;crs&quot;: 3857})</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">                &gt;&gt;&gt; box.as_bbox(), box.crs</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">                ([0.0, 0.0, 10.0, 5.0], 3857)</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">            - A missing edge is named:</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">                &gt;&gt;&gt; Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 1, &quot;crs&quot;: 4326})</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">                Traceback (most recent call last):</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">                    ...</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">                ValueError: Bounds.from_dict needs &#39;ymax&#39;; got keys [&#39;crs&#39;, &#39;xmax&#39;, &#39;xmin&#39;, &#39;ymin&#39;]</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a>        <span class="n">refuse_unknown</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a>            <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a>            <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a>        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -9744,18 +9766,7 @@ by name — a key is unknown, or the edges do not bound a rectangle.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/bounds.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-493">493</a></span>
-<span class="normal"><a href="#__codelineno-0-494">494</a></span>
-<span class="normal"><a href="#__codelineno-0-495">495</a></span>
-<span class="normal"><a href="#__codelineno-0-496">496</a></span>
-<span class="normal"><a href="#__codelineno-0-497">497</a></span>
-<span class="normal"><a href="#__codelineno-0-498">498</a></span>
-<span class="normal"><a href="#__codelineno-0-499">499</a></span>
-<span class="normal"><a href="#__codelineno-0-500">500</a></span>
-<span class="normal"><a href="#__codelineno-0-501">501</a></span>
-<span class="normal"><a href="#__codelineno-0-502">502</a></span>
-<span class="normal"><a href="#__codelineno-0-503">503</a></span>
-<span class="normal"><a href="#__codelineno-0-504">504</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-504">504</a></span>
 <span class="normal"><a href="#__codelineno-0-505">505</a></span>
 <span class="normal"><a href="#__codelineno-0-506">506</a></span>
 <span class="normal"><a href="#__codelineno-0-507">507</a></span>
@@ -9785,48 +9796,59 @@ by name — a key is unknown, or the edges do not bound a rectangle.</p>
 <span class="normal"><a href="#__codelineno-0-531">531</a></span>
 <span class="normal"><a href="#__codelineno-0-532">532</a></span>
 <span class="normal"><a href="#__codelineno-0-533">533</a></span>
-<span class="normal"><a href="#__codelineno-0-534">534</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Bounds&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a rectangle from its dict form.</span>
-<a id="__codelineno-0-496" name="__codelineno-0-496"></a>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-498" name="__codelineno-0-498"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`. A missing `crs` means `None`.</span>
-<a id="__codelineno-0-499" name="__codelineno-0-499"></a>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a><span class="sd">        The rectangle, validated as the constructor validates it.</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="sd">        TypeError: if `data` is not a mapping.</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="sd">        ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="sd">            by name — a key is unknown, or the edges do not bound a rectangle.</span>
+<span class="normal"><a href="#__codelineno-0-534">534</a></span>
+<span class="normal"><a href="#__codelineno-0-535">535</a></span>
+<span class="normal"><a href="#__codelineno-0-536">536</a></span>
+<span class="normal"><a href="#__codelineno-0-537">537</a></span>
+<span class="normal"><a href="#__codelineno-0-538">538</a></span>
+<span class="normal"><a href="#__codelineno-0-539">539</a></span>
+<span class="normal"><a href="#__codelineno-0-540">540</a></span>
+<span class="normal"><a href="#__codelineno-0-541">541</a></span>
+<span class="normal"><a href="#__codelineno-0-542">542</a></span>
+<span class="normal"><a href="#__codelineno-0-543">543</a></span>
+<span class="normal"><a href="#__codelineno-0-544">544</a></span>
+<span class="normal"><a href="#__codelineno-0-545">545</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-504" name="__codelineno-0-504"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Bounds&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a rectangle from its dict form.</span>
 <a id="__codelineno-0-507" name="__codelineno-0-507"></a>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">        - A stored rectangle reads back to the same value:</span>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">            &gt;&gt;&gt; box = Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 10, &quot;ymax&quot;: 5, &quot;crs&quot;: 3857})</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">            &gt;&gt;&gt; box.as_bbox(), box.crs</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">            ([0.0, 0.0, 10.0, 5.0], 3857)</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">        - A missing edge is named:</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            &gt;&gt;&gt; Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 1, &quot;crs&quot;: 4326})</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">            ValueError: Bounds.from_dict needs &#39;ymax&#39;; got keys [&#39;crs&#39;, &#39;xmax&#39;, &#39;xmin&#39;, &#39;ymin&#39;]</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524"></a>
-<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527"></a>    <span class="n">refuse_unknown</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">))</span>
-<a id="__codelineno-0-528" name="__codelineno-0-528"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-531" name="__codelineno-0-531"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a>        <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534"></a>    <span class="p">)</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`. A missing `crs` means `None`.</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">        The rectangle, validated as the constructor validates it.</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">        TypeError: if `data` is not a mapping.</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">        ValueError: if an edge is missing or is not a finite number — `None` and a numeric string are refused</span>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">            by name — a key is unknown, or the edges do not bound a rectangle.</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">        - A stored rectangle reads back to the same value:</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">            &gt;&gt;&gt; box = Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 10, &quot;ymax&quot;: 5, &quot;crs&quot;: 3857})</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">            &gt;&gt;&gt; box.as_bbox(), box.crs</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">            ([0.0, 0.0, 10.0, 5.0], 3857)</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">        - A missing edge is named:</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">            &gt;&gt;&gt; Bounds.from_dict({&quot;xmin&quot;: 0, &quot;ymin&quot;: 0, &quot;xmax&quot;: 1, &quot;crs&quot;: 4326})</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">            ValueError: Bounds.from_dict needs &#39;ymax&#39;; got keys [&#39;crs&#39;, &#39;xmax&#39;, &#39;xmin&#39;, &#39;ymin&#39;]</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a>    <span class="n">refuse_unknown</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="s2">&quot;crs&quot;</span><span class="p">))</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmin&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymin&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;xmax&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a>        <span class="n">finite_number</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Bounds&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;ymax&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a>        <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -10508,6 +10530,30 @@ can hold.</p>
     </table>
 
 
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ValueError">ValueError</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>naming the rectangle and both CRSs, when a corner falls outside the area <code>crs</code> can show —
+the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
 <p><span class="doc-section-title">Examples:</span></p>
     <ul>
 <li>Reprojecting to the CRS it already has is a no-op:
@@ -10559,7 +10605,18 @@ can hold.</p>
 <span class="normal"><a href="#__codelineno-0-449">449</a></span>
 <span class="normal"><a href="#__codelineno-0-450">450</a></span>
 <span class="normal"><a href="#__codelineno-0-451">451</a></span>
-<span class="normal"><a href="#__codelineno-0-452">452</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_crs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">crs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Bounds&quot;</span><span class="p">:</span>
+<span class="normal"><a href="#__codelineno-0-452">452</a></span>
+<span class="normal"><a href="#__codelineno-0-453">453</a></span>
+<span class="normal"><a href="#__codelineno-0-454">454</a></span>
+<span class="normal"><a href="#__codelineno-0-455">455</a></span>
+<span class="normal"><a href="#__codelineno-0-456">456</a></span>
+<span class="normal"><a href="#__codelineno-0-457">457</a></span>
+<span class="normal"><a href="#__codelineno-0-458">458</a></span>
+<span class="normal"><a href="#__codelineno-0-459">459</a></span>
+<span class="normal"><a href="#__codelineno-0-460">460</a></span>
+<span class="normal"><a href="#__codelineno-0-461">461</a></span>
+<span class="normal"><a href="#__codelineno-0-462">462</a></span>
+<span class="normal"><a href="#__codelineno-0-463">463</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-414" name="__codelineno-0-414"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_crs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">crs</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;Bounds&quot;</span><span class="p">:</span>
 <a id="__codelineno-0-415" name="__codelineno-0-415"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return this rectangle expressed in another CRS.</span>
 <a id="__codelineno-0-416" name="__codelineno-0-416"></a>
 <a id="__codelineno-0-417" name="__codelineno-0-417"></a><span class="sd">    The corner transform is pyramids&#39; (``pyramids.base.crs.reproject_coordinates``); this package does no</span>
@@ -10573,31 +10630,42 @@ can hold.</p>
 <a id="__codelineno-0-425" name="__codelineno-0-425"></a><span class="sd">    Returns:</span>
 <a id="__codelineno-0-426" name="__codelineno-0-426"></a><span class="sd">        The enclosing rectangle in `crs`, or this rectangle unchanged when `crs` already matches.</span>
 <a id="__codelineno-0-427" name="__codelineno-0-427"></a>
-<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">        - Reprojecting to the CRS it already has is a no-op:</span>
-<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-431" name="__codelineno-0-431"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">            &gt;&gt;&gt; box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)</span>
-<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">            &gt;&gt;&gt; box.to_crs(4326) is box</span>
-<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">            True</span>
-<a id="__codelineno-0-435" name="__codelineno-0-435"></a>
-<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-438" name="__codelineno-0-438"></a>    <span class="k">if</span> <span class="n">same_crs</span><span class="p">(</span><span class="n">crs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">):</span>
-<a id="__codelineno-0-439" name="__codelineno-0-439"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-440" name="__codelineno-0-440"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base.crs</span><span class="w"> </span><span class="kn">import</span> <span class="n">reproject_coordinates</span>
-<a id="__codelineno-0-441" name="__codelineno-0-441"></a>
-<a id="__codelineno-0-442" name="__codelineno-0-442"></a>    <span class="c1"># (x, y) order throughout, matching pyramids&#39; own contract — the four corners, not the four edges.</span>
-<a id="__codelineno-0-443" name="__codelineno-0-443"></a>    <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="n">reproject_coordinates</span><span class="p">(</span>
-<a id="__codelineno-0-444" name="__codelineno-0-444"></a>        <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">],</span>
-<a id="__codelineno-0-445" name="__codelineno-0-445"></a>        <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">],</span>
-<a id="__codelineno-0-446" name="__codelineno-0-446"></a>        <span class="n">from_crs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
-<a id="__codelineno-0-447" name="__codelineno-0-447"></a>        <span class="n">to_crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span>
-<a id="__codelineno-0-448" name="__codelineno-0-448"></a>        <span class="c1"># pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step</span>
-<a id="__codelineno-0-449" name="__codelineno-0-449"></a>        <span class="c1"># into a degenerate one — and set_extent would hand matplotlib a singular limit.</span>
-<a id="__codelineno-0-450" name="__codelineno-0-450"></a>        <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-451" name="__codelineno-0-451"></a>    <span class="p">)</span>
-<a id="__codelineno-0-452" name="__codelineno-0-452"></a>    <span class="k">return</span> <span class="n">Bounds</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
+<a id="__codelineno-0-428" name="__codelineno-0-428"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-429" name="__codelineno-0-429"></a><span class="sd">        ValueError: naming the rectangle and both CRSs, when a corner falls outside the area `crs` can show —</span>
+<a id="__codelineno-0-430" name="__codelineno-0-430"></a><span class="sd">            the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose.</span>
+<a id="__codelineno-0-431" name="__codelineno-0-431"></a>
+<a id="__codelineno-0-432" name="__codelineno-0-432"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-433" name="__codelineno-0-433"></a><span class="sd">        - Reprojecting to the CRS it already has is a no-op:</span>
+<a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="sd">            &gt;&gt;&gt; box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)</span>
+<a id="__codelineno-0-437" name="__codelineno-0-437"></a><span class="sd">            &gt;&gt;&gt; box.to_crs(4326) is box</span>
+<a id="__codelineno-0-438" name="__codelineno-0-438"></a><span class="sd">            True</span>
+<a id="__codelineno-0-439" name="__codelineno-0-439"></a>
+<a id="__codelineno-0-440" name="__codelineno-0-440"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-441" name="__codelineno-0-441"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-442" name="__codelineno-0-442"></a>    <span class="k">if</span> <span class="n">same_crs</span><span class="p">(</span><span class="n">crs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">):</span>
+<a id="__codelineno-0-443" name="__codelineno-0-443"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-444" name="__codelineno-0-444"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">pyramids.base.crs</span><span class="w"> </span><span class="kn">import</span> <span class="n">reproject_coordinates</span>
+<a id="__codelineno-0-445" name="__codelineno-0-445"></a>
+<a id="__codelineno-0-446" name="__codelineno-0-446"></a>    <span class="c1"># (x, y) order throughout, matching pyramids&#39; own contract — the four corners, not the four edges.</span>
+<a id="__codelineno-0-447" name="__codelineno-0-447"></a>    <span class="n">xs</span><span class="p">,</span> <span class="n">ys</span> <span class="o">=</span> <span class="n">reproject_coordinates</span><span class="p">(</span>
+<a id="__codelineno-0-448" name="__codelineno-0-448"></a>        <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">],</span>
+<a id="__codelineno-0-449" name="__codelineno-0-449"></a>        <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">],</span>
+<a id="__codelineno-0-450" name="__codelineno-0-450"></a>        <span class="n">from_crs</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span>
+<a id="__codelineno-0-451" name="__codelineno-0-451"></a>        <span class="n">to_crs</span><span class="o">=</span><span class="n">crs</span><span class="p">,</span>
+<a id="__codelineno-0-452" name="__codelineno-0-452"></a>        <span class="c1"># pyramids rounds to 6 decimals by default, which collapses a rectangle finer than that step</span>
+<a id="__codelineno-0-453" name="__codelineno-0-453"></a>        <span class="c1"># into a degenerate one — and set_extent would hand matplotlib a singular limit.</span>
+<a id="__codelineno-0-454" name="__codelineno-0-454"></a>        <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-455" name="__codelineno-0-455"></a>    <span class="p">)</span>
+<a id="__codelineno-0-456" name="__codelineno-0-456"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="nb">all</span><span class="p">(</span><span class="n">isfinite</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="p">(</span><span class="o">*</span><span class="n">xs</span><span class="p">,</span> <span class="o">*</span><span class="n">ys</span><span class="p">)):</span>
+<a id="__codelineno-0-457" name="__codelineno-0-457"></a>        <span class="c1"># pyramids answers a corner the target cannot show with an infinity. Handed on, the constructor would</span>
+<a id="__codelineno-0-458" name="__codelineno-0-458"></a>        <span class="c1"># report an infinite edge without saying a reprojection produced it.</span>
+<a id="__codelineno-0-459" name="__codelineno-0-459"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-460" name="__codelineno-0-460"></a>            <span class="sa">f</span><span class="s2">&quot;Bounds </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">as_bbox</span><span class="p">()</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="si">!r}</span><span class="s2"> cannot be reprojected into </span><span class="si">{</span><span class="n">crs</span><span class="si">!r}</span><span class="s2">: part of the &quot;</span>
+<a id="__codelineno-0-461" name="__codelineno-0-461"></a>            <span class="s2">&quot;rectangle falls outside the area that projection can show&quot;</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>        <span class="p">)</span>
+<a id="__codelineno-0-463" name="__codelineno-0-463"></a>    <span class="k">return</span> <span class="n">Bounds</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">min</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">xs</span><span class="p">),</span> <span class="nb">max</span><span class="p">(</span><span class="n">ys</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -10702,18 +10770,7 @@ can hold.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/bounds.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-456">456</a></span>
-<span class="normal"><a href="#__codelineno-0-457">457</a></span>
-<span class="normal"><a href="#__codelineno-0-458">458</a></span>
-<span class="normal"><a href="#__codelineno-0-459">459</a></span>
-<span class="normal"><a href="#__codelineno-0-460">460</a></span>
-<span class="normal"><a href="#__codelineno-0-461">461</a></span>
-<span class="normal"><a href="#__codelineno-0-462">462</a></span>
-<span class="normal"><a href="#__codelineno-0-463">463</a></span>
-<span class="normal"><a href="#__codelineno-0-464">464</a></span>
-<span class="normal"><a href="#__codelineno-0-465">465</a></span>
-<span class="normal"><a href="#__codelineno-0-466">466</a></span>
-<span class="normal"><a href="#__codelineno-0-467">467</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-467">467</a></span>
 <span class="normal"><a href="#__codelineno-0-468">468</a></span>
 <span class="normal"><a href="#__codelineno-0-469">469</a></span>
 <span class="normal"><a href="#__codelineno-0-470">470</a></span>
@@ -10737,42 +10794,53 @@ can hold.</p>
 <span class="normal"><a href="#__codelineno-0-488">488</a></span>
 <span class="normal"><a href="#__codelineno-0-489">489</a></span>
 <span class="normal"><a href="#__codelineno-0-490">490</a></span>
-<span class="normal"><a href="#__codelineno-0-491">491</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-456" name="__codelineno-0-456"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<a id="__codelineno-0-457" name="__codelineno-0-457"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
-<a id="__codelineno-0-458" name="__codelineno-0-458"></a>
-<a id="__codelineno-0-459" name="__codelineno-0-459"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="sd">        The four edges, as held, and the CRS. A CRS object is written as `&quot;EPSG:&lt;code&gt;&quot;` (or WKT when it has no</span>
-<a id="__codelineno-0-461" name="__codelineno-0-461"></a><span class="sd">        code), so the CRS survives `json.dumps`; `None`, an EPSG integer or a string is written as given, and a</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a><span class="sd">        string is not checked.</span>
-<a id="__codelineno-0-463" name="__codelineno-0-463"></a>
-<a id="__codelineno-0-464" name="__codelineno-0-464"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-465" name="__codelineno-0-465"></a><span class="sd">        TypeError: if the CRS is a boolean, or an object pyramids cannot read as a CRS.</span>
-<a id="__codelineno-0-466" name="__codelineno-0-466"></a>
-<a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="sd">        - The edges keep their names, so the ordering cannot be misread:</span>
-<a id="__codelineno-0-469" name="__codelineno-0-469"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">            &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()</span>
-<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">            {&#39;xmin&#39;: 0.0, &#39;ymin&#39;: 1.0, &#39;xmax&#39;: 2.0, &#39;ymax&#39;: 3.0, &#39;crs&#39;: 4326}</span>
-<a id="__codelineno-0-473" name="__codelineno-0-473"></a>
-<a id="__codelineno-0-474" name="__codelineno-0-474"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">        - A CRS object is written by its authority code:</span>
-<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-477" name="__codelineno-0-477"></a><span class="sd">            &gt;&gt;&gt; from pyramids.base.crs import crs_from_user_input</span>
-<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
-<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">            &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326)).to_dict()[&quot;crs&quot;]</span>
-<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">            &#39;EPSG:4326&#39;</span>
-<a id="__codelineno-0-481" name="__codelineno-0-481"></a>
-<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-484" name="__codelineno-0-484"></a>    <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-485" name="__codelineno-0-485"></a>        <span class="c1"># The constructor has already refused a non-finite edge, but not a numpy float, which json cannot write.</span>
-<a id="__codelineno-0-486" name="__codelineno-0-486"></a>        <span class="s2">&quot;xmin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">),</span>
-<a id="__codelineno-0-487" name="__codelineno-0-487"></a>        <span class="s2">&quot;ymin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">),</span>
-<a id="__codelineno-0-488" name="__codelineno-0-488"></a>        <span class="s2">&quot;xmax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">),</span>
-<a id="__codelineno-0-489" name="__codelineno-0-489"></a>        <span class="s2">&quot;ymax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">),</span>
-<a id="__codelineno-0-490" name="__codelineno-0-490"></a>        <span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="n">crs_to_json</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span> <span class="s2">&quot;Bounds.crs&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-491" name="__codelineno-0-491"></a>    <span class="p">}</span>
+<span class="normal"><a href="#__codelineno-0-491">491</a></span>
+<span class="normal"><a href="#__codelineno-0-492">492</a></span>
+<span class="normal"><a href="#__codelineno-0-493">493</a></span>
+<span class="normal"><a href="#__codelineno-0-494">494</a></span>
+<span class="normal"><a href="#__codelineno-0-495">495</a></span>
+<span class="normal"><a href="#__codelineno-0-496">496</a></span>
+<span class="normal"><a href="#__codelineno-0-497">497</a></span>
+<span class="normal"><a href="#__codelineno-0-498">498</a></span>
+<span class="normal"><a href="#__codelineno-0-499">499</a></span>
+<span class="normal"><a href="#__codelineno-0-500">500</a></span>
+<span class="normal"><a href="#__codelineno-0-501">501</a></span>
+<span class="normal"><a href="#__codelineno-0-502">502</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-467" name="__codelineno-0-467"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<a id="__codelineno-0-468" name="__codelineno-0-468"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
+<a id="__codelineno-0-469" name="__codelineno-0-469"></a>
+<a id="__codelineno-0-470" name="__codelineno-0-470"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-471" name="__codelineno-0-471"></a><span class="sd">        The four edges, as held, and the CRS. A CRS object is written as `&quot;EPSG:&lt;code&gt;&quot;` (or WKT when it has no</span>
+<a id="__codelineno-0-472" name="__codelineno-0-472"></a><span class="sd">        code), so the CRS survives `json.dumps`; `None`, an EPSG integer or a string is written as given, and a</span>
+<a id="__codelineno-0-473" name="__codelineno-0-473"></a><span class="sd">        string is not checked.</span>
+<a id="__codelineno-0-474" name="__codelineno-0-474"></a>
+<a id="__codelineno-0-475" name="__codelineno-0-475"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-476" name="__codelineno-0-476"></a><span class="sd">        TypeError: if the CRS is a boolean, or an object pyramids cannot read as a CRS.</span>
+<a id="__codelineno-0-477" name="__codelineno-0-477"></a>
+<a id="__codelineno-0-478" name="__codelineno-0-478"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-479" name="__codelineno-0-479"></a><span class="sd">        - The edges keep their names, so the ordering cannot be misread:</span>
+<a id="__codelineno-0-480" name="__codelineno-0-480"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-481" name="__codelineno-0-481"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-482" name="__codelineno-0-482"></a><span class="sd">            &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()</span>
+<a id="__codelineno-0-483" name="__codelineno-0-483"></a><span class="sd">            {&#39;xmin&#39;: 0.0, &#39;ymin&#39;: 1.0, &#39;xmax&#39;: 2.0, &#39;ymax&#39;: 3.0, &#39;crs&#39;: 4326}</span>
+<a id="__codelineno-0-484" name="__codelineno-0-484"></a>
+<a id="__codelineno-0-485" name="__codelineno-0-485"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-486" name="__codelineno-0-486"></a><span class="sd">        - A CRS object is written by its authority code:</span>
+<a id="__codelineno-0-487" name="__codelineno-0-487"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-488" name="__codelineno-0-488"></a><span class="sd">            &gt;&gt;&gt; from pyramids.base.crs import crs_from_user_input</span>
+<a id="__codelineno-0-489" name="__codelineno-0-489"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Bounds</span>
+<a id="__codelineno-0-490" name="__codelineno-0-490"></a><span class="sd">            &gt;&gt;&gt; Bounds(0.0, 1.0, 2.0, 3.0, crs=crs_from_user_input(4326)).to_dict()[&quot;crs&quot;]</span>
+<a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="sd">            &#39;EPSG:4326&#39;</span>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a>        <span class="c1"># The constructor has already refused a non-finite edge, but not a numpy float, which json cannot write.</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a>        <span class="s2">&quot;xmin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmin</span><span class="p">),</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a>        <span class="s2">&quot;ymin&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymin</span><span class="p">),</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>        <span class="s2">&quot;xmax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">xmax</span><span class="p">),</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a>        <span class="s2">&quot;ymax&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">ymax</span><span class="p">),</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a>        <span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="n">crs_to_json</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">,</span> <span class="s2">&quot;Bounds.crs&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a>    <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
