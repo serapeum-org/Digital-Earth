@@ -368,9 +368,21 @@ class TestCameraSerialisation:
         rebuilt = Camera.from_dict(json.loads(json.dumps(camera.to_dict())))
         assert rebuilt == camera, f"the camera changed in a round trip: {rebuilt!r}"
 
-    def test_to_dict_writes_only_what_differs_from_the_defaults(self):
-        """A default camera stores its position and nothing else."""
-        assert Camera((0.0, -10.0, 5.0)).to_dict() == {"position": [0.0, -10.0, 5.0]}
+    def test_to_dict_writes_every_setting_including_the_defaults(self):
+        """A stored camera records the settings in force, so it reproduces the view if a default changes.
+
+        Test scenario:
+            Omitting defaults meant comparing floats for equality with the default to decide what to leave out
+            (SonarCloud python:S1244); writing every field removes the comparison and makes the record complete.
+        """
+        assert Camera((0.0, -10.0, 5.0)).to_dict() == {
+            "position": [0.0, -10.0, 5.0],
+            "focal_point": [0.0, 0.0, 0.0],
+            "view_up": [0.0, 0.0, 1.0],
+            "view_angle": 30.0,
+            "parallel": False,
+            "vertical_exaggeration": 1.0,
+        }
 
     def test_from_dict_needs_a_position(self):
         """A stored camera with no position cannot be placed; the key is named."""

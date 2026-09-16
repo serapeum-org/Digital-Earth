@@ -189,8 +189,8 @@ class RenderTarget:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            ``kind``, plus each field that differs from its default. An unset budget is written as unset, not as the
-            kind's default, so a stored target keeps following the default if the default changes.
+            ``kind`` and ``pixel_ratio``, plus the canvas and the budget when set. An unset budget is written as
+            unset, not as the kind's default, so a stored target keeps following the default if the default changes.
 
         Examples:
             - A retina image target:
@@ -206,8 +206,7 @@ class RenderTarget:
             value = getattr(self, name)
             if value is not None:
                 out[name] = value
-        if self.pixel_ratio != 1.0:
-            out["pixel_ratio"] = self.pixel_ratio
+        out["pixel_ratio"] = self.pixel_ratio
         if self.budget is not None:
             out["budget"] = self.budget
         return out

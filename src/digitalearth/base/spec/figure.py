@@ -247,40 +247,81 @@ class FigureSpec:
                 f"FigureSpec schema_version {self.schema_version!r} is not one this version of digitalearth reads; "
                 f"it reads {SCHEMA_VERSION}"
             )
-        panels = tuple(self.panels)
-        if not panels:
-            raise ValueError("FigureSpec needs at least one panel")
-        for panel in panels:
-            if not isinstance(panel, PanelSpec):
-                raise ValueError(
-                    f"FigureSpec panels must be PanelSpec values; got {type(panel).__name__}"
-                )
-        panel_ids = [panel.id for panel in panels]
-        shared = sorted(
-            {panel_id for panel_id in panel_ids if panel_ids.count(panel_id) > 1}
+        object.__setattr__(self, "panels", self._checked_panels(self.panels))
+        object.__setattr__(
+            self, "sources", MappingProxyType(self._checked_sources(self.sources))
         )
-        if shared:
-            raise ValueError(
-                f"FigureSpec panel ids must be unique; {shared} appear more than once"
-            )
-        object.__setattr__(self, "panels", panels)
-
-        sources = dict(self.sources)
-        for source_id, ref in sources.items():
-            _identifier("FigureSpec source", source_id)
-            if not isinstance(ref, DataRef):
-                raise ValueError(
-                    f"source {source_id!r} must be a DataRef; got {type(ref).__name__}"
-                )
-        object.__setattr__(self, "sources", MappingProxyType(sources))
-
         if not isinstance(self.layers, LayerTree):
             raise ValueError(
                 f"FigureSpec layers must be a LayerTree; got {type(self.layers).__name__}"
             )
         for layer in self.layers:
-            self._check_sources(layer, sources)
-        for panel in panels:
+            self._check_sources(layer, self.sources)
+        self._check_panel_layers()
+        object.__setattr__(self, "size", self._checked_size(self.size))
+        if self.title is not None and not isinstance(self.title, str):
+            raise ValueError(
+                f"FigureSpec title must be a string or None; got {self.title!r}"
+            )
+
+    @staticmethod
+    def _checked_panels(panels: Any) -> Tuple[PanelSpec, ...]:
+        """Return the panels as a tuple, refusing none, a non-panel, or two panels sharing an id.
+
+        Args:
+            panels: What the constructor was given.
+
+        Returns:
+            The panels, in order.
+
+        Raises:
+            ValueError: for an empty sequence, something that is not a `PanelSpec`, or a repeated id.
+        """
+        checked = tuple(panels)
+        if not checked:
+            raise ValueError("FigureSpec needs at least one panel")
+        for panel in checked:
+            if not isinstance(panel, PanelSpec):
+                raise ValueError(
+                    f"FigureSpec panels must be PanelSpec values; got {type(panel).__name__}"
+                )
+        ids = [panel.id for panel in checked]
+        shared = sorted({panel_id for panel_id in ids if ids.count(panel_id) > 1})
+        if shared:
+            raise ValueError(
+                f"FigureSpec panel ids must be unique; {shared} appear more than once"
+            )
+        return checked
+
+    @staticmethod
+    def _checked_sources(sources: Mapping[str, Any]) -> Dict[str, DataRef]:
+        """Return the sources as a dict, refusing an id that addresses nothing or a value that is not a `DataRef`.
+
+        Args:
+            sources: What the constructor was given.
+
+        Returns:
+            A fresh dict of the sources.
+
+        Raises:
+            ValueError: for an empty or padded source id, or a value that is not a `DataRef`.
+        """
+        checked = dict(sources)
+        for source_id, ref in checked.items():
+            _identifier("FigureSpec source", source_id)
+            if not isinstance(ref, DataRef):
+                raise ValueError(
+                    f"source {source_id!r} must be a DataRef; got {type(ref).__name__}"
+                )
+        return checked
+
+    def _check_panel_layers(self) -> None:
+        """Refuse a panel that names a layer the figure does not have.
+
+        Raises:
+            ValueError: naming the panel, the missing layers and the layers that exist.
+        """
+        for panel in self.panels:
             missing = [
                 layer_id for layer_id in panel.layers if layer_id not in self.layers
             ]
@@ -290,31 +331,36 @@ class FigureSpec:
                     f"{list(self.layers.ids)}"
                 )
 
-        if self.size is not None:
-            if isinstance(self.size, (str, bytes)) or not hasattr(
-                self.size, "__iter__"
-            ):
-                raise ValueError(
-                    f"FigureSpec size must be (width, height); got {self.size!r}"
-                )
-            dimensions = list(self.size)
-            if len(dimensions) != 2 or not all(
-                not isinstance(value, bool)
-                and isinstance(value, (int, float))
-                and isfinite(value)
-                and value > 0
-                for value in dimensions
-            ):
-                raise ValueError(
-                    f"FigureSpec size must be two positive finite numbers; got {self.size!r}"
-                )
-            object.__setattr__(
-                self, "size", (float(dimensions[0]), float(dimensions[1]))
-            )
-        if self.title is not None and not isinstance(self.title, str):
+    @staticmethod
+    def _checked_size(size: Any) -> Optional[Tuple[float, float]]:
+        """Return the figure size as two floats, or ``None``.
+
+        Args:
+            size: What the constructor was given.
+
+        Returns:
+            ``(width, height)`` as floats, or ``None`` when unset.
+
+        Raises:
+            ValueError: for anything but two positive finite numbers — a boolean counts as neither.
+        """
+        if size is None:
+            return None
+        if isinstance(size, (str, bytes)) or not hasattr(size, "__iter__"):
+            raise ValueError(f"FigureSpec size must be (width, height); got {size!r}")
+        dimensions = list(size)
+        valid = len(dimensions) == 2 and all(
+            not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and isfinite(value)
+            and value > 0
+            for value in dimensions
+        )
+        if not valid:
             raise ValueError(
-                f"FigureSpec title must be a string or None; got {self.title!r}"
+                f"FigureSpec size must be two positive finite numbers; got {size!r}"
             )
+        return float(dimensions[0]), float(dimensions[1])
 
     @staticmethod
     def _check_sources(layer: LayerSpec, sources: Mapping[str, DataRef]) -> None:

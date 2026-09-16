@@ -116,43 +116,65 @@ class Viewport:
         """
         if self.crs is None or isinstance(self.crs, bool):
             raise ValueError(f"Viewport needs a display CRS; got {self.crs!r}")
-        if self.bounds is not None:
-            if not isinstance(self.bounds, Bounds):
-                raise ValueError(
-                    f"Viewport bounds must be a Bounds; got {type(self.bounds).__name__}"
-                )
-            if not _same_crs(self.bounds.crs, self.crs):
-                # A rectangle in one CRS read as another draws the wrong place, silently. `framed` reprojects; the
-                # constructor refuses, so a view never holds a region its own CRS cannot place.
-                raise ValueError(
-                    f"Viewport bounds are in {self.bounds.crs!r} but the view is drawn in {self.crs!r}; "
-                    "use Viewport.framed(bounds), which reprojects"
-                )
-        if self.domain is not None:
-            if isinstance(self.domain, str):
-                if not self.domain.strip():
-                    raise ValueError(
-                        "Viewport domain must be a region name or four numbers; got an empty name"
-                    )
-            else:
-                if not hasattr(self.domain, "__iter__"):
-                    raise ValueError(
-                        f"Viewport domain must be a region name or (west, south, east, north); got {self.domain!r}"
-                    )
-                edges = list(self.domain)
-                if len(edges) != 4:
-                    raise ValueError(
-                        f"Viewport domain must be a region name or (west, south, east, north); got {self.domain!r}"
-                    )
-                object.__setattr__(
-                    self,
-                    "domain",
-                    tuple(finite_number("Viewport", "domain", edge) for edge in edges),
-                )
+        self._check_bounds()
+        object.__setattr__(self, "domain", self._checked_domain(self.domain))
         if not isinstance(self.globe, bool):
             raise ValueError(
                 f"Viewport globe must be True or False; got {self.globe!r}"
             )
+
+    def _check_bounds(self) -> None:
+        """Refuse bounds that are not a `Bounds`, or that are in a different CRS from the view.
+
+        Raises:
+            ValueError: naming both CRSs and `framed`, which reprojects.
+        """
+        if self.bounds is None:
+            return
+        if not isinstance(self.bounds, Bounds):
+            raise ValueError(
+                f"Viewport bounds must be a Bounds; got {type(self.bounds).__name__}"
+            )
+        if not _same_crs(self.bounds.crs, self.crs):
+            # A rectangle in one CRS read as another draws the wrong place, silently. `framed` reprojects; the
+            # constructor refuses, so a view never holds a region its own CRS cannot place.
+            raise ValueError(
+                f"Viewport bounds are in {self.bounds.crs!r} but the view is drawn in {self.crs!r}; "
+                "use Viewport.framed(bounds), which reprojects"
+            )
+
+    @staticmethod
+    def _checked_domain(
+        domain: Any,
+    ) -> Optional[Union[str, Tuple[float, float, float, float]]]:
+        """Return the domain as a name or a tuple of four floats, or ``None``.
+
+        Args:
+            domain: What the constructor was given.
+
+        Returns:
+            The name unchanged, the four edges as floats, or ``None``.
+
+        Raises:
+            ValueError: for an empty name, a scalar, the wrong number of edges, or a non-finite edge.
+        """
+        if domain is None:
+            return None
+        if isinstance(domain, str):
+            if not domain.strip():
+                raise ValueError(
+                    "Viewport domain must be a region name or four numbers; got an empty name"
+                )
+            return domain
+        edges = list(domain) if hasattr(domain, "__iter__") else []
+        if len(edges) != 4:
+            raise ValueError(
+                f"Viewport domain must be a region name or (west, south, east, north); got {domain!r}"
+            )
+        west, south, east, north = (
+            finite_number("Viewport", "domain", edge) for edge in edges
+        )
+        return west, south, east, north
 
     def framed(self, bounds: Bounds) -> "Viewport":
         """Return this view framed on `bounds`, reprojected into the view's CRS if they are in another.
@@ -325,12 +347,12 @@ class Camera:
         object.__setattr__(self, "view_up", up)
         sight = tuple(p - f for p, f in zip(position, focal))
         sight_length = sqrt(sum(component * component for component in sight))
-        if sight_length == 0.0:
+        if sight_length <= 0.0:
             raise ValueError(
                 f"Camera position and focal_point are the same point {position}; it looks at nothing"
             )
         up_length = sqrt(sum(component * component for component in up))
-        if up_length == 0.0:
+        if up_length <= 0.0:
             raise ValueError(
                 "Camera view_up is the zero vector, which names no direction"
             )
@@ -503,29 +525,27 @@ class Camera:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            ``position``, plus each other field that differs from its default.
+            Every field. A camera is small, and a stored view is only reproducible if it records the settings
+            that were in force rather than relying on today's defaults.
 
         Examples:
-            - Only what differs from the defaults is written:
+            - Every setting is written, defaults included:
                 ```python
                 >>> from digitalearth.base.spec import Camera
-                >>> Camera((0.0, -10.0, 5.0), parallel=True).to_dict()
-                {'position': [0.0, -10.0, 5.0], 'parallel': True}
+                >>> stored = Camera((0.0, -10.0, 5.0), parallel=True).to_dict()
+                >>> stored["position"], stored["parallel"], stored["view_angle"]
+                ([0.0, -10.0, 5.0], True, 30.0)
 
                 ```
         """
-        out: Dict[str, Any] = {"position": list(self.position)}
-        if self.focal_point != (0.0, 0.0, 0.0):
-            out["focal_point"] = list(self.focal_point)
-        if self.view_up != (0.0, 0.0, 1.0):
-            out["view_up"] = list(self.view_up)
-        if self.view_angle != DEFAULT_VIEW_ANGLE:
-            out["view_angle"] = self.view_angle
-        if self.parallel:
-            out["parallel"] = True
-        if self.vertical_exaggeration != 1.0:
-            out["vertical_exaggeration"] = self.vertical_exaggeration
-        return out
+        return {
+            "position": list(self.position),
+            "focal_point": list(self.focal_point),
+            "view_up": list(self.view_up),
+            "view_angle": self.view_angle,
+            "parallel": self.parallel,
+            "vertical_exaggeration": self.vertical_exaggeration,
+        }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "Camera":
