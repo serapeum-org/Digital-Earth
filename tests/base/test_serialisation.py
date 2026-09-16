@@ -320,6 +320,43 @@ class TestWhatReadingRefuses:
         with pytest.raises(TypeError, match=re.escape(message)):
             read()
 
+    @pytest.mark.parametrize(
+        "entry, kind",
+        [(None, "NoneType"), ("x.tif", "str"), (["x.tif"], "list")],
+        ids=["none", "bare-path", "list"],
+    )
+    def test_a_source_entry_that_is_not_a_mapping_is_named(self, entry, kind):
+        """A stored source that is not a mapping is refused as such, whatever shape it has.
+
+        Args:
+            entry: The stored value for one source.
+            kind: The type name the message must report.
+
+        Test scenario:
+            Each entry went straight to `DataRef.from_dict`, which assumed a mapping: `None` raised
+            `'NoneType' object is not iterable`, and a bare path was read as a mapping of its letters, reporting
+            "unknown keys ['.', 'f', 'i', 't', 'x']" — a message that points at the wrong problem entirely.
+        """
+        stored = {"schema_version": 1, "panels": _PANELS, "sources": {"a": entry}}
+        with pytest.raises(
+            TypeError, match=f"DataRef.from_dict needs a mapping; got {kind}"
+        ):
+            FigureSpec.from_dict(stored)
+
+    def test_a_source_entry_with_no_uri_names_the_missing_key(self):
+        """A stored source without a `uri` says the key is missing, not that an empty string was given.
+
+        Test scenario:
+            A missing `uri` was read as ``""`` and refused as an empty uri, which reads as if the file had stored
+            one.
+        """
+        stored = {"driver": "COG"}
+        with pytest.raises(
+            ValueError,
+            match=re.escape("DataRef.from_dict needs 'uri'; got keys ['driver']"),
+        ):
+            DataRef.from_dict(stored)
+
     @pytest.mark.parametrize("edge", [None, "0"])
     def test_a_bounds_edge_that_is_not_a_number_is_named(self, edge):
         """`None` or a numeric string for an edge is refused naming the edge, not from inside `float()`.

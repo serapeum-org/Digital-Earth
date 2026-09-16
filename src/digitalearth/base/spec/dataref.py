@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from digitalearth.base.registry import register_object, resolve_uri
+from digitalearth.base.spec._serial import refuse_unknown, require
 
 __all__ = ["DataRef"]
 
@@ -197,8 +198,10 @@ class DataRef:
             The reference.
 
         Raises:
-            ValueError: if `uri` is missing or empty, or the mapping carries a key this type does not know —
-                silently dropping an unknown key would lose data a newer writer meant to keep.
+            TypeError: if `data` is not a mapping — a bare path string included, which would otherwise be read as a
+                mapping of its letters.
+            ValueError: if `uri` is missing or empty, a field is not a string, or the mapping carries a key this
+                type does not know — silently dropping an unknown key would lose data a newer writer meant to keep.
 
         Examples:
             - Rebuild a reference a figure stored, and read its fields back:
@@ -219,14 +222,9 @@ class DataRef:
 
                 ```
         """
-        known = {"uri", "driver", "version"}
-        unknown = sorted(set(data) - known)
-        if unknown:
-            raise ValueError(
-                f"DataRef.from_dict got unknown keys {unknown}; known keys are {sorted(known)}"
-            )
+        refuse_unknown("DataRef", data, ("uri", "driver", "version"))
         return cls(
-            uri=data.get("uri", ""),
+            uri=require("DataRef", data, "uri"),
             driver=data.get("driver"),
             version=data.get("version"),
         )
