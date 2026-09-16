@@ -243,8 +243,9 @@ class TestLayerTreeValidation:
     def test_a_hidden_group_nobody_belongs_to_is_refused(self):
         """Hiding a group that does not exist is a typo, not a no-op."""
         layers = (LayerSpec("a", "points", group="obs"),)
+        hidden = frozenset({"ob"})
         with pytest.raises(ValueError, match=r"hides groups \['ob'\]"):
-            LayerTree(layers, frozenset({"ob"}))
+            LayerTree(layers, hidden)
 
     def test_something_that_is_not_a_layer_is_refused(self):
         """A tree holds `LayerSpec` values, not engine handles."""

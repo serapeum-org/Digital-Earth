@@ -221,14 +221,16 @@ class TestFigureReferences:
     def test_a_source_id_with_surrounding_whitespace_is_refused(self):
         """`" srtm"` and `"srtm"` naming two sources would be a lookup that fails invisibly."""
         panels = (PanelSpec("p"),)
+        sources = {" srtm": DataRef("dem.tif")}
         with pytest.raises(ValueError, match="needs an id"):
-            FigureSpec(panels=panels, sources={" srtm": DataRef("dem.tif")})
+            FigureSpec(panels=panels, sources=sources)
 
     def test_layers_must_be_a_layer_tree(self):
         """A bare tuple of layers has no ordering or group rules."""
         panels = (PanelSpec("p"),)
+        layers = (LayerSpec("a", "points"),)
         with pytest.raises(ValueError, match="layers must be a LayerTree"):
-            FigureSpec(panels=panels, layers=(LayerSpec("a", "points"),))
+            FigureSpec(panels=panels, layers=layers)
 
     @pytest.mark.parametrize(
         "size",
