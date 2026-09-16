@@ -18,9 +18,11 @@ Reprojection is pyramids' job, not this package's: :meth:`Bounds.to_crs` delegat
 import warnings
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, List, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 import numpy as np
+
+from digitalearth.base.spec._serial import crs_to_json, refuse_unknown, require
 
 __all__ = ["Bounds"]
 
@@ -409,3 +411,65 @@ class Bounds:
             precision=None,
         )
         return Bounds(min(xs), min(ys), max(xs), max(ys), crs)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            The four edges and the CRS. A CRS object is written as ``"EPSG:<code>"`` (or WKT when it has no code),
+            so the dict survives `json.dumps`; an EPSG integer or a string is written as given.
+
+        Raises:
+            TypeError: if the CRS is not one pyramids can read.
+
+        Examples:
+            - The edges keep their names, so the ordering cannot be misread:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(0.0, 1.0, 2.0, 3.0, crs=4326).to_dict()
+                {'xmin': 0.0, 'ymin': 1.0, 'xmax': 2.0, 'ymax': 3.0, 'crs': 4326}
+
+                ```
+        """
+        return {
+            "xmin": self.xmin,
+            "ymin": self.ymin,
+            "xmax": self.xmax,
+            "ymax": self.ymax,
+            "crs": crs_to_json(self.crs, "Bounds.crs"),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Bounds":
+        """Rebuild a rectangle from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The rectangle, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: if an edge is missing, a key is unknown, or the edges do not bound a rectangle.
+
+        Examples:
+            - A stored rectangle reads back to the same value:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> box = Bounds.from_dict({"xmin": 0, "ymin": 0, "xmax": 10, "ymax": 5, "crs": 3857})
+                >>> box.as_bbox(), box.crs
+                ([0.0, 0.0, 10.0, 5.0], 3857)
+
+                ```
+        """
+        refuse_unknown("Bounds", data, ("xmin", "ymin", "xmax", "ymax", "crs"))
+        return cls(
+            float(require("Bounds", data, "xmin")),
+            float(require("Bounds", data, "ymin")),
+            float(require("Bounds", data, "xmax")),
+            float(require("Bounds", data, "ymax")),
+            data.get("crs"),
+        )

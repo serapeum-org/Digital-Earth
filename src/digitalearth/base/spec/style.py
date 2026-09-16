@@ -30,6 +30,7 @@ from difflib import get_close_matches
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from digitalearth.base.spec._serial import refuse_unknown, to_json_value
 from digitalearth.base.spec.encoding import CHANNELS, Encoding
 
 __all__ = ["StyleKey", "StyleSchema", "Symbology"]
@@ -286,6 +287,78 @@ class Symbology:
         merged = dict(self.props)
         merged.update(props)
         return Symbology(encodings=dict(self.encodings), props=merged)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``encodings`` (channel -> encoding dict) and ``props``, each omitted when empty — so a layer with no
+            styling stores an empty dict.
+
+        Raises:
+            TypeError: if a property or a constant has no JSON form.
+
+        Examples:
+            - Encodings are stored under the channel they drive:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology.of(color="#f00").to_dict()
+                {'encodings': {'color': {'channel': 'color', 'value': '#f00'}}}
+
+                ```
+            - No styling at all is an empty dict:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> Symbology().to_dict()
+                {}
+
+                ```
+        """
+        out: Dict[str, Any] = {}
+        if self.encodings:
+            out["encodings"] = {
+                channel: encoding.to_dict()
+                for channel, encoding in self.encodings.items()
+            }
+        if self.props:
+            out["props"] = to_json_value(dict(self.props), "Symbology.props")
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Symbology":
+        """Rebuild a symbology from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The symbology, with every encoding checked against the channel it is filed under.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for an unknown key, or an encoding filed under a channel it does not drive.
+
+        Examples:
+            - A stored style reads back channel by channel:
+                ```python
+                >>> from digitalearth.base.spec import Symbology
+                >>> stored = {"encodings": {"opacity": {"channel": "opacity", "value": 0.4}}, "props": {"k": 5}}
+                >>> sym = Symbology.from_dict(stored)
+                >>> sym.encoding("opacity").resolve(), sym.props["k"]
+                (0.4, 5)
+
+                ```
+        """
+        refuse_unknown("Symbology", data, ("encodings", "props"))
+        return cls(
+            encodings={
+                channel: Encoding.from_dict(encoding)
+                for channel, encoding in dict(data.get("encodings", {})).items()
+            },
+            props=dict(data.get("props", {})),
+        )
 
 
 @dataclass(frozen=True)

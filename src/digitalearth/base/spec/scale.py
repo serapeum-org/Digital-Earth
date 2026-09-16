@@ -27,12 +27,13 @@ into classes — and only the arithmetic is injected.
 
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from digitalearth.base.arrays import finite
 from digitalearth.base.registry import get_classifier
+from digitalearth.base.spec._serial import refuse_unknown, require, to_json_value
 
 __all__ = ["DEFAULT_CLASS_COUNT", "Scale"]
 
@@ -641,3 +642,85 @@ class Scale:
                 ```
         """
         return self
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``vmin`` and ``vmax``, plus each of ``scheme``, ``breaks``, ``categories``, ``colors`` and ``missing``
+            that is set. Class edges and categories are written as lists.
+
+        Raises:
+            TypeError: if a category has no JSON form.
+
+        Examples:
+            - A continuous scale is its domain:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> Scale.from_limits(0.0, 10.0).to_dict()
+                {'vmin': 0.0, 'vmax': 10.0}
+
+                ```
+            - A categorical scale carries its colours:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> stored = Scale.categorical(["a", "b"], ["#f00", "#00f"]).to_dict()
+                >>> stored["categories"], stored["colors"]
+                (['a', 'b'], ['#f00', '#00f'])
+
+                ```
+        """
+        out: Dict[str, Any] = {"vmin": self.vmin, "vmax": self.vmax}
+        if self.scheme is not None:
+            out["scheme"] = to_json_value(self.scheme, "Scale.scheme")
+        if self.breaks:
+            out["breaks"] = list(self.breaks)
+        if self.categories:
+            out["categories"] = to_json_value(self.categories, "Scale.categories")
+            out["colors"] = list(self._colors)
+        if self.missing is not None:
+            out["missing"] = self.missing
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Scale":
+        """Rebuild a scale from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The scale, validated as the constructor validates it. No classifier runs: the stored breaks are the
+            breaks, which is what makes a frozen scale reproduce the colours it was drawn with.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for a missing domain, an unknown key, or a domain the constructor refuses.
+
+        Examples:
+            - Stored class edges come back without re-classifying anything:
+                ```python
+                >>> from digitalearth.base.spec import Scale
+                >>> scale = Scale.from_dict({"vmin": 0, "vmax": 10, "breaks": [0, 5, 10]})
+                >>> scale.class_ranges()
+                [(0.0, 5.0), (5.0, 10.0)]
+
+                ```
+        """
+        refuse_unknown(
+            "Scale",
+            data,
+            ("vmin", "vmax", "scheme", "breaks", "categories", "colors", "missing"),
+        )
+        scheme = data.get("scheme")
+        return cls(
+            float(require("Scale", data, "vmin")),
+            float(require("Scale", data, "vmax")),
+            scheme=tuple(scheme) if isinstance(scheme, list) else scheme,
+            breaks=tuple(float(edge) for edge in data.get("breaks", ())),
+            categories=tuple(data.get("categories", ())),
+            missing=data.get("missing"),
+            _colors=tuple(data.get("colors", ())),
+        )

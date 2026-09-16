@@ -22,7 +22,9 @@ says *where* from. Materialising both is the data tier's job (`DE-16`, Wave 2).
 
 from dataclasses import dataclass, replace
 from numbers import Integral
-from typing import Any, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
+
+from digitalearth.base.spec._serial import refuse_unknown, to_json_value
 
 __all__ = ["DEFAULT_BAND", "Selection"]
 
@@ -257,3 +259,74 @@ class Selection:
                 ```
         """
         return tuple(self.with_band(index) for index in self.band)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``band`` as a list, plus each other axis that is set. An unset axis is omitted rather than written as
+            ``None``, so the common single-band selection is one key.
+
+        Raises:
+            TypeError: if `time`, `level` or `member` holds a value with no JSON form — a `datetime`, say. Store
+                the ISO string instead.
+
+        Examples:
+            - The default selection is one key:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection().to_dict()
+                {'band': [1]}
+
+                ```
+            - A slice through time and level keeps both:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.of(2, time="2024-01", level=850).to_dict()
+                {'band': [2], 'time': '2024-01', 'level': 850}
+
+                ```
+        """
+        out: Dict[str, Any] = {"band": list(self.band)}
+        for name in ("time", "level", "member", "overview", "budget"):
+            value = getattr(self, name)
+            if value is not None:
+                out[name] = to_json_value(value, f"Selection.{name}")
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Selection":
+        """Rebuild a selection from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`. A missing ``band`` means the default band.
+
+        Returns:
+            The selection, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for an unknown key, or a band the constructor refuses.
+
+        Examples:
+            - A stored composite reads back as a band tuple:
+                ```python
+                >>> from digitalearth.base.spec import Selection
+                >>> Selection.from_dict({"band": [3, 2, 1]}).band
+                (3, 2, 1)
+
+                ```
+        """
+        refuse_unknown(
+            "Selection", data, ("band", "time", "level", "member", "overview", "budget")
+        )
+        return cls(
+            band=tuple(data.get("band", (DEFAULT_BAND,))),
+            time=data.get("time"),
+            level=data.get("level"),
+            member=data.get("member"),
+            overview=data.get("overview"),
+            budget=data.get("budget"),
+        )

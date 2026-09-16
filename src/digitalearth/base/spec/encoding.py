@@ -22,8 +22,9 @@ everywhere.
 from dataclasses import dataclass
 from math import isfinite
 from types import MappingProxyType
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
+from digitalearth.base.spec._serial import refuse_unknown, require, to_json_value
 from digitalearth.base.spec.scale import Scale
 
 __all__ = ["CHANNELS", "Channel", "Encoding"]
@@ -406,3 +407,80 @@ class Encoding:
             return position
         low, high = self.output_range
         return low + position * (high - low)
+
+    # ------------------------------------------------------------------ serialisation
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``channel``, plus whichever of ``value``, ``field``, ``scale`` and ``output_range`` is set.
+
+        Raises:
+            TypeError: if the constant has no JSON form.
+
+        Examples:
+            - A constant is its channel and its value:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.constant("opacity", 0.5).to_dict()
+                {'channel': 'opacity', 'value': 0.5}
+
+                ```
+            - A field-driven channel carries its scale:
+                ```python
+                >>> from digitalearth.base.spec import Encoding, Scale
+                >>> stored = Encoding.by_field("size", "pop", scale=Scale.from_limits(0, 100)).to_dict()
+                >>> stored["field"], stored["scale"]
+                ('pop', {'vmin': 0.0, 'vmax': 100.0})
+
+                ```
+        """
+        out: Dict[str, Any] = {"channel": self.channel}
+        if self.value is not None:
+            out["value"] = to_json_value(
+                self.value, f"Encoding[{self.channel!r}].value"
+            )
+        if self.field is not None:
+            out["field"] = self.field
+        if self.scale is not None:
+            out["scale"] = self.scale.to_dict()
+        if self.output_range is not None:
+            out["output_range"] = list(self.output_range)
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Encoding":
+        """Rebuild an encoding from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The encoding, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for a missing channel, an unknown key, or a binding the constructor refuses.
+
+        Examples:
+            - A stored constant reads back and resolves as before:
+                ```python
+                >>> from digitalearth.base.spec import Encoding
+                >>> Encoding.from_dict({"channel": "color", "value": "#f00"}).resolve()
+                '#f00'
+
+                ```
+        """
+        refuse_unknown(
+            "Encoding", data, ("channel", "value", "field", "scale", "output_range")
+        )
+        scale = data.get("scale")
+        output_range = data.get("output_range")
+        return cls(
+            channel=require("Encoding", data, "channel"),
+            value=data.get("value"),
+            field=data.get("field"),
+            scale=None if scale is None else Scale.from_dict(scale),
+            output_range=None if output_range is None else tuple(output_range),
+        )
