@@ -792,7 +792,9 @@ class WebMapBase:
         """
         return list(self._layer_tree.ids)
 
-    def _index_layer(self, layer_id: str, label: Optional[str], *, kind: str) -> None:
+    def _index_layer(
+        self, layer_id: str, label: Optional[str], *, kind: str, visible: bool = True
+    ) -> None:
         """Record a data layer so it can be addressed later.
 
         Args:
@@ -800,13 +802,15 @@ class WebMapBase:
             label: What a layer switcher should call it; ``None`` falls back to the id.
             kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
                 the tree describes the layer rather than only naming it.
+            visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
+                tree says what the MapLibre layout says; the builders without one always build visible.
 
         Raises:
             ValueError: when `LayerSpec` refuses the id — a builder's `name=` becomes the id as given, so a name
                 with surrounding whitespace is refused here — or the kind, or when the id is already in the tree.
         """
         self._layer_tree = self._layer_tree.add(
-            LayerSpec(layer_id, kind, label=label or layer_id)
+            LayerSpec(layer_id, kind, label=label or layer_id, visible=visible)
         )
 
     def remove_layer(self, layer_id: str) -> Self:

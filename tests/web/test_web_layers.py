@@ -7,7 +7,7 @@ library.
 
 import geopandas as gpd
 import pytest
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 
 @pytest.fixture(autouse=True)
@@ -40,6 +40,23 @@ def polygons():
         geometry=[
             Polygon([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
             Polygon([(2.0, 0.0), (3.0, 0.0), (3.0, 1.0), (2.0, 1.0)]),
+        ],
+        crs="EPSG:4326",
+    )
+
+
+@pytest.fixture
+def lines():
+    """Two line strings with a numeric column.
+
+    Returns:
+        A GeoDataFrame in EPSG:4326.
+    """
+    return gpd.GeoDataFrame(
+        {"v": [1, 2]},
+        geometry=[
+            LineString([(0.0, 0.0), (1.0, 1.0)]),
+            LineString([(1.0, 0.0), (2.0, 1.0)]),
         ],
         crs="EPSG:4326",
     )
@@ -196,6 +213,79 @@ class TestTheRegistryIsAddressable:
         assert recorded.kind == kind, (
             f"{method} recorded kind {recorded.kind!r}, expected {kind!r}"
         )
+
+    @pytest.mark.parametrize(
+        "method, fixture, kwargs",
+        [
+            ("add_raster", "raster", {}),
+            ("rgb_composite", "raster", {"bands": (1, 1, 1)}),
+            ("points", "points", {}),
+            ("lines", "lines", {}),
+            ("polygons", "polygons", {}),
+            ("choropleth", "polygons", {"column": "pop"}),
+            ("labels", "points", {"column": "v"}),
+            ("contours", "raster", {"levels": [0.3, 0.6], "labels": True}),
+            ("graticule", None, {}),
+        ],
+        ids=[
+            "add_raster",
+            "rgb_composite",
+            "points",
+            "lines",
+            "polygons",
+            "choropleth",
+            "labels",
+            "contours",
+            "graticule",
+        ],
+    )
+    def test_a_layer_built_hidden_is_recorded_hidden(
+        self, request, method, fixture, kwargs
+    ):
+        """Every builder that takes `visible=` records the layer's visibility in the tree, not only in MapLibre.
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data, or ``None`` for a builder that takes none.
+            kwargs: Keyword arguments the builder needs besides `visible`.
+
+        Test scenario:
+            `_index_layer` took no `visible`, so the tree described every layer as visible while the emitted
+            MapLibre layout said ``visibility: none``. A layer switcher, an export or a reconciler reading the tree
+            would have shown every hidden layer. `contours` with labels indexes two layers, and both must be hidden.
+        """
+        from digitalearth.web import WebMap
+
+        inputs = () if fixture is None else (request.getfixturevalue(fixture),)
+        m = getattr(WebMap().basemap(), method)(*inputs, visible=False, **kwargs)
+        assert m.layer_ids, f"{method} indexed no layer"
+        shown = [layer for layer in m.layer_ids if m._layer_tree.is_visible(layer)]
+        assert shown == [], f"{method}(visible=False) recorded {shown} as visible"
+
+    def test_a_layer_built_visible_is_recorded_visible(self, points):
+        """The default builds a visible layer, and the tree says so.
+
+        Test scenario:
+            The other half of the hidden case: threading `visible` through must not turn the default into hidden.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points)
+        assert m._layer_tree.is_visible(m.layer_ids[0]), m._layer_tree
+
+    def test_only_the_first_timeslider_frame_is_recorded_visible(self, raster_stack):
+        """A raster timeslider builds its first frame visible and the rest hidden, and the tree records that.
+
+        Test scenario:
+            Every frame after the first is built with ``visible=False`` so a saved page shows one frame. The tree
+            recorded all of them as visible.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().timeslider(raster_stack)
+        recorded = [m._layer_tree.is_visible(layer) for layer in m.layer_ids]
+        assert recorded == [True, False, False], recorded
 
     @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
     def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
