@@ -34,19 +34,32 @@ class TestLayerSpec:
         assert layer.symbology == Symbology(), "no styling means an empty symbology"
         assert layer.visible is True, "a layer is drawn unless switched off"
 
-    @pytest.mark.parametrize("bad_id", ["", "   ", " dem", "dem ", 7, None])
+    @pytest.mark.parametrize("bad_id", ["", 7, None])
     def test_an_id_that_cannot_address_a_layer_is_refused(self, bad_id):
-        """An empty, padded or non-string id is refused.
+        """An empty or non-string id is refused.
 
         Args:
             bad_id: The id under test.
-
-        Test scenario:
-            The id is the only way a layer is addressed, so `" dem"` and `"dem"` naming two layers would be a lookup
-            that fails for a reason nobody can see.
         """
         with pytest.raises(ValueError, match="LayerSpec needs an id"):
             LayerSpec(bad_id, "raster")
+
+    @pytest.mark.parametrize("layer_id", [" dem", "dem ", "   "])
+    def test_whitespace_in_an_id_is_kept_exactly(self, layer_id):
+        """An id is compared exactly, so padding is part of it rather than a reason to refuse it.
+
+        Args:
+            layer_id: A padded or blank id.
+
+        Test scenario:
+            The web tier uses a caller's layer name as its MapLibre id verbatim. Refusing padding made
+            `WebMap().text(..., name=" amsterdam")` raise where it had worked, so the id is kept as given.
+        """
+        tree = LayerTree().add(LayerSpec(layer_id, "text"))
+        assert tree.get(layer_id).id == layer_id, tree.ids
+        assert layer_id.strip() not in tree.ids, (
+            f"the stripped form is a different id, got {tree.ids}"
+        )
 
     @pytest.mark.parametrize(
         "bad_kind", ["", "Raster", "1raster", "raster layer", None]
@@ -85,7 +98,7 @@ class TestLayerSpec:
         "field, value",
         [
             ("source_id", ""),
-            ("z_source", "  "),
+            ("z_source", ""),
             ("label", ""),
             ("group", 3),
             ("filter", ""),

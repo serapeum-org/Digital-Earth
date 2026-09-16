@@ -218,12 +218,22 @@ class TestFigureReferences:
         with pytest.raises(ValueError, match="source 'srtm' must be a DataRef"):
             FigureSpec(panels=panels, sources={"srtm": "dem.tif"})
 
-    def test_a_source_id_with_surrounding_whitespace_is_refused(self):
-        """`" srtm"` and `"srtm"` naming two sources would be a lookup that fails invisibly."""
+    def test_an_empty_source_id_is_refused(self):
+        """An empty key names no source."""
         panels = (PanelSpec("p"),)
-        sources = {" srtm": DataRef("dem.tif")}
+        sources = {"": DataRef("dem.tif")}
         with pytest.raises(ValueError, match="needs an id"):
             FigureSpec(panels=panels, sources=sources)
+
+    def test_a_padded_source_id_is_kept_exactly(self):
+        """Ids are compared exactly everywhere in a figure, so a padded source id is a distinct, valid key."""
+        layers = LayerTree((LayerSpec("dem", "raster", source_id=" srtm"),))
+        figure = FigureSpec(
+            panels=(PanelSpec("p", layers=("dem",)),),
+            sources={" srtm": DataRef("dem.tif")},
+            layers=layers,
+        )
+        assert list(figure.sources) == [" srtm"], list(figure.sources)
 
     def test_layers_must_be_a_layer_tree(self):
         """A bare tuple of layers has no ordering or group rules."""

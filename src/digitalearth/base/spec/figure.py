@@ -55,11 +55,17 @@ def _identifier(owner: str, value: Any) -> None:
         value: The candidate id.
 
     Raises:
-        ValueError: for a non-string, an empty or whitespace-only string, or one with surrounding whitespace.
+        ValueError: for a non-string or an empty string.
+
+    Note:
+        An id is compared exactly and nothing else, so whitespace in it is kept rather than refused: `" a"` and
+        `"a"` are two ids. Refusing padding broke the web tier, which uses a caller's layer name as the MapLibre id
+        verbatim — `WebMap().text(..., name=" amsterdam")` worked on `main` and raised once its index became a
+        `LayerTree`.
     """
-    if not isinstance(value, str) or not value.strip() or value != value.strip():
+    if not isinstance(value, str) or not value:
         raise ValueError(
-            f"{owner} needs an id that is a non-empty string with no surrounding whitespace; got {value!r}"
+            f"{owner} needs an id that is a non-empty string; got {value!r}"
         )
 
 
@@ -75,7 +81,7 @@ class PanelSpec:
         title: The panel's title, or ``None``.
 
     Raises:
-        ValueError: for an id that is not a non-empty string or has surrounding whitespace, a view that is neither a
+        ValueError: for an id that is not a non-empty string, a view that is neither a
             `Viewport` nor a `Camera`, `layers` given as a bare string, a layer id that is not a non-empty string, a
             layer listed twice, or a non-string title.
 
@@ -257,7 +263,7 @@ class FigureSpec:
     Raises:
         ValueError: for a schema version that is not :data:`SCHEMA_VERSION` as an `int` (`1.0` is refused), no
             panels, a panel that is not a `PanelSpec`, two panels sharing an id, a source id that is not a non-empty
-            string without surrounding whitespace or maps to something other than a `DataRef`, a layer tree that is
+            string or maps to something other than a `DataRef`, a layer tree that is
             not a `LayerTree`, a layer whose source or elevation source is not among the sources, a panel naming a
             layer that is not in the tree, a size that is not two positive finite numbers (a boolean counts as
             neither), or a non-string title.
@@ -370,7 +376,7 @@ class FigureSpec:
             A fresh dict of the sources.
 
         Raises:
-            ValueError: for a source id that is not a string, is empty or has surrounding whitespace, or a value
+            ValueError: for a source id that is not a string or is empty, or a value
                 that is not a `DataRef`.
         """
         checked = dict(sources)

@@ -197,6 +197,24 @@ class TestTheRegistryIsAddressable:
             f"{method} recorded kind {recorded.kind!r}, expected {kind!r}"
         )
 
+    @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
+    def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
+        """A name the web tier accepted before its index became a `LayerTree` is still accepted, verbatim.
+
+        Args:
+            name: A padded or blank layer name.
+
+        Test scenario:
+            The tier uses the caller's name as the MapLibre id and as the label, unchanged. `LayerSpec` refused ids
+            with surrounding whitespace and blank labels, so `text(..., name=" amsterdam")` raised a `ValueError` about
+            `LayerSpec` — a regression on a call that had worked, naming a type the caller never used.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "A", name=name)
+        assert m.layer_ids == [name], m.layer_ids
+        assert m._layer_tree.get(name).display_label == name, m._layer_tree.get(name)
+
     def test_removing_a_layer_removes_it_from_the_tree(self, points):
         """`remove_layer` and the tree agree, so the description never outlives the layer."""
         from digitalearth.web import WebMap

@@ -48,11 +48,12 @@ def _optional_text(owner: str, name: str, value: Any) -> None:
         value: Its value.
 
     Raises:
-        ValueError: for a non-string, or a string that is empty or only whitespace.
+        ValueError: for a non-string, or an empty string. Whitespace is kept, as it is in an id: these strings are
+            compared exactly, and the web tier passes a caller's layer name through as the label verbatim.
     """
     if value is None:
         return
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str) or not value:
         raise ValueError(
             f"{owner} needs {name} as a non-empty string or None; got {value!r}"
         )
@@ -80,7 +81,7 @@ class LayerSpec:
         filter: A filter expression, carried for the renderer rather than interpreted here.
 
     Raises:
-        ValueError: for an id that is not a non-empty string or has surrounding whitespace, a kind that is not a
+        ValueError: for an id that is not a non-empty string, a kind that is not a
             lowercase identifier, a non-boolean `visible`, a `selection` or `symbology` of the wrong type, a
             `source_id`, `z_source`, `label`, `group` or `filter` that is neither `None` nor a non-empty string, or
             a `z_source` of `"layer:"` that names no layer or names the layer itself.
@@ -129,13 +130,11 @@ class LayerSpec:
         Raises:
             ValueError: as described on the class.
         """
-        if (
-            not isinstance(self.id, str)
-            or not self.id.strip()
-            or self.id != self.id.strip()
-        ):
+        # Compared exactly and kept exactly: the web tier issues a caller's layer name verbatim as its MapLibre id,
+        # padding included, and refusing it turned `name=" amsterdam"` from a working call into a ValueError.
+        if not isinstance(self.id, str) or not self.id:
             raise ValueError(
-                f"LayerSpec needs an id that is a non-empty string with no surrounding whitespace; got {self.id!r}"
+                f"LayerSpec needs an id that is a non-empty string; got {self.id!r}"
             )
         if not isinstance(self.kind, str) or not _KIND.fullmatch(self.kind):
             raise ValueError(
