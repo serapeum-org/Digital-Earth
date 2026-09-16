@@ -25,7 +25,7 @@ from digitalearth.base.spec._serial import (
     refuse_unknown,
     require,
 )
-from digitalearth.base.spec.bounds import Bounds, _same_crs
+from digitalearth.base.spec.bounds import Bounds, same_crs
 
 __all__ = ["Camera", "DEFAULT_VIEW_ANGLE", "Viewport"]
 
@@ -148,7 +148,7 @@ class Viewport:
             raise ValueError(
                 f"Viewport bounds must be a Bounds; got {type(self.bounds).__name__}"
             )
-        if not _same_crs(self.bounds.crs, self.crs):
+        if not same_crs(self.bounds.crs, self.crs):
             # A rectangle in one CRS read as another draws the wrong place, silently. `framed` reprojects; the
             # constructor refuses, so a view never holds a region its own CRS cannot place.
             raise ValueError(

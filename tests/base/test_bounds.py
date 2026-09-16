@@ -220,11 +220,27 @@ class TestOperations:
                 Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
             )
 
+    def test_a_crs_object_is_the_same_crs_as_its_own_code(self):
+        """`to_crs` into the CRS object a rectangle already carries returns the rectangle, not a reprojection.
+
+        Test scenario:
+            Compared through pyramids' `crs_equal`, which reads only int/str/None, a CRS object was never the same as
+            anything — itself included — so `to_crs` reprojected a rectangle into its own CRS.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        crs = crs_from_user_input(3857)
+        box = Bounds(0.0, 0.0, 1.0, 1.0, crs=crs)
+        assert box.to_crs(crs) is box, (
+            "the same CRS object must be recognised as the same CRS"
+        )
+        assert box.to_crs(3857) is box, "and so must its EPSG code"
+
     def test_an_unreadable_crs_spelling_falls_back_to_plain_inequality(self):
         """A CRS neither pyramids nor equality can match is treated as different, not as an error.
 
         Test scenario:
-            `_same_crs` decides whether reprojection is needed, not whether input is valid — so a spelling
+            `same_crs` decides whether reprojection is needed, not whether input is valid — so a spelling
             pyramids cannot parse must answer "not the same" rather than raise out of `union`, where the
             caller would get a CRS-parsing traceback for what is really a mismatched-rectangle message.
         """

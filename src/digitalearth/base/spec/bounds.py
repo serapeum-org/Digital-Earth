@@ -32,7 +32,7 @@ from digitalearth.base.spec._serial import (
 __all__ = ["Bounds"]
 
 
-def _same_crs(one: Any, other: Any) -> bool:
+def same_crs(one: Any, other: Any) -> bool:
     """Whether two CRS spellings name the same reference system.
 
     Args:
@@ -51,10 +51,44 @@ def _same_crs(one: Any, other: Any) -> bool:
         ``==`` shortcut would answer "same CRS" for two rectangles built with ``crs=0``, letting them union
         as though they agreed and letting ``to_crs(0)`` no-op instead of refusing. It already answers
         ``True`` for two unset CRSs, which is the one case a shortcut would have been for.
+
+        A CRS **object** — a pyproj `CRS`, which is what `GeoDataFrame.crs` holds — is first written in the
+        spelling a figure stores it in (``"EPSG:<code>"``, or WKT when it has no code), because `crs_equal` reads
+        only ``int``/``str``/``None`` and answers ``False`` for an object compared even with itself. Without that,
+        a `Viewport` in an object CRS could never hold bounds, and `to_crs` reprojected a rectangle into the CRS it
+        was already in. An object that cannot be written is left as it is, and so compares as different.
+
+    Examples:
+        - Two spellings of one system, and a CRS object against its own EPSG code:
+            ```python
+            >>> from pyramids.base.crs import crs_from_user_input
+            >>> from digitalearth.base.spec.bounds import same_crs
+            >>> same_crs(4326, "EPSG:4326"), same_crs(crs_from_user_input(3857), 3857)
+            (True, True)
+
+            ```
     """
     from pyramids.base.crs import crs_equal
 
-    return bool(crs_equal(one, other))
+    return bool(crs_equal(_comparable_crs(one), _comparable_crs(other)))
+
+
+def _comparable_crs(crs: Any) -> Any:
+    """Return a CRS in a spelling `crs_equal` can read.
+
+    Args:
+        crs: A CRS in any spelling.
+
+    Returns:
+        ``None``, an ``int`` or a ``str`` unchanged; a CRS object as its serialised spelling; anything that cannot be
+        written, unchanged — `crs_equal` then answers ``False`` for it, which is the "not the same" this needs.
+    """
+    if crs is None or isinstance(crs, (int, str)):
+        return crs
+    try:
+        return crs_to_json(crs, "crs")
+    except TypeError:
+        return crs
 
 
 @dataclass(frozen=True)
@@ -329,7 +363,7 @@ class Bounds:
 
                 ```
         """
-        if not _same_crs(self.crs, other.crs):
+        if not same_crs(self.crs, other.crs):
             raise ValueError(
                 f"union needs both rectangles in one CRS; got {self.crs!r} and {other.crs!r} — "
                 "reproject one with to_crs() first"
@@ -401,7 +435,7 @@ class Bounds:
 
                 ```
         """
-        if _same_crs(crs, self.crs):
+        if same_crs(crs, self.crs):
             return self
         from pyramids.base.crs import reproject_coordinates
 

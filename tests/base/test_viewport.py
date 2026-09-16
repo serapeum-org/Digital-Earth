@@ -49,6 +49,29 @@ class TestViewport:
         view = Viewport("EPSG:4326", bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
         assert view.bounds.crs == 4326, view.bounds
 
+    def test_a_crs_object_view_holds_bounds_in_that_crs(self):
+        """A view in a pyproj CRS object accepts bounds in the same object, frames, and makes requests.
+
+        Test scenario:
+            `GeoDataFrame.crs` is a CRS object. pyramids' `crs_equal` reads only int/str/None and answers False for
+            an object compared with itself, so the constructor refused these bounds, `framed` refused the bounds it
+            had just reprojected, and `RenderTarget.view_request` failed the same way — each with a message telling
+            the caller to use `framed`.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        from digitalearth.base.spec import RenderTarget
+
+        crs = crs_from_user_input(3857)
+        held = Viewport(crs, bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=crs))
+        framed = Viewport(crs).framed(Bounds(0.0, 0.0, 1.0, 1.0, crs=4326))
+        request = RenderTarget().view_request(
+            Viewport(crs), bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
+        )
+        assert held.bounds.as_bbox() == [0.0, 0.0, 1.0, 1.0], held.bounds
+        assert framed.bounds.xmax == pytest.approx(111319.49, abs=1.0), framed.bounds
+        assert request.bounds.xmax == pytest.approx(111319.49, abs=1.0), request.bounds
+
     def test_bounds_must_be_a_bounds(self):
         """A bare list cannot say which edge is which."""
         with pytest.raises(ValueError, match="bounds must be a Bounds"):
