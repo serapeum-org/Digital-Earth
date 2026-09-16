@@ -20,7 +20,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
-from typing import Any, Dict, List, Optional, Self, Tuple
+from typing import Any, Dict, List, Optional, Self
 
 from loguru import logger
 from pyramids.base.crs import reproject_coordinates
@@ -35,6 +35,7 @@ from digitalearth.base.display import (
     to_display_source,
 )
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.symbology import sample_cmap
 
 #: The document title an exported page gets when the caller names none. Shared by every export entry
@@ -422,10 +423,10 @@ class WebMapBase:
         self._issued_ids: set = set()
         #: Id of the most recently added data layer — the default target for ``popup``/``tooltip``.
         self._last_layer_id: Optional[str] = None
-        #: Every data layer added, in order, as ``(id, label)``. The id addresses the layer in MapLibre;
-        #: the label is what a layer switcher shows a viewer. Controls and basemaps are not in here —
-        #: they are not things a viewer turns on and off.
-        self._layer_index: List[Tuple[str, str]] = []
+        #: Every data layer added, in draw order, as a :class:`~digitalearth.base.spec.layer.LayerTree`. The
+        #: id addresses the layer in MapLibre; the label is what a layer switcher shows a viewer. Controls and
+        #: basemaps are not in here — they are not things a viewer turns on and off.
+        self._layer_tree: LayerTree = LayerTree()
         #: Class breaks from the most recent classified ``choropleth``/``points`` (for an out-of-band legend).
         self.last_breaks: Optional[List[float]] = None
         #: Everything :meth:`~digitalearth.web.decoration.DecorationMixin.legend` needs to draw a key for
@@ -770,16 +771,20 @@ class WebMapBase:
         Returns:
             The layer ids, oldest first.
         """
-        return [layer_id for layer_id, _ in self._layer_index]
+        return list(self._layer_tree.ids)
 
-    def _index_layer(self, layer_id: str, label: Optional[str]) -> None:
+    def _index_layer(self, layer_id: str, label: Optional[str], *, kind: str) -> None:
         """Record a data layer so it can be addressed later.
 
         Args:
             layer_id: The MapLibre layer id.
             label: What a layer switcher should call it; ``None`` falls back to the id.
+            kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
+                the tree describes the layer rather than only naming it.
         """
-        self._layer_index.append((layer_id, label or layer_id))
+        self._layer_tree = self._layer_tree.add(
+            LayerSpec(layer_id, kind, label=label or layer_id)
+        )
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.
@@ -808,8 +813,7 @@ class WebMapBase:
             raise KeyError(
                 f"no layer {layer_id!r} on this map; added layers are {present}"
             )
-        index = present.index(layer_id)
-        self._layer_index.pop(index)
+        self._layer_tree = self._layer_tree.remove(layer_id)
         self.layers = [
             layer
             for layer in self.layers

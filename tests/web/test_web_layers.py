@@ -101,6 +101,42 @@ class TestTheRegistryIsAddressable:
         assert m.layer_ids[0].startswith("fill"), m.layer_ids
         assert m.layer_ids[1].startswith("circle"), m.layer_ids
 
+    def test_each_data_layer_is_described_with_its_kind_and_label(
+        self, points, polygons
+    ):
+        """The index is a `LayerTree`, so a layer is described as well as named (DE-20, #281).
+
+        Test scenario:
+            The index held `(id, label)` pairs and the label was never read back. Backed by a `LayerTree`, each
+            entry says what sort of layer it is — the builder's paint type — and carries the caller's name as its
+            label, which is what a later export or a layer switcher needs.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .choropleth(polygons, column="pop", name="Population")
+            .points(points)
+        )
+        fill, circle = m.layer_ids
+        assert m._layer_tree.ids == (fill, circle), m._layer_tree.ids
+        assert m._layer_tree.get(fill).kind == "fill", m._layer_tree.get(fill)
+        assert m._layer_tree.get(fill).display_label == "Population", m._layer_tree.get(
+            fill
+        )
+        assert m._layer_tree.get(circle).kind == "circle", m._layer_tree.get(circle)
+
+    def test_removing_a_layer_removes_it_from_the_tree(self, points):
+        """`remove_layer` and the tree agree, so the description never outlives the layer."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().basemap().points(points).points(points)
+        first, second = m.layer_ids
+        m.remove_layer(first)
+        assert first not in m._layer_tree, m._layer_tree.ids
+        assert m._layer_tree.ids == (second,), m._layer_tree.ids
+
     def test_a_basemap_is_not_a_data_layer(self, points):
         """The basemap is the ground; listing it among the toggles would invite turning the map off.
 
