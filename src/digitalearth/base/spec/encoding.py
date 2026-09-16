@@ -427,11 +427,12 @@ class Encoding:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant goes
-            through the JSON check (a tuple is written as a list); `output_range` is written as a list, as held.
+            `channel`, plus whichever of `value`, `field`, `scale` and `output_range` is set. The constant and
+            `output_range` go through the JSON check, so a tuple is written as a list and a numpy number as a plain
+            Python one.
 
         Raises:
-            TypeError: if the constant, or the scale's scheme or a category, has no JSON form.
+            TypeError: if the constant, an `output_range` end, or any field of the scale has no JSON form.
 
         Examples:
             - A constant is its channel and its value:

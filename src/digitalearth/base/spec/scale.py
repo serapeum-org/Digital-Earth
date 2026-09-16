@@ -662,12 +662,12 @@ class Scale:
 
         Returns:
             `vmin` and `vmax`, plus each of `scheme`, `breaks`, `categories` (with their `colors`) and `missing`
-            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Only
-            `scheme` and `categories` go through the JSON check; the limits, the edges, the colours and `missing`
-            are written without it.
+            that is set. Class edges, a scheme given as edges, categories and colours are written as lists. Every
+            field goes through the JSON check, so a numpy number is written as a plain Python one.
 
         Raises:
-            TypeError: if `scheme` or a category has no JSON form.
+            TypeError: if any field — `scheme`, an edge, a category, a colour or `missing` — has no JSON form, naming
+                the field.
 
         Examples:
             - A continuous scale is its domain:

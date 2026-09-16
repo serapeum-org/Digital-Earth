@@ -815,8 +815,9 @@ class WebMapBase:
                 the tree's order stays the order the map draws in. Call this before `add_reference`.
 
         Raises:
-            ValueError: when `LayerSpec` refuses the id — a builder's `name=` becomes the id as given, so a name
-                with surrounding whitespace is refused here — or the kind, or when the id is already in the tree.
+            ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
+                the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
+                whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
         index = None
         if reference:
