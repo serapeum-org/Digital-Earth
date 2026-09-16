@@ -82,12 +82,25 @@ class Source:
 
     @property
     def x(self) -> DimensionInfo:
-        """The x / longitude dimension."""
+        """The x / longitude dimension.
+
+        Note:
+            For a **vector** source the coordinate array is read-only: it comes from
+            :class:`~digitalearth.base.points.PointArrays`, which freezes its arrays so one reading cannot be
+            changed under another holder of it. Copy it (``np.array(source.x.values)``) before modifying in
+            place. This is not new under pandas 3, whose copy-on-write already made the geometry's ``.x``
+            read-only; it is new, and unconditional, for an install on pandas 2. Raster and plain-array
+            sources build their axes fresh and stay writable.
+        """
         return self._x
 
     @property
     def y(self) -> DimensionInfo:
-        """The y / latitude dimension."""
+        """The y / latitude dimension.
+
+        Note:
+            Read-only for a vector source, for the reason given on :attr:`x`.
+        """
         return self._y
 
     @property

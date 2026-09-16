@@ -324,6 +324,29 @@ class TestFiniteFiltering:
             hash(PointArrays.of([0.0], [1.0]))
 
 
+class TestTheReadOnlyGuaranteeReachesSource:
+    """What `PointArrays`' frozen arrays mean for every vector `Source`."""
+
+    def test_a_vector_source_hands_out_read_only_coordinates(self):
+        """`Source.x.values` for a FeatureCollection refuses an in-place write.
+
+        Test scenario:
+            `_from_feature` passes `PointArrays`' frozen arrays straight into the `Source`. Under pandas 3 the
+            geometry's `.x` was already read-only through copy-on-write; under pandas 2, which `pyproject.toml`
+            still admits, it was writable, so the guarantee is now unconditional. `Source.x` documents it, and
+            this pins it so a change to either side is noticed.
+        """
+        from pyramids.feature import FeatureCollection
+
+        from digitalearth.base.sources import get_source
+
+        gdf = gpd.GeoDataFrame({"v": [1.0, 2.0]}, geometry=[Point(0, 1), Point(2, 3)], crs="EPSG:4326")
+        source = get_source(FeatureCollection(gdf))
+        with pytest.raises(ValueError, match="read-only"):
+            source.x.values[0] = 9.0
+        assert np.array(source.x.values).flags.writeable, "and the documented copy is writable"
+
+
 class TestShapes:
     """The two forms consumers ask for."""
 
