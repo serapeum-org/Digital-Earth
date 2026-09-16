@@ -491,8 +491,8 @@ class Camera:
             azimuth: The compass bearing, in degrees, **from the focal point to the camera** — clockwise from north,
                 with north along ``+y`` and east along ``+x``. ``225`` puts the camera to the south-west, looking
                 north-east.
-            elevation: Degrees above the horizontal. ``90`` looks straight down, which needs a horizontal
-                `view_up`.
+            elevation: Degrees above the horizontal, from ``-90`` to ``90``. ``90`` looks straight down, which
+                needs a horizontal `view_up`.
             distance: How far the camera is from the focal point; strictly positive.
             view_up: Which way is up on the screen.
             view_angle: The vertical field of view, in degrees.
@@ -505,9 +505,9 @@ class Camera:
             The camera.
 
         Raises:
-            ValueError: for a non-positive distance, an azimuth, elevation or distance that is not a finite number,
-                or any value the constructor refuses — including looking straight down with the default vertical
-                `view_up`.
+            ValueError: for a non-positive distance, an elevation outside ``[-90, 90]``, an azimuth, elevation or
+                distance that is not a finite number, or any value the constructor refuses — including looking
+                straight down with the default vertical `view_up`.
 
         Examples:
             - Looking at a point from due south, level with it:
@@ -531,7 +531,15 @@ class Camera:
         if span <= 0.0:
             raise ValueError(f"Camera.look_at needs a positive distance; got {span}")
         bearing = radians(finite_number(_LOOK_AT, "azimuth", azimuth))
-        tilt = radians(finite_number(_LOOK_AT, "elevation", elevation))
+        tilt_degrees = finite_number(_LOOK_AT, "elevation", elevation)
+        if not -90.0 <= tilt_degrees <= 90.0:
+            # Past the vertical the camera lands on the far side of the focal point, so it would read back with
+            # the opposite bearing; refuse it rather than turn the camera round without a word.
+            raise ValueError(
+                f"Camera.look_at needs an elevation between -90 and 90 degrees; got {tilt_degrees}. To look from "
+                "the other side, turn the azimuth by 180 instead"
+            )
+        tilt = radians(tilt_degrees)
         focal = _vector(_LOOK_AT, "focal_point", focal_point)
         offset = (
             span * sin(bearing) * cos(tilt),

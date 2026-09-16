@@ -393,6 +393,43 @@ class TestLookingAtAPoint:
                 (0.0, 0.0, 0.0), azimuth=0.0, elevation=0.0, distance=distance
             )
 
+    @pytest.mark.parametrize("elevation", [120.0, -90.5, 270.0])
+    def test_look_at_refuses_an_elevation_past_the_vertical(self, elevation):
+        """An elevation outside `[-90, 90]` is refused, naming it, rather than flipping the camera round.
+
+        Args:
+            elevation: An elevation past straight up or straight down.
+
+        Test scenario:
+            ``elevation=120`` placed the camera on the far side of the vertical — to the south at 60 degrees for an
+            azimuth of 0 — so `azimuth` and `elevation` read back as `(180, 60)`, not what was asked for. A caller
+            animating the elevation past 90 saw the camera jump to the opposite side with no error.
+        """
+        with pytest.raises(ValueError, match=r"elevation between -90 and 90"):
+            Camera.look_at(
+                (0.0, 0.0, 0.0),
+                azimuth=0.0,
+                elevation=elevation,
+                distance=10.0,
+                view_up=(0.0, 1.0, 0.0),
+            )
+
+    @pytest.mark.parametrize("elevation", [90.0, -90.0])
+    def test_look_at_accepts_straight_up_and_straight_down(self, elevation):
+        """The ends of the range are real views, and read back as they were given.
+
+        Args:
+            elevation: Straight down onto the focal point, or straight up at it.
+        """
+        camera = Camera.look_at(
+            (0.0, 0.0, 0.0),
+            azimuth=0.0,
+            elevation=elevation,
+            distance=10.0,
+            view_up=(0.0, 1.0, 0.0),
+        )
+        assert camera.elevation == pytest.approx(elevation), camera
+
     def test_look_at_carries_the_other_settings_through(self):
         """Projection, field of view and exaggeration are passed to the camera it builds."""
         camera = Camera.look_at(
