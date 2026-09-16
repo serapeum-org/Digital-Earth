@@ -33,6 +33,50 @@ class TestViewport:
         with pytest.raises(ValueError, match="needs a display CRS"):
             Viewport(crs)
 
+    @pytest.mark.parametrize(
+        "crs, kind",
+        [(4326.0, "float"), ([4326], "list"), (object(), "object")],
+        ids=["float", "list", "object"],
+    )
+    def test_a_crs_a_figure_cannot_store_is_refused_when_the_view_is_built(
+        self, crs, kind
+    ):
+        """A CRS spelling with no stored form is refused by the constructor, not when the figure is saved.
+
+        Args:
+            crs: A CRS value pyramids cannot read.
+            kind: The type name the message reports.
+
+        Test scenario:
+            `Viewport(4326.0)` built, and the error surfaced only from `to_dict` — at save time, far from the line
+            that made the view.
+        """
+        with pytest.raises(
+            ValueError, match=f"Viewport.crs holds a {kind} that is not a readable CRS"
+        ):
+            Viewport(crs)
+
+    def test_bounds_and_a_domain_together_are_refused(self):
+        """A view holds one region, so `bounds` and `domain` together are refused rather than ranked silently.
+
+        Test scenario:
+            `Viewport(4326, bounds=..., domain="europe")` held two competing regions with no stated precedence, so a
+            renderer would have had to guess which one the map shows.
+        """
+        box = Bounds(0.0, 0.0, 10.0, 10.0, crs=4326)
+        with pytest.raises(ValueError, match="bounds or a domain, not both"):
+            Viewport(4326, bounds=box, domain="europe")
+
+    def test_framing_a_view_on_bounds_replaces_its_domain(self):
+        """`framed` sets the region the map shows, so a named domain the view had gives way to it."""
+        framed = Viewport(4326, domain="europe").framed(
+            Bounds(0.0, 0.0, 10.0, 5.0, crs=4326)
+        )
+        assert (framed.domain, framed.bounds.as_bbox()) == (
+            None,
+            [0.0, 0.0, 10.0, 5.0],
+        ), framed
+
     def test_bounds_in_another_crs_are_refused_by_the_constructor(self):
         """A rectangle in degrees read as metres draws the wrong place, silently.
 

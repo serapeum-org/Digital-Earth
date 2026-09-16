@@ -81,12 +81,14 @@ class Viewport:
             Mercator, as the static `Map` does.
         bounds: The region shown, in `crs`. ``None`` means the view is not framed yet and the renderer chooses.
         domain: A named region (``"europe"``) or a ``(west, south, east, north)`` box in degrees — the static
-            tier's ``domain=`` — or ``None``.
+            tier's ``domain=`` — or ``None``. A view holds one region, so `bounds` and `domain` are not set together.
         globe: Whether the map is drawn on a globe frame rather than a flat projection.
 
     Raises:
-        ValueError: for a `None` or boolean CRS, `bounds` that is not a `Bounds` or is in a different CRS, a
-            `domain` that is neither a non-empty name nor four finite numbers, or a non-boolean `globe`.
+        ValueError: for a `None` or boolean CRS, or one a figure could not store (a float, a list — anything that is
+            not an EPSG integer, a string or a CRS object pyramids reads); `bounds` that is not a `Bounds` or is in a
+            different CRS; `bounds` and `domain` together; a `domain` that is neither a non-empty name nor four
+            finite numbers; or a non-boolean `globe`.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
@@ -128,8 +130,20 @@ class Viewport:
         """
         if self.crs is None or isinstance(self.crs, bool):
             raise ValueError(f"Viewport needs a display CRS; got {self.crs!r}")
+        try:
+            crs_to_json(self.crs, "Viewport.crs")
+        except TypeError as error:
+            # Checked here, not only when the view is written: a CRS a figure cannot store was otherwise found by
+            # `to_dict`, at save time, far from the line that built the view.
+            raise ValueError(str(error)) from error
         self._check_bounds()
         object.__setattr__(self, "domain", self._checked_domain(self.domain))
+        if self.bounds is not None and self.domain is not None:
+            # Two regions with no stated precedence leave a renderer to guess which one the map shows.
+            raise ValueError(
+                f"Viewport takes bounds or a domain, not both; got bounds {self.bounds.as_bbox()} and domain "
+                f"{self.domain!r}. Use Viewport.framed(bounds) to frame a view that has a domain"
+            )
         if not isinstance(self.globe, bool):
             raise ValueError(
                 f"Viewport globe must be True or False; got {self.globe!r}"
@@ -197,7 +211,8 @@ class Viewport:
             bounds: The region to show, in any CRS.
 
         Returns:
-            A new view. This one is unchanged — a change of view is a new value, never an edit of the old one.
+            A new view. This one is unchanged — a change of view is a new value, never an edit of the old one. A
+            `domain` the view had is dropped: the bounds are now the region it shows.
 
         Raises:
             ValueError: if `bounds` is not a `Bounds`, or cannot be reprojected into the view's CRS.
@@ -225,7 +240,7 @@ class Viewport:
             raise ValueError(
                 f"Viewport.framed needs a Bounds; got {type(bounds).__name__}"
             )
-        return replace(self, bounds=bounds.to_crs(self.crs))
+        return replace(self, bounds=bounds.to_crs(self.crs), domain=None)
 
     def needs_reproject(self, data: Any) -> bool:
         """Whether `data` has to be reprojected to be drawn in this view.
