@@ -75,6 +75,24 @@ def _identifier(owner: str, value: Any) -> None:
         )
 
 
+def _optional_title(owner: str, title: Any) -> None:
+    """Refuse a title that is neither ``None`` nor a non-empty string.
+
+    Args:
+        owner: The type being built, for the message.
+        title: The candidate title.
+
+    Raises:
+        ValueError: for a non-string or an empty string. It is the rule `LayerSpec` applies to its label: ``None``
+            is the one spelling of "no title", so ``""`` is not a second one that compares unequal to it.
+            Whitespace is kept, as it is in a label.
+    """
+    if title is not None and (not isinstance(title, str) or not title):
+        raise ValueError(
+            f"{owner} title must be a non-empty string or None; got {title!r}"
+        )
+
+
 @dataclass(frozen=True)
 class PanelSpec:
     """One panel of a figure: a view, and the layers it shows.
@@ -89,7 +107,7 @@ class PanelSpec:
     Raises:
         ValueError: for an id that is not a non-empty string, a view that is neither a
             `Viewport` nor a `Camera`, `layers` given as a bare string, a layer id that is not a non-empty string, a
-            layer listed twice, or a non-string title.
+            layer listed twice, or a title that is not a non-empty string.
 
     Examples:
         - Two panels over the same layer, in two projections:
@@ -155,10 +173,7 @@ class PanelSpec:
                 f"panel {self.id!r} lists layers {repeated} more than once"
             )
         object.__setattr__(self, "layers", layers)
-        if self.title is not None and not isinstance(self.title, str):
-            raise ValueError(
-                f"PanelSpec title must be a string or None; got {self.title!r}"
-            )
+        _optional_title("PanelSpec", self.title)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a figure stores.
@@ -270,7 +285,7 @@ class FigureSpec:
             not a `LayerTree`, a layer whose source or elevation source is not among the sources, a panel naming a
             layer that is not in the tree, a 3-D (`Camera`) panel showing a draped layer without the layer it
             drapes over, a size that is not two positive finite numbers (a boolean counts as
-            neither), or a non-string title.
+            neither), or a title that is not a non-empty string.
 
     Examples:
         - One source, one layer, one panel:
@@ -335,10 +350,7 @@ class FigureSpec:
             self._check_sources(layer, self.sources)
         self._check_panel_layers()
         object.__setattr__(self, "size", self._checked_size(self.size))
-        if self.title is not None and not isinstance(self.title, str):
-            raise ValueError(
-                f"FigureSpec title must be a string or None; got {self.title!r}"
-            )
+        _optional_title("FigureSpec", self.title)
 
     def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
         """Pickle and copy by rebuilding through the constructor.
