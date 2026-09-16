@@ -158,6 +158,31 @@ class Symbology:
             ),
         )
 
+    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+        """Pickle and copy by rebuilding through the constructor.
+
+        Returns:
+            ``(Symbology, (dict(encodings), dict(props)))``.
+
+            The read-only mapping views this type stores cannot be pickled, so
+            `pickle`, `copy.copy` and `copy.deepcopy` raised ``cannot pickle 'mappingproxy' object`` — for this
+            type and for everything holding one, a `LayerTree` and a web map with a layer included. Rebuilding
+            from plain dicts goes through the same validation and freezing as any other construction.
+
+        Examples:
+            - A copy is equal to the original, and is a separate object:
+                ```python
+                >>> import copy
+                >>> from digitalearth.base.spec import Symbology
+                >>> original = Symbology.of(color="#f00").with_props(levels=(1, 2))
+                >>> clone = copy.deepcopy(original)
+                >>> clone == original, clone is original
+                (True, False)
+
+                ```
+        """
+        return Symbology, (dict(self.encodings), dict(self.props))
+
     def __hash__(self) -> int:
         """Hash by the channels driven and the properties set, so a style can key a cache.
 
@@ -421,6 +446,31 @@ class StyleSchema:
     def __post_init__(self) -> None:
         """Freeze the table, so a schema handed around cannot be extended behind a caller's back."""
         object.__setattr__(self, "keys", MappingProxyType(dict(self.keys)))
+
+    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+        """Pickle and copy by rebuilding through the constructor.
+
+        Returns:
+            ``(StyleSchema, (dict(keys),))``.
+
+            The read-only mapping views this type stores cannot be pickled, so
+            `pickle`, `copy.copy` and `copy.deepcopy` raised ``cannot pickle 'mappingproxy' object`` — for this
+            type and for everything holding one, a `LayerTree` and a web map with a layer included. Rebuilding
+            from plain dicts goes through the same validation and freezing as any other construction.
+
+        Examples:
+            - A copy is equal to the original, and is a separate object:
+                ```python
+                >>> import copy
+                >>> from digitalearth.base.spec import StyleKey, StyleSchema
+                >>> original = StyleSchema.of(StyleKey("cmap", "Colormap name."))
+                >>> clone = copy.deepcopy(original)
+                >>> clone == original, clone is original
+                (True, False)
+
+                ```
+        """
+        return StyleSchema, (dict(self.keys),)
 
     @classmethod
     def of(cls, *keys: StyleKey) -> "StyleSchema":

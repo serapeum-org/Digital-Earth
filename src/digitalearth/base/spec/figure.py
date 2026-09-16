@@ -336,6 +336,38 @@ class FigureSpec:
                 f"FigureSpec title must be a string or None; got {self.title!r}"
             )
 
+    def __reduce__(self) -> Tuple[Any, Tuple[Any, ...]]:
+        """Pickle and copy by rebuilding through the constructor.
+
+        Returns:
+            ``(FigureSpec, (panels, dict(sources), layers, size, title, schema_version))``.
+
+            The read-only mapping views this type stores cannot be pickled, so
+            `pickle`, `copy.copy` and `copy.deepcopy` raised ``cannot pickle 'mappingproxy' object`` — for this
+            type and for everything holding one, a `LayerTree` and a web map with a layer included. Rebuilding
+            from plain dicts goes through the same validation and freezing as any other construction.
+
+        Examples:
+            - A copy is equal to the original, and is a separate object:
+                ```python
+                >>> import copy
+                >>> from digitalearth.base.spec import FigureSpec
+                >>> original = FigureSpec(panels=(PanelSpec("p"),))
+                >>> clone = copy.deepcopy(original)
+                >>> clone == original, clone is original
+                (True, False)
+
+                ```
+        """
+        return FigureSpec, (
+            self.panels,
+            dict(self.sources),
+            self.layers,
+            self.size,
+            self.title,
+            self.schema_version,
+        )
+
     def __hash__(self) -> int:
         """Hash by value, like every other type in the vocabulary.
 

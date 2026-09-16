@@ -215,6 +215,26 @@ class TestTheRegistryIsAddressable:
         assert m.layer_ids == [name], m.layer_ids
         assert m._layer_tree.get(name).display_label == name, m._layer_tree.get(name)
 
+    def test_a_map_with_a_layer_can_be_deep_copied(self):
+        """`copy.deepcopy` of a map with a data layer works and gives an independent map.
+
+        Test scenario:
+            The layer index became a `LayerTree`, whose layers hold a `Symbology` with read-only mapping views that
+            cannot be pickled; deep-copying any map with a layer then raised `cannot pickle 'mappingproxy' object`,
+            where `main`'s list index copied fine.
+        """
+        import copy
+
+        from digitalearth.web import WebMap
+
+        original = WebMap().text(4.9, 52.4, "A", name="amsterdam")
+        clone = copy.deepcopy(original)
+        clone.remove_layer("amsterdam")
+        assert original.layer_ids == ["amsterdam"], (
+            "removing from the copy must not touch the original"
+        )
+        assert clone.layer_ids == [], clone.layer_ids
+
     def test_removing_a_layer_removes_it_from_the_tree(self, points):
         """`remove_layer` and the tree agree, so the description never outlives the layer."""
         from digitalearth.web import WebMap

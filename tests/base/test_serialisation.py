@@ -5,8 +5,10 @@ the pairs `Bounds`, `Selection`, `Scale`, `Encoding` and `Symbology` gained, and
 `base/spec/_serial.py` they are built on.
 """
 
+import copy
 import datetime
 import json
+import pickle
 import re
 
 import numpy as np
@@ -15,12 +17,16 @@ import pytest
 from digitalearth.base.spec import (
     Bounds,
     Camera,
+    DataRef,
     Encoding,
     FigureSpec,
+    LayerSpec,
     LayerTree,
     PanelSpec,
     Scale,
     Selection,
+    StyleKey,
+    StyleSchema,
     Symbology,
 )
 from digitalearth.base.spec._serial import crs_to_json, finite_number, to_json_value
@@ -324,6 +330,47 @@ class TestWhatReadingRefuses:
         stored = {"xmin": edge, "ymin": 0, "xmax": 1, "ymax": 1, "crs": 4326}
         with pytest.raises(ValueError, match="Bounds needs xmin as a number"):
             Bounds.from_dict(stored)
+
+
+class TestCopyingAndPickling:
+    """The value types copy and pickle, including those holding read-only mappings."""
+
+    @pytest.mark.parametrize("how", ["pickle", "deepcopy", "copy"])
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda: Symbology.of(color="#f00").with_props(levels=(1, 2)),
+            lambda: StyleSchema.of(StyleKey("cmap", "Colormap name.")),
+            lambda: LayerTree(
+                (LayerSpec("a", "raster", symbology=Symbology.of(opacity=0.5)),)
+            ),
+            lambda: FigureSpec(
+                panels=(PanelSpec("p", layers=("a",)),),
+                sources={"s": DataRef("a.tif")},
+                layers=LayerTree((LayerSpec("a", "raster", source_id="s"),)),
+            ),
+        ],
+        ids=["symbology", "style-schema", "layer-tree", "figure"],
+    )
+    def test_a_value_survives_pickling_and_copying(self, build, how):
+        """`pickle`, `copy.deepcopy` and `copy.copy` give back an equal value.
+
+        Args:
+            build: Builds the value under test.
+            how: Which of the three to use.
+
+        Test scenario:
+            `Symbology`, `StyleSchema` and `FigureSpec` store read-only mapping views, which cannot be pickled, so
+            each of these raised `cannot pickle 'mappingproxy' object` — and so did everything holding one: a
+            `LayerTree`, and a web map with a layer, which a notebook user deep-copies as a matter of course.
+        """
+        value = build()
+        copied = {
+            "pickle": lambda: pickle.loads(pickle.dumps(value)),
+            "deepcopy": lambda: copy.deepcopy(value),
+            "copy": lambda: copy.copy(value),
+        }[how]()
+        assert copied == value, f"{how} changed the value: {copied!r}"
 
 
 class TestWhatWritingRefuses:
