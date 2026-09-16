@@ -287,7 +287,7 @@ class TestLayerTreeChanges:
             "b",
         )
 
-    @pytest.mark.parametrize("index", [-1, 3, True])
+    @pytest.mark.parametrize("index", [-1, 3, True, 1.0])
     def test_add_refuses_a_position_outside_the_tree(self, index):
         """`list.insert` would clamp, putting the layer somewhere the caller did not ask for.
 
@@ -298,6 +298,23 @@ class TestLayerTreeChanges:
         layer = LayerSpec("c", "points")
         with pytest.raises(IndexError, match="positions run from 0"):
             tree.add(layer, index=index)
+
+    @pytest.mark.parametrize("method", ["add", "replace"])
+    def test_add_and_replace_refuse_something_that_is_not_a_layer(self, method):
+        """A bare id is not a layer description, and is refused as the documented `ValueError`.
+
+        Args:
+            method: The tree method under test.
+
+        Test scenario:
+            ``tree.add("c")`` raised ``AttributeError: 'str' object has no attribute 'id'`` from inside the method,
+            while the docstring promises a `ValueError` and the constructor refuses a non-layer by name.
+        """
+        tree = _tree("a", "c")
+        with pytest.raises(
+            ValueError, match=f"LayerTree.{method} needs a LayerSpec; got str"
+        ):
+            getattr(tree, method)("c")
 
     def test_add_refuses_a_duplicate_id(self):
         """Adding an id already in the tree is refused rather than shadowing the first layer."""
@@ -362,7 +379,7 @@ class TestLayerTreeChanges:
         """
         assert _tree("a", "b", "c").move("c", index).ids == expected
 
-    @pytest.mark.parametrize("index", [3, -4])
+    @pytest.mark.parametrize("index", [3, -4, True, 1.0])
     def test_move_refuses_a_position_outside_the_tree(self, index):
         """A position past either end is refused rather than wrapped.
 
@@ -380,6 +397,22 @@ class TestLayerTreeChanges:
         after = tree.replace(styled)
         assert after.ids == ("a", "b", "c"), after.ids
         assert after.get("b") == styled, after.get("b")
+
+    def test_replace_moving_the_last_layer_out_of_a_hidden_group_forgets_the_group(
+        self,
+    ):
+        """A hidden group left with no layer is dropped by `replace`, exactly as `remove` drops it.
+
+        Test scenario:
+            `remove` forgets a hidden group it empties, but `replace` refused the same state — moving a hidden
+            group's only layer into another group raised "LayerTree hides groups ['g'] that no layer belongs to".
+        """
+        tree = LayerTree(
+            (LayerSpec("a", "points", group="g"), LayerSpec("b", "points")),
+            frozenset({"g"}),
+        )
+        moved = tree.replace(LayerSpec("a", "points", group="h"))
+        assert (moved.hidden_groups, moved.get("a").group) == (frozenset(), "h"), moved
 
     def test_replace_an_unknown_id_is_a_key_error(self):
         """A replacement names the layer it replaces, which has to exist."""
@@ -407,6 +440,20 @@ class TestLayerTreeChanges:
         tree = _tree("a")
         with pytest.raises(ValueError, match="visible must be True or False"):
             tree.set_visible("a", "no")
+
+    def test_a_string_of_hidden_groups_is_refused(self):
+        """`hidden_groups="obs"` names one group, not the letters of one, so the constructor refuses a string.
+
+        Test scenario:
+            `frozenset("obs")` is `{'o', 'b', 's'}`, which surfaced as "hides groups ['b', 'o', 's']" — and a
+            one-letter group name would have been hidden silently. `from_dict` already refused a string here.
+        """
+        layers = (LayerSpec("a", "points", group="obs"),)
+        with pytest.raises(
+            ValueError,
+            match="hidden_groups must be a collection of group names; got the string",
+        ):
+            LayerTree(layers, hidden_groups="obs")
 
 
 class TestScaling:

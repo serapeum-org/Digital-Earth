@@ -23,6 +23,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
+from numbers import Integral
 from typing import (
     Any,
     Dict,
@@ -335,6 +336,37 @@ class LayerSpec:
         )
 
 
+def _is_position(index: Any) -> bool:
+    """Whether `index` is a whole number a position can be — a numpy integer included, a boolean not.
+
+    Args:
+        index: The position a caller passed.
+
+    Returns:
+        ``True`` for an `int` or a numpy integer. `True` is an `int` in Python and would read as position 1, and a
+        whole float such as `1.0` is refused by `list.insert` with a `TypeError` naming neither the method nor the
+        layer, so both answer ``False`` and the caller refuses them as it refuses a position past either end.
+    """
+    return isinstance(index, Integral) and not isinstance(index, bool)
+
+
+def _check_layer(method: str, layer: Any) -> None:
+    """Refuse something that is not a `LayerSpec` where a tree method needs one.
+
+    Args:
+        method: The tree method, for the message.
+        layer: What it was given.
+
+    Raises:
+        ValueError: naming the method and the type found, as the constructor refuses a non-layer — rather than an
+            `AttributeError` from reading an `id` the value does not have.
+    """
+    if not isinstance(layer, LayerSpec):
+        raise ValueError(
+            f"LayerTree.{method} needs a LayerSpec; got {type(layer).__name__}"
+        )
+
+
 @dataclass(frozen=True)
 class LayerTree:
     """The layers of a figure, in draw order, addressed by id.
@@ -394,6 +426,12 @@ class LayerTree:
             ValueError: as described on the class.
         """
         object.__setattr__(self, "layers", tuple(self.layers))
+        if isinstance(self.hidden_groups, str):
+            # `frozenset("obs")` is the letters of the name, and a one-letter group would be hidden silently.
+            raise ValueError(
+                "LayerTree hidden_groups must be a collection of group names; got the string "
+                f"{self.hidden_groups!r}"
+            )
         object.__setattr__(self, "hidden_groups", frozenset(self.hidden_groups))
         for layer in self.layers:
             if not isinstance(layer, LayerSpec):
@@ -584,10 +622,10 @@ class LayerTree:
             The new tree.
 
         Raises:
-            ValueError: if a layer with the same id is already in the tree, or the layer's `z_source` names a layer
-                that is not.
-            IndexError: if `index` is negative or past the top. `list.insert` would clamp it silently, which puts
-                the layer somewhere the caller did not ask for.
+            ValueError: if `layer` is not a `LayerSpec`, a layer with the same id is already in the tree, or the
+                layer's `z_source` names a layer that is not.
+            IndexError: if `index` is negative or past the top — `list.insert` would clamp it silently, which puts
+                the layer somewhere the caller did not ask for — or is not a whole number: a boolean or a float.
 
         Examples:
             - A basemap goes to the bottom without moving anything else's identity:
@@ -608,6 +646,7 @@ class LayerTree:
 
                 ```
         """
+        _check_layer("add", layer)
         if any(existing.id == layer.id for existing in self.layers):
             raise ValueError(
                 f"a layer with id {layer.id!r} is already in the tree; layer ids must be unique"
@@ -615,7 +654,7 @@ class LayerTree:
         layers = list(self.layers)
         if index is None:
             layers.append(layer)
-        elif isinstance(index, bool) or not 0 <= index <= len(layers):
+        elif not _is_position(index) or not 0 <= index <= len(layers):
             raise IndexError(
                 f"cannot add {layer.id!r} at position {index!r}; positions run from 0 (bottom) to {len(layers)} (top)"
             )
@@ -691,7 +730,8 @@ class LayerTree:
 
         Raises:
             KeyError: if no layer has that id.
-            IndexError: if `index` is outside the tree.
+            IndexError: if `index` is outside the tree, or is not a whole number — a boolean or a float — exactly as
+                :meth:`add` refuses one.
 
         Examples:
             - Bring a layer to the top:
@@ -713,7 +753,7 @@ class LayerTree:
         """
         layer = self.get(layer_id)
         count = len(self.layers)
-        if not -count <= index < count:
+        if not _is_position(index) or not -count <= index < count:
             raise IndexError(
                 f"cannot move {layer_id!r} to position {index}; the tree holds {count} layers"
             )
@@ -732,12 +772,13 @@ class LayerTree:
             layer: The new description. Its id names the layer it replaces.
 
         Returns:
-            The new tree.
+            The new tree. A hidden group the new description leaves with no layers stops being hidden, as
+            :meth:`remove` forgets one, since there is nothing left in it.
 
         Raises:
             KeyError: if no layer has that id.
-            ValueError: if the new description breaks what the tree holds together: its `z_source` names a layer
-                the tree does not have or closes a loop, or it leaves a hidden group with no layer in it.
+            ValueError: if `layer` is not a `LayerSpec`, or the new description breaks what the tree holds together:
+                its `z_source` names a layer the tree does not have or closes a loop.
 
         Examples:
             - Restyle a layer without moving it:
@@ -760,13 +801,14 @@ class LayerTree:
 
                 ```
         """
+        _check_layer("replace", layer)
         self.get(layer.id)
-        return with_fields(
-            self,
-            layers=tuple(
-                layer if existing.id == layer.id else existing
-                for existing in self.layers
-            ),
+        layers = tuple(
+            layer if existing.id == layer.id else existing for existing in self.layers
+        )
+        groups = {existing.group for existing in layers}
+        return LayerTree(
+            layers, frozenset(group for group in self.hidden_groups if group in groups)
         )
 
     def set_visible(self, layer_id: str, visible: bool) -> "LayerTree":
