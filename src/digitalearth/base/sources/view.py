@@ -211,7 +211,8 @@ class SourceView(Source):
             KeyError: if the reference no longer resolves — an `object:` id not registered in this process,
                 or a scheme no resolver handles. Raised by
                 :meth:`~digitalearth.base.spec.dataref.DataRef.open`.
-            ValueError: if this view's selection is one :meth:`of` refuses.
+            ValueError: if this view's selection is one :meth:`of` refuses, or the source is a rotated raster,
+                which no window can be labelled for.
 
         Examples:
             - Re-reading within a budget keeps the address, and the band name the bare windowed array lacks:
@@ -361,7 +362,8 @@ class SourceView(Source):
         Raises:
             ValueError: if `selection` names a `time`, `level`, `member` or `overview`, or more than one
                 band. Nothing but the band and the budget is honoured, so a view that stored the rest would
-                report a slice it does not hold; a composite selection is refused for the same reason.
+                report a slice it does not hold; a composite selection is refused for the same reason. Also
+                if `request` would window a rotated raster — see :meth:`_refuse_rotated`.
             Exception: whatever the extractor raises for data it cannot read, or pyramids for a window it
                 cannot read.
 
@@ -589,6 +591,7 @@ class SourceView(Source):
             view claims a projected CRS while holding pixel indices.
 
         Raises:
+            ValueError: if the source is a rotated raster — see :meth:`_refuse_rotated`.
             Exception: whatever pyramids raises for a window it cannot read.
         """
         nothing = (data, None, None, None)
@@ -616,6 +619,7 @@ class SourceView(Source):
         # the result from the requested bbox misplaces every cell by up to one source pixel per edge, worst
         # on exactly the zoomed-out tiles this exists for. Aligning the request makes the snap a no-op, so
         # the window asked for and the window read are the same rectangle.
+        cls._refuse_rotated(data)
         window = cls._aligned(window, data)
         width, height = cls._shape(request)
         array = np.asarray(
@@ -662,6 +666,31 @@ class SourceView(Source):
         return Bounds(left, bottom, right, top, window.crs)
 
     @staticmethod
+    def _refuse_rotated(data: Any) -> None:
+        """Refuse a windowed read of a raster whose geotransform carries rotation.
+
+        Args:
+            data: The object about to be windowed.
+
+        Raises:
+            ValueError: if `geotransform[2]` or `geotransform[4]` is non-zero.
+
+            A rotated raster's cells do not lie along one x axis and one y axis, so no pair of 1-D
+            coordinate arrays can label a window of it — and the axis-aligned bbox `read_part` takes does
+            not describe the rectangle of cells it returns. Windowing one anyway came back silently wrong:
+            on geotransform `(0, 1, 0.5, 8, 0, -1)` a 4x4 read labelled `x = [1.5, 2.5, 3.5, 4.5]` held
+            `[-9999.0, 30.0, 30.5, 31.17]` — nodata and interpolated values under clean labels. Refused
+            here, like the selection axes :meth:`of` cannot honour, rather than drawn wrong.
+        """
+        transform = getattr(data, "geotransform", None)
+        if transform and len(transform) >= 6 and (transform[2] or transform[4]):
+            raise ValueError(
+                f"SourceView cannot window a rotated raster (geotransform {tuple(transform)}): its cells do "
+                "not lie along one x and one y axis, so a window of it has no coordinates to label. Read it "
+                "without a request instead"
+            )
+
+    @staticmethod
     def _grid(data: Any) -> Optional[Tuple[float, float, float, float]]:
         """Return the source's ``(origin_x, step_x, origin_y, step_y)``, or ``None`` if it has no grid.
 
@@ -670,10 +699,10 @@ class SourceView(Source):
 
         Returns:
             The four geotransform entries that place a cell on an axis-aligned grid. The rotation terms
-            (`geotransform[2]` and `geotransform[4]`) are dropped without being checked: an axis-aligned
-            window cannot describe a rotated raster, so one — which pyramids can hold, for instance from
-            `GeoReference(geo=...)` — is windowed and labelled as if it were unrotated. ``None`` when there
-            is no geotransform, it has fewer than six entries, or a step is zero and the grid degenerate.
+            (`geotransform[2]` and `geotransform[4]`) are not part of the answer: a windowed read refuses a
+            rotated raster first, in :meth:`_refuse_rotated`, so by the time this is consulted they are zero.
+            ``None`` when there is no geotransform, it has fewer than six entries, or a step is zero and the
+            grid degenerate.
         """
         transform = getattr(data, "geotransform", None)
         if not transform or len(transform) < 6:

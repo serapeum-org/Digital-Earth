@@ -436,6 +436,28 @@ class TestARereadIsStillGeoreferenced:
                     f"column {stored_column}, got {again.z.values[row][column]}"
                 )
 
+    def test_a_rotated_raster_is_refused_rather_than_windowed_as_if_unrotated(
+        self, tmp_path
+    ):
+        """A geotransform with rotation terms cannot be labelled by one x and one y axis, so it is refused.
+
+        Test scenario:
+            `_grid` drops `geotransform[2]` and `[4]`, so a rotated raster was snapped and labelled as though
+            it were north-up. On `(0, 1, 0.5, 8, 0, -1)` a 4x4 read labelled `x = [1.5, 2.5, 3.5, 4.5]` held
+            nodata and interpolated values — silently wrong, which is worse than an error that names why.
+        """
+        path = _write_labelled(tmp_path, "rotated", (0.0, 1.0, 0.5, 8.0, 0.0, -1.0))
+        ref = DataRef(str(path))
+        view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
+        request = ViewRequest(
+            bounds=Bounds(1.5, 1.5, 4.5, 4.5, crs=3857),
+            width=4,
+            height=4,
+            budget=10_000,
+        )
+        with pytest.raises(ValueError, match="cannot window a rotated raster"):
+            view.reread(request)
+
     def test_what_the_data_is_survives_a_reread(self):
         """The variable, the kind and the units describe the data, not the window.
 
