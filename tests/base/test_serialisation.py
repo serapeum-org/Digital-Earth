@@ -565,6 +565,54 @@ class TestWhatWritingRefuses:
             to_json_value({1: "a"}, "props")
 
 
+class TestCrsObjectsHashLikeTheirRoundTrip:
+    """A spec built with a CRS object is equal to its JSON round trip, and hashes the same."""
+
+    @pytest.mark.parametrize(
+        "definition",
+        ["EPSG:3857", "+proj=utm +zone=31 +ellps=intl +units=m +no_defs"],
+        ids=["with-a-code", "code-less"],
+    )
+    def test_bounds_viewport_and_figure_hash_alike_after_a_round_trip(self, definition):
+        """`Bounds`, `Viewport` and a `FigureSpec` over them rebuild equal and hash equal, so one keys a cache.
+
+        Args:
+            definition: What the CRS object is parsed from.
+
+        Test scenario:
+            The object stayed in the `crs` field. pyproj's `__eq__` parses the other side, so a rectangle equalled
+            its round trip — which holds the written string — while `hash` used the object's WKT: equal values
+            hashed apart, a rebuilt figure missed its own cache entry, and `Viewport(obj)` equalled both
+            `Viewport(3857)` and `Viewport("EPSG:3857")`, which are not equal to each other.
+        """
+        from pyramids.base.crs import crs_from_user_input
+
+        crs = crs_from_user_input(definition)
+        box = Bounds(0.0, 0.0, 1.0, 1.0, crs=crs)
+        view = Viewport(crs, bounds=box)
+        figure = FigureSpec(panels=(PanelSpec("p", view),))
+        cache = {figure: "drawn"}
+        for value in (box, view, figure):
+            rebuilt = _through_json(value)
+            assert rebuilt == value, f"{type(value).__name__} changed in a round trip"
+            assert hash(rebuilt) == hash(value), (
+                f"{type(value).__name__} hashes apart from its round trip"
+            )
+        assert cache.get(_through_json(figure)) == "drawn", (
+            "a rebuilt figure must find its cache entry"
+        )
+
+    def test_a_crs_object_view_equals_only_views_written_the_same_way(self):
+        """A view in a CRS object is the view its written spelling names, and equality stays transitive."""
+        from pyramids.base.crs import crs_from_user_input
+
+        in_object = Viewport(crs_from_user_input(3857))
+        assert in_object == Viewport("EPSG:3857"), in_object
+        assert in_object != Viewport(3857), (
+            "an int and a string spelling are different values, as they always were"
+        )
+
+
 class TestNumpyInputs:
     """A value computed with numpy is accepted wherever its Python form is, and stored as the Python form."""
 

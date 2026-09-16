@@ -325,18 +325,22 @@ class TestOperations:
                 Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
             )
 
-    def test_a_crs_the_spec_cannot_write_is_treated_as_different(self):
-        """A CRS value `crs_to_json` refuses compares as different, instead of raising its TypeError.
+    @pytest.mark.parametrize(
+        "crs", [4326.5, [4326], True], ids=["float", "list", "bool"]
+    )
+    def test_a_crs_with_no_written_form_is_refused_when_the_rectangle_is_built(
+        self, crs
+    ):
+        """A CRS a figure could not store is refused by the constructor, naming the field.
+
+        Args:
+            crs: A value that names no CRS pyramids can read.
 
         Test scenario:
-            `same_crs` first writes a CRS in its stored spelling. A float is not writable, and the TypeError that
-            raises must not escape `union`: the rectangle keeps the value and the caller gets the mismatched-CRS
-            message naming both CRSs.
+            The rectangle held the value and failed only when written — or, before that, when compared.
         """
-        box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326.5)
-        other = Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
-        with pytest.raises(ValueError, match=r"one CRS; got 4326\.5 and 4326"):
-            box.union(other)
+        with pytest.raises(ValueError, match="Bounds.crs"):
+            Bounds(0.0, 0.0, 1.0, 1.0, crs=crs)
 
     def test_comparing_a_float_crs_does_not_change_how_its_integer_compares(self):
         """After a float CRS is compared, the integer with the same value still matches itself.

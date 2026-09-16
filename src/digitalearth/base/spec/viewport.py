@@ -79,7 +79,8 @@ class Viewport:
 
     Attributes:
         crs: The display CRS every layer is drawn in — an EPSG integer or anything pyramids reads. Defaults to Web
-            Mercator, as the static `Map` does.
+            Mercator, as the static `Map` does. A CRS object is held in the spelling it is written in, as `Bounds`
+            holds one, so a view and its JSON round trip are one value with one hash.
         bounds: The region shown, in `crs`. ``None`` means the view is not framed yet and the renderer chooses.
         domain: A named region (``"europe"``) or a ``(west, south, east, north)`` box in degrees — the static
             tier's ``domain=`` — or ``None``. A view holds one region, so `bounds` and `domain` are not set together.
@@ -132,11 +133,12 @@ class Viewport:
         if self.crs is None or isinstance(self.crs, bool):
             raise ValueError(f"Viewport needs a display CRS; got {self.crs!r}")
         try:
-            crs_to_json(self.crs, "Viewport.crs")
+            written = crs_to_json(self.crs, "Viewport.crs")
         except TypeError as error:
             # Checked here, not only when the view is written: a CRS a figure cannot store was otherwise found by
             # `to_dict`, at save time, far from the line that built the view.
             raise ValueError(str(error)) from error
+        object.__setattr__(self, "crs", written)
         self._check_bounds()
         object.__setattr__(self, "domain", self._checked_domain(self.domain))
         if self.bounds is not None and self.domain is not None:

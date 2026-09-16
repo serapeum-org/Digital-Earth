@@ -94,7 +94,9 @@ class Bounds:
         xmax: Eastern edge.
         ymax: Northern edge.
         crs: The CRS the four values are expressed in — an EPSG code, a WKT string, or anything pyramids
-            resolves. Kept with the numbers so a rectangle cannot be measured against the wrong one.
+            resolves. Kept with the numbers so a rectangle cannot be measured against the wrong one. A CRS object
+            is held in the spelling it is written in — ``"EPSG:<code>"`` when its definition carries one, WKT
+            otherwise — so a rectangle and its JSON round trip are one value with one hash.
 
     Raises:
         ValueError: if any edge is not finite, or if an edge pair is inverted (``xmax < xmin``). A rectangle
@@ -142,7 +144,7 @@ class Bounds:
         """Refuse a rectangle that cannot bound anything.
 
         Raises:
-            ValueError: for a non-finite edge, or an inverted pair.
+            ValueError: for a non-finite edge, an inverted pair, or a CRS with no written form.
         """
         for name, value in (
             ("xmin", self.xmin),
@@ -160,6 +162,13 @@ class Bounds:
             raise ValueError(
                 f"Bounds needs ymin <= ymax; got ymin={self.ymin}, ymax={self.ymax}"
             )
+        try:
+            written = crs_to_json(self.crs, "Bounds.crs")
+        except TypeError as error:
+            raise ValueError(str(error)) from error
+        # Held as written. A CRS object equals its own code through pyproj's `__eq__` but hashes by its WKT, so a
+        # rectangle equalled its round trip with a different hash, and could not key a cache it was rebuilt for.
+        object.__setattr__(self, "crs", written)
 
     # ------------------------------------------------------------------ builders
 
