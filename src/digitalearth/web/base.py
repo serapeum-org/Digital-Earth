@@ -764,14 +764,16 @@ class WebMapBase:
 
     @property
     def layer_ids(self) -> List[str]:
-        """The MapLibre ids of the data layers added so far, in order.
+        """The MapLibre ids of the data layers added so far, in draw order.
 
         The registry used to be write-only: builders minted ids internally and nothing surfaced them, so a
         caller could not address a layer afterwards to hide, remove or switch it.
 
         Returns:
-            The layer ids, oldest first, as a new list. A layer the caller named carries that name as its id; an
-            unnamed one gets a generated id.
+            The layer ids, bottom first, as a new list: the order they were added in, except that a graticule,
+            which is drawn in the reference band beneath the data, is listed before every layer that is not a
+            graticule, whenever it was added. A layer the caller named carries that name as its id; an unnamed one
+            gets a generated id.
 
         Examples:
             - Named and unnamed layers, in the order they were added:
@@ -780,6 +782,13 @@ class WebMapBase:
                 >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").text(2.35, 48.86, "Paris")
                 >>> m.layer_ids
                 ['amsterdam', 'text-3']
+
+                ```
+            - A graticule added last is listed first, because it is drawn beneath the data:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").graticule().layer_ids
+                ['Graticule', 'amsterdam']
 
                 ```
             - A map with no data layers has no ids:
@@ -815,9 +824,11 @@ class WebMapBase:
                 the tree's order stays the order the map draws in. Call this before `add_reference`.
 
         Raises:
-            ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
-                the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
-                whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
+            ValueError: when `LayerSpec` refuses the id (an empty string), the kind or `visible` (anything but a
+                Python or numpy boolean), or when the id is already in the tree. A builder reaches the `visible`
+                refusal when its caller passes a non-boolean `visible=`, such as `0`. It reaches none of the others:
+                its `name=` becomes the id as given, surrounding whitespace included, and `_layer_id` generates an id
+                for an empty name and suffixes a repeated one.
         """
         index = None
         if reference:

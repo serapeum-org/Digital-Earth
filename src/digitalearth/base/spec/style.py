@@ -98,7 +98,8 @@ class Symbology:
         encodings: Channel name -> :class:`~digitalearth.base.spec.encoding.Encoding`. Each entry is stored
             under the channel it drives, so a renderer asks by channel rather than searching.
         props: Static style properties that are not visual channels — a contour level list, a hillshade flag,
-            a legend kwargs dict. Declared, unlike the keyword soup they replace, but not resolved per datum.
+            a legend kwargs dict. Declared, unlike the keyword soup they replace, but not resolved per datum. Every
+            list in a value, however nested, is stored as a tuple.
 
     Raises:
         ValueError: if an encoding is filed under a channel it does not drive. That mismatch would make
@@ -453,10 +454,9 @@ class StyleSchema:
         Returns:
             ``(StyleSchema, (dict(keys),))``.
 
-            The read-only mapping views this type stores cannot be pickled, so
-            `pickle`, `copy.copy` and `copy.deepcopy` raised ``cannot pickle 'mappingproxy' object`` — for this
-            type and for everything holding one, a `LayerTree` and a web map with a layer included. Rebuilding
-            from plain dicts goes through the same validation and freezing as any other construction.
+            `keys` is stored as a read-only mapping view, which cannot be pickled, so `pickle`, `copy.copy` and
+            `copy.deepcopy` raised `cannot pickle 'mappingproxy' object` for every schema. Rebuilding from a plain
+            dict goes through the same freezing as any other construction.
 
         Examples:
             - A copy is equal to the original, and is a separate object:

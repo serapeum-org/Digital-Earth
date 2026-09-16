@@ -358,16 +358,16 @@ class FigureSpec:
         Returns:
             ``(FigureSpec, (panels, dict(sources), layers, size, title, schema_version))``.
 
-            The read-only mapping views this type stores cannot be pickled, so
-            `pickle`, `copy.copy` and `copy.deepcopy` raised ``cannot pickle 'mappingproxy' object`` — for this
-            type and for everything holding one, a `LayerTree` and a web map with a layer included. Rebuilding
-            from plain dicts goes through the same validation and freezing as any other construction.
+            `sources` is stored as a read-only mapping view, which cannot be pickled, so `pickle`, `copy.copy` and
+            `copy.deepcopy` raised `cannot pickle 'mappingproxy' object` for every figure, one with no sources
+            included. Rebuilding from a plain dict goes through the same validation and freezing as any other
+            construction.
 
         Examples:
             - A copy is equal to the original, and is a separate object:
                 ```python
                 >>> import copy
-                >>> from digitalearth.base.spec import FigureSpec
+                >>> from digitalearth.base.spec import FigureSpec, PanelSpec
                 >>> original = FigureSpec(panels=(PanelSpec("p"),))
                 >>> clone = copy.deepcopy(original)
                 >>> clone == original, clone is original
@@ -393,8 +393,8 @@ class FigureSpec:
             `LayerTree`, `PanelSpec` and `Viewport` all hashed.
 
         Raises:
-            TypeError: if a part holds an unhashable value — a list in a layer's `Symbology` properties, say. Only
-                the mappings in the vocabulary are frozen, not what a caller puts in them.
+            TypeError: if a part holds an unhashable value — a dict or a numpy array in a layer's `Symbology`
+                properties, say. A list is not among them: the vocabulary stores lists as tuples.
 
         Examples:
             - Two figures built alike hash alike, so a figure can key a cache:

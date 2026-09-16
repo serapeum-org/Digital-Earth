@@ -111,7 +111,8 @@ class Encoding:
 
     Attributes:
         channel: Which channel this drives — a key of :data:`CHANNELS`.
-        value: The constant, when the channel does not vary with the data.
+        value: The constant, when the channel does not vary with the data. A list in it, however nested, is stored
+            as a tuple, so `[1, 0, 0]` and `(1, 0, 0)` are one constant.
         field: The column or band name the channel varies with. Exactly one of `value` and `field` is set.
         scale: How a field's values map onto the channel. ``None`` passes the values through untouched, which
             is what a renderer wants when it holds its own mapping.

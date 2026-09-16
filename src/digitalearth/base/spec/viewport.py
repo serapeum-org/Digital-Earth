@@ -238,6 +238,14 @@ class Viewport:
                 (3857, [0, 0, 111319, 111325])
 
                 ```
+            - Framing a view that has a named domain replaces the domain with the bounds:
+                ```python
+                >>> from digitalearth.base.spec import Bounds, Viewport
+                >>> framed = Viewport(4326, domain="europe").framed(Bounds(0.0, 0.0, 10.0, 5.0, crs=4326))
+                >>> framed.domain, framed.bounds.as_bbox()
+                (None, [0.0, 0.0, 10.0, 5.0])
+
+                ```
         """
         if not isinstance(bounds, Bounds):
             raise ValueError(
@@ -387,8 +395,9 @@ class Camera:
 
     Raises:
         ValueError: for a vector that is not three finite numbers, a camera placed at its own focal point, a zero or
-            parallel `view_up`, a view angle outside ``(0, 180)``, a non-positive exaggeration or parallel scale,
-            or a non-boolean `parallel`.
+            parallel `view_up`, a view angle, exaggeration or parallel scale that is not a finite number (a boolean
+            included), a view angle outside `(0, 180)`, a non-positive exaggeration or parallel scale, or a
+            non-boolean `parallel`.
 
     Examples:
         - A camera south-west of a scene, 30 degrees up:
@@ -544,6 +553,25 @@ class Camera:
                 (0.0, 0.0, 10.0)
 
                 ```
+            - A parallel view stores how much of the scene it shows:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> plan = Camera.look_at(
+                ...     (0, 0, 0), azimuth=180, elevation=30, distance=10, parallel=True, parallel_scale=50
+                ... )
+                >>> plan.parallel, plan.parallel_scale
+                (True, 50.0)
+
+                ```
+            - An elevation past the vertical is refused rather than turning the camera round:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> Camera.look_at((0, 0, 0), azimuth=0, elevation=120, distance=10)  # doctest: +ELLIPSIS
+                Traceback (most recent call last):
+                    ...
+                ValueError: Camera.look_at needs an elevation between -90 and 90 degrees; got 120.0. ...
+
+                ```
         """
         span = finite_number(_LOOK_AT, "distance", distance)
         if span <= 0.0:
@@ -614,6 +642,13 @@ class Camera:
                 >>> from digitalearth.base.spec import Camera
                 >>> Camera((-5.0, 0.0, 0.0)).azimuth
                 270.0
+
+                ```
+            - A camera a rounding error west of due north reads as due north, not as 360:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> Camera((-1e-15, 5.0, 0.0)).azimuth
+                0.0
 
                 ```
         """

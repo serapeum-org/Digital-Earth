@@ -418,7 +418,8 @@ class Bounds:
 
         Raises:
             ValueError: naming the rectangle and both CRSs, when a corner falls outside the area `crs` can show —
-                the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose.
+                the far side of an orthographic globe, say — so the reprojection gives no finite corner to enclose;
+                or, as pyramids' `CRSError` (a `ValueError` subclass), when `crs` is not a CRS pyramids can read.
 
         Examples:
             - Reprojecting to the CRS it already has is a no-op:
@@ -427,6 +428,15 @@ class Bounds:
                 >>> box = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
                 >>> box.to_crs(4326) is box
                 True
+
+                ```
+            - A rectangle on the far side of an orthographic globe has no corners to enclose:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds(100.0, -10.0, 170.0, 10.0, crs=4326).to_crs("+proj=ortho +lat_0=0 +lon_0=0")
+                Traceback (most recent call last):
+                    ...
+                ValueError: Bounds [100.0, -10.0, 170.0, 10.0] in 4326 cannot be reprojected into ...
 
                 ```
         """

@@ -41,7 +41,8 @@ class ViewRequest:
             both must respect this one.
 
     Raises:
-        ValueError: if a dimension or the budget is not a positive finite number. A zero-width request reads
+        ValueError: if `width`, `height` or `budget` is not a positive whole number (`800.0` is refused), or
+            `pixel_ratio` is not a positive finite number (a boolean is refused). A zero-width request reads
             nothing and a negative one is a computed value that went wrong upstream; both are worth catching
             where they are written rather than inside a reader.
 
@@ -73,7 +74,8 @@ class ViewRequest:
         """Refuse a request that asks for nothing, or for a negative amount of something.
 
         Raises:
-            ValueError: for a non-positive or non-finite dimension, ratio or budget.
+            ValueError: for a dimension or budget that is not a positive whole number, or a ratio that is not a
+                positive finite number.
         """
         for name in ("width", "height", "budget"):
             value = getattr(self, name)

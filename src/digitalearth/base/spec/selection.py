@@ -63,15 +63,17 @@ class Selection:
             because an RGB composite's order is the channel order.
         time: Time step or timestamp, or ``None`` for a dataset with no time axis.
         level: Vertical level, for a 3-D or atmospheric dataset.
-        member: Ensemble member.
+        member: Ensemble member. A list in `time`, `level` or `member`, however nested, is stored as a tuple, so a
+            selection hashes whichever spelling it was given and reads back equal from JSON.
         overview: Overview/LOD level to read, where the source has a pyramid. ``None`` reads full resolution.
         budget: Greatest number of cells or features the reader may return, for a large-data path. ``None``
             means unbounded.
 
     Raises:
-        ValueError: if `band` is empty, or any band index is below 1. Bands are 1-based everywhere in this
-            package's public surface — a 0 is almost always a caller who expected 0-based indexing, and
-            silently reading band 1 instead would draw the wrong data with no error.
+        ValueError: if `band` is empty, a band index is not a whole number (`1.0` and `True` are refused), or any
+            band index is below 1. Bands are 1-based everywhere in this package's public surface — a 0 is almost
+            always a caller who expected 0-based indexing, and silently reading band 1 instead would draw the
+            wrong data with no error.
 
     Examples:
         - A scalar band is normalised to a one-tuple, so one code path serves both:
@@ -96,6 +98,14 @@ class Selection:
             >>> narrowed = stack.with_band(2)
             >>> narrowed.band, narrowed.level, narrowed.member
             ((2,), 850, 4)
+
+            ```
+        - A list and a tuple along a free-form axis make one selection:
+            ```python
+            >>> from digitalearth.base.spec import Selection
+            >>> listed = Selection.of(1, time=[1, 2])
+            >>> listed.time, listed == Selection.of(1, time=(1, 2)), len({listed, Selection.of(1, time=(1, 2))})
+            ((1, 2), True, 1)
 
             ```
     """

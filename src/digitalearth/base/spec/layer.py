@@ -381,8 +381,8 @@ class LayerTree:
 
     Raises:
         ValueError: for an entry that is not a `LayerSpec`, two layers sharing an id, a `z_source` naming a layer
-            that is not in the tree, a chain of `z_source` references that loops back on itself, or a hidden group
-            no layer belongs to.
+            that is not in the tree, a chain of `z_source` references that loops back on itself, `hidden_groups`
+            given as a bare string rather than a collection of names, or a hidden group no layer belongs to.
 
     Examples:
         - Build a tree and address layers by id rather than by position:
@@ -788,6 +788,15 @@ class LayerTree:
                 >>> restyled = tree.replace(LayerSpec("a", "points", symbology=Symbology.of(color="#f00")))
                 >>> restyled.ids, restyled.get("a").symbology.encoding("color").resolve()
                 (('a', 'b'), '#f00')
+
+                ```
+            - Moving the last layer out of a hidden group un-hides the group, as removing it would:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> tree = LayerTree().add(LayerSpec("a", "points", group="obs")).add(LayerSpec("b", "lines"))
+                >>> hidden = tree.set_group_visible("obs", False)
+                >>> hidden.hidden_groups, hidden.replace(LayerSpec("a", "points")).hidden_groups
+                (frozenset({'obs'}), frozenset())
 
                 ```
             - Re-pointing a layer's elevation at a layer the tree lacks is refused:
