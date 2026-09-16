@@ -20,7 +20,8 @@ Two decisions this module settles:
 """
 
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
+from dataclasses import replace as with_fields
 from typing import Any, Dict, FrozenSet, Iterator, List, Mapping, Optional, Tuple
 
 from digitalearth.base.spec._serial import refuse_unknown, require
@@ -538,7 +539,7 @@ class LayerTree:
             )
         else:
             layers.insert(index, layer)
-        return replace(self, layers=tuple(layers))
+        return with_fields(self, layers=tuple(layers))
 
     def remove(self, layer_id: str) -> "LayerTree":
         """Return a tree without the layer with this id.
@@ -609,7 +610,7 @@ class LayerTree:
         position = index % count
         others = [candidate for candidate in self.layers if candidate.id != layer_id]
         others.insert(position, layer)
-        return replace(self, layers=tuple(others))
+        return with_fields(self, layers=tuple(others))
 
     def replace(self, layer: LayerSpec) -> "LayerTree":
         """Return a tree with the layer of the same id swapped for `layer`, in the same position.
@@ -639,7 +640,7 @@ class LayerTree:
                 ```
         """
         self.get(layer.id)
-        return replace(
+        return with_fields(
             self,
             layers=tuple(
                 layer if existing.id == layer.id else existing
@@ -671,7 +672,7 @@ class LayerTree:
 
                 ```
         """
-        return self.replace(replace(self.get(layer_id), visible=visible))
+        return self.replace(with_fields(self.get(layer_id), visible=visible))
 
     def set_group_visible(self, group: str, visible: bool) -> "LayerTree":
         """Return a tree with a whole group switched on or off.
@@ -711,7 +712,7 @@ class LayerTree:
             hidden.discard(group)
         else:
             hidden.add(group)
-        return replace(self, hidden_groups=frozenset(hidden))
+        return with_fields(self, hidden_groups=frozenset(hidden))
 
     # ------------------------------------------------------------------ serialisation
 

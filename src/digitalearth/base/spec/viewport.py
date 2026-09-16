@@ -37,6 +37,9 @@ _PARALLEL_TOLERANCE = 1e-9
 
 Vector3 = Tuple[float, float, float]
 
+#: The owner named in `Camera.look_at`'s validation messages.
+_LOOK_AT = "Camera.look_at"
+
 
 def _vector(owner: str, name: str, value: Any) -> Vector3:
     """Return `value` as three finite floats.
@@ -416,12 +419,12 @@ class Camera:
 
                 ```
         """
-        span = finite_number("Camera.look_at", "distance", distance)
+        span = finite_number(_LOOK_AT, "distance", distance)
         if span <= 0.0:
             raise ValueError(f"Camera.look_at needs a positive distance; got {span}")
-        bearing = radians(finite_number("Camera.look_at", "azimuth", azimuth))
-        tilt = radians(finite_number("Camera.look_at", "elevation", elevation))
-        focal = _vector("Camera.look_at", "focal_point", focal_point)
+        bearing = radians(finite_number(_LOOK_AT, "azimuth", azimuth))
+        tilt = radians(finite_number(_LOOK_AT, "elevation", elevation))
+        focal = _vector(_LOOK_AT, "focal_point", focal_point)
         offset = (
             span * sin(bearing) * cos(tilt),
             span * cos(bearing) * cos(tilt),
@@ -430,7 +433,7 @@ class Camera:
         return cls(
             position=(focal[0] + offset[0], focal[1] + offset[1], focal[2] + offset[2]),
             focal_point=focal,
-            view_up=_vector("Camera.look_at", "view_up", view_up),
+            view_up=_vector(_LOOK_AT, "view_up", view_up),
             view_angle=view_angle,
             parallel=parallel,
             vertical_exaggeration=vertical_exaggeration,

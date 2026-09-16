@@ -80,35 +80,42 @@ _register_classifier(_cleopatra_classify)
 # Each name is imported from its home the first time it is touched and cached in the module globals, so
 # `from digitalearth import Map`, `digitalearth.Map`, `from digitalearth import *` and `dir()` all behave as before;
 # only the moment the import happens moves. The classifier registration above stays eager: it imports no renderer.
+#: Each home module, with the public names imported from it. Grouped by module so each path is written once;
+#: :data:`_LAZY_EXPORTS` is the name -> module index `__getattr__` looks names up in.
+_LAZY_MODULES = {
+    "digitalearth.api": ("quickmap", "quickplot"),
+    "digitalearth.base.sources": ("DimensionInfo", "Source", "get_source"),
+    "digitalearth.ops.batch": ("Batch",),
+    "digitalearth.ops.browser": ("gallery",),
+    "digitalearth.ops.plugins": ("load_plugins",),
+    "digitalearth.static": (
+        "Map",
+        "Scene",
+        "TexturedGlobe",
+        "grid",
+        "projections",
+        "shared_colorbar",
+    ),
+    "digitalearth.static.charts": (
+        "bar",
+        "bar_by",
+        "histogram",
+        "line",
+        "line_by",
+        "scatter",
+        "statistics",
+    ),
+    "digitalearth.static.series": (
+        "boxplot",
+        "envelope",
+        "multiboxplot",
+        "quantile_band",
+        "stripes",
+    ),
+    "digitalearth.static.temporal": ("Climatology", "TimeSeries"),
+}
 _LAZY_EXPORTS = {
-    "quickmap": "digitalearth.api",
-    "quickplot": "digitalearth.api",
-    "DimensionInfo": "digitalearth.base.sources",
-    "Source": "digitalearth.base.sources",
-    "get_source": "digitalearth.base.sources",
-    "Batch": "digitalearth.ops.batch",
-    "gallery": "digitalearth.ops.browser",
-    "load_plugins": "digitalearth.ops.plugins",
-    "Map": "digitalearth.static",
-    "Scene": "digitalearth.static",
-    "TexturedGlobe": "digitalearth.static",
-    "grid": "digitalearth.static",
-    "projections": "digitalearth.static",
-    "shared_colorbar": "digitalearth.static",
-    "bar": "digitalearth.static.charts",
-    "bar_by": "digitalearth.static.charts",
-    "histogram": "digitalearth.static.charts",
-    "line": "digitalearth.static.charts",
-    "line_by": "digitalearth.static.charts",
-    "scatter": "digitalearth.static.charts",
-    "statistics": "digitalearth.static.charts",
-    "boxplot": "digitalearth.static.series",
-    "envelope": "digitalearth.static.series",
-    "multiboxplot": "digitalearth.static.series",
-    "quantile_band": "digitalearth.static.series",
-    "stripes": "digitalearth.static.series",
-    "Climatology": "digitalearth.static.temporal",
-    "TimeSeries": "digitalearth.static.temporal",
+    name: module for module, names in _LAZY_MODULES.items() for name in names
 }
 
 #: Subpackages the eager imports used to leave bound on the package, so `import digitalearth` followed by
