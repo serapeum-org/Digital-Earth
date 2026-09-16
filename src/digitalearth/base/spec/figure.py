@@ -336,6 +336,40 @@ class FigureSpec:
                 f"FigureSpec title must be a string or None; got {self.title!r}"
             )
 
+    def __hash__(self) -> int:
+        """Hash by value, like every other type in the vocabulary.
+
+        Returns:
+            A hash over every field. `sources` is held as a read-only mapping, which has no hash of its own, so it
+            is hashed as its sorted items — without this `hash(figure)` raised ``unhashable type: 'dict'`` while
+            `LayerTree`, `PanelSpec` and `Viewport` all hashed.
+
+        Raises:
+            TypeError: if a part holds an unhashable value — a list in a layer's `Symbology` properties, say. Only
+                the mappings in the vocabulary are frozen, not what a caller puts in them.
+
+        Examples:
+            - Two figures built alike hash alike, so a figure can key a cache:
+                ```python
+                >>> from digitalearth.base.spec import DataRef, FigureSpec, PanelSpec
+                >>> one = FigureSpec(panels=(PanelSpec("p"),), sources={"a": DataRef("a.tif")})
+                >>> two = FigureSpec.from_dict(one.to_dict())
+                >>> hash(one) == hash(two), len({one, two})
+                (True, 1)
+
+                ```
+        """
+        return hash(
+            (
+                self.panels,
+                tuple(sorted(self.sources.items())),
+                self.layers,
+                self.size,
+                self.title,
+                self.schema_version,
+            )
+        )
+
     @staticmethod
     def _checked_panels(panels: Any) -> Tuple[PanelSpec, ...]:
         """Return the panels as a tuple, refusing none, a non-panel, or two panels sharing an id.

@@ -301,6 +301,38 @@ class TestFigureReferences:
         assert [panel.view.crs for panel in figure.panels] == [3857, "EPSG:3413"]
 
 
+class TestHashing:
+    """A figure hashes by value, like the rest of the vocabulary."""
+
+    def test_two_figures_built_by_different_routes_hash_alike(self):
+        """A figure and its round-tripped copy share a hash and collapse in a set.
+
+        Test scenario:
+            `sources` is a read-only mapping with no hash of its own, and the dataclass-generated hash raised
+            `unhashable type: 'dict'` although `LayerTree`, `PanelSpec` and `Viewport` all hash.
+        """
+        figure = _two_panel_figure()
+        copy = FigureSpec.from_dict(json.loads(json.dumps(figure.to_dict())))
+        assert hash(figure) == hash(copy), "equal figures must hash alike"
+        assert len({figure, copy}) == 1, "and a set must hold them once"
+
+    def test_a_different_figure_is_a_different_set_member(self):
+        """Changing a source changes the value, so a set keeps both."""
+        figure = _two_panel_figure()
+        sources = dict(figure.sources)
+        sources["srtm"] = DataRef("data/other.tif")
+        other = FigureSpec(
+            panels=figure.panels,
+            sources=sources,
+            layers=figure.layers,
+            size=figure.size,
+            title=figure.title,
+        )
+        assert len({figure, other}) == 2, (
+            "two different figures must both stay in the set"
+        )
+
+
 class TestTheSchemaVersion:
     """The version is written from the start, and an unknown one is refused by name."""
 
