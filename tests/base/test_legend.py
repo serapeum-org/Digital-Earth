@@ -231,6 +231,26 @@ class TestFromAContinuousScale:
 class TestTheSpecItself:
     """The value, and what it refuses."""
 
+    @pytest.mark.parametrize("name", ["LEGEND_KINDS", "DEFAULT_RAMP_STOPS"])
+    def test_the_module_constants_are_exported_beside_the_type(self, name):
+        """The legend's constants are reachable from `digitalearth.base.spec`, as `Scale`'s and `Selection`'s are.
+
+        Args:
+            name: The constant under test.
+
+        Test scenario:
+            `DEFAULT_CLASS_COUNT` and `DEFAULT_BAND` are both in `spec.__all__`. `LEGEND_KINDS` was moved to
+            module scope to sit beside `DEFAULT_RAMP_STOPS` "where `Scale` and `Selection` keep theirs", but
+            the export half of that convention was not followed, so neither could be imported from `spec`.
+        """
+        import digitalearth.base.spec as spec
+        from digitalearth.base.spec import legend
+
+        assert name in spec.__all__, f"{name} must be listed in digitalearth.base.spec.__all__"
+        assert getattr(spec, name) is getattr(legend, name), (
+            f"spec.{name} must be the legend module's own object, not a copy"
+        )
+
     def test_an_unknown_kind_is_refused(self):
         """`kind` selects a drawing path in every tier.
 

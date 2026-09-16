@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from digitalearth.base.spec.scale import Scale
 
-__all__ = ["LegendEntry", "LegendSpec"]
+__all__ = ["DEFAULT_RAMP_STOPS", "LEGEND_KINDS", "LegendEntry", "LegendSpec"]
 
 #: The legend kinds every tier can draw. A module constant, not a dataclass field: declared as a field it
 #: became the 7th constructor parameter, so a caller could hand the type its own allow-list and defeat the
