@@ -2,6 +2,7 @@
 # `importlib_metadata` backport this used to fall back to can never be reached: read the version straight
 # from the installed distribution's metadata.
 from importlib.metadata import PackageNotFoundError, version
+from typing import TYPE_CHECKING, Any
 
 try:
     __version__ = version(__name__)
@@ -125,6 +126,47 @@ _LAZY_EXPORTS = {
 #: the `3d` extra, because `hasattr` only swallows `AttributeError`.
 _LAZY_SUBPACKAGES = ("api", "base", "ops", "static")
 
+# A type checker does not run `__getattr__` — it reads imports. Without these, mypy and IDEs saw every public name
+# as the `Any` an attribute hook returns: no completion, no go-to-definition, and `quickmap(backend=5)` passed. They
+# are the same names `_LAZY_MODULES` resolves at runtime, where `TYPE_CHECKING` is False and none of this runs, so
+# importing the package still imports no renderer. A test holds the two lists to one another.
+if TYPE_CHECKING:
+    # The redundant aliases mark these as re-exports: they are not in `__all__`, which star-import reads.
+    from digitalearth import api as api
+    from digitalearth import base as base
+    from digitalearth import ops as ops
+    from digitalearth import static as static
+    from digitalearth.api import quickmap, quickplot
+    from digitalearth.base.sources import DimensionInfo, Source, get_source
+    from digitalearth.ops.batch import Batch
+    from digitalearth.ops.browser import gallery
+    from digitalearth.ops.plugins import load_plugins
+    from digitalearth.static import (
+        Map,
+        Scene,
+        TexturedGlobe,
+        grid,
+        projections,
+        shared_colorbar,
+    )
+    from digitalearth.static.charts import (
+        bar,
+        bar_by,
+        histogram,
+        line,
+        line_by,
+        scatter,
+        statistics,
+    )
+    from digitalearth.static.series import (
+        boxplot,
+        envelope,
+        multiboxplot,
+        quantile_band,
+        stripes,
+    )
+    from digitalearth.static.temporal import Climatology, TimeSeries
+
 __all__ = [
     # one-call API + composition
     "quickplot",
@@ -198,7 +240,7 @@ _MOVED_SUBMODULES = {
 _REMOVED_GEOSTATISTICS = ("geostatistics", "hotspot_map", "kriging_map", "lisa_map")
 
 
-def __getattr__(name: str):
+def __getattr__(name: str) -> Any:
     """Resolve an attribute the package does not bind yet.
 
     That is a public name, a subpackage, a moved submodule, or a removed geostatistics name. A public name from

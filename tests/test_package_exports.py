@@ -1,5 +1,6 @@
 """Tests for the top-level digitalearth public surface (PC-4)."""
 
+import ast
 import importlib
 import importlib.metadata
 import importlib.util
@@ -113,6 +114,53 @@ class TestPackageExports:
         assert resolved is expected, f"digitalearth.{name} is not {home}.{name}"
         assert vars(digitalearth).get(name) is expected, (
             f"digitalearth.{name} was not cached after its first resolution"
+        )
+
+    def test_a_type_checker_sees_every_lazy_name_imported_from_its_home(self):
+        """The root's `if TYPE_CHECKING:` block imports each lazy name, and each subpackage, from where it lives.
+
+        Test scenario:
+            A type checker does not run `__getattr__`; it reads the imports. Resolving the public names lazily
+            left mypy and IDEs nothing but an unannotated `__getattr__`, so `from digitalearth import Map` was
+            `Any` and `quickmap(backend=5)` passed mypy. The block this reads is what gives them the real
+            objects back, and it has to name exactly what `_LAZY_EXPORTS` and `_LAZY_SUBPACKAGES` resolve at
+            runtime — a name missing here is `Any` again, and one imported from the wrong module is a type the
+            caller never gets.
+        """
+        tree = ast.parse(
+            pathlib.Path(digitalearth.__file__).read_text(encoding="utf-8")
+        )
+        blocks = [
+            node
+            for node in tree.body
+            if isinstance(node, ast.If)
+            and isinstance(node.test, ast.Name)
+            and node.test.id == "TYPE_CHECKING"
+        ]
+        assert len(blocks) == 1, (
+            f"expected one top-level `if TYPE_CHECKING:` block, found {len(blocks)}"
+        )
+        imported = {
+            alias.asname or alias.name: node.module
+            for node in blocks[0].body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        subpackages = {
+            name for name, module in imported.items() if module == "digitalearth"
+        }
+        names = {
+            name: module
+            for name, module in imported.items()
+            if module != "digitalearth"
+        }
+        drift = sorted(set(names.items()) ^ set(digitalearth._LAZY_EXPORTS.items()))
+        assert not drift, (
+            f"the TYPE_CHECKING imports differ from _LAZY_EXPORTS by {drift}"
+        )
+        missing = sorted(subpackages ^ set(digitalearth._LAZY_SUBPACKAGES))
+        assert not missing, (
+            f"the TYPE_CHECKING subpackage imports differ from _LAZY_SUBPACKAGES by {missing}"
         )
 
 
