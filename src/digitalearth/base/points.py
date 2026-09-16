@@ -146,7 +146,9 @@ class PointArrays:
             A row whose geometry is **missing** reads as `NaN`, whatever `centroids` says. A `null` geometry
             is ordinary in GeoJSON, and it is absent data rather than data of the wrong shape — so it is for
             :meth:`finite` to drop, which is what every caller does with it. Only a geometry that is
-            genuinely present and not a point is subject to the `centroids` decision.
+            genuinely present is subject to the `centroids` decision, and only present geometry decides
+            whether the frame is 3-D: a null among 3-D points keeps the others' heights, and its own `z` is
+            `NaN` like its `x` and `y`.
 
         Raises:
             TypeError: if `features` exposes no geometry to read.
@@ -189,7 +191,13 @@ class PointArrays:
                     "Pass centroids=True to use each geometry's centre point"
                 )
             geom = geom.centroid
-        has_z = bool(getattr(geom, "has_z", None) is not None and geom.has_z.all())
+        # Judged on present geometry too, for the reason the type check is: a null's `has_z` is False, so
+        # one missing row made a 3-D frame read as flat and zeroed the heights of every point in it.
+        has_z = bool(
+            getattr(geom, "has_z", None) is not None
+            and present.any()
+            and geom.has_z[present].all()
+        )
         return cls.of(
             geom.x.to_numpy(),
             geom.y.to_numpy(),

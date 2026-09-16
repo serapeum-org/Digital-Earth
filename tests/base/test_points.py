@@ -135,6 +135,34 @@ class TestFromFeatures:
         kept, _ = points.finite()
         assert len(kept) == 2, "leaving `finite` to drop it, as every caller does"
 
+    def test_a_missing_geometry_does_not_flatten_the_three_dimensional_points_beside_it(self):
+        """One null among 3-D points keeps every other point's height.
+
+        Test scenario:
+            The null fix narrowed the point-type check to present geometry but left `has_z` judged across
+            every row. A null's `has_z` is False, so `[Point(0, 0, 5), None, Point(2, 2, 7)]` read as flat and
+            came back with `z == [0, 0, 0]` — a 3-D point cloud silently drawn on the ground. Found by the
+            round-2 coverage pass, which is why it gets its own test rather than a line in the null test.
+        """
+        gdf = gpd.GeoDataFrame(
+            geometry=[Point(0, 0, 5), None, Point(2, 2, 7)], crs="EPSG:3857"
+        )
+        z = PointArrays.from_features(gdf, centroids=False).z
+        assert z[0] == 5.0, f"the first point keeps its height, got {z.tolist()}"
+        assert z[2] == 7.0, f"and so does the last, got {z.tolist()}"
+        assert np.isnan(z[1]), f"while the missing row's height is missing too, got {z.tolist()}"
+
+    def test_a_frame_of_only_missing_geometry_reads_as_flat(self):
+        """With no present geometry there is nothing to call 3-D, so `z` stays zeros.
+
+        Test scenario:
+            `.all()` over an empty selection is True; without the `present.any()` guard an all-null frame
+            would be declared 3-D and read `z` as NaN rather than the zeros every 2-D reading gets.
+        """
+        gdf = gpd.GeoDataFrame(geometry=[None, None], crs="EPSG:3857")
+        z = PointArrays.from_features(gdf, centroids=False).z
+        assert z.tolist() == [0.0, 0.0], f"an all-null frame reads as flat, got {z.tolist()}"
+
     def test_a_real_non_point_geometry_is_still_refused_when_centroids_is_off(self):
         """Relaxing the null case does not relax the case the guard is for.
 
