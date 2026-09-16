@@ -16,11 +16,16 @@ layers it shows. Two decisions:
 """
 
 from dataclasses import dataclass, field
-from math import isfinite
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple, Union
 
-from digitalearth.base.spec._serial import as_list, as_mapping, refuse_unknown, require
+from digitalearth.base.spec._serial import (
+    as_list,
+    as_mapping,
+    positive_number,
+    refuse_unknown,
+    require,
+)
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.spec.viewport import Camera, Viewport
@@ -488,19 +493,15 @@ class FigureSpec:
             return None
         if isinstance(size, (str, bytes)) or not hasattr(size, "__iter__"):
             raise ValueError(f"FigureSpec size must be (width, height); got {size!r}")
-        dimensions = list(size)
-        valid = len(dimensions) == 2 and all(
-            not isinstance(value, bool)
-            and isinstance(value, (int, float))
-            and isfinite(value)
-            and value > 0
-            for value in dimensions
+        # Numpy numbers count, as they do for every other number in the vocabulary: a size is often computed.
+        dimensions = [positive_number(value) for value in size]
+        if len(dimensions) == 2:
+            width, height = dimensions
+            if width is not None and height is not None:
+                return width, height
+        raise ValueError(
+            f"FigureSpec size must be two positive finite numbers; got {size!r}"
         )
-        if not valid:
-            raise ValueError(
-                f"FigureSpec size must be two positive finite numbers; got {size!r}"
-            )
-        return float(dimensions[0]), float(dimensions[1])
 
     @staticmethod
     def _check_sources(layer: LayerSpec, sources: Mapping[str, DataRef]) -> None:

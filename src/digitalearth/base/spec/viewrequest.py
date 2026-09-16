@@ -16,10 +16,11 @@ decides *which* request a given output wants, stays there.
 """
 
 from dataclasses import dataclass
-from math import isfinite, sqrt
+from math import sqrt
 from numbers import Integral
 from typing import Any, Optional, Tuple
 
+from digitalearth.base.spec._serial import positive_number
 from digitalearth.base.spec.bounds import Bounds
 
 __all__ = ["ViewRequest"]
@@ -89,10 +90,14 @@ class ViewRequest:
             if value <= 0:
                 raise ValueError(f"ViewRequest {name} must be positive; got {value}")
             object.__setattr__(self, name, int(value))
-        if not isfinite(self.pixel_ratio) or self.pixel_ratio <= 0:
+        # Stored as a Python float, as `RenderTarget` stores it: a numpy ratio was accepted and kept as numpy,
+        # and a boolean was accepted as a ratio of one.
+        ratio = positive_number(self.pixel_ratio)
+        if ratio is None:
             raise ValueError(
                 f"ViewRequest pixel_ratio must be a positive number; got {self.pixel_ratio!r}"
             )
+        object.__setattr__(self, "pixel_ratio", ratio)
 
     @property
     def pixels(self) -> Optional[int]:

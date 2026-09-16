@@ -13,7 +13,8 @@ than being re-spelled — slightly differently — on each type. Three rules:
 """
 
 from math import isfinite
-from typing import Any, Dict, Iterable, Mapping, Tuple
+from numbers import Real
+from typing import Any, Dict, Iterable, Mapping, Optional, Tuple
 
 import numpy as np
 
@@ -23,9 +24,11 @@ __all__ = [
     "as_mapping",
     "crs_to_json",
     "finite_number",
+    "positive_number",
     "refuse_unknown",
     "require",
     "to_json_value",
+    "true_or_false",
 ]
 
 
@@ -167,6 +170,61 @@ def finite_number(owner: str, name: str, value: Any) -> float:
     if not isfinite(number):
         raise ValueError(f"{owner} needs a finite {name}; got {value!r}")
     return number
+
+
+def true_or_false(value: Any) -> Optional[bool]:
+    """Return `value` as a Python bool when it is a boolean, numpy's `bool_` included, and ``None`` otherwise.
+
+    Args:
+        value: A flag a caller passed.
+
+    Returns:
+        ``True`` or ``False`` for a Python or a numpy boolean, and ``None`` for anything else, which the caller
+        refuses in its own words. A numpy boolean is what a comparison on an array gives back, so a flag computed
+        with numpy has to be accepted wherever the same flag typed in is. It comes back as Python's, because
+        `json.dumps` cannot write numpy's.
+
+    Examples:
+        - Both kinds of boolean come back as Python's; a truthy number is not a boolean:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import true_or_false
+            >>> true_or_false(np.bool_(True)), true_or_false(False), true_or_false(1)
+            (True, False, None)
+
+            ```
+    """
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    return None
+
+
+def positive_number(value: Any) -> Optional[float]:
+    """Return `value` as a float when it is a positive finite real number, numpy's included, and ``None`` otherwise.
+
+    Args:
+        value: A size or a ratio a caller passed.
+
+    Returns:
+        The value as a Python float, or ``None`` — for a boolean, a string, anything that is not a real number,
+        zero, a negative or a non-finite one — which the caller refuses in its own words.
+
+    Examples:
+        - A numpy integer or float is accepted and converted; a boolean and a zero are not:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import positive_number
+            >>> positive_number(np.int64(8)), positive_number(np.float32(2.5))
+            (8.0, 2.5)
+            >>> positive_number(True), positive_number(0), positive_number("2")
+            (None, None, None)
+
+            ```
+    """
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        return None
+    number = float(value)
+    return number if isfinite(number) and number > 0 else None
 
 
 def to_json_value(value: Any, where: str) -> Any:

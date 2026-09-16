@@ -12,12 +12,11 @@ the budget from the target.
 """
 
 from dataclasses import dataclass
-from math import isfinite
 from numbers import Integral
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Union
 
-from digitalearth.base.spec._serial import refuse_unknown
+from digitalearth.base.spec._serial import positive_number, refuse_unknown
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.viewport import Camera, Viewport
 from digitalearth.base.spec.viewrequest import ViewRequest
@@ -117,16 +116,12 @@ class RenderTarget:
             )
         for name in ("width", "height", "budget"):
             object.__setattr__(self, name, _positive_whole(name, getattr(self, name)))
-        if (
-            isinstance(self.pixel_ratio, bool)
-            or not isinstance(self.pixel_ratio, (int, float))
-            or not isfinite(self.pixel_ratio)
-            or self.pixel_ratio <= 0
-        ):
+        ratio = positive_number(self.pixel_ratio)
+        if ratio is None:
             raise ValueError(
                 f"RenderTarget pixel_ratio must be a positive number; got {self.pixel_ratio!r}"
             )
-        object.__setattr__(self, "pixel_ratio", float(self.pixel_ratio))
+        object.__setattr__(self, "pixel_ratio", ratio)
 
     @property
     def effective_budget(self) -> int:

@@ -36,7 +36,12 @@ from typing import (
     cast,
 )
 
-from digitalearth.base.spec._serial import as_list, refuse_unknown, require
+from digitalearth.base.spec._serial import (
+    as_list,
+    refuse_unknown,
+    require,
+    true_or_false,
+)
 from digitalearth.base.spec.selection import Selection
 from digitalearth.base.spec.style import Symbology
 
@@ -160,12 +165,14 @@ class LayerSpec:
             raise ValueError(
                 f"LayerSpec symbology must be a Symbology; got {type(self.symbology).__name__}"
             )
-        if not isinstance(self.visible, bool):
+        visible = true_or_false(self.visible)
+        if visible is None:
             # "False" or 0 would read as a caller's intent in some places and not others; only a real boolean
-            # says what it means.
+            # says what it means — Python's or numpy's, which is what a comparison on an array gives back.
             raise ValueError(
                 f"LayerSpec visible must be True or False; got {self.visible!r}"
             )
+        object.__setattr__(self, "visible", visible)
         for name in ("source_id", "z_source", "label", "group", "filter"):
             _optional_text("LayerSpec", name, getattr(self, name))
         if self.z_source is not None and self.z_source.startswith(LAYER_REFERENCE):
@@ -827,12 +834,13 @@ class LayerTree:
             raise KeyError(
                 f"no layer belongs to group {group!r}; groups are {list(self.groups)}"
             )
-        if not isinstance(visible, bool):
+        shown = true_or_false(visible)
+        if shown is None:
             raise ValueError(
                 f"set_group_visible needs visible as True or False; got {visible!r}"
             )
         hidden = set(self.hidden_groups)
-        if visible:
+        if shown:
             hidden.discard(group)
         else:
             hidden.add(group)

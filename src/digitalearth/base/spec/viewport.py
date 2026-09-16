@@ -24,6 +24,7 @@ from digitalearth.base.spec._serial import (
     finite_number,
     refuse_unknown,
     require,
+    true_or_false,
 )
 from digitalearth.base.spec.bounds import Bounds, same_crs
 
@@ -144,10 +145,12 @@ class Viewport:
                 f"Viewport takes bounds or a domain, not both; got bounds {self.bounds.as_bbox()} and domain "
                 f"{self.domain!r}. Use Viewport.framed(bounds) to frame a view that has a domain"
             )
-        if not isinstance(self.globe, bool):
+        globe = true_or_false(self.globe)
+        if globe is None:
             raise ValueError(
                 f"Viewport globe must be True or False; got {self.globe!r}"
             )
+        object.__setattr__(self, "globe", globe)
 
     def _check_bounds(self) -> None:
         """Refuse bounds that are not a `Bounds`, or that are in a different CRS from the view.
@@ -475,10 +478,12 @@ class Camera:
                 f"Camera vertical_exaggeration must be positive; got {factor}"
             )
         object.__setattr__(self, "vertical_exaggeration", factor)
-        if not isinstance(self.parallel, bool):
+        parallel = true_or_false(self.parallel)
+        if parallel is None:
             raise ValueError(
                 f"Camera parallel must be True or False; got {self.parallel!r}"
             )
+        object.__setattr__(self, "parallel", parallel)
         if self.parallel_scale is not None:
             scale = finite_number("Camera", "parallel_scale", self.parallel_scale)
             if scale <= 0.0:

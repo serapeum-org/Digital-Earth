@@ -23,11 +23,14 @@ from digitalearth.base.spec import (
     LayerSpec,
     LayerTree,
     PanelSpec,
+    RenderTarget,
     Scale,
     Selection,
     StyleKey,
     StyleSchema,
     Symbology,
+    Viewport,
+    ViewRequest,
 )
 from digitalearth.base.spec._serial import crs_to_json, finite_number, to_json_value
 
@@ -560,6 +563,90 @@ class TestWhatWritingRefuses:
         """A JSON object's keys are strings, so an int key is refused rather than stringified."""
         with pytest.raises(TypeError, match="non-string key 1"):
             to_json_value({1: "a"}, "props")
+
+
+class TestNumpyInputs:
+    """A value computed with numpy is accepted wherever its Python form is, and stored as the Python form."""
+
+    @pytest.mark.parametrize(
+        "build, read, stored",
+        [
+            (
+                lambda: FigureSpec(
+                    panels=(PanelSpec("p"),), size=(np.int64(8), np.float32(4.5))
+                ),
+                lambda spec: spec.size,
+                (8.0, 4.5),
+            ),
+            (
+                lambda: RenderTarget("image", pixel_ratio=np.float32(2.0)),
+                lambda target: target.pixel_ratio,
+                2.0,
+            ),
+            (
+                lambda: ViewRequest(pixel_ratio=np.float32(2.0)),
+                lambda request: request.pixel_ratio,
+                2.0,
+            ),
+            (
+                lambda: Camera((0.0, -10.0, 5.0), parallel=np.bool_(True)),
+                lambda camera: camera.parallel,
+                True,
+            ),
+            (
+                lambda: Viewport(4326, globe=np.bool_(True)),
+                lambda view: view.globe,
+                True,
+            ),
+            (
+                lambda: LayerSpec("a", "points", visible=np.bool_(False)),
+                lambda layer: layer.visible,
+                False,
+            ),
+            (
+                lambda: LayerTree((LayerSpec("a", "points"),)).set_visible(
+                    "a", np.bool_(False)
+                ),
+                lambda tree: tree.get("a").visible,
+                False,
+            ),
+            (
+                lambda: LayerTree(
+                    (LayerSpec("a", "points", group="g"),)
+                ).set_group_visible("g", np.bool_(False)),
+                lambda tree: tuple(tree.hidden_groups),
+                ("g",),
+            ),
+        ],
+        ids=[
+            "figure-size",
+            "target-pixel-ratio",
+            "request-pixel-ratio",
+            "camera-parallel",
+            "viewport-globe",
+            "layer-visible",
+            "tree-set-visible",
+            "tree-set-group-visible",
+        ],
+    )
+    def test_a_numpy_value_is_accepted_and_stored_as_the_python_one(
+        self, build, read, stored
+    ):
+        """Sizes, ratios and flags computed with numpy build, and hold plain Python values afterwards.
+
+        Args:
+            build: Builds a value from numpy inputs.
+            read: Reads the field back.
+            stored: The field as it must be held — Python floats and booleans.
+
+        Test scenario:
+            `finite_number` accepted numpy numbers for bounds, scales and cameras, but `FigureSpec.size` and
+            `RenderTarget.pixel_ratio` refused `np.int64`/`np.float32`, and every boolean field refused `np.bool_`
+            — one vocabulary disagreeing with itself. `ViewRequest` accepted a numpy ratio but kept it as numpy.
+            The repr comparison checks the type as well as the value: a stored `np.True_` or `np.float32` would not
+            survive `json.dumps`.
+        """
+        assert repr(read(build())) == repr(stored)
 
 
 class TestTheSharedRules:
