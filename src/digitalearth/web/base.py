@@ -930,6 +930,12 @@ class WebMapBase:
 
         Returns:
             ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+
+        Note:
+            This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
+            and tests call it. :meth:`_to_display_source` calls the shared function **directly**, so overriding
+            this method no longer changes what *that* method reprojects; the tier's other callers still consult
+            it. Nothing in-tree overrides it.
         """
         return needs_reproject(data, self.crs)
 

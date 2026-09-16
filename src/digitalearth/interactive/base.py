@@ -327,8 +327,10 @@ class InteractiveMapBase:
 
         Note:
             This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
-            and tests call it. :meth:`_to_display_source` now calls the shared function **directly**, so
-            overriding this method no longer changes what gets reprojected. Nothing in-tree overrides it.
+            and tests call it. :meth:`_to_display_source` calls the shared function **directly**, so overriding
+            this method no longer changes what *that* method reprojects. The tier's other callers — `rgb`,
+            `large_image`, `_display_gdf` and `tap_profile` — still consult it, so an override now applies to
+            them and not to `_to_display_source`. Nothing in-tree overrides it.
         """
         return needs_reproject(data, self.crs)
 
