@@ -347,12 +347,12 @@ class SourceView(Source):
             selection: Which slice to read. Defaults to the default band. Only its band and its `budget`
                 are honoured; the axes it may not name are listed under Raises.
             request: The region/resolution/budget wanted. Applied through pyramids' windowed read when the
-                object exposes one (`read_part`) and the request names a region or a budget — a budget with
-                no region windows against the source's own `bbox`. A request naming only a canvas size, or
-                one given for an object that cannot window, is recorded but not enforced: a reader that
-                cannot window is not a reason to refuse the read. A `budget` on `selection` is folded in
-                first, the smaller of the two winning — see :meth:`_budgeted` — and the view records the
-                request as it stands after that.
+                object exposes one (`read_part`) and the request names a region, a budget, or a full canvas
+                (both `width` and `height`) — a size with no region windows against the source's own `bbox`.
+                A request naming none of those, or one given for an object that cannot window, is recorded
+                but not enforced: a reader that cannot window is not a reason to refuse the read. A `budget`
+                on `selection` is folded in first, the smaller of the two winning — see :meth:`_budgeted` —
+                and the view records the request as it stands after that.
             crs: The CRS to record for the coordinates, passed through to the extractor. A windowed read
                 records the window's CRS instead, when the window has one.
 
@@ -580,8 +580,8 @@ class SourceView(Source):
         Returns:
             A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s: when
             there is no request, the object has no `read_part`, or the request names no region and either
-            has no budget (a canvas size alone) or meets an object with no `bbox` to window the budget
-            against.
+            names no usable size (no budget, and not both of width and height) or meets an object with no
+            `bbox` to window the size against.
 
             Windowed, the window is first grown to whole source pixels by :meth:`_aligned`, and the result is
             the **array** ``read_part`` returns for it plus the coordinates of its cell centres and the CRS
@@ -599,10 +599,14 @@ class SourceView(Source):
             return nothing
         bbox = request.as_bbox()
         if bbox is None:
-            # A budget with no region still has to be honoured: the object *can* window, so skipping here
-            # returned the whole raster and blew the budget silently. The source's own bbox is the region.
+            # A size with no region still has to be honoured: the object *can* window, so skipping here
+            # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
+            # canvas all 13x14 cells. The source's own bbox is the region.
             source_bbox = getattr(data, "bbox", None)
-            if source_bbox is None or request.budget is None:
+            # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
+            # one read a 64x64 floor square that honoured nothing the caller named.
+            canvas = request.width is not None and request.height is not None
+            if source_bbox is None or (request.budget is None and not canvas):
                 return nothing
             window = Bounds.from_bbox(
                 list(source_bbox), crs=getattr(data, "epsg", None)

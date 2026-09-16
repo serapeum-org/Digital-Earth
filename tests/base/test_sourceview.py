@@ -904,6 +904,36 @@ class TestTheRemainingWindowArms:
         )
         assert again is not view, "a re-read is a new view"
 
+    def test_a_canvas_with_no_region_windows_the_whole_source_at_that_size(self):
+        """`ViewRequest(width=4, height=3)` reads a 3x4 array, not the source's own 13x14 cells.
+
+        Test scenario:
+            A budget with no region already windowed against the source's extent, because the object can
+            window and skipping blew the budget. A full canvas with no region was recorded and ignored, so
+            the caller who asked for 4x3 got every cell — the same gap on the other sizing field.
+        """
+        ref = DataRef(str(RASTER))
+        view = SourceView.of(
+            ref.open(), ref=ref, request=ViewRequest(width=4, height=3)
+        )
+        assert view.z.values.shape == (3, 4), (
+            f"the canvas must size the read, got {view.z.values.shape}"
+        )
+
+    def test_half_a_canvas_with_no_region_is_recorded_but_not_applied(self):
+        """A lone `width` cannot size a read, so the source is read whole rather than as a 64x64 floor square.
+
+        Test scenario:
+            `_shape` cannot use one dimension without the other and falls back to `side()`'s readability
+            floor. Windowing on it produced a 64x64 upsample of a 13x14 raster, honouring nothing named.
+        """
+        ref = DataRef(str(RASTER))
+        full = SourceView.of(ref.open(), ref=ref)
+        view = SourceView.of(ref.open(), ref=ref, request=ViewRequest(width=5))
+        assert view.z.values.shape == full.z.values.shape, (
+            f"half a canvas must leave the read whole, got {view.z.values.shape}"
+        )
+
     def test_a_budget_only_request_against_an_object_with_no_budget_declines(self):
         """Both halves of the guard are needed: a bbox *and* a budget.
 
