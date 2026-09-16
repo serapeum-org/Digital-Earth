@@ -795,6 +795,46 @@ class TestNumpyInputs:
         assert repr(read(build())) == repr(stored)
 
 
+class TestNumpyArrayValues:
+    """A numpy array held as a free-form value writes, compares and hashes as the list of its elements would."""
+
+    @pytest.mark.parametrize(
+        "build",
+        [
+            lambda: LayerSpec(
+                "dem", "raster", selection=Selection.of(1, time=np.array([1, 2]))
+            ),
+            lambda: LayerSpec(
+                "dem",
+                "raster",
+                symbology=Symbology().with_props(
+                    levels=np.array([[0.0, 1.0], [2.0, 3.0]])
+                ),
+            ),
+            lambda: Encoding.constant("color", np.array([1.0, 0.0, 0.0])),
+        ],
+        ids=["selection-time", "symbology-2d-levels", "encoding-constant"],
+    )
+    def test_an_array_value_round_trips_equal_and_hashes_alike(self, build):
+        """A spec holding an array writes, reads back equal, and hashes as its round trip does.
+
+        Args:
+            build: Builds a spec with an array in a free-form value.
+
+        Test scenario:
+            `frozen_value` kept an array as given and `to_json_value` wrote it as a list, so the writer took a value
+            the comparison beside it could not: `LayerSpec.to_dict` compares its selection with the default and
+            raised "The truth value of an array with more than one element is ambiguous", as did `==` on the spec,
+            and the spec did not hash.
+        """
+        value = build()
+        rebuilt = _through_json(value)
+        assert rebuilt == value, rebuilt
+        assert hash(rebuilt) == hash(value), (
+            "an array value must hash as its round trip does"
+        )
+
+
 class TestNumpyStrings:
     """A string computed with numpy — `np.unique` over a column gives `numpy.str_` — is written as a Python string."""
 

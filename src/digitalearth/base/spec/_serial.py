@@ -379,7 +379,9 @@ def frozen_value(value: Any) -> Any:
 
     Returns:
         The value with sequences as tuples and the values inside a dict frozen the same way (the dict itself is a
-        fresh dict). Anything else — a scalar, a string, a numpy array — is returned as it is.
+        fresh dict). A numpy array becomes nested tuples of its elements, and a 0-d array its one element: an array
+        compares element-wise, so a spec holding one could neither be compared nor hashed. Anything else — a
+        scalar, a string — is returned as it is.
 
         This is the canonical form the constructors store. JSON has no tuple, so a tuple written by `to_dict`
         reads back as a list; storing both spellings as a tuple is what makes ``from_dict(to_dict(x)) == x`` and
@@ -394,9 +396,24 @@ def frozen_value(value: Any) -> Any:
             ((1, (2, 3)), {'levels': (1, 2)})
 
             ```
+        - An array becomes tuples of its elements, which compare equal to the lists a round trip reads:
+            ```python
+            >>> import numpy as np
+            >>> from digitalearth.base.spec._serial import frozen_value
+            >>> frozen_value(np.array([[1, 2], [3, 4]])) == ((1, 2), (3, 4))
+            True
+
+            ```
     """
     if isinstance(value, (list, tuple)):
         return tuple(frozen_value(item) for item in value)
+    if isinstance(value, np.ndarray):
+        # The elements stay numpy scalars, so a time array is still refused by type when it is written.
+        return (
+            value[()]
+            if value.ndim == 0
+            else tuple(frozen_value(item) for item in value)
+        )
     if isinstance(value, dict):
         return {key: frozen_value(item) for key, item in value.items()}
     return value

@@ -8,7 +8,8 @@ matplotlib, pyvista, holoviews or maplibre; :mod:`tests.test_base_is_engine_neut
 every mapping to a read-only view, and the free-form values (`Selection.time`, `Encoding.value`, a `Symbology`
 property, a `Scale` category) store their lists as tuples, however nested. So `Selection.of(1, time=[1, 2])` and
 `Selection.of(1, time=(1, 2))` are one value that hashes, and a round trip through JSON — which has no tuple —
-reads back equal. A dict or a numpy array held as such a value is kept as given, and does not hash.
+reads back equal. A numpy array held as such a value is stored the same way, as nested tuples of its elements.
+A dict is copied with its values frozen, and does not hash.
 
 The point of a shared vocabulary is that a value crosses a tier boundary without a convention having to travel
 beside it in a docstring. A bare ``[float, float, float, float]`` cannot say whether it is

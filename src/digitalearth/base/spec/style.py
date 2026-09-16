@@ -195,7 +195,7 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if any value in it is itself unhashable — a dict or a numpy array held as a property,
+            TypeError: if any value in it is itself unhashable — a dict held as a property,
                 say. A list is not among them: lists are stored as tuples, so ``Symbology.of(color=[1, 0, 0])``
                 hashes.
         """
