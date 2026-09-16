@@ -255,7 +255,8 @@ class PointArrays:
             dims: Which coordinates have to be finite. The default ``"xy"`` is deliberate: most consumers are
                 2-D, and a point with a perfectly good position but an unknown *elevation* is still a point
                 they can draw. Folding `z` in by default silently changed the topology of a 2-D Delaunay
-                tessellation. Pass ``"xyz"`` where a missing z really does make the point unusable.
+                tessellation. Pass ``"xyz"`` where a missing z really does make the point unusable. Each
+                axis may appear once, and at least one must.
 
         Returns:
             A ``(points, aligned)`` pair: the surviving points, and the filtered arrays in the order given.
@@ -284,6 +285,12 @@ class PointArrays:
         if unknown:
             raise ValueError(
                 f"finite() takes dims made of 'x', 'y' and 'z'; got {dims!r}, which names {unknown}"
+            )
+        # Checking only for unknown letters let two typos through: "" masks on nothing, so every point
+        # survives and the call reads as working; a repeated letter is a sign the caller meant another axis.
+        if not dims or len(set(dims)) != len(dims):
+            raise ValueError(
+                f"finite() needs each of 'x', 'y' and 'z' named at most once, and at least one; got {dims!r}"
             )
         mask = np.ones(len(self.x), dtype=bool)
         for name in dims:

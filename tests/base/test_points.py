@@ -270,6 +270,21 @@ class TestFiniteFiltering:
         with pytest.raises(ValueError, match="names"):
             PointArrays.of([0.0], [1.0]).finite(dims="xu")
 
+    @pytest.mark.parametrize("dims", ["", "xx", "yxy"])
+    def test_an_empty_or_repeating_dims_string_is_refused(self, dims):
+        """`dims=""` filters nothing and `dims="xx"` names an axis twice; both are typos, not requests.
+
+        Args:
+            dims: The malformed axis string under test.
+
+        Test scenario:
+            The guard refused only letters outside x/y/z. An empty string produced an all-True mask, so every
+            point survived — the silently-working typo the guard exists to stop — and a repeated letter
+            passed where the caller almost certainly meant a different axis.
+        """
+        with pytest.raises(ValueError, match="at most once, and at least one"):
+            PointArrays.of([0.0, float("nan")], [1.0, 2.0]).finite(dims=dims)
+
     def test_two_equal_readings_compare_equal(self):
         """Comparison works at all, which it did not before round 1.
 
