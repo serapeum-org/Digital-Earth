@@ -166,9 +166,6 @@ class PanelSpec:
             ``id``, the view under ``viewport`` or ``camera`` — which names the kind of view without a separate type
             field — plus ``layers`` and ``title`` when set.
 
-        Raises:
-            TypeError: if the view is a `Viewport` whose CRS is an object pyramids cannot read as a CRS.
-
         Examples:
             - The view is stored under the key that names its kind:
                 ```python
@@ -612,7 +609,8 @@ class FigureSpec:
             strings, lists and dicts gives a dict `json.dumps` writes as is.
 
         Raises:
-            TypeError: if a free-form value has no JSON form, or a CRS is an object pyramids cannot read.
+            TypeError: if a free-form value has no JSON form. A view's CRS is checked when the view is built, so
+                it is not a reason this can fail.
 
         Examples:
             - The version is always written:

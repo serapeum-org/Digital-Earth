@@ -284,10 +284,8 @@ class Viewport:
 
         Returns:
             `crs`, plus `bounds` and `domain` when set and `globe` only when it is `True`. A CRS object is written
-            as `"EPSG:<code>"` or WKT; an EPSG integer or a string is written as given, unchecked.
-
-        Raises:
-            TypeError: if the CRS is an object pyramids cannot read as a CRS.
+            as `"EPSG:<code>"` or WKT; an EPSG integer or a string is written as given, unchecked. The constructor
+            refuses a CRS with no stored form, so writing a view does not fail on its CRS.
 
         Examples:
             - A default view is its CRS:
