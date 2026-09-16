@@ -17,6 +17,7 @@ It **subclasses** `Source` rather than replacing it. Every existing consumer acr
 touching every reader in the package to gain a capability none of them uses yet.
 """
 
+from dataclasses import replace
 from typing import Any, Optional, Tuple
 
 import numpy as np
@@ -297,7 +298,8 @@ class SourceView(Source):
             request: The region/resolution/budget wanted. Applied through pyramids' windowed read when the
                 object exposes one — including a budget with no region, which windows against the source's
                 own extent. Otherwise recorded but not enforced: a reader that cannot window is not a reason
-                to refuse the read.
+                to refuse the read. A `budget` on `selection` is folded in here — see :meth:`_budgeted` —
+                and the view records the request as applied.
             crs: The CRS to record for the coordinates, passed through to the extractor.
 
         Returns:
@@ -342,6 +344,7 @@ class SourceView(Source):
                 f"SourceView reads one band; got {len(picked.band)}. Use Selection.frames() and build a "
                 "view per channel"
             )
+        request = cls._budgeted(request, picked.budget)
         windowed, xs, ys, window_crs = cls._windowed(data, picked, request)
         source = get_source(
             windowed,
@@ -364,6 +367,35 @@ class SourceView(Source):
             selection=picked,
             request=request,
         )
+
+    @staticmethod
+    def _budgeted(
+        request: Optional[ViewRequest], budget: Optional[int]
+    ) -> Optional[ViewRequest]:
+        """Fold a selection's cell budget into the request, so it is applied rather than only stored.
+
+        Args:
+            request: What was asked for, or ``None``.
+            budget: The budget the selection names, or ``None``.
+
+        Returns:
+            `request` unchanged when there is no selection budget, or the request's own budget is already
+            the tighter of the two. Otherwise the request with the selection's budget — a fresh
+            ``ViewRequest(budget=...)`` when there was no request at all.
+
+            Both are limits, so the smaller wins. The guard in :meth:`of` refuses `time`, `level`, `member`
+            and `overview` because a view that stored them would report a slice it does not hold; `budget`
+            was neither refused nor applied, so ``.selection.budget`` read back as a limit that had never
+            been respected. Honouring it is possible where the others are not, because the request already
+            carries the same limit.
+        """
+        if budget is None:
+            return request
+        if request is None:
+            return ViewRequest(budget=budget)
+        if request.budget is not None and request.budget <= budget:
+            return request
+        return replace(request, budget=budget)
 
     @classmethod
     def _shape(cls, request: ViewRequest) -> Tuple[int, int]:

@@ -468,6 +468,56 @@ class TestWhatTheViewRefuses:
                 np.arange(6.0).reshape(2, 3), selection=Selection.of(1, **axis)
             )
 
+    def test_a_selection_budget_is_applied_not_just_stored(self):
+        """`Selection.of(1, budget=64)` limits the read, and the view records the request it applied.
+
+        Test scenario:
+            The guard refused `time`, `level`, `member` and `overview` because a view storing them would
+            report a slice it does not hold — and let `budget` through neither refused nor applied, so
+            `.selection.budget` read back as a limit that was never respected. The example raster is 182
+            cells, so a budget of 64 is one the unfixed read visibly ignored.
+        """
+        ref = DataRef(str(RASTER))
+        view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1, budget=64))
+        assert view.z.values.size <= 64, f"the budget must limit the read, got {view.z.values.size} cells"
+        assert view.request is not None and view.request.budget == 64, (
+            f"and the view must record the request it applied, got {view.request}"
+        )
+
+    @pytest.mark.parametrize(
+        "selection_budget, request_budget", [(400, 100), (100, 400)]
+    )
+    def test_the_tighter_of_two_budgets_wins(self, selection_budget, request_budget):
+        """A selection budget and a request budget are both limits, so the smaller applies.
+
+        Args:
+            selection_budget: The budget named on the selection.
+            request_budget: The budget named on the request.
+
+        Test scenario:
+            Either order — a looser request must not lift the selection's limit, and a looser selection must
+            not lift the request's.
+        """
+        folded = SourceView._budgeted(ViewRequest(budget=request_budget), selection_budget)
+        assert folded.budget == min(selection_budget, request_budget), (
+            f"expected {min(selection_budget, request_budget)}, got {folded.budget}"
+        )
+
+    def test_a_request_keeps_its_region_when_a_selection_budget_is_folded_in(self):
+        """Folding the budget in replaces only the budget.
+
+        Test scenario:
+            The request is rebuilt with `dataclasses.replace`; the bounds and canvas it carried must survive.
+        """
+        request = ViewRequest(bounds=Bounds(0.0, 0.0, 1.0, 1.0, crs=3857), width=8, height=4)
+        folded = SourceView._budgeted(request, 16)
+        assert (folded.bounds, folded.width, folded.height, folded.budget) == (
+            request.bounds,
+            8,
+            4,
+            16,
+        ), f"only the budget may change, got {folded}"
+
     def test_a_composite_selection_is_refused(self):
         """A view holds one band, so a three-band selection says so.
 
