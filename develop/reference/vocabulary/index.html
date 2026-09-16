@@ -44759,9 +44759,9 @@ budget, or a pixel ratio that is a boolean, not a number, not finite or not posi
 <a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">            The request: region, canvas, pixel ratio and :attr:`effective_budget`. A view framed by a</span>
 <a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">            `(west, south, east, north)` domain asks for that box, reprojected into the view&#39;s CRS. With a canvas</span>
 <a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">            named, the request&#39;s :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">            canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed</span>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">            `Viewport` included — and a request with no region carries no CRS either: the reader returns the source</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">            in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">            canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">            unframed `Viewport` included — and a request with no region carries no CRS either: the reader returns the</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">            source in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
 <a id="__codelineno-0-180" name="__codelineno-0-180"></a>
 <a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">        Raises:</span>
 <a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">            ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, if</span>
@@ -45568,7 +45568,7 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>canvas, within the budget. The region is <code>None</code> when neither the view nor <code>bounds</code> supplies one — an unframed</p>
+                <p>canvas, within the budget. The region is <code>None</code> when neither the view nor <code>bounds</code> supplies one — an</p>
               </div>
             </td>
           </tr>
@@ -45583,7 +45583,7 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p><code>Viewport</code> included — and a request with no region carries no CRS either: the reader returns the source</p>
+                <p>unframed <code>Viewport</code> included — and a request with no region carries no CRS either: the reader returns the</p>
               </div>
             </td>
           </tr>
@@ -45598,7 +45598,7 @@ given.</p>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>in its own CRS, and the renderer reprojects it into the view's.</p>
+                <p>source in its own CRS, and the renderer reprojects it into the view's.</p>
               </div>
             </td>
           </tr>
@@ -45758,9 +45758,9 @@ named domain, which <code>base</code> cannot resolve.</p>
 <a id="__codelineno-0-174" name="__codelineno-0-174"></a><span class="sd">        The request: region, canvas, pixel ratio and :attr:`effective_budget`. A view framed by a</span>
 <a id="__codelineno-0-175" name="__codelineno-0-175"></a><span class="sd">        `(west, south, east, north)` domain asks for that box, reprojected into the view&#39;s CRS. With a canvas</span>
 <a id="__codelineno-0-176" name="__codelineno-0-176"></a><span class="sd">        named, the request&#39;s :meth:`~digitalearth.base.spec.viewrequest.ViewRequest.side` sizes a read to the</span>
-<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">        canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an unframed</span>
-<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">        `Viewport` included — and a request with no region carries no CRS either: the reader returns the source</span>
-<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">        in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
+<a id="__codelineno-0-177" name="__codelineno-0-177"></a><span class="sd">        canvas, within the budget. The region is `None` when neither the view nor `bounds` supplies one — an</span>
+<a id="__codelineno-0-178" name="__codelineno-0-178"></a><span class="sd">        unframed `Viewport` included — and a request with no region carries no CRS either: the reader returns the</span>
+<a id="__codelineno-0-179" name="__codelineno-0-179"></a><span class="sd">        source in its own CRS, and the renderer reprojects it into the view&#39;s.</span>
 <a id="__codelineno-0-180" name="__codelineno-0-180"></a>
 <a id="__codelineno-0-181" name="__codelineno-0-181"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-182" name="__codelineno-0-182"></a><span class="sd">        ValueError: if `view` is neither a `Viewport`, a `Camera` nor `None`, if `bounds` is not a `Bounds`, if</span>
