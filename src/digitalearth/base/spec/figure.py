@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple, Union
 
+from digitalearth.base.registry import OBJECT_SCHEME
 from digitalearth.base.spec._serial import (
     as_list,
     as_mapping,
@@ -611,6 +612,10 @@ class FigureSpec:
         Raises:
             TypeError: if a free-form value has no JSON form. A view's CRS is checked when the view is built, so
                 it is not a reason this can fail.
+            ValueError: if a source is an ``object:`` reference from :meth:`DataRef.to_object
+                <digitalearth.base.spec.dataref.DataRef.to_object>`. It names an object in this process's memory,
+                so a stored figure holding one would read back and then fail to open anywhere else. Building the
+                figure in memory with one is fine; storing it is not.
 
         Examples:
             - The version is always written:
@@ -642,6 +647,12 @@ class FigureSpec:
             "panels": [panel.to_dict() for panel in self.panels],
         }
         if self.sources:
+            for source_id, ref in self.sources.items():
+                if ref.uri.startswith(f"{OBJECT_SCHEME}:"):
+                    raise ValueError(
+                        f"source {source_id!r} is {ref.uri!r}, which only resolves in the process that registered "
+                        "it, so FigureSpec.to_dict cannot store it. Save the data and reference it by path or URL"
+                    )
             out["sources"] = {
                 source_id: ref.to_dict() for source_id, ref in self.sources.items()
             }

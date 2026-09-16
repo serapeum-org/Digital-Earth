@@ -402,6 +402,25 @@ class TestTheSchemaVersion:
         ):
             FigureSpec(panels=panels, schema_version=version)
 
+    def test_a_source_that_only_resolves_in_this_process_is_refused_when_written(self):
+        """An ``object:`` source names memory in the writing process, so a stored figure cannot hold one.
+
+        Test scenario:
+            `DataRef.to_object` documents its URI as deliberately not portable, yet `to_dict` wrote it as any other
+            source. The figure then passed `to_dict`/`from_dict` and failed only at `open()` in the process that
+            read it — the one place the round trip exists to reach.
+        """
+        figure = FigureSpec(
+            panels=(PanelSpec("p", layers=("dem",)),),
+            sources={"live": DataRef("object:dem-array")},
+            layers=LayerTree((LayerSpec("dem", "raster", source_id="live"),)),
+        )
+        with pytest.raises(
+            ValueError,
+            match=r"source 'live' is 'object:dem-array', which only resolves in the process",
+        ):
+            figure.to_dict()
+
     def test_from_dict_refuses_a_newer_version_before_reading_anything_else(self):
         """A newer figure is refused by version, not by whatever field changed meaning.
 
