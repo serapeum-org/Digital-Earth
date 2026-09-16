@@ -270,7 +270,8 @@ class FigureSpec:
             panels, a panel that is not a `PanelSpec`, two panels sharing an id, a source id that is not a non-empty
             string or maps to something other than a `DataRef`, a layer tree that is
             not a `LayerTree`, a layer whose source or elevation source is not among the sources, a panel naming a
-            layer that is not in the tree, a size that is not two positive finite numbers (a boolean counts as
+            layer that is not in the tree, a 3-D (`Camera`) panel showing a draped layer without the layer it
+            drapes over, a size that is not two positive finite numbers (a boolean counts as
             neither), or a non-string title.
 
     Examples:
@@ -460,10 +461,14 @@ class FigureSpec:
         return checked
 
     def _check_panel_layers(self) -> None:
-        """Refuse a panel that names a layer the figure does not have.
+        """Refuse a panel that names a layer the figure does not have, or a 3-D panel missing a drape's surface.
 
         Raises:
-            ValueError: naming the panel, the missing layers and the layers that exist.
+            ValueError: naming the panel, the missing layers and the layers that exist; or, for a `Camera` panel,
+                naming the draped layer and the surface it does not show. The tree already refuses a drape over a
+                layer it lacks; a 3-D panel is held to the same rule over what it shows, because a renderer has
+                nothing to drape the layer onto otherwise. A flat (`Viewport`) panel draws a draped layer flat,
+                so it may show one without its surface.
         """
         for panel in self.panels:
             missing = [
@@ -474,6 +479,15 @@ class FigureSpec:
                     f"panel {panel.id!r} shows layers {missing} that are not in the figure; layers are "
                     f"{list(self.layers.ids)}"
                 )
+            if not isinstance(panel.view, Camera):
+                continue
+            for layer_id in panel.layers:
+                surface = self.layers.get(layer_id).z_layer
+                if surface is not None and surface not in panel.layers:
+                    raise ValueError(
+                        f"panel {panel.id!r} shows {layer_id!r}, draped over {surface!r}, without {surface!r}; a 3-D "
+                        "panel needs the surface a layer takes its elevation from"
+                    )
 
     @staticmethod
     def _checked_size(size: Any) -> Optional[Tuple[float, float]]:

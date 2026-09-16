@@ -212,6 +212,52 @@ class TestFigureReferences:
         ):
             FigureSpec(panels=panels, layers=layers)
 
+    def test_a_3d_panel_showing_a_draped_layer_without_its_surface_is_refused(self):
+        """A 3-D panel that shows imagery draped over terrain has to show the terrain too.
+
+        Test scenario:
+            The tree refuses a drape over a layer it does not have, but the panel check did not apply the rule per
+            panel: a camera panel listing only the draped imagery was accepted, leaving a 3-D renderer with no
+            elevation to drape it onto.
+        """
+        layers = LayerTree(
+            (
+                LayerSpec("dem", "raster"),
+                LayerSpec("img", "rgb", z_source="layer:dem"),
+            )
+        )
+        panels = (PanelSpec("p", Camera((0.0, -10.0, 5.0)), layers=("img",)),)
+        with pytest.raises(
+            ValueError, match=r"panel 'p' shows 'img', draped over 'dem', without 'dem'"
+        ):
+            FigureSpec(panels=panels, layers=layers)
+
+    def test_a_draped_layer_is_accepted_with_its_surface_in_3d_and_alone_on_a_flat_map(
+        self,
+    ):
+        """With its surface a 3-D panel is complete; a flat map draws the imagery flat and needs no surface.
+
+        Test scenario:
+            Elevation only matters to a 3-D view. A flat panel showing the imagery alone is an ordinary map of it,
+            so the rule applies to camera panels only.
+        """
+        layers = LayerTree(
+            (
+                LayerSpec("dem", "raster"),
+                LayerSpec("img", "rgb", z_source="layer:dem"),
+            )
+        )
+        panels = (
+            PanelSpec("scene", Camera((0.0, -10.0, 5.0)), layers=("img", "dem")),
+            PanelSpec("map", Viewport(4326), layers=("img",)),
+        )
+        figure = FigureSpec(panels=panels, layers=layers)
+        shown = {
+            panel.id: [layer.id for layer in figure.layers_of(panel.id)]
+            for panel in panels
+        }
+        assert shown == {"scene": ["dem", "img"], "map": ["img"]}, shown
+
     def test_a_source_that_is_not_a_dataref_is_refused(self):
         """A path string is not an address a resolver can open without a driver hint."""
         panels = (PanelSpec("p"),)
