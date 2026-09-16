@@ -1,0 +1,489 @@
+"""A figure that describes itself: panels, their views, their layers, and where the data comes from.
+
+The design's test for the description tier is one line: ``FigureSpec.from_dict(fig.to_dict())`` reproduces the
+figure **with no renderer imported**. Before this module no figure could describe itself at all — the only serialisers
+in the package were `DataRef`'s and `LegendSpec`'s — and multi-panel existed on one tier, as a ``grid()`` that gave
+every panel the same CRS.
+
+:class:`FigureSpec` is the whole description: a schema version, the sources by id, one
+:class:`~digitalearth.base.spec.layer.LayerTree`, and the panels. :class:`PanelSpec` holds a view and the ids of the
+layers it shows. Two decisions:
+
+* **A panel names layers; it does not own them.** Linked views and swipe-compare show the same layer in two panels,
+  and a tree per panel would copy it.
+* **`schema_version` is written from the first version.** It is free to add now and impossible to add later, and a
+  reader that meets a version it does not know refuses by name instead of guessing.
+"""
+
+from dataclasses import dataclass, field
+from math import isfinite
+from types import MappingProxyType
+from typing import Any, Dict, Mapping, Optional, Tuple, Union
+
+from digitalearth.base.spec._serial import refuse_unknown, require
+from digitalearth.base.spec.dataref import DataRef
+from digitalearth.base.spec.layer import LayerSpec, LayerTree
+from digitalearth.base.spec.viewport import Camera, Viewport
+
+__all__ = ["FigureSpec", "PanelSpec", "SCHEMA_VERSION"]
+
+#: The version of the figure description this package writes and reads. Bumped when a stored figure written by an
+#: older version would be read differently; a reader refuses any version it does not know.
+SCHEMA_VERSION = 1
+
+
+def _identifier(owner: str, value: Any) -> None:
+    """Refuse an id that could not address anything.
+
+    Args:
+        owner: The type being built, for the message.
+        value: The candidate id.
+
+    Raises:
+        ValueError: for a non-string, an empty string, or one with surrounding whitespace.
+    """
+    if not isinstance(value, str) or not value.strip() or value != value.strip():
+        raise ValueError(
+            f"{owner} needs an id that is a non-empty string with no surrounding whitespace; got {value!r}"
+        )
+
+
+@dataclass(frozen=True)
+class PanelSpec:
+    """One panel of a figure: a view, and the layers it shows.
+
+    Attributes:
+        id: The panel's identity within its figure.
+        view: What the panel shows the layers through — a `Viewport` for a flat map, a `Camera` for a 3-D scene. Each
+            panel has its own, so two panels can be drawn in two CRSs.
+        layers: The ids of the layers the panel shows. The draw order is the figure's tree order, not this tuple's.
+        title: The panel's title, or ``None``.
+
+    Raises:
+        ValueError: for an empty or padded id, a view that is neither a `Viewport` nor a `Camera`, a layer id that is
+            not a non-empty string, a layer listed twice, or a non-string title.
+
+    Examples:
+        - Two panels over the same layer, in two projections:
+            ```python
+            >>> from digitalearth.base.spec import PanelSpec, Viewport
+            >>> left = PanelSpec("mercator", Viewport(3857), layers=("t2m",))
+            >>> right = PanelSpec("polar", Viewport("EPSG:3413"), layers=("t2m",))
+            >>> left.view.crs, right.view.crs, left.layers == right.layers
+            (3857, 'EPSG:3413', True)
+
+            ```
+    """
+
+    id: str
+    view: Union[Viewport, Camera] = field(default_factory=Viewport)
+    layers: Tuple[str, ...] = ()
+    title: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Refuse a panel that could not be drawn or addressed.
+
+        Raises:
+            ValueError: as described on the class.
+        """
+        _identifier("PanelSpec", self.id)
+        if not isinstance(self.view, (Viewport, Camera)):
+            raise ValueError(
+                f"PanelSpec view must be a Viewport or a Camera; got {type(self.view).__name__}"
+            )
+        if isinstance(self.layers, str):
+            # A bare string is iterable, and tuple("t2m") would be three one-letter layer ids.
+            raise ValueError(
+                f"PanelSpec layers must be a sequence of layer ids; got the string {self.layers!r}"
+            )
+        layers = tuple(self.layers)
+        for layer_id in layers:
+            if not isinstance(layer_id, str) or not layer_id:
+                raise ValueError(
+                    f"PanelSpec layers must be non-empty layer ids; got {layer_id!r}"
+                )
+        repeated = sorted(
+            {layer_id for layer_id in layers if layers.count(layer_id) > 1}
+        )
+        if repeated:
+            raise ValueError(
+                f"panel {self.id!r} lists layers {repeated} more than once"
+            )
+        object.__setattr__(self, "layers", layers)
+        if self.title is not None and not isinstance(self.title, str):
+            raise ValueError(
+                f"PanelSpec title must be a string or None; got {self.title!r}"
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            ``id``, the view under ``viewport`` or ``camera`` — which names the kind of view without a separate type
+            field — plus ``layers`` and ``title`` when set.
+
+        Raises:
+            TypeError: if the view's CRS is not one pyramids can read.
+
+        Examples:
+            - The view is stored under the key that names its kind:
+                ```python
+                >>> from digitalearth.base.spec import PanelSpec, Viewport
+                >>> PanelSpec("main", Viewport(4326), layers=("dem",)).to_dict()
+                {'id': 'main', 'viewport': {'crs': 4326}, 'layers': ['dem']}
+
+                ```
+        """
+        out: Dict[str, Any] = {"id": self.id}
+        if isinstance(self.view, Camera):
+            out["camera"] = self.view.to_dict()
+        else:
+            out["viewport"] = self.view.to_dict()
+        if self.layers:
+            out["layers"] = list(self.layers)
+        if self.title is not None:
+            out["title"] = self.title
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "PanelSpec":
+        """Rebuild a panel from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The panel, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for a missing id, an unknown key, both or neither of ``viewport`` and ``camera``, or a panel
+                the constructor refuses.
+
+        Examples:
+            - A stored 3-D panel reads back with its camera:
+                ```python
+                >>> from digitalearth.base.spec import PanelSpec
+                >>> panel = PanelSpec.from_dict({"id": "3d", "camera": {"position": [0, -10, 5]}})
+                >>> panel.view.position
+                (0.0, -10.0, 5.0)
+
+                ```
+        """
+        refuse_unknown(
+            "PanelSpec", data, ("id", "viewport", "camera", "layers", "title")
+        )
+        if ("viewport" in data) == ("camera" in data):
+            raise ValueError(
+                "PanelSpec.from_dict needs exactly one of 'viewport' (a flat map) or 'camera' (a 3-D scene); "
+                f"got keys {sorted(data)}"
+            )
+        view: Union[Viewport, Camera] = (
+            Camera.from_dict(data["camera"])
+            if "camera" in data
+            else Viewport.from_dict(data["viewport"])
+        )
+        return cls(
+            id=require("PanelSpec", data, "id"),
+            view=view,
+            layers=tuple(data.get("layers", ())),
+            title=data.get("title"),
+        )
+
+
+@dataclass(frozen=True, eq=True)
+class FigureSpec:
+    """A whole figure, described with no renderer present.
+
+    Attributes:
+        panels: The panels, in reading order. At least one.
+        sources: Source id -> :class:`~digitalearth.base.spec.dataref.DataRef`. Layers name their data by these ids,
+            so several layers can draw one source without repeating its address.
+        layers: Every layer in the figure, in draw order. A panel shows the ones it names.
+        size: ``(width, height)`` of the whole figure, in the renderer's units, or ``None``.
+        title: The figure's title, or ``None``.
+        schema_version: The description's version. Only :data:`SCHEMA_VERSION` is accepted.
+
+    Raises:
+        ValueError: for an unknown schema version, no panels, a panel that is not a `PanelSpec`, two panels sharing
+            an id, a source id that is not a non-empty string or maps to something other than a `DataRef`, a layer
+            tree that is not a `LayerTree`, a layer whose source or elevation source is not among the sources, a
+            panel naming a layer that is not in the tree, a size that is not two positive finite numbers, or a
+            non-string title.
+
+    Examples:
+        - One source, one layer, one panel:
+            ```python
+            >>> from digitalearth.base.spec import DataRef, FigureSpec, LayerSpec, LayerTree, PanelSpec, Viewport
+            >>> fig = FigureSpec(
+            ...     panels=(PanelSpec("main", Viewport(4326), layers=("dem",)),),
+            ...     sources={"srtm": DataRef("data/dem.tif")},
+            ...     layers=LayerTree((LayerSpec("dem", "raster", source_id="srtm"),)),
+            ... )
+            >>> [layer.id for layer in fig.layers_of("main")], fig.schema_version
+            (['dem'], 1)
+
+            ```
+    """
+
+    panels: Tuple[PanelSpec, ...]
+    sources: Mapping[str, DataRef] = field(default_factory=dict)
+    layers: LayerTree = field(default_factory=LayerTree)
+    size: Optional[Tuple[float, float]] = None
+    title: Optional[str] = None
+    schema_version: int = SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        """Refuse a figure whose parts do not refer to each other correctly.
+
+        Raises:
+            ValueError: as described on the class.
+        """
+        if (
+            isinstance(self.schema_version, bool)
+            or self.schema_version != SCHEMA_VERSION
+        ):
+            raise ValueError(
+                f"FigureSpec schema_version {self.schema_version!r} is not one this version of digitalearth reads; "
+                f"it reads {SCHEMA_VERSION}"
+            )
+        panels = tuple(self.panels)
+        if not panels:
+            raise ValueError("FigureSpec needs at least one panel")
+        for panel in panels:
+            if not isinstance(panel, PanelSpec):
+                raise ValueError(
+                    f"FigureSpec panels must be PanelSpec values; got {type(panel).__name__}"
+                )
+        panel_ids = [panel.id for panel in panels]
+        shared = sorted(
+            {panel_id for panel_id in panel_ids if panel_ids.count(panel_id) > 1}
+        )
+        if shared:
+            raise ValueError(
+                f"FigureSpec panel ids must be unique; {shared} appear more than once"
+            )
+        object.__setattr__(self, "panels", panels)
+
+        sources = dict(self.sources)
+        for source_id, ref in sources.items():
+            _identifier("FigureSpec source", source_id)
+            if not isinstance(ref, DataRef):
+                raise ValueError(
+                    f"source {source_id!r} must be a DataRef; got {type(ref).__name__}"
+                )
+        object.__setattr__(self, "sources", MappingProxyType(sources))
+
+        if not isinstance(self.layers, LayerTree):
+            raise ValueError(
+                f"FigureSpec layers must be a LayerTree; got {type(self.layers).__name__}"
+            )
+        for layer in self.layers:
+            self._check_sources(layer, sources)
+        for panel in panels:
+            missing = [
+                layer_id for layer_id in panel.layers if layer_id not in self.layers
+            ]
+            if missing:
+                raise ValueError(
+                    f"panel {panel.id!r} shows layers {missing} that are not in the figure; layers are "
+                    f"{list(self.layers.ids)}"
+                )
+
+        if self.size is not None:
+            if isinstance(self.size, (str, bytes)) or not hasattr(
+                self.size, "__iter__"
+            ):
+                raise ValueError(
+                    f"FigureSpec size must be (width, height); got {self.size!r}"
+                )
+            dimensions = list(self.size)
+            if len(dimensions) != 2 or not all(
+                not isinstance(value, bool)
+                and isinstance(value, (int, float))
+                and isfinite(value)
+                and value > 0
+                for value in dimensions
+            ):
+                raise ValueError(
+                    f"FigureSpec size must be two positive finite numbers; got {self.size!r}"
+                )
+            object.__setattr__(
+                self, "size", (float(dimensions[0]), float(dimensions[1]))
+            )
+        if self.title is not None and not isinstance(self.title, str):
+            raise ValueError(
+                f"FigureSpec title must be a string or None; got {self.title!r}"
+            )
+
+    @staticmethod
+    def _check_sources(layer: LayerSpec, sources: Mapping[str, DataRef]) -> None:
+        """Refuse a layer whose data or elevation names a source the figure does not have.
+
+        Args:
+            layer: The layer to check.
+            sources: The figure's sources.
+
+        Raises:
+            ValueError: naming the layer, the missing source and the sources that exist.
+        """
+        wanted = [layer.source_id]
+        if layer.z_source is not None and layer.z_layer is None:
+            wanted.append(layer.z_source)
+        for source_id in wanted:
+            if source_id is not None and source_id not in sources:
+                raise ValueError(
+                    f"layer {layer.id!r} reads source {source_id!r}, which is not in the figure; sources are "
+                    f"{sorted(sources)}"
+                )
+
+    def panel(self, panel_id: str) -> PanelSpec:
+        """Return the panel with this id.
+
+        Args:
+            panel_id: The id to look up.
+
+        Returns:
+            The panel.
+
+        Raises:
+            KeyError: if no panel has that id, listing the ids that exist.
+
+        Examples:
+            - Look a panel up by id:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec, PanelSpec
+                >>> FigureSpec(panels=(PanelSpec("a", title="Left"),)).panel("a").title
+                'Left'
+
+                ```
+        """
+        for panel in self.panels:
+            if panel.id == panel_id:
+                return panel
+        raise KeyError(
+            f"no panel {panel_id!r} in this figure; panels are {[panel.id for panel in self.panels]}"
+        )
+
+    def layers_of(self, panel_id: str) -> Tuple[LayerSpec, ...]:
+        """Return the layers a panel shows, in draw order.
+
+        Args:
+            panel_id: The panel.
+
+        Returns:
+            The panel's layers, ordered as the figure's tree orders them — so reordering the tree reorders every
+            panel that shows those layers.
+
+        Raises:
+            KeyError: if no panel has that id.
+
+        Examples:
+            - A panel's layers follow the tree's order, not the order the panel listed them in:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec, LayerSpec, LayerTree, PanelSpec
+                >>> tree = LayerTree((LayerSpec("base", "tiles"), LayerSpec("roads", "lines")))
+                >>> fig = FigureSpec(panels=(PanelSpec("p", layers=("roads", "base")),), layers=tree)
+                >>> [layer.id for layer in fig.layers_of("p")]
+                ['base', 'roads']
+
+                ```
+        """
+        shown = set(self.panel(panel_id).layers)
+        return tuple(layer for layer in self.layers if layer.id in shown)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form of the whole figure.
+
+        Returns:
+            ``schema_version`` and ``panels``, plus ``sources``, ``layers``, ``size`` and ``title`` when set. The dict
+            holds only JSON types, so ``json.dumps`` writes it as is.
+
+        Raises:
+            TypeError: if any part holds a value with no JSON form.
+
+        Examples:
+            - The version is always written:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec, PanelSpec
+                >>> FigureSpec(panels=(PanelSpec("main"),)).to_dict()
+                {'schema_version': 1, 'panels': [{'id': 'main', 'viewport': {'crs': 3857}}]}
+
+                ```
+        """
+        out: Dict[str, Any] = {
+            "schema_version": self.schema_version,
+            "panels": [panel.to_dict() for panel in self.panels],
+        }
+        if self.sources:
+            out["sources"] = {
+                source_id: ref.to_dict() for source_id, ref in self.sources.items()
+            }
+        if len(self.layers):
+            out["layers"] = self.layers.to_dict()
+        if self.size is not None:
+            out["size"] = list(self.size)
+        if self.title is not None:
+            out["title"] = self.title
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "FigureSpec":
+        """Rebuild a figure from its dict form.
+
+        The version is read first: a figure written by a newer schema is refused by name before any of its fields is
+        interpreted, since a field whose meaning changed would otherwise be read the old way without a word.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The figure, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for a missing or unknown schema version, a missing panel list, an unknown key, or a figure the
+                constructor refuses.
+
+        Examples:
+            - A figure from a newer schema is refused before it is read:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec
+                >>> FigureSpec.from_dict({"schema_version": 2, "panels": []})
+                Traceback (most recent call last):
+                    ...
+                ValueError: FigureSpec.from_dict got schema_version 2; this version of digitalearth reads 1
+
+                ```
+        """
+        if not isinstance(data, Mapping):
+            raise TypeError(
+                f"FigureSpec.from_dict needs a mapping; got {type(data).__name__}"
+            )
+        version = require("FigureSpec", data, "schema_version")
+        if isinstance(version, bool) or version != SCHEMA_VERSION:
+            raise ValueError(
+                f"FigureSpec.from_dict got schema_version {version!r}; this version of digitalearth reads "
+                f"{SCHEMA_VERSION}"
+            )
+        refuse_unknown(
+            "FigureSpec",
+            data,
+            ("schema_version", "panels", "sources", "layers", "size", "title"),
+        )
+        size = data.get("size")
+        layers = data.get("layers")
+        return cls(
+            panels=tuple(
+                PanelSpec.from_dict(panel)
+                for panel in require("FigureSpec", data, "panels")
+            ),
+            sources={
+                source_id: DataRef.from_dict(ref)
+                for source_id, ref in dict(data.get("sources", {})).items()
+            },
+            layers=LayerTree() if layers is None else LayerTree.from_dict(layers),
+            size=None if size is None else tuple(size),
+            title=data.get("title"),
+            schema_version=version,
+        )

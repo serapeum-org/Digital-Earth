@@ -34,6 +34,19 @@ What lives here:
 * :mod:`~digitalearth.base.spec.style` — :class:`~digitalearth.base.spec.style.Symbology`, the look of one
   layer, and :class:`~digitalearth.base.spec.style.StyleSchema`, which **declares** the style keywords a
   builder surface accepts so a typo can stop being a silently ignored keyword.
+* :mod:`~digitalearth.base.spec.layer` — :class:`~digitalearth.base.spec.layer.LayerSpec`, what one layer draws,
+  and :class:`~digitalearth.base.spec.layer.LayerTree`, the layers in draw order, addressed by id.
+* :mod:`~digitalearth.base.spec.viewport` — :class:`~digitalearth.base.spec.viewport.Viewport` and
+  :class:`~digitalearth.base.spec.viewport.Camera`: the view of a flat map and of a 3-D scene, as values.
+* :mod:`~digitalearth.base.spec.target` — :class:`~digitalearth.base.spec.target.RenderTarget`, the output a
+  figure is rendered to, which owns the read budget.
+* :mod:`~digitalearth.base.spec.figure` — :class:`~digitalearth.base.spec.figure.PanelSpec` and
+  :class:`~digitalearth.base.spec.figure.FigureSpec`: the whole figure, which round-trips through a dict with no
+  renderer imported.
+
+Every type here that a figure stores has a ``to_dict``/``from_dict`` pair, built on the shared rules in
+``_serial.py``: an unknown key is refused rather than dropped, and a value with no JSON form is refused where it
+is written.
 
 Note the neighbour: :mod:`digitalearth.base.symbology` is the colour *arithmetic* (resolving a categorical
 cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Symbology` here is the
@@ -43,6 +56,7 @@ cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Sy
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
 from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding
+from digitalearth.base.spec.figure import SCHEMA_VERSION, FigureSpec, PanelSpec
 from digitalearth.base.spec.layer import LAYER_REFERENCE, LayerSpec, LayerTree
 from digitalearth.base.spec.legend import (
     DEFAULT_RAMP_STOPS,
@@ -69,13 +83,16 @@ __all__ = [
     "Channel",
     "DataRef",
     "Encoding",
+    "FigureSpec",
     "LAYER_REFERENCE",
     "LEGEND_KINDS",
     "LegendEntry",
     "LayerSpec",
     "LayerTree",
     "LegendSpec",
+    "PanelSpec",
     "RenderTarget",
+    "SCHEMA_VERSION",
     "Scale",
     "Selection",
     "StyleKey",
