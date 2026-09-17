@@ -4569,10 +4569,7 @@ is nothing to frame on, and silently doing nothing would look like the call was 
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-659">659</a></span>
-<span class="normal"><a href="#__codelineno-0-660">660</a></span>
-<span class="normal"><a href="#__codelineno-0-661">661</a></span>
-<span class="normal"><a href="#__codelineno-0-662">662</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-662">662</a></span>
 <span class="normal"><a href="#__codelineno-0-663">663</a></span>
 <span class="normal"><a href="#__codelineno-0-664">664</a></span>
 <span class="normal"><a href="#__codelineno-0-665">665</a></span>
@@ -4624,62 +4621,65 @@ is nothing to frame on, and silently doing nothing would look like the call was 
 <span class="normal"><a href="#__codelineno-0-711">711</a></span>
 <span class="normal"><a href="#__codelineno-0-712">712</a></span>
 <span class="normal"><a href="#__codelineno-0-713">713</a></span>
-<span class="normal"><a href="#__codelineno-0-714">714</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-659" name="__codelineno-0-659"></a><span class="k">def</span><span class="w"> </span><span class="nf">fit_bounds</span><span class="p">(</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a>    <span class="n">bounds</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a>    <span class="n">padding</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a>    <span class="n">animate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Frame the map on ``bounds``, or on everything added so far.</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="sd">    Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="sd">    one country opened on the whole world unless the caller worked out a centre themselves.</span>
+<span class="normal"><a href="#__codelineno-0-714">714</a></span>
+<span class="normal"><a href="#__codelineno-0-715">715</a></span>
+<span class="normal"><a href="#__codelineno-0-716">716</a></span>
+<span class="normal"><a href="#__codelineno-0-717">717</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-662" name="__codelineno-0-662"></a><span class="k">def</span><span class="w"> </span><span class="nf">fit_bounds</span><span class="p">(</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a>    <span class="n">bounds</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a>    <span class="n">padding</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a>    <span class="n">animate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Frame the map on ``bounds``, or on everything added so far.</span>
 <a id="__codelineno-0-670" name="__codelineno-0-670"></a>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">        bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a><span class="sd">            so far, which is what most callers want and is applied automatically anyway (see</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">            :meth:`_map_view`).</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        padding: Breathing room left around the extent — a number of pixels, or MapLibre&#39;s</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">            per-edge mapping (``{&quot;top&quot;: 40, &quot;bottom&quot;: 10, ...}``).</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">        animate: Whether the browser eases into the new view rather than jumping.</span>
-<a id="__codelineno-0-678" name="__codelineno-0-678"></a>
-<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a><span class="sd">    Without this the view comes only from the ``center``/``zoom`` given to the constructor, so a map of</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a><span class="sd">    one country opened on the whole world unless the caller worked out a centre themselves.</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a><span class="sd">        bounds: ``(west, south, east, north)`` in lon/lat. ``None`` uses the extent of the data added</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a><span class="sd">            so far, which is what most callers want and is applied automatically anyway (see</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a><span class="sd">            :meth:`_map_view`).</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a><span class="sd">        padding: Breathing room left around the extent — a number of pixels, or MapLibre&#39;s</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="sd">            per-edge mapping (``{&quot;top&quot;: 40, &quot;bottom&quot;: 10, ...}``).</span>
+<a id="__codelineno-0-680" name="__codelineno-0-680"></a><span class="sd">        animate: Whether the browser eases into the new view rather than jumping.</span>
 <a id="__codelineno-0-681" name="__codelineno-0-681"></a>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">        ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a><span class="sd">            is nothing to frame on, and silently doing nothing would look like the call was ignored.</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">        - Frame on an explicit box:</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().fit_bounds((4.0, 51.0, 7.0, 54.0))   # doctest: +SKIP</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a>                <span class="s2">&quot;fit_bounds() has nothing to frame on: no layer with an extent has been added yet. &quot;</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a>                <span class="s2">&quot;Add the data first, or pass bounds=(west, south, east, north).&quot;</span>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a>            <span class="p">)</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span><span class="p">)</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">bounds</span><span class="p">]</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a>            <span class="sa">f</span><span class="s2">&quot;fit_bounds(bounds=...) takes (west, south, east, north); got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> values&quot;</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a>        <span class="p">)</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a>    <span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span> <span class="o">=</span> <span class="n">values</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_fit</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a>        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span><span class="p">],</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a>        <span class="c1"># Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a>        <span class="c1"># TypeError about int() rather than about the argument.</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a>        <span class="s2">&quot;padding&quot;</span><span class="p">:</span> <span class="n">padding</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">padding</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">padding</span><span class="p">),</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a>        <span class="s2">&quot;animate&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">animate</span><span class="p">),</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a>    <span class="p">}</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a><span class="sd">        ValueError: when ``bounds`` is ``None`` and nothing with an extent has been added yet — there</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a><span class="sd">            is nothing to frame on, and silently doing nothing would look like the call was ignored.</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a><span class="sd">        - Frame on an explicit box:</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().fit_bounds((4.0, 51.0, 7.0, 54.0))   # doctest: +SKIP</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a>    <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a>        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a>                <span class="s2">&quot;fit_bounds() has nothing to frame on: no layer with an extent has been added yet. &quot;</span>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a>                <span class="s2">&quot;Add the data first, or pass bounds=(west, south, east, north).&quot;</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a>            <span class="p">)</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a>        <span class="n">bounds</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span><span class="p">)</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a>    <span class="n">values</span> <span class="o">=</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="k">for</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">bounds</span><span class="p">]</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">4</span><span class="p">:</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a>            <span class="sa">f</span><span class="s2">&quot;fit_bounds(bounds=...) takes (west, south, east, north); got </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">values</span><span class="p">)</span><span class="si">}</span><span class="s2"> values&quot;</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a>        <span class="p">)</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a>    <span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span> <span class="o">=</span> <span class="n">values</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_fit</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a>        <span class="s2">&quot;bounds&quot;</span><span class="p">:</span> <span class="p">[</span><span class="n">west</span><span class="p">,</span> <span class="n">south</span><span class="p">,</span> <span class="n">east</span><span class="p">,</span> <span class="n">north</span><span class="p">],</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a>        <span class="c1"># Not int(): MapLibre also accepts {top, bottom, left, right}, and casting turns that into a</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a>        <span class="c1"># TypeError about int() rather than about the argument.</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a>        <span class="s2">&quot;padding&quot;</span><span class="p">:</span> <span class="n">padding</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">padding</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">padding</span><span class="p">),</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a>        <span class="s2">&quot;animate&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">(</span><span class="n">animate</span><span class="p">),</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a>    <span class="p">}</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5128,31 +5128,7 @@ look exactly like a layer that refused to go away.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/base.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-845">845</a></span>
-<span class="normal"><a href="#__codelineno-0-846">846</a></span>
-<span class="normal"><a href="#__codelineno-0-847">847</a></span>
-<span class="normal"><a href="#__codelineno-0-848">848</a></span>
-<span class="normal"><a href="#__codelineno-0-849">849</a></span>
-<span class="normal"><a href="#__codelineno-0-850">850</a></span>
-<span class="normal"><a href="#__codelineno-0-851">851</a></span>
-<span class="normal"><a href="#__codelineno-0-852">852</a></span>
-<span class="normal"><a href="#__codelineno-0-853">853</a></span>
-<span class="normal"><a href="#__codelineno-0-854">854</a></span>
-<span class="normal"><a href="#__codelineno-0-855">855</a></span>
-<span class="normal"><a href="#__codelineno-0-856">856</a></span>
-<span class="normal"><a href="#__codelineno-0-857">857</a></span>
-<span class="normal"><a href="#__codelineno-0-858">858</a></span>
-<span class="normal"><a href="#__codelineno-0-859">859</a></span>
-<span class="normal"><a href="#__codelineno-0-860">860</a></span>
-<span class="normal"><a href="#__codelineno-0-861">861</a></span>
-<span class="normal"><a href="#__codelineno-0-862">862</a></span>
-<span class="normal"><a href="#__codelineno-0-863">863</a></span>
-<span class="normal"><a href="#__codelineno-0-864">864</a></span>
-<span class="normal"><a href="#__codelineno-0-865">865</a></span>
-<span class="normal"><a href="#__codelineno-0-866">866</a></span>
-<span class="normal"><a href="#__codelineno-0-867">867</a></span>
-<span class="normal"><a href="#__codelineno-0-868">868</a></span>
-<span class="normal"><a href="#__codelineno-0-869">869</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-869">869</a></span>
 <span class="normal"><a href="#__codelineno-0-870">870</a></span>
 <span class="normal"><a href="#__codelineno-0-871">871</a></span>
 <span class="normal"><a href="#__codelineno-0-872">872</a></span>
@@ -5198,77 +5174,101 @@ look exactly like a layer that refused to go away.</p>
 <span class="normal"><a href="#__codelineno-0-912">912</a></span>
 <span class="normal"><a href="#__codelineno-0-913">913</a></span>
 <span class="normal"><a href="#__codelineno-0-914">914</a></span>
-<span class="normal"><a href="#__codelineno-0-915">915</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop a previously added layer from the map.</span>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a><span class="sd">    Building a `WebMap` was one-way: a mistake meant starting over, which in a notebook — where these</span>
-<a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">    maps are built — is the normal workflow.</span>
-<a id="__codelineno-0-850" name="__codelineno-0-850"></a>
-<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="sd">        layer_id: An id from :attr:`layer_ids`.</span>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a>
-<a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-858" name="__codelineno-0-858"></a><span class="sd">        The running data extent, and the classification a legend describes, are only cleared when the</span>
-<a id="__codelineno-0-859" name="__codelineno-0-859"></a><span class="sd">        last layer goes. They are &quot;most recent&quot; accessors rather than a model of what is on the map,</span>
-<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">        so after removing one layer of several they still describe the removed one; call</span>
-<a id="__codelineno-0-861" name="__codelineno-0-861"></a><span class="sd">        :meth:`fit_bounds` or rebuild the legend if that matters.</span>
-<a id="__codelineno-0-862" name="__codelineno-0-862"></a>
-<a id="__codelineno-0-863" name="__codelineno-0-863"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-864" name="__codelineno-0-864"></a><span class="sd">        KeyError: when no such layer was added, listing the ids that were — a silent no-op here would</span>
-<a id="__codelineno-0-865" name="__codelineno-0-865"></a><span class="sd">            look exactly like a layer that refused to go away.</span>
-<a id="__codelineno-0-866" name="__codelineno-0-866"></a>
-<a id="__codelineno-0-867" name="__codelineno-0-867"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-868" name="__codelineno-0-868"></a><span class="sd">        - Remove one layer; the map is returned, so calls chain:</span>
-<a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
-<a id="__codelineno-0-871" name="__codelineno-0-871"></a><span class="sd">            &gt;&gt;&gt; m = WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).text(2.35, 48.86, &quot;Paris&quot;, name=&quot;paris&quot;)</span>
-<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">            &gt;&gt;&gt; m.remove_layer(&quot;amsterdam&quot;) is m, m.layer_ids, len(m.layers)</span>
-<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">            (True, [&#39;paris&#39;], 1)</span>
+<span class="normal"><a href="#__codelineno-0-915">915</a></span>
+<span class="normal"><a href="#__codelineno-0-916">916</a></span>
+<span class="normal"><a href="#__codelineno-0-917">917</a></span>
+<span class="normal"><a href="#__codelineno-0-918">918</a></span>
+<span class="normal"><a href="#__codelineno-0-919">919</a></span>
+<span class="normal"><a href="#__codelineno-0-920">920</a></span>
+<span class="normal"><a href="#__codelineno-0-921">921</a></span>
+<span class="normal"><a href="#__codelineno-0-922">922</a></span>
+<span class="normal"><a href="#__codelineno-0-923">923</a></span>
+<span class="normal"><a href="#__codelineno-0-924">924</a></span>
+<span class="normal"><a href="#__codelineno-0-925">925</a></span>
+<span class="normal"><a href="#__codelineno-0-926">926</a></span>
+<span class="normal"><a href="#__codelineno-0-927">927</a></span>
+<span class="normal"><a href="#__codelineno-0-928">928</a></span>
+<span class="normal"><a href="#__codelineno-0-929">929</a></span>
+<span class="normal"><a href="#__codelineno-0-930">930</a></span>
+<span class="normal"><a href="#__codelineno-0-931">931</a></span>
+<span class="normal"><a href="#__codelineno-0-932">932</a></span>
+<span class="normal"><a href="#__codelineno-0-933">933</a></span>
+<span class="normal"><a href="#__codelineno-0-934">934</a></span>
+<span class="normal"><a href="#__codelineno-0-935">935</a></span>
+<span class="normal"><a href="#__codelineno-0-936">936</a></span>
+<span class="normal"><a href="#__codelineno-0-937">937</a></span>
+<span class="normal"><a href="#__codelineno-0-938">938</a></span>
+<span class="normal"><a href="#__codelineno-0-939">939</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="k">def</span><span class="w"> </span><span class="nf">remove_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Drop a previously added layer from the map.</span>
+<a id="__codelineno-0-871" name="__codelineno-0-871"></a>
+<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">    Building a `WebMap` was one-way: a mistake meant starting over, which in a notebook — where these</span>
+<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">    maps are built — is the normal workflow.</span>
 <a id="__codelineno-0-874" name="__codelineno-0-874"></a>
-<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-876" name="__codelineno-0-876"></a><span class="sd">        - An id that was never added is refused, naming the ids that were:</span>
-<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
-<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">            &gt;&gt;&gt; WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).remove_layer(&quot;paris&quot;)</span>
-<a id="__codelineno-0-880" name="__codelineno-0-880"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="sd">            KeyError: &quot;no layer &#39;paris&#39; on this map; added layers are [&#39;amsterdam&#39;]&quot;</span>
-<a id="__codelineno-0-883" name="__codelineno-0-883"></a>
-<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-886" name="__codelineno-0-886"></a>    <span class="n">present</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
-<a id="__codelineno-0-887" name="__codelineno-0-887"></a>    <span class="k">if</span> <span class="n">layer_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">present</span><span class="p">:</span>
-<a id="__codelineno-0-888" name="__codelineno-0-888"></a>        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
-<a id="__codelineno-0-889" name="__codelineno-0-889"></a>            <span class="sa">f</span><span class="s2">&quot;no layer </span><span class="si">{</span><span class="n">layer_id</span><span class="si">!r}</span><span class="s2"> on this map; added layers are </span><span class="si">{</span><span class="n">present</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-890" name="__codelineno-0-890"></a>        <span class="p">)</span>
-<a id="__codelineno-0-891" name="__codelineno-0-891"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-892" name="__codelineno-0-892"></a>    <span class="c1"># The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the</span>
-<a id="__codelineno-0-893" name="__codelineno-0-893"></a>    <span class="c1"># next `add_reference` inserts one place too high — above data it belongs beneath.</span>
-<a id="__codelineno-0-894" name="__codelineno-0-894"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
-<a id="__codelineno-0-895" name="__codelineno-0-895"></a>        <span class="mi">1</span>
-<a id="__codelineno-0-896" name="__codelineno-0-896"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span>
-<a id="__codelineno-0-897" name="__codelineno-0-897"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span>
-<a id="__codelineno-0-898" name="__codelineno-0-898"></a>        <span class="p">]</span>
-<a id="__codelineno-0-899" name="__codelineno-0-899"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;_digitalearth_layer_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="n">layer_id</span>
-<a id="__codelineno-0-900" name="__codelineno-0-900"></a>    <span class="p">)</span>
-<a id="__codelineno-0-901" name="__codelineno-0-901"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="p">[</span>
-<a id="__codelineno-0-902" name="__codelineno-0-902"></a>        <span class="n">layer</span>
-<a id="__codelineno-0-903" name="__codelineno-0-903"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span>
-<a id="__codelineno-0-904" name="__codelineno-0-904"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;_digitalearth_layer_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="n">layer_id</span>
-<a id="__codelineno-0-905" name="__codelineno-0-905"></a>    <span class="p">]</span>
-<a id="__codelineno-0-906" name="__codelineno-0-906"></a>    <span class="n">remaining</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
-<a id="__codelineno-0-907" name="__codelineno-0-907"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">==</span> <span class="n">layer_id</span><span class="p">:</span>
-<a id="__codelineno-0-908" name="__codelineno-0-908"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">remaining</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">remaining</span> <span class="k">else</span> <span class="kc">None</span>
-<a id="__codelineno-0-909" name="__codelineno-0-909"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_temporal_step</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-910" name="__codelineno-0-910"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">remaining</span><span class="p">:</span>
-<a id="__codelineno-0-911" name="__codelineno-0-911"></a>        <span class="c1"># Nothing is drawn any more, so the classification a legend would describe is gone with it.</span>
-<a id="__codelineno-0-912" name="__codelineno-0-912"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-913" name="__codelineno-0-913"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_breaks</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-914" name="__codelineno-0-914"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-915" name="__codelineno-0-915"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-876" name="__codelineno-0-876"></a><span class="sd">        layer_id: An id from :attr:`layer_ids`.</span>
+<a id="__codelineno-0-877" name="__codelineno-0-877"></a>
+<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-880" name="__codelineno-0-880"></a>
+<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="sd">        The running data extent, and the classification a legend describes, are only cleared when the</span>
+<a id="__codelineno-0-883" name="__codelineno-0-883"></a><span class="sd">        last layer goes. They are &quot;most recent&quot; accessors rather than a model of what is on the map,</span>
+<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">        so after removing one layer of several they still describe the removed one; call</span>
+<a id="__codelineno-0-885" name="__codelineno-0-885"></a><span class="sd">        :meth:`fit_bounds` or rebuild the legend if that matters.</span>
+<a id="__codelineno-0-886" name="__codelineno-0-886"></a>
+<a id="__codelineno-0-887" name="__codelineno-0-887"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-888" name="__codelineno-0-888"></a><span class="sd">        KeyError: when no such layer was added, listing the ids that were — a silent no-op here would</span>
+<a id="__codelineno-0-889" name="__codelineno-0-889"></a><span class="sd">            look exactly like a layer that refused to go away.</span>
+<a id="__codelineno-0-890" name="__codelineno-0-890"></a>
+<a id="__codelineno-0-891" name="__codelineno-0-891"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-892" name="__codelineno-0-892"></a><span class="sd">        - Remove one layer; the map is returned, so calls chain:</span>
+<a id="__codelineno-0-893" name="__codelineno-0-893"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-894" name="__codelineno-0-894"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
+<a id="__codelineno-0-895" name="__codelineno-0-895"></a><span class="sd">            &gt;&gt;&gt; m = WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).text(2.35, 48.86, &quot;Paris&quot;, name=&quot;paris&quot;)</span>
+<a id="__codelineno-0-896" name="__codelineno-0-896"></a><span class="sd">            &gt;&gt;&gt; m.remove_layer(&quot;amsterdam&quot;) is m, m.layer_ids, len(m.layers)</span>
+<a id="__codelineno-0-897" name="__codelineno-0-897"></a><span class="sd">            (True, [&#39;paris&#39;], 1)</span>
+<a id="__codelineno-0-898" name="__codelineno-0-898"></a>
+<a id="__codelineno-0-899" name="__codelineno-0-899"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-900" name="__codelineno-0-900"></a><span class="sd">        - An id that was never added is refused, naming the ids that were:</span>
+<a id="__codelineno-0-901" name="__codelineno-0-901"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-902" name="__codelineno-0-902"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
+<a id="__codelineno-0-903" name="__codelineno-0-903"></a><span class="sd">            &gt;&gt;&gt; WebMap().text(4.9, 52.4, &quot;Amsterdam&quot;, name=&quot;amsterdam&quot;).remove_layer(&quot;paris&quot;)</span>
+<a id="__codelineno-0-904" name="__codelineno-0-904"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-905" name="__codelineno-0-905"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-906" name="__codelineno-0-906"></a><span class="sd">            KeyError: &quot;no layer &#39;paris&#39; on this map; added layers are [&#39;amsterdam&#39;]&quot;</span>
+<a id="__codelineno-0-907" name="__codelineno-0-907"></a>
+<a id="__codelineno-0-908" name="__codelineno-0-908"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-909" name="__codelineno-0-909"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-910" name="__codelineno-0-910"></a>    <span class="n">present</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
+<a id="__codelineno-0-911" name="__codelineno-0-911"></a>    <span class="k">if</span> <span class="n">layer_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">present</span><span class="p">:</span>
+<a id="__codelineno-0-912" name="__codelineno-0-912"></a>        <span class="k">raise</span> <span class="ne">KeyError</span><span class="p">(</span>
+<a id="__codelineno-0-913" name="__codelineno-0-913"></a>            <span class="sa">f</span><span class="s2">&quot;no layer </span><span class="si">{</span><span class="n">layer_id</span><span class="si">!r}</span><span class="s2"> on this map; added layers are </span><span class="si">{</span><span class="n">present</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-914" name="__codelineno-0-914"></a>        <span class="p">)</span>
+<a id="__codelineno-0-915" name="__codelineno-0-915"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_tree</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-916" name="__codelineno-0-916"></a>    <span class="c1"># The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the</span>
+<a id="__codelineno-0-917" name="__codelineno-0-917"></a>    <span class="c1"># next `add_reference` inserts one place too high — above data it belongs beneath.</span>
+<a id="__codelineno-0-918" name="__codelineno-0-918"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span> <span class="o">-=</span> <span class="nb">sum</span><span class="p">(</span>
+<a id="__codelineno-0-919" name="__codelineno-0-919"></a>        <span class="mi">1</span>
+<a id="__codelineno-0-920" name="__codelineno-0-920"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span>
+<a id="__codelineno-0-921" name="__codelineno-0-921"></a>            <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_underlay_count</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_reference_count</span>
+<a id="__codelineno-0-922" name="__codelineno-0-922"></a>        <span class="p">]</span>
+<a id="__codelineno-0-923" name="__codelineno-0-923"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;_digitalearth_layer_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">==</span> <span class="n">layer_id</span>
+<a id="__codelineno-0-924" name="__codelineno-0-924"></a>    <span class="p">)</span>
+<a id="__codelineno-0-925" name="__codelineno-0-925"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">layers</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-0-926" name="__codelineno-0-926"></a>        <span class="n">layer</span>
+<a id="__codelineno-0-927" name="__codelineno-0-927"></a>        <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers</span>
+<a id="__codelineno-0-928" name="__codelineno-0-928"></a>        <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="s2">&quot;_digitalearth_layer_id&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="o">!=</span> <span class="n">layer_id</span>
+<a id="__codelineno-0-929" name="__codelineno-0-929"></a>    <span class="p">]</span>
+<a id="__codelineno-0-930" name="__codelineno-0-930"></a>    <span class="n">remaining</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
+<a id="__codelineno-0-931" name="__codelineno-0-931"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">==</span> <span class="n">layer_id</span><span class="p">:</span>
+<a id="__codelineno-0-932" name="__codelineno-0-932"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">remaining</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">remaining</span> <span class="k">else</span> <span class="kc">None</span>
+<a id="__codelineno-0-933" name="__codelineno-0-933"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_forget_temporal_step</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-934" name="__codelineno-0-934"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">remaining</span><span class="p">:</span>
+<a id="__codelineno-0-935" name="__codelineno-0-935"></a>        <span class="c1"># Nothing is drawn any more, so the classification a legend would describe is gone with it.</span>
+<a id="__codelineno-0-936" name="__codelineno-0-936"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_data_bounds</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-937" name="__codelineno-0-937"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_breaks</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-938" name="__codelineno-0-938"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-939" name="__codelineno-0-939"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6616,7 +6616,8 @@ missing property renders nothing at all, with no error to explain the empty map.
 <span class="normal"><a href="#__codelineno-0-403">403</a></span>
 <span class="normal"><a href="#__codelineno-0-404">404</a></span>
 <span class="normal"><a href="#__codelineno-0-405">405</a></span>
-<span class="normal"><a href="#__codelineno-0-406">406</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="k">def</span><span class="w"> </span><span class="nf">labels</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-406">406</a></span>
+<span class="normal"><a href="#__codelineno-0-407">407</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-311" name="__codelineno-0-311"></a><span class="k">def</span><span class="w"> </span><span class="nf">labels</span><span class="p">(</span>
 <a id="__codelineno-0-312" name="__codelineno-0-312"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-313" name="__codelineno-0-313"></a>    <span class="n">features</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-314" name="__codelineno-0-314"></a>    <span class="n">column</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
@@ -6708,10 +6709,11 @@ missing property renders nothing at all, with no error to explain the empty map.
 <a id="__codelineno-0-400" name="__codelineno-0-400"></a>        <span class="s2">&quot;label&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-401" name="__codelineno-0-401"></a>        <span class="n">LayerType</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
 <a id="__codelineno-0-402" name="__codelineno-0-402"></a>        <span class="n">paint</span><span class="p">,</span>
-<a id="__codelineno-0-403" name="__codelineno-0-403"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-404" name="__codelineno-0-404"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-405" name="__codelineno-0-405"></a>        <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span>
-<a id="__codelineno-0-406" name="__codelineno-0-406"></a>    <span class="p">)</span>
+<a id="__codelineno-0-403" name="__codelineno-0-403"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;labels&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-405" name="__codelineno-0-405"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-406" name="__codelineno-0-406"></a>        <span class="n">layout</span><span class="o">=</span><span class="n">layout</span><span class="p">,</span>
+<a id="__codelineno-0-407" name="__codelineno-0-407"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -7469,8 +7471,7 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/vector.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-491">491</a></span>
-<span class="normal"><a href="#__codelineno-0-492">492</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-492">492</a></span>
 <span class="normal"><a href="#__codelineno-0-493">493</a></span>
 <span class="normal"><a href="#__codelineno-0-494">494</a></span>
 <span class="normal"><a href="#__codelineno-0-495">495</a></span>
@@ -7594,132 +7595,141 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <span class="normal"><a href="#__codelineno-0-613">613</a></span>
 <span class="normal"><a href="#__codelineno-0-614">614</a></span>
 <span class="normal"><a href="#__codelineno-0-615">615</a></span>
-<span class="normal"><a href="#__codelineno-0-616">616</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-491" name="__codelineno-0-491"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
-<a id="__codelineno-0-492" name="__codelineno-0-492"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-493" name="__codelineno-0-493"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-494" name="__codelineno-0-494"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-495" name="__codelineno-0-495"></a>    <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">ContourInterval</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-496" name="__codelineno-0-496"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
-<a id="__codelineno-0-498" name="__codelineno-0-498"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-499" name="__codelineno-0-499"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-500" name="__codelineno-0-500"></a>    <span class="n">units</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-501" name="__codelineno-0-501"></a>    <span class="n">color</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-502" name="__codelineno-0-502"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.5</span><span class="p">,</span>
-<a id="__codelineno-0-503" name="__codelineno-0-503"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="n">labels</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<a id="__codelineno-0-505" name="__codelineno-0-505"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-506" name="__codelineno-0-506"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-507" name="__codelineno-0-507"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Trace iso-value contours from a raster band and draw them as vectors.</span>
-<a id="__codelineno-0-509" name="__codelineno-0-509"></a>
-<a id="__codelineno-0-510" name="__codelineno-0-510"></a><span class="sd">    The GIS is pyramids&#39; (``Dataset.contour``, the ``gdal_contour`` equivalent); this only draws what</span>
-<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">    it returns. Contours are the one field type that maps cleanly onto MapLibre — the result is a</span>
-<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    ``FeatureCollection``, which the tier already knows how to render — so it is the field renderer</span>
-<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">    this tier can honestly offer. Vector fields and meshes have no native primitive here; see the</span>
-<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">    static and interactive tiers for those.</span>
-<a id="__codelineno-0-515" name="__codelineno-0-515"></a>
-<a id="__codelineno-0-516" name="__codelineno-0-516"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">        dataset: A pyramids ``Dataset``.</span>
-<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">        interval: Spacing between levels — a number for &quot;one every N&quot;, or a</span>
-<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">            :class:`ContourInterval` when the spacing has to be anchored somewhere other than zero.</span>
-<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            Give at most one of this or ``levels``.</span>
-<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">        levels: Explicit levels to contour. Give at most one of this or ``interval``. With neither,</span>
-<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">            the levels come from :func:`~digitalearth.base.autostyle.auto_style` when the band&#39;s</span>
-<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">            variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels</span>
-<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">            that field is conventionally drawn with.</span>
-<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">        band: 1-based band to contour, matching</span>
-<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">            :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and</span>
-<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">            this converts, so the same number means the same band everywhere in this tier.</span>
-<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">        filled: Draw filled bands between successive levels instead of lines.</span>
-<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">        cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the</span>
-<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">            band&#39;s variable.</span>
-<a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">        units: What the contoured values are measured in, which the key names in parentheses after the</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">            column. ``None`` (the default) takes the variable&#39;s units from</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">            :func:`~digitalearth.base.autostyle.auto_style`, and leaves the heading bare when it</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">            carries none — a unit is never guessed. Pass one to correct a band the library</span>
-<a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">            mis-identifies, or to name the units of a variable it does not know.</span>
-<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">        color: A single colour for every contour, overriding ``cmap``. Use it when the levels are</span>
-<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">            labelled rather than colour-coded.</span>
-<a id="__codelineno-0-538" name="__codelineno-0-538"></a><span class="sd">        width: Line width in pixels; ignored when ``filled``.</span>
-<a id="__codelineno-0-539" name="__codelineno-0-539"></a><span class="sd">        opacity: Layer opacity in ``[0, 1]``.</span>
-<a id="__codelineno-0-540" name="__codelineno-0-540"></a><span class="sd">        labels: Whether to label each contour with its value — the level for a line, the band&#39;s lower</span>
-<a id="__codelineno-0-541" name="__codelineno-0-541"></a><span class="sd">            edge when ``filled``.</span>
-<a id="__codelineno-0-542" name="__codelineno-0-542"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
-<a id="__codelineno-0-543" name="__codelineno-0-543"></a><span class="sd">        visible: Whether the layer starts visible.</span>
-<a id="__codelineno-0-544" name="__codelineno-0-544"></a>
-<a id="__codelineno-0-545" name="__codelineno-0-545"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-546" name="__codelineno-0-546"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-547" name="__codelineno-0-547"></a>
-<a id="__codelineno-0-548" name="__codelineno-0-548"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="sd">        ValueError: when both ``interval`` and ``levels`` are given — pyramids takes exactly one, and</span>
-<a id="__codelineno-0-550" name="__codelineno-0-550"></a><span class="sd">            saying so here names the argument the caller actually wrote — or when neither is given</span>
-<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">            and the variable is not one ``auto_style`` knows levels for.</span>
-<a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">        TypeError: when ``interval`` is neither a number nor a :class:`ContourInterval`.</span>
-<a id="__codelineno-0-553" name="__codelineno-0-553"></a>
-<a id="__codelineno-0-554" name="__codelineno-0-554"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="sd">        - Contour a DEM every 100 m:</span>
-<a id="__codelineno-0-556" name="__codelineno-0-556"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-557" name="__codelineno-0-557"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                        # doctest: +SKIP</span>
-<a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().contours(dem, interval=100)             # doctest: +SKIP</span>
-<a id="__codelineno-0-559" name="__codelineno-0-559"></a>
-<a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-561" name="__codelineno-0-561"></a>
-<a id="__codelineno-0-562" name="__codelineno-0-562"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-563" name="__codelineno-0-563"></a><span class="sd">        digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.</span>
-<a id="__codelineno-0-564" name="__codelineno-0-564"></a><span class="sd">        digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.</span>
-<a id="__codelineno-0-565" name="__codelineno-0-565"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-566" name="__codelineno-0-566"></a>    <span class="n">spacing</span> <span class="o">=</span> <span class="n">_as_interval</span><span class="p">(</span><span class="n">interval</span><span class="p">)</span>
-<a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_display_raster_or_skip</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;contours&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-569" name="__codelineno-0-569"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_display_source</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">)</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="n">cmap</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_cmap</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">cmap</span><span class="p">)</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a>    <span class="n">levels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_contour_levels</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="n">spacing</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573"></a>    <span class="c1"># Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.</span>
-<a id="__codelineno-0-574" name="__codelineno-0-574"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_units</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">contour</span><span class="p">(</span>
-<a id="__codelineno-0-576" name="__codelineno-0-576"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">spacing</span><span class="o">.</span><span class="n">spacing</span> <span class="k">if</span> <span class="n">spacing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577"></a>        <span class="n">fixed_levels</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">levels</span><span class="p">)</span> <span class="k">if</span> <span class="n">levels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="n">base</span><span class="o">=</span><span class="n">spacing</span><span class="o">.</span><span class="n">base</span> <span class="k">if</span> <span class="n">spacing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579"></a>        <span class="n">band</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">band</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>  <span class="c1"># pyramids counts bands from 0; this tier counts from 1</span>
-<a id="__codelineno-0-580" name="__codelineno-0-580"></a>        <span class="n">attribute</span><span class="o">=</span><span class="s2">&quot;level&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-581" name="__codelineno-0-581"></a>        <span class="n">polygonize</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
-<a id="__codelineno-0-582" name="__codelineno-0-582"></a>    <span class="p">)</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">features</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584"></a>        <span class="c1"># No level fell inside the band&#39;s range. Passing this on raises &quot;column &#39;level&#39; not found&quot;,</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585"></a>        <span class="c1"># because pyramids only writes the attribute when it writes a feature — which points at the</span>
-<a id="__codelineno-0-586" name="__codelineno-0-586"></a>        <span class="c1"># wrong thing entirely.</span>
-<a id="__codelineno-0-587" name="__codelineno-0-587"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_skipped</span><span class="p">(</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a>            <span class="s2">&quot;contours&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-589" name="__codelineno-0-589"></a>            <span class="s2">&quot;no level lies within the data, so nothing was traced — check that &quot;</span>
-<a id="__codelineno-0-590" name="__codelineno-0-590"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;levels=&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">repr</span><span class="p">(</span><span class="n">levels</span><span class="p">)</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">spacing</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="kc">None</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;interval=&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">repr</span><span class="p">(</span><span class="n">interval</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a>            <span class="sa">f</span><span class="s2">&quot;suits band </span><span class="si">{</span><span class="n">band</span><span class="si">}</span><span class="s2">&#39;s range&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a>        <span class="p">)</span>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="c1"># Lines carry `level`; filled bands carry `level_min`/`level_max` for the band&#39;s two edges, so</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="c1"># colour and label the lower edge — it is what orders the bands.</span>
-<a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="n">attribute</span> <span class="o">=</span> <span class="s2">&quot;level_min&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;level&quot;</span>
-<a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="n">column</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">color</span> <span class="k">else</span> <span class="n">attribute</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_contour_features</span><span class="p">(</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a>        <span class="n">features</span><span class="p">,</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a>        <span class="n">filled</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a>        <span class="n">column</span><span class="o">=</span><span class="n">column</span><span class="p">,</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a>        <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a>        <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a>        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a>    <span class="p">)</span>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a>        <span class="c1"># The classification the sub-builder just recorded describes this raster&#39;s values, so the key</span>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a>        <span class="c1"># can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span><span class="p">[</span><span class="s2">&quot;units&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a>        <span class="c1"># Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a>    <span class="k">return</span> <span class="bp">self</span>
+<span class="normal"><a href="#__codelineno-0-616">616</a></span>
+<span class="normal"><a href="#__codelineno-0-617">617</a></span>
+<span class="normal"><a href="#__codelineno-0-618">618</a></span>
+<span class="normal"><a href="#__codelineno-0-619">619</a></span>
+<span class="normal"><a href="#__codelineno-0-620">620</a></span>
+<span class="normal"><a href="#__codelineno-0-621">621</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
+<a id="__codelineno-0-493" name="__codelineno-0-493"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-494" name="__codelineno-0-494"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-495" name="__codelineno-0-495"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-496" name="__codelineno-0-496"></a>    <span class="n">interval</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">ContourInterval</span><span class="p">,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-497" name="__codelineno-0-497"></a>    <span class="n">levels</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-498" name="__codelineno-0-498"></a>    <span class="n">band</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-0-499" name="__codelineno-0-499"></a>    <span class="n">filled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-500" name="__codelineno-0-500"></a>    <span class="n">cmap</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-501" name="__codelineno-0-501"></a>    <span class="n">units</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-502" name="__codelineno-0-502"></a>    <span class="n">color</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-503" name="__codelineno-0-503"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.5</span><span class="p">,</span>
+<a id="__codelineno-0-504" name="__codelineno-0-504"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-505" name="__codelineno-0-505"></a>    <span class="n">labels</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<a id="__codelineno-0-506" name="__codelineno-0-506"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-507" name="__codelineno-0-507"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-508" name="__codelineno-0-508"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-509" name="__codelineno-0-509"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Trace iso-value contours from a raster band and draw them as vectors.</span>
+<a id="__codelineno-0-510" name="__codelineno-0-510"></a>
+<a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="sd">    The GIS is pyramids&#39; (``Dataset.contour``, the ``gdal_contour`` equivalent); this only draws what</span>
+<a id="__codelineno-0-512" name="__codelineno-0-512"></a><span class="sd">    it returns. Contours are the one field type that maps cleanly onto MapLibre — the result is a</span>
+<a id="__codelineno-0-513" name="__codelineno-0-513"></a><span class="sd">    ``FeatureCollection``, which the tier already knows how to render — so it is the field renderer</span>
+<a id="__codelineno-0-514" name="__codelineno-0-514"></a><span class="sd">    this tier can honestly offer. Vector fields and meshes have no native primitive here; see the</span>
+<a id="__codelineno-0-515" name="__codelineno-0-515"></a><span class="sd">    static and interactive tiers for those.</span>
+<a id="__codelineno-0-516" name="__codelineno-0-516"></a>
+<a id="__codelineno-0-517" name="__codelineno-0-517"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-518" name="__codelineno-0-518"></a><span class="sd">        dataset: A pyramids ``Dataset``.</span>
+<a id="__codelineno-0-519" name="__codelineno-0-519"></a><span class="sd">        interval: Spacing between levels — a number for &quot;one every N&quot;, or a</span>
+<a id="__codelineno-0-520" name="__codelineno-0-520"></a><span class="sd">            :class:`ContourInterval` when the spacing has to be anchored somewhere other than zero.</span>
+<a id="__codelineno-0-521" name="__codelineno-0-521"></a><span class="sd">            Give at most one of this or ``levels``.</span>
+<a id="__codelineno-0-522" name="__codelineno-0-522"></a><span class="sd">        levels: Explicit levels to contour. Give at most one of this or ``interval``. With neither,</span>
+<a id="__codelineno-0-523" name="__codelineno-0-523"></a><span class="sd">            the levels come from :func:`~digitalearth.base.autostyle.auto_style` when the band&#39;s</span>
+<a id="__codelineno-0-524" name="__codelineno-0-524"></a><span class="sd">            variable is one it recognises (mean sea-level pressure, 2-m temperature, …) — the levels</span>
+<a id="__codelineno-0-525" name="__codelineno-0-525"></a><span class="sd">            that field is conventionally drawn with.</span>
+<a id="__codelineno-0-526" name="__codelineno-0-526"></a><span class="sd">        band: 1-based band to contour, matching</span>
+<a id="__codelineno-0-527" name="__codelineno-0-527"></a><span class="sd">            :meth:`~digitalearth.web.raster.RasterMixin.add_raster` — pyramids counts bands from 0, and</span>
+<a id="__codelineno-0-528" name="__codelineno-0-528"></a><span class="sd">            this converts, so the same number means the same band everywhere in this tier.</span>
+<a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">        filled: Draw filled bands between successive levels instead of lines.</span>
+<a id="__codelineno-0-530" name="__codelineno-0-530"></a><span class="sd">        cmap: Colormap for colouring by level; ``None`` resolves the autostyle default for the</span>
+<a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">            band&#39;s variable.</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">        units: What the contoured values are measured in, which the key names in parentheses after the</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">            column. ``None`` (the default) takes the variable&#39;s units from</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">            :func:`~digitalearth.base.autostyle.auto_style`, and leaves the heading bare when it</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">            carries none — a unit is never guessed. Pass one to correct a band the library</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">            mis-identifies, or to name the units of a variable it does not know.</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">        color: A single colour for every contour, overriding ``cmap``. Use it when the levels are</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a><span class="sd">            labelled rather than colour-coded.</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a><span class="sd">        width: Line width in pixels; ignored when ``filled``.</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a><span class="sd">        opacity: Layer opacity in ``[0, 1]``.</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a><span class="sd">        labels: Whether to label each contour with its value — the level for a line, the band&#39;s lower</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a><span class="sd">            edge when ``filled``.</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a><span class="sd">        visible: Whether the layer starts visible.</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a>
+<a id="__codelineno-0-546" name="__codelineno-0-546"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-547" name="__codelineno-0-547"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548"></a>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a><span class="sd">        ValueError: when both ``interval`` and ``levels`` are given — pyramids takes exactly one, and</span>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">            saying so here names the argument the caller actually wrote — or when neither is given</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">            and the variable is not one ``auto_style`` knows levels for.</span>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a><span class="sd">        TypeError: when ``interval`` is neither a number nor a :class:`ContourInterval`.</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554"></a>
+<a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-556" name="__codelineno-0-556"></a><span class="sd">        - Contour a DEM every 100 m:</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                        # doctest: +SKIP</span>
+<a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().contours(dem, interval=100)             # doctest: +SKIP</span>
+<a id="__codelineno-0-560" name="__codelineno-0-560"></a>
+<a id="__codelineno-0-561" name="__codelineno-0-561"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562"></a>
+<a id="__codelineno-0-563" name="__codelineno-0-563"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564"></a><span class="sd">        digitalearth.web.vector.VectorMixin.lines: what the traced contours are drawn as.</span>
+<a id="__codelineno-0-565" name="__codelineno-0-565"></a><span class="sd">        digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="n">spacing</span> <span class="o">=</span> <span class="n">_as_interval</span><span class="p">(</span><span class="n">interval</span><span class="p">)</span>
+<a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_display_raster_or_skip</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;contours&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569"></a>    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-570" name="__codelineno-0-570"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_display_source</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="n">band</span><span class="p">)</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a>    <span class="n">cmap</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_cmap</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">cmap</span><span class="p">)</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a>    <span class="n">levels</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_contour_levels</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="n">spacing</span><span class="p">,</span> <span class="n">levels</span><span class="o">=</span><span class="n">levels</span><span class="p">)</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a>    <span class="c1"># Recorded before the sub-builder runs, so the key it sets can say what the values are measured in.</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_auto_units</span><span class="p">(</span><span class="n">source</span><span class="p">,</span> <span class="n">units</span><span class="p">)</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">contour</span><span class="p">(</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a>        <span class="n">interval</span><span class="o">=</span><span class="n">spacing</span><span class="o">.</span><span class="n">spacing</span> <span class="k">if</span> <span class="n">spacing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="n">fixed_levels</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="n">levels</span><span class="p">)</span> <span class="k">if</span> <span class="n">levels</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a>        <span class="n">base</span><span class="o">=</span><span class="n">spacing</span><span class="o">.</span><span class="n">base</span> <span class="k">if</span> <span class="n">spacing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mf">0.0</span><span class="p">,</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580"></a>        <span class="n">band</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">band</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span>  <span class="c1"># pyramids counts bands from 0; this tier counts from 1</span>
+<a id="__codelineno-0-581" name="__codelineno-0-581"></a>        <span class="n">attribute</span><span class="o">=</span><span class="s2">&quot;level&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="n">polygonize</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a>    <span class="p">)</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a>    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">features</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a>        <span class="c1"># No level fell inside the band&#39;s range. Passing this on raises &quot;column &#39;level&#39; not found&quot;,</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a>        <span class="c1"># because pyramids only writes the attribute when it writes a feature — which points at the</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a>        <span class="c1"># wrong thing entirely.</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_skipped</span><span class="p">(</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a>            <span class="s2">&quot;contours&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a>            <span class="s2">&quot;no level lies within the data, so nothing was traced — check that &quot;</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="s1">&#39;levels=&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">repr</span><span class="p">(</span><span class="n">levels</span><span class="p">)</span><span class="w"> </span><span class="k">if</span><span class="w"> </span><span class="n">spacing</span><span class="w"> </span><span class="ow">is</span><span class="w"> </span><span class="kc">None</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="s1">&#39;interval=&#39;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">repr</span><span class="p">(</span><span class="n">interval</span><span class="p">)</span><span class="si">}</span><span class="s2"> &quot;</span>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a>            <span class="sa">f</span><span class="s2">&quot;suits band </span><span class="si">{</span><span class="n">band</span><span class="si">}</span><span class="s2">&#39;s range&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a>        <span class="p">)</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="c1"># Lines carry `level`; filled bands carry `level_min`/`level_max` for the band&#39;s two edges, so</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="c1"># colour and label the lower edge — it is what orders the bands.</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="n">attribute</span> <span class="o">=</span> <span class="s2">&quot;level_min&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;level&quot;</span>
+<a id="__codelineno-0-598" name="__codelineno-0-598"></a>    <span class="n">column</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="n">color</span> <span class="k">else</span> <span class="n">attribute</span>
+<a id="__codelineno-0-599" name="__codelineno-0-599"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_draw_contour_features</span><span class="p">(</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a>        <span class="n">features</span><span class="p">,</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a>        <span class="n">filled</span><span class="o">=</span><span class="n">filled</span><span class="p">,</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a>        <span class="n">column</span><span class="o">=</span><span class="n">column</span><span class="p">,</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a>        <span class="n">cmap</span><span class="o">=</span><span class="n">cmap</span><span class="p">,</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a>        <span class="n">color</span><span class="o">=</span><span class="n">color</span><span class="p">,</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a>        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a>        <span class="n">opacity</span><span class="o">=</span><span class="n">opacity</span><span class="p">,</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609"></a>    <span class="p">)</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a>    <span class="c1"># Drawn through `lines` or `polygons`, which record their own kind; the layer is contours.</span>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_rekind_layer</span><span class="p">(</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span><span class="p">,</span> <span class="s2">&quot;filled_contours&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;contours&quot;</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="p">)</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a>        <span class="c1"># The classification the sub-builder just recorded describes this raster&#39;s values, so the key</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a>        <span class="c1"># can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span><span class="p">[</span><span class="s2">&quot;units&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a>        <span class="c1"># Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
