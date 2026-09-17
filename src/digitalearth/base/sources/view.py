@@ -38,6 +38,22 @@ __all__ = ["DESCRIBING_KEYS", "SourceView"]
 DESCRIBING_KEYS = ("variable", "kind", "standard_name")
 
 
+def _off_source(error: BaseException) -> bool:
+    """Whether a failed windowed read means the window missed the data.
+
+    Args:
+        error: What the reader raised.
+
+    Returns:
+        `True` for pyramids' out-of-bounds report, matched by name so this module needs no import of it — the
+        exception moved package once already, and a viewport that pans off the edge must not depend on where
+        it lives.
+    """
+    if "OutOfBounds" in type(error).__name__:
+        return True
+    return "out of bounds" in str(error).lower()
+
+
 class SourceView(Source):
     """A materialised view of data, carrying the reference and slice it was read from.
 
@@ -625,19 +641,152 @@ class SourceView(Source):
         # the window asked for and the window read are the same rectangle.
         cls._refuse_rotated(data)
         window = cls._aligned(window, data)
-        width, height = cls._shape(request)
-        array = np.asarray(
+        width, height = cls._native(window, data, *cls._shape(request))
+        band = selection.first_band
+        try:
+            array = cls._read_window(data, window, width, height, band)
+        # A viewport panned off the data is a place with nothing in it, not a failed read: the canvas comes
+        # back empty, as it does for a window over a hole in the raster, and the map keeps panning.
+        except Exception as error:  # noqa: BLE001
+            if not _off_source(error):
+                raise
+            array = np.full((height, width), np.nan)
+        rows, columns = array.shape[-2], array.shape[-1]
+        xs, ys = cls._axes(window, rows, columns, data)
+        return array, xs, ys, window.crs
+
+    @staticmethod
+    def _missing(data: Any, band: int) -> Optional[float]:
+        """Return the value a windowed read of this band uses for "no data", in the units it returns.
+
+        Args:
+            data: The raster being read.
+            band: The 1-based band.
+
+        Returns:
+            The sentinel as the read returns it — scaled and offset when the band is packed, since a windowed
+            read unpacks its values — or `None` when the band declares none.
+
+        Note:
+            A native-resolution read masks through pyramids (`read_array(masked=True)`), which is the reliable
+            way and the one :func:`~digitalearth.base.arrays.read_masked_band` uses. A decimated read cannot:
+            pyramids refuses `masked=True` together with `out_shape=`, so until it does not
+            (serapeum-org/pyramids#1156) a viewport read compares against the sentinel itself.
+        """
+        sentinels = getattr(data, "no_data_value", None)
+        if not sentinels or band - 1 >= len(sentinels):
+            return None
+        sentinel = sentinels[band - 1]
+        if sentinel is None:
+            return None
+        scales = getattr(data, "scale", None) or [1.0]
+        offsets = getattr(data, "offset", None) or [0.0]
+        index = band - 1 if band - 1 < len(scales) else 0
+        scale = scales[index] if scales[index] is not None else 1.0
+        offset = (offsets[index] if index < len(offsets) else 0.0) or 0.0
+        return float(sentinel) * float(scale) + float(offset)
+
+    @classmethod
+    def _unmasked(cls, array: np.ndarray, data: Any, band: int) -> np.ndarray:
+        """Return a windowed read as floats, with its nodata cells set to `NaN`.
+
+        Args:
+            array: What the windowed read returned.
+            data: The raster it was read from.
+            band: The 1-based band.
+
+        Returns:
+            A `float64` array. Without this a nodata cell reaches the colour range as its sentinel —
+            -3.4e38 on `acc4000.tif` — which flattens every real value onto one end of the ramp.
+        """
+        values = np.asarray(array, dtype="float64")
+        sentinel = cls._missing(data, band)
+        if sentinel is not None:
+            values = np.where(values == sentinel, np.nan, values)
+        return values
+
+    @classmethod
+    def _read_window(
+        cls, data: Any, window: Bounds, width: int, height: int, band: int
+    ) -> np.ndarray:
+        """Read one window of a raster as floats, with its missing cells as `NaN`.
+
+        Args:
+            data: The raster to read.
+            window: The region, snapped to source pixels and in the source's CRS.
+            width: Cells across the canvas.
+            height: Cells down it.
+            band: The 1-based band.
+
+        Returns:
+            A `float64` array of `(height, width)`.
+
+        Note:
+            **Two reads, one meaning.** At full resolution the window is read with `masked=True`, so pyramids
+            decides what is missing — the only reliable answer, and the one a packed band needs, since its
+            nodata cells unpack to ordinary-looking numbers. Decimated, that is not available (pyramids
+            refuses `masked=True` with `out_shape=`, serapeum-org/pyramids#1156), so the read is compared
+            against the sentinel instead. The difference is visible: on `acc4000.tif` the resampler carries
+            values across the nodata boundary, so a decimated frame has fewer missing cells than the raster
+            does. Reading at full resolution when the window allows it is what keeps a zoomed-in frame honest.
+        """
+        native = cls._native_cells(window, data)
+        if native is not None and (width, height) == native:
+            values = np.ma.asarray(
+                data.read_array(band=band - 1, bbox=window.as_bbox(), masked=True)
+            ).astype("float64")
+            return np.ma.filled(values, np.nan)
+        return cls._unmasked(
             data.read_part(
                 bbox=window.as_bbox(),
                 dst_width=width,
                 dst_height=height,
                 bbox_crs=window.crs,
-                band=selection.first_band - 1,  # pyramids' windowed read is 0-based
-            )
+                band=band - 1,  # pyramids' windowed read is 0-based
+            ),
+            data,
+            band,
         )
-        rows, columns = array.shape[-2], array.shape[-1]
-        xs, ys = cls._axes(window, rows, columns, data)
-        return array, xs, ys, window.crs
+
+    @staticmethod
+    def _native(window: Bounds, data: Any, width: int, height: int) -> Tuple[int, int]:
+        """Return the canvas, never asking for more cells than the window holds at full resolution.
+
+        Args:
+            window: The region being read, in the source's CRS.
+            data: The raster being read.
+            width: The canvas width the budget allowed.
+            height: The canvas height it allowed.
+
+        Returns:
+            `(width, height)`, each capped at the number of source cells the window spans. Reading 100x100
+            cells from a 13x14 raster is interpolation dressed as data: it costs more, says no more, and is a
+            picture of the resampler rather than of the raster.
+        """
+        cells = SourceView._native_cells(window, data)
+        if cells is None:
+            return width, height
+        return min(width, cells[0]), min(height, cells[1])
+
+    @staticmethod
+    def _native_cells(window: Bounds, data: Any) -> Optional[Tuple[int, int]]:
+        """Return how many source cells a window spans, across and down.
+
+        Args:
+            window: The region, in the source's CRS.
+            data: The raster being read.
+
+        Returns:
+            `(across, down)`, or `None` when the source does not say what a cell measures — a reader with no
+            geotransform, which is windowed exactly as it was asked.
+        """
+        cell = getattr(data, "cell_size", None)
+        if not cell:
+            return None
+        xmin, ymin, xmax, ymax = window.as_bbox()
+        across = max(1, int(round((xmax - xmin) / float(cell))))
+        down = max(1, int(round((ymax - ymin) / float(cell))))
+        return across, down
 
     @classmethod
     def _aligned(cls, window: Bounds, data: Any) -> Bounds:

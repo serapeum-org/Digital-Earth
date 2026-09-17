@@ -19,6 +19,14 @@ in the tier plan's feature-parity matrix.
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.crs import reproject
+from digitalearth.base.sources.view import SourceView
+from digitalearth.base.spec import (
+    Bounds,
+    DataRef,
+    RenderTarget,
+    Selection,
+    Viewport,
+)
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -439,8 +447,6 @@ class RasterMixin(_MixinBase):
 
                 ```
         """
-        import numpy as np
-
         gv, hv = _require_holoviz()
         if band < 1:
             raise ValueError(f"band is 1-based; got {band!r}")
@@ -449,39 +455,48 @@ class RasterMixin(_MixinBase):
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
                 ".preview); upgrade pyramids or use image() for a small raster"
             )
-        ds = reproject(dataset, self.crs) if self._needs_reproject(dataset) else dataset
+        ds = self._windowable(dataset)
         # Resolved once, from the band's name only: reading the array to build a full Source would
         # defeat the whole point of a windowed reader.
         cmap = self._auto_cmap_for_band(ds, band, cmap)
-        side = max(64, int(np.sqrt(max_pixels)))
-        read_band = (
-            band - 1
-        )  # pyramids preview/read_part are 0-based (like Dataset.read_array)
+        target = RenderTarget(
+            "window", width=self.width, height=self.height, budget=max_pixels
+        )
+        view = SourceView.of(
+            ds,
+            ref=DataRef.to_object(ds),
+            selection=Selection.of(band),
+            request=target.view_request(Viewport(self.crs)),
+        )
 
         def _frame(x_range: Any = None, y_range: Any = None) -> Any:
-            if (
-                x_range is None or y_range is None
-            ):  # initial / static frame: a cheap overview preview
-                arr = _masked_to_nan(
-                    np.asarray(ds.preview(max_size=side, band=read_band))
-                )
-                bounds = ds.bbox if hasattr(ds, "bbox") else None
+            """Read the window the viewport asks for, and draw it.
+
+            Args:
+                x_range: The viewport's x range, or `None` for the first frame.
+                y_range: Its y range, or `None`.
+
+            Returns:
+                The styled element for that window.
+            """
+            if x_range is None or y_range is None:
+                # The first frame is the whole raster within the budget: a canvas with no region windows
+                # the source itself, which is what `preview` used to approximate.
+                shown = view
             else:
-                bbox = (x_range[0], y_range[0], x_range[1], y_range[1])
-                arr = _masked_to_nan(
-                    np.asarray(
-                        ds.read_part(
-                            bbox=bbox,
-                            dst_width=side,
-                            dst_height=side,
-                            bbox_crs=self.crs,
-                            band=read_band,
-                        )
+                shown = view.reread(
+                    target.view_request(
+                        Viewport(self.crs),
+                        bounds=Bounds(
+                            x_range[0], y_range[0], x_range[1], y_range[1], crs=self.crs
+                        ),
                     )
                 )
-                bounds = (bbox[0], bbox[1], bbox[2], bbox[3])
-            image = hv.Image(arr, bounds=bounds) if bounds else hv.Image(arr)
-            return image.opts(cmap=cmap, colorbar=True, **opts)
+            return self._styled(
+                self._image_from_source(shown),
+                common={"cmap": cmap, "colorbar": True, **opts},
+                bokeh={"tools": ["hover"]},
+            )
 
         if not dynamic:
             return self.add_element(_frame())
@@ -489,3 +504,22 @@ class RasterMixin(_MixinBase):
 
         dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
         return self.add_element(dmap)
+
+    def _windowable(self, dataset: Any) -> Any:
+        """Return the raster to read windows from, warped lazily when the display CRS asks for it.
+
+        Args:
+            dataset: The raster the caller gave.
+
+        Returns:
+            The dataset itself when it is already in the display CRS; otherwise pyramids' lazily warped view
+            of it (`Dataset.warped_view`), so each frame warps only the window it reads rather than the whole
+            raster once, up front, at full resolution. A pyramids without `warped_view` falls back to warping
+            the dataset, which is what this did before.
+        """
+        if not self._needs_reproject(dataset):
+            return dataset
+        warped_view = getattr(dataset, "warped_view", None)
+        if warped_view is None:  # pragma: no cover - older pyramids
+            return reproject(dataset, self.crs)
+        return warped_view(self.crs)

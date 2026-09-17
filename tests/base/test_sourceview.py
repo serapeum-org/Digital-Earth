@@ -287,11 +287,13 @@ class TestRereading:
     """The capability the whole task exists for, against a real raster."""
 
     def test_a_view_can_be_read_again_at_another_resolution(self):
-        """`reread` returns the same slice, sized to the new request.
+        """`reread` returns the same slice, sized to the new request but never finer than the data.
 
         Test scenario:
-            This is what `interactive/raster.py` drives by hand and nothing else can reuse. The budget sets
-            the square side, exactly as its inline `max(64, sqrt(max_pixels))` does.
+            This is what `interactive/raster.py` drove by hand and nothing else could reuse. The budget sets
+            how many cells may be read; the source sets how many there are to read. `acc4000.tif` holds
+            13x14 cells, so a budget of 10,000 reads 13x14 — this test pinned 100x100 before #297, which was
+            a picture of the resampler rather than of the raster.
         """
         ref = DataRef(str(RASTER))
         view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
@@ -301,8 +303,8 @@ class TestRereading:
                 budget=10_000,
             )
         )
-        assert again.z.values.shape == (100, 100), (
-            f"a budget of 10,000 cells must read a 100x100 window, got {again.z.values.shape}"
+        assert again.z.values.shape == (13, 14), (
+            f"a whole-raster window must read the raster's own 13x14 cells, got {again.z.values.shape}"
         )
 
     def test_the_address_survives_the_reread(self):
