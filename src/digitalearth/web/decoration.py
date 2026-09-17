@@ -655,6 +655,9 @@ class DecorationMixin(_MixinBase):
             "theme": theme,
             "position": position,
         }
+        self._record_furniture(
+            "layer_switcher", anchor=position, layers=tuple(wanted), theme=theme
+        )
         return self
 
     def text(
@@ -788,6 +791,7 @@ class DecorationMixin(_MixinBase):
         if subtitle:
             body += f'<div style="opacity:.75;margin-top:2px">{_text(subtitle)}</div>'
         self._panels["title"] = (f"<div>{body}</div>", position)
+        self._title = heading
         return self
 
     def graticule(
@@ -928,6 +932,13 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
+        self._record_furniture(
+            "navigation",
+            anchor=position,
+            show_compass=show_compass,
+            show_zoom=show_zoom,
+            visualize_pitch=visualize_pitch,
+        )
         return self._queue(apply)
 
     def scale_bar(
@@ -959,6 +970,9 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
+        self._record_furniture(
+            "scale_bar", anchor=position, unit=unit, max_width=int(max_width)
+        )
         return self._queue(apply)
 
     def fullscreen(self, *, position: str = "top-right") -> Self:
@@ -982,6 +996,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
+        self._record_furniture("fullscreen", anchor=position)
         return self._queue(apply)
 
     def controls(
@@ -1048,6 +1063,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_mapbox_draw(options, position)
 
+        self._record_furniture("measure", anchor=position, distance=distance, area=area)
         return self._queue(apply)
 
     @staticmethod
@@ -1095,6 +1111,10 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_popup(layer_id, **kwargs)
 
+        # Tagged with the layer it belongs to, so `remove_layer` takes the popup off with it rather than
+        # leaving a page that pops up over a layer nobody can see.
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._record_tooltip(layer_id, fields, trigger="click")
         return self._queue(apply)
 
     def tooltip(
@@ -1124,4 +1144,6 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_tooltip(layer_id, **kwargs)
 
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._record_tooltip(layer_id, fields, trigger="hover")
         return self._queue(apply)

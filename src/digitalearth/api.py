@@ -58,6 +58,7 @@ class _Unset:
 _UNSET = _Unset()
 from digitalearth.base.capabilities import Capabilities
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
+from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
 #: Which of ``quickmap``'s map-shaped parameters each backend can actually honour. Anything a caller passes
 #: that is not listed for their backend is refused by name rather than dropped (:func:`_reject_unsupported`).
@@ -89,7 +90,10 @@ _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
 
 #: The tiers whose `capabilities.py` has landed. Each replaces a row that used to be written out here; the rest
 #: keep theirs until their seam lands (#296 web, #300 interactive, #303 static).
-_DECLARATIONS: dict[str, Capabilities] = {"3d": CAPABILITIES_3D}
+_DECLARATIONS: dict[str, Capabilities] = {
+    "3d": CAPABILITIES_3D,
+    "web": CAPABILITIES_WEB,
+}
 
 
 def _declared_row(declaration: Capabilities) -> frozenset[str]:
@@ -143,7 +147,7 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     ),
     "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
     "3d": _declared_row(CAPABILITIES_3D),
-    "web": frozenset({"crs", "basemap", "colorbar"}),
+    "web": _declared_row(CAPABILITIES_WEB),
 }
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that

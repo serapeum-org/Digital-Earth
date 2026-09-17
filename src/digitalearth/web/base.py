@@ -38,6 +38,16 @@ from digitalearth.base.display import (
 )
 from digitalearth.base.registry import KIND_BANDS, band_of, kind_info
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import (
+    Bounds,
+    DataRef,
+    Encoding,
+    FigureSpec,
+    Furniture,
+    PanelSpec,
+    Symbology,
+    Viewport,
+)
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.symbology import sample_cmap
@@ -322,6 +332,12 @@ def _resolve_style(style: Any) -> Any:
     return f"https://basemaps.cartocdn.com/gl/{slug}-gl-style/style.json"
 
 
+#: The id of the one panel a web map draws into. A map is a single view of a single set of layers, so the
+#: figure it writes has exactly one panel; the name is fixed so a stored figure reads the same way every
+#: time.
+PANEL_ID: str = "main"
+
+
 class WebMapBase:
     """Core host: ordered layer registry + display CRS + render/save lifecycle over the MapLibre widget.
 
@@ -455,6 +471,14 @@ class WebMapBase:
         self._data_bounds: Optional[List[float]] = None
         #: An explicit :meth:`fit_bounds` request, which always wins over the accumulated extent.
         self._fit: Optional[dict] = None
+        #: The projection MapLibre draws in, as `globe()` sets it; recorded so the view can say so.
+        self._projection: str = "mercator"
+        #: Where each layer's data came from, keyed by layer id — the figure's sources (#296).
+        self._sources: Dict[str, DataRef] = {}
+        #: The controls the map draws, as furniture on its panel (#292).
+        self._furniture: List[Furniture] = []
+        #: The panel's title, as `title()` set it.
+        self._title: Optional[str] = None
         #: How many layers sit in the basemap band, so :meth:`add_reference` can insert just above them.
         self._underlay_count = 0
         #: How many sit in the reference band, so two of them keep the order they were added in.
@@ -811,6 +835,160 @@ class WebMapBase:
         """
         return list(self._layer_tree.ids)
 
+    @property
+    def figure_spec(self) -> FigureSpec:
+        """What the map draws, as data: its layers, their sources, the view, and the panel's furniture.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`. Its layers are the tree in
+            draw order, its sources are what each builder was given, and its view is a
+            :class:`~digitalearth.base.spec.Viewport` in EPSG:4326 — the CRS the tier places data in — carrying
+            the centre, zoom and fitted bounds the map was asked for. The panel also holds the title and the
+            furniture: the navigation, scale-bar, fullscreen, measure, layer-switcher and time-slider controls,
+            each under the name #292 registers it with.
+
+        Examples:
+            - A map describes what it drew, and where it is looking:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> points = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> figure = WebMap(center=(4.9, 52.4), zoom=7).points(points, name="obs").figure_spec
+                >>> figure.layers.get("obs").kind, figure.panels[0].view.zoom
+                ('points', 7.0)
+
+                ```
+            - Controls are the panel's furniture, not layers:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> panel = WebMap().navigation().scale_bar().figure_spec.panels[0]
+                >>> sorted(item.kind for item in panel.furniture)
+                ['navigation', 'scale_bar']
+
+                ```
+        """
+        tree = self._layer_tree
+        panel = PanelSpec(
+            PANEL_ID,
+            self.viewport,
+            layers=tuple(tree.ids),
+            title=self._title,
+            furniture=tuple(self._furniture),
+        )
+        return FigureSpec(
+            panels=(panel,),
+            layers=tree,
+            sources={
+                key: ref for key, ref in self._sources.items() if key in set(tree.ids)
+            },
+        )
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Viewport` in the CRS the tier places data in (EPSG:4326, which
+            is what `WebMap(crs=)` accepts), carrying the `center` and `zoom` the map was built with and the
+            bounds an explicit :meth:`fit_bounds` asked for. The projection MapLibre draws in is a property of
+            the style rather than of the data, which is why it is not this CRS.
+        """
+        fitted = self._fit if isinstance(self._fit, dict) else {}
+        box = fitted.get("bounds")
+        bounds = (
+            Bounds(box[0], box[1], box[2], box[3], crs=self.crs)
+            if box is not None
+            else None
+        )
+        return Viewport(
+            self.crs,
+            bounds=bounds,
+            globe=self._projection == "globe",
+            center=tuple(self.center) if self.center is not None else None,
+            zoom=float(self.zoom) if self.zoom is not None else None,
+        )
+
+    def _record_furniture(
+        self, kind: str, *, anchor: Any = None, **options: Any
+    ) -> None:
+        """Record a control the map draws, as furniture on its panel (#292).
+
+        Calling a control builder twice records one item: MapLibre would add a second control in the same
+        corner, which is a caller repeating themselves rather than asking for two.
+
+        Args:
+            kind: The registered furniture name — `"navigation"`, `"scale_bar"`, ….
+            anchor: The corner it sits in; `None` takes the registered default.
+            **options: What the control was built with, for a renderer that draws it from the description.
+        """
+        item = Furniture(kind, anchor=anchor, options=options)
+        self._furniture = [held for held in self._furniture if held.kind != kind]
+        self._furniture.append(item)
+
+    def _forget_furniture(self, kind: str) -> None:
+        """Forget a control the map no longer draws.
+
+        Args:
+            kind: The registered furniture name.
+        """
+        self._furniture = [held for held in self._furniture if held.kind != kind]
+
+    def _record_tooltip(self, layer_id: str, fields: Any, *, trigger: str) -> None:
+        """Record what a popup or tooltip shows, as a channel on the layer it is bound to (#292).
+
+        Per-layer interaction is an encoding, not a separate object: put it on the layer and it travels with
+        it, so removing the layer removes what pops up over it — which is what left a page emitting
+        `addPopup` for a layer that was no longer there.
+
+        Args:
+            layer_id: The layer the popup or tooltip is bound to.
+            fields: The field names shown; `None`, like an empty list, means every field, which is what the
+                builders already mean by it.
+            trigger: `"click"` for a popup, `"hover"` for a tooltip.
+        """
+        held = self._layer_tree.get(layer_id)
+        shown = () if fields is None else tuple(fields)
+        symbology = Symbology(
+            encodings={
+                **dict(held.symbology.encodings),
+                "tooltip": Encoding.constant("tooltip", shown),
+            },
+            props=dict(held.symbology.props),
+        ).with_props(tooltip_trigger=trigger)
+        self._layer_tree = self._layer_tree.replace(
+            replace_fields(held, symbology=symbology)
+        )
+
+    def _forget_slider_frame(self, layer_id: str) -> None:
+        """Drop a removed layer from the time slider, and the slider itself when nothing is left to step.
+
+        Args:
+            layer_id: The layer being removed.
+
+        Note:
+            A slider that still named a removed layer filtered a layer that was not there — the page kept a
+            control that did nothing, which is the dangling reference this seam is meant to end.
+        """
+        slider = next(
+            (item for item in self._furniture if item.kind == "time_slider"), None
+        )
+        if slider is None:
+            return
+        named = slider.options.get("layers", ())
+        if layer_id == slider.options.get("layer") or tuple(named) == (layer_id,):
+            self._forget_furniture("time_slider")
+            return
+        if layer_id in named:
+            self._record_furniture(
+                "time_slider",
+                anchor=slider.anchor,
+                **{
+                    **dict(slider.options),
+                    "layers": tuple(held for held in named if held != layer_id),
+                },
+            )
+
     def _index_layer(
         self,
         layer_id: str,
@@ -819,6 +997,8 @@ class WebMapBase:
         kind: str,
         visible: bool = True,
         band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
     ) -> None:
         """Record a data layer so it can be addressed later.
 
@@ -833,6 +1013,10 @@ class WebMapBase:
                 recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
                 and records one.
 
+            source: What the layer draws, recorded in the figure's sources under the layer's id — a path, a
+                URL, or the object itself. `None` for a layer drawn from no data, such as a graticule.
+            symbology: How the layer looks, as values rather than as the compiled engine expression. `None`
+                records an empty symbology.
             band: Where the layer is drawn, when its kind does not say — what a caller's own object needs,
                 since `custom:maplibre` names the engine rather than what it draws. `None` takes the kind's band.
 
@@ -849,12 +1033,16 @@ class WebMapBase:
                 whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
         kind_info(kind)
+        if source is not None:
+            self._sources[layer_id] = DataRef.of(source, name=layer_id)
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
             # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
             LayerSpec(
                 layer_id,
                 kind,
+                source_id=layer_id if source is not None else None,
+                symbology=Symbology() if symbology is None else symbology,
                 label=label or layer_id,
                 visible=bool(visible),
                 band=band,
@@ -928,6 +1116,8 @@ class WebMapBase:
         # A caller's own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker
         # attribute the builders' closures carry, so there is nothing on it to compare by id.
         held = self._custom.pop(layer_id, None)
+        self._sources.pop(layer_id, None)
+        self._forget_slider_frame(layer_id)
 
         def _is_layer(layer: Any) -> bool:
             """Whether a queued layer is the one being removed.

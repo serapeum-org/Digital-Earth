@@ -18,6 +18,7 @@ The payoff lands with `SourceView` in Wave 2: ``SourceView = materialise(DataRef
 Until then this is the reference and the registry, with no tier obliged to use it yet.
 """
 
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -120,6 +121,52 @@ class DataRef:
                 ```
         """
         return cls(register_object(obj, name=name), **rest)
+
+    @classmethod
+    def of(cls, data: Any, *, name: str = "") -> "DataRef":
+        """Return the reference a builder stores for whatever it was given.
+
+        Args:
+            data: A path or URL, a `DataRef` already, or an object in memory — a pyramids dataset, a
+                GeoDataFrame, an array.
+            name: A stable id for an in-memory object; reusing one replaces what it points at.
+
+        Returns:
+            The reference as given for a `DataRef`; a reference to that path or URL for a string or
+            `os.PathLike`, so the figure can be written and read back anywhere; and an `object:` reference
+            otherwise, which resolves in this process only — a pyramids dataset does not know where it came
+            from, so that is the only honest reference to one.
+
+        Examples:
+            - A path is referenced as a path, which a stored figure can carry:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> DataRef.of("data/dem.tif").uri
+                'data/dem.tif'
+
+                ```
+            - An object is registered, and the reference reaches it back:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> rows = [1, 2, 3]
+                >>> DataRef.of(rows, name="demo-of").open() is rows
+                True
+
+                ```
+            - A reference already made is kept as it is:
+                ```python
+                >>> from digitalearth.base.spec import DataRef
+                >>> held = DataRef("s3://bucket/dem.tif")
+                >>> DataRef.of(held) is held
+                True
+
+                ```
+        """
+        if isinstance(data, DataRef):
+            return data
+        if isinstance(data, (str, os.PathLike)):
+            return cls(str(data))
+        return cls.to_object(data, name=name)
 
     def open(self) -> Any:
         """Open the data this reference names.

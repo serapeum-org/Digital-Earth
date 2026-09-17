@@ -169,7 +169,7 @@ class RasterMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind="raster", visible=visible)
+        self._index_layer(layer_id, name, kind="raster", visible=visible, source=data)
         return self._queue(apply)
 
     def rgb_composite(
@@ -275,7 +275,7 @@ class RasterMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind="rgb", visible=visible)
+        self._index_layer(layer_id, name, kind="rgb", visible=visible, source=dataset)
         return self._queue(apply)
 
     @staticmethod

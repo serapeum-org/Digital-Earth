@@ -127,7 +127,6 @@ class TestLayerSpec:
             ("z_source", ""),
             ("label", ""),
             ("group", 3),
-            ("filter", ""),
         ],
     )
     def test_an_optional_string_that_is_set_must_not_be_empty(self, field, value):
@@ -312,6 +311,34 @@ class TestLayerTreeChanges:
             "a",
             "b",
         )
+
+    @pytest.mark.parametrize(
+        "value, message",
+        [
+            ("", "must be a non-empty string or None"),
+            ([], "must be a non-empty expression"),
+            (3, "must be a string, a JSON expression"),
+        ],
+    )
+    def test_a_filter_nothing_could_evaluate_is_refused(self, value, message):
+        """A filter reaches the renderer uninterpreted, so it is checked for shape where it is written.
+
+        Args:
+            value: The unusable filter under test.
+            message: What the refusal must say.
+
+        Test scenario:
+            The field takes a MapLibre expression as well as a string since #296, so an empty list is now a
+            distinct mistake: it filters nothing, which is what no filter already means.
+        """
+        with pytest.raises(ValueError, match=message):
+            LayerSpec("a", "points", filter=value)
+
+    def test_a_filter_expression_round_trips(self):
+        """A MapLibre expression is stored as nested tuples and written back as lists."""
+        layer = LayerSpec("a", "points", filter=["==", ["get", "class"], "road"])
+        assert layer.filter == ("==", ("get", "class"), "road"), layer.filter
+        assert LayerSpec.from_dict(layer.to_dict()) == layer, layer.to_dict()
 
     @pytest.mark.parametrize("index", [-1, 3, True, 1.0])
     def test_add_refuses_a_position_outside_the_tree(self, index):

@@ -122,7 +122,7 @@ class BigDataMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, None, kind="heatmap")
+        self._index_layer(layer_id, None, kind="heatmap", source=gdf)
         return self._queue(apply)
 
     def cluster(
@@ -197,7 +197,7 @@ class BigDataMixin(_MixinBase):
         # indexed id removes all three together — they are one thing to a viewer.
         apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
         self._last_layer_id = unclustered.id
-        self._index_layer(clusters.id, None, kind="clusters")
+        self._index_layer(clusters.id, None, kind="clusters", source=gdf)
         return self._queue(apply)
 
     def _add_deck_layer(self, layer: dict) -> Self:

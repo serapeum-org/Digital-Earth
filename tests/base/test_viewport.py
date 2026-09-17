@@ -279,8 +279,8 @@ class TestViewport:
 
     def test_from_dict_refuses_an_unknown_key(self):
         """A key a newer writer added is refused, not dropped."""
-        stored = {"crs": 4326, "zoom": 3}
-        with pytest.raises(ValueError, match=r"unknown keys \['zoom'\]"):
+        stored = {"crs": 4326, "pitch": 30}
+        with pytest.raises(ValueError, match=r"unknown keys \['pitch'\]"):
             Viewport.from_dict(stored)
 
 

@@ -40,10 +40,12 @@ from typing import (
 from digitalearth.base.registry import KIND_BANDS, band_of, is_kind_name
 from digitalearth.base.spec._serial import (
     as_list,
+    frozen_value,
     plain_text,
     read_entry,
     refuse_unknown,
     require,
+    to_json_value,
     true_or_false,
 )
 from digitalearth.base.spec.selection import Selection
@@ -110,7 +112,10 @@ class LayerSpec:
             :data:`~digitalearth.base.registry.KIND_BANDS`, or `None` to take the kind's. A custom layer needs
             it: a caller's own object is `custom:<engine>` whatever it draws, so only the caller can say whether
             it is ground cover or a label.
-        filter: A filter expression, carried for the renderer rather than interpreted here.
+        filter: A filter expression, carried for the renderer rather than interpreted here. A string — SQL-like,
+            as the static and interactive tiers write one — or a JSON expression, as MapLibre and deck.gl take
+            one (`["==", ["get", "class"], "road"]`). A list is stored as a tuple, like every other sequence
+            here, and is written back as a list by `to_dict`.
 
     Raises:
         ValueError: for an id that is not a non-empty string, a kind that is not a
@@ -201,8 +206,9 @@ class LayerSpec:
                 f"LayerSpec visible must be True or False; got {self.visible!r}"
             )
         object.__setattr__(self, "visible", visible)
-        for name in ("source_id", "z_source", "label", "group", "filter"):
+        for name in ("source_id", "z_source", "label", "group"):
             _optional_text("LayerSpec", name, getattr(self, name))
+        object.__setattr__(self, "filter", _checked_filter(self.filter))
         if self.band is not None and self.band not in KIND_BANDS:
             raise ValueError(
                 f"LayerSpec band must be one of {list(KIND_BANDS)} or None; got {self.band!r}"
@@ -290,10 +296,12 @@ class LayerSpec:
         styled = self.symbology.to_dict()
         if styled:
             out["symbology"] = styled
-        for name in ("z_source", "label", "group", "band", "filter"):
+        for name in ("z_source", "label", "group", "band"):
             value = getattr(self, name)
             if value is not None:
                 out[name] = plain_text(value)
+        if self.filter is not None:
+            out["filter"] = to_json_value(self.filter, f"LayerSpec[{self.id!r}].filter")
         if not self.visible:
             out["visible"] = False
         return out
@@ -370,6 +378,55 @@ class LayerSpec:
             band=data.get("band"),
             filter=data.get("filter"),
         )
+
+
+def _checked_filter(value: Any) -> Any:
+    """Return a layer's filter in the form it is stored, refusing one no renderer could read.
+
+    Args:
+        value: What the constructor was given.
+
+    Returns:
+        `None`, a non-empty string, or an expression with every list in it — however nested — stored as a
+        tuple, so a filter written with `to_dict` reads back equal and the layer stays hashable.
+
+    Raises:
+        ValueError: for an empty string, an empty expression, or a value that is neither: a filter nothing can
+            evaluate would silently draw every feature.
+
+    Examples:
+        - A string filter is kept as written:
+            ```python
+            >>> from digitalearth.base.spec.layer import _checked_filter
+            >>> _checked_filter("class = 'road'")
+            "class = 'road'"
+
+            ```
+        - A MapLibre expression is stored as nested tuples:
+            ```python
+            >>> from digitalearth.base.spec.layer import _checked_filter
+            >>> _checked_filter(["==", ["get", "class"], "road"])
+            ('==', ('get', 'class'), 'road')
+
+            ```
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        if not value:
+            raise ValueError("LayerSpec filter must be a non-empty string or None")
+        return value
+    if isinstance(value, (list, tuple)):
+        if not value:
+            raise ValueError(
+                "LayerSpec filter must be a non-empty expression; an empty one draws every feature, which is "
+                "what no filter already means"
+            )
+        return frozen_value(value)
+    raise ValueError(
+        f"LayerSpec filter must be a string, a JSON expression such as ['==', ['get', 'class'], 'road'], or "
+        f"None; got {type(value).__name__}"
+    )
 
 
 def _is_position(index: Any) -> bool:

@@ -125,13 +125,18 @@ class Viewport:
         domain: A named region (``"europe"``) or a ``(west, south, east, north)`` box in degrees — the static
             tier's ``domain=`` — or ``None``. A view holds one region, so `bounds` and `domain` are not set together.
         globe: Whether the map is drawn on a globe frame rather than a flat projection.
+        center: Where a pan-and-zoom map is looking, as `(x, y)` in `crs` — what the web tier calls `center=`.
+            `None` leaves the renderer to frame the data. A region and a centre are not the same request: a
+            region says *what to fit*, a centre and a zoom say *where to stand*, which is why both can be set.
+        zoom: The zoom level of a pan-and-zoom map — MapLibre's, where each step doubles the scale. `None`
+            leaves it to the renderer.
 
     Raises:
         ValueError: for a `None` or boolean CRS, one a figure could not store (a float, a list — anything that is
             not an EPSG integer, a string or a CRS object pyramids reads), or one pyramids cannot read (`0`, `""`);
             `bounds` that is not a `Bounds`, carries no CRS or is in a different CRS; `bounds` and `domain` together;
             a `domain` that is neither a non-empty name nor four finite numbers, or a domain box with west past east
-            or south past north — a box cannot cross the antimeridian; or a non-boolean `globe`.
+            or south past north — a box cannot cross the antimeridian; a non-boolean `globe`; a `center` that is not two finite numbers; or a `zoom` that is not a finite number.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
@@ -164,6 +169,8 @@ class Viewport:
     bounds: Optional[Bounds] = None
     domain: Optional[Union[str, Tuple[float, float, float, float]]] = None
     globe: bool = False
+    center: Optional[Tuple[float, float]] = None
+    zoom: Optional[float] = None
 
     def __post_init__(self) -> None:
         """Refuse a view nothing could be drawn in.
@@ -188,6 +195,38 @@ class Viewport:
                 f"Viewport globe must be True or False; got {self.globe!r}"
             )
         object.__setattr__(self, "globe", globe)
+        object.__setattr__(self, "center", self._checked_center(self.center))
+        if self.zoom is not None:
+            object.__setattr__(
+                self, "zoom", finite_number("Viewport", "zoom", self.zoom)
+            )
+
+    @staticmethod
+    def _checked_center(center: Any) -> Optional[Tuple[float, float]]:
+        """Return the centre as two floats, or `None`.
+
+        Args:
+            center: What the constructor was given.
+
+        Returns:
+            `(x, y)` as floats, or `None`.
+
+        Raises:
+            ValueError: for anything that is not two finite numbers — a centre with three numbers is a caller
+                who meant a bounding box, and one with a `None` in it would place the map nowhere.
+        """
+        if center is None:
+            return None
+        try:
+            x, y = center
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Viewport center must be (x, y) in the view's CRS; got {center!r}"
+            ) from None
+        return (
+            finite_number("Viewport", "center x", x),
+            finite_number("Viewport", "center y", y),
+        )
 
     def _check_bounds(self) -> None:
         """Refuse bounds that are not a `Bounds`, or that are in a different CRS from the view.
@@ -374,6 +413,10 @@ class Viewport:
             )
         if self.globe:
             out["globe"] = True
+        if self.center is not None:
+            out["center"] = [float(value) for value in self.center]
+        if self.zoom is not None:
+            out["zoom"] = float(self.zoom)
         return out
 
     @classmethod
@@ -418,9 +461,12 @@ class Viewport:
 
                 ```
         """
-        refuse_unknown("Viewport", data, ("crs", "bounds", "domain", "globe"))
+        refuse_unknown(
+            "Viewport", data, ("crs", "bounds", "domain", "globe", "center", "zoom")
+        )
         bounds = data.get("bounds")
         domain = data.get("domain")
+        center = data.get("center")
         return cls(
             crs=require("Viewport", data, "crs"),
             bounds=None
@@ -428,6 +474,8 @@ class Viewport:
             else read_entry("Viewport", "bounds", Bounds.from_dict, bounds),
             domain=tuple(domain) if isinstance(domain, list) else domain,
             globe=data.get("globe", False),
+            center=None if center is None else tuple(center),
+            zoom=data.get("zoom"),
         )
 
 

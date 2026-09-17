@@ -389,26 +389,6 @@ PANEL_ID: str = "scene"
 DEFAULT_CAMERA: Camera = Camera((1.0, -1.0, 1.0))
 
 
-def _source_ref(data: Any, kind: str) -> DataRef:
-    """Return the reference a layer's source is stored as.
-
-    Args:
-        data: What the builder was given — a path, a URI, a `DataRef`, or an object already in memory.
-        kind: The layer's kind, used to name an in-memory object.
-
-    Returns:
-        A `DataRef` naming the file or URL when the caller gave one, so the figure can be written and read back
-        anywhere. An object is registered in this process instead: a pyramids dataset does not know where it
-        came from, so the only honest reference to it is one that resolves here — which is why
-        `FigureSpec.to_dict` refuses to store it.
-    """
-    if isinstance(data, DataRef):
-        return data
-    if isinstance(data, (str, os.PathLike)):
-        return DataRef(str(data))
-    return DataRef.to_object(data, name=kind)
-
-
 def _vector3(values: Any) -> tuple[float, float, float]:
     """Return VTK's three coordinates as the triple a `Camera` field holds.
 
@@ -1299,7 +1279,7 @@ class Scene3DBase:
         source_id = None
         if data is not None:
             source_id = layer_id
-            sources[source_id] = _source_ref(data, kind)
+            sources[source_id] = DataRef.of(data, name=kind)
         spec = LayerSpec(
             layer_id,
             kind,

@@ -672,7 +672,7 @@ class VectorMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind=kind, visible=visible)
+        self._index_layer(layer_id, name, kind=kind, visible=visible, source=features)
         return self._queue_layer(apply, kind)
 
     @staticmethod

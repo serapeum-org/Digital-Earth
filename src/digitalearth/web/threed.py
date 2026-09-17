@@ -90,7 +90,7 @@ class ThreeDMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, None, kind="extrusion")
+        self._index_layer(layer_id, None, kind="extrusion", source=gdf)
         return self._queue(apply)
 
     def terrain(
@@ -137,6 +137,7 @@ class ThreeDMixin(_MixinBase):
         """
         _require_layer_api()
         projection = "globe" if enabled else "mercator"
+        self._projection = projection
 
         def apply(widget: Any) -> None:
             widget.set_projection(projection)
