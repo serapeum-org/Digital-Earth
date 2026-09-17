@@ -296,6 +296,24 @@ class TestDecorationNeedsEngine:
         with pytest.raises(ValueError, match="popup"):
             WebMap().popup(["pop"])
 
+    def test_popup_defaults_to_the_last_layer_and_queues(self, polygons_gdf):
+        """A popup binds to the layer just drawn, and is queued like any other closure.
+
+        Args:
+            polygons_gdf: The features the popup is bound to.
+
+        Test scenario:
+            Only the refusal was covered; the path that binds a popup went through the builders' queue
+            unexercised, which is where a drawn layer is placed among the bands (#292).
+        """
+        from maplibre.ipywidget import MapWidget
+
+        m = WebMap().choropleth(polygons_gdf, column="pop").popup(["pop"])
+        assert m._layer_tree.get(m.layer_ids[0]).kind == "choropleth", m.layer_ids
+        assert isinstance(m.render(), MapWidget), (
+            "the popup closure must replay onto the widget"
+        )
+
     def test_tooltip_defaults_to_last_layer_and_renders(self, polygons_gdf):
         from maplibre.ipywidget import MapWidget
 

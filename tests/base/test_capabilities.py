@@ -116,6 +116,21 @@ class TestWhatIsDeliberatelyMissing:
                 "flat", features={"colorbar"}, absent={"colorbar": "no colour key"}
             )
 
+    def test_a_name_that_is_not_a_string_is_refused(self):
+        """A number in a capability set would compare equal to nothing a caller can ask for."""
+        with pytest.raises(ValueError, match="must be names"):
+            Capabilities("flat", features={1})
+
+    def test_absent_must_be_a_mapping_of_reasons(self):
+        """A list of names would be an absence with no explanation, which is the point of the field."""
+        with pytest.raises(ValueError, match="absent must be a mapping"):
+            Capabilities("flat", absent=["domain"])
+
+    def test_absent_must_be_keyed_by_name(self):
+        """A reason filed under a number could never be looked up."""
+        with pytest.raises(ValueError, match="absent must be keyed by name"):
+            Capabilities("flat", absent={1: "no extent"})
+
     def test_the_declaration_cannot_be_edited_afterwards(self):
         """A frozen value type: a tier's answer is not something a caller can rewrite."""
         declared = Capabilities("flat", absent={"domain": "no extent"})

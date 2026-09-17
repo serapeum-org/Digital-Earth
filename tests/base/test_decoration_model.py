@@ -21,6 +21,7 @@ from digitalearth.base.registry import (
     furniture_kinds,
     kind_info,
     kinds,
+    register_furniture,
     temporary_furniture,
     temporary_kind,
 )
@@ -273,6 +274,51 @@ class TestFurniture:
             placed = Furniture("demo:inset").anchor
         assert placed == "top-left", placed
 
+    def test_a_name_that_could_not_be_looked_up_is_refused(self):
+        """A furniture name follows the kind grammar, so it can be stored and read back."""
+        with pytest.raises(ValueError, match="is not a furniture name"):
+            FurnitureInfo("Scale Bar", "top-left", "a scale bar")
+
+    def test_an_entry_anchored_nowhere_is_refused(self):
+        """An anchor outside the four corners could not be placed by any tier."""
+        with pytest.raises(ValueError, match="anchor must be one of"):
+            FurnitureInfo("demo:compass", "middle", "a compass")
+
+    def test_an_entry_with_no_description_is_refused(self):
+        """The registry is listed to callers, so every row says what it is."""
+        with pytest.raises(ValueError, match="needs a description"):
+            FurnitureInfo("demo:blank", "top-left", "  ")
+
+    def test_registering_something_that_is_not_an_entry_is_refused(self):
+        """A bare name carries no anchor, so it could not be placed."""
+        with pytest.raises(TypeError, match="needs a FurnitureInfo"):
+            register_furniture("scale_bar")
+
+    def test_a_second_meaning_for_one_name_is_refused(self):
+        """Two plugins claiming one name would otherwise overwrite each other silently."""
+        with pytest.raises(ValueError, match="is already registered"):
+            register_furniture(FurnitureInfo("measure", "top-right", "another meaning"))
+
+    def test_registering_the_same_entry_again_is_accepted(self):
+        """A module imported twice registers the same row twice, which is not a clash."""
+        register_furniture(furniture_info("measure"))
+        assert furniture_info("measure").anchor == "top-left", furniture_info("measure")
+
+    def test_a_temporary_entry_needs_an_entry_too(self):
+        """The block form refuses what the permanent form refuses."""
+        with pytest.raises(TypeError, match="needs a FurnitureInfo"):
+            with temporary_furniture("scale_bar"):
+                pass
+
+    def test_swapping_a_built_in_for_a_block_puts_it_back(self):
+        """A test that moves the scale bar must not move it for the next test."""
+        with temporary_furniture(FurnitureInfo("scale_bar", "top-right", "a stand-in")):
+            inside = furniture_info("scale_bar").anchor
+        assert (inside, furniture_info("scale_bar").anchor) == (
+            "top-right",
+            "bottom-left",
+        ), "the built-in must come back"
+
     def test_the_built_in_items_cover_what_the_tiers_already_draw(self):
         """Scale bar, north arrow, attribution, navigation, fullscreen, switcher, slider, measure."""
         missing = {
@@ -382,6 +428,15 @@ class TestGuides:
     def test_a_default_guide_stores_an_empty_dict(self):
         """Only what was asked for is written, so a guide costs nothing in JSON."""
         assert Guide().to_dict() == {}, Guide().to_dict()
+
+    def test_a_guide_writes_what_it_was_asked_for(self):
+        """Each field is stored under its own key, so a stored guide reads as it was written."""
+        stored = Guide(show=False, title="Rainfall", anchor="top-left").to_dict()
+        assert stored == {
+            "show": False,
+            "title": "Rainfall",
+            "anchor": "top-left",
+        }, stored
 
     @pytest.mark.parametrize(
         "guide, message",
