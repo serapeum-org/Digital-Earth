@@ -177,6 +177,16 @@ class TestTheGlobe:
         scene.globe(field, coastlines=False)
         assert same_crs(scene.display_crs, 4326), scene.display_crs
 
+    def test_a_globe_joins_a_scene_already_drawn_in_epsg_4326(self, field):
+        """A scene given `crs=4326` draws the globe and keeps its CRS."""
+        scene = Scene3D(off_screen=True, crs="EPSG:4326")
+        try:
+            scene.globe(field, coastlines=False)
+            described = (scene.display_crs, len(scene.layers))
+        finally:
+            scene.close()
+        assert described == ("EPSG:4326", 1), described
+
     def test_a_globe_in_a_scene_drawn_in_another_crs_is_refused(
         self, scene, dem, field
     ):
