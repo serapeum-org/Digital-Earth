@@ -772,7 +772,9 @@ class Scene3DBase:
             volume=volume,
             **kwargs,
         )
-        if actor is None:
+        if (
+            actor is None
+        ):  # pragma: no cover - the object was stored a line above, so it is there
             self._custom.pop(layer_id, None)
         return actor
 
@@ -997,6 +999,20 @@ class Scene3DBase:
 
         Raises:
             KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - The mesh a builder produced, reached by the layer's id rather than by position:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
+                >>> scene.mesh_of("terrain-1").n_points
+                20
+                >>> scene.close()
+
+                ```
         """
         return self._drawn_pair(layer_id, "mesh")
 
@@ -1140,6 +1156,22 @@ class Scene3DBase:
         Note:
             VTK composites its actors by depth, so this changes the description rather than the picture. It is
             recorded because the figure is drawn by the other tiers too, where order decides what is on top.
+
+        Examples:
+            - Two layers, reordered by id:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> dem = get_source(np.add.outer(np.arange(4.0), np.arange(5.0)))
+                >>> _ = scene.terrain(dem, name="under")
+                >>> _ = scene.terrain(dem, name="over")
+                >>> scene.move_layer("over", 0).layer_ids
+                ['over', 'under']
+                >>> scene.close()
+
+                ```
         """
         self._change(
             self._figure_with(layers=self._figure.layers.move(layer_id, index))

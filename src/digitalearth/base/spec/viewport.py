@@ -147,6 +147,14 @@ class Viewport:
             (4326, [-10.0, 35.0, 30.0, 60.0])
 
             ```
+        - A pan-and-zoom map says where it is standing rather than what to fit:
+            ```python
+            >>> from digitalearth.base.spec import Viewport
+            >>> view = Viewport(4326, center=(4.9, 52.4), zoom=7)
+            >>> view.center, view.zoom
+            ((4.9, 52.4), 7.0)
+
+            ```
         - A named domain, as the static tier spells it:
             ```python
             >>> from digitalearth.base.spec import Viewport

@@ -387,16 +387,23 @@ class RasterMixin(_MixinBase):
 
         The raster analogue of the vector Datashader path: instead of materialising a multi-GB raster,
         it reads only the visible window at a suitable overview via **pyramids** and re-reads on pan/
-        zoom. All windowing/overview selection is pyramids' (``read_part`` / ``preview`` —
-        cloud-native partial reads for remote COGs over ``/vsicurl/`` come for free); this method only
-        drives the viewport loop and styles the result.
+        zoom. Cloud-native partial reads for remote COGs over ``/vsicurl/`` come for free.
+
+        **Every frame is a read through the data tier** (#297): the window, the canvas and the budget are a
+        :class:`~digitalearth.base.spec.RenderTarget` request, and
+        :class:`~digitalearth.base.sources.view.SourceView` answers it — snapping the window to source pixel
+        edges, never asking for more cells than the window holds, masking what is missing, and drawing an
+        empty frame for a window off the data. A raster in another CRS is read through pyramids'
+        ``Dataset.warped_view``, so each frame warps only its own window rather than the whole raster once.
 
         Args:
             dataset: A pyramids ``Dataset`` (ideally a COG with overviews). Must expose ``read_part``.
             band: 1-based band to read.
-            max_pixels: Pixel budget per rendered frame; the canvas is sized to stay under it.
+            max_pixels: Cell budget per rendered frame. The canvas follows the map's own width and height
+                within it, so a wide map reads a wide window rather than a square one.
             dynamic: Re-read the viewport on pan/zoom via a ``RangeXY`` stream (needs a live server);
-                ``False`` renders one decimated ``preview`` frame (deterministic — what tests assert).
+                ``False`` renders one frame of the whole raster within the budget (deterministic — what
+                tests assert).
             cmap: Colormap; ``None`` (default) resolves from the band's variable name via
                 ``autostyle.auto_style`` (#249), with ``"viridis"`` behind the lookup as the fallback.
             **opts: Extra HoloViews style options applied to the element.
@@ -410,9 +417,9 @@ class RasterMixin(_MixinBase):
                 (``read_part``/``preview``) — file a pyramids issue rather than reaching around it.
 
         Examples:
-            - ``dynamic=False`` reads one decimated ``preview`` frame — deterministic, and the one
-              form that works with no live server behind it. A raster already under the pixel
-              budget comes back whole, so the budget only ever *caps* what is materialised:
+            - ``dynamic=False`` reads one frame of the whole raster — deterministic, and the one
+              form that works with no live server behind it. A raster already under the budget comes back
+              whole, so the budget only ever *caps* what is materialised:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP

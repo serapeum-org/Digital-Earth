@@ -893,6 +893,23 @@ class WebMapBase:
             is what `WebMap(crs=)` accepts), carrying the `center` and `zoom` the map was built with and the
             bounds an explicit :meth:`fit_bounds` asked for. The projection MapLibre draws in is a property of
             the style rather than of the data, which is why it is not this CRS.
+
+        Examples:
+            - What a map was built to look at is readable as a value:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> view = WebMap(center=(4.9, 52.4), zoom=7).viewport
+                >>> view.center, view.zoom, view.crs
+                ((4.9, 52.4), 7.0, 4326)
+
+                ```
+            - A region asked for with `fit_bounds` frames the view:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().fit_bounds([3.0, 50.0, 7.0, 54.0]).viewport.bounds.as_bbox()
+                [3.0, 50.0, 7.0, 54.0]
+
+                ```
         """
         fitted = self._fit if isinstance(self._fit, dict) else {}
         box = fitted.get("bounds")

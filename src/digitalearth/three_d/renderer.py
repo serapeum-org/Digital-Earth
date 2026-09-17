@@ -243,7 +243,9 @@ class Renderer3D:
         # Only through the plotter the scene already has: asking for `scene.plotter` here would build one for
         # a scene that never drew anything, which is what #290 made lazy.
         plotter = getattr(self.scene, "_plotter", None)
-        if plotter is not None:
+        if (
+            plotter is not None
+        ):  # pragma: no branch - a drawn layer means a plotter was built
             plotter.remove_actor(drawn[1], render=False)
 
     def set_visible(self, layer_id: str, visible: bool) -> None:
