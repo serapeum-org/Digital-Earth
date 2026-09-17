@@ -96,6 +96,17 @@ class TestLookingUpAKind:
         ):
             kind_info("polygon")
 
+    def test_an_unhashable_name_is_reported_as_unknown(self):
+        """A list is not a kind; the lookup answers with the same `KeyError` rather than a `TypeError`.
+
+        Test scenario:
+            A dict lookup with an unhashable key raises `TypeError`, which would name neither the kind nor the
+            registered ones.
+        """
+        name = ["points"]
+        with pytest.raises(KeyError, match="no layer kind"):
+            kind_info(name)
+
 
 class TestRegisteringAKind:
     """How a plugin or an engine-specific layer adds a kind."""
@@ -130,6 +141,26 @@ class TestRegisteringAKind:
         clash = KindInfo("raster", "points", "a different meaning for a taken name")
         with pytest.raises(ValueError, match="'raster' is already registered"):
             register_kind(clash)
+
+    @pytest.mark.parametrize("entry", [("points", "points", "doc"), "points", None])
+    def test_register_kind_needs_a_kind_info(self, entry):
+        """Only a built `KindInfo` is registered, so its checks cannot be skipped by passing a tuple or a name.
+
+        Args:
+            entry: A value that is not a `KindInfo`.
+        """
+        with pytest.raises(TypeError, match="register_kind needs a KindInfo"):
+            register_kind(entry)
+
+    def test_temporary_kind_needs_a_kind_info(self):
+        """The scoped form refuses a non-entry too, before touching the registry."""
+        before = kinds()
+        with pytest.raises(TypeError, match="temporary_kind needs a KindInfo"):
+            with temporary_kind("points"):
+                pass
+        assert kinds() == before, (
+            "a refused temporary registration changed the registry"
+        )
 
     @pytest.mark.parametrize(
         "name, takes, doc, message",

@@ -235,6 +235,40 @@ class TestTheRegistryIsAddressable:
         prefixes = [layer_id.split("-")[0] for layer_id in m.layer_ids]
         assert prefixes == ["fill", "circle"], m.layer_ids
 
+    def test_an_unregistered_kind_is_refused_before_anything_is_indexed(self):
+        """A builder passing a kind the registry cannot look up fails, and the tree is left unchanged.
+
+        Test scenario:
+            The index would otherwise describe a layer with a name no renderer can resolve.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        with pytest.raises(KeyError, match="no layer kind 'fill' is registered"):
+            m._index_layer("fill-0", None, kind="fill")
+        assert m._layer_tree.ids == (), m._layer_tree.ids
+
+    def test_rekinding_to_an_unregistered_kind_keeps_the_recorded_kind(self, points):
+        """`_rekind_layer` checks the kind first, so a refused name leaves the layer described as it was."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points)
+        layer_id = m.layer_ids[0]
+        with pytest.raises(KeyError, match="no layer kind 'dots' is registered"):
+            m._rekind_layer(layer_id, "dots")
+        assert m._layer_tree.get(layer_id).kind == "points", m._layer_tree.get(layer_id)
+
+    def test_rekinding_keeps_the_label_visibility_and_place(self, points, polygons):
+        """Only the kind changes: the layer keeps its label, visibility and position in draw order."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().polygons(polygons, name="Areas", visible=False).points(points)
+        first = m.layer_ids[0]
+        m._rekind_layer(first, "choropleth")
+        held = m._layer_tree.get(first)
+        described = (held.kind, held.display_label, held.visible, m.layer_ids[0])
+        assert described == ("choropleth", "Areas", False, first), described
+
     def test_every_kind_the_tree_records_is_registered(self, points, polygons, raster):
         """No builder writes a kind the registry cannot look up (#288)."""
         from digitalearth.base.registry import kinds

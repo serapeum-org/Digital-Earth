@@ -1050,6 +1050,21 @@ class TestJsonSafeDatetimes:
         )
         assert extent == (5.0, 52.0, 6.0, 53.0), extent
 
+    def test_an_extent_in_another_crs_is_reprojected_to_lon_lat(self):
+        """A display CRS that is not EPSG:4326 — however it is spelled — is reprojected for ``fitBounds``.
+
+        Test scenario:
+            The other side of the same-system check: ``"EPSG:3857"`` names Web Mercator, so the metres are
+            converted rather than handed to MapLibre as degrees.
+        """
+        m = WebMap()
+        m.crs = "EPSG:3857"
+        west, south, east, north = m._as_lonlat(
+            556597.0, 6800125.0, 668219.0, 6982997.0
+        )
+        rounded = (round(west), round(south), round(east), round(north))
+        assert rounded == (5, 52, 6, 53), (west, south, east, north)
+
 
 class TestDatetimeFramesReachTheMap:
     """End-to-end: a dated frame now renders and saves through every vector builder (issue #156)."""
