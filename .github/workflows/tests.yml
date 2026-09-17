@@ -381,6 +381,21 @@ jobs:
         run: |
           xvfb-run -a pixi run -e viz3d test-3d
 
+      - name: Compare the 3-D renders against the baselines
+        # One small scene per builder, rendered at a fixed size from a fixed camera and compared with
+        # tests/baseline3d. Baselines are rendered on this job's image (software OpenGL under xvfb), which is
+        # why the comparison runs here and nowhere else.
+        run: |
+          xvfb-run -a pixi run -e viz3d test-3d-images --image3d-results=image3d-results
+
+      - name: Upload the 3-D image-comparison report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image3d-results
+          path: image3d-results
+          if-no-files-found: ignore
+
       - name: Run the 3-D doctests
         # The `doctests` task ignores three_d because those modules import pyvista, which the dev env does
         # not have. Without this step their doctests would run in no job at all.
