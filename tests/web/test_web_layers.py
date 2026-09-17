@@ -481,6 +481,62 @@ class TestTheRegistryIsAddressable:
         assert _drawn(m) == [graticule, "data-1"], _drawn(m)
         assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
 
+    def test_data_added_after_a_label_is_drawn_beneath_it(self, points):
+        """A place name stays over the data that arrives after it, and the tree says the same (#292).
+
+        Args:
+            points: The features drawn under the label.
+
+        Test scenario:
+            `text` joins the overlay band, which the tree bands by kind. The queue appended, so the points were
+            drawn over the label while the tree listed the label on top — the two disagreed the moment a data
+            layer followed a label.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "A", name="label").points(points, name="obs")
+        assert _drawn(m) == ["obs", "label"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_labels_from_a_column_join_the_same_band(self, points):
+        """`labels` is text too, so it is drawn over data added afterwards.
+
+        Args:
+            points: The features the labels are taken from.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().labels(points, column="v", name="names").points(points, name="obs")
+        assert _drawn(m) == ["obs", "names"], _drawn(m)
+
+    def test_removing_a_label_gives_its_place_back(self, points):
+        """The overlay band is counted, so removing a label does not strand the count.
+
+        Args:
+            points: The features drawn under the label.
+
+        Test scenario:
+            The mirror of the reference-band regression: with the count left at one, the next data layer would be
+            queued one place too low — beneath a label that is no longer there.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "A", name="label").points(points, name="obs")
+        m.remove_layer("label").points(points, name="more")
+        assert _drawn(m) == ["obs", "more"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_add_overlay_queues_above_a_layer_added_later(self):
+        """The low-level entry points band the queue the way the builders do.
+
+        Test scenario:
+            Any object stands in for a layer here — the queue does not inspect it.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_overlay("label").add_layer("data").add_underlay("tiles")
+        assert m.layers == ["tiles", "data", "label"], m.layers
+
     @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
     def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
         """A name the web tier accepted before its index became a `LayerTree` is still accepted, verbatim.

@@ -319,10 +319,14 @@ class TestLayerTreeChanges:
 
         Args:
             index: The out-of-range position under test.
+
+        Test scenario:
+            The message names the band the position had to fall in, since a position is now read against the
+            layer's band rather than the whole tree (#292).
         """
         tree = _tree("a", "b")
         layer = LayerSpec("c", "points")
-        with pytest.raises(IndexError, match="positions run from 0"):
+        with pytest.raises(IndexError, match="the data band runs from position 0 to 2"):
             tree.add(layer, index=index)
 
     @pytest.mark.parametrize("method", ["add", "replace"])

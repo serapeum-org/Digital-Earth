@@ -30,6 +30,7 @@ from digitalearth.base.spec._serial import (
     require,
 )
 from digitalearth.base.spec.dataref import DataRef
+from digitalearth.base.spec.furniture import Furniture
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.spec.viewport import Camera, Viewport
 
@@ -105,11 +106,16 @@ class PanelSpec:
             panel has its own, so two panels can be drawn in two CRSs.
         layers: The ids of the layers the panel shows. The draw order is the figure's tree order, not this tuple's.
         title: The panel's title, or ``None``.
+        furniture: What is fixed to the panel's frame rather than drawn on the ground — a scale bar, a north
+            arrow, zoom buttons, a time slider. Each item names a registered kind and the corner it sits in; a
+            tier that cannot draw one skips it. Anything with a place on the ground is a layer instead, and
+            anything explaining an encoding is a guide on that encoding.
 
     Raises:
         ValueError: for an id that is not a non-empty string, a view that is neither a
             `Viewport` nor a `Camera`, `layers` given as a bare string, a layer id that is not a non-empty string, a
-            layer listed twice, or a title that is not a non-empty string.
+            layer listed twice, a title that is not a non-empty string, a furniture entry that is not a
+            :class:`~digitalearth.base.spec.furniture.Furniture`, or one furniture kind listed twice.
 
     Examples:
         - Two panels over the same layer, in two projections:
@@ -129,6 +135,14 @@ class PanelSpec:
             (3857, ('dem', 'roads'))
 
             ```
+        - Furniture is anchored to the frame, wherever the map is panned:
+            ```python
+            >>> from digitalearth.base.spec import Furniture, PanelSpec
+            >>> panel = PanelSpec("main", furniture=(Furniture("scale_bar"), Furniture("north_arrow")))
+            >>> [(item.kind, item.anchor) for item in panel.furniture]
+            [('scale_bar', 'bottom-left'), ('north_arrow', 'top-right')]
+
+            ```
         - A bare string is refused rather than read as one layer id per letter:
             ```python
             >>> from digitalearth.base.spec import PanelSpec
@@ -144,6 +158,7 @@ class PanelSpec:
     view: Union[Viewport, Camera] = field(default_factory=Viewport)
     layers: Tuple[str, ...] = ()
     title: Optional[str] = None
+    furniture: Tuple[Furniture, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse a panel that could not be drawn or addressed.
@@ -176,6 +191,23 @@ class PanelSpec:
             )
         object.__setattr__(self, "layers", layers)
         _optional_title("PanelSpec", self.title)
+        furniture = tuple(self.furniture)
+        for item in furniture:
+            if not isinstance(item, Furniture):
+                raise ValueError(
+                    f"PanelSpec furniture must be Furniture items; got {type(item).__name__}"
+                )
+        kinds_listed = [item.kind for item in furniture]
+        repeated_kinds = sorted(
+            {kind for kind in kinds_listed if kinds_listed.count(kind) > 1}
+        )
+        if repeated_kinds:
+            # Two scale bars on one panel is a caller who added the same item twice, not a design: whichever is
+            # drawn second would sit on top of the first, in the same corner.
+            raise ValueError(
+                f"panel {self.id!r} lists furniture {repeated_kinds} more than once"
+            )
+        object.__setattr__(self, "furniture", furniture)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a figure stores.
@@ -210,6 +242,8 @@ class PanelSpec:
             out["layers"] = [plain_text(layer_id) for layer_id in self.layers]
         if self.title is not None:
             out["title"] = plain_text(self.title)
+        if self.furniture:
+            out["furniture"] = [item.to_dict() for item in self.furniture]
         return out
 
     @classmethod
@@ -248,7 +282,9 @@ class PanelSpec:
                 ```
         """
         refuse_unknown(
-            "PanelSpec", data, ("id", "viewport", "camera", "layers", "title")
+            "PanelSpec",
+            data,
+            ("id", "viewport", "camera", "layers", "title", "furniture"),
         )
         if ("viewport" in data) == ("camera" in data):
             raise ValueError(
@@ -267,6 +303,10 @@ class PanelSpec:
             view=view,
             layers=as_list("PanelSpec", "layers", data.get("layers", ())),
             title=data.get("title"),
+            furniture=tuple(
+                read_entry("PanelSpec", "furniture", Furniture.from_dict, item)
+                for item in as_list("PanelSpec", "furniture", data.get("furniture", ()))
+            ),
         )
 
 

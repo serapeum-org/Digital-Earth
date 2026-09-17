@@ -31,12 +31,13 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Sequence,
     Set,
     Tuple,
     cast,
 )
 
-from digitalearth.base.registry import is_kind_name
+from digitalearth.base.registry import KIND_BANDS, band_of, is_kind_name
 from digitalearth.base.spec._serial import (
     as_list,
     plain_text,
@@ -79,8 +80,16 @@ def _optional_text(owner: str, name: str, value: Any) -> None:
 class LayerSpec:
     """What one layer draws, described without drawing it.
 
+    **Where a decoration lives.** Anything drawn in map coordinates is a layer, decoration included: a basemap,
+    coastlines, a graticule, a string placed at a coordinate. Its kind's band
+    (:data:`~digitalearth.base.registry.KIND_BANDS`) decides where in draw order it lands, so a graticule added
+    last is still drawn under the data. The three other homes are for what has no place on the ground: whatever
+    explains an encoding is a `Guide` on that :class:`~digitalearth.base.spec.encoding.Encoding` (a legend, a
+    colorbar), whatever is fixed to the frame is :class:`~digitalearth.base.spec.furniture.Furniture` on the
+    `PanelSpec` (a scale bar, a north arrow, a navigation control), and the panel's heading is its `title`.
+
     Attributes:
-        id: The layer's identity. Stable for the layer's life, unique within a :class:`LayerTree`, and the only way
+        id: The layer's identity within its figure, unique within a :class:`LayerTree`, and the only way
             a layer is addressed — never by position.
         kind: What sort of layer it is — `"raster"`, `"points"`, `"graticule"` — as a key into the kind
             registry (:func:`~digitalearth.base.registry.kind_info`). A lowercase identifier, optionally after one
@@ -374,12 +383,46 @@ def _check_layer(method: str, layer: Any) -> None:
         )
 
 
+def _band_bounds(layers: Sequence[LayerSpec], band: str) -> Tuple[int, int]:
+    """Return the lowest and highest positions a layer of one band may take.
+
+    Args:
+        layers: The layers the new one joins, bottom first.
+        band: The band it belongs to — one of :data:`~digitalearth.base.registry.KIND_BANDS`.
+
+    Returns:
+        ``(low, high)``: `low` is just above the topmost layer of a lower band, `high` just below the lowest
+        layer of a higher band, so every position between them keeps the tree in band order. `high` is the top
+        of the band, which is where a layer added without a position goes.
+
+        A tree built by hand can hold its layers in any order — nothing stops `LayerTree((label, basemap))`. The
+        bounds then meet at the topmost lower-band layer: the new layer is placed above the ground cover it
+        belongs over, which is the half of the order that still means something.
+    """
+    rank = KIND_BANDS.index(band)
+    low = 0
+    high = len(layers)
+    for position, held in enumerate(layers):
+        held_rank = KIND_BANDS.index(band_of(held.kind))
+        if held_rank < rank:
+            low = position + 1
+        elif held_rank > rank and position < high:
+            high = position
+    return low, max(low, high)
+
+
 @dataclass(frozen=True)
 class LayerTree:
     """The layers of a figure, in draw order, addressed by id.
 
     Every change returns a new tree of the same type — a subclass stays a subclass — and leaves this one as it was,
     so a renderer can compare the tree it drew with the tree it is asked to draw.
+
+    A layer is placed in the band its kind belongs to (:data:`~digitalearth.base.registry.KIND_BANDS`), not
+    simply where it was added: ground cover stays under the data, a graticule over the ground but under the data,
+    labels over everything. That is what every tier already does by hand — the web tier counts underlays onto its
+    queue, the interactive tier inserts at position 0, the static tier sets `zorder` — expressed once, so the tree
+    order *is* the draw order.
 
     Attributes:
         layers: The layers, bottom first — the first is drawn first and so sits beneath the rest.
@@ -664,8 +707,9 @@ class LayerTree:
 
         Args:
             layer: The layer to add.
-            index: Where it goes in draw order. ``None`` puts it on top; ``0`` puts it at the bottom, beneath every
-                other layer — where a basemap goes.
+            index: Where it goes **within its band**. ``None`` puts it on top of the band, which is what a
+                builder wants: a basemap under the data however late it is added, a label over the data however
+                early. A position is counted in the whole tree, so the band's own range is what it must fall in.
 
         Returns:
             The new tree.
@@ -673,25 +717,33 @@ class LayerTree:
         Raises:
             ValueError: if `layer` is not a `LayerSpec`, a layer with the same id is already in the tree, or the
                 layer's `z_source` names a layer that is not.
-            IndexError: if `index` is negative or past the top — `list.insert` would clamp it silently, which puts
+            IndexError: if `index` is outside the layer's band — `list.insert` would clamp it silently, which puts
                 the layer somewhere the caller did not ask for — or is not a whole number: a boolean or a float.
 
         Examples:
-            - A basemap goes to the bottom without moving anything else's identity:
+            - A basemap is ground cover, so it goes beneath the data wherever it is added:
                 ```python
                 >>> from digitalearth.base.spec import LayerSpec, LayerTree
                 >>> tree = LayerTree().add(LayerSpec("roads", "lines"))
-                >>> tree.add(LayerSpec("tiles", "tiles"), index=0).ids
+                >>> tree.add(LayerSpec("tiles", "basemap")).ids
                 ('tiles', 'roads')
 
                 ```
-            - A position past the top is refused rather than clamped:
+            - Kinds that draw over the data stay over it, and the order within a band is the order they arrived:
                 ```python
                 >>> from digitalearth.base.spec import LayerSpec, LayerTree
-                >>> LayerTree().add(LayerSpec("dem", "raster")).add(LayerSpec("roads", "lines"), index=5)
+                >>> tree = LayerTree().add(LayerSpec("place", "text")).add(LayerSpec("dem", "raster"))
+                >>> tree.add(LayerSpec("grid", "graticule")).ids
+                ('grid', 'dem', 'place')
+
+                ```
+            - A position that would take the layer out of its band is refused rather than clamped:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> LayerTree().add(LayerSpec("dem", "raster")).add(LayerSpec("tiles", "basemap"), index=1)
                 Traceback (most recent call last):
                     ...
-                IndexError: cannot add 'roads' at position 5; positions run from 0 (bottom) to 1 (top)
+                IndexError: cannot add 'tiles' at position 1; the underlay band runs from position 0 to 0
 
                 ```
         """
@@ -701,11 +753,13 @@ class LayerTree:
                 f"a layer with id {layer.id!r} is already in the tree; layer ids must be unique"
             )
         layers = list(self.layers)
+        band = band_of(layer.kind)
+        low, high = _band_bounds(layers, band)
         if index is None:
-            layers.append(layer)
-        elif not _is_position(index) or not 0 <= index <= len(layers):
+            layers.insert(high, layer)
+        elif not _is_position(index) or not low <= index <= high:
             raise IndexError(
-                f"cannot add {layer.id!r} at position {index!r}; positions run from 0 (bottom) to {len(layers)} (top)"
+                f"cannot add {layer.id!r} at position {index!r}; the {band} band runs from position {low} to {high}"
             )
         else:
             layers.insert(index, layer)
@@ -778,14 +832,16 @@ class LayerTree:
         Args:
             layer_id: The layer to move.
             index: Its position afterwards, counted as a list index is — ``0`` is the bottom, ``-1`` the top.
+                A layer moves **within its band**: reordering the data layers is what a layer switcher does, and
+                dragging the basemap over them is not something a caller means to do.
 
         Returns:
             The new tree. Every other layer keeps its relative order.
 
         Raises:
             KeyError: if no layer has that id.
-            IndexError: if `index` is outside the tree, or is not a whole number — a boolean or a float — exactly as
-                :meth:`add` refuses one.
+            IndexError: if `index` is outside the tree or outside the layer's band, or is not a whole number — a
+                boolean or a float — exactly as :meth:`add` refuses one.
 
         Examples:
             - Bring a layer to the top:
@@ -804,6 +860,16 @@ class LayerTree:
                 ('c', 'a', 'b')
 
                 ```
+            - A layer cannot be moved out of its band; the message says where the band runs:
+                ```python
+                >>> from digitalearth.base.spec import LayerSpec, LayerTree
+                >>> tree = LayerTree().add(LayerSpec("tiles", "basemap")).add(LayerSpec("dem", "raster"))
+                >>> tree.move("tiles", -1)
+                Traceback (most recent call last):
+                    ...
+                IndexError: cannot move 'tiles' to position 1; the underlay band runs from position 0 to 0
+
+                ```
         """
         layer = self.get(layer_id)
         count = len(self.layers)
@@ -813,6 +879,13 @@ class LayerTree:
             )
         position = index % count
         others = [candidate for candidate in self.layers if candidate.id != layer_id]
+        band = band_of(layer.kind)
+        low, high = _band_bounds(others, band)
+        if not low <= position <= high:
+            raise IndexError(
+                f"cannot move {layer_id!r} to position {position}; the {band} band runs from position {low} "
+                f"to {high}"
+            )
         others.insert(position, layer)
         return with_fields(self, layers=tuple(others))
 

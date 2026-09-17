@@ -673,7 +673,7 @@ class VectorMixin(_MixinBase):
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
         self._index_layer(layer_id, name, kind=kind, visible=visible)
-        return self.add_layer(apply)
+        return self._queue_layer(apply, kind)
 
     @staticmethod
     def _require_column(gdf: Any, column: str) -> Any:

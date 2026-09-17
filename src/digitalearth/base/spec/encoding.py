@@ -24,6 +24,7 @@ from math import isfinite
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Tuple
 
+from digitalearth.base.registry import FURNITURE_ANCHORS
 from digitalearth.base.spec._serial import (
     as_list,
     frozen_value,
@@ -35,7 +36,7 @@ from digitalearth.base.spec._serial import (
 )
 from digitalearth.base.spec.scale import Scale
 
-__all__ = ["CHANNELS", "Channel", "Encoding"]
+__all__ = ["CHANNELS", "Channel", "Encoding", "Guide"]
 
 
 @dataclass(frozen=True)
@@ -89,9 +90,158 @@ CHANNELS: Mapping[str, Channel] = MappingProxyType(
             ),
             Channel("text", "text", "Label drawn with the feature."),
             Channel("rotation", "number", "Rotation applied to the glyph, in degrees."),
+            Channel(
+                "tooltip",
+                "text",
+                "Field values shown when the feature is hovered or clicked.",
+            ),
         )
     }
 )
+
+
+@dataclass(frozen=True)
+class Guide:
+    """What explains an encoding to the reader: whether to draw a legend or a colorbar for it, and where.
+
+    An encoding says what drives a channel; a guide says whether the reader is told. It lives on the encoding
+    because that is what it explains — one scale shared by several layers is one guide, and a channel nobody
+    needs explained (a constant colour chosen for contrast) simply carries `show=False`. The *content* stays in
+    :class:`~digitalearth.base.spec.legend.LegendSpec`, which a renderer computes from the data; nothing here
+    holds entries or colours.
+
+    Attributes:
+        show: Whether to draw the guide at all. `True` by default: a data-driven channel that nothing explains is
+            a map the reader cannot read.
+        title: What to call it. `None` lets the renderer name it after the field the channel is driven by.
+        anchor: Which corner of the panel it sits in — one of
+            :data:`~digitalearth.base.registry.FURNITURE_ANCHORS` — or `None` for the tier's own default, which
+            is the one place a colorbar's position is not worth pinning across four backends.
+
+    Raises:
+        ValueError: if `show` is not a real boolean, `title` is not a non-empty string, or `anchor` is not one of
+            the four corners.
+
+    Examples:
+        - Title a colorbar and put it where the data is not:
+            ```python
+            >>> from digitalearth.base.spec import Encoding, Guide, Scale
+            >>> guide = Guide(title="Elevation (m)", anchor="bottom-right")
+            >>> encoding = Encoding.by_field("color", "dem", scale=Scale.from_limits(0, 100), guide=guide)
+            >>> encoding.guide.title, encoding.guide.anchor
+            ('Elevation (m)', 'bottom-right')
+
+            ```
+        - Switch a guide off without losing what it would have said:
+            ```python
+            >>> from digitalearth.base.spec import Guide
+            >>> quiet = Guide(show=False, title="Elevation (m)")
+            >>> quiet.show, quiet.title
+            (False, 'Elevation (m)')
+
+            ```
+        - A corner no tier could place is refused:
+            ```python
+            >>> from digitalearth.base.spec import Guide
+            >>> Guide(anchor="middle")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: Guide anchor must be one of ['top-left', ...]; got 'middle'
+
+            ```
+    """
+
+    show: bool = True
+    title: Optional[str] = None
+    anchor: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        """Refuse a guide that could not be drawn.
+
+        Raises:
+            ValueError: as described on the class.
+        """
+        if not isinstance(self.show, bool):
+            raise ValueError(f"Guide show must be True or False; got {self.show!r}")
+        if self.title is not None and (
+            not isinstance(self.title, str) or not self.title.strip()
+        ):
+            raise ValueError(
+                f"Guide title must be a non-empty string or None; got {self.title!r}"
+            )
+        if self.anchor is not None and self.anchor not in FURNITURE_ANCHORS:
+            raise ValueError(
+                f"Guide anchor must be one of {list(FURNITURE_ANCHORS)}; got {self.anchor!r}"
+            )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Return the plain-dict form a figure stores.
+
+        Returns:
+            Only what was asked for: a guide left at its defaults stores `{}`, so an encoding that carries one
+            is no bigger in JSON than an encoding that does not.
+
+        Examples:
+            - A default guide is an empty dict, and still reads back as a guide:
+                ```python
+                >>> from digitalearth.base.spec import Guide
+                >>> Guide().to_dict()
+                {}
+
+                ```
+            - What was set is written:
+                ```python
+                >>> from digitalearth.base.spec import Guide
+                >>> Guide(show=False, title="Rainfall", anchor="top-left").to_dict()
+                {'show': False, 'title': 'Rainfall', 'anchor': 'top-left'}
+
+                ```
+        """
+        out: Dict[str, Any] = {}
+        if not self.show:
+            out["show"] = False
+        if self.title is not None:
+            out["title"] = plain_text(self.title)
+        if self.anchor is not None:
+            out["anchor"] = plain_text(self.anchor)
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "Guide":
+        """Rebuild a guide from its dict form.
+
+        Args:
+            data: A mapping as produced by :meth:`to_dict`.
+
+        Returns:
+            The guide, validated as the constructor validates it.
+
+        Raises:
+            TypeError: if `data` is not a mapping.
+            ValueError: for an unknown key, or a guide the constructor refuses.
+
+        Examples:
+            - A stored guide reads back with what it was given:
+                ```python
+                >>> from digitalearth.base.spec import Guide
+                >>> Guide.from_dict({"title": "Rainfall"}).title
+                'Rainfall'
+
+                ```
+            - An empty dict is the default guide:
+                ```python
+                >>> from digitalearth.base.spec import Guide
+                >>> Guide.from_dict({}).show
+                True
+
+                ```
+        """
+        refuse_unknown("Guide", data, ("show", "title", "anchor"))
+        return cls(
+            show=data.get("show", True),
+            title=data.get("title"),
+            anchor=data.get("anchor"),
+        )
 
 
 def _clamp_unit(value: float) -> float:
@@ -121,12 +271,15 @@ class Encoding:
         output_range: ``(low, high)`` the normalised position is stretched into, for a numeric channel — the
             marker sizes or line widths the data should span. Meaningless for a colour channel, whose
             positions the backend's ramp consumes.
+        guide: How the channel is explained to the reader — a legend or a colorbar, titled and placed. `None`
+            leaves that to the renderer's own rule. The guide lives here, with what it explains, rather than on
+            the panel: a scale shared by several layers is explained once.
 
     Raises:
         ValueError: if the channel is not declared, if neither or both of `value`/`field` are given, if `field` is
-            not a non-empty string, or if a scale or an output range is attached to a constant — a constant that
+            not a non-empty string, if a scale or an output range is attached to a constant — a constant that
             carries a mapping is a caller who expected the mapping to apply, and silently ignoring it would draw one
-            colour.
+            colour — or if `guide` is not a :class:`Guide`.
 
     Examples:
         - A constant, which is what a plain ``color="#f00"`` means:
@@ -161,14 +314,19 @@ class Encoding:
     field: Optional[str] = None
     scale: Optional[Scale] = None
     output_range: Optional[Tuple[float, float]] = None
+    guide: Optional["Guide"] = None
 
     def __post_init__(self) -> None:
         """Refuse an encoding that names no channel, or names both a constant and a field.
 
         Raises:
-            ValueError: for an undeclared channel, an ambiguous or empty binding, a field that is not a string, or
-                a mapping attached to a constant.
+            ValueError: for an undeclared channel, an ambiguous or empty binding, a field that is not a string, a
+                mapping attached to a constant, or a `guide` that is not a :class:`Guide`.
         """
+        if self.guide is not None and not isinstance(self.guide, Guide):
+            raise ValueError(
+                f"Encoding guide must be a Guide or None; got {type(self.guide).__name__}"
+            )
         if self.channel not in CHANNELS:
             raise ValueError(
                 f"{self.channel!r} is not a visual channel; declared channels are {sorted(CHANNELS)}"
@@ -237,12 +395,16 @@ class Encoding:
     # ------------------------------------------------------------------ builders
 
     @classmethod
-    def constant(cls, channel: str, value: Any) -> "Encoding":
+    def constant(
+        cls, channel: str, value: Any, *, guide: Optional["Guide"] = None
+    ) -> "Encoding":
         """Bind a channel to one value for every feature.
 
         Args:
             channel: The channel to drive.
             value: The constant.
+            guide: How the channel is explained to the reader. A constant rarely needs one — there is nothing to
+                read off — but a chosen colour that stands for something does.
 
         Returns:
             The encoding.
@@ -268,7 +430,7 @@ class Encoding:
 
                 ```
         """
-        return cls(channel=channel, value=value)
+        return cls(channel=channel, value=value, guide=guide)
 
     @classmethod
     def by_field(
@@ -278,6 +440,7 @@ class Encoding:
         *,
         scale: Optional[Scale] = None,
         output_range: Optional[Tuple[float, float]] = None,
+        guide: Optional["Guide"] = None,
     ) -> "Encoding":
         """Bind a channel to a data field.
 
@@ -286,6 +449,7 @@ class Encoding:
             field: The column or band the channel varies with.
             scale: How its values map onto the channel; ``None`` passes them through.
             output_range: ``(low, high)`` for a numeric channel.
+            guide: How the channel is explained to the reader — a legend or a colorbar, titled and placed.
 
         Returns:
             The encoding.
@@ -317,7 +481,13 @@ class Encoding:
             raise ValueError(
                 f"an Encoding for {channel!r} needs a field name that is a non-empty string"
             )
-        return cls(channel=channel, field=field, scale=scale, output_range=output_range)
+        return cls(
+            channel=channel,
+            field=field,
+            scale=scale,
+            output_range=output_range,
+            guide=guide,
+        )
 
     # ------------------------------------------------------------------ readers
 
@@ -477,6 +647,8 @@ class Encoding:
             out["output_range"] = to_json_value(
                 self.output_range, f"Encoding[{self.channel!r}].output_range"
             )
+        if self.guide is not None:
+            out["guide"] = self.guide.to_dict()
         return out
 
     @classmethod
@@ -523,10 +695,13 @@ class Encoding:
                 ```
         """
         refuse_unknown(
-            "Encoding", data, ("channel", "value", "field", "scale", "output_range")
+            "Encoding",
+            data,
+            ("channel", "value", "field", "scale", "output_range", "guide"),
         )
         scale = data.get("scale")
         output_range = data.get("output_range")
+        guide = data.get("guide")
         return cls(
             channel=require("Encoding", data, "channel"),
             value=data.get("value"),
@@ -537,4 +712,7 @@ class Encoding:
             output_range=None
             if output_range is None
             else as_list("Encoding", "output_range", output_range),
+            guide=None
+            if guide is None
+            else read_entry("Encoding", "guide", Guide.from_dict, guide),
         )

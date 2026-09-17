@@ -32,14 +32,22 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 __all__ = [
+    "KIND_BANDS",
     "KIND_PATTERN",
     "KIND_TAKES",
     "KindInfo",
+    "band_of",
     "is_kind_name",
     "kind_info",
     "kinds",
     "register_kind",
     "temporary_kind",
+    "FURNITURE_ANCHORS",
+    "FurnitureInfo",
+    "furniture_info",
+    "furniture_kinds",
+    "register_furniture",
+    "temporary_furniture",
     "OBJECT_SCHEME",
     "temporary_classifier",
     "temporary_resolver",
@@ -495,25 +503,43 @@ def is_kind_name(value: Any) -> bool:
     return isinstance(value, str) and KIND_PATTERN.fullmatch(value) is not None
 
 
+#: The draw-order bands a layer kind belongs to, **bottom first**. A band says where a kind sits relative to the
+#: data, which every tier already decides its own way: the web tier counts underlays and references onto its layer
+#: queue, the interactive tier inserts ground cover at position 0, and the static tier spells the same thing as
+#: `zorder`. `LayerTree.add` places a new layer at the top of its band, so a graticule added last still draws
+#: beneath the data and a label added first still draws over it.
+#:
+#: * `underlay` — ground cover the data is drawn on: tiles, land, ocean, lakes.
+#: * `reference` — geography drawn over the ground but under the data, so it locates the map without hiding it.
+#: * `data` — what the figure is about. The default for a kind that does not say, and for an unregistered one.
+#: * `overlay` — drawn over the data: text and labels, and the line geography (coastlines, borders, rivers) the
+#:   static and interactive tiers draw above the field so it stays visible over an opaque raster.
+KIND_BANDS: Tuple[str, ...] = ("underlay", "reference", "data", "overlay")
+
+
 @dataclass(frozen=True)
 class KindInfo:
-    """One registered layer kind: its name, the data it draws, and what it is.
+    """One registered layer kind: its name, the data it draws, where it is drawn, and what it is.
 
     Attributes:
         name: The kind, as a `LayerSpec` writes it.
         takes: The data class a layer of this kind draws — one of :data:`KIND_TAKES`.
         doc: A one-line description, shown wherever the registry is listed.
+        band: Where a layer of this kind is drawn relative to the data — one of :data:`KIND_BANDS`. `"data"` by
+            default, which is what a kind that draws the figure's subject wants.
 
     Raises:
-        ValueError: for a name that is not spelled as a kind, a `takes` outside :data:`KIND_TAKES`, or an empty
-            description — each refused where the entry is built rather than when a renderer looks it up.
+        ValueError: for a name that is not spelled as a kind, a `takes` outside :data:`KIND_TAKES`, a `band`
+            outside :data:`KIND_BANDS`, or an empty description — each refused where the entry is built rather
+            than when a renderer looks it up.
 
     Examples:
-        - Build an entry for a plugin's kind:
+        - Build an entry for a plugin's kind, drawn among the data:
             ```python
             >>> from digitalearth.base.registry import KindInfo
-            >>> KindInfo("mypkg:hexbin", "points", "binned point density").takes
-            'points'
+            >>> entry = KindInfo("mypkg:hexbin", "points", "binned point density")
+            >>> entry.takes, entry.band
+            ('points', 'data')
 
             ```
         - A name that could not be looked up is refused where the entry is built:
@@ -530,9 +556,10 @@ class KindInfo:
     name: str
     takes: str
     doc: str
+    band: str = "data"
 
     def __post_init__(self) -> None:
-        """Refuse an entry that could not be looked up or drawn.
+        """Refuse an entry that could not be looked up, drawn, or placed.
 
         Raises:
             ValueError: as described on the class.
@@ -545,6 +572,10 @@ class KindInfo:
         if self.takes not in KIND_TAKES:
             raise ValueError(
                 f"layer kind {self.name!r}: takes must be one of {list(KIND_TAKES)}; got {self.takes!r}"
+            )
+        if self.band not in KIND_BANDS:
+            raise ValueError(
+                f"layer kind {self.name!r}: band must be one of {list(KIND_BANDS)}; got {self.band!r}"
             )
         if not isinstance(self.doc, str) or not self.doc.strip():
             raise ValueError(f"layer kind {self.name!r} needs a description")
@@ -657,6 +688,36 @@ def kinds() -> Tuple[str, ...]:
     return tuple(sorted(_KINDS))
 
 
+def band_of(kind: str) -> str:
+    """Return the draw-order band a layer kind belongs to.
+
+    Args:
+        kind: The kind, as a `LayerSpec` holds it.
+
+    Returns:
+        One of :data:`KIND_BANDS`. A kind nobody registered — a plugin's, or one whose plugin is not installed —
+        is `"data"`, so an unknown layer is drawn where the figure is about rather than under the basemap.
+
+    Examples:
+        - The built-in vocabulary already sorts a map into bands:
+            ```python
+            >>> from digitalearth.base.registry import band_of
+            >>> [band_of(kind) for kind in ("basemap", "graticule", "raster", "labels")]
+            ['underlay', 'reference', 'data', 'overlay']
+
+            ```
+        - An unregistered kind is data:
+            ```python
+            >>> from digitalearth.base.registry import band_of
+            >>> band_of("mypkg:hexbin")
+            'data'
+
+            ```
+    """
+    info = _KINDS.get(kind) if isinstance(kind, str) else None
+    return "data" if info is None else info.band
+
+
 @contextmanager
 def temporary_kind(info: KindInfo) -> Iterator[None]:
     """Register a layer kind for the duration of a block, then put the registry back as it was.
@@ -708,6 +769,256 @@ def temporary_kind(info: KindInfo) -> Iterator[None]:
             _KINDS[info.name] = previous
 
 
+#: Where an anchored item sits in the panel frame. The four corners are what every tier can place: matplotlib's
+#: `loc`, MapLibre's control positions and PyVista's corner widgets all name them, so a figure that asks for one
+#: is drawable everywhere rather than on the tier it was written for.
+FURNITURE_ANCHORS: Tuple[str, ...] = (
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+)
+
+_FURNITURE: Dict[str, "FurnitureInfo"] = {}
+
+
+@dataclass(frozen=True)
+class FurnitureInfo:
+    """One registered piece of panel furniture: an item fixed to the frame rather than drawn in map coordinates.
+
+    A scale bar, a north arrow, a navigation control or a time slider does not move when the map is panned, so it
+    is not a layer. It is registered here and placed by :class:`~digitalearth.base.spec.Furniture` on a panel.
+
+    Attributes:
+        name: The kind, spelled as a layer kind is (:data:`KIND_PATTERN`).
+        anchor: Where it sits unless the item says otherwise — one of :data:`FURNITURE_ANCHORS`.
+        doc: A one-line description, shown wherever the registry is listed.
+
+    Raises:
+        ValueError: for a name that is not spelled as a kind, an anchor outside :data:`FURNITURE_ANCHORS`, or an
+            empty description.
+
+    Examples:
+        - Read where a built-in item sits by default:
+            ```python
+            >>> from digitalearth.base.registry import furniture_info
+            >>> furniture_info("scale_bar").anchor
+            'bottom-left'
+
+            ```
+        - An anchor no tier could place is refused where the entry is built:
+            ```python
+            >>> from digitalearth.base.registry import FurnitureInfo
+            >>> FurnitureInfo("compass", "middle", "a compass")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: furniture 'compass': anchor must be one of ['top-left', ...]; got 'middle'
+
+            ```
+    """
+
+    name: str
+    anchor: str
+    doc: str
+
+    def __post_init__(self) -> None:
+        """Refuse an entry that could not be looked up or placed.
+
+        Raises:
+            ValueError: as described on the class.
+        """
+        if not is_kind_name(self.name):
+            raise ValueError(
+                f"{self.name!r} is not a furniture name: use a lowercase identifier, optionally after one "
+                "namespace and a colon, such as 'scale_bar' or 'mypkg:compass'"
+            )
+        if self.anchor not in FURNITURE_ANCHORS:
+            raise ValueError(
+                f"furniture {self.name!r}: anchor must be one of {list(FURNITURE_ANCHORS)}; got {self.anchor!r}"
+            )
+        if not isinstance(self.doc, str) or not self.doc.strip():
+            raise ValueError(f"furniture {self.name!r} needs a description")
+
+
+def register_furniture(info: FurnitureInfo) -> None:
+    """Register a piece of panel furniture, so a panel can ask for it by name.
+
+    Args:
+        info: The entry to register.
+
+    Raises:
+        TypeError: if `info` is not a :class:`FurnitureInfo`.
+        ValueError: if a *different* entry is already registered under the same name, exactly as
+            :func:`register_kind` refuses one.
+
+    Examples:
+        - Registration is permanent, so the demonstration uses :func:`temporary_furniture`:
+            ```python
+            >>> from digitalearth.base.registry import FurnitureInfo, furniture_info, temporary_furniture
+            >>> with temporary_furniture(FurnitureInfo("demo:compass", "top-left", "a demonstration compass")):
+            ...     furniture_info("demo:compass").doc
+            'a demonstration compass'
+
+            ```
+        - A different meaning for a built-in name is refused, and the built-in stays as it was:
+            ```python
+            >>> from digitalearth.base.registry import FurnitureInfo, furniture_info, register_furniture
+            >>> register_furniture(FurnitureInfo("scale_bar", "top-left", "another meaning"))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: furniture 'scale_bar' is already registered as FurnitureInfo(name='scale_bar', ...
+            >>> furniture_info("scale_bar").anchor
+            'bottom-left'
+
+            ```
+    """
+    if not isinstance(info, FurnitureInfo):
+        raise TypeError(
+            f"register_furniture needs a FurnitureInfo; got {type(info).__name__}"
+        )
+    held = _FURNITURE.get(info.name)
+    if held is not None and held != info:
+        raise ValueError(
+            f"furniture {info.name!r} is already registered as {held!r}; register a namespaced name "
+            "such as 'mypkg:<name>' instead"
+        )
+    _FURNITURE[info.name] = info
+
+
+def furniture_info(name: str) -> FurnitureInfo:
+    """Return the registered entry for a piece of panel furniture.
+
+    Args:
+        name: The kind, as a `Furniture` holds it.
+
+    Returns:
+        The :class:`FurnitureInfo` registered under `name`.
+
+    Raises:
+        KeyError: for furniture nobody registered, naming what is.
+
+    Examples:
+        - Look up a built-in item:
+            ```python
+            >>> from digitalearth.base.registry import furniture_info
+            >>> furniture_info("north_arrow").doc
+            'an arrow pointing to north — static north_arrow'
+
+            ```
+        - A misspelt name is refused with the registered names in the message:
+            ```python
+            >>> from digitalearth.base.registry import furniture_info
+            >>> furniture_info("scalebar")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            KeyError: "no furniture 'scalebar' is registered; registered furniture is ['attribution', ...]"
+
+            ```
+    """
+    try:
+        return _FURNITURE[name]
+    except (KeyError, TypeError):
+        raise KeyError(
+            f"no furniture {name!r} is registered; registered furniture is {sorted(_FURNITURE)}"
+        ) from None
+
+
+def furniture_kinds() -> Tuple[str, ...]:
+    """Return the registered furniture names, sorted.
+
+    Returns:
+        The names, as a tuple, so the listing cannot be used to edit the registry.
+
+    Examples:
+        - The built-in vocabulary is registered at import:
+            ```python
+            >>> from digitalearth.base.registry import furniture_kinds
+            >>> "scale_bar" in furniture_kinds() and "time_slider" in furniture_kinds()
+            True
+
+            ```
+        - The names come back sorted:
+            ```python
+            >>> from digitalearth.base.registry import furniture_kinds
+            >>> furniture_kinds()[:3]
+            ('attribution', 'fullscreen', 'layer_switcher')
+
+            ```
+    """
+    return tuple(sorted(_FURNITURE))
+
+
+@contextmanager
+def temporary_furniture(info: FurnitureInfo) -> Iterator[None]:
+    """Register a piece of furniture for the duration of a block, then put the registry back as it was.
+
+    Unlike :func:`register_furniture`, this may replace an entry already registered under the same name, and the
+    original is restored when the block ends.
+
+    Args:
+        info: The entry to install for the block.
+
+    Yields:
+        Nothing; the entry is registered inside the block.
+
+    Raises:
+        TypeError: if `info` is not a :class:`FurnitureInfo`.
+
+    Examples:
+        - The name resolves inside the block and is gone afterwards:
+            ```python
+            >>> from digitalearth.base.registry import FurnitureInfo, furniture_kinds, temporary_furniture
+            >>> with temporary_furniture(FurnitureInfo("demo:inset", "top-right", "a scratch inset map")):
+            ...     "demo:inset" in furniture_kinds()
+            True
+            >>> "demo:inset" in furniture_kinds()
+            False
+
+            ```
+    """
+    if not isinstance(info, FurnitureInfo):
+        raise TypeError(
+            f"temporary_furniture needs a FurnitureInfo; got {type(info).__name__}"
+        )
+    previous = _FURNITURE.get(info.name)
+    _FURNITURE[info.name] = info
+    try:
+        yield
+    finally:
+        if previous is None:
+            _FURNITURE.pop(info.name, None)
+        else:
+            _FURNITURE[info.name] = previous
+
+
+#: The furniture every tier draws in the panel frame. Each entry's anchor is where the item sits unless the panel
+#: says otherwise; the tier that cannot draw one declares it absent (#294) and skips it rather than failing.
+_BUILT_IN_FURNITURE = (
+    (
+        "scale_bar",
+        "bottom-left",
+        "a bar showing how far a screen distance is — static scalebar, web scale_bar",
+    ),
+    ("north_arrow", "top-right", "an arrow pointing to north — static north_arrow"),
+    ("attribution", "bottom-right", "the data and tile credits — web attribution"),
+    ("navigation", "top-right", "zoom and compass buttons — web navigation"),
+    ("fullscreen", "top-right", "a button that fills the screen — web fullscreen"),
+    (
+        "layer_switcher",
+        "top-right",
+        "a list of the layers, to switch each on and off — web controls",
+    ),
+    (
+        "time_slider",
+        "bottom-left",
+        "a slider over the time steps — web timeslider, interactive player",
+    ),
+    ("measure", "top-left", "a tool that measures distances — web measure"),
+)
+
+for _name, _anchor, _doc in _BUILT_IN_FURNITURE:
+    register_furniture(FurnitureInfo(_name, _anchor, _doc))
+
 #: The engine-neutral vocabulary every tier writes. Kind names are nouns for *what is drawn*, not method names or
 #: engine layer types; the builders that draw each one today are listed in its description.
 _BUILT_IN_KINDS = (
@@ -715,86 +1026,189 @@ _BUILT_IN_KINDS = (
         "raster",
         "raster",
         "a band drawn as an image — static imshow, interactive image/large_image, web add_raster",
+        "data",
     ),
     (
         "mesh",
         "raster",
         "a band drawn as cells — static pcolormesh/block, interactive quadmesh",
+        "data",
     ),
     (
         "rgb",
         "raster",
         "a multi-band colour composite — rgb_composite, static hsv_composite, interactive rgb",
+        "data",
     ),
     (
         "contours",
         "raster",
         "iso-value lines traced from a band — static contour, interactive/web contours",
+        "data",
     ),
     (
         "filled_contours",
         "raster",
         "bands between iso-values — static contourf, interactive filled_contours",
+        "data",
     ),
     (
         "vectors",
         "raster",
         "a u/v vector field — static quiver/barbs, interactive vectorfield/barbs, 3-D vectors",
+        "data",
     ),
     (
         "streamlines",
         "raster",
         "flow lines through a u/v field — static streamplot, interactive streamlines",
+        "data",
     ),
-    ("terrain", "raster", "a DEM drawn as a surface — 3-D terrain, web terrain"),
-    ("volume", "volume", "a 3-D cube, ray-cast — 3-D volume"),
-    ("isosurface", "volume", "the surface at one value of a cube — 3-D isosurface"),
+    (
+        "terrain",
+        "raster",
+        "a DEM drawn as a surface — 3-D terrain, web terrain",
+        "data",
+    ),
+    (
+        "volume",
+        "volume",
+        "a 3-D cube, ray-cast — 3-D volume",
+        "data",
+    ),
+    (
+        "isosurface",
+        "volume",
+        "the surface at one value of a cube — 3-D isosurface",
+        "data",
+    ),
     (
         "points",
         "points",
         "point features — static scatter/grid_points, interactive/web points",
+        "data",
     ),
     (
         "point_cloud",
         "points",
         "positioned 3-D points — 3-D point_cloud, web point_cloud",
+        "data",
     ),
-    ("heatmap", "points", "point density — static kde, web heatmap"),
-    ("clusters", "points", "points grouped by proximity — web cluster"),
-    ("labels", "points", "text taken from a feature column — interactive/web labels"),
-    ("lines", "lines", "line features — interactive path, web lines"),
-    ("flow", "lines", "flows between places — static sankey"),
+    (
+        "heatmap",
+        "points",
+        "point density — static kde, web heatmap",
+        "data",
+    ),
+    (
+        "clusters",
+        "points",
+        "points grouped by proximity — web cluster",
+        "data",
+    ),
+    (
+        "labels",
+        "points",
+        "text taken from a feature column — interactive/web labels",
+        "overlay",
+    ),
+    (
+        "lines",
+        "lines",
+        "line features — interactive path, web lines",
+        "data",
+    ),
+    (
+        "flow",
+        "lines",
+        "flows between places — static sankey",
+        "data",
+    ),
     (
         "polygons",
         "polygons",
         "polygon features, outlined or flat-filled — static shapes, interactive/web polygons",
+        "data",
     ),
     (
         "choropleth",
         "polygons",
         "polygons coloured by a column — choropleth, static grid_cells/cartogram",
+        "data",
     ),
     (
         "extrusion",
         "polygons",
         "polygons raised by a column — 3-D extruded_polygons, web extrusion",
+        "data",
     ),
-    ("unstructured", "mesh", "a UGRID mesh — static tripcolor/tricontour/tricontourf"),
-    ("text", "none", "a string placed at a coordinate — text, annotate"),
-    ("graticule", "none", "meridians and parallels — graticule"),
+    (
+        "unstructured",
+        "mesh",
+        "a UGRID mesh — static tripcolor/tricontour/tricontourf",
+        "data",
+    ),
+    (
+        "text",
+        "none",
+        "a string placed at a coordinate — text, annotate",
+        "overlay",
+    ),
+    (
+        "graticule",
+        "none",
+        "meridians and parallels — graticule",
+        "reference",
+    ),
     (
         "basemap",
         "none",
         "tiles drawn under the data — basemap, tiles, static stock_img",
+        "underlay",
     ),
-    ("coastlines", "none", "Natural Earth coastlines — coastlines"),
-    ("borders", "none", "Natural Earth country borders — borders"),
-    ("land", "none", "Natural Earth land — land"),
-    ("ocean", "none", "Natural Earth ocean — ocean"),
-    ("lakes", "none", "Natural Earth lakes — lakes"),
-    ("rivers", "none", "Natural Earth rivers — rivers"),
-    ("model", "none", "a 3-D model placed on the map — web gltf"),
+    (
+        "coastlines",
+        "none",
+        "Natural Earth coastlines — coastlines",
+        "overlay",
+    ),
+    (
+        "borders",
+        "none",
+        "Natural Earth country borders — borders",
+        "overlay",
+    ),
+    (
+        "land",
+        "none",
+        "Natural Earth land — land",
+        "underlay",
+    ),
+    (
+        "ocean",
+        "none",
+        "Natural Earth ocean — ocean",
+        "underlay",
+    ),
+    (
+        "lakes",
+        "none",
+        "Natural Earth lakes — lakes",
+        "underlay",
+    ),
+    (
+        "rivers",
+        "none",
+        "Natural Earth rivers — rivers",
+        "overlay",
+    ),
+    (
+        "model",
+        "none",
+        "a 3-D model placed on the map — web gltf",
+        "data",
+    ),
 )
 
-for _name, _takes, _doc in _BUILT_IN_KINDS:
-    register_kind(KindInfo(_name, _takes, _doc))
+for _name, _takes, _doc, _band in _BUILT_IN_KINDS:
+    register_kind(KindInfo(_name, _takes, _doc, _band))

@@ -35,7 +35,7 @@ from digitalearth.base.display import (
     needs_reproject,
     to_display_source,
 )
-from digitalearth.base.registry import kind_info
+from digitalearth.base.registry import band_of, kind_info
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
@@ -458,6 +458,9 @@ class WebMapBase:
         self._underlay_count = 0
         #: How many sit in the reference band, so two of them keep the order they were added in.
         self._reference_count = 0
+        #: How many sit in the overlay band — text and labels, drawn above the data — so :meth:`add_layer` can
+        #: insert beneath them instead of appending on top.
+        self._overlay_count = 0
         #: The floating panels — legend and title — as ``{kind: (content, position)}``. Held as state so
         #: calling either twice replaces it rather than stacking two identical boxes in one corner.
         self._panels: dict = {}
@@ -811,7 +814,6 @@ class WebMapBase:
         *,
         kind: str,
         visible: bool = True,
-        reference: bool = False,
     ) -> None:
         """Record a data layer so it can be addressed later.
 
@@ -825,9 +827,11 @@ class WebMapBase:
                 tree says what the MapLibre layout says; the builders without one always build visible. It is
                 recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
                 and records one.
-            reference: Whether the layer is about to join the reference band through :meth:`add_reference`. It
-                then joins the tree at the top of that band — beneath every data layer — rather than on top, so
-                the tree's order stays the order the map draws in. Call this before `add_reference`.
+
+        Note:
+            The tree places the layer in the band its kind declares, so nothing here computes a position. Queue
+            the drawn layer with :meth:`_queue_layer`, which puts the MapLibre closure in the same band, and the
+            tree's order stays the order the map draws in.
 
         Raises:
             KeyError: when `kind` is not a registered layer kind — a builder passing a name the registry cannot
@@ -837,16 +841,10 @@ class WebMapBase:
                 whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
         kind_info(kind)
-        index = None
-        if reference:
-            band = self.layers[: self._underlay_count + self._reference_count]
-            banded = {getattr(layer, "_digitalearth_layer_id", None) for layer in band}
-            index = sum(1 for existing in self._layer_tree.ids if existing in banded)
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
             # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
-            LayerSpec(layer_id, kind, label=label or layer_id, visible=bool(visible)),
-            index=index,
+            LayerSpec(layer_id, kind, label=label or layer_id, visible=bool(visible))
         )
 
     def _rekind_layer(self, layer_id: str, kind: str) -> None:
@@ -920,6 +918,13 @@ class WebMapBase:
             for layer in self.layers[
                 self._underlay_count : self._underlay_count + self._reference_count
             ]
+            if getattr(layer, "_digitalearth_layer_id", None) == layer_id
+        )
+        # The overlay band is counted from the top, for the same reason: remove a label and the next data layer
+        # would otherwise be queued one place too low, beneath a label that is no longer there.
+        self._overlay_count -= sum(
+            1
+            for layer in self.layers[len(self.layers) - self._overlay_count :]
             if getattr(layer, "_digitalearth_layer_id", None) == layer_id
         )
         self.layers = [
@@ -1012,6 +1017,9 @@ class WebMapBase:
         The low-level entry point the capability mixins build on — every builder method ends here. A layer
         is replayed onto the MapLibre widget at :meth:`render` time (see :meth:`_apply_layer`).
 
+        A layer is queued on top of the data, but beneath the overlay band: text added before a raster is still
+        drawn over it, which is what the tree says and what a reader expects of a place name.
+
         Args:
             layer: A ``maplibre`` ``Layer``/spec, or a callable ``apply(widget)``.
 
@@ -1031,8 +1039,32 @@ class WebMapBase:
 
                 ```
         """
-        self.layers.append(layer)
+        self.layers.insert(len(self.layers) - self._overlay_count, layer)
         return self
+
+    def _queue_layer(self, layer: Any, kind: str) -> Self:
+        """Queue a drawn layer in the band its kind belongs to, and return ``self``.
+
+        MapLibre draws its layers in the order they are added, and the tree bands them by kind
+        (:data:`~digitalearth.base.registry.KIND_BANDS`). This is what keeps the two saying the same thing: a
+        graticule queued after a raster still draws beneath it, and a raster queued after a label still draws
+        beneath the label.
+
+        Args:
+            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            kind: The layer's registered kind, as passed to :meth:`_index_layer`.
+
+        Returns:
+            This map (chainable).
+        """
+        band = band_of(kind)
+        if band == "overlay":
+            return self.add_overlay(layer)
+        if band == "reference":
+            return self.add_reference(layer)
+        if band == "underlay":
+            return self.add_underlay(layer)
+        return self.add_layer(layer)
 
     def _needs_reproject(self, data: Any) -> bool:
         """Whether `data` must be reprojected (via pyramids) to the display CRS.
@@ -1402,6 +1434,23 @@ class WebMapBase:
         """
         self.layers.insert(self._underlay_count + self._reference_count, layer)
         self._reference_count += 1
+        return self
+
+    def add_overlay(self, layer: Any) -> Self:
+        """Register ``layer`` **above the data** (drawn last) and return ``self``.
+
+        Text and labels call this: a place name is drawn over the field it names, and stays over it when a
+        raster is added afterwards. The mirror of :meth:`add_underlay`, and the reason :meth:`add_layer` inserts
+        beneath this band rather than appending.
+
+        Args:
+            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+
+        Returns:
+            This map (chainable).
+        """
+        self.layers.append(layer)
+        self._overlay_count += 1
         return self
 
     def add_underlay(self, layer: Any) -> Self:
