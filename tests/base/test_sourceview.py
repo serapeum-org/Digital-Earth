@@ -1186,3 +1186,180 @@ class TestTheRemainingWindowArms:
         assert merged == {"variable": "precip"}, (
             f"the new read's variable must stand alone, got {merged}"
         )
+
+
+class TestAWindowThatMissesTheSource:
+    """A viewport panned off the data draws nothing, rather than raising (#297)."""
+
+    class _Missing(Exception):
+        """Stands in for pyramids' out-of-bounds report, which this module matches by name."""
+
+    class _OffRaster:
+        """A raster whose every windowed read reports the window as out of bounds."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
+        no_data_value = (-9999.0,)
+
+        def read_part(self, **kwargs):
+            """Refuse every window.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OutOfBoundsError: always.
+            """
+            raise _out_of_bounds()
+
+        def read_array(self, **kwargs):
+            """Refuse every window.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OutOfBoundsError: always.
+            """
+            raise _out_of_bounds()
+
+    class _Broken:
+        """A raster whose reads fail for a reason that has nothing to do with the window."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
+        no_data_value = (-9999.0,)
+
+        def read_part(self, **kwargs):
+            """Fail the way a broken file does.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OSError: always.
+            """
+            raise OSError("the file is truncated")
+
+        def read_array(self, **kwargs):
+            """Fail the way a broken file does.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OSError: always.
+            """
+            raise OSError("the file is truncated")
+
+    def test_an_off_source_window_comes_back_empty(self):
+        """The canvas is all missing, which is what an empty place looks like."""
+        source = self._OffRaster()
+        ref = DataRef.to_object(source, name="off-source-view")
+        view = SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(
+                bounds=Bounds(10.0, 10.0, 12.0, 12.0, crs=4326), budget=64
+            ),
+        )
+        assert np.isnan(view.z.values).all(), view.z.values
+
+    def test_a_read_that_failed_for_another_reason_still_raises(self):
+        """A truncated file is not an empty place, and is not hidden as one."""
+        source = self._Broken()
+        ref = DataRef.to_object(source, name="broken-view")
+        with pytest.raises(OSError, match="truncated"):
+            SourceView.of(
+                source,
+                ref=ref,
+                selection=Selection.of(1),
+                request=ViewRequest(
+                    bounds=Bounds(0.0, 0.0, 2.0, 2.0, crs=4326), budget=64
+                ),
+            )
+
+
+class TestMaskingAWindowedRead:
+    """What a decimated read calls missing, where pyramids cannot mask it (#297)."""
+
+    class _Packed:
+        """A raster whose band is packed, so its sentinel unpacks to an ordinary-looking number."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 8.0, 8.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 8.0, 0.0, -1.0)
+        no_data_value = (-9999,)
+        scale = [0.01]
+        offset = [5.0]
+
+        def read_part(self, *, bbox, dst_width, dst_height, bbox_crs=None, band=0):
+            """Return a decimated window whose first cell is the unpacked sentinel.
+
+            Args:
+                bbox: The window.
+                dst_width: Cells across.
+                dst_height: Cells down.
+                bbox_crs: The window's CRS.
+                band: The 0-based band.
+
+            Returns:
+                The canvas, in physical units.
+            """
+            values = np.full((dst_height, dst_width), 7.0)
+            values[0, 0] = -9999 * 0.01 + 5.0
+            return values
+
+    def test_a_packed_sentinel_is_missing_in_the_units_the_read_returns(self):
+        """The sentinel is scaled and offset before it is compared, as the read's values are."""
+        source = self._Packed()
+        ref = DataRef.to_object(source, name="packed-view")
+        view = SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(bounds=Bounds(0.0, 0.0, 8.0, 8.0, crs=4326), budget=16),
+        )
+        assert int(np.isnan(view.z.values).sum()) == 1, view.z.values
+
+    @pytest.mark.parametrize("declared", [(), (None,)], ids=["no-entry", "no-value"])
+    def test_a_band_that_declares_no_sentinel_keeps_every_value(self, declared):
+        """Nothing is guessed: a raster with no nodata value has no missing cells.
+
+        Args:
+            declared: What the band says about its nodata value — nothing at all, or explicitly none.
+        """
+
+        class _Plain(TestMaskingAWindowedRead._Packed):
+            """The same raster, without a usable nodata value."""
+
+            no_data_value = declared
+
+        source = _Plain()
+        ref = DataRef.to_object(source, name="plain-view")
+        view = SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(bounds=Bounds(0.0, 0.0, 8.0, 8.0, crs=4326), budget=16),
+        )
+        assert not np.isnan(view.z.values).any(), view.z.values
+
+
+def _out_of_bounds() -> Exception:
+    """Return an exception named the way pyramids names its out-of-bounds report.
+
+    Returns:
+        The exception to raise.
+    """
+
+    class OutOfBoundsError(Exception):
+        """Named, not imported: the module matches by name so the tier does not depend on where it lives."""
+
+    return OutOfBoundsError("the window is outside the raster")

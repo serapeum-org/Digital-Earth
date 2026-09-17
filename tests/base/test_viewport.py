@@ -671,3 +671,42 @@ class TestCameraSerialisation:
         stored = {"position": [0, -10, 5], "roll": 15}
         with pytest.raises(ValueError, match=r"unknown keys \['roll'\]"):
             Camera.from_dict(stored)
+
+
+class TestWhereAPanAndZoomMapLooks:
+    """`center` and `zoom` — what a web map says about where it is standing (#296)."""
+
+    def test_a_centre_and_a_zoom_are_kept_as_floats(self):
+        """The two values a pan-and-zoom map is built with are part of its view."""
+        view = Viewport(4326, center=(4.9, 52.4), zoom=7)
+        assert (view.center, view.zoom) == ((4.9, 52.4), 7.0), view.to_dict()
+
+    def test_a_view_with_neither_says_nothing_about_either(self):
+        """An unframed view leaves the framing to the renderer, as it always did."""
+        assert (Viewport(4326).center, Viewport(4326).zoom) == (None, None), "unset"
+
+    @pytest.mark.parametrize(
+        "center", [(1.0, 2.0, 3.0), (1.0, None), "4.9,52.4", (float("nan"), 1.0)]
+    )
+    def test_a_centre_that_is_not_a_place_is_refused(self, center):
+        """A centre with three numbers is a caller who meant a box; one with a hole places nothing.
+
+        Args:
+            center: The unusable centre under test.
+        """
+        with pytest.raises(ValueError, match="center"):
+            Viewport(4326, center=center)
+
+    def test_a_zoom_that_is_not_a_number_is_refused(self):
+        """A zoom level is a number of doublings, not a word."""
+        with pytest.raises(ValueError, match="zoom"):
+            Viewport(4326, zoom="far")
+
+    def test_the_centre_and_zoom_round_trip(self):
+        """A stored view reads back as the view it was written from."""
+        view = Viewport(3857, center=(0.0, 0.0), zoom=3.5)
+        assert Viewport.from_dict(view.to_dict()) == view, view.to_dict()
+
+    def test_a_view_with_neither_stores_neither(self):
+        """The fields are additive: a view that names no centre is the dict it was before."""
+        assert sorted(Viewport(4326).to_dict()) == ["crs"], Viewport(4326).to_dict()

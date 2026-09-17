@@ -401,3 +401,205 @@ class TestTheLayerSpecTheSceneWrites:
         scene.point_cloud(np.zeros((3, 3)), values=values)
         stored = scene.figure_spec.layers.get("point_cloud-1").symbology.props["values"]
         assert sorted(stored) == ["$ref"], stored
+
+
+class TestTheRemainingArms:
+    """The paths the seam's other tests reach around: a live plotter, a skipped layer, a restyle."""
+
+    def test_the_exaggeration_reaches_a_plotter_that_already_exists(self, scene):
+        """Set after the first render, the view scale is applied to the window that is open.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        scene.screenshot()
+        scene.vertical_exaggeration = 4.0
+        assert float(scene.plotter.renderer.scale[2]) == 4.0, (
+            scene.plotter.renderer.scale
+        )
+
+    def test_a_camera_set_after_a_render_is_applied_at_once(self, scene):
+        """There is a plotter to put it on, so it does not wait for the next render.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        scene.screenshot()
+        scene.camera = Camera((7.0, -7.0, 7.0))
+        assert [round(value) for value in scene.plotter.camera.position] == [
+            7,
+            -7,
+            7,
+        ], scene.plotter.camera.position
+
+    def test_a_parallel_camera_carries_its_scale(self, scene):
+        """A parallel projection is zoomed by `parallel_scale`, so that is what is applied.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        scene.camera = Camera((1.0, -1.0, 1.0), parallel=True, parallel_scale=5.0)
+        scene.screenshot()
+        assert scene.plotter.camera.parallel_scale == 5.0, scene.plotter.camera
+
+    def test_the_camera_is_readable_before_anything_is_drawn(self):
+        """A scene that has not rendered still says where it will look from."""
+        built = Scene3D(off_screen=True)
+        try:
+            built.camera = Camera((2.0, -2.0, 2.0))
+            assert built._plotter is None, "reading the camera must not build a plotter"
+            assert built.camera.position == (2.0, -2.0, 2.0), built.camera
+        finally:
+            built.close()
+
+    def test_a_described_but_undrawn_layer_has_no_mesh(self, scene):
+        """A custom layer whose object is not here is in the figure and not on the plotter.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.add_mesh(pv.Sphere(radius=0.5), name="ball")
+        elsewhere = Scene3D(off_screen=True)
+        try:
+            elsewhere.draw_figure(scene.figure_spec)
+            assert elsewhere.mesh_of("ball") is None, "nothing was drawn for it"
+            assert elsewhere.remove_layer("ball").layer_ids == [], "it still removes"
+        finally:
+            elsewhere.close()
+
+    def test_an_unknown_layer_cannot_be_hidden(self, scene):
+        """Visibility is addressed by id, and an id nobody used is refused by name.
+
+        Args:
+            scene: The scene under test.
+        """
+        with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
+            scene.set_visible("nope", False)
+
+    def test_a_hidden_layer_is_drawn_hidden(self, scene):
+        """A figure that says a layer is off is drawn with it off, not drawn and then hidden.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        scene.set_visible("terrain-1", False)
+        elsewhere = Scene3D(off_screen=True)
+        try:
+            elsewhere.draw_figure(scene.figure_spec)
+            assert not bool(elsewhere.actor_of("terrain-1").visibility), "drawn hidden"
+        finally:
+            elsewhere.close()
+
+    def test_a_restyled_layer_is_drawn_again(self, scene):
+        """VTK has no cheap restyle, so the layer is rebuilt from its new description.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The diff's `restyled` arm: same id, same source, another colormap.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Symbology
+
+        scene.terrain(get_source(_dem()), cmap="terrain")
+        before = scene.mesh_of("terrain-1")
+        figure = scene.figure_spec
+        layer = figure.layers.get("terrain-1")
+        restyled = replace(
+            figure,
+            layers=figure.layers.replace(
+                replace(
+                    layer,
+                    symbology=Symbology(
+                        props={**dict(layer.symbology.props), "cmap": "magma"}
+                    ),
+                )
+            ),
+        )
+        scene.draw_figure(restyled)
+        assert scene.mesh_of("terrain-1") is not before, "the layer must be drawn again"
+
+    def test_removing_a_layer_that_was_never_drawn_is_harmless(self, scene):
+        """A described layer with nothing on the plotter still comes off the figure.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.add_mesh(pv.Sphere(radius=0.5), name="ball")
+        elsewhere = Scene3D(off_screen=True)
+        try:
+            elsewhere.draw_figure(scene.figure_spec)
+            elsewhere.remove_layer("ball")
+            assert elsewhere.renderer.drawn == {}, elsewhere.renderer.drawn
+        finally:
+            elsewhere.close()
+
+    def test_hiding_a_layer_that_was_never_drawn_is_harmless(self, scene):
+        """A described layer with nothing on the plotter can still be switched off.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.add_mesh(pv.Sphere(radius=0.5), name="ball")
+        elsewhere = Scene3D(off_screen=True)
+        try:
+            elsewhere.draw_figure(scene.figure_spec)
+            elsewhere.set_visible("ball", False)
+            assert elsewhere.figure_spec.layers.is_visible("ball") is False, "recorded"
+        finally:
+            elsewhere.close()
+
+    def test_a_third_name_collision_gets_a_third_number(self, scene):
+        """Ids stay unique however many times a name is reused.
+
+        Args:
+            scene: The scene under test.
+        """
+        for _ in range(3):
+            scene.terrain(get_source(_dem()), name="relief")
+        assert scene.layer_ids == ["relief", "relief-2", "relief-3"], scene.layer_ids
+
+    def test_hiding_a_layer_through_a_figure_toggles_its_actor(self, scene):
+        """The diff's `hidden` arm reaches the actor, not only the description.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        hidden = scene.figure_spec.layers.set_visible("terrain-1", False)
+        from dataclasses import replace
+
+        scene.draw_figure(replace(scene.figure_spec, layers=hidden))
+        assert not bool(scene.actor_of("terrain-1").visibility), "the actor must follow"
+
+    def test_a_figure_drawn_through_a_flat_view_leaves_the_camera_alone(self, scene):
+        """A figure whose panel is a flat map says nothing about where a scene looks from.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `FigureSpec` panels hold a `Viewport` or a `Camera`; only the second is a 3-D view, and the other
+            is drawn without touching the scene's own camera.
+        """
+        from digitalearth.base.spec import PanelSpec, Viewport
+
+        before = scene.camera
+        scene.draw_figure(FigureSpec(panels=(PanelSpec("scene", Viewport(4326)),)))
+        assert scene.camera == before, scene.camera
+
+    def test_a_repeated_name_is_suffixed(self, scene):
+        """Two layers cannot share an id, so the second name is numbered.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()), name="relief")
+        scene.terrain(get_source(_dem()), name="relief")
+        assert scene.layer_ids == ["relief", "relief-2"], scene.layer_ids

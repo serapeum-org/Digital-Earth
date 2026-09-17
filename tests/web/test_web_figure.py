@@ -213,6 +213,20 @@ class TestPerLayerInteraction:
             0
         ].to_dict()
 
+    def test_removing_another_layer_leaves_the_slider_alone(self, points):
+        """A slider steps through its own layers; removing a different one does not touch it.
+
+        Args:
+            points: The features drawn.
+        """
+        frames = points.assign(t=["2020", "2021"])
+        m = WebMap().timeslider(frames, kdim="t")
+        (stepped,) = m.layer_ids
+        m.points(points, name="obs").remove_layer("obs")
+        kinds = [item.kind for item in m.figure_spec.panels[0].furniture]
+        assert kinds == ["time_slider"], kinds
+        assert stepped in m.layer_ids, m.layer_ids
+
 
 class TestTheDeclaration:
     """`capabilities.py` says what the tier can draw (#294)."""
