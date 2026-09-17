@@ -395,6 +395,15 @@ class Scene3DBase:
             one (see the paragraph above).
 
     Examples:
+        - A scene given a display CRS reports it before any layer is added, and builds no plotter to do so:
+            ```python
+            >>> from digitalearth.three_d.base import Scene3DBase
+            >>> scene = Scene3DBase(off_screen=True, crs=4326)
+            >>> scene.display_crs, scene.layers
+            (4326, [])
+            >>> scene.close()
+
+            ```
         - Build a scene, stack two meshes on its single plotter, and read the layer registry back:
             ```python
             >>> import pyvista as pv
@@ -1068,7 +1077,7 @@ class Scene3DBase:
         """Close the wrapped plotter and free its render window.
 
         Closing twice is harmless, so a scene can be closed explicitly inside a ``with`` block that will close
-        it again on exit.
+        it again on exit. A scene that never drew has no render window, and closing it opens none.
 
         Examples:
             - Free the render window when the scene is finished with:

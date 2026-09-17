@@ -358,9 +358,9 @@ def quickmap(
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
-        crs: Display CRS for the map (``backend="matplotlib"``/``"interactive"``, where it defaults to
-            ``3857``, and ``"web"``, which accepts only ``4326``). With ``backend="3d"`` the scene is drawn in it;
-            left out, the 3-D scene takes the data's own CRS.
+        crs: Display CRS for the map (`backend="matplotlib"`/`"interactive"`, where it defaults to `3857`, and
+            `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
+            scene takes the data's own CRS.
         kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for

@@ -111,6 +111,9 @@ class PointCloudMixin(_MixinBase):
     ) -> Any:
         """Render a point cloud (LiDAR / observations / raster cells) and register it as a layer.
 
+        A GeoDataFrame is placed in the scene's display CRS — setting it when the scene has none, reprojected
+        through pyramids when it is in another. A numpy point table declares no CRS and is placed as given.
+
         Args:
             data: A numpy ``(N, 3)``/``(N, 2)`` point table (e.g. ``Dataset.to_xyz()`` or LiDAR xyz), or a
                 GeoDataFrame of ``Point`` geometries (e.g. ``Dataset.get_cell_points()``).
@@ -139,8 +142,9 @@ class PointCloudMixin(_MixinBase):
         Raises:
             TypeError: if both ``size`` and the deprecated ``point_size`` are given — they name one
                 parameter, so neither can be silently preferred.
-            ValueError: if ``values`` does not have one entry per point, or if ``scheme`` cannot classify
-                the values. Also — only when the scene was built with ``strict=True`` —
+            ValueError: if ``values`` does not have one entry per point, if ``scheme`` cannot classify
+                the values, or if `data` declares a CRS other than the scene's and cannot be reprojected (a
+                `PointArrays`). Also — only when the scene was built with ``strict=True`` —
                 :class:`~digitalearth.base.crs.OffLimbError` for an empty cloud, which is otherwise skipped
                 with a warning.
 

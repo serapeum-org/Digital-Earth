@@ -245,6 +245,9 @@ class VectorMixin(_MixinBase):
     ) -> Any:
         """Extrude polygon footprints into 3-D prisms and register them as a single layer.
 
+        The footprints are placed in the scene's display CRS — setting it when the scene has none, reprojected
+        through pyramids when they are in another.
+
         Args:
             gdf: A GeoDataFrame of ``Polygon``/``MultiPolygon`` geometries (e.g. a pyramids
                 ``FeatureCollection`` / ``get_cell_polygons()``); coordinates are read by duck-typing (no

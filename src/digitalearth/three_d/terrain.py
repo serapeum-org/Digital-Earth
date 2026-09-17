@@ -127,6 +127,10 @@ class TerrainMixin(_MixinBase):
         CRS, no xarray), turned into a ``StructuredGrid``, and added to the plotter. Colour by elevation
         (default) or pass ``scalars=None`` to colour by something else / a uniform colour.
 
+        The raster is placed in the scene's display CRS: it sets that CRS when the scene has none, and is
+        reprojected through pyramids when it is in another. Metre elevations over a geographic scene are
+        converted to degrees by the scene's CRS, not the raster's.
+
         **Vertical exaggeration is a property of the scene, not of this layer.** ``z_exaggeration`` sets
         :attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`, a PyVista view scale that applies
         to every actor — so two terrains in one scene cannot disagree about it, the value can be read back off
@@ -156,6 +160,8 @@ class TerrainMixin(_MixinBase):
             OffLimbError: only when the scene was built with ``strict=True`` and the raster is empty or
                 entirely nodata; by default that layer is skipped with a warning instead, so one blank tile
                 does not cost a composed scene its other layers.
+            ValueError: if `data` is a `Source` in a CRS other than the scene's — extracted coordinates cannot be
+                reprojected.
 
         Examples:
             - A ramped DEM renders as a non-flat, correctly-oriented surface, and the exaggeration asked for is

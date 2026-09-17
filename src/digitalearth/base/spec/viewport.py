@@ -765,6 +765,15 @@ class Camera:
                 ([0.0, -10.0, 5.0], True, 30.0)
 
                 ```
+            - A CRS is written only when the camera has one:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> "crs" in Camera((0.0, -10.0, 5.0)).to_dict()
+                False
+                >>> Camera((0.0, -10.0, 5.0), crs=4326).to_dict()["crs"]
+                4326
+
+                ```
             - The dict survives a JSON round trip and rebuilds an equal camera:
                 ```python
                 >>> import json

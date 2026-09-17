@@ -206,6 +206,8 @@ class GlobeMixin(_MixinBase):
         :class:`~digitalearth.base.sources.Source` or raw array carrying a projected CRS or none at all — is
         rejected, with an error naming what is wrong.
 
+        A globe draws in EPSG:4326, and declares that as the scene's display CRS when the scene has none.
+
         Args:
             data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts), or an
                 already-built :class:`~digitalearth.base.sources.Source` whose x/y are longitude/latitude and whose
@@ -225,7 +227,8 @@ class GlobeMixin(_MixinBase):
         Raises:
             ImportError: if the optional ``geovista`` dependency is not installed.
             ValueError: if ``data`` cannot be reprojected and is not geographic — a ``Source`` in a projected
-                CRS, or one with no CRS whose coordinates are not lon/lat.
+                CRS, or one with no CRS whose coordinates are not lon/lat — or if the scene is already drawn in
+                a CRS other than EPSG:4326.
 
         Examples:
             - Drape a cosine-of-latitude field on a globe with coastlines (needs the ``3d`` extra / geovista):
