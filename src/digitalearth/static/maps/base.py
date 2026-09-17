@@ -64,17 +64,17 @@ class GeoLayerBase(Scene):
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
     def _needs_reproject(self, dataset: Any) -> bool:
-        """Whether ``dataset`` must be reprojected to the display CRS.
+        """Whether `dataset` must be reprojected to the display CRS.
 
         A thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code and tests
         call it.
 
         Args:
-            dataset: A pyramids ``Dataset`` whose CRS is compared against the display CRS.
+            dataset: A pyramids `Dataset` whose CRS is compared against the display CRS.
 
         Returns:
-            ``False`` when the dataset's CRS and the display CRS name the same reference system, however either
-            is spelled (``3857``, ``"EPSG:3857"``, a pyproj ``CRS``); ``True`` otherwise.
+            `False` when the dataset's CRS and the display CRS name the same reference system, however either
+            is spelled (`3857`, `"EPSG:3857"`, a pyproj `CRS`); `True` otherwise.
         """
         return needs_reproject(dataset, self.crs)
 

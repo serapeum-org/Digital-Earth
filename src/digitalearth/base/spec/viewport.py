@@ -286,10 +286,10 @@ class Viewport:
         """Whether `data` has to be reprojected to be drawn in this view.
 
         Args:
-            data: A pyramids object exposing ``.crs`` and/or ``.epsg``.
+            data: A pyramids object exposing `.crs` and/or `.epsg`.
 
         Returns:
-            ``False`` when the data's own CRS and the view's name the same reference system, however either is
+            `False` when the data's own CRS and the view's name the same reference system, however either is
             spelled — the rule every tier shares, from :func:`digitalearth.base.display.needs_reproject`.
 
         Examples:

@@ -82,9 +82,9 @@ class LayerSpec:
     Attributes:
         id: The layer's identity. Stable for the layer's life, unique within a :class:`LayerTree`, and the only way
             a layer is addressed — never by position.
-        kind: What sort of layer it is — ``"raster"``, ``"points"``, ``"graticule"`` — as a key into the kind
+        kind: What sort of layer it is — `"raster"`, `"points"`, `"graticule"` — as a key into the kind
             registry (:func:`~digitalearth.base.registry.kind_info`). A lowercase identifier, optionally after one
-            namespace and a colon (``"custom:pyvista"``). The spelling is checked here; whether the kind is
+            namespace and a colon (`"custom:pyvista"`). The spelling is checked here; whether the kind is
             registered is checked by the renderer that draws it, so a figure naming a plugin's kind still loads
             where the plugin is not installed.
         source_id: The key of the layer's data in the figure's sources, or ``None`` for a layer drawn from no data

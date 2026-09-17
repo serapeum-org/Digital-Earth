@@ -455,9 +455,9 @@ def temporary_classifier(classifier: Callable[..., Any]) -> Iterator[None]:
 # Layer kinds
 # ---------------------------------------------------------------------------------------------------------------------
 
-#: What a layer kind may be spelled as: a lowercase identifier (a letter, then letters, digits, ``_`` or ``-``),
-#: optionally after **one** namespace of the same form and a colon — ``points``, ``custom:pyvista``,
-#: ``mypkg:hexbin``. The namespace keeps a plugin's kinds and an engine's custom layers out of the built-in names.
+#: What a layer kind may be spelled as: a lowercase identifier (a letter, then letters, digits, `_` or `-`),
+#: optionally after **one** namespace of the same form and a colon — `points`, `custom:pyvista`,
+#: `mypkg:hexbin`. The namespace keeps a plugin's kinds and an engine's custom layers out of the built-in names.
 KIND_PATTERN = re.compile(r"(?:[a-z][a-z0-9_-]*:)?[a-z][a-z0-9_-]*")
 
 #: The data a kind draws. A renderer reads it to know which extractor a layer's source goes through.
@@ -473,7 +473,7 @@ def is_kind_name(value: Any) -> bool:
         value: The candidate name.
 
     Returns:
-        ``True`` for a string matching :data:`KIND_PATTERN` in full; ``False`` for anything else, a non-string
+        `True` for a string matching :data:`KIND_PATTERN` in full; `False` for anything else, a non-string
         included.
 
     Examples:
@@ -482,6 +482,13 @@ def is_kind_name(value: Any) -> bool:
             >>> from digitalearth.base.registry import is_kind_name
             >>> [is_kind_name(n) for n in ("points", "custom:pyvista", "Points", "a:b:c")]
             [True, True, False, False]
+
+            ```
+        - A value that is not a string is never a kind name, so it is answered rather than raising:
+            ```python
+            >>> from digitalearth.base.registry import is_kind_name
+            >>> is_kind_name(42), is_kind_name(None)
+            (False, False)
 
             ```
     """
@@ -507,6 +514,15 @@ class KindInfo:
             >>> from digitalearth.base.registry import KindInfo
             >>> KindInfo("mypkg:hexbin", "points", "binned point density").takes
             'points'
+
+            ```
+        - A name that could not be looked up is refused where the entry is built:
+            ```python
+            >>> from digitalearth.base.registry import KindInfo
+            >>> KindInfo("Hexbin", "points", "binned point density")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: 'Hexbin' is not a layer-kind name: use a lowercase identifier, ...
 
             ```
     """
@@ -555,6 +571,17 @@ def register_kind(info: KindInfo) -> None:
             'a demonstration kind'
 
             ```
+        - A different meaning for a built-in name is refused, and the built-in stays as it was:
+            ```python
+            >>> from digitalearth.base.registry import KindInfo, kind_info, register_kind
+            >>> register_kind(KindInfo("raster", "points", "another meaning"))  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            ValueError: layer kind 'raster' is already registered as KindInfo(name='raster', ...
+            >>> kind_info("raster").takes
+            'raster'
+
+            ```
     """
     if not isinstance(info, KindInfo):
         raise TypeError(f"register_kind needs a KindInfo; got {type(info).__name__}")
@@ -587,6 +614,15 @@ def kind_info(name: str) -> KindInfo:
             'polygons'
 
             ```
+        - A misspelt kind is refused with the registered names in the message:
+            ```python
+            >>> from digitalearth.base.registry import kind_info
+            >>> kind_info("polygon")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            KeyError: "no layer kind 'polygon' is registered; registered kinds are ['basemap', 'borders', ...]"
+
+            ```
     """
     try:
         return _KINDS[name]
@@ -608,6 +644,13 @@ def kinds() -> Tuple[str, ...]:
             >>> from digitalearth.base.registry import kinds
             >>> "polygons" in kinds() and "choropleth" in kinds()
             True
+
+            ```
+        - The names come back sorted:
+            ```python
+            >>> from digitalearth.base.registry import kinds
+            >>> kinds()[:3]
+            ('basemap', 'borders', 'choropleth')
 
             ```
     """
@@ -639,6 +682,16 @@ def temporary_kind(info: KindInfo) -> Iterator[None]:
             True
             >>> "demo:scratch" in kinds()
             False
+
+            ```
+        - Swapping a built-in for a block puts the built-in back afterwards:
+            ```python
+            >>> from digitalearth.base.registry import KindInfo, kind_info, temporary_kind
+            >>> with temporary_kind(KindInfo("points", "points", "a stand-in description")):
+            ...     kind_info("points").doc
+            'a stand-in description'
+            >>> kind_info("points").doc
+            'point features — static scatter/grid_points, interactive/web points'
 
             ```
     """

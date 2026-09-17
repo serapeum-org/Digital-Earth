@@ -42,25 +42,25 @@ def needs_reproject(data: Any, crs: Any) -> bool:
     """Whether `data` must be reprojected to reach the display CRS.
 
     Args:
-        data: A pyramids object — a ``Dataset`` or ``FeatureCollection`` — exposing ``.crs`` and/or ``.epsg``.
-        crs: The display CRS, in any spelling pyramids reads: an EPSG ``int``, an ``"EPSG:<code>"`` string, a
-            proj4 or WKT string, or a pyproj ``CRS``.
+        data: A pyramids object — a `Dataset` or `FeatureCollection` — exposing `.crs` and/or `.epsg`.
+        crs: The display CRS, in any spelling pyramids reads: an EPSG `int`, an `"EPSG:<code>"` string, a
+            proj4 or WKT string, or a pyproj `CRS`.
 
     Returns:
-        ``False`` when the data's own CRS and `crs` name the same reference system; ``True`` otherwise,
+        `False` when the data's own CRS and `crs` name the same reference system; `True` otherwise,
         including for data that declares no CRS at all.
 
         The two are compared by meaning, through :func:`~digitalearth.base.spec.bounds.same_crs`, the rule
         `Bounds` and `Viewport` already use. Comparing Python values instead skipped a warp only for an
-        ``int`` display CRS, so a view holding ``"EPSG:4326"`` — the spelling `Viewport` writes for a CRS
+        `int` display CRS, so a view holding `"EPSG:4326"` — the spelling `Viewport` writes for a CRS
         object — warped data that was already in EPSG:4326.
 
-        The data's CRS **definition** (``.crs``) is read before its EPSG code, which is only the fallback. An
+        The data's CRS **definition** (`.crs`) is read before its EPSG code, which is only the fallback. An
         EPSG code says nothing about a projection with no authority code, while the definition does: an
         orthographic dataset still warps to EPSG:4326, and needs no warp to its own orthographic CRS.
 
-        Both attributes are read with ``getattr``, so an input declaring no CRS gets an answer rather than an
-        ``AttributeError``.
+        Both attributes are read with `getattr`, so an input declaring no CRS gets an answer rather than an
+        `AttributeError`.
 
     Examples:
         - The same system needs no warp, however the display CRS is spelled:

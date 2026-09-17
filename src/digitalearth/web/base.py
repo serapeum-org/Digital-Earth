@@ -817,9 +817,9 @@ class WebMapBase:
 
         Args:
             layer_id: The MapLibre layer id.
-            label: What a layer switcher should call it; ``None`` falls back to the id.
-            kind: What sort of layer it is — a registered, engine-neutral kind such as ``"raster"``,
-                ``"choropleth"`` or ``"points"`` (:func:`~digitalearth.base.registry.kinds`), not the MapLibre layer
+            label: What a layer switcher should call it; `None` falls back to the id.
+            kind: What sort of layer it is — a registered, engine-neutral kind such as `"raster"`,
+                `"choropleth"` or `"points"` (:func:`~digitalearth.base.registry.kinds`), not the MapLibre layer
                 type — so the tree describes the layer rather than only naming it.
             visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
                 tree says what the MapLibre layout says; the builders without one always build visible. It is
@@ -1035,14 +1035,14 @@ class WebMapBase:
         return self
 
     def _needs_reproject(self, data: Any) -> bool:
-        """Whether ``data`` must be reprojected (via pyramids) to the display CRS.
+        """Whether `data` must be reprojected (via pyramids) to the display CRS.
 
         Args:
-            data: A pyramids object exposing ``.crs`` and/or ``.epsg`` (``Dataset``/``FeatureCollection``).
+            data: A pyramids object exposing `.crs` and/or `.epsg` (`Dataset`/`FeatureCollection`).
 
         Returns:
-            ``False`` when the data's CRS and the display CRS name the same reference system, however either
-            is spelled; ``True`` otherwise.
+            `False` when the data's CRS and the display CRS name the same reference system, however either
+            is spelled; `True` otherwise.
 
         Note:
             This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code

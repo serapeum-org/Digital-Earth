@@ -632,20 +632,20 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         layout: Optional[dict] = None,
     ) -> Self:
-        """Register a GeoJSON source + a typed layer with ``paint`` and record it as the last data layer.
+        """Register a GeoJSON source + a typed layer with `paint` and record it as the last data layer.
 
         Args:
             features: The display-CRS GeoDataFrame to serve as the GeoJSON source.
-            prefix: The layer id prefix, from the MapLibre type (``"circle"``/``"line"``/``"fill"``/``"label"``).
+            prefix: The layer id prefix, from the MapLibre type (`"circle"`/`"line"`/`"fill"`/`"label"`).
                 It shapes the public `layer_ids`, so it is kept apart from `kind`.
-            layer_type: The ``maplibre`` ``LayerType`` member for the layer.
+            layer_type: The `maplibre` `LayerType` member for the layer.
             paint: The MapLibre paint dict for the layer.
-            kind: The registered, engine-neutral kind the layer is recorded as — ``"points"``, ``"polygons"``,
-                ``"choropleth"`` — which the MapLibre type cannot tell apart.
-            name: What a layer switcher calls this layer; ``None`` uses its generated id.
+            kind: The registered, engine-neutral kind the layer is recorded as — `"points"`, `"polygons"`,
+                `"choropleth"` — which the MapLibre type cannot tell apart.
+            name: What a layer switcher calls this layer; `None` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
-            layout: MapLibre layout properties for the layer (a symbol layer's ``text-field`` and its
-                placement live here rather than in ``paint``). Merged with the visibility flag.
+            layout: MapLibre layout properties for the layer (a symbol layer's `text-field` and its
+                placement live here rather than in `paint`). Merged with the visibility flag.
 
         Returns:
             The same map instance, so builder calls chain.

@@ -318,14 +318,14 @@ class InteractiveMapBase:
         return self
 
     def _needs_reproject(self, data: Any) -> bool:
-        """Whether ``data`` must be reprojected (via pyramids) to the display CRS.
+        """Whether `data` must be reprojected (via pyramids) to the display CRS.
 
         Args:
-            data: A pyramids object exposing ``.crs`` and/or ``.epsg`` (``Dataset``/``FeatureCollection``).
+            data: A pyramids object exposing `.crs` and/or `.epsg` (`Dataset`/`FeatureCollection`).
 
         Returns:
-            ``False`` when the data's CRS and the display CRS name the same reference system, however either
-            is spelled; ``True`` otherwise.
+            `False` when the data's CRS and the display CRS name the same reference system, however either
+            is spelled; `True` otherwise.
 
         Note:
             This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
