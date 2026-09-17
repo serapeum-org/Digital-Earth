@@ -128,6 +128,14 @@ class LayerSpec:
             ('raster', 'srtm', True, 0.8)
 
             ```
+        - A layer can be drawn outside the band its kind declares, which is what a caller's own object needs:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec, LayerTree
+            >>> tiles = LayerSpec("tiles", "custom:maplibre", band="underlay")
+            >>> LayerTree().add(LayerSpec("dem", "raster")).add(tiles).ids
+            ('tiles', 'dem')
+
+            ```
         - Imagery draped over that layer names it as its elevation source:
             ```python
             >>> from digitalearth.base.spec import LayerSpec

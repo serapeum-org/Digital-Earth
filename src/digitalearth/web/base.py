@@ -1538,6 +1538,23 @@ class WebMapBase:
 
         Returns:
             This map (chainable).
+
+        Examples:
+            - What joins the overlay band stays above what is added afterwards (any object stands in for a
+              layer here — the queue does not inspect it):
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().add_overlay("label").add_layer("raster-layer").layers
+                ['raster-layer', 'label']
+
+                ```
+            - Two overlays keep the order they arrived in:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().add_overlay("towns").add_overlay("cities").layers
+                ['towns', 'cities']
+
+                ```
         """
         self.layers.append(layer)
         self._overlay_count += 1
