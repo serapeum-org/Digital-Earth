@@ -398,7 +398,9 @@ jobs:
 
       - name: Run the 3-D doctests
         # The `doctests` task ignores three_d because those modules import pyvista, which the dev env does
-        # not have. Without this step their doctests would run in no job at all.
+        # not have. Without this step their doctests would run in no job at all. Runs after a failed image
+        # comparison too, so a moved pixel never hides a broken example.
+        if: ${{ !cancelled() }}
         run: |
           xvfb-run -a pixi run -e viz3d doctests-3d
 
