@@ -319,6 +319,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        gdf = self._place(gdf, layer="extruded_polygons")
         geoms = gdf.geometry
         heights = gdf[height].to_numpy() if isinstance(height, str) else None
         colours = gdf[column].to_numpy() if column else None

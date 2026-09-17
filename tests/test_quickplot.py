@@ -328,7 +328,6 @@ class TestBackendCapabilityRefusal:
     @pytest.mark.parametrize(
         ("backend", "parameter", "value"),
         [
-            ("3d", "crs", 4326),
             ("3d", "domain", "europe"),
             ("3d", "coastlines", True),
             ("3d", "basemap", True),
@@ -440,9 +439,20 @@ class TestBackendCapabilityRefusal:
             figure. Checking first is what keeps every rejected call free of a resource nobody will close.
         """
         three_d = mocker.patch.object(qp, "_quickmap_3d")
-        with pytest.raises(ValueError, match="crs="):
-            qp.quickmap(dataset, backend="3d", crs=4326)
+        with pytest.raises(ValueError, match="domain="):
+            qp.quickmap(dataset, backend="3d", domain="europe")
         assert not three_d.called, "a refused call must not reach the backend builder"
+
+    def test_a_crs_is_forwarded_to_the_3d_backend(self, dataset, mocker):
+        """The 3-D tier has a display CRS, so ``crs=`` reaches its builder instead of being refused (#291).
+
+        Args:
+            dataset: The raster to draw.
+            mocker: Replaces the 3-D backend builder with a recorder.
+        """
+        three_d = mocker.patch.object(qp, "_quickmap_3d")
+        qp.quickmap(dataset, backend="3d", crs=4326)
+        assert three_d.call_args.kwargs["crs"] == 4326, three_d.call_args
 
     def test_every_backend_has_a_capability_entry(self):
         """The dispatcher and the capability table name the same backends.

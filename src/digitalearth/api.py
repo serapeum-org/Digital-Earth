@@ -63,8 +63,9 @@ _UNSET = _Unset()
 #: * ``matplotlib`` is the only tier with an extent setter, so it is the only one that takes ``domain``.
 #: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
 #:   colorbar toggle.
-#: * ``3d`` has no display CRS at all (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs` is ``None``
-#:   and says so) and no coastline or extent concept; its scalar bar is the ``colorbar`` toggle.
+#: * ``3d`` draws every layer in one display CRS, given as ``crs`` or taken from the first layer
+#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept, and its
+#:   scalar bar is the ``colorbar`` toggle.
 #: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
 #:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
 #:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
@@ -76,7 +77,7 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
         {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
     ),
     "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
-    "3d": frozenset({"colorbar"}),
+    "3d": frozenset({"crs", "colorbar"}),
     "web": frozenset({"crs", "basemap", "colorbar"}),
 }
 
@@ -358,8 +359,8 @@ def quickmap(
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         crs: Display CRS for the map (``backend="matplotlib"``/``"interactive"``, where it defaults to
-            ``3857``, and ``"web"``, which accepts only ``4326``). ``backend="3d"`` has no display CRS, so
-            passing it there is refused rather than ignored — reproject with pyramids before plotting.
+            ``3857``, and ``"web"``, which accepts only ``4326``). With ``backend="3d"`` the scene is drawn in it;
+            left out, the 3-D scene takes the data's own CRS.
         kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
@@ -459,10 +460,10 @@ def quickmap(
             >>> from digitalearth.api import quickmap
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> try:
-            ...     quickmap(ds, backend="3d", crs=4326)
+            ...     quickmap(ds, backend="3d", domain="europe")
             ... except ValueError as error:
             ...     print(str(error).split(";")[0])
-            crs= is not supported by backend='3d'
+            domain= is not supported by backend='3d'
 
             ```
     """
@@ -486,7 +487,9 @@ def quickmap(
     coastlines = False if coastlines is _UNSET else coastlines
     domain = None if domain is _UNSET else domain
     if backend == "3d":
-        return _quickmap_3d(data, colorbar=colorbar, **kwargs)
+        return _quickmap_3d(
+            data, colorbar=colorbar, crs=None if crs is _UNSET else crs, **kwargs
+        )
     if backend == "interactive":
         return _quickmap_interactive(
             data,
@@ -735,22 +738,23 @@ def _quickmap_web(
     return scene
 
 
-def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any:
+def _quickmap_3d(
+    data: PlottableData, *, colorbar: bool = True, crs: Any = None, **kwargs
+) -> Any:
     """Build a finished ``Scene3D`` from ``data`` (the ``backend="3d"`` path, DX.1).
 
     Dispatches by input type, mirroring :func:`_draw`: a raster ``Dataset`` becomes 3-D relief
     (``terrain``); a point ``FeatureCollection`` becomes a ``point_cloud`` (coloured by ``column`` when
     given); a polygon ``FeatureCollection`` becomes ``extruded_polygons`` (extruded by, and coloured by,
-    ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. The
-    map-only kwargs (``crs``/``kind``/``domain``/``basemap``/``coastlines``) have no 3-D analogue and are
-    not accepted here — ``crs``/``domain``/``coastlines`` are refused by name in :func:`quickmap` before this
-    is reached, since :attr:`~digitalearth.three_d.base.Scene3DBase.display_crs` records that this tier
-    projects nothing.
+    ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. ``crs``
+    becomes the scene's display CRS; the map-only kwargs (``kind``/``domain``/``basemap``/``coastlines``) have
+    no 3-D analogue and are refused by name in :func:`quickmap` before this is reached.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         colorbar: When False, hide the scalar bar (``show_scalar_bar=False``); True leaves PyVista's
             default (a bar iff the layer carries scalars).
+        crs: The scene's display CRS; ``None`` takes the data's own.
         **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
             ``column``, ``height``, ``point_size``).
 
@@ -789,9 +793,9 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
         not colorbar
     ):  # PyVista shows a scalar bar by default when scalars exist; force it off here
         kwargs.setdefault("show_scalar_bar", False)
-    scene = (
-        Scene3D()
-    )  # constructed only after validation — the error paths above never leak a plotter
+    scene = Scene3D(
+        crs=crs
+    )  # constructed only after validation, so the error paths above leak no scene
     if isinstance(data, Dataset):
         scene.terrain(data, **kwargs)
     elif geom_kind == "polygons":

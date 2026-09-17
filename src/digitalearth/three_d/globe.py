@@ -17,6 +17,7 @@ import numpy as np
 
 from digitalearth.base.crs import declared_crs, is_geographic, reproject
 from digitalearth.base.sources import Source, get_source
+from digitalearth.base.spec.bounds import same_crs
 
 #: Fallback scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field (used only if the mesh
 #: exposes no active scalars). Prefer ``mesh.active_scalars_name`` so the binding tracks geovista's own choice.
@@ -244,6 +245,14 @@ class GlobeMixin(_MixinBase):
                 ```
         """
         gv = _require_geovista()
+        if self.display_crs is None:
+            self.display_crs = GEOGRAPHIC_EPSG
+        elif not same_crs(self.display_crs, GEOGRAPHIC_EPSG):
+            # geovista wraps lon/lat onto a sphere; the scene's other layers would be flat in another CRS.
+            raise ValueError(
+                f"globe() draws in EPSG:{GEOGRAPHIC_EPSG}, but this scene is drawn in {self.display_crs!r}; "
+                "draw the globe in its own Scene3D"
+            )
         src = self._to_geographic_source(data, band=band)
         lon = np.asarray(src.x.values, dtype="float64")
         lat = np.asarray(src.y.values, dtype="float64")

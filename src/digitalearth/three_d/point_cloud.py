@@ -71,7 +71,6 @@ def _coords_from_array(data: Any) -> np.ndarray:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
-
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
@@ -190,6 +189,7 @@ class PointCloudMixin(_MixinBase):
             caller="Scene3D.point_cloud()",
             default=5.0,
         )
+        data = self._place(data, layer="point_cloud")
         if hasattr(data, "geometry"):
             points, gdf_values = _coords_from_geodataframe(data, value_column)
         else:

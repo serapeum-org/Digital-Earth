@@ -19,8 +19,8 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import numpy as np
 
-from digitalearth.base.crs import OffLimbError
-from digitalearth.base.display import auto_cmap
+from digitalearth.base.crs import OffLimbError, declared_crs, reproject
+from digitalearth.base.display import auto_cmap, needs_reproject
 from digitalearth.base.sources import Source
 from digitalearth.base.spec import Scale
 
@@ -369,13 +369,12 @@ def _require_one_vtk_build() -> None:
 class Scene3DBase:
     """Core single-:class:`pyvista.Plotter` host: layer registry + render/export lifecycle.
 
-    **This tier has no display CRS.** A 2-D map reprojects everything it draws into one display CRS and
-    places it on a flat axes; a 3-D scene has no such thing. Coordinates go into the plotter as the numbers
-    pyramids handed over, in whatever CRS the data is already in, and the camera — not a projection — decides
-    what the viewer sees. :attr:`display_crs` is ``None`` to say so in code, which is what lets
-    :func:`digitalearth.api.quickmap` refuse ``crs=`` for ``backend="3d"`` with a real reason instead of
-    accepting the argument and quietly ignoring it. Reproject **before** handing data here if you need a
-    particular CRS — that is pyramids' job (``Dataset.to_crs``), not this scene's.
+    **The scene has one display CRS, and every layer is placed in it.** Given as `crs=`, or — when omitted —
+    taken from the first layer that declares a CRS, so a scene whose layers share one CRS reprojects nothing
+    and renders exactly as its data is. A later layer in another CRS is reprojected through pyramids
+    (`Dataset.to_crs` / `FeatureCollection.to_crs`) before it becomes geometry; data that declares no CRS — a
+    bare array, a hand-built mesh — is placed as given. `globe()` draws in EPSG:4326 and declares it. Unlike a
+    2-D map, the camera, not a projection, then decides what the viewer sees.
 
     Args:
         off_screen: Render without opening a window. ``None`` (default) follows :data:`pyvista.OFF_SCREEN`.
@@ -384,13 +383,16 @@ class Scene3DBase:
         strict: How a layer with nothing to draw is handled. ``False`` (default) skips it with a warning
             naming the layer and why, so one empty layer never kills a composed scene; ``True`` raises
             :class:`~digitalearth.base.crs.OffLimbError` instead.
+        crs: The display CRS every layer is placed in. `None` (default) takes the CRS of the first layer that
+            declares one.
         **plotter_kwargs: Forwarded to :class:`pyvista.Plotter`.
 
     Attributes:
         plotter: The wrapped :class:`pyvista.Plotter`.
         layers: Registered ``(mesh, actor)`` pairs, in add order.
         strict: Whether an empty layer raises rather than being skipped (see ``strict`` above).
-        display_crs: Always ``None`` — this tier projects nothing (see the paragraph above).
+        display_crs: The CRS the scene draws in, or `None` while no `crs=` was given and no layer has declared
+            one (see the paragraph above).
 
     Examples:
         - Build a scene, stack two meshes on its single plotter, and read the layer registry back:
@@ -432,18 +434,13 @@ class Scene3DBase:
             capability mixins, and is the class to use directly.
     """
 
-    #: The CRS this tier displays in — ``None``, because it displays in none. Declared rather than left
-    #: implicit so callers and :func:`digitalearth.api.quickmap` can *read* the absence: a 3-D scene places
-    #: coordinates as given and lets the camera do the projecting, so there is no display CRS for a ``crs=``
-    #: argument to set. The 2-D tiers carry a real CRS on the same attribute name.
-    display_crs: None = None
-
     def __init__(
         self,
         off_screen: bool | None = None,
         window_size: tuple[int, int] = (1024, 768),
         theme: "pv.themes.Theme | None" = None,
         strict: bool = False,
+        crs: Any = None,
         **plotter_kwargs: Any,
     ):
         """Build the 3-D scene; the PyVista plotter behind it is built when something first needs it.
@@ -455,6 +452,8 @@ class Scene3DBase:
             theme: PyVista theme; defaults to the package's document-style theme.
             strict: Raise `OffLimbError` for a layer with nothing to draw — an empty point table, a DEM with
                 no finite elevation — instead of skipping it with a warning.
+            crs: The display CRS every layer is placed in. `None` takes the CRS of the first layer that
+                declares one.
             **plotter_kwargs: Forwarded to `pyvista.Plotter` when it is built.
         """
         self._plotter_settings: dict[str, Any] = {
@@ -467,6 +466,8 @@ class Scene3DBase:
         self.layers: list[tuple[Any, Any]] = []
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
         self.strict: bool = strict
+        #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
+        self.display_crs: Any = crs
 
     @property
     def plotter(self) -> "pv.Plotter":
@@ -515,6 +516,55 @@ class Scene3DBase:
             plotter: The plotter to use from now on; a stand-in with the methods the scene calls will do.
         """
         self._plotter = plotter
+
+    def _place(self, data: Any, *, layer: str) -> Any:
+        """Return `data` in the scene's display CRS, adopting the data's CRS when the scene has none yet.
+
+        Args:
+            data: A layer's input — a pyramids `Dataset` or `FeatureCollection`, a `GeoDataFrame`, a `Source`,
+                a `PointArrays`, or a bare array.
+            layer: The builder's name, for the message.
+
+        Returns:
+            `data` itself when it declares no CRS, when it sets the scene's CRS, or when it is already in it;
+            otherwise the reprojected data.
+
+        Raises:
+            ValueError: when `data` is in another CRS and cannot be reprojected — a `Source` or `PointArrays`,
+                which hold coordinates rather than a warpable dataset.
+            OffLimbError: when the reprojection places none of the data.
+
+        Examples:
+            - The first layer carrying a CRS sets the scene's; data with none is placed as given:
+                ```python
+                >>> import numpy as np
+                >>> from pyramids.dataset import Dataset
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> placed = scene._place(np.zeros((2, 3)), layer="demo")
+                >>> scene.display_crs is None
+                True
+                >>> _ = scene._place(Dataset.read_file("examples/data/acc4000.tif"), layer="demo")
+                >>> scene.display_crs
+                32618
+
+                ```
+        """
+        own = declared_crs(data)
+        if own is None:
+            return data
+        if self.display_crs is None:
+            self.display_crs = own
+            return data
+        if not needs_reproject(data, self.display_crs):
+            return data
+        if not hasattr(data, "to_crs"):
+            raise ValueError(
+                f"{layer}() got data in {own!r}, but this scene is drawn in {self.display_crs!r}, and a "
+                f"{type(data).__name__} cannot be reprojected; reproject it in pyramids first "
+                "(Dataset.to_crs / FeatureCollection.to_crs)"
+            )
+        return reproject(data, self.display_crs)
 
     def _skip_empty(self, layer: str, reason: str) -> None:
         """Report that ``layer`` drew nothing, by warning (default) or raising (``strict=True``).

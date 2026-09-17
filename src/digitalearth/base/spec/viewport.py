@@ -75,6 +75,44 @@ def _vector(owner: str, name: str, value: Any) -> Vector3:
     return (x, y, z)
 
 
+def _written_crs(owner: str, crs: Any) -> Any:
+    """Return a CRS in the spelling a figure stores, refusing one it cannot store or pyramids cannot read.
+
+    Args:
+        owner: The field being set, for the message — `"Viewport.crs"`, `"Camera.crs"`.
+        crs: The CRS given. Not `None`: each caller decides what an absent CRS means.
+
+    Returns:
+        An EPSG integer or a string as given, or a CRS object written as `"EPSG:<code>"` or WKT.
+
+    Raises:
+        ValueError: for a boolean, a value with no written form (a float, a list), or one pyramids cannot read
+            (`0`, `""`, `"junk"`).
+    """
+    if isinstance(crs, bool):
+        raise ValueError(
+            f"{owner} holds a bool that is not a readable CRS; got {crs!r}"
+        )
+    try:
+        written = crs_to_json(crs, owner)
+    except TypeError as error:
+        # Checked when the value is built, not only when it is written: a CRS a figure cannot store was otherwise
+        # found by `to_dict`, at save time, far from the line that built it.
+        raise ValueError(str(error)) from error
+    # Written spellings are an int or a string, which `crs_to_json` passes through unread: `0`, `""` and "junk"
+    # built a view that failed only when `framed` asked pyramids to reproject into it.
+    from pyramids.base.crs import crs_from_user_input
+
+    try:
+        crs_from_user_input(written)
+    # Whatever pyramids cannot read names no system anything could be drawn in.
+    except Exception as error:  # noqa: BLE001
+        raise ValueError(
+            f"{owner} {crs!r} names no coordinate reference system pyramids can read"
+        ) from error
+    return written
+
+
 @dataclass(frozen=True)
 class Viewport:
     """What a flat map shows: the CRS it is drawn in, and optionally the region.
@@ -135,24 +173,7 @@ class Viewport:
         """
         if self.crs is None or isinstance(self.crs, bool):
             raise ValueError(f"Viewport needs a display CRS; got {self.crs!r}")
-        try:
-            written = crs_to_json(self.crs, "Viewport.crs")
-        except TypeError as error:
-            # Checked here, not only when the view is written: a CRS a figure cannot store was otherwise found by
-            # `to_dict`, at save time, far from the line that built the view.
-            raise ValueError(str(error)) from error
-        # Written spellings are an int or a string, which `crs_to_json` passes through unread: `0`, `""` and "junk"
-        # built a view that failed only when `framed` asked pyramids to reproject into it.
-        from pyramids.base.crs import crs_from_user_input
-
-        try:
-            crs_from_user_input(written)
-        # Whatever pyramids cannot read names no system a map could be drawn in.
-        except Exception as error:  # noqa: BLE001
-            raise ValueError(
-                f"Viewport.crs {self.crs!r} names no coordinate reference system pyramids can read"
-            ) from error
-        object.__setattr__(self, "crs", written)
+        object.__setattr__(self, "crs", _written_crs("Viewport.crs", self.crs))
         self._check_bounds()
         object.__setattr__(self, "domain", self._checked_domain(self.domain))
         if self.bounds is not None and self.domain is not None:
@@ -428,6 +449,8 @@ class Camera:
             renderer to fit the scene. Ignored by a perspective projection, as `view_angle` is by a parallel one.
         vertical_exaggeration: The factor applied to the z axis, strictly positive. It lives on the view, as the 3-D
             tier already keeps it, rather than in the mesh coordinates.
+        crs: The CRS `position` and `focal_point` are measured in — the scene's display CRS — or `None` when the
+            scene declares none. A CRS object is held in its written spelling, as `Viewport` holds one.
 
     Raises:
         ValueError: for a vector that is not three finite numbers, a camera placed at its own focal point, a zero or
@@ -470,6 +493,7 @@ class Camera:
     parallel: bool = False
     parallel_scale: Optional[float] = None
     vertical_exaggeration: float = 1.0
+    crs: Any = None
 
     def __post_init__(self) -> None:
         """Refuse a camera that could not frame anything.
@@ -477,6 +501,8 @@ class Camera:
         Raises:
             ValueError: as described on the class.
         """
+        if self.crs is not None:
+            object.__setattr__(self, "crs", _written_crs("Camera.crs", self.crs))
         position = _vector("Camera", "position", self.position)
         focal = _vector("Camera", "focal_point", self.focal_point)
         up = _vector("Camera", "view_up", self.view_up)
@@ -727,8 +753,8 @@ class Camera:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            Every field. A camera is small, and a stored view is only reproducible if it records the settings
-            that were in force rather than relying on today's defaults.
+            Every field, and `crs` when one is set. A camera is small, and a stored view is only reproducible if it
+            records the settings that were in force rather than relying on today's defaults.
 
         Examples:
             - Every setting is written, defaults included:
@@ -757,6 +783,9 @@ class Camera:
             "parallel": self.parallel,
             "parallel_scale": self.parallel_scale,
             "vertical_exaggeration": self.vertical_exaggeration,
+            # Written only when set: a camera with no CRS stores what it stored before the field existed, so a
+            # reader that refuses unknown keys still reads it.
+            **({} if self.crs is None else {"crs": self.crs}),
         }
 
     @classmethod
@@ -811,6 +840,7 @@ class Camera:
                 "parallel",
                 "parallel_scale",
                 "vertical_exaggeration",
+                "crs",
             ),
         )
         return cls(
@@ -823,4 +853,5 @@ class Camera:
             parallel=data.get("parallel", False),
             parallel_scale=data.get("parallel_scale"),
             vertical_exaggeration=data.get("vertical_exaggeration", 1.0),
+            crs=data.get("crs"),
         )

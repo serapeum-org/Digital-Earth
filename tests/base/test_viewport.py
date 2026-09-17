@@ -563,6 +563,55 @@ class TestLookingAtAPoint:
         ) == (45.0, True, 12.0, 4.0)
 
 
+class TestCameraCrs:
+    """`Camera.crs` — what the camera's coordinates are measured in (TD-5a, #291)."""
+
+    def test_a_camera_has_no_crs_unless_given_one(self):
+        """The field is optional, so every existing camera keeps building."""
+        assert Camera((0.0, -10.0, 5.0)).crs is None
+
+    def test_a_crs_object_is_held_in_its_written_spelling(self):
+        """A pyproj `CRS` is stored as `"EPSG:<code>"`, as `Viewport` stores one, so the camera hashes."""
+        from pyproj import CRS
+
+        camera = Camera((0.0, -10.0, 5.0), crs=CRS.from_epsg(32618))
+        assert (camera.crs, isinstance(hash(camera), int)) == ("EPSG:32618", True), (
+            camera
+        )
+
+    @pytest.mark.parametrize(
+        "crs", [4326.0, True, "junk", 0], ids=["float", "bool", "junk", "zero"]
+    )
+    def test_a_crs_that_names_no_system_is_refused(self, crs):
+        """A CRS a figure cannot store, or pyramids cannot read, is refused where the camera is built.
+
+        Args:
+            crs: The rejected value.
+        """
+        with pytest.raises(ValueError, match="Camera.crs"):
+            Camera((0.0, -10.0, 5.0), crs=crs)
+
+    def test_to_dict_writes_the_crs_only_when_set(self):
+        """A camera without a CRS stores exactly what it stored before, so older readers still load it."""
+        without, with_crs = (
+            Camera((0.0, -10.0, 5.0)).to_dict(),
+            Camera((0.0, -10.0, 5.0), crs=4326).to_dict(),
+        )
+        assert ("crs" in without, with_crs["crs"]) == (False, 4326), (without, with_crs)
+
+    def test_the_crs_survives_a_json_round_trip(self):
+        """A stored camera reads back with its CRS."""
+        import json
+
+        text = json.dumps(Camera((0.0, -10.0, 5.0), crs="EPSG:3857").to_dict())
+        assert Camera.from_dict(json.loads(text)).crs == "EPSG:3857", text
+
+    def test_a_stored_camera_without_a_crs_loads(self):
+        """A dict written before the field existed is read as a camera with no CRS."""
+        stored = {"position": [0.0, -10.0, 5.0], "view_angle": 30.0}
+        assert Camera.from_dict(stored).crs is None
+
+
 class TestCameraSerialisation:
     """A camera round-trips, so a view can be captured and replayed (#204)."""
 

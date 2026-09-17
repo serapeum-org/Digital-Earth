@@ -197,6 +197,7 @@ class TerrainMixin(_MixinBase):
 
                 ```
         """
+        data = self._place(data, layer="terrain")
         src = data if isinstance(data, Source) else get_source(data, band=band)
         elevation = np.asarray(src.z.values, dtype="float64")
         if elevation.size == 0 or not np.isfinite(elevation).any():
@@ -208,9 +209,11 @@ class TerrainMixin(_MixinBase):
             self.vertical_exaggeration = z_exaggeration
         # Geographic DEMs carry lon/lat (degrees) horizontally but metre elevation vertically; rescale the
         # vertical so true scale is a faithful, *visible* surface rather than a needle. That is a unit
-        # conversion this layer's CRS dictates — exaggeration is the view scale set just above.
+        # conversion the scene's CRS dictates — the horizontal units every layer is drawn in — and the
+        # layer's own only when the scene has none; exaggeration is the view scale set just above.
+        units_crs = src.crs if self.display_crs is None else self.display_crs
         mesh = _terrain_mesh(
-            src.z.values, src.x.values, src.y.values, _vertical_unit_scale(src.crs)
+            src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
         )
         return self.add_mesh(
             mesh,

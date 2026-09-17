@@ -599,32 +599,43 @@ class TestC7SkipAndWarn:
             scene.point_cloud(np.zeros((0, 3)), values=np.ones(3))
 
 
-class TestC13NoDisplayCrs:
-    """C13 — the 3-D tier declares that it has no display CRS."""
+class TestC13TheDisplayCrs:
+    """C13 — the 3-D tier declares the display CRS it draws every layer in (rewritten for #291)."""
 
-    def test_display_crs_is_declared_none(self, scene):
-        """``display_crs`` exists and is ``None``, on the class and on an instance.
+    def test_a_scene_given_no_crs_declares_none_until_a_layer_does(self, scene):
+        """``display_crs`` is readable, and ``None`` until a layer carrying a CRS is added.
 
         Args:
             scene: The scene under test.
 
         Test scenario:
-            "There is no display CRS" has to be *readable*, not merely true: the dispatcher refuses ``crs=``
-            for this backend on the strength of it, and a docstring cannot be queried. Declared on the class
-            so it can be checked without building a plotter.
+            Readable rather than implied, as the 2-D tiers' ``crs`` is: a caller asks the scene what it draws in.
         """
-        assert Scene3DBase.display_crs is None, (
-            "Scene3DBase must declare display_crs = None"
-        )
-        assert scene.display_crs is None, "a built scene must report no display CRS"
+        assert scene.display_crs is None, scene.display_crs
 
-    def test_the_docstring_says_so_too(self):
-        """The class docstring states the absence, for the reader who never looks at the attribute.
+    def test_the_first_layer_with_a_crs_sets_it(self, scene):
+        """A raster in EPSG:32618 makes the scene's display CRS EPSG:32618.
 
-        Test scenario:
-            The contract asks for both halves — a class attribute and a docstring line — because the
-            attribute tells the dispatcher and the docstring tells the person wondering where ``crs=`` went.
+        Args:
+            scene: The scene under test.
         """
-        assert "no display CRS" in Scene3DBase.__doc__, (
-            "the class docstring must state that this tier has no display CRS"
+        from pyramids.dataset import Dataset
+
+        scene.terrain(Dataset.read_file("examples/data/acc4000.tif"))
+        assert scene.display_crs == 32618, scene.display_crs
+
+    def test_a_crs_given_to_the_scene_is_declared(self):
+        """``Scene3DBase(crs=...)`` is what the scene reports, before any layer."""
+        built = Scene3DBase(off_screen=True, crs=4326)
+        try:
+            assert built.display_crs == 4326, built.display_crs
+        finally:
+            built.close()
+
+    def test_the_docstring_states_the_rule(self):
+        """The class docstring says every layer is placed in one display CRS, for the reader who never looks at
+        the attribute.
+        """
+        assert "one display CRS" in Scene3DBase.__doc__, (
+            "the class docstring must state the display CRS rule"
         )
