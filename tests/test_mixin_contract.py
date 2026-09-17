@@ -383,14 +383,23 @@ class TestComposedClassMro:
 
 @functools.lru_cache(maxsize=None)
 def _self_builders() -> tuple:
-    """Return `(module, FunctionDef)` for every `-> Self` function under `src/digitalearth/`."""
+    """Return `(module, FunctionDef)` for every `-> Self` builder under `src/digitalearth/`.
+
+    A `-> Self` **classmethod** is an alternate constructor — `Scene3D.from_figure(figure)` builds a scene and
+    returns it — so it is not a builder and is left out: `Self` is the right annotation there (it is the
+    subclass that comes back), but returning `self` is not.
+    """
     found = []
     for path in sorted((ROOT / "src" / "digitalearth").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             is_function = isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
             if is_function and node.returns is not None:
-                if ast.unparse(node.returns) == "Self":
+                constructor = any(
+                    isinstance(decorator, ast.Name) and decorator.id == "classmethod"
+                    for decorator in node.decorator_list
+                )
+                if ast.unparse(node.returns) == "Self" and not constructor:
                     module = path.relative_to(ROOT / "src").with_suffix("").as_posix()
                     found.append((module.replace("/", "."), node))
     return tuple(found)

@@ -56,6 +56,8 @@ class _Unset:
 #: and ``colorbar=True`` in particular — so the default value cannot itself signal absence: without this,
 #: ``quickmap(ds, backend="3d")`` would be refused for a ``crs`` the caller never asked for.
 _UNSET = _Unset()
+from digitalearth.base.capabilities import Capabilities
+from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 
 #: Which of ``quickmap``'s map-shaped parameters each backend can actually honour. Anything a caller passes
 #: that is not listed for their backend is refused by name rather than dropped (:func:`_reject_unsupported`).
@@ -72,12 +74,75 @@ _UNSET = _Unset()
 #:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
 #:   and stays with U-3.
+
+#: Which capability each of `quickmap`'s map-shaped parameters needs, for the tiers that declare theirs (#294).
+#: A keyword is honoured when the backend supports any of the capabilities listed for it: `colorbar=` is the
+#: web tier's legend and the 3-D tier's scalar bar, which are one request with two names.
+_KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "crs": ("display_crs",),
+    "kind": ("raster_renderer",),
+    "domain": ("domain",),
+    "basemap": ("basemap",),
+    "coastlines": ("coastlines",),
+    "colorbar": ("colorbar", "legend"),
+}
+
+#: The tiers whose `capabilities.py` has landed. Each replaces a row that used to be written out here; the rest
+#: keep theirs until their seam lands (#296 web, #300 interactive, #303 static).
+_DECLARATIONS: dict[str, Capabilities] = {"3d": CAPABILITIES_3D}
+
+
+def _declared_row(declaration: Capabilities) -> frozenset[str]:
+    """Return the `quickmap` keywords a declaration says the backend honours.
+
+    Args:
+        declaration: The tier's `Capabilities`.
+
+    Returns:
+        The keyword names, as :data:`BACKEND_CAPABILITIES` holds them.
+
+    Examples:
+        - The 3-D tier's row is read from its own declaration rather than written here:
+            ```python
+            >>> from digitalearth.api import BACKEND_CAPABILITIES
+            >>> sorted(BACKEND_CAPABILITIES["3d"])
+            ['colorbar', 'crs']
+
+            ```
+    """
+    return frozenset(
+        keyword
+        for keyword, capabilities in _KEYWORD_CAPABILITIES.items()
+        if any(declaration.supports(capability) for capability in capabilities)
+    )
+
+
+def _refusal_reason(backend: str, keyword: str) -> str:
+    """Return the tier's own reason for not honouring a keyword, when it declared one.
+
+    Args:
+        backend: The backend that was asked.
+        keyword: The `quickmap` keyword it cannot honour.
+
+    Returns:
+        The declared reason, or `""` when the tier keeps no declaration yet or said nothing about it.
+    """
+    declaration = _DECLARATIONS.get(backend)
+    if declaration is None:
+        return ""
+    reasons = [
+        declaration.reason(capability)
+        for capability in _KEYWORD_CAPABILITIES.get(keyword, ())
+    ]
+    return next((reason for reason in reasons if reason), "")
+
+
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     "matplotlib": frozenset(
         {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
     ),
     "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
-    "3d": frozenset({"crs", "colorbar"}),
+    "3d": _declared_row(CAPABILITIES_3D),
     "web": frozenset({"crs", "basemap", "colorbar"}),
 }
 
@@ -206,9 +271,11 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             for other in sorted(BACKEND_CAPABILITIES)
             if name in BACKEND_CAPABILITIES[other]
         )
+        reason = _refusal_reason(backend, name)
         raise ValueError(
-            f"{name}= is not supported by backend={backend!r}; it is honoured by {honoured} — "
-            f"drop the argument, or pick one of those backends"
+            f"{name}= is not supported by backend={backend!r}; "
+            + (f"{reason}. " if reason else "")
+            + f"it is honoured by {honoured} — drop the argument, or pick one of those backends"
         )
 
 

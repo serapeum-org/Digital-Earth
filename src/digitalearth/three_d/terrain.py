@@ -20,6 +20,8 @@ import numpy as np
 
 from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
+from digitalearth.base.spec import LayerSpec, Selection
+from digitalearth.three_d.layer import drawing_props
 
 #: Attribute name the elevation scalar is stored under on the generated mesh.
 ELEVATION = "elevation"
@@ -115,6 +117,7 @@ class TerrainMixin(_MixinBase):
         self,
         data: Any,
         *,
+        name: Any = None,
         band: int = 1,
         z_exaggeration: float | None = None,
         cmap: str | None = None,
@@ -203,27 +206,56 @@ class TerrainMixin(_MixinBase):
 
                 ```
         """
-        data = self._place(data, layer="terrain")
-        src = data if isinstance(data, Source) else get_source(data, band=band)
-        elevation = np.asarray(src.z.values, dtype="float64")
-        if elevation.size == 0 or not np.isfinite(elevation).any():
-            # A grid with no finite cell has no surface: PyVista would still build a mesh from it and render
-            # a blank sheet at z=0, which reads as "the terrain is flat here" rather than "there is no data".
-            self._skip_empty("terrain", "the raster holds no finite elevation")
-            return None
         if z_exaggeration is not None:
             self.vertical_exaggeration = z_exaggeration
-        # Geographic DEMs carry lon/lat (degrees) horizontally but metre elevation vertically; rescale the
-        # vertical so true scale is a faithful, *visible* surface rather than a needle. That is a unit
-        # conversion the scene's CRS dictates — the horizontal units every layer is drawn in — and the
-        # layer's own only when the scene has none; exaggeration is the view scale set just above.
-        units_crs = src.crs if self.display_crs is None else self.display_crs
-        mesh = _terrain_mesh(
-            src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
-        )
-        return self.add_mesh(
-            mesh,
+        return self._add_described_layer(
+            kind="terrain",
+            data=data,
+            name=name,
+            selection=Selection(band=(band,)),
+            cmap=cmap,
             scalars=scalars,
-            cmap=self._auto_cmap(src, cmap, fallback="terrain"),
             **kwargs,
         )
+
+
+def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the surface a `terrain` layer describes and add it to the scene's plotter.
+
+    Args:
+        scene: The scene being drawn into — its display CRS places the raster and its `strict` policy decides
+            what an empty one does.
+        data: The layer's source object: a pyramids raster, a `Source`, or a 2-D array.
+        layer: The layer's description. Its selection names the band; its symbology's props carry `cmap`,
+            `scalars` and whatever else was passed to PyVista.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when the raster held no finite elevation and the scene is not
+        `strict`.
+
+    Raises:
+        OffLimbError: when the raster holds nothing to draw and the scene is `strict`.
+        ValueError: if `data` is a `Source` in a CRS other than the scene's.
+    """
+    props = drawing_props(layer.symbology.props)
+    cmap = props.pop("cmap", None)
+    band = layer.selection.band[0] if layer.selection.band else 1
+    placed = scene._place(data, layer="terrain")
+    src = placed if isinstance(placed, Source) else get_source(placed, band=band)
+    elevation = np.asarray(src.z.values, dtype="float64")
+    if elevation.size == 0 or not np.isfinite(elevation).any():
+        # A grid with no finite cell has no surface: PyVista would still build a mesh from it and render
+        # a blank sheet at z=0, which reads as "the terrain is flat here" rather than "there is no data".
+        scene._skip_empty("terrain", "the raster holds no finite elevation")
+        return None
+    # Geographic DEMs carry lon/lat (degrees) horizontally but metre elevation vertically; rescale the
+    # vertical so true scale is a faithful, *visible* surface rather than a needle. That is a unit
+    # conversion the scene's CRS dictates — the horizontal units every layer is drawn in — and the
+    # layer's own only when the scene has none; exaggeration is the view scale, kept on the camera.
+    units_crs = src.crs if scene.display_crs is None else scene.display_crs
+    mesh = _terrain_mesh(
+        src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
+    )
+    return mesh, scene.plotter.add_mesh(
+        mesh, cmap=scene._auto_cmap(src, cmap, fallback="terrain"), **props
+    )

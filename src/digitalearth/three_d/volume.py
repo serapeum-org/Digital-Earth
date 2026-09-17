@@ -77,6 +77,10 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+from digitalearth.base.spec import LayerSpec
+from digitalearth.three_d.layer import drawing_props
+
+
 class VolumeMixin(_MixinBase):
     """Adds :meth:`volume` and :meth:`isosurface` — render a 3-D scalar field — to a :class:`Scene3D`.
 
@@ -99,6 +103,7 @@ class VolumeMixin(_MixinBase):
         self,
         data: Any,
         *,
+        name: Any = None,
         cmap: str = "viridis",
         opacity: Any = "sigmoid",
         **kwargs: Any,
@@ -131,19 +136,20 @@ class VolumeMixin(_MixinBase):
 
                 ```
         """
-        # SSAA (the house theme's anti-aliasing) supersamples the frame, which washes a ray-cast volume out to
-        # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
-        # on other scenes — this only affects a plotter that's actually showing a volume).
-        self.plotter.disable_anti_aliasing()
-        actor = self.add_volume(
-            _volume_grid(_cube(data)), cmap=cmap, opacity=opacity, **kwargs
+        return self._add_described_layer(
+            kind="volume",
+            data=data,
+            name=name,
+            cmap=cmap,
+            opacity=opacity,
+            **kwargs,
         )
-        return actor
 
     def isosurface(
         self,
         data: Any,
         *,
+        name: Any = None,
         isosurfaces: Sequence[float] | None = None,
         cmap: str = "viridis",
         **kwargs: Any,
@@ -175,9 +181,50 @@ class VolumeMixin(_MixinBase):
 
                 ```
         """
-        grid = _point_grid(_cube(data))
-        contour_kwargs = (
-            {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+        return self._add_described_layer(
+            kind="isosurface",
+            data=data,
+            name=name,
+            isosurfaces=isosurfaces,
+            cmap=cmap,
+            **kwargs,
         )
-        mesh = grid.contour(scalars=FIELD, **contour_kwargs)
-        return self.add_mesh(mesh, scalars=FIELD, cmap=cmap, **kwargs)
+
+
+def draw_volume(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Ray-cast the cube a `volume` layer describes.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: a 3-D cube, or a pyramids collection holding one.
+        layer: The layer's description, whose props carry the colormap and the opacity ramp.
+
+    Returns:
+        The `(grid, actor)` pair.
+    """
+    props = drawing_props(layer.symbology.props)
+    # SSAA (the house theme's anti-aliasing) supersamples the frame, which washes a ray-cast volume out to
+    # near-invisibility; disable AA so the volume renders at full intensity (geometry layers keep their AA
+    # on other scenes — this only affects a plotter that's actually showing a volume).
+    scene.plotter.disable_anti_aliasing()
+    grid = _volume_grid(_cube(data))
+    return grid, scene.plotter.add_volume(grid, **props)
+
+
+def draw_isosurface(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Extract and draw the surfaces an `isosurface` layer describes.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: a 3-D cube, or a pyramids collection holding one.
+        layer: The layer's description, whose props carry the iso-values and the colormap.
+
+    Returns:
+        The `(mesh, actor)` pair.
+    """
+    props = drawing_props(layer.symbology.props)
+    isosurfaces = props.pop("isosurfaces", None)
+    grid = _point_grid(_cube(data))
+    contour_kwargs = {} if isosurfaces is None else {"isosurfaces": list(isosurfaces)}
+    mesh = grid.contour(scalars=FIELD, **contour_kwargs)
+    return mesh, scene.plotter.add_mesh(mesh, scalars=FIELD, **props)

@@ -41,7 +41,10 @@ def _named_raster(variable: str) -> Dataset:
 
 
 def _record_add_mesh(scene: Scene3D) -> dict:
-    """Wrap ``scene.add_mesh`` so the styling kwargs a builder passes can be inspected afterwards.
+    """Wrap the plotter's ``add_mesh`` so the styling kwargs a builder passes can be inspected afterwards.
+
+    The scene's own ``add_mesh`` is the entry point for a caller's own mesh (#293); a builder describes its
+    layer and the renderer draws it, so what a builder styles is read where the renderer draws (#295).
 
     Args:
         scene: The scene to instrument (still renders normally).
@@ -50,13 +53,13 @@ def _record_add_mesh(scene: Scene3D) -> dict:
         The dict the recorded kwargs land in.
     """
     captured: dict = {}
-    original = scene.add_mesh
+    original = scene.plotter.add_mesh
 
     def recorder(mesh, **kwargs):
         captured.update(kwargs)
         return original(mesh, **kwargs)
 
-    scene.add_mesh = recorder
+    scene.plotter.add_mesh = recorder
     return captured
 
 

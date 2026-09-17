@@ -19,7 +19,9 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
+from digitalearth.base.spec import LayerSpec
 from digitalearth.three_d.base import classified_scalars
+from digitalearth.three_d.layer import drawing_props
 
 #: Attribute name the vector array is stored under for glyph orientation/scaling.
 VECTORS = "vectors"
@@ -176,6 +178,7 @@ class VectorMixin(_MixinBase):
         points: np.ndarray,
         vectors: np.ndarray,
         *,
+        name: Any = None,
         factor: float = 1.0,
         cmap: str = "viridis",
         **kwargs: Any,
@@ -215,27 +218,21 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        pts = np.asarray(points, dtype="float64")
-        vec = np.asarray(vectors, dtype="float64")
-        if pts.shape != vec.shape:
-            raise ValueError(
-                f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}"
-            )
-        if pts.size == 0:
-            self._skip_empty("vectors", "the field has no points")
-            return None
-        import pyvista as pv
-
-        cloud = pv.PolyData(pts)
-        cloud[VECTORS] = vec
-        cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
-        glyph = cloud.glyph(orient=VECTORS, scale=MAGNITUDE, factor=factor)
-        return self.add_mesh(glyph, scalars=MAGNITUDE, cmap=cmap, **kwargs)
+        return self._add_described_layer(
+            kind="vectors",
+            data=points,
+            name=name,
+            vectors=vectors,
+            factor=factor,
+            cmap=cmap,
+            **kwargs,
+        )
 
     def extruded_polygons(
         self,
         gdf: Any,
         *,
+        name: Any = None,
         height: float | str = 1.0,
         column: str | None = None,
         scheme: Any | None = None,
@@ -322,33 +319,102 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        gdf = self._place(gdf, layer="extruded_polygons")
-        geoms = gdf.geometry
-        heights = gdf[height].to_numpy() if isinstance(height, str) else None
-        colours = gdf[column].to_numpy() if column else None
-
-        # Classify once, per feature, *before* building the prisms. The per-cell array is then filled
-        # straight from the result, so a label column ("categorical") and a column carrying NaN both work:
-        # neither survives a round-trip through float(), which is what re-keying the raw values required.
-        style, scalars = _classify_or_refuse(
-            colours, scheme=scheme, k=k, cmap=cmap, pinned=kwargs
+        return self._add_described_layer(
+            kind="extrusion",
+            data=gdf,
+            name=name,
+            height=height,
+            column=column,
+            scheme=scheme,
+            k=k,
+            cmap=cmap,
+            **kwargs,
         )
 
-        prisms: list["pv.PolyData"] = []
-        for i, geom in enumerate(geoms):
-            h = _finite_height(heights, height, i)
-            for ring in _exterior_rings(geom):
-                prism = _extrude_ring(ring, h)
-                if scalars is not None:
-                    prism.cell_data[VALUE] = np.full(prism.n_cells, scalars[i])
-                prisms.append(prism)
 
-        if not prisms:
-            self._skip_empty("extruded_polygons", "no polygon geometries to extrude")
-            return None
-        import pyvista as pv
+def draw_vectors(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the arrow glyphs a `vectors` layer describes.
 
-        merged = pv.MultiBlock(prisms).combine()
-        if colours is None:
-            return self.add_mesh(merged, scalars=None, cmap=cmap, **kwargs)
-        return self.add_mesh(merged, scalars=VALUE, **style, **kwargs)
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: the `(N, 3)` anchor points.
+        layer: The layer's description, whose props carry the vectors, the arrow scale and the colormap.
+
+    Returns:
+        The `(glyph, actor)` pair, or `None` when the field had no points and the scene is not `strict`.
+
+    Raises:
+        ValueError: if the points and the vectors do not have the same shape.
+        OffLimbError: when the field is empty and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    factor = props.pop("factor", 1.0)
+    pts = np.asarray(data, dtype="float64")
+    vec = np.asarray(props.pop("vectors"), dtype="float64")
+    if pts.shape != vec.shape:
+        raise ValueError(
+            f"points and vectors must have the same shape, got {pts.shape} and {vec.shape}"
+        )
+    if pts.size == 0:
+        scene._skip_empty("vectors", "the field has no points")
+        return None
+    import pyvista as pv
+
+    cloud = pv.PolyData(pts)
+    cloud[VECTORS] = vec
+    cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
+    glyph = cloud.glyph(orient=VECTORS, scale=MAGNITUDE, factor=factor)
+    return glyph, scene.plotter.add_mesh(glyph, scalars=MAGNITUDE, **props)
+
+
+def draw_extruded_polygons(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the prisms an `extrusion` layer describes.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: the polygons to extrude.
+        layer: The layer's description, whose props carry the height, the colour column and the classification.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when there was nothing to extrude and the scene is not `strict`.
+
+    Raises:
+        ValueError: if the scheme cannot classify the column, or a pinned colour keyword clashes with it.
+        OffLimbError: when there are no polygons and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    height = props.pop("height", 1.0)
+    column = props.pop("column", None)
+    scheme = props.pop("scheme", None)
+    k = props.pop("k", 5)
+    cmap = props.pop("cmap", "viridis")
+    gdf = scene._place(data, layer="extruded_polygons")
+    geoms = gdf.geometry
+    heights = gdf[height].to_numpy() if isinstance(height, str) else None
+    colours = gdf[column].to_numpy() if column else None
+
+    # Classify once, per feature, *before* building the prisms. The per-cell array is then filled
+    # straight from the result, so a label column ("categorical") and a column carrying NaN both work:
+    # neither survives a round-trip through float(), which is what re-keying the raw values required.
+    style, scalars = _classify_or_refuse(
+        colours, scheme=scheme, k=k, cmap=cmap, pinned=props
+    )
+
+    prisms: list["pv.PolyData"] = []
+    for i, geom in enumerate(geoms):
+        h = _finite_height(heights, height, i)
+        for ring in _exterior_rings(geom):
+            prism = _extrude_ring(ring, h)
+            if scalars is not None:
+                prism.cell_data[VALUE] = np.full(prism.n_cells, scalars[i])
+            prisms.append(prism)
+
+    if not prisms:
+        scene._skip_empty("extruded_polygons", "no polygon geometries to extrude")
+        return None
+    import pyvista as pv
+
+    merged = pv.MultiBlock(prisms).combine()
+    if colours is None:
+        return merged, scene.plotter.add_mesh(merged, scalars=None, cmap=cmap, **props)
+    return merged, scene.plotter.add_mesh(merged, scalars=VALUE, **style, **props)

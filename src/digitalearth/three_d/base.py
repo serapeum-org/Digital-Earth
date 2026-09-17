@@ -14,15 +14,28 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 import logging
 import os
 import sys
+from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import numpy as np
 
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
+from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
 from digitalearth.base.sources import Source
-from digitalearth.base.spec import Scale
+from digitalearth.base.spec import (
+    Camera,
+    DataRef,
+    FigureSpec,
+    LayerSpec,
+    PanelSpec,
+    Scale,
+    Selection,
+    Symbology,
+)
+from digitalearth.three_d.layer import next_layer_id, stored_props
+from digitalearth.three_d.renderer import Renderer3D
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     import pyvista as pv
@@ -366,6 +379,63 @@ def _require_one_vtk_build() -> None:
         )
 
 
+#: The id of the one panel a 3-D scene draws into. A scene is a single view of a single set of layers, so the
+#: figure it writes has exactly one panel; the name is fixed so a stored figure reads the same way every time.
+PANEL_ID: str = "scene"
+
+#: Where a scene looks from before anything has been drawn or asked for — the isometric view a reader expects
+#: of a 3-D figure. PyVista fits its own camera to the first mesh, so this is what the description says until
+#: either the scene has rendered or a caller sets a camera.
+DEFAULT_CAMERA: Camera = Camera((1.0, -1.0, 1.0))
+
+
+def _source_ref(data: Any, kind: str) -> DataRef:
+    """Return the reference a layer's source is stored as.
+
+    Args:
+        data: What the builder was given — a path, a URI, a `DataRef`, or an object already in memory.
+        kind: The layer's kind, used to name an in-memory object.
+
+    Returns:
+        A `DataRef` naming the file or URL when the caller gave one, so the figure can be written and read back
+        anywhere. An object is registered in this process instead: a pyramids dataset does not know where it
+        came from, so the only honest reference to it is one that resolves here — which is why
+        `FigureSpec.to_dict` refuses to store it.
+    """
+    if isinstance(data, DataRef):
+        return data
+    if isinstance(data, (str, os.PathLike)):
+        return DataRef(str(data))
+    return DataRef.to_object(data, name=kind)
+
+
+def _vector3(values: Any) -> tuple[float, float, float]:
+    """Return VTK's three coordinates as the triple a `Camera` field holds.
+
+    Args:
+        values: A position, focal point or up vector, as PyVista hands it out.
+
+    Returns:
+        The three values as floats.
+    """
+    x, y, z = (float(value) for value in values)
+    return x, y, z
+
+
+def _with_panel_layers(figure: FigureSpec) -> FigureSpec:
+    """Return `figure` with its panel listing exactly the layers in its tree.
+
+    Args:
+        figure: The figure to correct.
+
+    Returns:
+        The figure, with the panel's `layers` in tree order. A scene has one panel showing everything, so the
+        panel follows the tree rather than being maintained beside it.
+    """
+    panel = with_fields(figure.panels[0], layers=tuple(figure.layers.ids))
+    return with_fields(figure, panels=(panel,))
+
+
 class Scene3DBase:
     """Core single-:class:`pyvista.Plotter` host: layer registry + render/export lifecycle.
 
@@ -472,7 +542,22 @@ class Scene3DBase:
             **plotter_kwargs,
         }
         self._plotter: Optional["pv.Plotter"] = None
-        self.layers: list[tuple[Any, Any]] = []
+        #: What the scene draws, as data. Every builder adds a layer to it; `figure_spec` hands it out with the
+        #: live camera on its panel.
+        self._figure: FigureSpec = FigureSpec(
+            panels=(PanelSpec(PANEL_ID, DEFAULT_CAMERA),)
+        )
+        #: Draws the figure onto the plotter, and holds the `(mesh, actor)` pair of every drawn layer.
+        self._renderer: Renderer3D = Renderer3D(self)
+        #: The objects a caller handed to `add_mesh`/`add_volume`, keyed by layer id (#293).
+        self._custom: dict[str, Any] = {}
+        #: The camera a caller set, and whether they set one. Applied to the plotter before each render, since
+        #: PyVista resets its own camera to fit the first mesh added.
+        self._camera: Camera = DEFAULT_CAMERA
+        self._camera_set: bool = False
+        #: The vertical view scale, kept here so it survives a plotter that has not been built yet and so it
+        #: can be written onto the figure's camera.
+        self._vertical: float = 1.0
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
         self.strict: bool = strict
         #: The CRS every layer is placed in; `None` until given or declared by the first layer carrying one.
@@ -515,6 +600,11 @@ class Scene3DBase:
             settings = dict(self._plotter_settings)
             settings["theme"] = settings["theme"] or house_theme()
             self._plotter = pv.Plotter(**settings)
+            # A view scale or a camera set before anything was drawn belongs to the scene, not to whichever
+            # plotter happens to exist: both are applied to the new window rather than quietly lost.
+            if self._vertical != 1.0:
+                self._plotter.set_scale(zscale=self._vertical, render=False)
+            self._apply_camera()
         return self._plotter
 
     @plotter.setter
@@ -640,7 +730,11 @@ class Scene3DBase:
 
                 ```
         """
-        return float(self.plotter.renderer.scale[2])
+        if self._plotter is None:
+            # Readable before anything is drawn: the value belongs to the view (`Camera.vertical_exaggeration`),
+            # and asking for it should not build a render window (#290).
+            return self._vertical
+        return float(self._plotter.renderer.scale[2])
 
     @vertical_exaggeration.setter
     def vertical_exaggeration(self, factor: float) -> None:
@@ -649,7 +743,9 @@ class Scene3DBase:
         Args:
             factor: The z scale to render at (``1.0`` = true scale, ``>1`` accentuates relief).
         """
-        self.plotter.set_scale(zscale=float(factor), render=False)
+        self._vertical = float(factor)
+        if self._plotter is not None:
+            self._plotter.set_scale(zscale=float(factor), render=False)
 
     def _auto_cmap(
         self, source: Source, cmap: str | None, fallback: str = "viridis"
@@ -672,20 +768,37 @@ class Scene3DBase:
         """
         return auto_cmap(source, cmap, fallback)
 
-    def _add_actor(self, mesh: Any, actor: Any) -> Any:
-        """Register a rendered ``mesh`` and its ``actor``, returning the actor.
+    def _add_custom(
+        self, obj: Any, *, name: Any, band: Any, volume: bool, **kwargs: Any
+    ) -> Any:
+        """Register an object the caller built, and draw it.
 
         Args:
-            mesh: The PyVista mesh that was added to the plotter.
-            actor: The :class:`pyvista.Actor` the plotter produced.
+            obj: The PyVista mesh or volume.
+            name: The id to address it by; `None` numbers it.
+            band: Where it is drawn (#292); `None` draws it among the data.
+            volume: Whether it is ray-cast (`add_volume`) rather than surfaced (`add_mesh`).
+            **kwargs: Forwarded to PyVista.
 
         Returns:
-            The ``actor`` (so callers can chain or tweak its properties).
+            The actor PyVista produced.
         """
-        self.layers.append((mesh, actor))
+        layer_id = next_layer_id(self._figure.layers, custom_kind("pyvista"), name)
+        self._custom[layer_id] = obj
+        actor = self._add_described_layer(
+            kind=custom_kind("pyvista"),
+            name=layer_id,
+            band=band,
+            volume=volume,
+            **kwargs,
+        )
+        if actor is None:
+            self._custom.pop(layer_id, None)
         return actor
 
-    def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
+    def add_mesh(
+        self, mesh: Any, *, name: Any = None, band: Any = None, **kwargs: Any
+    ) -> Any:
         """Add a PyVista ``mesh`` to the scene and register it as a layer.
 
         The low-level entry point the capability mixins build on. ``kwargs`` pass straight to
@@ -736,10 +849,11 @@ class Scene3DBase:
         See Also:
             add_volume: the ray-cast counterpart, for scalar fields rather than surfaces.
         """
-        actor = self.plotter.add_mesh(mesh, **kwargs)
-        return self._add_actor(mesh, actor)
+        return self._add_custom(mesh, name=name, band=band, volume=False, **kwargs)
 
-    def add_volume(self, volume: Any, **kwargs: Any) -> Any:
+    def add_volume(
+        self, volume: Any, *, name: Any = None, band: Any = None, **kwargs: Any
+    ) -> Any:
         """Add a volumetric ``volume`` (ray-cast rendering) and register it as a layer.
 
         An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
@@ -788,8 +902,505 @@ class Scene3DBase:
         See Also:
             add_mesh: the surface counterpart, and the method the capability mixins call.
         """
-        actor = self.plotter.add_volume(volume, **kwargs)
-        return self._add_actor(volume, actor)
+        return self._add_custom(volume, name=name, band=band, volume=True, **kwargs)
+
+    @property
+    def figure_spec(self) -> FigureSpec:
+        """What the scene draws, as data: its layers, their sources, and the camera it is seen from.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"scene"`, whose view is the scene's
+            current :attr:`camera` and whose layers are the ids in draw order. Every builder writes into it, so
+            it is the scene's description rather than a report about it: written with `to_dict()`, read back
+            with `from_dict()` and drawn again with :meth:`from_figure`, it renders the same picture.
+
+            A scene built from data already in memory can be handed straight to :meth:`from_figure`, but not
+            written: `to_dict()` refuses an `object:` source, because a reference into this process's memory
+            would be unreadable everywhere else. Give a builder a path to get a figure that can be stored.
+
+        Examples:
+            - A built scene describes itself, and the description names what was drawn:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
+                >>> layer = scene.figure_spec.layers.get("terrain-1")
+                >>> layer.kind, layer.symbology.props["scalars"]
+                ('terrain', 'elevation')
+                >>> scene.close()
+
+                ```
+        """
+        panel = with_fields(
+            self._figure.panels[0],
+            view=self.camera,
+            layers=tuple(self._figure.layers.ids),
+        )
+        return with_fields(self._figure, panels=(panel,))
+
+    @property
+    def renderer(self) -> Renderer3D:
+        """The renderer that draws this scene's figure, and holds what it drew.
+
+        Returns:
+            The :class:`~digitalearth.three_d.renderer.Renderer3D`. Its `drawn` mapping is how a layer id
+            reaches the mesh and actor behind it.
+        """
+        return self._renderer
+
+    @property
+    def held_objects(self) -> dict[str, Any]:
+        """The engine objects a caller handed to :meth:`add_mesh`/:meth:`add_volume`, keyed by layer id.
+
+        Returns:
+            The table the renderer looks a `custom:pyvista` layer up in. A figure describes such a layer but
+            never carries the object (:mod:`digitalearth.base.custom`), so this is where it lives.
+        """
+        return self._custom
+
+    @property
+    def layers(self) -> list[tuple[Any, Any]]:
+        """The drawn `(mesh, actor)` pairs, in draw order — the view this tier has always exposed.
+
+        Returns:
+            One pair per layer that was actually drawn, ordered as :attr:`layer_ids` is. A described layer that
+            was skipped (an empty raster, a missing custom object) has no pair.
+
+        Note:
+            This is a **compatibility view** of what the renderer holds, not the scene's state: the scene is
+            described by :attr:`figure_spec`, and layers are addressed by id through :attr:`layer_ids`,
+            :meth:`mesh_of`, :meth:`actor_of`, :meth:`remove_layer` and :meth:`set_visible`. It is kept —
+            without a deprecation warning — because it is what `animate`'s callback and a good deal of user
+            code reach for; the rename that retires it belongs with the tier method names (#299), so callers
+            get one migration rather than two.
+        """
+        drawn = self._renderer.drawn
+        return [
+            drawn[layer_id] for layer_id in self._figure.layers.ids if layer_id in drawn
+        ]
+
+    @property
+    def layer_ids(self) -> list[str]:
+        """The ids of the scene's layers, in draw order.
+
+        Returns:
+            The ids, bottom first. A builder that was given `name=` used it; the others were numbered by kind.
+
+        Examples:
+            - Two layers, each addressable by the name the scene gave it:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> dem = get_source(np.add.outer(np.arange(4.0), np.arange(5.0)))
+                >>> _ = scene.terrain(dem)
+                >>> _ = scene.point_cloud(np.array([[0.0, 0.0, 9.0]]), name="peak")
+                >>> scene.layer_ids
+                ['terrain-1', 'peak']
+                >>> scene.close()
+
+                ```
+        """
+        return list(self._figure.layers.ids)
+
+    def mesh_of(self, layer_id: str) -> Any:
+        """Return the mesh drawn for a layer.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            The PyVista mesh, or `None` when the layer was described but not drawn.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+        """
+        return self._drawn_pair(layer_id, "mesh")
+
+    def actor_of(self, layer_id: str) -> Any:
+        """Return the actor drawn for a layer.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            The PyVista actor, or `None` when the layer was described but not drawn.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+        """
+        return self._drawn_pair(layer_id, "actor")
+
+    def _drawn_pair(self, layer_id: str, part: str) -> Any:
+        """Return one half of what was drawn for a layer.
+
+        Args:
+            layer_id: The layer to look up.
+            part: `"mesh"` or `"actor"`.
+
+        Returns:
+            The mesh or the actor, or `None` when nothing was drawn for the layer.
+
+        Raises:
+            KeyError: if no layer has that id.
+        """
+        if layer_id not in self._figure.layers:
+            raise KeyError(
+                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
+            )
+        drawn = self._renderer.drawn.get(layer_id)
+        if drawn is None:
+            return None
+        return drawn[0] if part == "mesh" else drawn[1]
+
+    def remove_layer(self, layer_id: str) -> Self:
+        """Take a layer off the scene, by id.
+
+        Args:
+            layer_id: The layer to remove.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - A layer added and then removed leaves nothing behind:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
+                >>> scene.remove_layer("terrain-1").layer_ids
+                []
+                >>> len(scene.layers)
+                0
+                >>> scene.close()
+
+                ```
+        """
+        if layer_id not in self._figure.layers:
+            raise KeyError(
+                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
+            )
+        sources = {
+            key: ref
+            for key, ref in self._figure.sources.items()
+            if key != self._figure.layers.get(layer_id).source_id
+        }
+        self._change(
+            self._figure_with(
+                layers=self._figure.layers.remove(layer_id), sources=sources
+            )
+        )
+        self._custom.pop(layer_id, None)
+        return self
+
+    def set_visible(self, layer_id: str, visible: bool = True) -> Self:
+        """Show or hide a layer, by id.
+
+        The layer stays in the scene and in its description — which is what lets a viewer switch it back on,
+        and what tells a saved figure that the layer is there but hidden.
+
+        Args:
+            layer_id: The layer to toggle.
+            visible: Whether it is drawn.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - A hidden layer is still described, and comes back on:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
+                >>> hidden = scene.set_visible("terrain-1", False)
+                >>> hidden.figure_spec.layers.is_visible("terrain-1")
+                False
+                >>> scene.set_visible("terrain-1").figure_spec.layers.is_visible("terrain-1")
+                True
+                >>> scene.close()
+
+                ```
+        """
+        if layer_id not in self._figure.layers:
+            raise KeyError(
+                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
+            )
+        self._change(
+            self._figure_with(layers=self._figure.layers.set_visible(layer_id, visible))
+        )
+        return self
+
+    def move_layer(self, layer_id: str, index: int) -> Self:
+        """Move a layer in draw order, by id.
+
+        Args:
+            layer_id: The layer to move.
+            index: Its position afterwards, counted as a list index is — `0` is the bottom, `-1` the top.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id.
+            IndexError: if the position is outside the scene, or outside the layer's band (#292).
+
+        Note:
+            VTK composites its actors by depth, so this changes the description rather than the picture. It is
+            recorded because the figure is drawn by the other tiers too, where order decides what is on top.
+        """
+        self._change(
+            self._figure_with(layers=self._figure.layers.move(layer_id, index))
+        )
+        return self
+
+    def draw_figure(self, figure: FigureSpec) -> Self:
+        """Draw a figure into this scene, bringing it from whatever it showed before.
+
+        Args:
+            figure: The figure to draw. Its one panel's camera becomes the scene's.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+            OffLimbError: when a layer cannot be drawn and the scene is `strict`.
+        """
+        view = figure.panels[0].view
+        if isinstance(view, Camera):
+            self.camera = view
+        self._change(figure)
+        return self
+
+    @classmethod
+    def from_figure(cls, figure: FigureSpec, **scene_kwargs: Any) -> Self:
+        """Build a scene and draw a figure into it.
+
+        This is the round trip the seam exists for: a scene describes itself with :attr:`figure_spec`, the
+        description survives `to_dict()`/`from_dict()`, and this draws it again.
+
+        Args:
+            figure: The figure to draw.
+            **scene_kwargs: Passed to the constructor — `off_screen`, `window_size`, `strict`, …. The display
+                CRS comes from the figure's camera unless `crs=` is given here.
+
+        Returns:
+            The scene, with every layer drawn.
+
+        Examples:
+            - A figure written by one scene is drawn by another:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec
+                >>> from digitalearth.three_d import Scene3D
+                >>> first = Scene3D(off_screen=True)
+                >>> _ = first.terrain("examples/data/acc4000.tif")
+                >>> stored = first.figure_spec.to_dict()
+                >>> first.close()
+                >>> second = Scene3D.from_figure(FigureSpec.from_dict(stored), off_screen=True)
+                >>> second.layer_ids
+                ['terrain-1']
+                >>> second.close()
+
+                ```
+        """
+        view = figure.panels[0].view
+        crs = getattr(view, "crs", None)
+        scene = cls(**{"crs": crs, **scene_kwargs})
+        scene.draw_figure(figure)
+        return scene
+
+    def _figure_with(self, *, layers: Any = None, sources: Any = None) -> FigureSpec:
+        """Return the scene's figure with other layers or sources, and its panel kept in step.
+
+        The panel lists the layers it shows, so it has to change in the same construction: a figure built with
+        new layers and an old panel names a layer that is not there, and `FigureSpec` refuses it — correctly.
+
+        Args:
+            layers: The new `LayerTree`, or `None` to keep the current one.
+            sources: The new sources, or `None` to keep the current ones.
+
+        Returns:
+            The new figure.
+        """
+        tree = self._figure.layers if layers is None else layers
+        panel = with_fields(self._figure.panels[0], layers=tuple(tree.ids))
+        return with_fields(
+            self._figure,
+            panels=(panel,),
+            layers=tree,
+            sources=self._figure.sources if sources is None else sources,
+        )
+
+    def _change(self, figure: FigureSpec) -> None:
+        """Move the scene to another figure, applying the difference to the plotter.
+
+        Args:
+            figure: The figure the scene should show.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+            OffLimbError: when a layer cannot be drawn and the scene is `strict`.
+        """
+        before = self._figure
+        self._figure = _with_panel_layers(figure)
+        self._renderer.apply(before, self._figure)
+
+    def _add_described_layer(
+        self,
+        *,
+        kind: str,
+        data: Any = None,
+        name: Any = None,
+        band: Any = None,
+        selection: Any = None,
+        label: Any = None,
+        **props: Any,
+    ) -> Any:
+        """Describe a layer, add it to the scene's figure, and draw it.
+
+        Every builder ends here. It is where a layer gets its id, its source and the keywords the renderer
+        redraws it with — the description that used to be lost the moment PyVista had the mesh.
+
+        Args:
+            kind: The registered layer kind (#288) — `"terrain"`, `"point_cloud"`, `"extrusion"`, ….
+            data: What the layer draws: a path or URL, a `DataRef`, or an object already in memory. `None` for
+                a layer drawn from no data at all, such as the globe's coastlines. A path is stored as a
+                reference to that path, so the figure can be written to disk and drawn again elsewhere; an
+                object is stored as a reference that resolves in this process only.
+            name: The caller's name for the layer; `None` numbers it by kind.
+            band: Where it is drawn relative to the data (#292); `None` takes the kind's own band.
+            selection: Which slice of the source it draws.
+            label: What a layer switcher would call it.
+            **props: The engine keywords, stored on the layer's symbology. An array among them is stored as a
+                reference rather than copied (:mod:`digitalearth.three_d.layer`).
+
+        Returns:
+            The actor PyVista produced, or `None` when the layer had nothing to draw. A skipped layer is not
+            added to the figure, so the description lists what is actually there.
+
+        Raises:
+            OffLimbError: when the layer has nothing to draw and the scene is `strict`.
+        """
+        layer_id = next_layer_id(self._figure.layers, kind, name)
+        sources = dict(self._figure.sources)
+        source_id = None
+        if data is not None:
+            source_id = layer_id
+            sources[source_id] = _source_ref(data, kind)
+        spec = LayerSpec(
+            layer_id,
+            kind,
+            source_id=source_id,
+            band=band,
+            label=label,
+            selection=selection if selection is not None else Selection(),
+            symbology=Symbology(props=stored_props(**props)),
+        )
+        candidate = self._figure_with(
+            layers=self._figure.layers.add(spec), sources=sources
+        )
+        actor = self._renderer.draw_layer(candidate, layer_id)
+        if actor is None:
+            # A skipped layer is not kept: `layer_ids` lists what the scene actually draws, and a figure that
+            # named a layer nothing was drawn for would draw nothing on the way back either.
+            return None
+        self._figure = candidate
+        return actor
+
+    @property
+    def camera(self) -> Camera:
+        """Where the scene is looked at from, as a :class:`~digitalearth.base.spec.Camera`.
+
+        Reading it once the scene has rendered gives the live view — pan, zoom and orbit included — so a camera
+        found interactively can be written down, stored with `to_dict()` and set again later. Before the
+        plotter exists it is the camera that was set, or the scene's default isometric view.
+
+        Returns:
+            The camera, carrying the scene's vertical exaggeration and display CRS.
+
+        Examples:
+            - A camera set on a scene is the camera it reports:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> scene.camera = Camera.look_at((0.0, 0.0, 0.0), azimuth=225.0, elevation=30.0, distance=10.0)
+                >>> [round(value, 3) for value in scene.camera.position]
+                [-6.124, -6.124, 5.0]
+                >>> scene.close()
+
+                ```
+        """
+        if self._plotter is None:
+            return with_fields(
+                self._camera,
+                vertical_exaggeration=self.vertical_exaggeration,
+                crs=self.display_crs,
+            )
+        live = self._plotter.camera
+        parallel = bool(live.parallel_projection)
+        return Camera(
+            position=_vector3(live.position),
+            focal_point=_vector3(live.focal_point),
+            view_up=_vector3(live.up),
+            view_angle=float(live.view_angle),
+            parallel=parallel,
+            parallel_scale=float(live.parallel_scale) if parallel else None,
+            vertical_exaggeration=self.vertical_exaggeration,
+            crs=self.display_crs,
+        )
+
+    @camera.setter
+    def camera(self, camera: Camera) -> None:
+        """Look at the scene from `camera`.
+
+        The camera is applied to the plotter immediately when there is one, and again just before each render:
+        PyVista resets its camera to fit the first mesh added, which would otherwise undo a view set before the
+        layers were.
+
+        Args:
+            camera: Where to look from.
+
+        Raises:
+            ValueError: if `camera` is not a `Camera` — a tuple of three points is PyVista's `camera_position`,
+                which this deliberately does not accept, since it says nothing about projection or exaggeration.
+        """
+        if not isinstance(camera, Camera):
+            raise ValueError(
+                f"Scene3D.camera must be a Camera; got {type(camera).__name__}. Build one with "
+                "Camera(position=...) or Camera.look_at(focal_point, azimuth=..., elevation=..., distance=...)"
+            )
+        self._camera = camera
+        self._camera_set = True
+        self.vertical_exaggeration = camera.vertical_exaggeration
+        if self._plotter is not None:
+            self._apply_camera()
+
+    def _apply_camera(self) -> None:
+        """Put the stored camera on the plotter, if one was ever set."""
+        if not self._camera_set or self._plotter is None:
+            return
+        live = self._plotter.camera
+        live.position = tuple(self._camera.position)
+        live.focal_point = tuple(self._camera.focal_point)
+        live.up = tuple(self._camera.view_up)
+        live.view_angle = float(self._camera.view_angle)
+        live.parallel_projection = bool(self._camera.parallel)
+        if self._camera.parallel and self._camera.parallel_scale is not None:
+            live.parallel_scale = float(self._camera.parallel_scale)
 
     def screenshot(self, path: Destination | None = None, **kwargs: Any) -> np.ndarray:
         """Render the scene off-screen and return the RGB image (optionally writing it to ``path``).
@@ -835,6 +1446,7 @@ class Scene3DBase:
         See Also:
             save: dispatches here for the raster-frame suffixes (:data:`IMAGE_SUFFIXES`).
         """
+        self._apply_camera()
         return self.plotter.screenshot(filename=path, return_img=True, **kwargs)
 
     def export_html(self, path: Destination) -> str:
@@ -1085,6 +1697,7 @@ class Scene3DBase:
         See Also:
             screenshot: returns the rendered frame as an array instead of displaying it.
         """
+        self._apply_camera()
         return self.plotter.show(**kwargs)
 
     def close(self) -> None:
