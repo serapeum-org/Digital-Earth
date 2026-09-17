@@ -287,6 +287,13 @@ class InteractiveMapBase:
 
         The low-level entry point the capability mixins build on — every builder method ends here.
 
+        An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
+        kind `custom:holoviews`, a label, a band and whether it is visible — and never the object, which has no
+        description to write. The object stays with the scene that was handed it, so a figure saved and loaded
+        again names the layer but cannot rebuild it, and another backend cannot draw it at all
+        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
+        layer tree as its seam lands (#300); until then the object is drawn and nothing else is kept.
+
         Args:
             element: Any HoloViews/GeoViews element (or overlay-able object).
 

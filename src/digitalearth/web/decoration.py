@@ -928,7 +928,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def scale_bar(
         self,
@@ -959,7 +959,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def fullscreen(self, *, position: str = "top-right") -> Self:
         """Add a MapLibre fullscreen toggle control (ED.13).
@@ -982,7 +982,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def controls(
         self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
@@ -1048,7 +1048,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_mapbox_draw(options, position)
 
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:
@@ -1095,7 +1095,7 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_popup(layer_id, **kwargs)
 
-        return self.add_layer(apply)
+        return self._queue(apply)
 
     def tooltip(
         self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
@@ -1124,4 +1124,4 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_tooltip(layer_id, **kwargs)
 
-        return self.add_layer(apply)
+        return self._queue(apply)

@@ -691,6 +691,13 @@ class Scene3DBase:
         The low-level entry point the capability mixins build on. ``kwargs`` pass straight to
         :meth:`pyvista.Plotter.add_mesh` (``scalars``, ``cmap``, ``opacity``, ``show_edges``, ``pbr`` …).
 
+        An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
+        kind `custom:pyvista`, a label, a band and whether it is visible — and never the object, which has no
+        description to write. The object stays with the scene that was handed it, so a figure saved and loaded
+        again names the layer but cannot rebuild it, and another backend cannot draw it at all
+        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
+        layer tree as its seam lands (#295); until then the object is drawn and nothing else is kept.
+
         Args:
             mesh: Any PyVista dataset (``ImageData``/``StructuredGrid``/``PolyData``/``UnstructuredGrid``).
             **kwargs: Forwarded to :meth:`pyvista.Plotter.add_mesh`.
@@ -734,6 +741,13 @@ class Scene3DBase:
 
     def add_volume(self, volume: Any, **kwargs: Any) -> Any:
         """Add a volumetric ``volume`` (ray-cast rendering) and register it as a layer.
+
+        An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
+        kind `custom:pyvista`, a label, a band and whether it is visible — and never the object, which has no
+        description to write. The object stays with the scene that was handed it, so a figure saved and loaded
+        again names the layer but cannot rebuild it, and another backend cannot draw it at all
+        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
+        layer tree as its seam lands (#295); until then the object is drawn and nothing else is kept.
 
         Args:
             volume: An ``ImageData``/``UnstructuredGrid`` carrying a scalar field to ray-cast.

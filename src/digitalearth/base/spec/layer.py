@@ -106,12 +106,17 @@ class LayerSpec:
             back on.
         label: What a layer switcher calls it; ``None`` means the id.
         group: The group the layer belongs to, so a set of layers can be hidden together.
+        band: Where this layer is drawn, overriding the band its kind declares — one of
+            :data:`~digitalearth.base.registry.KIND_BANDS`, or `None` to take the kind's. A custom layer needs
+            it: a caller's own object is `custom:<engine>` whatever it draws, so only the caller can say whether
+            it is ground cover or a label.
         filter: A filter expression, carried for the renderer rather than interpreted here.
 
     Raises:
         ValueError: for an id that is not a non-empty string, a kind that is not a
             lowercase identifier, a non-boolean `visible`, a `selection` or `symbology` of the wrong type, a
-            `source_id`, `z_source`, `label`, `group` or `filter` that is neither `None` nor a non-empty string, or
+            `source_id`, `z_source`, `label`, `group` or `filter` that is neither `None` nor a non-empty string, a
+            `band` outside :data:`~digitalearth.base.registry.KIND_BANDS`, or
             a `z_source` of `"layer:"` that names no layer or names the layer itself.
 
     Examples:
@@ -150,6 +155,7 @@ class LayerSpec:
     visible: bool = True
     label: Optional[str] = None
     group: Optional[str] = None
+    band: Optional[str] = None
     filter: Optional[str] = None
 
     def __post_init__(self) -> None:
@@ -189,6 +195,10 @@ class LayerSpec:
         object.__setattr__(self, "visible", visible)
         for name in ("source_id", "z_source", "label", "group", "filter"):
             _optional_text("LayerSpec", name, getattr(self, name))
+        if self.band is not None and self.band not in KIND_BANDS:
+            raise ValueError(
+                f"LayerSpec band must be one of {list(KIND_BANDS)} or None; got {self.band!r}"
+            )
         if self.z_source is not None and self.z_source.startswith(LAYER_REFERENCE):
             target = self.z_source[len(LAYER_REFERENCE) :]
             if not target:
@@ -272,7 +282,7 @@ class LayerSpec:
         styled = self.symbology.to_dict()
         if styled:
             out["symbology"] = styled
-        for name in ("z_source", "label", "group", "filter"):
+        for name in ("z_source", "label", "group", "band", "filter"):
             value = getattr(self, name)
             if value is not None:
                 out[name] = plain_text(value)
@@ -312,7 +322,7 @@ class LayerSpec:
                 >>> LayerSpec.from_dict({"id": "dem", "kind": "raster", "order": 0})  # doctest: +ELLIPSIS
                 Traceback (most recent call last):
                     ...
-                ValueError: LayerSpec.from_dict got unknown keys ['order']; known keys are ['filter', 'group', ...]
+                ValueError: LayerSpec.from_dict got unknown keys ['order']; known keys are ['band', 'filter', ...]
 
                 ```
         """
@@ -329,6 +339,7 @@ class LayerSpec:
                 "visible",
                 "label",
                 "group",
+                "band",
                 "filter",
             ),
         )
@@ -348,6 +359,7 @@ class LayerSpec:
             visible=data.get("visible", True),
             label=data.get("label"),
             group=data.get("group"),
+            band=data.get("band"),
             filter=data.get("filter"),
         )
 
@@ -383,6 +395,18 @@ def _check_layer(method: str, layer: Any) -> None:
         )
 
 
+def _layer_band(layer: LayerSpec) -> str:
+    """Return the band a layer is drawn in.
+
+    Args:
+        layer: The layer.
+
+    Returns:
+        The layer's own `band` when it has one, else the band its kind declares.
+    """
+    return band_of(layer.kind) if layer.band is None else layer.band
+
+
 def _band_bounds(layers: Sequence[LayerSpec], band: str) -> Tuple[int, int]:
     """Return the lowest and highest positions a layer of one band may take.
 
@@ -403,7 +427,7 @@ def _band_bounds(layers: Sequence[LayerSpec], band: str) -> Tuple[int, int]:
     low = 0
     high = len(layers)
     for position, held in enumerate(layers):
-        held_rank = KIND_BANDS.index(band_of(held.kind))
+        held_rank = KIND_BANDS.index(_layer_band(held))
         if held_rank < rank:
             low = position + 1
         elif held_rank > rank and position < high:
@@ -753,7 +777,7 @@ class LayerTree:
                 f"a layer with id {layer.id!r} is already in the tree; layer ids must be unique"
             )
         layers = list(self.layers)
-        band = band_of(layer.kind)
+        band = _layer_band(layer)
         low, high = _band_bounds(layers, band)
         if index is None:
             layers.insert(high, layer)
@@ -879,7 +903,7 @@ class LayerTree:
             )
         position = index % count
         others = [candidate for candidate in self.layers if candidate.id != layer_id]
-        band = band_of(layer.kind)
+        band = _layer_band(layer)
         low, high = _band_bounds(others, band)
         if not low <= position <= high:
             raise IndexError(

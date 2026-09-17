@@ -1208,6 +1208,24 @@ _BUILT_IN_KINDS = (
         "a 3-D model placed on the map — web gltf",
         "data",
     ),
+    (
+        "custom:pyvista",
+        "none",
+        "an object the caller built with PyVista and handed to the scene — add_mesh, add_volume",
+        "data",
+    ),
+    (
+        "custom:holoviews",
+        "none",
+        "an element the caller built with HoloViews/GeoViews and handed to the map — add_element",
+        "data",
+    ),
+    (
+        "custom:maplibre",
+        "none",
+        "a layer the caller built with MapLibre and handed to the map — add_layer",
+        "data",
+    ),
 )
 
 for _name, _takes, _doc, _band in _BUILT_IN_KINDS:

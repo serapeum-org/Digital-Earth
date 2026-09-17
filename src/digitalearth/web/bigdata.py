@@ -123,7 +123,7 @@ class BigDataMixin(_MixinBase):
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
         self._index_layer(layer_id, None, kind="heatmap")
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def cluster(
         self,
@@ -198,7 +198,7 @@ class BigDataMixin(_MixinBase):
         apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
         self._last_layer_id = unclustered.id
         self._index_layer(clusters.id, None, kind="clusters")
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def _add_deck_layer(self, layer: dict) -> Self:
         """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.
@@ -219,7 +219,7 @@ class BigDataMixin(_MixinBase):
             def apply(widget: Any) -> None:
                 widget.add_deck_layers(deck_layers)
 
-            self.add_layer(layer=apply)
+            self._queue(apply)
         self._deck_layers.append(layer)
         return self
 

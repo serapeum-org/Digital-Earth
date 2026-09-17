@@ -118,9 +118,14 @@ def _drawn(web_map):
         web_map: The map.
 
     Returns:
-        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none.
+        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none. A
+        caller's own object carries no marker either, so it is looked up in the map's custom table by identity.
     """
-    ids = [getattr(layer, "_digitalearth_layer_id", None) for layer in web_map.layers]
+    held = {id(obj): layer_id for layer_id, obj in web_map._custom.items()}
+    ids = [
+        getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
+        for layer in web_map.layers
+    ]
     return [layer_id for layer_id in ids if layer_id is not None]
 
 
@@ -1023,3 +1028,110 @@ class TestTheDeckRefusalNamesTheRealCause:
         with pytest.raises(ValueError, match="deck.gl overlay") as err:
             web_map.polygons(points, big=True, name="Cities")
         assert "threshold" not in str(err.value), str(err.value)
+
+
+class TestACallersOwnLayer:
+    """A MapLibre layer the caller built is addressable, like every other layer (#293)."""
+
+    @staticmethod
+    def _layer(layer_id):
+        """Return a minimal MapLibre layer.
+
+        Args:
+            layer_id: The id the layer carries.
+
+        Returns:
+            A `maplibre` `Layer`.
+        """
+        from maplibre import Layer, LayerType
+
+        return Layer(id=layer_id, type=LayerType.CIRCLE, source=f"{layer_id}-src")
+
+    def test_a_layer_the_caller_built_is_addressable(self):
+        """The reproduction from the issue: `layer_ids` listed nothing and `remove_layer` raised.
+
+        Test scenario:
+            The object never reached the tree, so a caller could add a layer and then not refer to it again.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        assert m.layer_ids == ["wells"], m.layer_ids
+        assert m.remove_layer("wells").layer_ids == [], m.layer_ids
+
+    def test_removing_it_takes_the_object_off_the_map_too(self):
+        """A `maplibre` `Layer` carries no marker attribute, so removal matches it by identity."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        m.remove_layer("wells")
+        assert m.layers == [], m.layers
+
+    def test_it_is_recorded_as_a_custom_layer_of_its_engine(self):
+        """The kind names the engine that built the object, which is what a renderer reads."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        assert m._layer_tree.get("wells").kind == "custom:maplibre", m._layer_tree.get(
+            "wells"
+        )
+
+    def test_a_name_wins_over_the_object_s_own_id(self):
+        """The caller's `name=` is the id the map is addressed by."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"), name="Boreholes")
+        assert m.layer_ids == ["Boreholes"], m.layer_ids
+
+    def test_an_unnamed_object_gets_a_generated_id(self):
+        """Anything without an id of its own is still addressable."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(lambda widget: None)
+        assert m.layer_ids == ["custom-1"], m.layer_ids
+
+    def test_a_repeated_name_is_suffixed(self):
+        """Two layers cannot share an id, as they cannot through any builder's `name=`."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells")).add_layer(self._layer("wells"))
+        assert m.layer_ids == ["wells", "wells-2"], m.layer_ids
+
+    def test_a_band_puts_it_under_the_data(self, points):
+        """A caller's own ground cover is drawn first, and the tree says so.
+
+        Args:
+            points: The features drawn over it.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .points(points, name="obs")
+            .add_layer(self._layer("tiles"), band="underlay")
+        )
+        assert _drawn(m) == ["tiles", "obs"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_a_band_no_tier_could_draw_is_refused(self):
+        """A misspelt band names the four that work."""
+        from digitalearth.web import WebMap
+
+        with pytest.raises(ValueError, match="band must be one of"):
+            WebMap().add_layer(self._layer("wells"), band="middle")
+
+    def test_a_builder_s_own_layer_is_not_recorded_twice(self, points):
+        """The package's builders describe what they draw, so they do not come through this entry point.
+
+        Args:
+            points: The features drawn.
+
+        Test scenario:
+            `points` records one `points` layer. Were the builder still queueing through `add_layer`, the same
+            layer would also be recorded as a caller's own object, under a second id.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        assert m.layer_ids == ["obs"], m.layer_ids
+        assert m._layer_tree.get("obs").kind == "points", m._layer_tree.get("obs")

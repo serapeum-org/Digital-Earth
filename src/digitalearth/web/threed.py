@@ -91,7 +91,7 @@ class ThreeDMixin(_MixinBase):
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
         self._index_layer(layer_id, None, kind="extrusion")
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def terrain(
         self,
@@ -124,7 +124,7 @@ class ThreeDMixin(_MixinBase):
             widget.add_source(src_id, source)
             widget.set_terrain(src_id, exaggeration)
 
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     def globe(self, enabled: bool = True) -> Self:
         """Switch the map to the spherical globe projection (or back to Web Mercator).
@@ -141,7 +141,7 @@ class ThreeDMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.set_projection(projection)
 
-        return self.add_layer(layer=apply)
+        return self._queue(apply)
 
     @staticmethod
     def _point_cloud_data(points: Any, z_column: Optional[str]) -> list:
