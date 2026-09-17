@@ -157,8 +157,9 @@ class TestTheRegistryIsAddressable:
 
         Test scenario:
             The index held `(id, label)` pairs and the label was never read back. Backed by a `LayerTree`, each
-            entry says what sort of layer it is — the builder's paint type — and carries the caller's name as its
-            label, which is what a later export or a layer switcher needs.
+            entry says what sort of layer it is — an engine-neutral kind from the registry (#288), not the
+            MapLibre paint type — and carries the caller's name as its label, which is what a later export or a
+            layer switcher needs.
         """
         from digitalearth.web import WebMap
 
@@ -170,11 +171,90 @@ class TestTheRegistryIsAddressable:
         )
         fill, circle = m.layer_ids
         assert m._layer_tree.ids == (fill, circle), m._layer_tree.ids
-        assert m._layer_tree.get(fill).kind == "fill", m._layer_tree.get(fill)
+        assert m._layer_tree.get(fill).kind == "choropleth", m._layer_tree.get(fill)
         assert m._layer_tree.get(fill).display_label == "Population", m._layer_tree.get(
             fill
         )
-        assert m._layer_tree.get(circle).kind == "circle", m._layer_tree.get(circle)
+        assert m._layer_tree.get(circle).kind == "points", m._layer_tree.get(circle)
+
+    @pytest.mark.parametrize(
+        "method, fixture, kwargs, kind",
+        [
+            ("points", "points", {}, "points"),
+            ("lines", "lines", {}, "lines"),
+            ("polygons", "polygons", {}, "polygons"),
+            ("choropleth", "polygons", {"column": "pop"}, "choropleth"),
+            ("contours", "raster", {"levels": [0.3, 0.6]}, "contours"),
+            (
+                "contours",
+                "raster",
+                {"levels": [0.3, 0.6], "filled": True},
+                "filled_contours",
+            ),
+        ],
+        ids=[
+            "points",
+            "lines",
+            "polygons",
+            "choropleth",
+            "contours",
+            "filled-contours",
+        ],
+    )
+    def test_the_vector_builders_record_engine_neutral_kinds(
+        self, request, method, fixture, kwargs, kind
+    ):
+        """A vector layer's kind names what is drawn, not the MapLibre layer type drawing it (#288).
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data.
+            kwargs: Keyword arguments the builder needs.
+            kind: The kind the builder must record.
+
+        Test scenario:
+            The tree recorded the MapLibre type, so `polygons`, `choropleth` and filled `contours` were all
+            `fill`, `points` was `circle`, and contour lines were `line` — a figure could not tell them apart.
+        """
+        from digitalearth.web import WebMap
+
+        m = getattr(WebMap().basemap(), method)(
+            request.getfixturevalue(fixture), **kwargs
+        )
+        recorded = m._layer_tree.get(m.layer_ids[0]).kind
+        assert recorded == kind, (
+            f"{method} recorded kind {recorded!r}, expected {kind!r}"
+        )
+
+    def test_the_layer_ids_keep_their_engine_prefixes(self, points, polygons):
+        """Changing the recorded kind leaves the public ids as they were: `fill-…` and `circle-…`."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().polygons(polygons).points(points)
+        prefixes = [layer_id.split("-")[0] for layer_id in m.layer_ids]
+        assert prefixes == ["fill", "circle"], m.layer_ids
+
+    def test_every_kind_the_tree_records_is_registered(self, points, polygons, raster):
+        """No builder writes a kind the registry cannot look up (#288)."""
+        from digitalearth.base.registry import kinds
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .add_raster(raster)
+            .contours(raster, levels=[0.3], labels=True)
+            .choropleth(polygons, column="pop")
+            .points(points)
+            .heatmap(points)
+            .graticule()
+            .text(4.9, 52.4, "Amsterdam")
+        )
+        unregistered = sorted(
+            {m._layer_tree.get(layer).kind for layer in m.layer_ids} - set(kinds())
+        )
+        assert unregistered == [], unregistered
 
     @pytest.mark.parametrize(
         "method, fixture, args, kwargs, kind",
@@ -186,7 +266,7 @@ class TestTheRegistryIsAddressable:
             ("extrusion", "polygons", (), {"height": "pop"}, "extrusion"),
             ("text", None, (4.9, 52.4, "Amsterdam"), {}, "text"),
             ("graticule", None, (), {}, "graticule"),
-            ("labels", "points", ("v",), {}, "label"),
+            ("labels", "points", ("v",), {}, "labels"),
         ],
         ids=[
             "add_raster",
@@ -215,8 +295,7 @@ class TestTheRegistryIsAddressable:
         Test scenario:
             The vector builders record their paint type, asserted above. The raster, composite, big-data, 3-D and
             decoration builders each pass their own kind, and a wrong one would describe the layer as something
-            it is not in any later export. `labels` builds a symbol layer and records `"label"`, the one vector
-            kind that is not a paint type.
+            it is not in any later export. `labels` builds a MapLibre symbol layer and records `"labels"`.
         """
         from digitalearth.web import WebMap
 

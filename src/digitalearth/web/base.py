@@ -20,6 +20,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
+from dataclasses import replace as replace_fields
 from typing import Any, Dict, List, Optional, Self
 
 from loguru import logger
@@ -34,6 +35,7 @@ from digitalearth.base.display import (
     needs_reproject,
     to_display_source,
 )
+from digitalearth.base.registry import kind_info
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
@@ -816,8 +818,9 @@ class WebMapBase:
         Args:
             layer_id: The MapLibre layer id.
             label: What a layer switcher should call it; ``None`` falls back to the id.
-            kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
-                the tree describes the layer rather than only naming it.
+            kind: What sort of layer it is — a registered, engine-neutral kind such as ``"raster"``,
+                ``"choropleth"`` or ``"points"`` (:func:`~digitalearth.base.registry.kinds`), not the MapLibre layer
+                type — so the tree describes the layer rather than only naming it.
             visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
                 tree says what the MapLibre layout says; the builders without one always build visible. It is
                 recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
@@ -827,10 +830,13 @@ class WebMapBase:
                 the tree's order stays the order the map draws in. Call this before `add_reference`.
 
         Raises:
+            KeyError: when `kind` is not a registered layer kind — a builder passing a name the registry cannot
+                look up, which no caller input reaches.
             ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
                 the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
                 whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
+        kind_info(kind)
         index = None
         if reference:
             band = self.layers[: self._underlay_count + self._reference_count]
@@ -842,6 +848,23 @@ class WebMapBase:
             LayerSpec(layer_id, kind, label=label or layer_id, visible=bool(visible)),
             index=index,
         )
+
+    def _rekind_layer(self, layer_id: str, kind: str) -> None:
+        """Record a different kind for a layer already in the tree, keeping its id, label, visibility and place.
+
+        A builder that draws through another one — `contours` through `lines` or `polygons` — gets the kind of the
+        builder it called. This corrects the record to what was actually drawn.
+
+        Args:
+            layer_id: The layer to re-describe.
+            kind: The registered kind it is.
+
+        Raises:
+            KeyError: when `kind` is not registered, or no layer has `layer_id`.
+        """
+        kind_info(kind)
+        held = self._layer_tree.get(layer_id)
+        self._layer_tree = self._layer_tree.replace(replace_fields(held, kind=kind))
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.

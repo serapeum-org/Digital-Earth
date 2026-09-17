@@ -19,7 +19,6 @@ Two decisions this module settles:
   compare, so the tree is a value like everything else in :mod:`digitalearth.base.spec`.
 """
 
-import re
 from collections import Counter
 from dataclasses import dataclass, field
 from dataclasses import replace as with_fields
@@ -37,6 +36,7 @@ from typing import (
     cast,
 )
 
+from digitalearth.base.registry import is_kind_name
 from digitalearth.base.spec._serial import (
     as_list,
     plain_text,
@@ -53,10 +53,6 @@ __all__ = ["LAYER_REFERENCE", "LayerSpec", "LayerTree"]
 #: The prefix a ``z_source`` takes when a layer's elevation comes from **another layer** rather than from a source —
 #: imagery draped over terrain (#202). ``"layer:dem"`` names the layer ``dem``; anything else names a source.
 LAYER_REFERENCE = "layer:"
-
-#: What a layer kind may be spelled as: lowercase, starting with a letter, then letters, digits, ``_`` or ``-``. Kinds
-#: become registry keys later in the plan, so a spelling that could not be one is refused now.
-_KIND = re.compile(r"[a-z][a-z0-9_-]*")
 
 
 def _optional_text(owner: str, name: str, value: Any) -> None:
@@ -86,8 +82,11 @@ class LayerSpec:
     Attributes:
         id: The layer's identity. Stable for the layer's life, unique within a :class:`LayerTree`, and the only way
             a layer is addressed — never by position.
-        kind: What sort of layer it is — ``"raster"``, ``"points"``, ``"graticule"``. Lowercase, starting with a
-            letter.
+        kind: What sort of layer it is — ``"raster"``, ``"points"``, ``"graticule"`` — as a key into the kind
+            registry (:func:`~digitalearth.base.registry.kind_info`). A lowercase identifier, optionally after one
+            namespace and a colon (``"custom:pyvista"``). The spelling is checked here; whether the kind is
+            registered is checked by the renderer that draws it, so a figure naming a plugin's kind still loads
+            where the plugin is not installed.
         source_id: The key of the layer's data in the figure's sources, or ``None`` for a layer drawn from no data
             source (a graticule, a tile basemap).
         selection: Which slice of the source the layer draws.
@@ -156,9 +155,12 @@ class LayerSpec:
             raise ValueError(
                 f"LayerSpec needs an id that is a non-empty string; got {self.id!r}"
             )
-        if not isinstance(self.kind, str) or not _KIND.fullmatch(self.kind):
+        if not is_kind_name(self.kind):
+            # The spelling rule lives with the kind registry, so a name a renderer can look up and a name a layer
+            # can hold are one rule; whether the kind is *registered* is the renderer's question, not this one's.
             raise ValueError(
-                f"LayerSpec kind must be a lowercase identifier such as 'raster' or 'points'; got {self.kind!r}"
+                "LayerSpec kind must be a lowercase identifier such as 'raster' or 'points', optionally after one "
+                f"namespace such as 'custom:pyvista'; got {self.kind!r}"
             )
         if not isinstance(self.selection, Selection):
             raise ValueError(

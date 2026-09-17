@@ -23,13 +23,23 @@ to keep importing this module cheap — not to make `base/` pyramids-free, which
 """
 
 import os
+import re
 import uuid
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 __all__ = [
+    "KIND_PATTERN",
+    "KIND_TAKES",
+    "KindInfo",
+    "is_kind_name",
+    "kind_info",
+    "kinds",
+    "register_kind",
+    "temporary_kind",
     "OBJECT_SCHEME",
     "temporary_classifier",
     "temporary_resolver",
@@ -439,3 +449,299 @@ def temporary_classifier(classifier: Callable[..., Any]) -> Iterator[None]:
         yield
     finally:
         _CLASSIFIER = previous
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Layer kinds
+# ---------------------------------------------------------------------------------------------------------------------
+
+#: What a layer kind may be spelled as: a lowercase identifier (a letter, then letters, digits, ``_`` or ``-``),
+#: optionally after **one** namespace of the same form and a colon — ``points``, ``custom:pyvista``,
+#: ``mypkg:hexbin``. The namespace keeps a plugin's kinds and an engine's custom layers out of the built-in names.
+KIND_PATTERN = re.compile(r"(?:[a-z][a-z0-9_-]*:)?[a-z][a-z0-9_-]*")
+
+#: The data a kind draws. A renderer reads it to know which extractor a layer's source goes through.
+KIND_TAKES = ("raster", "points", "lines", "polygons", "mesh", "volume", "none")
+
+_KINDS: Dict[str, "KindInfo"] = {}
+
+
+def is_kind_name(value: Any) -> bool:
+    """Whether `value` is spelled as a layer kind.
+
+    Args:
+        value: The candidate name.
+
+    Returns:
+        ``True`` for a string matching :data:`KIND_PATTERN` in full; ``False`` for anything else, a non-string
+        included.
+
+    Examples:
+        - A plain and a namespaced kind are names; an upper-case one and a doubly namespaced one are not:
+            ```python
+            >>> from digitalearth.base.registry import is_kind_name
+            >>> [is_kind_name(n) for n in ("points", "custom:pyvista", "Points", "a:b:c")]
+            [True, True, False, False]
+
+            ```
+    """
+    return isinstance(value, str) and KIND_PATTERN.fullmatch(value) is not None
+
+
+@dataclass(frozen=True)
+class KindInfo:
+    """One registered layer kind: its name, the data it draws, and what it is.
+
+    Attributes:
+        name: The kind, as a `LayerSpec` writes it.
+        takes: The data class a layer of this kind draws — one of :data:`KIND_TAKES`.
+        doc: A one-line description, shown wherever the registry is listed.
+
+    Raises:
+        ValueError: for a name that is not spelled as a kind, a `takes` outside :data:`KIND_TAKES`, or an empty
+            description — each refused where the entry is built rather than when a renderer looks it up.
+
+    Examples:
+        - Build an entry for a plugin's kind:
+            ```python
+            >>> from digitalearth.base.registry import KindInfo
+            >>> KindInfo("mypkg:hexbin", "points", "binned point density").takes
+            'points'
+
+            ```
+    """
+
+    name: str
+    takes: str
+    doc: str
+
+    def __post_init__(self) -> None:
+        """Refuse an entry that could not be looked up or drawn.
+
+        Raises:
+            ValueError: as described on the class.
+        """
+        if not is_kind_name(self.name):
+            raise ValueError(
+                f"{self.name!r} is not a layer-kind name: use a lowercase identifier, optionally after one "
+                "namespace and a colon, such as 'points' or 'mypkg:hexbin'"
+            )
+        if self.takes not in KIND_TAKES:
+            raise ValueError(
+                f"layer kind {self.name!r}: takes must be one of {list(KIND_TAKES)}; got {self.takes!r}"
+            )
+        if not isinstance(self.doc, str) or not self.doc.strip():
+            raise ValueError(f"layer kind {self.name!r} needs a description")
+
+
+def register_kind(info: KindInfo) -> None:
+    """Register a layer kind, so a renderer can look it up by the name a `LayerSpec` holds.
+
+    Args:
+        info: The entry to register.
+
+    Raises:
+        TypeError: if `info` is not a :class:`KindInfo`.
+        ValueError: if a *different* entry is already registered under the same name. Two plugins claiming one
+            name would otherwise overwrite each other silently, and whichever imported last would win.
+            Registering an identical entry again — a module imported twice — is accepted.
+
+    Examples:
+        - Registration is permanent, so the demonstration uses :func:`temporary_kind`:
+            ```python
+            >>> from digitalearth.base.registry import KindInfo, kind_info, temporary_kind
+            >>> with temporary_kind(KindInfo("demo:dots", "points", "a demonstration kind")):
+            ...     kind_info("demo:dots").doc
+            'a demonstration kind'
+
+            ```
+    """
+    if not isinstance(info, KindInfo):
+        raise TypeError(f"register_kind needs a KindInfo; got {type(info).__name__}")
+    held = _KINDS.get(info.name)
+    if held is not None and held != info:
+        raise ValueError(
+            f"layer kind {info.name!r} is already registered as {held!r}; register a namespaced kind "
+            "such as 'mypkg:<name>' instead"
+        )
+    _KINDS[info.name] = info
+
+
+def kind_info(name: str) -> KindInfo:
+    """Return the registered entry for a layer kind.
+
+    Args:
+        name: The kind, as a `LayerSpec` holds it.
+
+    Returns:
+        The :class:`KindInfo` registered under `name`.
+
+    Raises:
+        KeyError: for a kind nobody registered, naming the kinds that are.
+
+    Examples:
+        - Look up a built-in kind:
+            ```python
+            >>> from digitalearth.base.registry import kind_info
+            >>> kind_info("choropleth").takes
+            'polygons'
+
+            ```
+    """
+    try:
+        return _KINDS[name]
+    except (KeyError, TypeError):
+        raise KeyError(
+            f"no layer kind {name!r} is registered; registered kinds are {sorted(_KINDS)}"
+        ) from None
+
+
+def kinds() -> Tuple[str, ...]:
+    """Return the registered layer kinds, sorted.
+
+    Returns:
+        The names, as a tuple, so the listing cannot be used to edit the registry.
+
+    Examples:
+        - The built-in vocabulary is registered at import:
+            ```python
+            >>> from digitalearth.base.registry import kinds
+            >>> "polygons" in kinds() and "choropleth" in kinds()
+            True
+
+            ```
+    """
+    return tuple(sorted(_KINDS))
+
+
+@contextmanager
+def temporary_kind(info: KindInfo) -> Iterator[None]:
+    """Register a layer kind for the duration of a block, then put the registry back as it was.
+
+    Unlike :func:`register_kind`, this may replace an entry already registered under the same name — that is
+    what a test swapping a built-in needs — and the original is restored when the block ends.
+
+    Args:
+        info: The entry to install for the block.
+
+    Yields:
+        Nothing; the entry is registered inside the block.
+
+    Raises:
+        TypeError: if `info` is not a :class:`KindInfo`.
+
+    Examples:
+        - The kind resolves inside the block and is gone afterwards:
+            ```python
+            >>> from digitalearth.base.registry import KindInfo, kinds, temporary_kind
+            >>> with temporary_kind(KindInfo("demo:scratch", "none", "a scratch kind")):
+            ...     "demo:scratch" in kinds()
+            True
+            >>> "demo:scratch" in kinds()
+            False
+
+            ```
+    """
+    if not isinstance(info, KindInfo):
+        raise TypeError(f"temporary_kind needs a KindInfo; got {type(info).__name__}")
+    previous = _KINDS.get(info.name)
+    _KINDS[info.name] = info
+    try:
+        yield
+    finally:
+        if previous is None:
+            _KINDS.pop(info.name, None)
+        else:
+            _KINDS[info.name] = previous
+
+
+#: The engine-neutral vocabulary every tier writes. Kind names are nouns for *what is drawn*, not method names or
+#: engine layer types; the builders that draw each one today are listed in its description.
+_BUILT_IN_KINDS = (
+    (
+        "raster",
+        "raster",
+        "a band drawn as an image — static imshow, interactive image/large_image, web add_raster",
+    ),
+    (
+        "mesh",
+        "raster",
+        "a band drawn as cells — static pcolormesh/block, interactive quadmesh",
+    ),
+    (
+        "rgb",
+        "raster",
+        "a multi-band colour composite — rgb_composite, static hsv_composite, interactive rgb",
+    ),
+    (
+        "contours",
+        "raster",
+        "iso-value lines traced from a band — static contour, interactive/web contours",
+    ),
+    (
+        "filled_contours",
+        "raster",
+        "bands between iso-values — static contourf, interactive filled_contours",
+    ),
+    (
+        "vectors",
+        "raster",
+        "a u/v vector field — static quiver/barbs, interactive vectorfield/barbs, 3-D vectors",
+    ),
+    (
+        "streamlines",
+        "raster",
+        "flow lines through a u/v field — static streamplot, interactive streamlines",
+    ),
+    ("terrain", "raster", "a DEM drawn as a surface — 3-D terrain, web terrain"),
+    ("volume", "volume", "a 3-D cube, ray-cast — 3-D volume"),
+    ("isosurface", "volume", "the surface at one value of a cube — 3-D isosurface"),
+    (
+        "points",
+        "points",
+        "point features — static scatter/grid_points, interactive/web points",
+    ),
+    (
+        "point_cloud",
+        "points",
+        "positioned 3-D points — 3-D point_cloud, web point_cloud",
+    ),
+    ("heatmap", "points", "point density — static kde, web heatmap"),
+    ("clusters", "points", "points grouped by proximity — web cluster"),
+    ("labels", "points", "text taken from a feature column — interactive/web labels"),
+    ("lines", "lines", "line features — interactive path, web lines"),
+    ("flow", "lines", "flows between places — static sankey"),
+    (
+        "polygons",
+        "polygons",
+        "polygon features, outlined or flat-filled — static shapes, interactive/web polygons",
+    ),
+    (
+        "choropleth",
+        "polygons",
+        "polygons coloured by a column — choropleth, static grid_cells/cartogram",
+    ),
+    (
+        "extrusion",
+        "polygons",
+        "polygons raised by a column — 3-D extruded_polygons, web extrusion",
+    ),
+    ("unstructured", "mesh", "a UGRID mesh — static tripcolor/tricontour/tricontourf"),
+    ("text", "none", "a string placed at a coordinate — text, annotate"),
+    ("graticule", "none", "meridians and parallels — graticule"),
+    (
+        "basemap",
+        "none",
+        "tiles drawn under the data — basemap, tiles, static stock_img",
+    ),
+    ("coastlines", "none", "Natural Earth coastlines — coastlines"),
+    ("borders", "none", "Natural Earth country borders — borders"),
+    ("land", "none", "Natural Earth land — land"),
+    ("ocean", "none", "Natural Earth ocean — ocean"),
+    ("lakes", "none", "Natural Earth lakes — lakes"),
+    ("rivers", "none", "Natural Earth rivers — rivers"),
+    ("model", "none", "a 3-D model placed on the map — web gltf"),
+)
+
+for _name, _takes, _doc in _BUILT_IN_KINDS:
+    register_kind(KindInfo(_name, _takes, _doc))

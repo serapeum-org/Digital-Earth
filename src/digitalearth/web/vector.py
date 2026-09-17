@@ -400,6 +400,7 @@ class VectorMixin(_MixinBase):
             "label",
             LayerType.SYMBOL,
             paint,
+            kind="labels",
             name=name,
             visible=visible,
             layout=layout,
@@ -606,6 +607,10 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
         )
+        # Drawn through `lines` or `polygons`, which record their own kind; the layer is contours.
+        self._rekind_layer(
+            self._last_layer_id, "filled_contours" if filled else "contours"
+        )
         if self.last_units and self.last_legend is not None:
             # The classification the sub-builder just recorded describes this raster's values, so the key
             # can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.
@@ -622,6 +627,7 @@ class VectorMixin(_MixinBase):
         layer_type: Any,
         paint: dict,
         *,
+        kind: str,
         name: Optional[str] = None,
         visible: bool = True,
         layout: Optional[dict] = None,
@@ -630,9 +636,12 @@ class VectorMixin(_MixinBase):
 
         Args:
             features: The display-CRS GeoDataFrame to serve as the GeoJSON source.
-            prefix: The id prefix / kind tag (``"circle"``/``"line"``/``"fill"``).
+            prefix: The layer id prefix, from the MapLibre type (``"circle"``/``"line"``/``"fill"``/``"label"``).
+                It shapes the public `layer_ids`, so it is kept apart from `kind`.
             layer_type: The ``maplibre`` ``LayerType`` member for the layer.
             paint: The MapLibre paint dict for the layer.
+            kind: The registered, engine-neutral kind the layer is recorded as — ``"points"``, ``"polygons"``,
+                ``"choropleth"`` — which the MapLibre type cannot tell apart.
             name: What a layer switcher calls this layer; ``None`` uses its generated id.
             visible: Whether the layer starts visible, which is what a layer switcher toggles.
             layout: MapLibre layout properties for the layer (a symbol layer's ``text-field`` and its
@@ -661,7 +670,7 @@ class VectorMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind=prefix, visible=visible)
+        self._index_layer(layer_id, name, kind=kind, visible=visible)
         return self.add_layer(apply)
 
     @staticmethod
@@ -812,7 +821,13 @@ class VectorMixin(_MixinBase):
         else:
             paint["circle-color"] = color
         return self._vector_layer(
-            gdf, "circle", LayerType.CIRCLE, paint, name=name, visible=visible
+            gdf,
+            "circle",
+            LayerType.CIRCLE,
+            paint,
+            kind="points",
+            name=name,
+            visible=visible,
         )
 
     def lines(
@@ -897,7 +912,13 @@ class VectorMixin(_MixinBase):
         else:
             paint["line-color"] = color
         return self._vector_layer(
-            gdf, "line", LayerType.LINE, paint, name=name, visible=visible
+            gdf,
+            "line",
+            LayerType.LINE,
+            paint,
+            kind="lines",
+            name=name,
+            visible=visible,
         )
 
     def polygons(
@@ -1029,7 +1050,13 @@ class VectorMixin(_MixinBase):
         else:
             paint["fill-color"] = color
         return self._vector_layer(
-            gdf, "fill", LayerType.FILL, paint, name=name, visible=visible
+            gdf,
+            "fill",
+            LayerType.FILL,
+            paint,
+            kind="polygons",
+            name=name,
+            visible=visible,
         )
 
     def choropleth(
@@ -1134,5 +1161,11 @@ class VectorMixin(_MixinBase):
             "fill-outline-color": outline_color,
         }
         return self._vector_layer(
-            gdf, "fill", LayerType.FILL, paint, name=name, visible=visible
+            gdf,
+            "fill",
+            LayerType.FILL,
+            paint,
+            kind="choropleth",
+            name=name,
+            visible=visible,
         )
