@@ -19,7 +19,6 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pyvista as pv
 
 #: Attribute name the field scalar is stored under on the generated grids.
 FIELD = "field"
@@ -49,24 +48,30 @@ def _to_vtk_axes(cube: np.ndarray) -> np.ndarray:
     return cube.transpose(2, 1, 0).ravel(order="F")
 
 
-def _volume_grid(cube: np.ndarray) -> pv.ImageData:
+def _volume_grid(cube: np.ndarray) -> "pv.ImageData":
     """Build a cell-data ``ImageData`` (dimensions ``shape[::-1] + 1``) for ray-cast volume rendering.
 
     The cube ``(nz, ny, nx)`` maps to world ``(x=lon, y=lat, z=level)`` — see the module docstring's axis note.
     """
+    import pyvista as pv
+
     grid = pv.ImageData(dimensions=np.array(cube.shape[::-1]) + 1)
     grid.cell_data[FIELD] = _to_vtk_axes(cube)
     return grid
 
 
-def _point_grid(cube: np.ndarray) -> pv.ImageData:
+def _point_grid(cube: np.ndarray) -> "pv.ImageData":
     """Build a point-data ``ImageData`` (dimensions ``shape[::-1]``) for isosurface extraction (lon→X, lat→Y)."""
+    import pyvista as pv
+
     grid = pv.ImageData(dimensions=cube.shape[::-1])
     grid.point_data[FIELD] = _to_vtk_axes(cube)
     return grid
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    import pyvista as pv
+
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object

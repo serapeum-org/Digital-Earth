@@ -13,7 +13,6 @@ all CRS work upstream.
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pyvista as pv
 
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
@@ -72,6 +71,7 @@ def _coords_from_array(data: Any) -> np.ndarray:
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
@@ -205,6 +205,8 @@ class PointCloudMixin(_MixinBase):
                 )
             self._skip_empty("point_cloud", "the point table is empty")
             return None
+        import pyvista as pv
+
         cloud = pv.PolyData(points)
 
         add_kwargs = dict(

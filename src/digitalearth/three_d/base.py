@@ -15,15 +15,17 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Union
 
 import numpy as np
-import pyvista as pv
 
 from digitalearth.base.crs import OffLimbError
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.sources import Source
 from digitalearth.base.spec import Scale
+
+if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    import pyvista as pv
 
 logger = logging.getLogger(__name__)
 
@@ -261,7 +263,7 @@ def supported_destinations() -> str:
     return f"use a raster-frame suffix ({frames}) or a scene-export suffix ({exports})"
 
 
-def house_theme() -> pv.themes.Theme:
+def house_theme() -> "pv.themes.Theme":
     """Return Digital-Earth's default PyVista theme (document-style, anti-aliased).
 
     Returns:
@@ -294,6 +296,8 @@ def house_theme() -> pv.themes.Theme:
     See Also:
         Scene3DBase: applies this theme whenever its ``theme`` argument is left as ``None``.
     """
+    import pyvista as pv
+
     theme = pv.themes.DocumentTheme()
     theme.background = "white"
     theme.cmap = "viridis"
@@ -314,6 +318,8 @@ def _pyvista_vtk_root() -> str:
     Returns:
         The package name, e.g. ``"vtkmodules"``.
     """
+    import pyvista as pv
+
     resolved = getattr(getattr(pv, "_vtk", None), "_VTK_ROOT", None)
     if resolved:
         return str(resolved)
@@ -436,11 +442,11 @@ class Scene3DBase:
         self,
         off_screen: bool | None = None,
         window_size: tuple[int, int] = (1024, 768),
-        theme: pv.themes.Theme | None = None,
+        theme: "pv.themes.Theme | None" = None,
         strict: bool = False,
         **plotter_kwargs: Any,
     ):
-        """Build the 3-D scene and the PyVista plotter behind it.
+        """Build the 3-D scene; the PyVista plotter behind it is built when something first needs it.
 
         Args:
             off_screen: Render without opening a window. `None` follows PyVista's own setting, which is what
@@ -449,17 +455,66 @@ class Scene3DBase:
             theme: PyVista theme; defaults to the package's document-style theme.
             strict: Raise `OffLimbError` for a layer with nothing to draw — an empty point table, a DEM with
                 no finite elevation — instead of skipping it with a warning.
-            **plotter_kwargs: Forwarded to `pyvista.Plotter`.
+            **plotter_kwargs: Forwarded to `pyvista.Plotter` when it is built.
         """
-        self.plotter: pv.Plotter = pv.Plotter(
-            off_screen=off_screen,
-            window_size=list(window_size),
-            theme=theme or house_theme(),
+        self._plotter_settings: dict[str, Any] = {
+            "off_screen": off_screen,
+            "window_size": list(window_size),
+            "theme": theme,
             **plotter_kwargs,
-        )
+        }
+        self._plotter: Optional["pv.Plotter"] = None
         self.layers: list[tuple[Any, Any]] = []
         #: Whether a layer with nothing to draw raises instead of being skipped with a warning.
         self.strict: bool = strict
+
+    @property
+    def plotter(self) -> "pv.Plotter":
+        """The PyVista plotter the scene draws on, built the first time it is asked for.
+
+        Building a scene opens no render window: describing layers needs none, and a scene that is only
+        described never pays for one. The settings given to the constructor are applied when the plotter is
+        built, with :func:`house_theme` when no theme was given.
+
+        Returns:
+            The scene's `pyvista.Plotter`.
+
+        Examples:
+            - The plotter carries the size the scene was built with:
+                ```python
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True, window_size=(320, 240))
+                >>> list(scene.plotter.window_size)
+                [320, 240]
+                >>> scene.close()
+
+                ```
+            - Asking twice returns the same plotter:
+                ```python
+                >>> from digitalearth.three_d.base import Scene3DBase
+                >>> scene = Scene3DBase(off_screen=True)
+                >>> scene.plotter is scene.plotter
+                True
+                >>> scene.close()
+
+                ```
+        """
+        if self._plotter is None:
+            import pyvista as pv
+
+            settings = dict(self._plotter_settings)
+            settings["theme"] = settings["theme"] or house_theme()
+            self._plotter = pv.Plotter(**settings)
+        return self._plotter
+
+    @plotter.setter
+    def plotter(self, plotter: Any) -> None:
+        """Replace the plotter the scene draws on.
+
+        Args:
+            plotter: The plotter to use from now on; a stand-in with the methods the scene calls will do.
+        """
+        self._plotter = plotter
 
     def _skip_empty(self, layer: str, reason: str) -> None:
         """Report that ``layer`` drew nothing, by warning (default) or raising (``strict=True``).
@@ -904,6 +959,8 @@ class Scene3DBase:
             # version that lacks one must say so plainly instead of failing on a missing attribute.
             exporter = getattr(self.plotter, exporter_name, None)
             if exporter is None:
+                import pyvista as pv
+
                 raise ValueError(
                     f"the installed pyvista ({pv.__version__}) has no Plotter.{exporter_name}, so {suffix!r} "
                     f"cannot be exported; {supported_destinations()}"
@@ -987,7 +1044,9 @@ class Scene3DBase:
         See Also:
             __exit__: calls this on the way out of a ``with`` block.
         """
-        self.plotter.close()
+        # A scene that never drew has no render window to free, and must not open one in order to close it.
+        if self._plotter is not None:
+            self._plotter.close()
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the scene.

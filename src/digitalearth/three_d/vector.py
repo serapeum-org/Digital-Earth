@@ -18,7 +18,6 @@ from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
-import pyvista as pv
 
 from digitalearth.three_d.base import classified_scalars
 
@@ -54,7 +53,7 @@ def _exterior_rings(geom: Any) -> Iterator[np.ndarray]:
         yield np.asarray(part.exterior.coords, dtype="float64")
 
 
-def _extrude_ring(ring: np.ndarray, height: float) -> pv.PolyData:
+def _extrude_ring(ring: np.ndarray, height: float) -> "pv.PolyData":
     """Extrude a flat ``(M, 2)`` polygon ring into a capped 3-D prism of the given height.
 
     Args:
@@ -64,12 +63,16 @@ def _extrude_ring(ring: np.ndarray, height: float) -> pv.PolyData:
     Returns:
         pyvista.PolyData: the solid prism (triangulated cap + walls).
     """
+    import pyvista as pv
+
     z = np.zeros((len(ring), 1))
     face = pv.PolyData(np.hstack([ring, z]), faces=np.r_[len(ring), range(len(ring))])
     return face.triangulate().extrude((0.0, 0.0, float(height)), capping=True)
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    import pyvista as pv
+
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
@@ -221,6 +224,8 @@ class VectorMixin(_MixinBase):
         if pts.size == 0:
             self._skip_empty("vectors", "the field has no points")
             return None
+        import pyvista as pv
+
         cloud = pv.PolyData(pts)
         cloud[VECTORS] = vec
         cloud[MAGNITUDE] = np.linalg.norm(vec, axis=1)
@@ -325,7 +330,7 @@ class VectorMixin(_MixinBase):
             colours, scheme=scheme, k=k, cmap=cmap, pinned=kwargs
         )
 
-        prisms: list[pv.PolyData] = []
+        prisms: list["pv.PolyData"] = []
         for i, geom in enumerate(geoms):
             h = _finite_height(heights, height, i)
             for ring in _exterior_rings(geom):
@@ -337,6 +342,8 @@ class VectorMixin(_MixinBase):
         if not prisms:
             self._skip_empty("extruded_polygons", "no polygon geometries to extrude")
             return None
+        import pyvista as pv
+
         merged = pv.MultiBlock(prisms).combine()
         if colours is None:
             return self.add_mesh(merged, scalars=None, cmap=cmap, **kwargs)
