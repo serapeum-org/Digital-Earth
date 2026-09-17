@@ -137,6 +137,17 @@ class TestTextAndLabels:
         m.text(1_391_493.6, 5_146_011.7, "X", crs=3857)
         assert m.layers[0].x == pytest.approx(1_391_493.6, rel=1e-6)
 
+    def test_text_in_a_differently_spelled_display_crs_is_not_transformed(self, mocker):
+        """Coordinates already in the display CRS skip the transform, however the CRS is spelled (#287)."""
+        transform = mocker.patch("pyramids.feature.geometry.reproject_coordinates")
+        xy = InteractiveMap(crs=3857)._to_display_xy(
+            1_391_493.6, 5_146_011.7, "EPSG:3857"
+        )
+        assert transform.call_count == 0, (
+            "the coordinates were transformed into their own CRS"
+        )
+        assert xy == ([1_391_493.6], [5_146_011.7]), xy
+
     def test_labels_from_feature_column(self, m):
         from pyramids.feature import FeatureCollection
 

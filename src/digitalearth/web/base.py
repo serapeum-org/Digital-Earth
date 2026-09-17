@@ -35,6 +35,7 @@ from digitalearth.base.display import (
     to_display_source,
 )
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.symbology import sample_cmap
 
@@ -645,7 +646,7 @@ class WebMapBase:
             frame the map on the wrong place, and silently feeding metres to ``fitBounds`` did exactly
             that.
         """
-        if self.crs in (4326, "EPSG:4326", None):
+        if self.crs is None or same_crs(self.crs, 4326):
             return west, south, east, north
         try:
             xs, ys = reproject_coordinates(
@@ -1329,10 +1330,10 @@ class WebMapBase:
             if self._needs_reproject(features):
                 features = self._placed(features, method=method)
             return self._noted(self._json_safe(features))
-        crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
-        if (
-            crs_epsg is not None and crs_epsg != self.crs
-        ):  # a bare GeoDataFrame in another CRS
+        own_crs = getattr(features, "crs", None)
+        # A bare GeoDataFrame in another CRS. Compared by meaning, not by EPSG code: a projection with no
+        # authority code has none, and was drawn as if its metres were degrees.
+        if own_crs is not None and not same_crs(own_crs, self.crs):
             return self._noted(self._json_safe(self._placed(features, method=method)))
         return self._noted(self._json_safe(features))
 

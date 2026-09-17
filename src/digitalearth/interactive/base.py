@@ -36,6 +36,7 @@ from digitalearth.base.display import (
 )
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec.bounds import same_crs
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
 # vector builder auto-routes to its tier's big-data renderer (#250) lives in `digitalearth.base.bigdata`, so
@@ -672,7 +673,7 @@ class InteractiveMapBase:
         Raises:
             ValueError: when ``self.crs`` is not ``3857``.
         """
-        if self.crs != 3857:
+        if not same_crs(self.crs, 3857):
             raise ValueError(
                 f"{method}() needs the Web-Mercator display CRS (crs=3857) — Bokeh renders tiles/"
                 f"features in EPSG:3857 only, and this map uses crs={self.crs!r}. Either build the "

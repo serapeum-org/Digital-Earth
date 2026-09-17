@@ -254,6 +254,21 @@ class TestBasemapWidgetIsWired:
         with pytest.raises(ValueError, match="Web-Mercator"):
             non_mercator.dashboard(widgets=("basemap",))
 
+    def test_tiles_accept_web_mercator_spelled_as_a_string(self):
+        """``crs="EPSG:3857"`` is Web Mercator, so tiles are drawn rather than refused (#287).
+
+        Test scenario:
+            The check compared ``self.crs != 3857``; the constructor keeps the string, so the map was refused
+            for not being in the CRS it is in.
+        """
+        m = InteractiveMap(crs="EPSG:3857").tiles()
+        assert len(m.layers) == 1, m.layers
+
+    def test_the_basemap_select_is_built_for_web_mercator_spelled_as_a_string(self):
+        """The layer-control basemap switch reads the display CRS by meaning too (#287)."""
+        select = InteractiveMap(crs="EPSG:3857")._basemap_select(pn, requested=True)
+        assert isinstance(select, pn.widgets.Select), type(select)
+
     def test_layer_control_binds_its_basemap_select(self, multi):
         """The layer-control Select is passed to pn.bind, not merely laid out."""
         panel_obj = multi.layer_control(basemap_switch=True)

@@ -19,6 +19,7 @@ from operator import mul as _mul
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import _require_holoviz
 from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
 
@@ -532,7 +533,7 @@ class DashboardMixin(_MixinBase):
             ValueError: when ``requested`` is true and the display CRS is not EPSG:3857; the message
                 names the CRS the map actually uses.
         """
-        if self.crs != 3857:
+        if not same_crs(self.crs, 3857):
             if requested:
                 self._require_web_mercator("layer_control basemap")
             from loguru import logger
