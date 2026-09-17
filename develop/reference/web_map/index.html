@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -7600,7 +7600,9 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <span class="normal"><a href="#__codelineno-0-618">618</a></span>
 <span class="normal"><a href="#__codelineno-0-619">619</a></span>
 <span class="normal"><a href="#__codelineno-0-620">620</a></span>
-<span class="normal"><a href="#__codelineno-0-621">621</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-621">621</a></span>
+<span class="normal"><a href="#__codelineno-0-622">622</a></span>
+<span class="normal"><a href="#__codelineno-0-623">623</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-492" name="__codelineno-0-492"></a><span class="k">def</span><span class="w"> </span><span class="nf">contours</span><span class="p">(</span>
 <a id="__codelineno-0-493" name="__codelineno-0-493"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-494" name="__codelineno-0-494"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
 <a id="__codelineno-0-495" name="__codelineno-0-495"></a>    <span class="o">*</span><span class="p">,</span>
@@ -7718,18 +7720,20 @@ digitalearth.base.autostyle.auto_style: supplies the levels, colormap and units.
 <a id="__codelineno-0-607" name="__codelineno-0-607"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
 <a id="__codelineno-0-608" name="__codelineno-0-608"></a>        <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span>
 <a id="__codelineno-0-609" name="__codelineno-0-609"></a>    <span class="p">)</span>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a>    <span class="c1"># Drawn through `lines` or `polygons`, which record their own kind; the layer is contours.</span>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_rekind_layer</span><span class="p">(</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span><span class="p">,</span> <span class="s2">&quot;filled_contours&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;contours&quot;</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a>    <span class="p">)</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a>        <span class="c1"># The classification the sub-builder just recorded describes this raster&#39;s values, so the key</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a>        <span class="c1"># can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.</span>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span><span class="p">[</span><span class="s2">&quot;units&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
-<a id="__codelineno-0-618" name="__codelineno-0-618"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
-<a id="__codelineno-0-619" name="__codelineno-0-619"></a>        <span class="c1"># Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.</span>
-<a id="__codelineno-0-620" name="__codelineno-0-620"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a>    <span class="c1"># Drawn through `lines` or `polygons`, which record their own kind; the layer is contours. Both builders</span>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a>    <span class="c1"># set `_last_layer_id` to the layer they add, so it names that layer here.</span>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_rekind_layer</span><span class="p">(</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a>        <span class="n">cast</span><span class="p">(</span><span class="nb">str</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span><span class="p">),</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a>        <span class="s2">&quot;filled_contours&quot;</span> <span class="k">if</span> <span class="n">filled</span> <span class="k">else</span> <span class="s2">&quot;contours&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a>    <span class="p">)</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a>        <span class="c1"># The classification the sub-builder just recorded describes this raster&#39;s values, so the key</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>        <span class="c1"># can name their unit. Never guessed: `last_units` is only set when auto_style supplied one.</span>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span><span class="p">[</span><span class="s2">&quot;units&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_units</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a>        <span class="c1"># Otherwise a hidden contour layer leaves its level numbers floating with nothing to annotate.</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">labels</span><span class="p">(</span><span class="n">features</span><span class="p">,</span> <span class="n">attribute</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
