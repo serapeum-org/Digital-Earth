@@ -10,6 +10,7 @@ import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
 from digitalearth.base.autostyle import auto_style
+from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
 from digitalearth.base.spec import Bounds
@@ -92,9 +93,7 @@ class RasterMixin(_MixinBase):
         # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that
         # label a colorbar the caller did not label itself.
         style = auto_style(src)
-        if cmap is None:
-            cmap = style.get("cmap") or default_cmap
-        opts["cmap"] = cmap
+        opts["cmap"] = auto_cmap(src, cmap, default_cmap, lookup=lambda _: style)
         if levels is None and kind in _CONTOUR_KINDS:
             levels = style.get("levels")  # the variable's canonical contour levels
         if levels is not None:

@@ -230,6 +230,26 @@ class TestViewport:
         """
         assert Viewport(4326).needs_reproject(SimpleNamespace(epsg=epsg)) is expected
 
+    @pytest.mark.parametrize("spelling", ["string", "crs object"])
+    def test_needs_reproject_reads_the_view_crs_by_meaning(self, spelling):
+        """A view in EPSG:4326 spelled as a string, or built from a CRS object, does not warp 4326 data.
+
+        Args:
+            spelling: How the view's CRS is given.
+
+        Test scenario:
+            A view built from a `GeoDataFrame.crs` stores ``"EPSG:4326"``; under the integer rule every layer
+            drawn through it was warped into the CRS it was already in.
+        """
+        from pyproj import CRS
+
+        view = (
+            Viewport("EPSG:4326")
+            if spelling == "string"
+            else Viewport(CRS.from_epsg(4326))
+        )
+        assert view.needs_reproject(SimpleNamespace(epsg=4326)) is False
+
     @pytest.mark.parametrize(
         "view",
         [

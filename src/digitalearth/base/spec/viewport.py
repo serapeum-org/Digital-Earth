@@ -286,26 +286,27 @@ class Viewport:
         """Whether `data` has to be reprojected to be drawn in this view.
 
         Args:
-            data: A pyramids object exposing ``.epsg``.
+            data: A pyramids object exposing ``.crs`` and/or ``.epsg``.
 
         Returns:
-            ``False`` only when the view's CRS is an EPSG integer equal to ``data.epsg`` — the rule every tier
-            shares, from :func:`digitalearth.base.display.needs_reproject`.
+            ``False`` when the data's own CRS and the view's name the same reference system, however either is
+            spelled — the rule every tier shares, from :func:`digitalearth.base.display.needs_reproject`.
 
         Examples:
-            - Data already in the view's CRS needs no warp:
+            - Data already in the view's CRS needs no warp, whether the view holds a code or its string:
                 ```python
                 >>> from types import SimpleNamespace
                 >>> from digitalearth.base.spec import Viewport
-                >>> Viewport(4326).needs_reproject(SimpleNamespace(epsg=4326))
-                False
+                >>> data = SimpleNamespace(epsg=4326)
+                >>> Viewport(4326).needs_reproject(data), Viewport("EPSG:4326").needs_reproject(data)
+                (False, False)
 
                 ```
-            - A CRS spelled as a string always warps, even when it names the data's own system:
+            - Data in another system warps:
                 ```python
                 >>> from types import SimpleNamespace
                 >>> from digitalearth.base.spec import Viewport
-                >>> Viewport("EPSG:4326").needs_reproject(SimpleNamespace(epsg=4326))
+                >>> Viewport(3857).needs_reproject(SimpleNamespace(epsg=4326))
                 True
 
                 ```

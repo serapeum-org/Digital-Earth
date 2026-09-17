@@ -320,10 +320,11 @@ class InteractiveMapBase:
         """Whether ``data`` must be reprojected (via pyramids) to the display CRS.
 
         Args:
-            data: A pyramids object exposing ``.epsg`` (``Dataset``/``FeatureCollection``).
+            data: A pyramids object exposing ``.crs`` and/or ``.epsg`` (``Dataset``/``FeatureCollection``).
 
         Returns:
-            ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+            ``False`` when the data's CRS and the display CRS name the same reference system, however either
+            is spelled; ``True`` otherwise.
 
         Note:
             This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
