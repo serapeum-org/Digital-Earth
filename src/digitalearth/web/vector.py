@@ -14,7 +14,7 @@ cleopatra / matplotlib / numpy are imported lazily inside the methods; importing
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional, Self, Union
+from typing import TYPE_CHECKING, Any, Optional, Self, Union, cast
 
 from loguru import logger
 
@@ -607,9 +607,11 @@ class VectorMixin(_MixinBase):
             name=name,
             visible=visible,
         )
-        # Drawn through `lines` or `polygons`, which record their own kind; the layer is contours.
+        # Drawn through `lines` or `polygons`, which record their own kind; the layer is contours. Both builders
+        # set `_last_layer_id` to the layer they add, so it names that layer here.
         self._rekind_layer(
-            self._last_layer_id, "filled_contours" if filled else "contours"
+            cast(str, self._last_layer_id),
+            "filled_contours" if filled else "contours",
         )
         if self.last_units and self.last_legend is not None:
             # The classification the sub-builder just recorded describes this raster's values, so the key
