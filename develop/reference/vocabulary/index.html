@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -42795,7 +42795,16 @@ non-boolean <code>parallel</code>.</p>
 <span class="normal"><a href="#__codelineno-0-854">854</a></span>
 <span class="normal"><a href="#__codelineno-0-855">855</a></span>
 <span class="normal"><a href="#__codelineno-0-856">856</a></span>
-<span class="normal"><a href="#__codelineno-0-857">857</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-857">857</a></span>
+<span class="normal"><a href="#__codelineno-0-858">858</a></span>
+<span class="normal"><a href="#__codelineno-0-859">859</a></span>
+<span class="normal"><a href="#__codelineno-0-860">860</a></span>
+<span class="normal"><a href="#__codelineno-0-861">861</a></span>
+<span class="normal"><a href="#__codelineno-0-862">862</a></span>
+<span class="normal"><a href="#__codelineno-0-863">863</a></span>
+<span class="normal"><a href="#__codelineno-0-864">864</a></span>
+<span class="normal"><a href="#__codelineno-0-865">865</a></span>
+<span class="normal"><a href="#__codelineno-0-866">866</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-434" name="__codelineno-0-434"></a><span class="nd">@dataclass</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 <a id="__codelineno-0-435" name="__codelineno-0-435"></a><span class="k">class</span><span class="w"> </span><span class="nc">Camera</span><span class="p">:</span>
 <a id="__codelineno-0-436" name="__codelineno-0-436"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Where a 3-D scene is looked at from.</span>
 <a id="__codelineno-0-437" name="__codelineno-0-437"></a>
@@ -43129,96 +43138,105 @@ non-boolean <code>parallel</code>.</p>
 <a id="__codelineno-0-765" name="__codelineno-0-765"></a><span class="sd">                ([0.0, -10.0, 5.0], True, 30.0)</span>
 <a id="__codelineno-0-766" name="__codelineno-0-766"></a>
 <a id="__codelineno-0-767" name="__codelineno-0-767"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a><span class="sd">            - The dict survives a JSON round trip and rebuilds an equal camera:</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a><span class="sd">            - A CRS is written only when the camera has one:</span>
 <a id="__codelineno-0-769" name="__codelineno-0-769"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a><span class="sd">                &gt;&gt;&gt; import json</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="sd">                &gt;&gt;&gt; text = json.dumps(Camera((0.0, -10.0, 5.0), vertical_exaggeration=3.0).to_dict())</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="sd">                &gt;&gt;&gt; Camera.from_dict(json.loads(text)).vertical_exaggeration</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="sd">                3.0</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a><span class="sd">                &gt;&gt;&gt; &quot;crs&quot; in Camera((0.0, -10.0, 5.0)).to_dict()</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="sd">                False</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="sd">                &gt;&gt;&gt; Camera((0.0, -10.0, 5.0), crs=4326).to_dict()[&quot;crs&quot;]</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="sd">                4326</span>
 <a id="__codelineno-0-775" name="__codelineno-0-775"></a>
 <a id="__codelineno-0-776" name="__codelineno-0-776"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>        <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a>            <span class="s2">&quot;position&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a>            <span class="s2">&quot;focal_point&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">focal_point</span><span class="p">),</span>
-<a id="__codelineno-0-781" name="__codelineno-0-781"></a>            <span class="s2">&quot;view_up&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">view_up</span><span class="p">),</span>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a>            <span class="s2">&quot;view_angle&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">view_angle</span><span class="p">,</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a>            <span class="s2">&quot;parallel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel</span><span class="p">,</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a>            <span class="s2">&quot;parallel_scale&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel_scale</span><span class="p">,</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a>            <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">vertical_exaggeration</span><span class="p">,</span>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a>            <span class="c1"># Written only when set: a camera with no CRS stores what it stored before the field existed, so a</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a>            <span class="c1"># reader that refuses unknown keys still reads it.</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a>            <span class="o">**</span><span class="p">({}</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{</span><span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">}),</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a>        <span class="p">}</span>
-<a id="__codelineno-0-790" name="__codelineno-0-790"></a>
-<a id="__codelineno-0-791" name="__codelineno-0-791"></a>    <span class="nd">@classmethod</span>
-<a id="__codelineno-0-792" name="__codelineno-0-792"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Camera&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a camera from its dict form.</span>
-<a id="__codelineno-0-794" name="__codelineno-0-794"></a>
-<a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">        Args:</span>
-<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`.</span>
-<a id="__codelineno-0-797" name="__codelineno-0-797"></a>
-<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">        Returns:</span>
-<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">            The camera, validated as the constructor validates it.</span>
-<a id="__codelineno-0-800" name="__codelineno-0-800"></a>
-<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">        Raises:</span>
-<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="sd">            TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not a list,</span>
-<a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">                naming the field.</span>
-<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">            ValueError: for a missing position, an unknown key, or a camera the constructor refuses.</span>
-<a id="__codelineno-0-805" name="__codelineno-0-805"></a>
-<a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="sd">        Examples:</span>
-<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">            - A stored camera reads back with its exaggeration:</span>
-<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-809" name="__codelineno-0-809"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">                &gt;&gt;&gt; Camera.from_dict({&quot;position&quot;: [0, -10, 5], &quot;vertical_exaggeration&quot;: 3}).vertical_exaggeration</span>
-<a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">                3.0</span>
-<a id="__codelineno-0-812" name="__codelineno-0-812"></a>
-<a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-814" name="__codelineno-0-814"></a><span class="sd">            - Only the position is required; the rest takes the constructor&#39;s defaults:</span>
-<a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">                &gt;&gt;&gt; camera = Camera.from_dict({&quot;position&quot;: [0, -10, 5]})</span>
-<a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="sd">                &gt;&gt;&gt; camera.focal_point, camera.parallel</span>
-<a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="sd">                ((0.0, 0.0, 0.0), False)</span>
-<a id="__codelineno-0-820" name="__codelineno-0-820"></a>
-<a id="__codelineno-0-821" name="__codelineno-0-821"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-822" name="__codelineno-0-822"></a><span class="sd">            - A missing position is named:</span>
-<a id="__codelineno-0-823" name="__codelineno-0-823"></a><span class="sd">                ```python</span>
-<a id="__codelineno-0-824" name="__codelineno-0-824"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-825" name="__codelineno-0-825"></a><span class="sd">                &gt;&gt;&gt; Camera.from_dict({&quot;view_angle&quot;: 45})</span>
-<a id="__codelineno-0-826" name="__codelineno-0-826"></a><span class="sd">                Traceback (most recent call last):</span>
-<a id="__codelineno-0-827" name="__codelineno-0-827"></a><span class="sd">                    ...</span>
-<a id="__codelineno-0-828" name="__codelineno-0-828"></a><span class="sd">                ValueError: Camera.from_dict needs &#39;position&#39;; got keys [&#39;view_angle&#39;]</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">            - The dict survives a JSON round trip and rebuilds an equal camera:</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="sd">                &gt;&gt;&gt; import json</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-781" name="__codelineno-0-781"></a><span class="sd">                &gt;&gt;&gt; text = json.dumps(Camera((0.0, -10.0, 5.0), vertical_exaggeration=3.0).to_dict())</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">                &gt;&gt;&gt; Camera.from_dict(json.loads(text)).vertical_exaggeration</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">                3.0</span>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a>        <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a>            <span class="s2">&quot;position&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a>            <span class="s2">&quot;focal_point&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">focal_point</span><span class="p">),</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a>            <span class="s2">&quot;view_up&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">view_up</span><span class="p">),</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a>            <span class="s2">&quot;view_angle&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">view_angle</span><span class="p">,</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a>            <span class="s2">&quot;parallel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel</span><span class="p">,</span>
+<a id="__codelineno-0-793" name="__codelineno-0-793"></a>            <span class="s2">&quot;parallel_scale&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel_scale</span><span class="p">,</span>
+<a id="__codelineno-0-794" name="__codelineno-0-794"></a>            <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">vertical_exaggeration</span><span class="p">,</span>
+<a id="__codelineno-0-795" name="__codelineno-0-795"></a>            <span class="c1"># Written only when set: a camera with no CRS stores what it stored before the field existed, so a</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a>            <span class="c1"># reader that refuses unknown keys still reads it.</span>
+<a id="__codelineno-0-797" name="__codelineno-0-797"></a>            <span class="o">**</span><span class="p">({}</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{</span><span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">}),</span>
+<a id="__codelineno-0-798" name="__codelineno-0-798"></a>        <span class="p">}</span>
+<a id="__codelineno-0-799" name="__codelineno-0-799"></a>
+<a id="__codelineno-0-800" name="__codelineno-0-800"></a>    <span class="nd">@classmethod</span>
+<a id="__codelineno-0-801" name="__codelineno-0-801"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Camera&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Rebuild a camera from its dict form.</span>
+<a id="__codelineno-0-803" name="__codelineno-0-803"></a>
+<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">        Args:</span>
+<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">            data: A mapping as produced by :meth:`to_dict`.</span>
+<a id="__codelineno-0-806" name="__codelineno-0-806"></a>
+<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">        Returns:</span>
+<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">            The camera, validated as the constructor validates it.</span>
+<a id="__codelineno-0-809" name="__codelineno-0-809"></a>
+<a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">        Raises:</span>
+<a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">            TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not a list,</span>
+<a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="sd">                naming the field.</span>
+<a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">            ValueError: for a missing position, an unknown key, or a camera the constructor refuses.</span>
+<a id="__codelineno-0-814" name="__codelineno-0-814"></a>
+<a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">        Examples:</span>
+<a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">            - A stored camera reads back with its exaggeration:</span>
+<a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="sd">                &gt;&gt;&gt; Camera.from_dict({&quot;position&quot;: [0, -10, 5], &quot;vertical_exaggeration&quot;: 3}).vertical_exaggeration</span>
+<a id="__codelineno-0-820" name="__codelineno-0-820"></a><span class="sd">                3.0</span>
+<a id="__codelineno-0-821" name="__codelineno-0-821"></a>
+<a id="__codelineno-0-822" name="__codelineno-0-822"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-823" name="__codelineno-0-823"></a><span class="sd">            - Only the position is required; the rest takes the constructor&#39;s defaults:</span>
+<a id="__codelineno-0-824" name="__codelineno-0-824"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-825" name="__codelineno-0-825"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-826" name="__codelineno-0-826"></a><span class="sd">                &gt;&gt;&gt; camera = Camera.from_dict({&quot;position&quot;: [0, -10, 5]})</span>
+<a id="__codelineno-0-827" name="__codelineno-0-827"></a><span class="sd">                &gt;&gt;&gt; camera.focal_point, camera.parallel</span>
+<a id="__codelineno-0-828" name="__codelineno-0-828"></a><span class="sd">                ((0.0, 0.0, 0.0), False)</span>
 <a id="__codelineno-0-829" name="__codelineno-0-829"></a>
 <a id="__codelineno-0-830" name="__codelineno-0-830"></a><span class="sd">                ```</span>
-<a id="__codelineno-0-831" name="__codelineno-0-831"></a><span class="sd">        &quot;&quot;&quot;</span>
-<a id="__codelineno-0-832" name="__codelineno-0-832"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-833" name="__codelineno-0-833"></a>            <span class="s2">&quot;Camera&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-834" name="__codelineno-0-834"></a>            <span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-835" name="__codelineno-0-835"></a>            <span class="p">(</span>
-<a id="__codelineno-0-836" name="__codelineno-0-836"></a>                <span class="s2">&quot;position&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-837" name="__codelineno-0-837"></a>                <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-838" name="__codelineno-0-838"></a>                <span class="s2">&quot;view_up&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-839" name="__codelineno-0-839"></a>                <span class="s2">&quot;view_angle&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-840" name="__codelineno-0-840"></a>                <span class="s2">&quot;parallel&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-841" name="__codelineno-0-841"></a>                <span class="s2">&quot;parallel_scale&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-842" name="__codelineno-0-842"></a>                <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-843" name="__codelineno-0-843"></a>                <span class="s2">&quot;crs&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a>            <span class="p">),</span>
-<a id="__codelineno-0-845" name="__codelineno-0-845"></a>        <span class="p">)</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a>            <span class="n">position</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a>            <span class="n">focal_point</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span>
-<a id="__codelineno-0-849" name="__codelineno-0-849"></a>                <span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
-<a id="__codelineno-0-850" name="__codelineno-0-850"></a>            <span class="p">),</span>
-<a id="__codelineno-0-851" name="__codelineno-0-851"></a>            <span class="n">view_up</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))),</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a>            <span class="n">view_angle</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_angle&quot;</span><span class="p">,</span> <span class="n">DEFAULT_VIEW_ANGLE</span><span class="p">),</span>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a>            <span class="n">parallel</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
-<a id="__codelineno-0-854" name="__codelineno-0-854"></a>            <span class="n">parallel_scale</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel_scale&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a>            <span class="n">vertical_exaggeration</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a>            <span class="n">crs</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a>        <span class="p">)</span>
+<a id="__codelineno-0-831" name="__codelineno-0-831"></a><span class="sd">            - A missing position is named:</span>
+<a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="sd">                ```python</span>
+<a id="__codelineno-0-833" name="__codelineno-0-833"></a><span class="sd">                &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-834" name="__codelineno-0-834"></a><span class="sd">                &gt;&gt;&gt; Camera.from_dict({&quot;view_angle&quot;: 45})</span>
+<a id="__codelineno-0-835" name="__codelineno-0-835"></a><span class="sd">                Traceback (most recent call last):</span>
+<a id="__codelineno-0-836" name="__codelineno-0-836"></a><span class="sd">                    ...</span>
+<a id="__codelineno-0-837" name="__codelineno-0-837"></a><span class="sd">                ValueError: Camera.from_dict needs &#39;position&#39;; got keys [&#39;view_angle&#39;]</span>
+<a id="__codelineno-0-838" name="__codelineno-0-838"></a>
+<a id="__codelineno-0-839" name="__codelineno-0-839"></a><span class="sd">                ```</span>
+<a id="__codelineno-0-840" name="__codelineno-0-840"></a><span class="sd">        &quot;&quot;&quot;</span>
+<a id="__codelineno-0-841" name="__codelineno-0-841"></a>        <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-842" name="__codelineno-0-842"></a>            <span class="s2">&quot;Camera&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-843" name="__codelineno-0-843"></a>            <span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-844" name="__codelineno-0-844"></a>            <span class="p">(</span>
+<a id="__codelineno-0-845" name="__codelineno-0-845"></a>                <span class="s2">&quot;position&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-846" name="__codelineno-0-846"></a>                <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-847" name="__codelineno-0-847"></a>                <span class="s2">&quot;view_up&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-848" name="__codelineno-0-848"></a>                <span class="s2">&quot;view_angle&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-849" name="__codelineno-0-849"></a>                <span class="s2">&quot;parallel&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-850" name="__codelineno-0-850"></a>                <span class="s2">&quot;parallel_scale&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-851" name="__codelineno-0-851"></a>                <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-852" name="__codelineno-0-852"></a>                <span class="s2">&quot;crs&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-853" name="__codelineno-0-853"></a>            <span class="p">),</span>
+<a id="__codelineno-0-854" name="__codelineno-0-854"></a>        <span class="p">)</span>
+<a id="__codelineno-0-855" name="__codelineno-0-855"></a>        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-856" name="__codelineno-0-856"></a>            <span class="n">position</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-857" name="__codelineno-0-857"></a>            <span class="n">focal_point</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span>
+<a id="__codelineno-0-858" name="__codelineno-0-858"></a>                <span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+<a id="__codelineno-0-859" name="__codelineno-0-859"></a>            <span class="p">),</span>
+<a id="__codelineno-0-860" name="__codelineno-0-860"></a>            <span class="n">view_up</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))),</span>
+<a id="__codelineno-0-861" name="__codelineno-0-861"></a>            <span class="n">view_angle</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_angle&quot;</span><span class="p">,</span> <span class="n">DEFAULT_VIEW_ANGLE</span><span class="p">),</span>
+<a id="__codelineno-0-862" name="__codelineno-0-862"></a>            <span class="n">parallel</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+<a id="__codelineno-0-863" name="__codelineno-0-863"></a>            <span class="n">parallel_scale</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel_scale&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-864" name="__codelineno-0-864"></a>            <span class="n">vertical_exaggeration</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+<a id="__codelineno-0-865" name="__codelineno-0-865"></a>            <span class="n">crs</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-866" name="__codelineno-0-866"></a>        <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
               </details>
 
@@ -43741,16 +43759,7 @@ naming the field.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/base/spec/viewport.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-791">791</a></span>
-<span class="normal"><a href="#__codelineno-0-792">792</a></span>
-<span class="normal"><a href="#__codelineno-0-793">793</a></span>
-<span class="normal"><a href="#__codelineno-0-794">794</a></span>
-<span class="normal"><a href="#__codelineno-0-795">795</a></span>
-<span class="normal"><a href="#__codelineno-0-796">796</a></span>
-<span class="normal"><a href="#__codelineno-0-797">797</a></span>
-<span class="normal"><a href="#__codelineno-0-798">798</a></span>
-<span class="normal"><a href="#__codelineno-0-799">799</a></span>
-<span class="normal"><a href="#__codelineno-0-800">800</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-800">800</a></span>
 <span class="normal"><a href="#__codelineno-0-801">801</a></span>
 <span class="normal"><a href="#__codelineno-0-802">802</a></span>
 <span class="normal"><a href="#__codelineno-0-803">803</a></span>
@@ -43807,73 +43816,82 @@ naming the field.</p>
 <span class="normal"><a href="#__codelineno-0-854">854</a></span>
 <span class="normal"><a href="#__codelineno-0-855">855</a></span>
 <span class="normal"><a href="#__codelineno-0-856">856</a></span>
-<span class="normal"><a href="#__codelineno-0-857">857</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-791" name="__codelineno-0-791"></a><span class="nd">@classmethod</span>
-<a id="__codelineno-0-792" name="__codelineno-0-792"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Camera&quot;</span><span class="p">:</span>
-<a id="__codelineno-0-793" name="__codelineno-0-793"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a camera from its dict form.</span>
-<a id="__codelineno-0-794" name="__codelineno-0-794"></a>
-<a id="__codelineno-0-795" name="__codelineno-0-795"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-796" name="__codelineno-0-796"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`.</span>
-<a id="__codelineno-0-797" name="__codelineno-0-797"></a>
-<a id="__codelineno-0-798" name="__codelineno-0-798"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-799" name="__codelineno-0-799"></a><span class="sd">        The camera, validated as the constructor validates it.</span>
-<a id="__codelineno-0-800" name="__codelineno-0-800"></a>
-<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="sd">        TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not a list,</span>
-<a id="__codelineno-0-803" name="__codelineno-0-803"></a><span class="sd">            naming the field.</span>
-<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">        ValueError: for a missing position, an unknown key, or a camera the constructor refuses.</span>
-<a id="__codelineno-0-805" name="__codelineno-0-805"></a>
-<a id="__codelineno-0-806" name="__codelineno-0-806"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">        - A stored camera reads back with its exaggeration:</span>
-<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-809" name="__codelineno-0-809"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">            &gt;&gt;&gt; Camera.from_dict({&quot;position&quot;: [0, -10, 5], &quot;vertical_exaggeration&quot;: 3}).vertical_exaggeration</span>
-<a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">            3.0</span>
-<a id="__codelineno-0-812" name="__codelineno-0-812"></a>
-<a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-814" name="__codelineno-0-814"></a><span class="sd">        - Only the position is required; the rest takes the constructor&#39;s defaults:</span>
-<a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">            &gt;&gt;&gt; camera = Camera.from_dict({&quot;position&quot;: [0, -10, 5]})</span>
-<a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="sd">            &gt;&gt;&gt; camera.focal_point, camera.parallel</span>
-<a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="sd">            ((0.0, 0.0, 0.0), False)</span>
-<a id="__codelineno-0-820" name="__codelineno-0-820"></a>
-<a id="__codelineno-0-821" name="__codelineno-0-821"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-822" name="__codelineno-0-822"></a><span class="sd">        - A missing position is named:</span>
-<a id="__codelineno-0-823" name="__codelineno-0-823"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-824" name="__codelineno-0-824"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-825" name="__codelineno-0-825"></a><span class="sd">            &gt;&gt;&gt; Camera.from_dict({&quot;view_angle&quot;: 45})</span>
-<a id="__codelineno-0-826" name="__codelineno-0-826"></a><span class="sd">            Traceback (most recent call last):</span>
-<a id="__codelineno-0-827" name="__codelineno-0-827"></a><span class="sd">                ...</span>
-<a id="__codelineno-0-828" name="__codelineno-0-828"></a><span class="sd">            ValueError: Camera.from_dict needs &#39;position&#39;; got keys [&#39;view_angle&#39;]</span>
+<span class="normal"><a href="#__codelineno-0-857">857</a></span>
+<span class="normal"><a href="#__codelineno-0-858">858</a></span>
+<span class="normal"><a href="#__codelineno-0-859">859</a></span>
+<span class="normal"><a href="#__codelineno-0-860">860</a></span>
+<span class="normal"><a href="#__codelineno-0-861">861</a></span>
+<span class="normal"><a href="#__codelineno-0-862">862</a></span>
+<span class="normal"><a href="#__codelineno-0-863">863</a></span>
+<span class="normal"><a href="#__codelineno-0-864">864</a></span>
+<span class="normal"><a href="#__codelineno-0-865">865</a></span>
+<span class="normal"><a href="#__codelineno-0-866">866</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-800" name="__codelineno-0-800"></a><span class="nd">@classmethod</span>
+<a id="__codelineno-0-801" name="__codelineno-0-801"></a><span class="k">def</span><span class="w"> </span><span class="nf">from_dict</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;Camera&quot;</span><span class="p">:</span>
+<a id="__codelineno-0-802" name="__codelineno-0-802"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Rebuild a camera from its dict form.</span>
+<a id="__codelineno-0-803" name="__codelineno-0-803"></a>
+<a id="__codelineno-0-804" name="__codelineno-0-804"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-805" name="__codelineno-0-805"></a><span class="sd">        data: A mapping as produced by :meth:`to_dict`.</span>
+<a id="__codelineno-0-806" name="__codelineno-0-806"></a>
+<a id="__codelineno-0-807" name="__codelineno-0-807"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-808" name="__codelineno-0-808"></a><span class="sd">        The camera, validated as the constructor validates it.</span>
+<a id="__codelineno-0-809" name="__codelineno-0-809"></a>
+<a id="__codelineno-0-810" name="__codelineno-0-810"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-811" name="__codelineno-0-811"></a><span class="sd">        TypeError: if `data` is not a mapping, or `position`, `focal_point` or `view_up` is not a list,</span>
+<a id="__codelineno-0-812" name="__codelineno-0-812"></a><span class="sd">            naming the field.</span>
+<a id="__codelineno-0-813" name="__codelineno-0-813"></a><span class="sd">        ValueError: for a missing position, an unknown key, or a camera the constructor refuses.</span>
+<a id="__codelineno-0-814" name="__codelineno-0-814"></a>
+<a id="__codelineno-0-815" name="__codelineno-0-815"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-816" name="__codelineno-0-816"></a><span class="sd">        - A stored camera reads back with its exaggeration:</span>
+<a id="__codelineno-0-817" name="__codelineno-0-817"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-818" name="__codelineno-0-818"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-819" name="__codelineno-0-819"></a><span class="sd">            &gt;&gt;&gt; Camera.from_dict({&quot;position&quot;: [0, -10, 5], &quot;vertical_exaggeration&quot;: 3}).vertical_exaggeration</span>
+<a id="__codelineno-0-820" name="__codelineno-0-820"></a><span class="sd">            3.0</span>
+<a id="__codelineno-0-821" name="__codelineno-0-821"></a>
+<a id="__codelineno-0-822" name="__codelineno-0-822"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-823" name="__codelineno-0-823"></a><span class="sd">        - Only the position is required; the rest takes the constructor&#39;s defaults:</span>
+<a id="__codelineno-0-824" name="__codelineno-0-824"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-825" name="__codelineno-0-825"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-826" name="__codelineno-0-826"></a><span class="sd">            &gt;&gt;&gt; camera = Camera.from_dict({&quot;position&quot;: [0, -10, 5]})</span>
+<a id="__codelineno-0-827" name="__codelineno-0-827"></a><span class="sd">            &gt;&gt;&gt; camera.focal_point, camera.parallel</span>
+<a id="__codelineno-0-828" name="__codelineno-0-828"></a><span class="sd">            ((0.0, 0.0, 0.0), False)</span>
 <a id="__codelineno-0-829" name="__codelineno-0-829"></a>
 <a id="__codelineno-0-830" name="__codelineno-0-830"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-831" name="__codelineno-0-831"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-832" name="__codelineno-0-832"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
-<a id="__codelineno-0-833" name="__codelineno-0-833"></a>        <span class="s2">&quot;Camera&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-834" name="__codelineno-0-834"></a>        <span class="n">data</span><span class="p">,</span>
-<a id="__codelineno-0-835" name="__codelineno-0-835"></a>        <span class="p">(</span>
-<a id="__codelineno-0-836" name="__codelineno-0-836"></a>            <span class="s2">&quot;position&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-837" name="__codelineno-0-837"></a>            <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-838" name="__codelineno-0-838"></a>            <span class="s2">&quot;view_up&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-839" name="__codelineno-0-839"></a>            <span class="s2">&quot;view_angle&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-840" name="__codelineno-0-840"></a>            <span class="s2">&quot;parallel&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-841" name="__codelineno-0-841"></a>            <span class="s2">&quot;parallel_scale&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-842" name="__codelineno-0-842"></a>            <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-843" name="__codelineno-0-843"></a>            <span class="s2">&quot;crs&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a>        <span class="p">),</span>
-<a id="__codelineno-0-845" name="__codelineno-0-845"></a>    <span class="p">)</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a>        <span class="n">position</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">)),</span>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a>        <span class="n">focal_point</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span>
-<a id="__codelineno-0-849" name="__codelineno-0-849"></a>            <span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
-<a id="__codelineno-0-850" name="__codelineno-0-850"></a>        <span class="p">),</span>
-<a id="__codelineno-0-851" name="__codelineno-0-851"></a>        <span class="n">view_up</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))),</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a>        <span class="n">view_angle</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_angle&quot;</span><span class="p">,</span> <span class="n">DEFAULT_VIEW_ANGLE</span><span class="p">),</span>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a>        <span class="n">parallel</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
-<a id="__codelineno-0-854" name="__codelineno-0-854"></a>        <span class="n">parallel_scale</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel_scale&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a>        <span class="n">vertical_exaggeration</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a>        <span class="n">crs</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a>    <span class="p">)</span>
+<a id="__codelineno-0-831" name="__codelineno-0-831"></a><span class="sd">        - A missing position is named:</span>
+<a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-833" name="__codelineno-0-833"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-834" name="__codelineno-0-834"></a><span class="sd">            &gt;&gt;&gt; Camera.from_dict({&quot;view_angle&quot;: 45})</span>
+<a id="__codelineno-0-835" name="__codelineno-0-835"></a><span class="sd">            Traceback (most recent call last):</span>
+<a id="__codelineno-0-836" name="__codelineno-0-836"></a><span class="sd">                ...</span>
+<a id="__codelineno-0-837" name="__codelineno-0-837"></a><span class="sd">            ValueError: Camera.from_dict needs &#39;position&#39;; got keys [&#39;view_angle&#39;]</span>
+<a id="__codelineno-0-838" name="__codelineno-0-838"></a>
+<a id="__codelineno-0-839" name="__codelineno-0-839"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-840" name="__codelineno-0-840"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-841" name="__codelineno-0-841"></a>    <span class="n">refuse_unknown</span><span class="p">(</span>
+<a id="__codelineno-0-842" name="__codelineno-0-842"></a>        <span class="s2">&quot;Camera&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-843" name="__codelineno-0-843"></a>        <span class="n">data</span><span class="p">,</span>
+<a id="__codelineno-0-844" name="__codelineno-0-844"></a>        <span class="p">(</span>
+<a id="__codelineno-0-845" name="__codelineno-0-845"></a>            <span class="s2">&quot;position&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-846" name="__codelineno-0-846"></a>            <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-847" name="__codelineno-0-847"></a>            <span class="s2">&quot;view_up&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-848" name="__codelineno-0-848"></a>            <span class="s2">&quot;view_angle&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-849" name="__codelineno-0-849"></a>            <span class="s2">&quot;parallel&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-850" name="__codelineno-0-850"></a>            <span class="s2">&quot;parallel_scale&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-851" name="__codelineno-0-851"></a>            <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-852" name="__codelineno-0-852"></a>            <span class="s2">&quot;crs&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-853" name="__codelineno-0-853"></a>        <span class="p">),</span>
+<a id="__codelineno-0-854" name="__codelineno-0-854"></a>    <span class="p">)</span>
+<a id="__codelineno-0-855" name="__codelineno-0-855"></a>    <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+<a id="__codelineno-0-856" name="__codelineno-0-856"></a>        <span class="n">position</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">,</span> <span class="n">require</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="s2">&quot;position&quot;</span><span class="p">)),</span>
+<a id="__codelineno-0-857" name="__codelineno-0-857"></a>        <span class="n">focal_point</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span>
+<a id="__codelineno-0-858" name="__codelineno-0-858"></a>            <span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;focal_point&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">))</span>
+<a id="__codelineno-0-859" name="__codelineno-0-859"></a>        <span class="p">),</span>
+<a id="__codelineno-0-860" name="__codelineno-0-860"></a>        <span class="n">view_up</span><span class="o">=</span><span class="n">as_list</span><span class="p">(</span><span class="s2">&quot;Camera&quot;</span><span class="p">,</span> <span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_up&quot;</span><span class="p">,</span> <span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">))),</span>
+<a id="__codelineno-0-861" name="__codelineno-0-861"></a>        <span class="n">view_angle</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;view_angle&quot;</span><span class="p">,</span> <span class="n">DEFAULT_VIEW_ANGLE</span><span class="p">),</span>
+<a id="__codelineno-0-862" name="__codelineno-0-862"></a>        <span class="n">parallel</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+<a id="__codelineno-0-863" name="__codelineno-0-863"></a>        <span class="n">parallel_scale</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;parallel_scale&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-864" name="__codelineno-0-864"></a>        <span class="n">vertical_exaggeration</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+<a id="__codelineno-0-865" name="__codelineno-0-865"></a>        <span class="n">crs</span><span class="o">=</span><span class="n">data</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;crs&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-866" name="__codelineno-0-866"></a>    <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -44420,12 +44438,19 @@ straight down with the default vertical <code>view_up</code>.</p>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">stored</span><span class="p">[</span><span class="s2">&quot;position&quot;</span><span class="p">],</span> <span class="n">stored</span><span class="p">[</span><span class="s2">&quot;parallel&quot;</span><span class="p">],</span> <span class="n">stored</span><span class="p">[</span><span class="s2">&quot;view_angle&quot;</span><span class="p">]</span>
 <a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">],</span> <span class="kc">True</span><span class="p">,</span> <span class="mf">30.0</span><span class="p">)</span>
 </code></pre></div></li>
+<li>A CRS is written only when the camera has one:
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.spec</span><span class="w"> </span><span class="kn">import</span> <span class="n">Camera</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="s2">&quot;crs&quot;</span> <span class="ow">in</span> <span class="n">Camera</span><span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">))</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kc">False</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">Camera</span><span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">),</span> <span class="n">crs</span><span class="o">=</span><span class="mi">4326</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()[</span><span class="s2">&quot;crs&quot;</span><span class="p">]</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="mi">4326</span>
+</code></pre></div></li>
 <li>The dict survives a JSON round trip and rebuilds an equal camera:
-    <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
-<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.spec</span><span class="w"> </span><span class="kn">import</span> <span class="n">Camera</span>
-<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">text</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">Camera</span><span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">),</span> <span class="n">vertical_exaggeration</span><span class="o">=</span><span class="mf">3.0</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span>
-<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">Camera</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">text</span><span class="p">))</span><span class="o">.</span><span class="n">vertical_exaggeration</span>
-<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="mf">3.0</span>
+    <div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.spec</span><span class="w"> </span><span class="kn">import</span> <span class="n">Camera</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">text</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">Camera</span><span class="p">((</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="mf">10.0</span><span class="p">,</span> <span class="mf">5.0</span><span class="p">),</span> <span class="n">vertical_exaggeration</span><span class="o">=</span><span class="mf">3.0</span><span class="p">)</span><span class="o">.</span><span class="n">to_dict</span><span class="p">())</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">Camera</span><span class="o">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">text</span><span class="p">))</span><span class="o">.</span><span class="n">vertical_exaggeration</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="mf">3.0</span>
 </code></pre></div></li>
 </ul>
 
@@ -44469,7 +44494,16 @@ straight down with the default vertical <code>view_up</code>.</p>
 <span class="normal"><a href="#__codelineno-0-786">786</a></span>
 <span class="normal"><a href="#__codelineno-0-787">787</a></span>
 <span class="normal"><a href="#__codelineno-0-788">788</a></span>
-<span class="normal"><a href="#__codelineno-0-789">789</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="normal"><a href="#__codelineno-0-789">789</a></span>
+<span class="normal"><a href="#__codelineno-0-790">790</a></span>
+<span class="normal"><a href="#__codelineno-0-791">791</a></span>
+<span class="normal"><a href="#__codelineno-0-792">792</a></span>
+<span class="normal"><a href="#__codelineno-0-793">793</a></span>
+<span class="normal"><a href="#__codelineno-0-794">794</a></span>
+<span class="normal"><a href="#__codelineno-0-795">795</a></span>
+<span class="normal"><a href="#__codelineno-0-796">796</a></span>
+<span class="normal"><a href="#__codelineno-0-797">797</a></span>
+<span class="normal"><a href="#__codelineno-0-798">798</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-752" name="__codelineno-0-752"></a><span class="k">def</span><span class="w"> </span><span class="nf">to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <a id="__codelineno-0-753" name="__codelineno-0-753"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the plain-dict form a figure stores.</span>
 <a id="__codelineno-0-754" name="__codelineno-0-754"></a>
 <a id="__codelineno-0-755" name="__codelineno-0-755"></a><span class="sd">    Returns:</span>
@@ -44485,28 +44519,37 @@ straight down with the default vertical <code>view_up</code>.</p>
 <a id="__codelineno-0-765" name="__codelineno-0-765"></a><span class="sd">            ([0.0, -10.0, 5.0], True, 30.0)</span>
 <a id="__codelineno-0-766" name="__codelineno-0-766"></a>
 <a id="__codelineno-0-767" name="__codelineno-0-767"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a><span class="sd">        - The dict survives a JSON round trip and rebuilds an equal camera:</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a><span class="sd">        - A CRS is written only when the camera has one:</span>
 <a id="__codelineno-0-769" name="__codelineno-0-769"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a><span class="sd">            &gt;&gt;&gt; import json</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="sd">            &gt;&gt;&gt; text = json.dumps(Camera((0.0, -10.0, 5.0), vertical_exaggeration=3.0).to_dict())</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="sd">            &gt;&gt;&gt; Camera.from_dict(json.loads(text)).vertical_exaggeration</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="sd">            3.0</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a><span class="sd">            &gt;&gt;&gt; &quot;crs&quot; in Camera((0.0, -10.0, 5.0)).to_dict()</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a><span class="sd">            False</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a><span class="sd">            &gt;&gt;&gt; Camera((0.0, -10.0, 5.0), crs=4326).to_dict()[&quot;crs&quot;]</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a><span class="sd">            4326</span>
 <a id="__codelineno-0-775" name="__codelineno-0-775"></a>
 <a id="__codelineno-0-776" name="__codelineno-0-776"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>    <span class="k">return</span> <span class="p">{</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a>        <span class="s2">&quot;position&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a>        <span class="s2">&quot;focal_point&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">focal_point</span><span class="p">),</span>
-<a id="__codelineno-0-781" name="__codelineno-0-781"></a>        <span class="s2">&quot;view_up&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">view_up</span><span class="p">),</span>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a>        <span class="s2">&quot;view_angle&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">view_angle</span><span class="p">,</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a>        <span class="s2">&quot;parallel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel</span><span class="p">,</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a>        <span class="s2">&quot;parallel_scale&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel_scale</span><span class="p">,</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a>        <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">vertical_exaggeration</span><span class="p">,</span>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a>        <span class="c1"># Written only when set: a camera with no CRS stores what it stored before the field existed, so a</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a>        <span class="c1"># reader that refuses unknown keys still reads it.</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a>        <span class="o">**</span><span class="p">({}</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{</span><span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">}),</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a>    <span class="p">}</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a><span class="sd">        - The dict survives a JSON round trip and rebuilds an equal camera:</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a><span class="sd">            &gt;&gt;&gt; import json</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.base.spec import Camera</span>
+<a id="__codelineno-0-781" name="__codelineno-0-781"></a><span class="sd">            &gt;&gt;&gt; text = json.dumps(Camera((0.0, -10.0, 5.0), vertical_exaggeration=3.0).to_dict())</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a><span class="sd">            &gt;&gt;&gt; Camera.from_dict(json.loads(text)).vertical_exaggeration</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a><span class="sd">            3.0</span>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a>    <span class="k">return</span> <span class="p">{</span>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a>        <span class="s2">&quot;position&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">position</span><span class="p">),</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a>        <span class="s2">&quot;focal_point&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">focal_point</span><span class="p">),</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a>        <span class="s2">&quot;view_up&quot;</span><span class="p">:</span> <span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">view_up</span><span class="p">),</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a>        <span class="s2">&quot;view_angle&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">view_angle</span><span class="p">,</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a>        <span class="s2">&quot;parallel&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel</span><span class="p">,</span>
+<a id="__codelineno-0-793" name="__codelineno-0-793"></a>        <span class="s2">&quot;parallel_scale&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parallel_scale</span><span class="p">,</span>
+<a id="__codelineno-0-794" name="__codelineno-0-794"></a>        <span class="s2">&quot;vertical_exaggeration&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">vertical_exaggeration</span><span class="p">,</span>
+<a id="__codelineno-0-795" name="__codelineno-0-795"></a>        <span class="c1"># Written only when set: a camera with no CRS stores what it stored before the field existed, so a</span>
+<a id="__codelineno-0-796" name="__codelineno-0-796"></a>        <span class="c1"># reader that refuses unknown keys still reads it.</span>
+<a id="__codelineno-0-797" name="__codelineno-0-797"></a>        <span class="o">**</span><span class="p">({}</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">{</span><span class="s2">&quot;crs&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">crs</span><span class="p">}),</span>
+<a id="__codelineno-0-798" name="__codelineno-0-798"></a>    <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
