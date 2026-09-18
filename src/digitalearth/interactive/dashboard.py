@@ -228,6 +228,43 @@ class DashboardMixin(_MixinBase):
             )
         return merged
 
+    def _restyled_layers(self, overrides: dict) -> list:
+        """Return each layer restyled with **its own** recorded style, the widget's values over the top.
+
+        The defect this replaces: the widget values were merged with the style of *every* colour-mapped layer
+        into one dict — last layer wins — and that dict was applied to all of them through
+        ``hv.opts.Image(**merged)``, which HoloViews applies per element *type*. Moving the opacity slider on a
+        map with two rasters therefore gave both the second one's colormap and colour limits. A layer's style
+        is the layer's, so it is applied to the layer.
+
+        Args:
+            overrides: The widget values — `cmap`, `alpha` — to apply over each layer's own style.
+
+        Returns:
+            The layers in draw order, each carrying its own styling with the overrides on top. A layer no
+            widget claims is returned unchanged.
+        """
+        alpha_only = {
+            key: value for key, value in overrides.items() if key in _ALPHA_ONLY_STYLE
+        }
+        styled = []
+        for layer in self.layers:
+            name = type(layer).__name__
+            if name in _COLOR_MAPPED_TYPES:
+                recorded = {
+                    key: value
+                    for key, value in self.style_of(layer)["common"].items()
+                    if key in _OVERRIDABLE_STYLE
+                }
+                styled.append(layer.opts(**{**recorded, **overrides}))
+            elif name in _ALPHA_ONLY_TYPES and alpha_only:
+                # An RGB composite is already three colour channels: it has no scalar for a cmap or a clim
+                # to map, so only the opacity reaches it.
+                styled.append(layer.opts(**alpha_only))
+            else:
+                styled.append(layer)
+        return styled
+
     def _restyle(self, obj: Any, merged: dict) -> Any:
         """Apply ``merged`` to every element type a dashboard widget claims to restyle.
 
@@ -300,19 +337,20 @@ class DashboardMixin(_MixinBase):
             values: Widget values keyed by widget name (``cmap``/``alpha``/``basemap``).
 
         Returns:
-            The composed HoloViews object with the overrides applied — every element type
-            :meth:`_restyle` covers redrawn with the widget values merged over their recorded style,
-            over the chosen tile basemap.
+            The composed HoloViews object with the overrides applied — each layer redrawn with the widget
+            values over **its own** recorded style, over the chosen tile basemap.
         """
-        obj = self.render()
         overrides: dict = {}
         if values.get("cmap"):
             overrides["cmap"] = values["cmap"]
         if values.get("alpha") is not None:
             overrides["alpha"] = values["alpha"]
-        if overrides:
-            merged = {**self._recorded_overridable_style(), **overrides}
-            obj = self._restyle(obj, merged)
+        if not overrides:
+            obj = self.render()
+        else:
+            # Composed from the restyled layers rather than restyled after composing: `.opts()` on an overlay
+            # applies per element *type*, so one spec cannot give two rasters different colormaps (#300).
+            obj = self._compose(self._restyled_layers(overrides))
         if values.get("basemap"):
             obj = self._with_basemap(obj, values["basemap"])
         return obj

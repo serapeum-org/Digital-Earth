@@ -57,6 +57,9 @@ class _Unset:
 #: ``quickmap(ds, backend="3d")`` would be refused for a ``crs`` the caller never asked for.
 _UNSET = _Unset()
 from digitalearth.base.capabilities import Capabilities
+from digitalearth.interactive.capabilities import (
+    CAPABILITIES as CAPABILITIES_INTERACTIVE,
+)
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
@@ -89,10 +92,11 @@ _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
 }
 
 #: The tiers whose `capabilities.py` has landed. Each replaces a row that used to be written out here; the rest
-#: keep theirs until their seam lands (#296 web, #300 interactive, #303 static).
+#: keep theirs until their seam lands (#303 static).
 _DECLARATIONS: dict[str, Capabilities] = {
     "3d": CAPABILITIES_3D,
     "web": CAPABILITIES_WEB,
+    "interactive": CAPABILITIES_INTERACTIVE,
 }
 
 
@@ -145,7 +149,7 @@ BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     "matplotlib": frozenset(
         {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
     ),
-    "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
+    "interactive": _declared_row(CAPABILITIES_INTERACTIVE),
     "3d": _declared_row(CAPABILITIES_3D),
     "web": _declared_row(CAPABILITIES_WEB),
 }

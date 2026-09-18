@@ -687,6 +687,27 @@ class InteractiveMapBase:
                 "map with InteractiveMap(crs=3857) (the default) or drop the decoration."
             )
 
+    def _compose(self, layers: Any) -> Any:
+        """Overlay layers in draw order.
+
+        The one place the tier turns a sequence of elements into one figure, so a caller that renders a subset
+        — the layer switcher, a dashboard widget restyling each layer on its own (#300) — composes exactly as
+        `render` does rather than growing a second reduce beside it.
+
+        Args:
+            layers: The elements to overlay, bottom first.
+
+        Returns:
+            An empty `hv.Overlay` for none, the element itself for one, and their product otherwise.
+        """
+        _, hv = _require_holoviz()
+        drawn = list(layers)
+        if not drawn:
+            return hv.Overlay([])
+        if len(drawn) == 1:
+            return drawn[0]
+        return reduce(mul, drawn)
+
     def render(self) -> Any:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
 
@@ -722,12 +743,7 @@ class InteractiveMapBase:
         if self._tiles_provider is not None and hasattr(self, "tiles"):
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
             self.tiles(provider)
-        if not self.layers:
-            obj = hv.Overlay([])
-        elif len(self.layers) == 1:
-            obj = self.layers[0]
-        else:
-            obj = reduce(mul, self.layers)
+        obj = self._compose(self.layers)
         if self._projection is not None:
             if (
                 "matplotlib" not in hv.Store.renderers
