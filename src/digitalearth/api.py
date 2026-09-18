@@ -60,6 +60,7 @@ from digitalearth.base.capabilities import Capabilities
 from digitalearth.interactive.capabilities import (
     CAPABILITIES as CAPABILITIES_INTERACTIVE,
 )
+from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
@@ -91,9 +92,10 @@ _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "colorbar": ("colorbar", "legend"),
 }
 
-#: The tiers whose `capabilities.py` has landed. Each replaces a row that used to be written out here; the rest
-#: keep theirs until their seam lands (#303 static).
+#: Every tier's declaration. Each replaces a row that used to be written out here, and the last of them —
+#: `matplotlib` — landed with the static seam's own `capabilities.py`, so no row is hand-written any more.
 _DECLARATIONS: dict[str, Capabilities] = {
+    "matplotlib": CAPABILITIES_STATIC,
     "3d": CAPABILITIES_3D,
     "web": CAPABILITIES_WEB,
     "interactive": CAPABILITIES_INTERACTIVE,
@@ -146,12 +148,8 @@ def _refusal_reason(backend: str, keyword: str) -> str:
 
 
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
-    "matplotlib": frozenset(
-        {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
-    ),
-    "interactive": _declared_row(CAPABILITIES_INTERACTIVE),
-    "3d": _declared_row(CAPABILITIES_3D),
-    "web": _declared_row(CAPABILITIES_WEB),
+    backend: _declared_row(declaration)
+    for backend, declaration in _DECLARATIONS.items()
 }
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
