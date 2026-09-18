@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4170,7 +4170,7 @@ actually called — importing this module works without it.</p>
 <a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.web</span><span class="w"> </span><span class="kn">import</span> <span class="n">WebMap</span>
 <a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="o">&gt;&gt;&gt;</span> <span class="n">dem</span> <span class="o">=</span> <span class="n">Dataset</span><span class="o">.</span><span class="n">read_file</span><span class="p">(</span><span class="s2">&quot;examples/data/acc4000.tif&quot;</span><span class="p">)</span>
 <a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="o">&gt;&gt;&gt;</span> <span class="k">with</span> <span class="n">tempfile</span><span class="o">.</span><span class="n">TemporaryDirectory</span><span class="p">()</span> <span class="k">as</span> <span class="n">folder</span><span class="p">:</span>
-<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="o">...</span>     <span class="n">written</span> <span class="o">=</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">add_raster</span><span class="p">(</span><span class="n">dem</span><span class="p">)</span><span class="o">.</span><span class="n">basemap</span><span class="p">()</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;map.html&quot;</span><span class="p">)</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="o">...</span>     <span class="n">written</span> <span class="o">=</span> <span class="n">WebMap</span><span class="p">()</span><span class="o">.</span><span class="n">field</span><span class="p">(</span><span class="n">dem</span><span class="p">)</span><span class="o">.</span><span class="n">basemap</span><span class="p">()</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">Path</span><span class="p">(</span><span class="n">folder</span><span class="p">)</span> <span class="o">/</span> <span class="s2">&quot;map.html&quot;</span><span class="p">)</span>
 <a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="o">...</span>     <span class="p">(</span><span class="n">written</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">written</span><span class="o">.</span><span class="n">is_file</span><span class="p">())</span>
 <a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">(</span><span class="s1">&#39;map.html&#39;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 </code></pre></div></li>
@@ -4304,7 +4304,7 @@ digitalearth.three_d.scene3d.Scene3D: the true-3D (PyVista) sibling.</p>
 <a id="__codelineno-0-72" name="__codelineno-0-72"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap</span>
 <a id="__codelineno-0-73" name="__codelineno-0-73"></a><span class="sd">            &gt;&gt;&gt; dem = Dataset.read_file(&quot;examples/data/acc4000.tif&quot;)</span>
 <a id="__codelineno-0-74" name="__codelineno-0-74"></a><span class="sd">            &gt;&gt;&gt; with tempfile.TemporaryDirectory() as folder:</span>
-<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            ...     written = WebMap().add_raster(dem).basemap().save(Path(folder) / &quot;map.html&quot;)</span>
+<a id="__codelineno-0-75" name="__codelineno-0-75"></a><span class="sd">            ...     written = WebMap().field(dem).basemap().save(Path(folder) / &quot;map.html&quot;)</span>
 <a id="__codelineno-0-76" name="__codelineno-0-76"></a><span class="sd">            ...     (written.name, written.is_file())</span>
 <a id="__codelineno-0-77" name="__codelineno-0-77"></a><span class="sd">            (&#39;map.html&#39;, True)</span>
 <a id="__codelineno-0-78" name="__codelineno-0-78"></a>
@@ -4893,7 +4893,7 @@ maps are built — is the normal workflow.</p>
   <p>The running data extent, and the classification a legend describes, are only cleared when the
 last layer goes. They are "most recent" accessors rather than a model of what is on the map,
 so after removing one layer of several they still describe the removed one; call
-:meth:<code>fit_bounds</code> or rebuild the legend if that matters.</p>
+:meth:<code>set_bounds</code> or rebuild the legend if that matters.</p>
 </details>
 
 <p><span class="doc-section-title">Raises:</span></p>
@@ -5051,7 +5051,7 @@ look exactly like a layer that refused to go away.</p>
 <a id="__codelineno-0-1216" name="__codelineno-0-1216"></a><span class="sd">        The running data extent, and the classification a legend describes, are only cleared when the</span>
 <a id="__codelineno-0-1217" name="__codelineno-0-1217"></a><span class="sd">        last layer goes. They are &quot;most recent&quot; accessors rather than a model of what is on the map,</span>
 <a id="__codelineno-0-1218" name="__codelineno-0-1218"></a><span class="sd">        so after removing one layer of several they still describe the removed one; call</span>
-<a id="__codelineno-0-1219" name="__codelineno-0-1219"></a><span class="sd">        :meth:`fit_bounds` or rebuild the legend if that matters.</span>
+<a id="__codelineno-0-1219" name="__codelineno-0-1219"></a><span class="sd">        :meth:`set_bounds` or rebuild the legend if that matters.</span>
 <a id="__codelineno-0-1220" name="__codelineno-0-1220"></a>
 <a id="__codelineno-0-1221" name="__codelineno-0-1221"></a><span class="sd">    Raises:</span>
 <a id="__codelineno-0-1222" name="__codelineno-0-1222"></a><span class="sd">        KeyError: when no such layer was added, listing the ids that were — a silent no-op here would</span>
