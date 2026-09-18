@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 
 from loguru import logger
 
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.spec import Scale
 from digitalearth.web.base import _require_layer_api
 
@@ -30,7 +31,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 class RasterMixin(_MixinBase):
     """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
-    def add_raster(
+    def field(
         self,
         data: Any,
         *,
@@ -120,7 +121,7 @@ class RasterMixin(_MixinBase):
         import numpy as np
 
         Layer, LayerType = _require_layer_api()
-        source = self._display_source_or_skip(data, band=band, layer="add_raster")
+        source = self._display_source_or_skip(data, band=band, layer="field")
         if source is None:
             return self
         cmap_name = self._auto_cmap(source, cmap)
@@ -130,7 +131,7 @@ class RasterMixin(_MixinBase):
         values = source.z.values
         if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:
             logger.warning(
-                "add_raster: inlining a {}-pixel band as a data-URI image source bloats the page; for large "
+                "field: inlining a {}-pixel band as a data-URI image source bloats the page; for large "
                 "rasters serve COG/XYZ tiles from pyramids instead",
                 getattr(values, "size", 0),
             )
@@ -143,7 +144,7 @@ class RasterMixin(_MixinBase):
         coordinates = self._lonlat_corners(source)
         if coordinates is None:
             self._skipped(
-                "add_raster",
+                "field",
                 "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
                 "needs; reproject the dataset so its extent is representable",
             )
@@ -171,6 +172,10 @@ class RasterMixin(_MixinBase):
         self._last_layer_id = layer_id
         self._index_layer(layer_id, name, kind="raster", visible=visible, source=data)
         return self._queue(apply)
+
+    #: Deprecated spelling of :meth:`field`, the contract's name for a raster band drawn as a coloured field
+    #: (#299). It forwards and warns.
+    add_raster = renamed_method(new="field", old="add_raster", owner="WebMap")
 
     def rgb_composite(
         self,

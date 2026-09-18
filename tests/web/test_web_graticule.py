@@ -44,7 +44,7 @@ class TestTheGridItself:
         """
         from digitalearth.web.decoration import _graticule_features
 
-        features = _graticule_features(spacing)["features"]
+        features = _graticule_features(spacing, spacing)["features"]
         lines = [f["geometry"]["coordinates"] for f in features]
         vertical = [c for c in lines if c[0][0] == c[-1][0]]
         horizontal = [c for c in lines if c[0][1] == c[-1][1]]
@@ -57,7 +57,7 @@ class TestTheGridItself:
         """-180 and +180 are the same line; drawing both doubles it."""
         from digitalearth.web.decoration import _graticule_features
 
-        features = _graticule_features(10.0)["features"]
+        features = _graticule_features(10.0, 10.0)["features"]
         longitudes = [
             f["geometry"]["coordinates"][0][0]
             for f in features
@@ -71,7 +71,8 @@ class TestTheGridItself:
         from digitalearth.web.decoration import _graticule_features
 
         labels = {
-            f["properties"]["label"] for f in _graticule_features(10.0)["features"]
+            f["properties"]["label"]
+            for f in _graticule_features(10.0, 10.0)["features"]
         }
         assert "10°E" in labels
         assert "10°W" in labels
@@ -83,7 +84,7 @@ class TestTheGridItself:
         """A projection curves a meridian, which it cannot do with only two vertices."""
         from digitalearth.web.decoration import _graticule_features
 
-        features = _graticule_features(30.0)["features"]
+        features = _graticule_features(30.0, 30.0)["features"]
         meridian = next(
             f
             for f in features

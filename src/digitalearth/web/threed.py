@@ -14,9 +14,10 @@ extrusion reuses the base ``_color_expr`` for graduated/continuous colouring; de
 ``_add_deck_layer`` accumulator. maplibre/numpy are imported lazily.
 """
 
+import warnings
 from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
-from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.web.base import _require_layer_api
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
@@ -93,7 +94,7 @@ class ThreeDMixin(_MixinBase):
         self._index_layer(layer_id, None, kind="extrusion", source=gdf)
         return self._queue(apply)
 
-    def terrain(
+    def terrain_tiles(
         self,
         dem: Optional[str] = None,
         *,
@@ -126,6 +127,38 @@ class ThreeDMixin(_MixinBase):
 
         return self._queue(apply)
 
+    #: Deprecated spelling of :meth:`terrain_tiles` (#299). The 3-D tier's `terrain` takes a pyramids DEM
+    #: and this one a terrain-RGB tile URL; one name cannot mean both, so the tile reader says so.
+    terrain = renamed_method(new="terrain_tiles", old="terrain", owner="WebMap")
+
+    def projection(self, name: str = "globe") -> Self:
+        """Draw the map in another projection, by name.
+
+        Args:
+            name: `"globe"` for the sphere, `"mercator"` for the flat Web-Mercator map. MapLibre's other
+                projection names are passed through as they are.
+
+        Returns:
+            This map (chainable).
+
+        Examples:
+            - The globe is a projection, which is what the interactive tier already calls it:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().projection("globe").viewport.globe
+                True
+
+                ```
+            - And back again:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().projection("globe").projection("mercator").viewport.globe
+                False
+
+                ```
+        """
+        return self._set_projection(str(name))
+
     def globe(self, enabled: bool = True) -> Self:
         """Switch the map to the spherical globe projection (or back to Web Mercator).
 
@@ -136,7 +169,23 @@ class ThreeDMixin(_MixinBase):
             This map (chainable).
         """
         _require_layer_api()
-        projection = "globe" if enabled else "mercator"
+        warnings.warn(
+            "WebMap.globe() is deprecated and will be removed in a future release; use "
+            'WebMap.projection("globe") instead',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._set_projection("globe" if enabled else "mercator")
+
+    def _set_projection(self, projection: str) -> Self:
+        """Switch the map's projection and record it on the view.
+
+        Args:
+            projection: The MapLibre projection name.
+
+        Returns:
+            This map (chainable).
+        """
         self._projection = projection
 
         def apply(widget: Any) -> None:

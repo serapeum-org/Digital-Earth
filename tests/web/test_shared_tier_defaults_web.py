@@ -78,7 +78,7 @@ class TestTheAnimationRateIsTheSharedOne:
 
         from digitalearth.web import export
 
-        source = inspect.getsource(export.ExportMixin.animate)
+        source = inspect.getsource(export.ExportMixin.save_animation)
         assert "default=DEFAULT_FPS," in source
 
 

@@ -3,7 +3,7 @@
 ``WebMapBase`` owns the layer registry (in add order), the display-CRS reproject-through-pyramids
 plumbing, and the render/save/show lifecycle around the ``maplibre`` (py-maplibregl) anywidget. Capability
 mixins (raster, vector, big-data, 3-D, temporal, decoration, export) live in sibling modules and add
-``add_raster()`` / ``choropleth()`` / … builder methods that call ``self.add_layer(...)``; the public
+``field()`` / ``choropleth()`` / … builder methods that call ``self.add_layer(...)``; the public
 :class:`digitalearth.web.map.WebMap` composes the base with those mixins — mirroring the 2-D
 ``Map(GeoLayerBase, RasterMixin, …)``, the 3-D ``Scene3D(Scene3DBase, …)`` and the interactive
 ``InteractiveMap(InteractiveMapBase, …)`` patterns exactly.
@@ -31,6 +31,7 @@ from digitalearth.base.bigdata import (
 )
 from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.custom import custom_kind
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
@@ -462,7 +463,7 @@ class WebMapBase:
         #: can override it with its own ``big_data_threshold=`` without changing the map's setting.
         self.big_data_threshold = DEFAULT_BIG_DATA_THRESHOLD
         #: What the most recently drawn raster's values are measured in, or ``None``: the caller's
-        #: ``add_raster(units=)`` / ``contours(units=)`` when they named one, else the
+        #: ``field(units=)`` / ``contours(units=)`` when they named one, else the
         #: :func:`~digitalearth.base.autostyle.auto_style` hint. Carried so a key built from that raster's
         #: values can say what they are measured in (see :meth:`_auto_units`).
         self.last_units: Optional[str] = None
@@ -690,7 +691,7 @@ class WebMapBase:
         values = (float(xs[0]), float(ys[0]), float(xs[1]), float(ys[1]))
         return values if all(math.isfinite(v) for v in values) else None
 
-    def fit_bounds(
+    def set_bounds(
         self,
         bounds: Optional[Any] = None,
         *,
@@ -721,21 +722,21 @@ class WebMapBase:
             - Frame on an explicit box:
                 ```python
                 >>> from digitalearth.web import WebMap                     # doctest: +SKIP
-                >>> WebMap().basemap().fit_bounds((4.0, 51.0, 7.0, 54.0))   # doctest: +SKIP
+                >>> WebMap().basemap().set_bounds((4.0, 51.0, 7.0, 54.0))  # doctest: +SKIP
 
                 ```
         """
         if bounds is None:
             if self._data_bounds is None:
                 raise ValueError(
-                    "fit_bounds() has nothing to frame on: no layer with an extent has been added yet. "
+                    "set_bounds() has nothing to frame on: no layer with an extent has been added yet. "
                     "Add the data first, or pass bounds=(west, south, east, north)."
                 )
             bounds = list(self._data_bounds)
         values = [float(value) for value in bounds]
         if len(values) != 4:
             raise ValueError(
-                f"fit_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
+                f"set_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
             )
         west, south, east, north = values
         self._fit = {
@@ -746,6 +747,9 @@ class WebMapBase:
             "animate": bool(animate),
         }
         return self
+
+    #: Deprecated spelling of :meth:`set_bounds`, the contract's name for framing a figure on a region (#299).
+    fit_bounds = renamed_method(new="set_bounds", old="fit_bounds", owner="WebMap")
 
     def _switcher_request(self) -> Optional[dict]:
         """Return the layer switcher to add to the widget being built, or ``None`` for no switcher.
@@ -906,7 +910,7 @@ class WebMapBase:
             - A region asked for with `fit_bounds` frames the view:
                 ```python
                 >>> from digitalearth.web import WebMap
-                >>> WebMap().fit_bounds([3.0, 50.0, 7.0, 54.0]).viewport.bounds.as_bbox()
+                >>> WebMap().set_bounds([3.0, 50.0, 7.0, 54.0]).viewport.bounds.as_bbox()
                 [3.0, 50.0, 7.0, 54.0]
 
                 ```
@@ -925,6 +929,29 @@ class WebMapBase:
             center=tuple(self.center) if self.center is not None else None,
             zoom=float(self.zoom) if self.zoom is not None else None,
         )
+
+    def _as_display_point(self, x: float, y: float, crs: Any) -> tuple:
+        """Return one coordinate pair in the CRS this tier places data in.
+
+        Args:
+            x: The x coordinate, in `crs`.
+            y: The y coordinate, in `crs`.
+            crs: What they are measured in.
+
+        Returns:
+            `(lon, lat)` in the display CRS. A point already in it is returned unchanged, so the common call
+            costs nothing; anything else goes through pyramids, as every other placement in this tier does.
+
+        Raises:
+            ValueError: when the point cannot be expressed in the display CRS.
+        """
+        if crs is None or same_crs(crs, self.crs):
+            return x, y
+        # A point is a rectangle with no width: `Bounds.to_crs` is the tier's own reprojection, through
+        # pyramids, and using it keeps geopandas out of this module (the import guard, and the rule that
+        # pyramids owns every CRS operation).
+        moved = Bounds(x, y, x, y, crs=crs).to_crs(self.crs)
+        return float(moved.xmin), float(moved.ymin)
 
     def _record_furniture(
         self, kind: str, *, anchor: Any = None, **options: Any
@@ -1082,6 +1109,96 @@ class WebMapBase:
         kind_info(kind)
         held = self._layer_tree.get(layer_id)
         self._layer_tree = self._layer_tree.replace(replace_fields(held, kind=kind))
+
+    def get_layer(self, layer_id: str) -> LayerSpec:
+        """Return the description of one layer, by id.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            Its :class:`~digitalearth.base.spec.LayerSpec` — kind, source, symbology, band and visibility.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - What a builder recorded, read back by id:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> points = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> WebMap().points(points, name="obs").get_layer("obs").kind
+                'points'
+
+                ```
+        """
+        present = self.layer_ids
+        if layer_id not in present:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; added layers are {present}"
+            )
+        return self._layer_tree.get(layer_id)
+
+    def colorbar(
+        self,
+        layer_id: Optional[str] = None,
+        *,
+        label: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Show the continuous colour key of a layer.
+
+        The contract's name for a colour key (#299, #261). On this tier the key is drawn by :meth:`legend`,
+        which builds a panel from what a layer's classification recorded; a continuous ramp is that panel with
+        the ramp's ends labelled, which is why this is a thin call onto it rather than a second mechanism.
+
+        Args:
+            layer_id: Which layer's key to show. `None` takes the most recently classified layer, which is
+                what the tier recorded before layers had ids.
+            label: What to call the key — the variable and its units, usually.
+            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if `layer_id` names no layer on this map.
+            ValueError: when there is no classification to describe, as :meth:`legend` raises.
+
+        Examples:
+            - A classified layer's key, titled:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth.web import WebMap
+                >>> squares = gpd.GeoDataFrame(
+                ...     {"pop": [1, 9]},
+                ...     geometry=[
+                ...         Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                ...         Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+                ...     ],
+                ...     crs=4326,
+                ... )
+                >>> m = WebMap().choropleth(squares, column="pop", name="area")
+                >>> sorted(m.colorbar("area", label="People")._panels)
+                ['legend']
+
+                ```
+            - `visible=False` asks for no key at all, and draws none:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().colorbar(visible=False)._panels
+                {}
+
+                ```
+        """
+        if not visible:
+            return self
+        if layer_id is not None:
+            self.get_layer(layer_id)  # refuses an id nobody drew, by name
+        return self.legend(title=label)
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.
@@ -1272,7 +1389,7 @@ class WebMapBase:
                 ground cover or a label.
 
         Returns:
-            This map, so builder calls chain: ``m.add_raster(dem).basemap()``.
+            This map, so builder calls chain: ``m.field(dem).basemap()``.
 
         Raises:
             ValueError: if `band` is not one of the four bands.
@@ -1437,7 +1554,7 @@ class WebMapBase:
         if isinstance(getattr(data, "columns", None), int):
             raise TypeError(
                 f"{method}() does not take a raster; got {type(data).__name__}. For a single raster use "
-                f"add_raster(); for a raster time stack pass a DatasetCollection to timeslider()."
+                f"field(); for a raster time stack pass a DatasetCollection to timeslider()."
             )
 
     @staticmethod
@@ -1484,7 +1601,7 @@ class WebMapBase:
                 >>> try:
                 ...     WebMap._require_vector(42, "points")
                 ... except TypeError as err:
-                ...     print("add_raster" in str(err), "DatasetCollection" in str(err))
+                ...     print("field" in str(err), "DatasetCollection" in str(err))
                 True True
 
                 ```
@@ -1510,7 +1627,7 @@ class WebMapBase:
             )
         raise TypeError(
             f"{method}() needs a vector layer (a pyramids FeatureCollection / GeoDataFrame); got "
-            f"{type(features).__name__}. For a single raster use add_raster(); for a raster time stack "
+            f"{type(features).__name__}. For a single raster use field(); for a raster time stack "
             f"use timeslider() with a DatasetCollection."
         )
 

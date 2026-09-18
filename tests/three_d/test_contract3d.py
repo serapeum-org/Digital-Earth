@@ -124,11 +124,13 @@ class TestC2Fps:
         Test scenario:
             The tier used to carry two different defaults (12 for ``orbit``, 8 for ``animate``), neither
             matching the other backends. One constant now backs both, so "the default speed" is one number.
+            The callback loop is ``record`` since #299 — ``animate`` means three different things across the
+            tiers — and ``animate`` forwards to it.
         """
         import inspect
 
         assert DEFAULT_FPS == 3.0, f"the shared default must be 3.0, got {DEFAULT_FPS}"
-        for method in ("orbit", "animate"):
+        for method in ("orbit", "record"):
             signature = inspect.signature(getattr(Scene3D, method))
             assert "fps" in signature.parameters, f"{method}() must take fps"
             assert signature.parameters["fps"].default is None, (
@@ -150,12 +152,12 @@ class TestC2Fps:
         scene.terrain(_dem())
         opened = mocker.patch.object(scene.plotter, "open_gif")
         mocker.patch.object(scene.plotter, "write_frame")
-        scene.animate([1.0], str(tmp_path / "a.gif"), lambda s, f: None, fps=7.0)
+        scene.record([1.0], str(tmp_path / "a.gif"), lambda s, f: None, fps=7.0)
         assert opened.call_args.kwargs["fps"] == 7.0, (
             f"the writer must be opened at the fps given, got {opened.call_args!r}"
         )
 
-    @pytest.mark.parametrize("method", ["orbit", "animate"])
+    @pytest.mark.parametrize("method", ["orbit", "record"])
     def test_framerate_still_works_and_warns(self, scene, tmp_path, mocker, method):
         """The deprecated ``framerate=`` still sets the frame rate, and says so once.
 
@@ -178,7 +180,7 @@ class TestC2Fps:
         call = (
             (lambda: scene.orbit(out, n_frames=4, framerate=9.0))
             if method == "orbit"
-            else (lambda: scene.animate([1.0], out, lambda s, f: None, framerate=9.0))
+            else (lambda: scene.record([1.0], out, lambda s, f: None, framerate=9.0))
         )
         with pytest.warns(DeprecationWarning, match="fps"):
             call()
@@ -200,7 +202,7 @@ class TestC2Fps:
             used to raise ``ValueError`` here while web silently preferred the old spelling).
         """
         with pytest.raises(TypeError) as excinfo:
-            scene.animate(
+            scene.record(
                 [1.0],
                 str(tmp_path / "a.gif"),
                 lambda s, f: None,

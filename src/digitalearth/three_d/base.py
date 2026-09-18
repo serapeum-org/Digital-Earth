@@ -1052,6 +1052,102 @@ class Scene3DBase:
             return None
         return drawn[0] if part == "mesh" else drawn[1]
 
+    def get_layer(self, layer_id: str) -> LayerSpec:
+        """Return the description of one layer, by id.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            Its :class:`~digitalearth.base.spec.LayerSpec` — kind, source, symbology, band and visibility.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - What a builder recorded, read back by id:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
+                >>> scene.get_layer("terrain-1").kind
+                'terrain'
+                >>> scene.close()
+
+                ```
+        """
+        if layer_id not in self._figure.layers:
+            raise KeyError(
+                f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
+            )
+        return self._figure.layers.get(layer_id)
+
+    def replace_layer(self, layer: LayerSpec) -> Self:
+        """Swap a layer's description for another, keeping its id and its place in draw order.
+
+        This is how a layer is restyled or re-pointed after it has been added: the renderer draws it again
+        from the new description, since VTK bakes a colormap into the mesh it built.
+
+        Args:
+            layer: The new description. Its id names the layer it replaces.
+
+        Returns:
+            This scene (chainable).
+
+        Raises:
+            KeyError: if no layer has that id.
+            ValueError: if `layer` is not a `LayerSpec`.
+
+        Examples:
+            - A layer redrawn in another colormap keeps its id:
+                ```python
+                >>> import numpy as np
+                >>> from dataclasses import replace
+                >>> from digitalearth.base.spec import Symbology
+                >>> from digitalearth.base.sources import get_source
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> _ = scene.terrain(get_source(np.add.outer(np.arange(4.0), np.arange(5.0))))
+                >>> held = scene.get_layer("terrain-1")
+                >>> _ = scene.replace_layer(replace(held, symbology=Symbology(props={"cmap": "magma"})))
+                >>> scene.get_layer("terrain-1").symbology.props["cmap"]
+                'magma'
+                >>> scene.close()
+
+                ```
+        """
+        if layer.id not in self._figure.layers:
+            raise KeyError(
+                f"no layer {layer.id!r} in this scene; its layers are {self.layer_ids}"
+            )
+        self._change(self._figure_with(layers=self._figure.layers.replace(layer)))
+        return self
+
+    def render(self) -> Any:
+        """Build and return the renderer's own object — this tier's plotter.
+
+        Every tier answers to `render()` with the thing its engine draws on, so a caller who wants to reach
+        past the facade has one name to learn. Here that is the `pyvista.Plotter`, built on first use (#290).
+
+        Returns:
+            The scene's plotter, with every layer drawn on it.
+
+        Examples:
+            - The plotter is what a 3-D scene renders to:
+                ```python
+                >>> from digitalearth.three_d import Scene3D
+                >>> scene = Scene3D(off_screen=True)
+                >>> scene.render() is scene.plotter
+                True
+                >>> scene.close()
+
+                ```
+        """
+        self._apply_camera()
+        return self.plotter
+
     def remove_layer(self, layer_id: str) -> Self:
         """Take a layer off the scene, by id.
 

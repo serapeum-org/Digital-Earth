@@ -30,9 +30,9 @@ class TestTheAnimationRateIsTheSharedOne:
         """
         assert animation3d.DEFAULT_FPS is DEFAULT_FPS
 
-    @pytest.mark.parametrize("method", ["orbit", "animate"])
+    @pytest.mark.parametrize("method", ["orbit", "record"])
     def test_both_entry_points_resolve_to_the_shared_rate(self, method):
-        """``orbit`` and ``animate`` fall back to the shared rate when ``fps`` is omitted.
+        """``orbit`` and ``record`` fall back to the shared rate when ``fps`` is omitted.
 
         Args:
             method: The animation entry point to inspect.
@@ -40,7 +40,7 @@ class TestTheAnimationRateIsTheSharedOne:
         Test scenario:
             Both take ``fps=None`` as the "not passed" sentinel and hand it to ``renamed_parameter`` with a
             ``default=``; that default is the number a caller actually animates at, so it is what has to be
-            the shared one. This tier used to answer 12 for ``orbit`` and 8 for ``animate``.
+            the shared one. This tier used to answer 12 for ``orbit`` and 8 for its callback loop, which is ``record`` since #299.
         """
         import inspect
 

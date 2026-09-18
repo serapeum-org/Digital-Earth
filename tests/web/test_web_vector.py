@@ -429,7 +429,7 @@ class TestVectorBuilderRasterGuard:
         assert message.startswith(f"{method}()"), (
             f"{method} did not name itself: {message}"
         )
-        assert "add_raster" in message, (
+        assert "field" in message, (
             f"{method} did not name the raster builder: {message}"
         )
         assert "argument of type" not in message, (

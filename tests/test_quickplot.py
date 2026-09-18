@@ -180,7 +180,7 @@ def test_web_basemap_branches_reach_the_tier(dataset, mocker, basemap, expected_
     """
     web = pytest.importorskip("digitalearth.web")
     tiles = mocker.patch.object(web.WebMap, "basemap")
-    mocker.patch.object(web.WebMap, "add_raster")
+    mocker.patch.object(web.WebMap, "field")
     qp.quickplot(dataset, backend="web", basemap=basemap)
     assert tiles.call_args.args == expected_args, (
         f"basemap={basemap!r} must call basemap{expected_args}, got {tiles.call_args!r}"

@@ -792,7 +792,7 @@ def _quickmap_web(
     if isinstance(data, FeatureCollection):
         _draw_web_vector(scene, data, kwargs)
     elif isinstance(data, Dataset):
-        scene.add_raster(data, **kwargs)
+        scene.field(data, **kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
     if basemap:

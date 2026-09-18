@@ -24,7 +24,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, Optional
 
 from digitalearth.base.animation import DEFAULT_FPS
-from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.web.base import DEFAULT_TITLE
 
 # `DEFAULT_FPS` is imported above rather than declared here: the rate every tier's animation entry point
@@ -251,7 +251,7 @@ class ExportMixin(_MixinBase):
             "a driver."
         )
 
-    def animate(
+    def save_animation(
         self,
         path: str,
         *,
@@ -332,100 +332,13 @@ class ExportMixin(_MixinBase):
             _write_gif(images, path, duration=1.0 / float(fps), loop=loop)
         return pathlib.Path(path)
 
-    def to_gif(
-        self,
-        path: str,
-        *,
-        fps: Optional[float] = None,
-        loop: int = 0,
-        title: str = DEFAULT_TITLE,
-        duration: Optional[float] = None,
-    ) -> pathlib.Path:
-        """Deprecated alias of :meth:`animate` — same arguments, same result.
-
-        The signature is spelled out rather than forwarded as ``**kwargs`` so that the deprecated
-        ``duration=`` is resolved **here**, one frame below the caller. Forwarding it left
-        :func:`~digitalearth.base.deprecation.renamed_parameter` counting frames from :meth:`animate`, so the
-        warning about the caller's own keyword was attributed to this module instead of to their line
-        (review M9) — a warning nobody can act on, since the file it names is not theirs.
-
-        Args:
-            path: Where to write the GIF.
-            fps: Frames per second — see :meth:`animate`, whose default applies when this is left ``None``.
-            loop: How many times to repeat; ``0`` loops forever.
-            title: HTML document title used while rendering.
-            duration: **Deprecated** spelling of the frame rate, in seconds held per frame; converted to
-                ``fps`` exactly as :meth:`animate` converts it.
-
-        Returns:
-            The :class:`pathlib.Path` written.
-
-        Raises:
-            TypeError: when both ``fps`` and the deprecated ``duration`` are passed.
-            ValueError: whatever :meth:`animate` raises — no time series, fewer than two
-                steps, or a non-finite/non-positive rate. The ``DeprecationWarning`` is emitted
-                first either way, so an old call is told to move even when it then fails for a
-                reason of its own.
-            ImportError: when no headless browser is installed to render the frames.
-
-        Warns:
-            DeprecationWarning: always, naming :meth:`animate` as the spelling to move to; and a second
-                time when the deprecated ``duration=`` is passed instead of ``fps=``. Both are raised
-                from this frame, so both point at the caller's own line.
-
-        Examples:
-            - The old name still does the work, but says it is going away first. There is no series
-              to animate here, so the call raises straight after warning — the warning is the part
-              this example is about, and it needs no engine to show:
-                ```python
-                >>> import warnings
-                >>> from digitalearth.web import WebMap
-                >>> with warnings.catch_warnings(record=True) as caught:
-                ...     warnings.simplefilter("always")
-                ...     try:
-                ...         WebMap().to_gif("steps.gif")
-                ...     except ValueError as error:
-                ...         print(str(error).split(";")[0])
-                animate() needs a raster time series with at least two steps
-                >>> print(caught[0].category.__name__)
-                DeprecationWarning
-                >>> print(str(caught[0].message).split(";")[0])
-                WebMap.to_gif() is deprecated and will be removed in a future release
-
-                ```
-            - The message names its own replacement, so the migration is a rename and nothing
-              else — same arguments, same GIF, no warning:
-                ```python
-                >>> from digitalearth.web import WebMap              # doctest: +SKIP
-                >>> from pyramids.dataset.collection import DatasetCollection   # doctest: +SKIP
-                >>> stack = DatasetCollection.from_files(["jan.tif", "feb.tif"])  # doctest: +SKIP
-                >>> m = WebMap().basemap().timeslider(stack)         # doctest: +SKIP
-                >>> m.animate("steps.gif", fps=5).name               # doctest: +SKIP
-                'steps.gif'
-
-                ```
-
-        See Also:
-            animate: the method this forwards to, and the name to write in new code.
-        """
-        warnings.warn(
-            "WebMap.to_gif() is deprecated and will be removed in a future release; use "
-            "WebMap.animate() instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        # Resolved here, not in `animate`: from this frame the default stacklevel of 3
-        # (renamed_parameter -> to_gif -> the caller) lands the warning on the user's line.
-        fps = renamed_parameter(
-            new="fps",
-            value=fps,
-            old="duration",
-            alias=duration,
-            caller="WebMap.to_gif()",
-            default=None,
-            convert=_fps_from_duration,
-        )
-        return self.animate(path, fps=fps, loop=loop, title=title)
+    #: Deprecated spellings of :meth:`save_animation`, the contract's name for writing a sequence of frames
+    #: to a file (#299). `animate` means a matplotlib `FuncAnimation` on static and a callback loop in 3-D, so
+    #: the file-writing meaning takes the name it already had on those tiers; `to_gif` was this tier's own
+    #: older name. Both forward and warn.
+    save_gif = save_animation
+    animate = renamed_method(new="save_animation", old="animate", owner="WebMap")
+    to_gif = renamed_method(new="save_animation", old="to_gif", owner="WebMap")
 
     def _temporal_frames(self) -> list:
         """Return the visible-layer set for each time step, oldest first.
