@@ -172,7 +172,7 @@ class AnimationMixin(_MixinBase):
             ```python
             >>> from digitalearth.three_d.animation import AnimationMixin
             >>> sorted(name for name in vars(AnimationMixin) if not name.startswith("_"))
-            ['animate', 'jupyter', 'orbit']
+            ['animate', 'jupyter', 'orbit', 'record']
             >>> AnimationMixin.__bases__
             (<class 'object'>,)
 

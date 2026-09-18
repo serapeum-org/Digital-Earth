@@ -131,7 +131,12 @@ class TerrainMixin(_MixinBase):
         (default) or pass ``scalars=None`` to colour by something else / a uniform colour.
 
         The raster is placed in the scene's display CRS: it sets that CRS when the scene has none, and is
-        reprojected through pyramids when it is in another. Metre elevations over a geographic scene are
+        reprojected through pyramids when it is in another.
+
+        **The surface spans the cell centres, not the cell edges.** One height is set per node, at the middle
+        of each cell, which is what a surface through sampled elevations means — so the mesh is half a cell
+        narrower than the raster's own extent on each side. The 2-D tiers draw the cells themselves and cover
+        that extent (#301); whether a draped surface should too is decided with draping (#202). Metre elevations over a geographic scene are
         converted to degrees by the scene's CRS, not the raster's.
 
         **Vertical exaggeration is a property of the scene, not of this layer.** ``z_exaggeration`` sets

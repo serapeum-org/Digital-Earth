@@ -213,6 +213,10 @@ class GlobeMixin(_MixinBase):
 
         A globe draws in EPSG:4326, and declares that as the scene's display CRS when the scene has none.
 
+        **The sphere spans the cell centres, not the cell edges**, as `terrain` does: geovista places one
+        vertex per lon/lat pair, so a global field is drawn half a cell inside its own extent at each pole and
+        meridian (#301).
+
         Args:
             data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts), or an
                 already-built :class:`~digitalearth.base.sources.Source` whose x/y are longitude/latitude and whose

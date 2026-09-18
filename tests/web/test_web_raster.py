@@ -57,10 +57,19 @@ class TestImageCoordinates:
     """``_image_coordinates`` returns the MapLibre image corners ``[TL, TR, BR, BL]`` in ``[lng, lat]``."""
 
     def test_corner_order(self):
+        """The corners run top-left, top-right, bottom-right, bottom-left, around the cells.
+
+        Test scenario:
+            Since #301 the corners are the edges of the rectangle the cells cover, not their centres: three
+            one-degree cells centred at 10/11/12 span 9.5 to 12.5, so an image source is no longer drawn half
+            a cell inside its own data on every side.
+        """
         x = np.array([10.0, 11.0, 12.0])
         y = np.array([50.0, 51.0, 52.0])
         corners = WebMap()._image_coordinates(x, y)
-        assert corners == [[10.0, 52.0], [12.0, 52.0], [12.0, 50.0], [10.0, 50.0]]
+        assert corners == [[9.5, 52.5], [12.5, 52.5], [12.5, 49.5], [9.5, 49.5]], (
+            corners
+        )
 
 
 class TestAddRasterNeedsEngine:

@@ -268,6 +268,97 @@ class Bounds:
                 crs,
             )
 
+    @classmethod
+    def cell_edges(cls, x: Any, y: Any, crs: Any, *, step: Any = None) -> "Bounds":
+        """Return the rectangle a raster's cells cover, from the axes through their centres.
+
+        A raster is a grid of cells, and its coordinates name the middle of each one. An extent taken from the
+        smallest and largest of those stops half a cell short on every side: the image is one cell narrower and
+        one shorter than the data, and every pixel is drawn at `(n - 1) / n` of its size. On
+        `examples/data/acc4000.tif` — 14 by 13 cells of 4,000 m — that is 2,000 m missing from each edge, and
+        the picture is wrong by exactly the amount nobody notices.
+
+        This is the rule that places one: half the outermost spacing outward on each side.
+
+        Args:
+            x: The cell-centre x coordinates, ascending or descending.
+            y: The cell-centre y coordinates, ascending or descending.
+            crs: What they are measured in, stored as given.
+            step: `(dx, dy)`, the cell size, for an axis with one cell — which has no spacing of its own to
+                read. `None` leaves a one-cell axis as a line, since guessing a width would place the data
+                somewhere nobody asked for.
+
+        Returns:
+            The rectangle, ascending in both axes whichever way the axes run.
+
+        Raises:
+            ValueError: for an empty axis, or coordinates that are not numbers.
+
+        Examples:
+            - Three cells of 10,000 m, centred at 5,000/15,000/25,000, cover 0 to 30,000:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> axis = [5000.0, 15000.0, 25000.0]
+                >>> Bounds.cell_edges(axis, axis, crs=32618).as_bbox()
+                [0.0, 0.0, 30000.0, 30000.0]
+
+                ```
+            - A descending axis — the row order a north-up raster is stored in — covers the same rectangle:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds.cell_edges([5.0, 15.0, 25.0], [25.0, 15.0, 5.0], crs=4326).as_bbox()
+                [0.0, 0.0, 30.0, 30.0]
+
+                ```
+            - A single cell has no spacing to read, so its width is given or it stays a line:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds.cell_edges([5.0], [5.0], crs=4326, step=(10.0, 10.0)).as_bbox()
+                [0.0, 0.0, 10.0, 10.0]
+
+                ```
+        """
+        import numpy as np
+
+        xs = np.asarray(x, dtype="float64").ravel()
+        ys = np.asarray(y, dtype="float64").ravel()
+        if xs.size == 0 or ys.size == 0:
+            raise ValueError(
+                "Bounds.cell_edges needs coordinates on both axes; got "
+                f"{xs.size} x and {ys.size} y"
+            )
+        steps = (None, None) if step is None else (step[0], step[1])
+        west, east = cls._edges(xs, steps[0])
+        south, north = cls._edges(ys, steps[1])
+        return cls(west, south, east, north, crs)
+
+    @staticmethod
+    def _edges(axis: Any, step: Any) -> Tuple[float, float]:
+        """Return where one axis' cells start and end.
+
+        Args:
+            axis: The cell centres along the axis.
+            step: The cell size, for an axis with one cell; `None` leaves such an axis unwidened.
+
+        Returns:
+            `(low, high)`, ascending.
+        """
+        import numpy as np
+
+        low, high = float(np.nanmin(axis)), float(np.nanmax(axis))
+        if axis.size > 1:
+            ordered = np.sort(axis)
+            # Half the outermost spacing at each end, so an irregular grid is placed by its own cells rather
+            # than by an average that fits none of them.
+            return (
+                low - 0.5 * float(ordered[1] - ordered[0]),
+                high + 0.5 * float(ordered[-1] - ordered[-2]),
+            )
+        if step is None:
+            return low, high
+        half = 0.5 * abs(float(step))
+        return low - half, high + half
+
     @staticmethod
     def _four(values: Sequence[float], label: str) -> Tuple[float, float, float, float]:
         """Return exactly four floats, or say which argument was the wrong length.

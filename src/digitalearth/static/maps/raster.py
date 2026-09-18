@@ -194,7 +194,9 @@ class RasterMixin(_MixinBase):
             in the display one, and a CRS that changes nothing is a parameter every caller must think about
             for no benefit.
         """
-        return Bounds.from_points(x, y, crs=None).as_bbox()
+        # The rectangle the cells cover, not the line through their centres: an extent from the centres
+        # insets the image by half a cell on every side (#301).
+        return Bounds.cell_edges(x, y, crs=None).as_bbox()
 
     def _extent(self, ds: Any) -> List[float]:
         """Return the bbox-order extent of a dataset's cell-centre coords, as cleopatra takes it.

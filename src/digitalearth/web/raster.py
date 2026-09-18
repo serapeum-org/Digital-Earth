@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_method
-from digitalearth.base.spec import Scale
+from digitalearth.base.spec import Bounds, Scale
 from digitalearth.web.base import _require_layer_api
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
@@ -350,12 +350,9 @@ class RasterMixin(_MixinBase):
             The four corners top-left, top-right, bottom-right, bottom-left as ``[lng, lat]`` pairs — the
             order MapLibre's image source expects.
         """
-        import numpy as np
-
-        xs = np.asarray(x, dtype=float)
-        ys = np.asarray(y, dtype=float)
-        west, east = float(xs.min()), float(xs.max())
-        south, north = float(ys.min()), float(ys.max())
+        # The corners of the rectangle the cells cover. Taken from the centres, an image source is drawn
+        # half a cell inside the data on every side, and the map frames on that inset too (#301).
+        west, south, east, north = Bounds.cell_edges(x, y, crs=None).as_bbox()
         return [[west, north], [east, north], [east, south], [west, south]]
 
     @staticmethod
