@@ -64,23 +64,8 @@ from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
 from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
 from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
-#: Which of ``quickmap``'s map-shaped parameters each backend can actually honour. Anything a caller passes
-#: that is not listed for their backend is refused by name rather than dropped (:func:`_reject_unsupported`).
-#:
-#: * ``matplotlib`` is the only tier with an extent setter, so it is the only one that takes ``domain``.
-#: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
-#:   colorbar toggle.
-#: * ``3d`` draws every layer in one display CRS, given as ``crs`` or taken from the first layer
-#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept, and its
-#:   scalar bar is the ``colorbar`` toggle.
-#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
-#:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
-#:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
-#:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
-#:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
-#:   and stays with U-3.
-
-#: Which capability each of `quickmap`'s map-shaped parameters needs, for the tiers that declare theirs (#294).
+#: Which capability each of `quickmap`'s map-shaped parameters needs, in the vocabulary every tier now
+#: declares itself in (#294).
 #: A keyword is honoured when the backend supports any of the capabilities listed for it: `colorbar=` is the
 #: web tier's legend and the 3-D tier's scalar bar, which are one request with two names.
 _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
@@ -147,6 +132,23 @@ def _refusal_reason(backend: str, keyword: str) -> str:
     return next((reason for reason in reasons if reason), "")
 
 
+#: Which of ``quickmap``'s map-shaped parameters each backend can actually honour. Anything a caller passes
+#: that is not listed for their backend is refused by name rather than dropped (:func:`_reject_unsupported`).
+#: Every row is **derived** from that tier's own :class:`~digitalearth.base.capabilities.Capabilities`
+#: (#294): the rows are read here, and decided there.
+#:
+#: * ``matplotlib`` is the only tier with an extent setter, so it is the only one that takes ``domain``.
+#: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
+#:   colorbar toggle.
+#: * ``3d`` draws every layer in one display CRS, given as ``crs`` or taken from the first layer
+#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept, and its
+#:   scalar bar is the ``colorbar`` toggle.
+#: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
+#:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
+#:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
+#:   recorded a classification, and nothing is tolerated once the builder is reached (#254). Renaming the
+#:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
+#:   and stays with U-3.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
     backend: _declared_row(declaration)
     for backend, declaration in _DECLARATIONS.items()

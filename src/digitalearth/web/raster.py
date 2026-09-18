@@ -342,6 +342,11 @@ class RasterMixin(_MixinBase):
     def _image_coordinates(x: Any, y: Any) -> List[List[float]]:
         """Return the image-source corner coordinates ``[TL, TR, BR, BL]`` in ``[lng, lat]``.
 
+        The corners are the cell *edges* — half the outermost spacing beyond the centres on each side
+        (:meth:`Bounds.cell_edges`). Taken from the centres themselves, an image source is drawn half a cell
+        inside the data all the way round, and a map framed on those corners is inset by the same amount
+        (#301).
+
         Args:
             x: 1-D x / longitude cell-centre coordinates (display CRS, lon/lat).
             y: 1-D y / latitude cell-centre coordinates.
@@ -350,8 +355,6 @@ class RasterMixin(_MixinBase):
             The four corners top-left, top-right, bottom-right, bottom-left as ``[lng, lat]`` pairs — the
             order MapLibre's image source expects.
         """
-        # The corners of the rectangle the cells cover. Taken from the centres, an image source is drawn
-        # half a cell inside the data on every side, and the map frames on that inset too (#301).
         west, south, east, north = Bounds.cell_edges(x, y, crs=None).as_bbox()
         return [[west, north], [east, north], [east, south], [west, south]]
 

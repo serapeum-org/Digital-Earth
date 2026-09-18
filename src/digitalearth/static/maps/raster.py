@@ -180,7 +180,12 @@ class RasterMixin(_MixinBase):
 
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
-        """Return the bbox-order extent enclosing 1-D x/y coordinate arrays, as cleopatra takes it.
+        """Return the bbox-order extent of the cells 1-D x/y centres describe, as cleopatra takes it.
+
+        The coordinates name the middle of each cell, and the extent is the rectangle those cells *cover* —
+        half the outermost spacing further out on every side (:meth:`Bounds.cell_edges`). Taken from the
+        smallest and largest centre instead, the image would be drawn one cell narrower and one shorter than
+        the data, with every pixel at ``(n - 1) / n`` of its size (#301).
 
         Args:
             x: X coordinates, already in the display CRS.
@@ -194,18 +199,16 @@ class RasterMixin(_MixinBase):
             in the display one, and a CRS that changes nothing is a parameter every caller must think about
             for no benefit.
         """
-        # The rectangle the cells cover, not the line through their centres: an extent from the centres
-        # insets the image by half a cell on every side (#301).
         return Bounds.cell_edges(x, y, crs=None).as_bbox()
 
     def _extent(self, ds: Any) -> List[float]:
-        """Return the bbox-order extent of a dataset's cell-centre coords, as cleopatra takes it.
+        """Return the bbox-order extent of the cells a dataset's coordinates describe, as cleopatra takes it.
 
         Args:
-            ds: The display-CRS source whose ``x``/``y`` coordinates bound the image.
+            ds: The display-CRS source whose ``x``/``y`` cell centres bound the image.
 
         Returns:
-            ``[xmin, ymin, xmax, ymax]``.
+            ``[xmin, ymin, xmax, ymax]`` — the rectangle the cells cover, as :meth:`_extent_of` places it.
         """
         return self._extent_of(ds.x, ds.y)
 
