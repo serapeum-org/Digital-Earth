@@ -148,7 +148,8 @@ class TestTheGroupIsBuiltUpstream:
         with pytest.raises(ValueError) as raised:
             fold_color_scaling({"color": ColorScaling.power(), "midpoint": 2.0})
         message = str(raised.value)
-        assert "color=" in message and "midpoint" in message, message
+        assert "color=" in message, message
+        assert "midpoint" in message, message
 
     def test_a_glyph_without_a_colour_parameter_leaves_the_keys_alone(self):
         """`accepted=` is what keeps a group off a glyph whose `plot()` cannot take it."""

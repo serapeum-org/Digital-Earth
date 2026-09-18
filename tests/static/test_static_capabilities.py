@@ -117,7 +117,8 @@ class TestTheDeclaration:
             for backend, declaration in _DECLARATIONS.items()
             if backend != "matplotlib" and declaration.supports("export_vector")
         ]
-        assert CAPABILITIES.supports("export_vector") and not others, others
+        assert CAPABILITIES.supports("export_vector"), sorted(CAPABILITIES.features)
+        assert not others, others
 
     @pytest.mark.parametrize(
         "name, phrase",
