@@ -133,6 +133,13 @@ class TestFoldingAChannel:
         grouped, _ = fold_symbology(Symbology.of(color=encoding), "Polygons")
         assert grouped["plot"]["color_levels"] == [0.0, 4.0, 10.0], grouped
 
+    def test_a_colour_field_with_no_scale_folds_to_the_column_alone(self):
+        """A column with no scale is a colour HoloViews ranges itself, so no limits are written."""
+        encoding = Encoding.by_field("color", "landcover")
+        grouped, _ = fold_symbology(Symbology.of(color=encoding), "Points")
+        assert grouped["style"]["color"] == "landcover", grouped
+        assert "clim" not in grouped["plot"], grouped
+
     def test_a_field_driven_size_is_refused_rather_than_guessed(self):
         """HoloViews takes a number for a size; a column would silently draw one marker size."""
         encoding = Encoding.by_field("size", "pop")

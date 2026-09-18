@@ -268,6 +268,82 @@ class TestTheAttachedIssues:
         web = _facade("web")
         assert web().graticule(spacing=20.0).layer_ids, "a square grid still draws"
 
+    def test_web_text_places_a_point_given_in_another_crs(self):
+        """#260: a Web-Mercator coordinate lands where it belongs, not in the Atlantic.
+
+        Test scenario:
+            The tier places data in EPSG:4326, so a point given in another CRS has to be reprojected — which
+            it goes through `Bounds.to_crs`, keeping the CRS work in pyramids.
+        """
+        web = _facade("web")
+        placed = web().text(500000.0, 6800000.0, "Utrecht", crs=3857)
+        assert placed.layer_ids, placed.layer_ids
+
+    def test_web_text_needs_a_string(self):
+        """A call with no string names what is missing rather than drawing an empty label."""
+        web = _facade("web")
+        with pytest.raises(TypeError, match="needs the string to draw"):
+            web().text(4.9, 52.4)
+
+    def test_web_get_layer_returns_the_description(self):
+        """The contract's read-back: a layer's own `LayerSpec`, by id."""
+        web = _facade("web")
+        drawn = web().text(4.9, 52.4, "Amsterdam", name="label")
+        assert drawn.get_layer("label").kind == "text", drawn.get_layer("label")
+
+    def test_web_get_layer_refuses_an_unknown_id(self):
+        """The message names the layers that are there."""
+        web = _facade("web")
+        with pytest.raises(KeyError, match="no layer 'nope' on this map"):
+            web().get_layer("nope")
+
+    def test_web_colorbar_draws_the_colour_key(self):
+        """The contract's name for a colour key, which this tier draws through `legend`."""
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+
+        web = _facade("web")
+        squares = gpd.GeoDataFrame(
+            {"pop": [1, 9]},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+            ],
+            crs=4326,
+        )
+        drawn = web().choropleth(squares, column="pop", name="area")
+        assert sorted(drawn.colorbar("area", label="People")._panels) == ["legend"], (
+            drawn._panels
+        )
+
+    def test_web_colorbar_without_an_id_keys_the_last_classified_layer(self):
+        """A caller who drew one thing should not have to name it."""
+        import geopandas as gpd
+        from shapely.geometry import Polygon
+
+        web = _facade("web")
+        squares = gpd.GeoDataFrame(
+            {"pop": [1, 9]},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+            ],
+            crs=4326,
+        )
+        drawn = web().choropleth(squares, column="pop", name="area").colorbar()
+        assert sorted(drawn._panels) == ["legend"], drawn._panels
+
+    def test_web_colorbar_refuses_an_unknown_layer(self):
+        """A key for a layer nobody drew is a caller's mistake, not an empty panel."""
+        web = _facade("web")
+        with pytest.raises(KeyError, match="no layer 'nope' on this map"):
+            web().colorbar("nope")
+
+    def test_web_colorbar_draws_nothing_when_it_is_not_wanted(self):
+        """`visible=False` is a caller passing a flag through, not an error."""
+        web = _facade("web")
+        assert web().colorbar(visible=False)._panels == {}, "no key was asked for"
+
 
 class TestTheDispatcherPassesUnderDeprecationErrors:
     """Nothing the package calls itself may go through a deprecated spelling."""

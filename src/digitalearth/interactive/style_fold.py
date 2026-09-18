@@ -367,7 +367,9 @@ def fold_symbology(
         entry = next(
             (option for option in CHANNEL_OPTIONS if option.channel == channel), None
         )
-        if entry is None:
+        if (
+            entry is None
+        ):  # pragma: no cover - a channel added to CHANNELS before this table knows it
             unsupported[channel] = f"this tier folds no {channel!r} channel"
             continue
         if element not in entry.elements:

@@ -603,3 +603,88 @@ class TestTheRemainingArms:
         scene.terrain(get_source(_dem()), name="relief")
         scene.terrain(get_source(_dem()), name="relief")
         assert scene.layer_ids == ["relief", "relief-2"], scene.layer_ids
+
+
+class TestTheContractNames:
+    """The Core names the 3-D tier answers to (#299)."""
+
+    def test_a_layer_is_read_back_by_id(self, scene):
+        """`get_layer` hands out the description a builder recorded.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        assert scene.get_layer("terrain-1").kind == "terrain", scene.get_layer(
+            "terrain-1"
+        )
+
+    def test_reading_an_unknown_layer_is_refused(self, scene):
+        """The message names the layers that are there.
+
+        Args:
+            scene: The scene under test.
+        """
+        with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
+            scene.get_layer("nope")
+
+    def test_a_layer_is_replaced_in_place(self, scene):
+        """`replace_layer` keeps the id and the place, and the renderer draws it again.
+
+        Args:
+            scene: The scene under test.
+        """
+        from dataclasses import replace
+
+        from digitalearth.base.spec import Symbology
+
+        scene.terrain(get_source(_dem()), cmap="terrain")
+        held = scene.get_layer("terrain-1")
+        scene.replace_layer(
+            replace(
+                held,
+                symbology=Symbology(
+                    props={**dict(held.symbology.props), "cmap": "magma"}
+                ),
+            )
+        )
+        assert scene.get_layer("terrain-1").symbology.props["cmap"] == "magma", (
+            "restyled"
+        )
+        assert scene.layer_ids == ["terrain-1"], scene.layer_ids
+
+    def test_replacing_an_unknown_layer_is_refused(self, scene):
+        """A description whose id nobody drew names what is there instead.
+
+        Args:
+            scene: The scene under test.
+        """
+        with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
+            scene.replace_layer(LayerSpec("nope", "terrain"))
+
+    def test_render_hands_back_the_plotter(self, scene):
+        """Every tier's `render` returns its own engine object; here that is the plotter.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()))
+        assert scene.render() is scene.plotter, "render must hand back the plotter"
+
+    def test_the_callback_loop_is_recorded_under_its_own_name(self, scene, tmp_path):
+        """`record` writes the frames; `animate` still forwards, warning once (#299).
+
+        Args:
+            scene: The scene under test.
+            tmp_path: Where the GIF is written.
+        """
+        import warnings
+
+        scene.terrain(get_source(_dem()))
+        out = tmp_path / "grow.gif"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            scene.animate([1.0], str(out), lambda s, frame: None)
+        messages = [str(record.message) for record in caught]
+        assert any("use Scene3D.record()" in message for message in messages), messages
+        assert out.stat().st_size > 0, "the alias must still write the file"
