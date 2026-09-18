@@ -1,6 +1,6 @@
 """RasterMixin — web-tier raster builder (DW.1b, recipe W1).
 
-``add_raster`` puts a pyramids raster on the web map as a MapLibre **image source**: the band is reprojected
+``field`` puts a pyramids raster on the web map as a MapLibre **image source**: the band is reprojected
 to lon/lat through pyramids, colour-mapped to an RGBA PNG (NoData → transparent), embedded as a ``data:`` URI,
 and placed by its lon/lat corner coordinates. This is the offline, size-limited path; the large-raster
 COG/XYZ-tile path (pyramids ``to_cog``/``to_xyz``) is a follow-up — it needs a tile server or PMTiles and is

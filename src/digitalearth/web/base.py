@@ -630,7 +630,7 @@ class WebMapBase:
         """Union a layer's lon/lat extent into the running data extent.
 
         Called by the builders' shared choke points — :meth:`_display_gdf` for vector data and
-        ``add_raster`` for rasters — so a new builder inherits framing without doing anything.
+        ``field`` for rasters — so a new builder inherits framing without doing anything.
 
         Args:
             bounds: ``(west, south, east, north)`` in the **display CRS**, which is converted to lon/lat
@@ -784,12 +784,12 @@ class WebMapBase:
     def _map_view(self) -> Optional[dict]:
         """Return the framing to apply to the built widget, or ``None`` to leave the view alone.
 
-        An explicit :meth:`fit_bounds` always wins. Otherwise the accumulated data extent is used, but only
+        An explicit :meth:`set_bounds` always wins. Otherwise the accumulated data extent is used, but only
         when the caller expressed no view of their own — passing ``center`` or a non-default ``zoom`` is
         taken as "I have chosen the view", and it is not overridden.
 
         Returns:
-            The ``fit_bounds`` keyword arguments, or ``None``.
+            The ``fit_bounds`` keyword arguments MapLibre takes, or ``None``.
         """
         if self._fit is not None:
             return self._fit
@@ -895,7 +895,7 @@ class WebMapBase:
         Returns:
             A :class:`~digitalearth.base.spec.Viewport` in the CRS the tier places data in (EPSG:4326, which
             is what `WebMap(crs=)` accepts), carrying the `center` and `zoom` the map was built with and the
-            bounds an explicit :meth:`fit_bounds` asked for. The projection MapLibre draws in is a property of
+            bounds an explicit :meth:`set_bounds` asked for. The projection MapLibre draws in is a property of
             the style rather than of the data, which is why it is not this CRS.
 
         Examples:
@@ -907,7 +907,7 @@ class WebMapBase:
                 ((4.9, 52.4), 7.0, 4326)
 
                 ```
-            - A region asked for with `fit_bounds` frames the view:
+            - A region asked for with `set_bounds` frames the view:
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> WebMap().set_bounds([3.0, 50.0, 7.0, 54.0]).viewport.bounds.as_bbox()
@@ -1216,7 +1216,7 @@ class WebMapBase:
             The running data extent, and the classification a legend describes, are only cleared when the
             last layer goes. They are "most recent" accessors rather than a model of what is on the map,
             so after removing one layer of several they still describe the removed one; call
-            :meth:`fit_bounds` or rebuild the legend if that matters.
+            :meth:`set_bounds` or rebuild the legend if that matters.
 
         Raises:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
@@ -1965,7 +1965,7 @@ class WebMapBase:
         """Resolve the units a key labels values with: the caller's if given, else the autostyle hint.
 
         The same three-way contract as :meth:`_auto_cmap` and :meth:`_auto_levels`, and like theirs the
-        caller's half is a real public argument — ``add_raster(units=)`` and ``contours(units=)``. The
+        caller's half is a real public argument — ``field(units=)`` and ``contours(units=)``. The
         library's hint is canonical rather than measured (it says ``"hPa"`` for mean sea-level pressure),
         so a band that is genuinely in something else needs a way to say so that does not also throw away
         the column name ``legend()`` derives; that is what the argument is for (review L3).
