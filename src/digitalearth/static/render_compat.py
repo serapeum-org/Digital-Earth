@@ -459,7 +459,21 @@ def _fold_points(out: Dict[str, Any]) -> None:
 def _fold_group(
     out: Dict[str, Any], param: str, cls: type, field_map: Dict[str, str]
 ) -> None:
-    """Fold one group's flat members in ``out`` into a ``param`` group object (in place)."""
+    """Fold one group's flat members in ``out`` into a ``param`` group object (in place).
+
+    Args:
+        out: The ``plot()`` keyword dict, mutated: the flat members are removed and the built group put in
+            their place.
+        param: The ``plot()`` parameter the group is passed under.
+        cls: The cleopatra group class to build.
+        field_map: ``{flat keyword: group field}`` for this group.
+
+    Note:
+        A caller who passed a built group under ``param`` keeps it, and their flat members are left in place
+        for :func:`prepare_plot_kwargs` to refuse by name. The colour group does not come through here — it
+        is built by :func:`~digitalearth.static.style_fold.fold_color_scaling`, which refuses that pair
+        rather than forwarding it.
+    """
     if out.get(param) is not None:
         return  # caller already passed a built group object under this name; leave any flat members in place
     members = {field: out.pop(key) for key, field in field_map.items() if key in out}
