@@ -1127,6 +1127,36 @@ class TestAColourKeyDescribesTheLayerItNames:
         drawn = m._panels["legend"][0]
         assert ">500<" in drawn, drawn
 
+    def test_removing_the_keyed_layer_clears_the_default_key(self, points):
+        """`legend()` with no id draws the most recent classification — which must still be on the map.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            `remove_layer` forgot the layer's own entry, and `last_legend` — what the *default* path reads
+            — was cleared only when the map went empty. So the keyed path became correct and the default
+            path went on drawing a removed layer's key (review M5).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.points(points, name="B")
+        m.remove_layer("A")
+        assert m.last_legend is None, m.last_legend
+        with pytest.raises(ValueError, match="nothing to describe"):
+            m.legend()
+
+    def test_a_surviving_classification_takes_over_as_the_default(self):
+        """Two classified layers, one removed: the key falls back to the other, not to nothing."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.choropleth(self._squares("rain", [500, 900]), column="rain", name="B")
+        m.remove_layer("B")
+        m.legend()
+        assert ">1<" in m._panels["legend"][0], m._panels["legend"][0][:120]
+
     def test_a_layer_with_no_classification_says_so(self, points):
         """An unclassified layer has no ramp; naming it is answered rather than substituted.
 
@@ -1292,6 +1322,41 @@ class TestOneMapsSourcesAreItsOwn:
             f"five closed maps left {len(_OBJECTS) - before} entries behind"
         )
 
+    def test_removing_a_layer_leaves_a_captured_figure_readable(self, points):
+        """A figure captured before the removal still names the object, and must still open it.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            Forgetting the object on removal made every already-captured `FigureSpec` dangle — the data
+            tier is meant to be re-readable (review M6). `close()` is where a map lets its data go.
+        """
+        from digitalearth.base.registry import resolve_uri
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        captured = m.figure_spec.sources["obs"].uri
+        m.remove_layer("obs")
+        assert resolve_uri(captured) is not None, captured
+
+    def test_two_equal_stand_ins_are_two_layers(self, points):
+        """Identity is not a test for an immutable: CPython interns equal strings.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            `add_layer`'s own docstring says any object stands in for a layer, and two independent string
+            stand-ins were refused as one because they are the same interned object (review M7).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.add_layer("wells-layer", name="a")
+        m.add_layer("wells-layer", name="b")
+        assert m.layer_ids == ["a", "b"], m.layer_ids
+
     def test_an_open_map_still_resolves_its_sources(self, points):
         """Closing is the caller's decision, and until they make it the figure reads.
 
@@ -1303,25 +1368,73 @@ class TestOneMapsSourcesAreItsOwn:
         m = WebMap().points(points, name="obs")
         assert m.figure_spec.sources["obs"].open() is not None, "still readable"
 
-    def test_a_removed_layer_lets_its_data_go(self, points):
-        """The registry holds strong references, so a drawn-and-removed layer would leak one.
+    def test_closing_releases_what_a_removed_layer_registered_too(self, points):
+        """Removal takes the reference out of the figure; closing is what lets the object go.
 
         Args:
             points: The fixture points.
+
+        Test scenario:
+            Forgetting on removal dangled every already-captured figure (review M6), so the two were
+            separated: a removed layer is out of *this* map's figure, and `close()` forgets the map's whole
+            namespace — including anything it removed along the way.
         """
         from digitalearth.base.registry import _OBJECTS
         from digitalearth.web import WebMap
 
         before = len(_OBJECTS)
-        m = WebMap().points(points)
-        m.remove_layer(m.layer_ids[0])
+        m = WebMap().points(points, name="obs")
+        m.remove_layer("obs")
+        m.close()
         assert len(_OBJECTS) == before, (
-            f"the registry grew by {len(_OBJECTS) - before} after a draw and a remove"
+            f"closing left {len(_OBJECTS) - before} entries behind"
         )
 
+    def test_removing_a_layer_leaves_a_captured_figure_readable(self, points):
+        """A figure captured before the removal still names the object, and must still open it.
 
-class TestIdsAreAllocatedOnce:
-    """A caller name and a generated id come out of the same allocator."""
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            Forgetting the object on removal made every already-captured `FigureSpec` dangle — the data
+            tier is meant to be re-readable (review M6). `close()` is where a map lets its data go.
+        """
+        from digitalearth.base.registry import resolve_uri
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        captured = m.figure_spec.sources["obs"].uri
+        m.remove_layer("obs")
+        assert resolve_uri(captured) is not None, captured
+
+    def test_two_equal_stand_ins_are_two_layers(self, points):
+        """Identity is not a test for an immutable: CPython interns equal strings.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            `add_layer`'s own docstring says any object stands in for a layer, and two independent string
+            stand-ins were refused as one because they are the same interned object (review M7).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.add_layer("wells-layer", name="a")
+        m.add_layer("wells-layer", name="b")
+        assert m.layer_ids == ["a", "b"], m.layer_ids
+
+    def test_an_open_map_still_resolves_its_sources(self, points):
+        """Closing is the caller's decision, and until they make it the figure reads.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        assert m.figure_spec.sources["obs"].open() is not None, "still readable"
 
     def test_a_name_shaped_like_a_generated_id_does_not_collide(self, points):
         """Two layers sharing a MapLibre id makes addLayer drop the second with a console error.

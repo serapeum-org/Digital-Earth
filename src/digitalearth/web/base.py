@@ -1342,12 +1342,22 @@ class WebMapBase:
         # A caller's own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker
         # attribute the builders' closures carry, so there is nothing on it to compare by id.
         held = self._custom.pop(layer_id, None)
-        # Let the object go with the layer: the registry holds strong references, so a session that draws
-        # and removes keeps every dataset alive otherwise (review H2).
-        dropped = self._sources.pop(layer_id, None)
-        if dropped is not None:
-            forget_object(dropped.uri)
-        self._legends.pop(layer_id, None)
+        # The reference goes out of *this* map's figure, and the object stays registered: a `FigureSpec`
+        # captured before the removal still names it, and forgetting here made every such figure dangle
+        # (review M6). `close()` is where a map lets its data go, which is the caller saying they are
+        # finished with every figure it produced.
+        self._sources.pop(layer_id, None)
+        dropped_legend = self._legends.pop(layer_id, None)
+        if dropped_legend is not None and dropped_legend is self.last_legend:
+            # The keyed path forgets it; the default path read `last_legend`, which was cleared only when
+            # the map went empty — so `legend()` kept drawing the key of a layer that had been removed
+            # (review M5). The most recent surviving classification takes its place, or none.
+            surviving = [
+                self._legends[held] for held in self.layer_ids if held in self._legends
+            ]
+            self.last_legend = surviving[-1] if surviving else None
+            if not surviving:
+                self.last_breaks = None
         self._forget_slider_frame(layer_id)
 
         def _is_layer(layer: Any) -> bool:
@@ -1518,8 +1528,15 @@ class WebMapBase:
             raise ValueError(
                 f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
             )
-        already = next(
-            (held for held, obj in self._custom.items() if obj is layer), None
+        # By identity, and only where identity means anything: CPython interns equal strings and small
+        # integers, so two independent stand-ins compared as one object and the second was refused as a
+        # duplicate (review M7). A caller's real layer object is not one of these.
+        already = (
+            None
+            if isinstance(layer, (str, bytes, int, float, bool, tuple, frozenset))
+            else next(
+                (held for held, obj in self._custom.items() if obj is layer), None
+            )
         )
         if already is not None:
             # One object is one layer on the page. Registering it twice gave two tree entries the queue
