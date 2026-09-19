@@ -586,8 +586,32 @@ class InteractiveMapBase:
             frame["title"] = self.title
         frame.update(bokeh or {})
         element = element.opts(backend="bokeh", **frame)
-        self._styles[id(element)] = {"common": dict(common), "bokeh": dict(frame)}
+        self._record_style(element, {"common": dict(common), "bokeh": dict(frame)})
         return element
+
+    def _record_style(self, element: Any, style: dict) -> None:
+        """File the style of a just-drawn element, and of the layer it is a frame of.
+
+        A dynamic layer is registered as a `DynamicMap` and redrawn as a fresh element per frame, so the
+        style recorded against the frame answered for nothing a caller holds: `style_of` on a
+        `large_image(dynamic=True)` layer read empty, and the dashboard's widgets — which look the style up
+        to merge over it — passed such a layer by (review M17). The style is filed against the registered
+        layer as well when the frame belongs to one.
+
+        The table is then trimmed to the registered layers plus this element. Every frame is a new object
+        under a new `id()`, so the old keying grew one dead entry per pan — sixteen after fifteen of them —
+        keyed by the id of a collected object, which another object may later be handed (review M18).
+
+        Args:
+            element: The element that was styled.
+            style: What was applied to it.
+        """
+        self._styles[id(element)] = style
+        drawn = self.layers[-1] if self.layers else None
+        if drawn is not None and type(drawn).__name__ == "DynamicMap":
+            self._styles[id(drawn)] = style
+        live = {id(layer) for layer in self.layers} | {id(element)}
+        self._styles = {key: held for key, held in self._styles.items() if key in live}
 
     def style_of(self, layer: Any) -> dict:
         """Return the style options :meth:`_styled` applied to ``layer``.

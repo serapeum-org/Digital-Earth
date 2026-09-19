@@ -37,7 +37,12 @@ _TILE_TYPES = ("WMTS", "Tiles")
 
 #: Element type names the dashboard's ``cmap``/``alpha`` overrides apply to (the colour-mapped raster
 #: elements). Their recorded style is what an override is merged over.
-_COLOR_MAPPED_TYPES = ("Image", "QuadMesh")
+#:
+#: ``DynamicMap`` is among them: a `large_image` layer *is* one, and its frames are the `Image`s the other
+#: two names cover. Left out, the default raster builder for a big raster was the one layer both widgets
+#: silently passed by (review M17). HoloViews applies `.opts()` on a `DynamicMap` to the elements it
+#: produces, so the override reaches the next frame drawn.
+_COLOR_MAPPED_TYPES = ("Image", "QuadMesh", "DynamicMap")
 
 #: Style keys a widget may override on a colour-mapped layer. Anything the builders recorded under these
 #: keys is read back and merged *under* the widget value, so an override never silently drops the rest of

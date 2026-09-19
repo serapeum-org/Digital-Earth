@@ -196,6 +196,40 @@ class TestWhatTheFrameShows:
             "Flow",
         ), frame
 
+    def test_a_dynamic_layer_records_the_style_its_frames_are_drawn_with(self, cog):
+        """The default path is `dynamic=True`, and its style was readable on neither the map nor the frame.
+
+        Args:
+            cog: The recording raster.
+
+        Test scenario:
+            `_styled` filed the style against the *frame*, while the layer a caller holds is the
+            `DynamicMap`. `style_of` therefore answered `{}` for the tier's own big-raster builder, and the
+            dashboard's widgets — which read it to merge over — passed the layer by (review M17).
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        m.large_image(cog, cmap="magma")
+        m.layers[0][()]  # draw the first frame, as a renderer would
+        assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
+
+    def test_panning_does_not_grow_the_style_table(self, cog):
+        """Every frame is a new object, and the table was keyed by `id()` of the ones already gone.
+
+        Args:
+            cog: The recording raster.
+
+        Test scenario:
+            One dead entry per pan, keyed by the id of a collected object — which another object may later
+            be handed, making a stale style answer for it (review M18).
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        m.large_image(cog, cmap="magma")
+        dmap = m.layers[0]
+        west, south, east, north = cog.bbox
+        for step in range(8):
+            dmap[(west + step, east - step), (south + step, north - step)]
+        assert len(m._styles) <= len(m.layers) + 1, len(m._styles)
+
     def test_a_canvas_of_one_cell_is_still_placed_on_what_it_read(self, cog):
         """A budget small enough to read one cell has no spacing for a renderer to derive.
 
