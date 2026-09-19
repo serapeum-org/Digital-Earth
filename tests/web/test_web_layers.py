@@ -1132,6 +1132,46 @@ class TestACustomLayerIsAddedUnderTheIdItIsGiven:
         assert m.layer_ids == ["obs", "obs-2"], m.layer_ids
         assert own.id == "obs-2", own.id
 
+    def test_one_object_cannot_be_added_twice(self, points):
+        """One object is one layer on the page, and the queue cannot tell two registrations apart.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: `add_layer(obj, name="a").add_layer(obj, name="b")` gave two tree entries
+            matched by identity, so `remove_layer("a")` dropped both from the queue — the map still listed
+            `b` and nothing drew it (review M13). With the allocated id written onto the object, the first
+            entry also named an id the object no longer carried.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        own = Layer(id="mine", type=LayerType.CIRCLE, source="s")
+        m.add_layer(own, name="a")
+        with pytest.raises(ValueError, match="already on the map as 'a'"):
+            m.add_layer(own, name="b")
+        assert m.layer_ids == ["obs", "a"], m.layer_ids
+
+    def test_two_objects_are_removed_independently(self, points):
+        """The ordinary case: two layers, and removing one leaves the other drawn.
+
+        Args:
+            points: The fixture points.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.add_layer(Layer(id="x", type=LayerType.CIRCLE, source="s"), name="x")
+        m.add_layer(Layer(id="y", type=LayerType.CIRCLE, source="s"), name="y")
+        m.remove_layer("x")
+        assert m.layer_ids == ["y"], m.layer_ids
+        assert len(m.layers) == 1, m.layers
+
     def test_an_uncontested_id_is_left_as_it_was(self, points):
         """A caller's own id survives when nothing is claiming it.
 

@@ -1499,6 +1499,17 @@ class WebMapBase:
             raise ValueError(
                 f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
             )
+        already = next(
+            (held for held, obj in self._custom.items() if obj is layer), None
+        )
+        if already is not None:
+            # One object is one layer on the page. Registering it twice gave two tree entries the queue
+            # could not tell apart — removing either removed both — and, since the allocated id is written
+            # onto the object, the first entry named an id the object no longer carried (review M13).
+            raise ValueError(
+                f"this layer is already on the map as {already!r}; add a second one to draw it twice, or "
+                f"remove_layer({already!r}) first"
+            )
         layer_id = self._layer_id("custom", name or getattr(layer, "id", None))
         # The allocator suffixes an id that is already taken, and what it allocates is what `layer_ids`,
         # `get_layer`, `layer_control` and `popup(layer=...)` all name. A `maplibre` Layer carries its own
