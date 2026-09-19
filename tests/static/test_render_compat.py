@@ -229,6 +229,7 @@ def test_orphaned_point_styling_names_the_keyword_the_caller_wrote():
     with pytest.raises(ValueError, match=r"\['point_color'\]"):
         group_render_kwargs({"points": None, "point_color": "red"})
 
+
 def test_a_group_with_no_members_is_not_built():
     """A fold that built an empty group would hand cleopatra a spec nobody asked for.
 
