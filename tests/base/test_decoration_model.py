@@ -168,6 +168,57 @@ class TestBandedTree:
         ):
             tree.add(tiles, index=1)
 
+    def test_a_replacement_that_changes_the_band_is_re_placed(self):
+        """`add` and `move` both refuse to cross a band; `replace` walked straight through.
+
+        Test scenario:
+            The measured defect: replacing a basemap with a coastlines layer kept position 0, so an overlay
+            was drawn first — beneath the data — while `add` at that position is refused by name and
+            `diff()` reported nothing at all (review M1).
+        """
+        tree = (
+            LayerTree()
+            .add(LayerSpec("tiles", "basemap"))
+            .add(LayerSpec("dem", "raster"))
+            .add(LayerSpec("lbl", "text"))
+        )
+        rebanded = tree.replace(LayerSpec("tiles", "coastlines"))
+        assert rebanded.ids == ("dem", "lbl", "tiles"), rebanded.ids
+
+    def test_a_replacement_within_the_band_keeps_its_position(self):
+        """The ordinary case — a restyle or a re-point — is still in place."""
+        tree = LayerTree().add(LayerSpec("dem", "raster")).add(LayerSpec("b", "points"))
+        restyled = tree.replace(LayerSpec("dem", "raster", label="renamed"))
+        assert restyled.ids == ("dem", "b"), restyled.ids
+
+    def test_a_re_band_reads_as_a_reorder(self):
+        """A renderer is told what happened: the layer moved, which is what a band change is.
+
+        Test scenario:
+            `diff` compares `(kind, source_id, …)` and `(symbology, filter, label, group)`, neither of which
+            carries the band — so before the layer was re-placed, a band change produced an empty diff and
+            the one consumer of it did nothing.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import FigureSpec, PanelSpec, Viewport
+
+        tree = (
+            LayerTree()
+            .add(LayerSpec("tiles", "basemap"))
+            .add(LayerSpec("dem", "raster"))
+        )
+        before = FigureSpec(
+            panels=(PanelSpec("main", Viewport(4326), layers=tree.ids),), layers=tree
+        )
+        rebanded = tree.replace(LayerSpec("tiles", "coastlines"))
+        after = with_fields(
+            before,
+            layers=rebanded,
+            panels=(with_fields(before.panels[0], layers=rebanded.ids),),
+        )
+        assert before.diff(after).order == ("dem", "tiles"), before.diff(after)
+
     def test_a_layer_moves_within_its_band(self):
         """Reordering the data layers is what a layer switcher does, and it still works."""
         tree = (

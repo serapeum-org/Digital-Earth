@@ -984,6 +984,11 @@ class LayerTree:
         This is how a layer is restyled or re-pointed after it has been added: the id and the position stay, the
         description changes.
 
+        A replacement that changes the layer's **band** is the exception: it takes the position `add` would
+        have given it, at the top of the band it now belongs to. Keeping the old position would put a
+        reference layer under the data or an overlay beneath it, which is the one thing the bands exist to
+        prevent — and which `add` and `move` both refuse to do.
+
         Args:
             layer: The new description. Its id names the layer it replaces.
 
@@ -1027,7 +1032,13 @@ class LayerTree:
                 ```
         """
         _check_layer("replace", layer)
-        self.get(layer.id)
+        held = self.get(layer.id)
+        if _layer_band(layer) != _layer_band(held):
+            # `add` inserts into the layer's band and `move` refuses a position outside it; a replacement
+            # that changes the band and keeps the position walked straight through both, leaving an overlay
+            # drawn beneath the data with `diff` reporting nothing (review M1). Re-band by removing and
+            # adding, which puts the layer at the top of the band it now belongs to.
+            return self.remove(layer.id).add(layer)
         layers = tuple(
             layer if existing.id == layer.id else existing for existing in self.layers
         )
