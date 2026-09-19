@@ -1117,8 +1117,10 @@ class TestACallersOwnLayer:
         """A misspelt band names the four that work."""
         from digitalearth.web import WebMap
 
+        drawn = WebMap()
+        wells = self._layer("wells")
         with pytest.raises(ValueError, match="band must be one of"):
-            WebMap().add_layer(self._layer("wells"), band="middle")
+            drawn.add_layer(wells, band="middle")
 
     def test_a_builder_s_own_layer_is_not_recorded_twice(self, points):
         """The package's builders describe what they draw, so they do not come through this entry point.

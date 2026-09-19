@@ -659,8 +659,9 @@ class TestTheContractNames:
         Args:
             scene: The scene under test.
         """
+        absent = LayerSpec("nope", "terrain")
         with pytest.raises(KeyError, match="no layer 'nope' in this scene"):
-            scene.replace_layer(LayerSpec("nope", "terrain"))
+            scene.replace_layer(absent)
 
     def test_render_hands_back_the_plotter(self, scene):
         """Every tier's `render` returns its own engine object; here that is the plotter.

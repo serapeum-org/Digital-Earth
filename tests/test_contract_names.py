@@ -281,9 +281,9 @@ class TestTheAttachedIssues:
 
     def test_web_text_needs_a_string(self):
         """A call with no string names what is missing rather than drawing an empty label."""
-        web = _facade("web")
+        drawn = _facade("web")()
         with pytest.raises(TypeError, match="needs the string to draw"):
-            web().text(4.9, 52.4)
+            drawn.text(4.9, 52.4)
 
     def test_web_get_layer_returns_the_description(self):
         """The contract's read-back: a layer's own `LayerSpec`, by id."""
@@ -293,9 +293,9 @@ class TestTheAttachedIssues:
 
     def test_web_get_layer_refuses_an_unknown_id(self):
         """The message names the layers that are there."""
-        web = _facade("web")
+        drawn = _facade("web")()
         with pytest.raises(KeyError, match="no layer 'nope' on this map"):
-            web().get_layer("nope")
+            drawn.get_layer("nope")
 
     def test_web_colorbar_draws_the_colour_key(self):
         """The contract's name for a colour key, which this tier draws through `legend`."""
@@ -335,9 +335,9 @@ class TestTheAttachedIssues:
 
     def test_web_colorbar_refuses_an_unknown_layer(self):
         """A key for a layer nobody drew is a caller's mistake, not an empty panel."""
-        web = _facade("web")
+        drawn = _facade("web")()
         with pytest.raises(KeyError, match="no layer 'nope' on this map"):
-            web().colorbar("nope")
+            drawn.colorbar("nope")
 
     def test_web_colorbar_draws_nothing_when_it_is_not_wanted(self):
         """`visible=False` is a caller passing a flag through, not an error."""

@@ -1274,15 +1274,10 @@ class TestAWindowThatMissesTheSource:
         """A truncated file is not an empty place, and is not hidden as one."""
         source = self._Broken()
         ref = DataRef.to_object(source, name="broken-view")
+        selection = Selection.of(1)
+        request = ViewRequest(bounds=Bounds(0.0, 0.0, 2.0, 2.0, crs=4326), budget=64)
         with pytest.raises(OSError, match="truncated"):
-            SourceView.of(
-                source,
-                ref=ref,
-                selection=Selection.of(1),
-                request=ViewRequest(
-                    bounds=Bounds(0.0, 0.0, 2.0, 2.0, crs=4326), budget=64
-                ),
-            )
+            SourceView.of(source, ref=ref, selection=selection, request=request)
 
 
 class TestMaskingAWindowedRead:

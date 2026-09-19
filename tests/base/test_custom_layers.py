@@ -110,8 +110,9 @@ class TestALayerThatDescribesACustomObject:
 
     def test_a_band_nothing_could_draw_is_refused(self):
         """A misspelt band is caught where the layer is built."""
+        kind = custom_kind("maplibre")
         with pytest.raises(ValueError, match="band must be one of"):
-            LayerSpec("wells", custom_kind("maplibre"), band="middle")
+            LayerSpec("wells", kind, band="middle")
 
     def test_a_band_override_works_for_any_layer(self):
         """The override is not custom-only: a caller can put their coastlines under the data."""

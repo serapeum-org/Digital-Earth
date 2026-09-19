@@ -162,10 +162,11 @@ class TestBandedTree:
     def test_a_position_outside_the_band_is_refused(self):
         """Asking for a basemap above the data names the band's range rather than clamping."""
         tree = LayerTree().add(LayerSpec("dem", "raster"))
+        tiles = LayerSpec("tiles", "basemap")
         with pytest.raises(
             IndexError, match="the underlay band runs from position 0 to 0"
         ):
-            tree.add(LayerSpec("tiles", "basemap"), index=1)
+            tree.add(tiles, index=1)
 
     def test_a_layer_moves_within_its_band(self):
         """Reordering the data layers is what a layer switcher does, and it still works."""
@@ -296,8 +297,9 @@ class TestFurniture:
 
     def test_a_second_meaning_for_one_name_is_refused(self):
         """Two plugins claiming one name would otherwise overwrite each other silently."""
+        clashing = FurnitureInfo("measure", "top-right", "another meaning")
         with pytest.raises(ValueError, match="is already registered"):
-            register_furniture(FurnitureInfo("measure", "top-right", "another meaning"))
+            register_furniture(clashing)
 
     def test_registering_the_same_entry_again_is_accepted(self):
         """A module imported twice registers the same row twice, which is not a clash."""
@@ -357,13 +359,11 @@ class TestPanelFurniture:
 
     def test_one_kind_twice_is_refused(self):
         """Two scale bars in one corner is a caller who added the same item twice."""
+        twice = (Furniture("scale_bar"), Furniture("scale_bar", anchor="top-left"))
         with pytest.raises(ValueError, match="lists furniture \\['scale_bar'\\] more"):
             PanelSpec(
                 "main",
-                furniture=(
-                    Furniture("scale_bar"),
-                    Furniture("scale_bar", anchor="top-left"),
-                ),
+                furniture=twice,
             )
 
     def test_something_that_is_not_an_item_is_refused(self):

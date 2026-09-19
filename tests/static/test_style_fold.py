@@ -140,13 +140,15 @@ class TestTheGroupIsBuiltUpstream:
 
     def test_a_built_group_beside_a_flat_key_is_refused(self):
         """Both spellings style the same thing, and forwarding them produced advice already followed."""
+        both = {"color": ColorScaling.power(), "gamma": 0.3}
         with pytest.raises(ValueError, match="style the same thing"):
-            fold_color_scaling({"color": ColorScaling.power(), "gamma": 0.3})
+            fold_color_scaling(both)
 
     def test_the_refusal_names_both_spellings(self):
         """An error a caller can act on says which two keywords to choose between."""
+        both = {"color": ColorScaling.power(), "midpoint": 2.0}
         with pytest.raises(ValueError) as raised:
-            fold_color_scaling({"color": ColorScaling.power(), "midpoint": 2.0})
+            fold_color_scaling(both)
         message = str(raised.value)
         assert "color=" in message, message
         assert "midpoint" in message, message

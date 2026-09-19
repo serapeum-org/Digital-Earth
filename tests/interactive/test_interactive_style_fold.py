@@ -142,9 +142,9 @@ class TestFoldingAChannel:
 
     def test_a_field_driven_size_is_refused_rather_than_guessed(self):
         """HoloViews takes a number for a size; a column would silently draw one marker size."""
-        encoding = Encoding.by_field("size", "pop")
+        driven = Symbology.of(size=Encoding.by_field("size", "pop"))
         with pytest.raises(ValueError, match="resolve it and pass the values"):
-            fold_symbology(Symbology.of(size=encoding), "Points")
+            fold_symbology(driven, "Points")
 
     def test_a_tooltip_becomes_the_hover_tool(self):
         """Per-layer interaction is a channel (#292), and on this tier it is a Bokeh tool."""
@@ -184,13 +184,15 @@ class TestCheckingAgainstTheEngine:
             The measured defect: `_styled` called `.opts()` with no backend, so once matplotlib was registered
             a matplotlib-only option passed the check and drew nothing.
         """
+        matplotlib_only = Symbology(props={"interpolation": "nearest"})
         with pytest.raises(ValueError, match="interpolation"):
-            fold_symbology(Symbology(props={"interpolation": "nearest"}), "Image")
+            fold_symbology(matplotlib_only, "Image")
 
     def test_the_refusal_suggests_what_was_meant(self):
         """The did-you-mean `.opts()` gives, but before an element exists."""
+        misspelt = Symbology(props={"cmpa": "viridis"})
         with pytest.raises(ValueError, match=r"did you mean \['cmap'\]"):
-            fold_symbology(Symbology(props={"cmpa": "viridis"}), "Image")
+            fold_symbology(misspelt, "Image")
 
     def test_an_unknown_element_is_refused_by_name(self):
         """A typo in the element type is answered, not raised from inside HoloViews."""
