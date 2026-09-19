@@ -511,9 +511,11 @@ class DecorationMixin(_MixinBase):
     def legend(
         self,
         *,
+        layer_id: Optional[str] = None,
         title: Optional[str] = None,
         position: str = "bottom-right",
         labels: Optional[list] = None,
+        visible: bool = True,
     ) -> Self:
         """Add a key for the most recent classified layer (recipe W2).
 
@@ -538,10 +540,16 @@ class DecorationMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
 
+        Args:
+            layer_id: Which layer's classes to describe. `None` takes the most recently classified layer,
+                which is what the tier recorded before layers had ids.
+            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
+
         Raises:
-            ValueError: when ``position`` is not one of the four legal MapLibre corners, or when no
-                classified layer has been added — there is nothing to build a key from, and an empty box
-                would be worse than an error.
+            ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`
+                names a layer that carries no classification, or when no classified layer has been added at
+                all — there is nothing to build a key from, and an empty box would be worse than an error.
+            KeyError: when `layer_id` names no layer on this map.
 
         Examples:
             - A choropleth and its key:
@@ -556,9 +564,11 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
         """
+        if not visible:
+            return self
         _require_maplibre()
         _check_position(position)
-        spec = self.last_legend
+        spec = self.last_legend if layer_id is None else self._legend_of(layer_id)
         if not spec:
             raise ValueError(
                 "legend() has nothing to describe: no classified layer has been added yet. Add a "

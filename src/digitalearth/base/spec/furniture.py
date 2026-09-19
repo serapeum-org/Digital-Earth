@@ -17,7 +17,11 @@ map coordinates), a guide on an `Encoding` (anything that explains a channel) an
 from dataclasses import dataclass, field
 from typing import Any, Dict, Mapping, Optional
 
-from digitalearth.base.registry import FURNITURE_ANCHORS, furniture_info
+from digitalearth.base.registry import (
+    FURNITURE_ANCHORS,
+    KIND_PATTERN,
+    furniture_info,
+)
 from digitalearth.base.spec._serial import (
     FrozenDict,
     as_mapping,
@@ -100,8 +104,25 @@ class Furniture:
         # The registry's message already names what is registered; a `Furniture` is a value, and a value refuses
         # with ValueError, so the caller does not have to catch two exception types to validate a figure.
         except KeyError as error:
-            raise ValueError(error.args[0]) from None
-        anchor = registered.anchor if self.anchor is None else self.anchor
+            # Except for a *namespaced* kind — `mypkg:compass` — which is a plugin's furniture read on a
+            # machine where the plugin is not installed. `LayerSpec` checks only the spelling for the same
+            # reason, so a figure whose panel carried one could not be read back at all while its layers
+            # loaded fine (review L3). A bare name nobody registered is a typo, and keeps the registry's
+            # message, which lists what there is. A plugin's piece has no default anchor here, so it needs
+            # its own.
+            if ":" not in self.kind or KIND_PATTERN.fullmatch(self.kind) is None:
+                raise ValueError(error.args[0]) from None
+            if self.anchor is None:
+                raise ValueError(
+                    f"furniture {self.kind!r} is not registered here, so it has no default anchor; pass "
+                    f"anchor= to place it"
+                ) from None
+            registered = None
+        anchor = (
+            self.anchor
+            if registered is None or self.anchor is not None
+            else registered.anchor
+        )
         if anchor not in FURNITURE_ANCHORS:
             raise ValueError(
                 f"furniture {self.kind!r}: anchor must be one of {list(FURNITURE_ANCHORS)}; got {self.anchor!r}"

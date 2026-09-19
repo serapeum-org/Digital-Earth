@@ -438,6 +438,22 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_an_object_pyvista_refuses_is_not_kept(self, scene):
+        """The scene holds a custom object for its layer; a failed draw records no layer.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The object is held *before* the draw, because the drawer reads it from there — so a rejected
+            keyword propagated with the object still held under an id no layer owned, for the life of the
+            scene (review L8).
+        """
+        with pytest.raises(TypeError):
+            scene.add_mesh(pv.Sphere(radius=0.5), nonsense_kwarg=1)
+        assert scene.held_objects == {}, scene.held_objects
+        assert scene.layer_ids == [], scene.layer_ids
+
     def test_renaming_a_layer_does_not_rebuild_its_mesh(self, scene):
         """`label` is what a layer switcher calls the layer, and it never reaches PyVista.
 

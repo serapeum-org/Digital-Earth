@@ -171,7 +171,7 @@ class ThreeDMixin(_MixinBase):
         _require_layer_api()
         warnings.warn(
             "WebMap.globe() is deprecated and will be removed in a future release; use "
-            'WebMap.projection("globe") instead',
+            f"WebMap.projection({'globe' if enabled else 'mercator'!r}) instead",
             DeprecationWarning,
             stacklevel=2,
         )

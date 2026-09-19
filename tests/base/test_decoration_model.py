@@ -282,6 +282,22 @@ class TestFurniture:
         with pytest.raises(ValueError, match="no furniture 'scalebar' is registered"):
             Furniture("scalebar")
 
+    def test_a_plugin_s_furniture_loads_where_the_plugin_is_not_installed(self):
+        """A stored figure has to read back, and a panel's furniture is part of it.
+
+        Test scenario:
+            `LayerSpec` checks only the spelling of a kind, so a figure naming a plugin's *layer* loads
+            anywhere. Its furniture was refused outright, so the same figure could not be read back at all
+            on a machine without the plugin (review L3).
+        """
+        piece = Furniture("mypkg:compass", anchor="top-left")
+        assert (piece.kind, piece.anchor) == ("mypkg:compass", "top-left"), piece
+
+    def test_a_plugin_s_furniture_needs_an_anchor_of_its_own(self):
+        """There is no registration here to take a default corner from, so one has to be given."""
+        with pytest.raises(ValueError, match="has no default anchor"):
+            Furniture("mypkg:compass")
+
     def test_a_corner_no_tier_could_place_is_refused(self):
         """The four corners are what matplotlib, MapLibre and PyVista all name."""
         with pytest.raises(ValueError, match="anchor must be one of"):

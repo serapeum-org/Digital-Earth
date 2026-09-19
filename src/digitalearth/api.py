@@ -28,8 +28,15 @@ from typing import Any
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
+from digitalearth.base.capabilities import Capabilities
 from digitalearth.base.types import PlottableData
+from digitalearth.interactive.capabilities import (
+    CAPABILITIES as CAPABILITIES_INTERACTIVE,
+)
 from digitalearth.static import Map
+from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
+from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
+from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
 logger = logging.getLogger(__name__)
 
@@ -56,14 +63,6 @@ class _Unset:
 #: and ``colorbar=True`` in particular — so the default value cannot itself signal absence: without this,
 #: ``quickmap(ds, backend="3d")`` would be refused for a ``crs`` the caller never asked for.
 _UNSET = _Unset()
-from digitalearth.base.capabilities import Capabilities
-from digitalearth.interactive.capabilities import (
-    CAPABILITIES as CAPABILITIES_INTERACTIVE,
-)
-from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
-from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
-from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
-
 #: Which capability each of `quickmap`'s map-shaped parameters needs, in the vocabulary every tier now
 #: declares itself in (#294).
 #: A keyword is honoured when the backend supports any of the capabilities listed for it: `colorbar=` is the
@@ -286,7 +285,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
         raise ValueError(
             f"{name}= is not supported by backend={backend!r}; "
             + (f"{reason}. " if reason else "")
-            + f"it is honoured by {honoured} — drop the argument, or pick one of those backends"
+            + f"It is honoured by {honoured} — drop the argument, or pick one of those backends"
         )
 
 

@@ -293,7 +293,9 @@ class Bounds:
             The rectangle, ascending in both axes whichever way the axes run.
 
         Raises:
-            ValueError: for an empty axis, or coordinates that are not numbers.
+            ValueError: for an empty axis, for coordinates that are not numbers, or for a `step` that is not
+                a `(dx, dy)` pair. Each is named: this is on the hot path of two tiers, and numpy's own
+                `TypeError` says what it could not convert without saying which argument it came from.
 
         Examples:
             - Three cells of 10,000 m, centred at 5,000/15,000/25,000, cover 0 to 30,000:
@@ -321,14 +323,21 @@ class Bounds:
         """
         import numpy as np
 
-        xs = np.asarray(x, dtype="float64").ravel()
-        ys = np.asarray(y, dtype="float64").ravel()
+        xs, ys = cls._axis_values(x, "x"), cls._axis_values(y, "y")
         if xs.size == 0 or ys.size == 0:
             raise ValueError(
                 "Bounds.cell_edges needs coordinates on both axes; got "
                 f"{xs.size} x and {ys.size} y"
             )
-        steps = (None, None) if step is None else (step[0], step[1])
+        if step is None:
+            steps: Tuple[Any, Any] = (None, None)
+        else:
+            try:
+                steps = (step[0], step[1])
+            except (TypeError, IndexError, KeyError):
+                raise ValueError(
+                    f"Bounds.cell_edges step must be a (dx, dy) pair; got {step!r}"
+                ) from None
         # A lone cell has no spacing of its own, so it borrows the other axis's: a raster one row tall is a
         # row of square cells, not a line of zero height. Without this a 1 x 25 raster was placed on a
         # rectangle with no height at all and drawn invisible (review M4). A caller who knows better says so
@@ -337,6 +346,29 @@ class Bounds:
         west, east = cls._edges(xs, steps[0] if steps[0] is not None else spacings[1])
         south, north = cls._edges(ys, steps[1] if steps[1] is not None else spacings[0])
         return cls(west, south, east, north, crs)
+
+    @staticmethod
+    def _axis_values(axis: Any, name: str) -> Any:
+        """Return one axis' coordinates as a flat float array.
+
+        Args:
+            axis: What the caller passed for that axis.
+            name: `"x"` or `"y"`, for the message.
+
+        Returns:
+            The values, flattened.
+
+        Raises:
+            ValueError: when they are not numbers — naming the axis, which numpy's own `TypeError` cannot.
+        """
+        import numpy as np
+
+        try:
+            return np.asarray(axis, dtype="float64").ravel()
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Bounds.cell_edges needs numbers for {name}; got {type(axis).__name__} ({error})"
+            ) from None
 
     @staticmethod
     def _spacing(axis: Any) -> Optional[float]:

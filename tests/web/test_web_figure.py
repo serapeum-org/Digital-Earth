@@ -93,13 +93,13 @@ class TestTheView:
         assert WebMap().viewport.crs == 4326, WebMap().viewport.to_dict()
 
     def test_fitting_bounds_frames_the_view(self):
-        """`fit_bounds` is a region, which is what `Viewport.bounds` holds."""
-        view = WebMap().fit_bounds([3.0, 50.0, 7.0, 54.0]).viewport
+        """`set_bounds` is a region, which is what `Viewport.bounds` holds."""
+        view = WebMap().set_bounds([3.0, 50.0, 7.0, 54.0]).viewport
         assert view.bounds.as_bbox() == [3.0, 50.0, 7.0, 54.0], view.to_dict()
 
     def test_the_globe_projection_is_part_of_the_view(self):
-        """`globe()` switches the projection, which the view records."""
-        assert WebMap().globe().viewport.globe is True, "the view must say so"
+        """`projection("globe")` switches the projection, which the view records."""
+        assert WebMap().projection("globe").viewport.globe is True, "the view must say"
 
     def test_the_view_round_trips(self):
         """A stored view reads back as the view it was written from."""

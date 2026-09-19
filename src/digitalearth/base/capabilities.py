@@ -186,6 +186,29 @@ class Capabilities:
     features: FrozenSet[str] = frozenset()
     absent: Mapping[str, str] = field(default_factory=dict)
 
+    def __hash__(self) -> int:
+        """Hash the declaration by what it declares.
+
+        A frozen dataclass presents as a value — the tiers' declarations are compared and passed around as
+        one — but `absent` is a mapping, which the generated `__hash__` cannot hash. Hashing its items
+        instead lets a declaration go in a set or serve as a dict key, which is what "frozen" promised
+        (review L2).
+
+        Returns:
+            The hash of the six fields, with `absent` taken as its sorted items.
+        """
+        return hash(
+            (
+                self.backend,
+                self.kinds,
+                self.channels,
+                self.data_driven,
+                self.schemes,
+                self.features,
+                tuple(sorted(self.absent.items())),
+            )
+        )
+
     def __post_init__(self) -> None:
         """Check every name against the vocabulary it belongs to, then freeze the declaration.
 

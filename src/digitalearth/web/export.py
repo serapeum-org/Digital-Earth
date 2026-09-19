@@ -315,7 +315,7 @@ class ExportMixin(_MixinBase):
             value=fps,
             old="duration",
             alias=duration,
-            caller="WebMap.animate()",
+            caller="WebMap.save_animation()",
             default=DEFAULT_FPS,
             convert=_fps_from_duration,
         )
@@ -336,7 +336,7 @@ class ExportMixin(_MixinBase):
     #: to a file (#299). `animate` means a matplotlib `FuncAnimation` on static and a callback loop in 3-D, so
     #: the file-writing meaning takes the name it already had on those tiers; `to_gif` was this tier's own
     #: older name. Both forward and warn.
-    save_gif = save_animation
+    save_gif = renamed_method(new="save_animation", old="save_gif", owner="WebMap")
     animate = renamed_method(new="save_animation", old="animate", owner="WebMap")
     to_gif = renamed_method(new="save_animation", old="to_gif", owner="WebMap")
 
@@ -353,7 +353,7 @@ class ExportMixin(_MixinBase):
         layer_ids = list((config or {}).get("layer_ids") or [])
         if config is None or (config.get("mode") != "raster") or len(layer_ids) < 2:
             raise ValueError(
-                "animate() needs a raster time series with at least two steps; add one with "
+                "save_animation() needs a raster time series with at least two steps; add one with "
                 "timeslider(collection). The vector time-slider filters a single layer, so its steps "
                 "are not separately renderable."
             )

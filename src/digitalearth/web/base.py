@@ -1252,26 +1252,30 @@ class WebMapBase:
 
                 ```
         """
-        if not visible:
-            return self
-        if layer_id is None:
-            return self.legend(title=label)
+        return self.legend(layer_id=layer_id, title=label, visible=visible)
+
+    def _legend_of(self, layer_id: str) -> dict:
+        """Return the classification one layer was drawn with.
+
+        Args:
+            layer_id: The layer whose classes are wanted.
+
+        Returns:
+            What the builder recorded for it. Reading `last_legend` instead described the most recently
+            classified layer under the caller's chosen label — a wrong map that looks right (review H4).
+
+        Raises:
+            KeyError: when no layer on this map has that id.
+            ValueError: when the layer carries no classification to describe.
+        """
         self.get_layer(layer_id)  # refuses an id nobody drew, by name
         keyed = self._legends.get(layer_id)
         if keyed is None:
-            classified = sorted(self._legends)
             raise ValueError(
                 f"layer {layer_id!r} was not drawn with a classification, so it has no colour key to show; "
-                f"the layers that were are {classified}"
+                f"the layers that were are {sorted(self._legends)}"
             )
-        # The named layer's own classification, put in front of `legend()` for the call. Reading
-        # `last_legend` instead drew the most recently classified layer's ramp under this layer's label —
-        # a wrong map that looks right (review H4).
-        before, self.last_legend = self.last_legend, keyed
-        try:
-            return self.legend(title=label)
-        finally:
-            self.last_legend = before
+        return keyed
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.
@@ -2265,7 +2269,7 @@ class WebMapBase:
                 ...     WebMap().save("frames.gif")
                 ... except ValueError as error:
                 ...     print(str(error).split(";")[0])
-                animate() needs a raster time series with at least two steps
+                save_animation() needs a raster time series with at least two steps
 
                 ```
 

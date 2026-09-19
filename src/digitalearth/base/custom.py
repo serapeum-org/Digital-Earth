@@ -194,14 +194,16 @@ def held_object(
 
             ```
     """
-    try:
-        return held[layer_id]
-    except KeyError:
-        pass
+    # The engine first: a layer id that collides across tiers would otherwise hand a renderer an
+    # object built with another engine, which is the one case this function exists to tell apart (review L4).
     if custom_engine(kind) != engine:
         raise MissingObject(
             f"layer {layer_id!r} is a {kind} layer and cannot be drawn by the {backend} backend"
         )
+    try:
+        return held[layer_id]
+    except KeyError:
+        pass
     raise MissingObject(
         f"layer {layer_id!r} is a {engine} object this figure does not carry; add it again on the map that "
         "draws it"

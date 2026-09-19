@@ -28,6 +28,39 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def _colour_limits(limits: Any, vmin: Any, vmax: Any, *, caller: str) -> tuple:
+    """Resolve the contract's `limits=` against this tier's own `vmin`/`vmax`.
+
+    `limits` is the one spelling every tier answers to (#299); `vmin`/`vmax` are what this tier took before
+    it, and both still work. What is refused is naming the same thing twice, which has no right answer.
+
+    Args:
+        limits: `(vmin, vmax)`, or `None`.
+        vmin: The lower limit, or `None`.
+        vmax: The upper limit, or `None`.
+        caller: The method, for the message.
+
+    Returns:
+        The `(vmin, vmax)` pair to colour with.
+
+    Raises:
+        ValueError: when `limits` is given alongside either of the others, or is not a pair.
+    """
+    if limits is None:
+        return vmin, vmax
+    if vmin is not None or vmax is not None:
+        raise ValueError(
+            f"{caller} takes limits= or vmin=/vmax=, not both; they name the same thing"
+        )
+    try:
+        low, high = limits
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{caller} limits must be a (vmin, vmax) pair; got {limits!r}"
+        ) from None
+    return low, high
+
+
 class RasterMixin(_MixinBase):
     """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
@@ -39,6 +72,7 @@ class RasterMixin(_MixinBase):
         cmap: Optional[str] = None,
         units: Optional[str] = None,
         opacity: float = 1.0,
+        limits: Optional[Any] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         visible: bool = True,
@@ -47,7 +81,7 @@ class RasterMixin(_MixinBase):
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
         The band is reprojected to the display CRS (lon/lat) through pyramids, normalised over its finite
-        range (or the explicit ``vmin``/``vmax``), colour-mapped with ``cmap`` (autostyle default when
+        range (or the explicit ``limits``/``vmin``/``vmax``), colour-mapped with ``cmap`` (autostyle default when
         ``None``), and embedded as an RGBA PNG data-URI placed by its lon/lat corners. Masked / non-finite
         cells become fully transparent.
 
@@ -55,6 +89,9 @@ class RasterMixin(_MixinBase):
             data: A pyramids ``Dataset`` (or anything ``get_source`` accepts).
             band: 1-based band to draw.
             cmap: matplotlib colormap name; ``None`` resolves the autostyle default for the variable.
+            limits: The contract's name for the colour limits, as ``(vmin, vmax)`` — the one spelling every
+                tier answers to (#299). ``vmin``/``vmax`` remain, and naming both is refused rather than
+                silently resolved one way.
             units: What the band's values are measured in, recorded as
                 :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
                 ``None`` (the default) takes the variable's units from
@@ -91,16 +128,16 @@ class RasterMixin(_MixinBase):
                 ...     x=np.array([0.0, 1.0, 2.0, 3.0]),
                 ...     y=np.array([2.0, 1.0, 0.0]),
                 ... )
-                >>> m = WebMap().add_raster(src, cmap="viridis", name="dem")  # doctest: +SKIP
+                >>> m = WebMap().field(src, cmap="viridis", name="dem")       # doctest: +SKIP
                 >>> m.layer_ids, len(m.layers)                       # doctest: +SKIP
                 (['dem'], 1)
 
                 ```
             - The band also hands the map its extent, so the view frames itself and
-              :meth:`~digitalearth.web.base.WebMapBase.fit_bounds` has something to frame on;
+              :meth:`~digitalearth.web.base.WebMapBase.set_bounds` has something to frame on;
               on an empty map the same call raises instead:
                 ```python
-                >>> m.fit_bounds() is m                              # doctest: +SKIP
+                >>> m.set_bounds() is m                              # doctest: +SKIP
                 True
 
                 ```
@@ -108,7 +145,7 @@ class RasterMixin(_MixinBase):
               :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks one layer per time
               step without every frame showing at once — in a saved page too, which has no slider:
                 ```python
-                >>> m = WebMap().add_raster(src, visible=False, name="t0")  # doctest: +SKIP
+                >>> m = WebMap().field(src, visible=False, name="t0")       # doctest: +SKIP
                 >>> m.layer_ids                                      # doctest: +SKIP
                 ['t0']
 
@@ -120,6 +157,7 @@ class RasterMixin(_MixinBase):
         """
         import numpy as np
 
+        vmin, vmax = _colour_limits(limits, vmin, vmax, caller="WebMap.field()")
         Layer, LayerType = _require_layer_api()
         source = self._display_source_or_skip(data, band=band, layer="field")
         if source is None:
@@ -399,7 +437,7 @@ class RasterMixin(_MixinBase):
         )
         valid = np.isfinite(data)
         if not valid.any():
-            raise ValueError("add_raster got a band with no finite values to colour")
+            raise ValueError("field() got a band with no finite values to colour")
         # The domain, the explicit-limit override and the constant-band widening are one rule, in base/spec.
         # `valid` is already computed above, so the finite subset is handed over rather than derived twice —
         # this is the tier with the explicit inline-pixel budget.

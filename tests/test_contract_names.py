@@ -161,6 +161,38 @@ class TestTheSeamedTiersAnswerToTheCore:
             )
 
 
+class TestTheKeywordsAreThePromiseToo:
+    """Review L12 — the contract declares keywords, and nothing checked them."""
+
+    @pytest.mark.parametrize("backend", SEAMED)
+    def test_every_core_method_takes_its_declared_keywords(self, backend):
+        """A name that takes different arguments on each tier is not one name.
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            The contract test checked that the *name* existed and never looked at `Method.keywords`.
+            `WebMap.legend` was `(title, position, labels)` against a declaration of `{layer_id, title,
+            labels, visible}`, and `field` had no `limits` — two of the names this PR froze not answering
+            to what was frozen (review L12).
+
+            Scoped to the seamed tiers, as the alias checks are: an unseamed tier keeps its own signatures
+            until its seam adopts the Core's, which is the same promise `PENDING` makes about the names.
+        """
+        facade = _facade(backend)
+        pending = set(pending_for(backend))
+        short = {}
+        for method in CORE:
+            held = getattr(facade, method.name, None)
+            if method.name in pending or held is None or not callable(held):
+                continue
+            missing = sorted(method.keywords - set(inspect.signature(held).parameters))
+            if missing:
+                short[method.name] = missing
+        assert short == {}, f"{backend} is short of declared keywords: {short}"
+
+
 class TestAPlannedRenameIsNotAnAlias:
     """Review M5 — `ALIASES` promises the old name works; a rename nobody has adopted promises nothing."""
 

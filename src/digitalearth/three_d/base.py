@@ -23,7 +23,11 @@ import numpy as np
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
-from digitalearth.base.registry import forget_object, object_namespace
+from digitalearth.base.registry import (
+    forget_object,
+    kind_info,
+    object_namespace,
+)
 from digitalearth.base.sources import Source
 from digitalearth.base.spec import (
     Camera,
@@ -789,16 +793,21 @@ class Scene3DBase:
         """
         layer_id = next_layer_id(self._figure.layers, custom_kind("pyvista"), name)
         self._custom[layer_id] = obj
-        actor = self._add_described_layer(
-            kind=custom_kind("pyvista"),
-            name=layer_id,
-            band=band,
-            volume=volume,
-            **kwargs,
-        )
-        if (
-            actor is None
-        ):  # pragma: no cover - the object was stored a line above, so it is there
+        # The object is held before the draw, because the drawer reads it from there — so every way out of
+        # the draw has to put it back if no layer was recorded. A rejected keyword propagated with the
+        # object still held under an id no layer owned (review L8).
+        try:
+            actor = self._add_described_layer(
+                kind=custom_kind("pyvista"),
+                name=layer_id,
+                band=band,
+                volume=volume,
+                **kwargs,
+            )
+        except Exception:
+            self._custom.pop(layer_id, None)
+            raise
+        if actor is None:  # the layer was skipped, so nothing owns the object
             self._custom.pop(layer_id, None)
         return actor
 
@@ -1145,6 +1154,14 @@ class Scene3DBase:
         if layer.id not in self._figure.layers:
             raise KeyError(
                 f"no layer {layer.id!r} in this scene; its layers are {self.layer_ids}"
+            )
+        if layer.source_id is None and kind_info(layer.kind).takes != "none":
+            # The drawers hand `_source_object`'s `None` straight to `get_source`, which answers with a
+            # `TypeError` nothing documents — and, going through `_change`, used to leave the scene holding
+            # a figure it could not draw (review L9). A layer that draws from data says where it is.
+            raise ValueError(
+                f"layer {layer.id!r} is a {layer.kind!r} layer, which draws from data, so its replacement "
+                f"needs a source_id; got None"
             )
         self._change(self._figure_with(layers=self._figure.layers.replace(layer)))
         return self
