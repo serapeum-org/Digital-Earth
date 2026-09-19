@@ -28,6 +28,23 @@ __all__ = ["Renderer3D", "drawer_for"]
 logger = logging.getLogger(__name__)
 
 
+#: The layer kinds this tier draws. Names only, so what is drawable can be asked — by a caller, and by the
+#: tier's own capability test — without importing every builder module behind them. `drawer_for` resolves
+#: them to functions and is checked against this tuple, which is what keeps the two from drifting: the hole
+#: this closes was a kind with a drawer and no declaration (review M6).
+DRAWN_KINDS: Tuple[str, ...] = (
+    "terrain",
+    "point_cloud",
+    "volume",
+    "isosurface",
+    "vectors",
+    "extrusion",
+    "raster",
+    "coastlines",
+    "custom:pyvista",
+)
+
+
 def drawer_for(kind: str) -> Any:
     """Return the function that draws one kind of layer in this tier.
 
@@ -77,12 +94,11 @@ def drawer_for(kind: str) -> Any:
         "coastlines": globe.draw_coastlines,
         "custom:pyvista": draw_custom,
     }
-    try:
-        return drawers[kind]
-    except KeyError:
+    if kind not in DRAWN_KINDS:
         raise KeyError(
-            f"the 3-D tier does not draw {kind!r} layers; it draws {sorted(drawers)}"
-        ) from None
+            f"the 3-D tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+        )
+    return drawers[kind]
 
 
 def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional[Tuple[Any, Any]]:

@@ -73,7 +73,10 @@ _KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "kind": ("raster_renderer",),
     "domain": ("domain",),
     "basemap": ("basemap",),
-    "coastlines": ("coastlines",),
+    # The *overlay*, not the kind: the 3-D tier draws a `coastlines` layer — a globe puts its own shoreline
+    # on the sphere — while having no builder to add one to a scene, and `quickmap(coastlines=True)` asks for
+    # the second. One name answering both questions accepted a request the tier cannot honour (review M6).
+    "coastlines": ("coastline_overlay",),
     "colorbar": ("colorbar", "legend"),
 }
 

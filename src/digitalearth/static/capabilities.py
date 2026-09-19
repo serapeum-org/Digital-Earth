@@ -73,6 +73,7 @@ CAPABILITIES = Capabilities(
         {
             "display_crs",
             "domain",
+            "coastline_overlay",
             "raster_renderer",
             "colorbar",
             "legend",

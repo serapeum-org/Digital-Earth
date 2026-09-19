@@ -72,6 +72,10 @@ CAPABILITIES = Capabilities(
             "time_slider",
             "measure",
             "attribution",
+            # The tier's colour key: `colorbar()` selects a layer's classification and `legend()` draws it.
+            # It was listed as absent, on the grounds that the key is a builder rather than a toggle — but
+            # the method exists and `quickmap(colorbar=...)` reaches it, so "not here" was untrue (M19).
+            "colorbar",
         }
     ),
     absent={
@@ -83,10 +87,6 @@ CAPABILITIES = Capabilities(
         "coastlines": (
             "coastlines come with the basemap style a caller picks, rather than as a Natural Earth layer the "
             "tier draws"
-        ),
-        "colorbar": (
-            "the tier's colour key is legend(), a builder that takes content, rather than a toggle over a bar "
-            "matplotlib drew"
         ),
         "vectors": "MapLibre has no arrow glyph; a u/v field is drawn on the static or interactive tier",
         "streamlines": "there is no streamline primitive to trace a field with in a browser",

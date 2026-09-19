@@ -102,6 +102,22 @@ class TestTheDescription:
         kinds = {scene.figure_spec.layers.get(name).kind for name in scene.layer_ids}
         assert kinds <= CAPABILITIES.kinds, f"undeclared kinds drawn: {kinds}"
 
+    def test_every_kind_the_tier_has_a_drawer_for_is_declared(self):
+        """The builders above need no optional dependency; the tier draws more kinds than they cover.
+
+        Test scenario:
+            The check above exercises five builders, and `globe` and `extruded_polygons` are not among them
+            — which is exactly where the hole was: `globe(data)` records a `coastlines` layer by default,
+            of a kind the declaration did not list and its `absent` said could not exist (review M6).
+            Reading the drawer table covers every kind without needing geovista installed to do it.
+        """
+        from digitalearth.three_d.renderer import DRAWN_KINDS, drawer_for
+
+        undeclared = sorted(set(DRAWN_KINDS) - CAPABILITIES.kinds)
+        assert undeclared == [], f"the tier draws {undeclared} without declaring them"
+        unresolved = [kind for kind in DRAWN_KINDS if drawer_for(kind) is None]
+        assert unresolved == [], f"{unresolved} are declared drawable with no drawer"
+
 
 class TestDrawingFromTheDescription:
     """A figure is what the renderer draws, so it can be stored and drawn again."""

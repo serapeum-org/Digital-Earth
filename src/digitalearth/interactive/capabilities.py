@@ -71,6 +71,7 @@ CAPABILITIES = Capabilities(
         {
             "display_crs",
             "raster_renderer",
+            "coastline_overlay",
             "colorbar",
             "legend",
             "animation",

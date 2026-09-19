@@ -267,3 +267,42 @@ class TestTheImportCost:
             [sys.executable, "-c", code], capture_output=True, text=True, check=True
         )
         assert result.stdout.strip() == "[] flat", result.stdout or result.stderr
+
+
+class TestTheTwoDeclarationsDoNotContradict:
+    """Review M19 — `Capabilities.absent` and `contract.PENDING` answer different questions."""
+
+    @pytest.mark.parametrize("backend", ["matplotlib", "interactive", "3d", "web"])
+    def test_nothing_is_both_declined_and_pending(self, backend):
+        """ "We decided against it" and "nobody has written it yet" cannot both be true of one name.
+
+        Args:
+            backend: The tier whose two declarations are compared.
+
+        Test scenario:
+            The 3-D tier said both about `legend`: `absent` gave a design reason, `PENDING` gave a wave
+            number. A reader had no way to tell which, and the whole point of `absent` carrying a reason is
+            that the two are distinguishable.
+        """
+        from digitalearth.api import _DECLARATIONS
+        from digitalearth.base.contract import pending_for
+
+        declared = _DECLARATIONS[backend]
+        both = sorted(set(declared.absent) & set(pending_for(backend)))
+        assert both == [], (
+            f"{backend} lists {both} as deliberately absent and as not yet built; pick one"
+        )
+
+    def test_a_capability_may_outlive_a_core_method_that_is_pending(self):
+        """The one overlap that is not a contradiction, pinned so it is read as deliberate.
+
+        Test scenario:
+            The 3-D tier *has* a colour key — PyVista draws a scalar bar, and `quickmap(colorbar=...)` is
+            honoured on the strength of that — while the Core *method* `colorbar()` is not built. A feature
+            and a method of the same name are different claims, which is why only `absent` is checked above.
+        """
+        from digitalearth.base.contract import pending_for
+        from digitalearth.three_d.capabilities import CAPABILITIES
+
+        assert "colorbar" in CAPABILITIES.features, sorted(CAPABILITIES.features)
+        assert "colorbar" in pending_for("3d"), sorted(pending_for("3d"))

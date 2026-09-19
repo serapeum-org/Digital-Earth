@@ -57,6 +57,7 @@ FEATURES: Mapping[str, str] = MappingProxyType(
     {
         "display_crs": "every layer is drawn in one CRS, which the caller may choose",
         "domain": "the map can be framed to a named region",
+        "coastline_overlay": "a coastline layer can be added to any figure the tier draws",
         "raster_renderer": "a raster can be drawn as an image, as cells or as contours, chosen by name",
         "colorbar": "a continuous colour key",
         "legend": "a keyed list of classes",

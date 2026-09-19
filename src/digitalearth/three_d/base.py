@@ -22,8 +22,8 @@ import numpy as np
 
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
-from digitalearth.base.registry import forget_object, object_namespace
 from digitalearth.base.display import auto_cmap, needs_reproject
+from digitalearth.base.registry import forget_object, object_namespace
 from digitalearth.base.sources import Source
 from digitalearth.base.spec import (
     Camera,

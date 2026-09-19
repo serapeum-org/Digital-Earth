@@ -30,6 +30,9 @@ CAPABILITIES = Capabilities(
             "vectors",
             "extrusion",
             "raster",
+            # A globe draws its own shoreline onto the sphere — `globe(data)` records one by default — so the
+            # tier draws this kind even though it has no standalone coastline builder (review M6).
+            "coastlines",
             "custom:pyvista",
         }
     ),
@@ -62,11 +65,9 @@ CAPABILITIES = Capabilities(
             "not a rendering choice on top of one"
         ),
         "basemap": "there are no map tiles to drape under a scene drawn in three dimensions",
-        "coastlines": (
-            "a globe draws its own coastlines onto the sphere; a flat scene has no shoreline to trace, so "
-            "there is no coastline layer to add to one"
-        ),
-        "legend": "a classified layer is annotated on the scalar bar rather than listed beside the scene",
+        # `legend` and `colorbar` are not listed: they are Core *methods* this tier has not built, which is
+        # `contract.PENDING`'s answer, not this one. "We decided against it" and "nobody has written it yet"
+        # are different, and a name cannot be both (review M19).
         "scale_bar": "a screen distance means nothing when the camera decides the scale of what is in front",
         "north_arrow": "the scene can be looked at from any direction, so there is no fixed north on screen",
         "attribution": "a render window has no credit line; a caller writes one beside the image it saves",
