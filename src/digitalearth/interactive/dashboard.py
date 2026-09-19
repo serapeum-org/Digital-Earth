@@ -35,14 +35,36 @@ _BASEMAP_CHOICES = list(
 #: a provider, so a map that already carries tiles still responds to the switcher.
 _TILE_TYPES = ("WMTS", "Tiles")
 
+
+def _drawn_type(layer: Any) -> str:
+    """Return the name of the element type a registered layer actually draws.
+
+    A `DynamicMap` is a wrapper: `large_image` produces `Image` frames through one, and `datashade`,
+    `trajectory` and a bundled `network` produce **RGB** frames through one. Choosing the restyle branch by
+    the wrapper's own type name sent `cmap` to all of them — and HoloViews refuses `cmap` on an RGB, from
+    inside the callback, where `param` logs the error and the map silently stops updating (review H5).
+
+    Args:
+        layer: A registered layer.
+
+    Returns:
+        The produced element's type name where a wrapper declares one, else the layer's own. A `DynamicMap`
+        that has not drawn a frame yet declares nothing, and comes back as `"DynamicMap"` — which is in
+        neither style table, so such a layer is left alone until it has drawn.
+    """
+    produced = getattr(layer, "type", None)
+    if produced is not None:
+        return str(produced.__name__)
+    return type(layer).__name__
+
+
 #: Element type names the dashboard's ``cmap``/``alpha`` overrides apply to (the colour-mapped raster
 #: elements). Their recorded style is what an override is merged over.
 #:
-#: ``DynamicMap`` is among them: a `large_image` layer *is* one, and its frames are the `Image`s the other
-#: two names cover. Left out, the default raster builder for a big raster was the one layer both widgets
-#: silently passed by (review M17). HoloViews applies `.opts()` on a `DynamicMap` to the elements it
-#: produces, so the override reaches the next frame drawn.
-_COLOR_MAPPED_TYPES = ("Image", "QuadMesh", "DynamicMap")
+#: A dynamic layer is classified by what it *draws* — see :func:`_drawn_type` — so a `large_image` lands
+#: here through its `Image` frames while a `datashade` lands in :data:`_ALPHA_ONLY_TYPES` through its `RGB`
+#: ones. Naming `DynamicMap` itself here sent `cmap` to both (review H5).
+_COLOR_MAPPED_TYPES = ("Image", "QuadMesh")
 
 #: Style keys a widget may override on a colour-mapped layer. Anything the builders recorded under these
 #: keys is read back and merged *under* the widget value, so an override never silently drops the rest of
@@ -232,7 +254,7 @@ class DashboardMixin(_MixinBase):
         }
         styled = []
         for layer in self.layers if layers is None else layers:
-            name = type(layer).__name__
+            name = _drawn_type(layer)
             if name in _COLOR_MAPPED_TYPES:
                 recorded = {
                     key: value

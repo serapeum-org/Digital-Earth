@@ -16,7 +16,7 @@ is intentional (this tier reads as HoloViews to its users); the static↔interac
 in the tier plan's feature-parity matrix.
 """
 
-from typing import TYPE_CHECKING, Any, Optional, Self, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Self, Sequence, Tuple
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources.view import SourceView
@@ -487,6 +487,11 @@ class RasterMixin(_MixinBase):
             request=target.view_request(Viewport(self.crs)),
         )
 
+        # Filled in below with the `DynamicMap` the frames belong to, so each frame's style is filed
+        # against the layer a caller holds rather than against whichever layer happened to register last
+        # (review H3). It stays `None` for the static path, where the frame *is* the layer.
+        owner: Dict[str, Any] = {}
+
         def _frame(x_range: Any = None, y_range: Any = None) -> Any:
             """Read the window the viewport asks for, and draw it.
 
@@ -514,6 +519,7 @@ class RasterMixin(_MixinBase):
                 self._image_from_source(shown),
                 common={"cmap": cmap, "colorbar": True, **opts},
                 bokeh={"tools": ["hover"]},
+                owner=owner.get("layer"),
             )
 
         if not dynamic:
@@ -521,6 +527,7 @@ class RasterMixin(_MixinBase):
         from holoviews.streams import RangeXY
 
         dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
+        owner["layer"] = dmap
         return self.add_element(dmap)
 
     def _windowable(self, dataset: Any) -> Any:

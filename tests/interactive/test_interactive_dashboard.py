@@ -456,6 +456,72 @@ class TestBothOverridePathsRestyleTheSameElements:
         )
 
 
+class TestADynamicLayerIsClassifiedByWhatItDraws:
+    """Review H5 — a `DynamicMap` is a wrapper, and two builders wrap very different elements."""
+
+    @pytest.fixture()
+    def scattered(self):
+        """Return points enough to datashade.
+
+        Returns:
+            A GeoDataFrame of 200 points in EPSG:4326.
+        """
+        import geopandas as gpd
+        import numpy as np
+        from shapely.geometry import Point
+
+        rng = np.random.default_rng(0)
+        return gpd.GeoDataFrame(
+            {"v": rng.random(200)},
+            geometry=[Point(float(a), float(b)) for a, b in rng.random((200, 2)) * 10],
+            crs="EPSG:4326",
+        )
+
+    def test_a_datashaded_layer_is_read_as_the_rgb_it_draws(self, scattered):
+        """`datashade` produces RGB frames, which have no scalar for a colormap to map.
+
+        Args:
+            scattered: The points to shade.
+
+        Test scenario:
+            The branch was chosen from the wrapper's own type name, so naming `DynamicMap` as colour-mapped
+            sent `cmap` to every datashaded, trajectory and bundled-network layer. HoloViews refuses it —
+            from inside the callback, where `param` logs the error and the map stops updating (review H5).
+        """
+        from digitalearth.interactive.dashboard import _drawn_type
+
+        m = InteractiveMap(crs=4326)
+        m.datashade(scattered)
+        layer = m.layers[0]
+        layer[()]  # draw a frame, so the wrapper knows what it produces
+        assert _drawn_type(layer) == "RGB", _drawn_type(layer)
+
+    def test_a_colormap_override_does_not_break_a_datashaded_layer(self, scattered):
+        """The whole point: the widget moves and the map keeps drawing.
+
+        Args:
+            scattered: The points to shade.
+        """
+        m = InteractiveMap(crs=4326)
+        m.datashade(scattered)
+        m.layers[0][()]
+        composed = m._render_with_overrides({"cmap": "viridis", "alpha": 0.5})
+        assert composed[()] is not None, "the frame must still draw"
+
+    def test_a_large_image_is_still_read_as_an_image(self, dataset):
+        """The other half: a dynamic raster keeps taking the colormap widget.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        from digitalearth.interactive.dashboard import _drawn_type
+
+        m = InteractiveMap(crs=dataset.epsg)
+        m.large_image(dataset, cmap="magma")
+        m.layers[0][()]
+        assert _drawn_type(m.layers[0]) == "Image", _drawn_type(m.layers[0])
+
+
 class TestTheOverrideBranchIsStillARender:
     """#300 / review H9 — the widget path must do everything `render()` does, not only compose."""
 

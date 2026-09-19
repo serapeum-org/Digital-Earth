@@ -279,8 +279,17 @@ class InteractiveMapBase:
             An ``hv.Image`` or ``gv.Image`` element.
         """
         gv, hv = _require_holoviz()
-        data = (x, y, arr) if bounds is None else arr
-        placement = {} if bounds is None else {"bounds": tuple(bounds)}
+        # The axes are the better answer wherever they have one: they carry the grid's *direction*, which
+        # `SourceView._axes` derives from the geotransform's step signs, and `hv.Image(arr, bounds=...)`
+        # assumes row 0 is north and column 0 is west. Placing every read by its bounds mirrored a south-up
+        # or east-left raster, silently, because a flipped raster draws perfectly happily (review H4).
+        # Bounds are the fallback for the one case the axes cannot answer: a single cell has no spacing.
+        degenerate = len(getattr(x, "ravel", lambda: x)()) < 2 or (
+            len(getattr(y, "ravel", lambda: y)()) < 2
+        )
+        use_bounds = bounds is not None and degenerate
+        data = arr if use_bounds else (x, y, arr)
+        placement = {"bounds": tuple(bounds)} if use_bounds else {}
         if self._projection is None:
             return hv.Image(data, kdims=["x", "y"], vdims=[name], **placement)
         return gv.Image(
@@ -555,7 +564,11 @@ class InteractiveMapBase:
         return source.metadata("variable", None) or source.z.name or "value"
 
     def _styled(
-        self, element: Any, common: Optional[dict] = None, bokeh: Optional[dict] = None
+        self,
+        element: Any,
+        common: Optional[dict] = None,
+        bokeh: Optional[dict] = None,
+        owner: Any = None,
     ) -> Any:
         """Apply backend-agnostic style opts plus Bokeh-only frame opts to ``element``.
 
@@ -571,6 +584,8 @@ class InteractiveMapBase:
             element: The HoloViews/GeoViews element to style.
             common: Backend-agnostic options; ``None``-valued entries are dropped.
             bokeh: Extra Bokeh-only options merged over the default frame.
+            owner: The registered layer this element is a *frame* of, for a dynamic layer whose frames are
+                drawn one per viewport. `None` for an element that is itself the layer.
 
         Returns:
             The styled element.
@@ -586,17 +601,24 @@ class InteractiveMapBase:
             frame["title"] = self.title
         frame.update(bokeh or {})
         element = element.opts(backend="bokeh", **frame)
-        self._record_style(element, {"common": dict(common), "bokeh": dict(frame)})
+        self._record_style(
+            element, {"common": dict(common), "bokeh": dict(frame)}, owner
+        )
         return element
 
-    def _record_style(self, element: Any, style: dict) -> None:
+    def _record_style(self, element: Any, style: dict, owner: Any = None) -> None:
         """File the style of a just-drawn element, and of the layer it is a frame of.
 
         A dynamic layer is registered as a `DynamicMap` and redrawn as a fresh element per frame, so the
         style recorded against the frame answered for nothing a caller holds: `style_of` on a
         `large_image(dynamic=True)` layer read empty, and the dashboard's widgets — which look the style up
         to merge over it — passed such a layer by (review M17). The style is filed against the registered
-        layer as well when the frame belongs to one.
+        layer as well, when the frame says which one it belongs to.
+
+        It has to *say*. Reading `self.layers[-1]` instead was a guess, and a wrong one: every builder
+        styles its element before registering it, so while a builder styles, the last registered layer is
+        still the **previous** one — a static layer drawn after a dynamic one overwrote the dynamic layer's
+        style, and with it the widget values merged over it (review H3).
 
         The table is then trimmed to the registered layers plus this element. Every frame is a new object
         under a new `id()`, so the old keying grew one dead entry per pan — sixteen after fifteen of them —
@@ -605,12 +627,14 @@ class InteractiveMapBase:
         Args:
             element: The element that was styled.
             style: What was applied to it.
+            owner: The registered layer `element` is a frame of, or `None` when it is the layer itself.
         """
         self._styles[id(element)] = style
-        drawn = self.layers[-1] if self.layers else None
-        if drawn is not None and type(drawn).__name__ == "DynamicMap":
-            self._styles[id(drawn)] = style
+        if owner is not None:
+            self._styles[id(owner)] = style
         live = {id(layer) for layer in self.layers} | {id(element)}
+        if owner is not None:
+            live.add(id(owner))
         self._styles = {key: held for key, held in self._styles.items() if key in live}
 
     def style_of(self, layer: Any) -> dict:

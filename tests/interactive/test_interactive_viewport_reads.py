@@ -212,6 +212,39 @@ class TestWhatTheFrameShows:
         m.layers[0][()]  # draw the first frame, as a renderer would
         assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
 
+    def test_a_later_layer_does_not_overwrite_a_dynamic_layer_s_style(self, dataset):
+        """A frame says which layer it belongs to; it used to be guessed from the last one registered.
+
+        Args:
+            dataset: A real raster, since the static builder reads one directly.
+
+        Test scenario:
+            Every builder styles its element *before* registering it, so while a builder styles, the last
+            registered layer is still the previous one. A static layer drawn after a dynamic one therefore
+            filed its style against the dynamic layer — and the dashboard merges widget values over
+            `style_of`, so layer 0 was redrawn in layer 1's colours: the #300 defect again (review H3).
+        """
+        m = InteractiveMap(crs=dataset.epsg)
+        m.large_image(dataset, cmap="magma")
+        m.layers[0][()]  # draw a frame, as a renderer would
+        m.image(dataset, cmap="Blues")
+        assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
+        assert m.style_of(1)["common"]["cmap"] == "Blues", m.style_of(1)
+
+    def test_two_dynamic_layers_keep_their_own_styles(self, cog):
+        """Each frame names its own owner, so one dynamic layer cannot answer for another.
+
+        Args:
+            cog: The recording raster.
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        m.large_image(cog, cmap="magma")
+        m.large_image(cog, cmap="cividis")
+        m.layers[0][()]
+        m.layers[1][()]
+        assert m.style_of(0)["common"]["cmap"] == "magma", m.style_of(0)
+        assert m.style_of(1)["common"]["cmap"] == "cividis", m.style_of(1)
+
     def test_panning_does_not_grow_the_style_table(self, cog):
         """Every frame is a new object, and the table was keyed by `id()` of the ones already gone.
 
@@ -249,6 +282,57 @@ class TestWhatTheFrameShows:
         assert [round(float(edge), 3) for edge in drawn] == [
             round(float(edge), 3) for edge in cog.bbox
         ], f"{drawn} is not the raster's {cog.bbox}"
+
+    @pytest.mark.parametrize(
+        "label, x, y, expected",
+        [
+            (
+                "north-up",
+                [0.0, 1.0, 2.0],
+                [9.0, 0.0],
+                [[4.0, 5.0, 6.0], [1.0, 2.0, 3.0]],
+            ),
+            (
+                "south-up",
+                [0.0, 1.0, 2.0],
+                [0.0, 9.0],
+                [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+            ),
+            (
+                "east-left",
+                [2.0, 1.0, 0.0],
+                [9.0, 0.0],
+                [[6.0, 5.0, 4.0], [3.0, 2.0, 1.0]],
+            ),
+        ],
+    )
+    def test_the_axes_keep_their_direction(self, label, x, y, expected):
+        """A grid's axes carry which way it runs, and the placement must not throw that away.
+
+        Args:
+            label: Which orientation is under test.
+            x: The x cell centres, ascending or descending.
+            y: The y cell centres.
+            expected: What the element should hold, row 0 first.
+
+        Test scenario:
+            `hv.Image(arr, bounds=...)` assumes row 0 is north and column 0 is west, so placing every
+            windowed read by its bounds mirrored a south-up or east-left raster — silently, because a
+            flipped raster draws perfectly happily (review H4). Bounds are the fallback for the one case
+            the axes cannot answer, which is a single cell.
+        """
+        import numpy as np
+
+        m = InteractiveMap(crs=4326)
+        element = m._raster_element(
+            np.array(x),
+            np.array(y),
+            np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]),
+            "v",
+            bounds=[0.0, 0.0, 2.0, 9.0],
+        )
+        drawn = element.dimension_values(2, flat=False).tolist()
+        assert drawn == expected, f"{label}: {drawn}"
 
     def test_a_one_cell_canvas_does_not_raise(self, cog):
         """The budget below that one drew nothing and said nothing; it is a picture now.
