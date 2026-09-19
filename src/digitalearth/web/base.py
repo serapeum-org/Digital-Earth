@@ -37,7 +37,13 @@ from digitalearth.base.display import (
     needs_reproject,
     to_display_source,
 )
-from digitalearth.base.registry import KIND_BANDS, band_of, kind_info
+from digitalearth.base.registry import (
+    KIND_BANDS,
+    band_of,
+    forget_object,
+    kind_info,
+    object_namespace,
+)
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import (
     Bounds,
@@ -476,6 +482,9 @@ class WebMapBase:
         self._projection: str = "mercator"
         #: Where each layer's data came from, keyed by layer id — the figure's sources (#296).
         self._sources: Dict[str, DataRef] = {}
+        #: This map's prefix in the process-global object registry. Every map restarts its layer numbering,
+        #: so without one two maps in a session both wrote `circle-2` and the second won (review H2).
+        self._objects_ns: str = object_namespace()
         #: The controls the map draws, as furniture on its panel (#292).
         self._furniture: List[Furniture] = []
         #: The panel's title, as `title()` set it.
@@ -1078,7 +1087,12 @@ class WebMapBase:
         """
         kind_info(kind)
         if source is not None:
-            self._sources[layer_id] = DataRef.of(source, name=layer_id)
+            # Namespaced per map: every `WebMap` restarts its layer numbering, so two maps in one session
+            # both minted `circle-2` and the second registration replaced the first — map A's stored figure
+            # then described map B's data (review H2).
+            self._sources[layer_id] = DataRef.of(
+                source, name=f"{self._objects_ns}:{layer_id}"
+            )
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
             # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
@@ -1250,7 +1264,11 @@ class WebMapBase:
         # A caller's own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker
         # attribute the builders' closures carry, so there is nothing on it to compare by id.
         held = self._custom.pop(layer_id, None)
-        self._sources.pop(layer_id, None)
+        # Let the object go with the layer: the registry holds strong references, so a session that draws
+        # and removes keeps every dataset alive otherwise (review H2).
+        dropped = self._sources.pop(layer_id, None)
+        if dropped is not None:
+            forget_object(dropped.uri)
         self._forget_slider_frame(layer_id)
 
         def _is_layer(layer: Any) -> bool:

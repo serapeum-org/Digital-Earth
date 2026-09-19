@@ -22,6 +22,7 @@ import numpy as np
 
 from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
+from digitalearth.base.registry import forget_object, object_namespace
 from digitalearth.base.display import auto_cmap, needs_reproject
 from digitalearth.base.sources import Source
 from digitalearth.base.spec import (
@@ -531,6 +532,9 @@ class Scene3DBase:
         self._renderer: Renderer3D = Renderer3D(self)
         #: The objects a caller handed to `add_mesh`/`add_volume`, keyed by layer id (#293).
         self._custom: dict[str, Any] = {}
+        #: This scene's prefix in the process-global object registry, so its in-memory sources are its own
+        #: and not whichever scene numbered its layers the same way last (review H1).
+        self._objects_ns: str = object_namespace()
         #: The camera a caller set, and whether they set one. Applied to the plotter before each render, since
         #: PyVista resets its own camera to fit the first mesh added.
         self._camera: Camera = DEFAULT_CAMERA
@@ -1416,7 +1420,11 @@ class Scene3DBase:
         source_id = None
         if data is not None:
             source_id = layer_id
-            sources[source_id] = DataRef.of(data, name=kind)
+            # Keyed by this scene's namespace and the layer's own id, not by its kind: the object registry
+            # is process-global, so `name=kind` made every terrain in every scene share one entry, last
+            # write winning — two terrains in one scene described the same data, and a second scene
+            # re-pointed the first scene's already-captured figure (review H1).
+            sources[source_id] = DataRef.of(data, name=f"{self._objects_ns}:{layer_id}")
         spec = LayerSpec(
             layer_id,
             kind,

@@ -55,6 +55,8 @@ __all__ = [
     "register_classifier",
     "SOURCES_GROUP",
     "clear_objects",
+    "forget_object",
+    "object_namespace",
     "register_object",
     "register_resolver",
     "resolve_uri",
@@ -156,6 +158,58 @@ def register_object(obj: Any, *, name: str = "") -> str:
     key = name or uuid.uuid4().hex
     _OBJECTS[key] = obj
     return f"{OBJECT_SCHEME}:{key}"
+
+
+def object_namespace() -> str:
+    """Return a fresh prefix for one figure's in-memory sources.
+
+    The object table is process-global and keyed by name, so two figures that number their layers the same
+    way — and they all do — wrote to the same entries: a second map silently re-pointed the first map's
+    already-captured sources at its own data (review H1/H2). A figure takes a namespace once and keys every
+    source it registers under it.
+
+    Returns:
+        A short unique prefix, to be joined to a layer id with a colon.
+
+    Examples:
+        - Two figures get two namespaces:
+            ```python
+            >>> from digitalearth.base.registry import object_namespace
+            >>> object_namespace() != object_namespace()
+            True
+
+            ```
+    """
+    return uuid.uuid4().hex[:12]
+
+
+def forget_object(uri: str) -> None:
+    """Drop one registered object, by its URI or its bare id.
+
+    The counterpart to :func:`register_object` for a figure that no longer draws it — a removed layer, or a
+    scene that has been closed. Without it the table holds every dataset ever drawn for the life of the
+    process, and `clear_objects` is too blunt to call from a tier: it would forget every *other* figure's
+    sources too.
+
+    Args:
+        uri: The ``object:<id>`` URI, or the id on its own. An id that is not registered is ignored, so a
+            caller can forget the same layer twice.
+
+    Examples:
+        - A forgotten id no longer resolves:
+            ```python
+            >>> from digitalearth.base.registry import forget_object, register_object, resolve_uri
+            >>> uri = register_object([1, 2, 3], name="demo-forget")
+            >>> forget_object(uri)
+            >>> resolve_uri(uri)
+            Traceback (most recent call last):
+                ...
+            KeyError: "no object is registered as 'demo-forget'. An object: reference only resolves in the process that registered it — save the data and reference it by path to share the figure"
+
+            ```
+    """
+    key = uri.split(":", 1)[1] if uri.startswith(f"{OBJECT_SCHEME}:") else uri
+    _OBJECTS.pop(key, None)
 
 
 def clear_objects() -> None:

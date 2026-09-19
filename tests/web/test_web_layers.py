@@ -951,6 +951,52 @@ class TestTheSwitcherFollowsTheLiveLayers:
         assert exported[exported.rfind("var data = ") :].count('"addControl"') == 0
 
 
+class TestOneMapsSourcesAreItsOwn:
+    """#296 / review H2 — the object registry is process-global; a figure's sources must not be shared."""
+
+    def test_two_maps_in_one_session_keep_their_own_data(self, points):
+        """Every map restarts its layer numbering, so two of them mint the same id.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: both maps registered under `circle-2`, the second replaced the first, and
+            map A's stored figure then described map B's data — in a notebook, where two maps in one
+            session is the ordinary case.
+        """
+        from digitalearth.web import WebMap
+
+        other = points.iloc[:1].copy()
+        first = WebMap().points(points)
+        second = WebMap().points(other)
+        assert first.layer_ids == second.layer_ids, (
+            "the ids must collide for this to mean anything"
+        )
+        assert len(first.figure_spec.sources[first.layer_ids[0]].open()) == len(
+            points
+        ), "the first map's source must still be the data it was given"
+        assert len(second.figure_spec.sources[second.layer_ids[0]].open()) == len(
+            other
+        ), "and the second map's must be its own"
+
+    def test_a_removed_layer_lets_its_data_go(self, points):
+        """The registry holds strong references, so a drawn-and-removed layer would leak one.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.base.registry import _OBJECTS
+        from digitalearth.web import WebMap
+
+        before = len(_OBJECTS)
+        m = WebMap().points(points)
+        m.remove_layer(m.layer_ids[0])
+        assert len(_OBJECTS) == before, (
+            f"the registry grew by {len(_OBJECTS) - before} after a draw and a remove"
+        )
+
+
 class TestIdsAreAllocatedOnce:
     """A caller name and a generated id come out of the same allocator."""
 

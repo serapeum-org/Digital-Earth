@@ -422,6 +422,52 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_two_layers_of_one_kind_describe_their_own_data(self, scene):
+        """A source is keyed by the layer that draws it, not by the kind of layer it is.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The measured defect: both terrains registered under `object:terrain`, so the second replaced
+            the first and the figure described one dataset twice (review H1).
+        """
+        low = get_source(_dem())
+        high = get_source(_dem() * 10.0)
+        scene.terrain(low)
+        scene.terrain(high)
+        sources = scene.figure_spec.sources
+        drawn = [
+            float(np.nanmax(sources[layer_id].open().z.values))
+            for layer_id in scene.layer_ids
+        ]
+        assert drawn == [
+            float(np.nanmax(low.z.values)),
+            float(np.nanmax(high.z.values)),
+        ], drawn
+
+    def test_a_second_scene_leaves_the_first_scene_s_sources_alone(self, scene):
+        """Two scenes number their layers the same way; their data must not share an entry.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The object registry is process-global. Before the namespace, building a second scene
+            retroactively re-pointed a figure the first scene had already handed out (review H1).
+        """
+        low = get_source(_dem())
+        scene.terrain(low)
+        kept = scene.figure_spec.sources[scene.layer_ids[0]]
+        other = Scene3D(off_screen=True)
+        try:
+            other.terrain(get_source(_dem() * 10.0))
+            assert float(np.nanmax(kept.open().z.values)) == float(
+                np.nanmax(low.z.values)
+            ), "the first scene's source must still be its own"
+        finally:
+            other.close()
+
     def test_a_figure_the_renderer_refuses_does_not_become_the_scene(self, scene):
         """A change the plotter would not accept leaves the scene as it was.
 
