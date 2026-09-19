@@ -64,7 +64,7 @@
     
     
   <meta name="panzoom-theme" content="material">
-<meta name="panzoom-data" content='{"selectors": [".mermaid", ".d2"], "initial_zoom_level": 1.0}'> </head>
+<meta name="panzoom-data" content='{"selectors": [".d2", ".mermaid"], "initial_zoom_level": 1.0}'> </head>
   
   
     
@@ -4651,9 +4651,7 @@ has been added yet, or when an id was given that is not on this map.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-597">597</a></span>
-<span class="normal"><a href="#__codelineno-0-598">598</a></span>
-<span class="normal"><a href="#__codelineno-0-599">599</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-599">599</a></span>
 <span class="normal"><a href="#__codelineno-0-600">600</a></span>
 <span class="normal"><a href="#__codelineno-0-601">601</a></span>
 <span class="normal"><a href="#__codelineno-0-602">602</a></span>
@@ -4731,87 +4729,89 @@ has been added yet, or when an id was given that is not on this map.</p>
 <span class="normal"><a href="#__codelineno-0-674">674</a></span>
 <span class="normal"><a href="#__codelineno-0-675">675</a></span>
 <span class="normal"><a href="#__codelineno-0-676">676</a></span>
-<span class="normal"><a href="#__codelineno-0-677">677</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-597" name="__codelineno-0-597"></a><span class="k">def</span><span class="w"> </span><span class="nf">layer_control</span><span class="p">(</span>
-<a id="__codelineno-0-598" name="__codelineno-0-598"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-599" name="__codelineno-0-599"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-600" name="__codelineno-0-600"></a>    <span class="n">position</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;top-right&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-601" name="__codelineno-0-601"></a>    <span class="n">layer_ids</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-602" name="__codelineno-0-602"></a>    <span class="n">theme</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-603" name="__codelineno-0-603"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-604" name="__codelineno-0-604"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a switcher so a viewer can turn the data layers on and off.</span>
-<a id="__codelineno-0-605" name="__codelineno-0-605"></a>
-<a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="sd">    A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the</span>
-<a id="__codelineno-0-607" name="__codelineno-0-607"></a><span class="sd">    single most common thing anyone does with a web map. The switch lists the data layers only:</span>
-<a id="__codelineno-0-608" name="__codelineno-0-608"></a><span class="sd">    basemaps are the ground, not something a viewer toggles.</span>
-<a id="__codelineno-0-609" name="__codelineno-0-609"></a>
-<a id="__codelineno-0-610" name="__codelineno-0-610"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-611" name="__codelineno-0-611"></a><span class="sd">        position: One of the four MapLibre corners.</span>
-<a id="__codelineno-0-612" name="__codelineno-0-612"></a><span class="sd">        layer_ids: The layers to offer, defaulting to every data layer added so far</span>
-<a id="__codelineno-0-613" name="__codelineno-0-613"></a><span class="sd">            (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from</span>
-<a id="__codelineno-0-614" name="__codelineno-0-614"></a><span class="sd">            the switch without hiding them from the map.</span>
-<a id="__codelineno-0-615" name="__codelineno-0-615"></a><span class="sd">        theme: ``&quot;default&quot;`` or ``&quot;simple&quot;`` — py-maplibregl&#39;s two switcher styles.</span>
-<a id="__codelineno-0-616" name="__codelineno-0-616"></a>
-<a id="__codelineno-0-617" name="__codelineno-0-617"></a><span class="sd">    Note:</span>
-<a id="__codelineno-0-618" name="__codelineno-0-618"></a><span class="sd">        A row toggles exactly one MapLibre layer, because that is what py-maplibregl&#39;s control does.</span>
-<a id="__codelineno-0-619" name="__codelineno-0-619"></a><span class="sd">        Builders that draw more than one layer — ``cluster`` (bubbles, counts, loose points) and</span>
-<a id="__codelineno-0-620" name="__codelineno-0-620"></a><span class="sd">        ``graticule`` (lines, degree labels) — are listed once, under their main layer, so toggling a</span>
-<a id="__codelineno-0-621" name="__codelineno-0-621"></a><span class="sd">        cluster hides its bubbles while the count labels remain. ``remove_layer`` does take the whole</span>
-<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="sd">        group. Hiding the parts together needs a control py-maplibregl does not ship.</span>
-<a id="__codelineno-0-623" name="__codelineno-0-623"></a>
-<a id="__codelineno-0-624" name="__codelineno-0-624"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-625" name="__codelineno-0-625"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-626" name="__codelineno-0-626"></a>
-<a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-628" name="__codelineno-0-628"></a><span class="sd">        ValueError: when ``position`` is not one of the four legal MapLibre corners, when no data layer</span>
-<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">            has been added yet, or when an id was given that is not on this map.</span>
-<a id="__codelineno-0-630" name="__codelineno-0-630"></a>
-<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-632" name="__codelineno-0-632"></a><span class="sd">        - Two layers and a switch between them:</span>
-<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-634" name="__codelineno-0-634"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                            # doctest: +SKIP</span>
-<a id="__codelineno-0-635" name="__codelineno-0-635"></a><span class="sd">            &gt;&gt;&gt; (                                                              # doctest: +SKIP</span>
-<a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="sd">            ...     WebMap()</span>
-<a id="__codelineno-0-637" name="__codelineno-0-637"></a><span class="sd">            ...     .basemap()</span>
-<a id="__codelineno-0-638" name="__codelineno-0-638"></a><span class="sd">            ...     .choropleth(gdf, column=&quot;pop&quot;, name=&quot;Population&quot;)</span>
-<a id="__codelineno-0-639" name="__codelineno-0-639"></a><span class="sd">            ...     .layer_control()</span>
-<a id="__codelineno-0-640" name="__codelineno-0-640"></a><span class="sd">            ... )</span>
-<a id="__codelineno-0-641" name="__codelineno-0-641"></a>
-<a id="__codelineno-0-642" name="__codelineno-0-642"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-677">677</a></span>
+<span class="normal"><a href="#__codelineno-0-678">678</a></span>
+<span class="normal"><a href="#__codelineno-0-679">679</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-599" name="__codelineno-0-599"></a><span class="k">def</span><span class="w"> </span><span class="nf">layer_control</span><span class="p">(</span>
+<a id="__codelineno-0-600" name="__codelineno-0-600"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-601" name="__codelineno-0-601"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-602" name="__codelineno-0-602"></a>    <span class="n">position</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;top-right&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-603" name="__codelineno-0-603"></a>    <span class="n">layer_ids</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-604" name="__codelineno-0-604"></a>    <span class="n">theme</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-605" name="__codelineno-0-605"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-606" name="__codelineno-0-606"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Add a switcher so a viewer can turn the data layers on and off.</span>
+<a id="__codelineno-0-607" name="__codelineno-0-607"></a>
+<a id="__codelineno-0-608" name="__codelineno-0-608"></a><span class="sd">    A map with a basemap, a choropleth and a point overlay had no way to look underneath — which is the</span>
+<a id="__codelineno-0-609" name="__codelineno-0-609"></a><span class="sd">    single most common thing anyone does with a web map. The switch lists the data layers only:</span>
+<a id="__codelineno-0-610" name="__codelineno-0-610"></a><span class="sd">    basemaps are the ground, not something a viewer toggles.</span>
+<a id="__codelineno-0-611" name="__codelineno-0-611"></a>
+<a id="__codelineno-0-612" name="__codelineno-0-612"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-613" name="__codelineno-0-613"></a><span class="sd">        position: One of the four MapLibre corners.</span>
+<a id="__codelineno-0-614" name="__codelineno-0-614"></a><span class="sd">        layer_ids: The layers to offer, defaulting to every data layer added so far</span>
+<a id="__codelineno-0-615" name="__codelineno-0-615"></a><span class="sd">            (:attr:`~digitalearth.web.base.WebMapBase.layer_ids`). Pass a subset to hide the rest from</span>
+<a id="__codelineno-0-616" name="__codelineno-0-616"></a><span class="sd">            the switch without hiding them from the map.</span>
+<a id="__codelineno-0-617" name="__codelineno-0-617"></a><span class="sd">        theme: ``&quot;default&quot;`` or ``&quot;simple&quot;`` — py-maplibregl&#39;s two switcher styles.</span>
+<a id="__codelineno-0-618" name="__codelineno-0-618"></a>
+<a id="__codelineno-0-619" name="__codelineno-0-619"></a><span class="sd">    Note:</span>
+<a id="__codelineno-0-620" name="__codelineno-0-620"></a><span class="sd">        A row toggles exactly one MapLibre layer, because that is what py-maplibregl&#39;s control does.</span>
+<a id="__codelineno-0-621" name="__codelineno-0-621"></a><span class="sd">        Builders that draw more than one layer — ``cluster`` (bubbles, counts, loose points) and</span>
+<a id="__codelineno-0-622" name="__codelineno-0-622"></a><span class="sd">        ``graticule`` (lines, degree labels) — are listed once, under their main layer, so toggling a</span>
+<a id="__codelineno-0-623" name="__codelineno-0-623"></a><span class="sd">        cluster hides its bubbles while the count labels remain. ``remove_layer`` does take the whole</span>
+<a id="__codelineno-0-624" name="__codelineno-0-624"></a><span class="sd">        group. Hiding the parts together needs a control py-maplibregl does not ship.</span>
+<a id="__codelineno-0-625" name="__codelineno-0-625"></a>
+<a id="__codelineno-0-626" name="__codelineno-0-626"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-627" name="__codelineno-0-627"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-628" name="__codelineno-0-628"></a>
+<a id="__codelineno-0-629" name="__codelineno-0-629"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-630" name="__codelineno-0-630"></a><span class="sd">        ValueError: when ``position`` is not one of the four legal MapLibre corners, when no data layer</span>
+<a id="__codelineno-0-631" name="__codelineno-0-631"></a><span class="sd">            has been added yet, or when an id was given that is not on this map.</span>
+<a id="__codelineno-0-632" name="__codelineno-0-632"></a>
+<a id="__codelineno-0-633" name="__codelineno-0-633"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-634" name="__codelineno-0-634"></a><span class="sd">        - Two layers and a switch between them:</span>
+<a id="__codelineno-0-635" name="__codelineno-0-635"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-636" name="__codelineno-0-636"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                            # doctest: +SKIP</span>
+<a id="__codelineno-0-637" name="__codelineno-0-637"></a><span class="sd">            &gt;&gt;&gt; (                                                              # doctest: +SKIP</span>
+<a id="__codelineno-0-638" name="__codelineno-0-638"></a><span class="sd">            ...     WebMap()</span>
+<a id="__codelineno-0-639" name="__codelineno-0-639"></a><span class="sd">            ...     .basemap()</span>
+<a id="__codelineno-0-640" name="__codelineno-0-640"></a><span class="sd">            ...     .choropleth(gdf, column=&quot;pop&quot;, name=&quot;Population&quot;)</span>
+<a id="__codelineno-0-641" name="__codelineno-0-641"></a><span class="sd">            ...     .layer_control()</span>
+<a id="__codelineno-0-642" name="__codelineno-0-642"></a><span class="sd">            ... )</span>
 <a id="__codelineno-0-643" name="__codelineno-0-643"></a>
-<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-645" name="__codelineno-0-645"></a><span class="sd">        digitalearth.web.base.WebMapBase.layer_ids: the ids this offers by default.</span>
-<a id="__codelineno-0-646" name="__codelineno-0-646"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-647" name="__codelineno-0-647"></a>    <span class="n">_require_maplibre</span><span class="p">()</span>
-<a id="__codelineno-0-648" name="__codelineno-0-648"></a>    <span class="n">_check_position</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
-<a id="__codelineno-0-649" name="__codelineno-0-649"></a>    <span class="k">if</span> <span class="n">theme</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_SWITCHER_THEMES</span><span class="p">:</span>
-<a id="__codelineno-0-650" name="__codelineno-0-650"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-651" name="__codelineno-0-651"></a>            <span class="sa">f</span><span class="s2">&quot;layer_control(theme=</span><span class="si">{</span><span class="n">theme</span><span class="si">!r}</span><span class="s2">) must be one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">_SWITCHER_THEMES</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-652" name="__codelineno-0-652"></a>        <span class="p">)</span>
-<a id="__codelineno-0-653" name="__codelineno-0-653"></a>    <span class="n">available</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
-<a id="__codelineno-0-654" name="__codelineno-0-654"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">available</span><span class="p">:</span>
-<a id="__codelineno-0-655" name="__codelineno-0-655"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-656" name="__codelineno-0-656"></a>            <span class="s2">&quot;layer_control() has nothing to switch: no data layer has been added yet. A basemap is &quot;</span>
-<a id="__codelineno-0-657" name="__codelineno-0-657"></a>            <span class="s2">&quot;the ground rather than a layer a viewer toggles.&quot;</span>
-<a id="__codelineno-0-658" name="__codelineno-0-658"></a>        <span class="p">)</span>
-<a id="__codelineno-0-659" name="__codelineno-0-659"></a>    <span class="n">wanted</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">layer_ids</span><span class="p">)</span> <span class="k">if</span> <span class="n">layer_ids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">available</span>
-<a id="__codelineno-0-660" name="__codelineno-0-660"></a>    <span class="n">unknown</span> <span class="o">=</span> <span class="p">[</span><span class="n">layer_id</span> <span class="k">for</span> <span class="n">layer_id</span> <span class="ow">in</span> <span class="n">wanted</span> <span class="k">if</span> <span class="n">layer_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available</span><span class="p">]</span>
-<a id="__codelineno-0-661" name="__codelineno-0-661"></a>    <span class="k">if</span> <span class="n">unknown</span><span class="p">:</span>
-<a id="__codelineno-0-662" name="__codelineno-0-662"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-663" name="__codelineno-0-663"></a>            <span class="sa">f</span><span class="s2">&quot;layer_control() was given </span><span class="si">{</span><span class="n">unknown</span><span class="si">}</span><span class="s2">, which are not on this map; its layers are &quot;</span>
-<a id="__codelineno-0-664" name="__codelineno-0-664"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">&quot;</span>
-<a id="__codelineno-0-665" name="__codelineno-0-665"></a>        <span class="p">)</span>
-<a id="__codelineno-0-666" name="__codelineno-0-666"></a>    <span class="c1"># Held as a request, not appended as a layer: the live layers are resolved when the widget is</span>
-<a id="__codelineno-0-667" name="__codelineno-0-667"></a>    <span class="c1"># built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling</span>
-<a id="__codelineno-0-668" name="__codelineno-0-668"></a>    <span class="c1"># this twice replaces the request rather than stacking a second identical panel.</span>
-<a id="__codelineno-0-669" name="__codelineno-0-669"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_switcher</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-670" name="__codelineno-0-670"></a>        <span class="s2">&quot;layer_ids&quot;</span><span class="p">:</span> <span class="n">wanted</span><span class="p">,</span>
-<a id="__codelineno-0-671" name="__codelineno-0-671"></a>        <span class="s2">&quot;theme&quot;</span><span class="p">:</span> <span class="n">theme</span><span class="p">,</span>
-<a id="__codelineno-0-672" name="__codelineno-0-672"></a>        <span class="s2">&quot;position&quot;</span><span class="p">:</span> <span class="n">position</span><span class="p">,</span>
-<a id="__codelineno-0-673" name="__codelineno-0-673"></a>    <span class="p">}</span>
-<a id="__codelineno-0-674" name="__codelineno-0-674"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_record_furniture</span><span class="p">(</span>
-<a id="__codelineno-0-675" name="__codelineno-0-675"></a>        <span class="s2">&quot;layer_switcher&quot;</span><span class="p">,</span> <span class="n">anchor</span><span class="o">=</span><span class="n">position</span><span class="p">,</span> <span class="n">layers</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">wanted</span><span class="p">),</span> <span class="n">theme</span><span class="o">=</span><span class="n">theme</span>
-<a id="__codelineno-0-676" name="__codelineno-0-676"></a>    <span class="p">)</span>
-<a id="__codelineno-0-677" name="__codelineno-0-677"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-644" name="__codelineno-0-644"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-645" name="__codelineno-0-645"></a>
+<a id="__codelineno-0-646" name="__codelineno-0-646"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-647" name="__codelineno-0-647"></a><span class="sd">        digitalearth.web.base.WebMapBase.layer_ids: the ids this offers by default.</span>
+<a id="__codelineno-0-648" name="__codelineno-0-648"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-649" name="__codelineno-0-649"></a>    <span class="n">_require_maplibre</span><span class="p">()</span>
+<a id="__codelineno-0-650" name="__codelineno-0-650"></a>    <span class="n">_check_position</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
+<a id="__codelineno-0-651" name="__codelineno-0-651"></a>    <span class="k">if</span> <span class="n">theme</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_SWITCHER_THEMES</span><span class="p">:</span>
+<a id="__codelineno-0-652" name="__codelineno-0-652"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-653" name="__codelineno-0-653"></a>            <span class="sa">f</span><span class="s2">&quot;layer_control(theme=</span><span class="si">{</span><span class="n">theme</span><span class="si">!r}</span><span class="s2">) must be one of </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">_SWITCHER_THEMES</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-654" name="__codelineno-0-654"></a>        <span class="p">)</span>
+<a id="__codelineno-0-655" name="__codelineno-0-655"></a>    <span class="n">available</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layer_ids</span>
+<a id="__codelineno-0-656" name="__codelineno-0-656"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">available</span><span class="p">:</span>
+<a id="__codelineno-0-657" name="__codelineno-0-657"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-658" name="__codelineno-0-658"></a>            <span class="s2">&quot;layer_control() has nothing to switch: no data layer has been added yet. A basemap is &quot;</span>
+<a id="__codelineno-0-659" name="__codelineno-0-659"></a>            <span class="s2">&quot;the ground rather than a layer a viewer toggles.&quot;</span>
+<a id="__codelineno-0-660" name="__codelineno-0-660"></a>        <span class="p">)</span>
+<a id="__codelineno-0-661" name="__codelineno-0-661"></a>    <span class="n">wanted</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">layer_ids</span><span class="p">)</span> <span class="k">if</span> <span class="n">layer_ids</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">available</span>
+<a id="__codelineno-0-662" name="__codelineno-0-662"></a>    <span class="n">unknown</span> <span class="o">=</span> <span class="p">[</span><span class="n">layer_id</span> <span class="k">for</span> <span class="n">layer_id</span> <span class="ow">in</span> <span class="n">wanted</span> <span class="k">if</span> <span class="n">layer_id</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">available</span><span class="p">]</span>
+<a id="__codelineno-0-663" name="__codelineno-0-663"></a>    <span class="k">if</span> <span class="n">unknown</span><span class="p">:</span>
+<a id="__codelineno-0-664" name="__codelineno-0-664"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-665" name="__codelineno-0-665"></a>            <span class="sa">f</span><span class="s2">&quot;layer_control() was given </span><span class="si">{</span><span class="n">unknown</span><span class="si">}</span><span class="s2">, which are not on this map; its layers are &quot;</span>
+<a id="__codelineno-0-666" name="__codelineno-0-666"></a>            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">available</span><span class="si">}</span><span class="s2">&quot;</span>
+<a id="__codelineno-0-667" name="__codelineno-0-667"></a>        <span class="p">)</span>
+<a id="__codelineno-0-668" name="__codelineno-0-668"></a>    <span class="c1"># Held as a request, not appended as a layer: the live layers are resolved when the widget is</span>
+<a id="__codelineno-0-669" name="__codelineno-0-669"></a>    <span class="c1"># built, so removing a layer afterwards cannot leave a dead row in the saved page, and calling</span>
+<a id="__codelineno-0-670" name="__codelineno-0-670"></a>    <span class="c1"># this twice replaces the request rather than stacking a second identical panel.</span>
+<a id="__codelineno-0-671" name="__codelineno-0-671"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_switcher</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-672" name="__codelineno-0-672"></a>        <span class="s2">&quot;layer_ids&quot;</span><span class="p">:</span> <span class="n">wanted</span><span class="p">,</span>
+<a id="__codelineno-0-673" name="__codelineno-0-673"></a>        <span class="s2">&quot;theme&quot;</span><span class="p">:</span> <span class="n">theme</span><span class="p">,</span>
+<a id="__codelineno-0-674" name="__codelineno-0-674"></a>        <span class="s2">&quot;position&quot;</span><span class="p">:</span> <span class="n">position</span><span class="p">,</span>
+<a id="__codelineno-0-675" name="__codelineno-0-675"></a>    <span class="p">}</span>
+<a id="__codelineno-0-676" name="__codelineno-0-676"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_record_furniture</span><span class="p">(</span>
+<a id="__codelineno-0-677" name="__codelineno-0-677"></a>        <span class="s2">&quot;layer_switcher&quot;</span><span class="p">,</span> <span class="n">anchor</span><span class="o">=</span><span class="n">position</span><span class="p">,</span> <span class="n">layers</span><span class="o">=</span><span class="nb">tuple</span><span class="p">(</span><span class="n">wanted</span><span class="p">),</span> <span class="n">theme</span><span class="o">=</span><span class="n">theme</span>
+<a id="__codelineno-0-678" name="__codelineno-0-678"></a>    <span class="p">)</span>
+<a id="__codelineno-0-679" name="__codelineno-0-679"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5201,6 +5201,23 @@ gradient bar with its end values.</p>
       <tbody>
           <tr class="doc-section-item">
             <td>
+                <code>layer_id</code>
+            </td>
+            <td>
+                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Which layer's classes to describe. <code>None</code> takes the most recently classified layer,
+which is what the tier recorded before layers had ids.</p>
+              </div>
+            </td>
+            <td>
+                  <code>None</code>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td>
                 <code>title</code>
             </td>
             <td>
@@ -5251,6 +5268,23 @@ categories. Ignored for a continuous ramp, which has no rows.</p>
                   <code>None</code>
             </td>
           </tr>
+          <tr class="doc-section-item">
+            <td>
+                <code>visible</code>
+            </td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>False</code> draws no key, so a caller passing a flag through does not have to branch.
+The corner is still checked, so one spelling of it is not valid only half the time.</p>
+              </div>
+            </td>
+            <td>
+                  <code>True</code>
+            </td>
+          </tr>
       </tbody>
     </table>
 
@@ -5272,54 +5306,6 @@ categories. Ignored for a continuous ramp, which has no rows.</p>
               <div class="doc-md-description">
                 <p>The same map instance, so builder calls chain.</p>
               </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-<p><span class="doc-section-title">Parameters:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Default</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td>
-                <code>layer_id</code>
-            </td>
-            <td>
-                  <code><span title="typing.Optional">Optional</span>[<span title="str">str</span>]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>Which layer's classes to describe. <code>None</code> takes the most recently classified layer,
-which is what the tier recorded before layers had ids.</p>
-              </div>
-            </td>
-            <td>
-                  <code>None</code>
-            </td>
-          </tr>
-          <tr class="doc-section-item">
-            <td>
-                <code>visible</code>
-            </td>
-            <td>
-                  <code><span title="bool">bool</span></code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p><code>False</code> draws no key, so a caller passing a flag through does not have to branch.</p>
-              </div>
-            </td>
-            <td>
-                  <code>True</code>
             </td>
           </tr>
       </tbody>
@@ -5463,7 +5449,9 @@ all — there is nothing to build a key from, and an empty box would be worse th
 <span class="normal"><a href="#__codelineno-0-592">592</a></span>
 <span class="normal"><a href="#__codelineno-0-593">593</a></span>
 <span class="normal"><a href="#__codelineno-0-594">594</a></span>
-<span class="normal"><a href="#__codelineno-0-595">595</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="k">def</span><span class="w"> </span><span class="nf">legend</span><span class="p">(</span>
+<span class="normal"><a href="#__codelineno-0-595">595</a></span>
+<span class="normal"><a href="#__codelineno-0-596">596</a></span>
+<span class="normal"><a href="#__codelineno-0-597">597</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-511" name="__codelineno-0-511"></a><span class="k">def</span><span class="w"> </span><span class="nf">legend</span><span class="p">(</span>
 <a id="__codelineno-0-512" name="__codelineno-0-512"></a>    <span class="bp">self</span><span class="p">,</span>
 <a id="__codelineno-0-513" name="__codelineno-0-513"></a>    <span class="o">*</span><span class="p">,</span>
 <a id="__codelineno-0-514" name="__codelineno-0-514"></a>    <span class="n">layer_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -5484,70 +5472,72 @@ all — there is nothing to build a key from, and an empty box would be worse th
 <a id="__codelineno-0-529" name="__codelineno-0-529"></a><span class="sd">    gradient bar with its end values.</span>
 <a id="__codelineno-0-530" name="__codelineno-0-530"></a>
 <a id="__codelineno-0-531" name="__codelineno-0-531"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">        title: Heading above the key. ``None`` uses the classified column&#39;s name, followed by the</span>
-<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">            units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them</span>
-<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">            for the raster the classification came from. A title given here always wins, and a unit</span>
-<a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">            is never guessed: without one the heading is the bare column name, as it always was.</span>
-<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">        position: One of the four MapLibre corners.</span>
-<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">        labels: Explicit row labels, replacing the derived ones — for units, or for renaming</span>
-<a id="__codelineno-0-538" name="__codelineno-0-538"></a><span class="sd">            categories. Ignored for a continuous ramp, which has no rows.</span>
-<a id="__codelineno-0-539" name="__codelineno-0-539"></a>
-<a id="__codelineno-0-540" name="__codelineno-0-540"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-541" name="__codelineno-0-541"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-542" name="__codelineno-0-542"></a>
-<a id="__codelineno-0-543" name="__codelineno-0-543"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-544" name="__codelineno-0-544"></a><span class="sd">        layer_id: Which layer&#39;s classes to describe. `None` takes the most recently classified layer,</span>
-<a id="__codelineno-0-545" name="__codelineno-0-545"></a><span class="sd">            which is what the tier recorded before layers had ids.</span>
-<a id="__codelineno-0-546" name="__codelineno-0-546"></a><span class="sd">        visible: `False` draws no key, so a caller passing a flag through does not have to branch.</span>
-<a id="__codelineno-0-547" name="__codelineno-0-547"></a>
-<a id="__codelineno-0-548" name="__codelineno-0-548"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="sd">        ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`</span>
-<a id="__codelineno-0-550" name="__codelineno-0-550"></a><span class="sd">            names a layer that carries no classification, or when no classified layer has been added at</span>
-<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">            all — there is nothing to build a key from, and an empty box would be worse than an error.</span>
-<a id="__codelineno-0-552" name="__codelineno-0-552"></a><span class="sd">        KeyError: when `layer_id` names no layer on this map.</span>
-<a id="__codelineno-0-553" name="__codelineno-0-553"></a>
-<a id="__codelineno-0-554" name="__codelineno-0-554"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="sd">        - A choropleth and its key:</span>
-<a id="__codelineno-0-556" name="__codelineno-0-556"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-557" name="__codelineno-0-557"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                        # doctest: +SKIP</span>
-<a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">            &gt;&gt;&gt; (                                                          # doctest: +SKIP</span>
-<a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="sd">            ...     WebMap().basemap().choropleth(gdf, column=&quot;pop&quot;).legend()</span>
-<a id="__codelineno-0-560" name="__codelineno-0-560"></a><span class="sd">            ... )</span>
-<a id="__codelineno-0-561" name="__codelineno-0-561"></a>
-<a id="__codelineno-0-562" name="__codelineno-0-562"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-563" name="__codelineno-0-563"></a>
-<a id="__codelineno-0-564" name="__codelineno-0-564"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-565" name="__codelineno-0-565"></a><span class="sd">        digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.</span>
-<a id="__codelineno-0-566" name="__codelineno-0-566"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">visible</span><span class="p">:</span>
-<a id="__codelineno-0-568" name="__codelineno-0-568"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-569" name="__codelineno-0-569"></a>    <span class="n">_require_maplibre</span><span class="p">()</span>
-<a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="n">_check_position</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
-<a id="__codelineno-0-571" name="__codelineno-0-571"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="k">if</span> <span class="n">layer_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_legend_of</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
-<a id="__codelineno-0-572" name="__codelineno-0-572"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">spec</span><span class="p">:</span>
-<a id="__codelineno-0-573" name="__codelineno-0-573"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-574" name="__codelineno-0-574"></a>            <span class="s2">&quot;legend() has nothing to describe: no classified layer has been added yet. Add a &quot;</span>
-<a id="__codelineno-0-575" name="__codelineno-0-575"></a>            <span class="s2">&quot;choropleth (or any builder given column=...) first.&quot;</span>
-<a id="__codelineno-0-576" name="__codelineno-0-576"></a>        <span class="p">)</span>
-<a id="__codelineno-0-577" name="__codelineno-0-577"></a>    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="n">heading</span> <span class="o">=</span> <span class="n">title</span>
-<a id="__codelineno-0-579" name="__codelineno-0-579"></a>    <span class="k">else</span><span class="p">:</span>
-<a id="__codelineno-0-580" name="__codelineno-0-580"></a>        <span class="n">heading</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;column&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
-<a id="__codelineno-0-581" name="__codelineno-0-581"></a>        <span class="n">units</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;units&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="k">if</span> <span class="n">heading</span> <span class="ow">and</span> <span class="n">units</span><span class="p">:</span>
-<a id="__codelineno-0-583" name="__codelineno-0-583"></a>            <span class="n">heading</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">heading</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)&quot;</span>
-<a id="__codelineno-0-584" name="__codelineno-0-584"></a>    <span class="n">head</span> <span class="o">=</span> <span class="p">(</span>
-<a id="__codelineno-0-585" name="__codelineno-0-585"></a>        <span class="sa">f</span><span class="s1">&#39;&lt;div style=&quot;font-weight:600;margin-bottom:4px&quot;&gt;</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">heading</span><span class="p">)</span><span class="si">}</span><span class="s1">&lt;/div&gt;&#39;</span>
-<a id="__codelineno-0-586" name="__codelineno-0-586"></a>        <span class="k">if</span> <span class="n">heading</span>
-<a id="__codelineno-0-587" name="__codelineno-0-587"></a>        <span class="k">else</span> <span class="s2">&quot;&quot;</span>
-<a id="__codelineno-0-588" name="__codelineno-0-588"></a>    <span class="p">)</span>
-<a id="__codelineno-0-589" name="__codelineno-0-589"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="n">_legend_rows</span><span class="p">(</span>
-<a id="__codelineno-0-590" name="__codelineno-0-590"></a>        <span class="n">spec</span><span class="p">[</span><span class="s2">&quot;kind&quot;</span><span class="p">],</span> <span class="nb">list</span><span class="p">(</span><span class="n">spec</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">]),</span> <span class="nb">list</span><span class="p">(</span><span class="n">spec</span><span class="p">[</span><span class="s2">&quot;colors&quot;</span><span class="p">]),</span> <span class="n">labels</span>
-<a id="__codelineno-0-591" name="__codelineno-0-591"></a>    <span class="p">)</span>
-<a id="__codelineno-0-592" name="__codelineno-0-592"></a>    <span class="c1"># One panel per kind: a second legend replaces the first rather than stacking an identical box</span>
-<a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="c1"># in the same corner, and it is built into the widget rather than appended as a layer.</span>
-<a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_panels</span><span class="p">[</span><span class="s2">&quot;legend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;div&gt;</span><span class="si">{</span><span class="n">head</span><span class="si">}{</span><span class="n">rows</span><span class="si">}</span><span class="s2">&lt;/div&gt;&quot;</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
-<a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-532" name="__codelineno-0-532"></a><span class="sd">        layer_id: Which layer&#39;s classes to describe. `None` takes the most recently classified layer,</span>
+<a id="__codelineno-0-533" name="__codelineno-0-533"></a><span class="sd">            which is what the tier recorded before layers had ids.</span>
+<a id="__codelineno-0-534" name="__codelineno-0-534"></a><span class="sd">        title: Heading above the key. ``None`` uses the classified column&#39;s name, followed by the</span>
+<a id="__codelineno-0-535" name="__codelineno-0-535"></a><span class="sd">            units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them</span>
+<a id="__codelineno-0-536" name="__codelineno-0-536"></a><span class="sd">            for the raster the classification came from. A title given here always wins, and a unit</span>
+<a id="__codelineno-0-537" name="__codelineno-0-537"></a><span class="sd">            is never guessed: without one the heading is the bare column name, as it always was.</span>
+<a id="__codelineno-0-538" name="__codelineno-0-538"></a><span class="sd">        position: One of the four MapLibre corners.</span>
+<a id="__codelineno-0-539" name="__codelineno-0-539"></a><span class="sd">        labels: Explicit row labels, replacing the derived ones — for units, or for renaming</span>
+<a id="__codelineno-0-540" name="__codelineno-0-540"></a><span class="sd">            categories. Ignored for a continuous ramp, which has no rows.</span>
+<a id="__codelineno-0-541" name="__codelineno-0-541"></a><span class="sd">        visible: `False` draws no key, so a caller passing a flag through does not have to branch.</span>
+<a id="__codelineno-0-542" name="__codelineno-0-542"></a><span class="sd">            The corner is still checked, so one spelling of it is not valid only half the time.</span>
+<a id="__codelineno-0-543" name="__codelineno-0-543"></a>
+<a id="__codelineno-0-544" name="__codelineno-0-544"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-545" name="__codelineno-0-545"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-546" name="__codelineno-0-546"></a>
+<a id="__codelineno-0-547" name="__codelineno-0-547"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-548" name="__codelineno-0-548"></a><span class="sd">        ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`</span>
+<a id="__codelineno-0-549" name="__codelineno-0-549"></a><span class="sd">            names a layer that carries no classification, or when no classified layer has been added at</span>
+<a id="__codelineno-0-550" name="__codelineno-0-550"></a><span class="sd">            all — there is nothing to build a key from, and an empty box would be worse than an error.</span>
+<a id="__codelineno-0-551" name="__codelineno-0-551"></a><span class="sd">        KeyError: when `layer_id` names no layer on this map.</span>
+<a id="__codelineno-0-552" name="__codelineno-0-552"></a>
+<a id="__codelineno-0-553" name="__codelineno-0-553"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-554" name="__codelineno-0-554"></a><span class="sd">        - A choropleth and its key:</span>
+<a id="__codelineno-0-555" name="__codelineno-0-555"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-556" name="__codelineno-0-556"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                        # doctest: +SKIP</span>
+<a id="__codelineno-0-557" name="__codelineno-0-557"></a><span class="sd">            &gt;&gt;&gt; (                                                          # doctest: +SKIP</span>
+<a id="__codelineno-0-558" name="__codelineno-0-558"></a><span class="sd">            ...     WebMap().basemap().choropleth(gdf, column=&quot;pop&quot;).legend()</span>
+<a id="__codelineno-0-559" name="__codelineno-0-559"></a><span class="sd">            ... )</span>
+<a id="__codelineno-0-560" name="__codelineno-0-560"></a>
+<a id="__codelineno-0-561" name="__codelineno-0-561"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-562" name="__codelineno-0-562"></a>
+<a id="__codelineno-0-563" name="__codelineno-0-563"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-564" name="__codelineno-0-564"></a><span class="sd">        digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.</span>
+<a id="__codelineno-0-565" name="__codelineno-0-565"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-566" name="__codelineno-0-566"></a>    <span class="c1"># Validated before the flag is read: `legend(position=&quot;middle&quot;, visible=False)` was accepted while</span>
+<a id="__codelineno-0-567" name="__codelineno-0-567"></a>    <span class="c1"># `legend(position=&quot;middle&quot;)` raised, so a caller passing a flag through was checked half the time</span>
+<a id="__codelineno-0-568" name="__codelineno-0-568"></a>    <span class="c1"># (review L7).</span>
+<a id="__codelineno-0-569" name="__codelineno-0-569"></a>    <span class="n">_check_position</span><span class="p">(</span><span class="n">position</span><span class="p">)</span>
+<a id="__codelineno-0-570" name="__codelineno-0-570"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">visible</span><span class="p">:</span>
+<a id="__codelineno-0-571" name="__codelineno-0-571"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-572" name="__codelineno-0-572"></a>    <span class="n">_require_maplibre</span><span class="p">()</span>
+<a id="__codelineno-0-573" name="__codelineno-0-573"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_legend</span> <span class="k">if</span> <span class="n">layer_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">_legend_of</span><span class="p">(</span><span class="n">layer_id</span><span class="p">)</span>
+<a id="__codelineno-0-574" name="__codelineno-0-574"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">spec</span><span class="p">:</span>
+<a id="__codelineno-0-575" name="__codelineno-0-575"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-576" name="__codelineno-0-576"></a>            <span class="s2">&quot;legend() has nothing to describe: no classified layer has been added yet. Add a &quot;</span>
+<a id="__codelineno-0-577" name="__codelineno-0-577"></a>            <span class="s2">&quot;choropleth (or any builder given column=...) first.&quot;</span>
+<a id="__codelineno-0-578" name="__codelineno-0-578"></a>        <span class="p">)</span>
+<a id="__codelineno-0-579" name="__codelineno-0-579"></a>    <span class="k">if</span> <span class="n">title</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-580" name="__codelineno-0-580"></a>        <span class="n">heading</span> <span class="o">=</span> <span class="n">title</span>
+<a id="__codelineno-0-581" name="__codelineno-0-581"></a>    <span class="k">else</span><span class="p">:</span>
+<a id="__codelineno-0-582" name="__codelineno-0-582"></a>        <span class="n">heading</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;column&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+<a id="__codelineno-0-583" name="__codelineno-0-583"></a>        <span class="n">units</span> <span class="o">=</span> <span class="n">spec</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;units&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-584" name="__codelineno-0-584"></a>        <span class="k">if</span> <span class="n">heading</span> <span class="ow">and</span> <span class="n">units</span><span class="p">:</span>
+<a id="__codelineno-0-585" name="__codelineno-0-585"></a>            <span class="n">heading</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">heading</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2">)&quot;</span>
+<a id="__codelineno-0-586" name="__codelineno-0-586"></a>    <span class="n">head</span> <span class="o">=</span> <span class="p">(</span>
+<a id="__codelineno-0-587" name="__codelineno-0-587"></a>        <span class="sa">f</span><span class="s1">&#39;&lt;div style=&quot;font-weight:600;margin-bottom:4px&quot;&gt;</span><span class="si">{</span><span class="n">_text</span><span class="p">(</span><span class="n">heading</span><span class="p">)</span><span class="si">}</span><span class="s1">&lt;/div&gt;&#39;</span>
+<a id="__codelineno-0-588" name="__codelineno-0-588"></a>        <span class="k">if</span> <span class="n">heading</span>
+<a id="__codelineno-0-589" name="__codelineno-0-589"></a>        <span class="k">else</span> <span class="s2">&quot;&quot;</span>
+<a id="__codelineno-0-590" name="__codelineno-0-590"></a>    <span class="p">)</span>
+<a id="__codelineno-0-591" name="__codelineno-0-591"></a>    <span class="n">rows</span> <span class="o">=</span> <span class="n">_legend_rows</span><span class="p">(</span>
+<a id="__codelineno-0-592" name="__codelineno-0-592"></a>        <span class="n">spec</span><span class="p">[</span><span class="s2">&quot;kind&quot;</span><span class="p">],</span> <span class="nb">list</span><span class="p">(</span><span class="n">spec</span><span class="p">[</span><span class="s2">&quot;values&quot;</span><span class="p">]),</span> <span class="nb">list</span><span class="p">(</span><span class="n">spec</span><span class="p">[</span><span class="s2">&quot;colors&quot;</span><span class="p">]),</span> <span class="n">labels</span>
+<a id="__codelineno-0-593" name="__codelineno-0-593"></a>    <span class="p">)</span>
+<a id="__codelineno-0-594" name="__codelineno-0-594"></a>    <span class="c1"># One panel per kind: a second legend replaces the first rather than stacking an identical box</span>
+<a id="__codelineno-0-595" name="__codelineno-0-595"></a>    <span class="c1"># in the same corner, and it is built into the widget rather than appended as a layer.</span>
+<a id="__codelineno-0-596" name="__codelineno-0-596"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_panels</span><span class="p">[</span><span class="s2">&quot;legend&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="sa">f</span><span class="s2">&quot;&lt;div&gt;</span><span class="si">{</span><span class="n">head</span><span class="si">}{</span><span class="n">rows</span><span class="si">}</span><span class="s2">&lt;/div&gt;&quot;</span><span class="p">,</span> <span class="n">position</span><span class="p">)</span>
+<a id="__codelineno-0-597" name="__codelineno-0-597"></a>    <span class="k">return</span> <span class="bp">self</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5830,9 +5820,7 @@ parameter, so preferring either would silently drop the other.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-679">679</a></span>
-<span class="normal"><a href="#__codelineno-0-680">680</a></span>
-<span class="normal"><a href="#__codelineno-0-681">681</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-681">681</a></span>
 <span class="normal"><a href="#__codelineno-0-682">682</a></span>
 <span class="normal"><a href="#__codelineno-0-683">683</a></span>
 <span class="normal"><a href="#__codelineno-0-684">684</a></span>
@@ -5941,118 +5929,120 @@ parameter, so preferring either would silently drop the other.</p>
 <span class="normal"><a href="#__codelineno-0-787">787</a></span>
 <span class="normal"><a href="#__codelineno-0-788">788</a></span>
 <span class="normal"><a href="#__codelineno-0-789">789</a></span>
-<span class="normal"><a href="#__codelineno-0-790">790</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-679" name="__codelineno-0-679"></a><span class="k">def</span><span class="w"> </span><span class="nf">text</span><span class="p">(</span>
-<a id="__codelineno-0-680" name="__codelineno-0-680"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-681" name="__codelineno-0-681"></a>    <span class="n">lon</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-682" name="__codelineno-0-682"></a>    <span class="n">lat</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
-<a id="__codelineno-0-683" name="__codelineno-0-683"></a>    <span class="n">s</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-684" name="__codelineno-0-684"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-685" name="__codelineno-0-685"></a>    <span class="n">crs</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">4326</span><span class="p">,</span>
-<a id="__codelineno-0-686" name="__codelineno-0-686"></a>    <span class="n">text_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-687" name="__codelineno-0-687"></a>    <span class="n">color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#ffffff&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-688" name="__codelineno-0-688"></a>    <span class="n">halo_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#000000&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-689" name="__codelineno-0-689"></a>    <span class="n">halo_width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-690" name="__codelineno-0-690"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-691" name="__codelineno-0-691"></a>    <span class="n">size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-692" name="__codelineno-0-692"></a>    <span class="n">string</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-693" name="__codelineno-0-693"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-694" name="__codelineno-0-694"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Place a single line of text at a coordinate.</span>
-<a id="__codelineno-0-695" name="__codelineno-0-695"></a>
-<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="sd">    The &quot;label this spot&quot; case, which needed a whole GeoDataFrame before —</span>
-<a id="__codelineno-0-697" name="__codelineno-0-697"></a><span class="sd">    :meth:`~digitalearth.web.vector.VectorMixin.labels` is the data-driven counterpart.</span>
-<a id="__codelineno-0-698" name="__codelineno-0-698"></a>
-<a id="__codelineno-0-699" name="__codelineno-0-699"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-700" name="__codelineno-0-700"></a><span class="sd">        lon: X of the anchor point, in `crs` — a longitude by default.</span>
-<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">        lat: Y of the anchor point, in `crs` — a latitude by default.</span>
-<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="sd">        s: The string to draw. Named `s` as it is on the static and interactive tiers (#260), which</span>
-<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">            follow matplotlib&#39;s own spelling.</span>
-<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">        crs: What `lon`/`lat` are measured in. EPSG:4326 by default; a point in another CRS is</span>
-<a id="__codelineno-0-705" name="__codelineno-0-705"></a><span class="sd">            reprojected into the CRS this tier places data in, exactly as a feature is (#260).</span>
-<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">        text_size: Text size in pixels (``14.0`` when omitted — the signature&#39;s ``None`` is the</span>
-<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">            &quot;not passed&quot; sentinel the deprecated spelling is resolved against). Named for the text</span>
-<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">            rather than ``size``, which means the visual size of a marker everywhere else.</span>
-<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">        color: Text colour.</span>
-<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">        halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.</span>
-<a id="__codelineno-0-711" name="__codelineno-0-711"></a><span class="sd">        halo_width: Halo width in pixels; ``0`` disables it.</span>
-<a id="__codelineno-0-712" name="__codelineno-0-712"></a><span class="sd">        string: **Deprecated** spelling of `s`; forwarded unchanged, after a</span>
-<a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="sd">            ``DeprecationWarning`` that ``string=`` will be removed in a future release.</span>
-<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="sd">        name: What a layer switcher calls this annotation; ``None`` uses its generated id.</span>
-<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="sd">        size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a</span>
-<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="sd">            ``DeprecationWarning`` that ``size=`` will be removed in a future release.</span>
-<a id="__codelineno-0-717" name="__codelineno-0-717"></a>
-<a id="__codelineno-0-718" name="__codelineno-0-718"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-719" name="__codelineno-0-719"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-720" name="__codelineno-0-720"></a>
-<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-722" name="__codelineno-0-722"></a><span class="sd">        TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one</span>
-<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">            parameter, so preferring either would silently drop the other.</span>
-<a id="__codelineno-0-724" name="__codelineno-0-724"></a>
-<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-726" name="__codelineno-0-726"></a><span class="sd">        - Mark a place:</span>
-<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
-<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().text(4.9, 52.4, &quot;Amsterdam&quot;)         # doctest: +SKIP</span>
-<a id="__codelineno-0-730" name="__codelineno-0-730"></a>
-<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">            ```</span>
+<span class="normal"><a href="#__codelineno-0-790">790</a></span>
+<span class="normal"><a href="#__codelineno-0-791">791</a></span>
+<span class="normal"><a href="#__codelineno-0-792">792</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-681" name="__codelineno-0-681"></a><span class="k">def</span><span class="w"> </span><span class="nf">text</span><span class="p">(</span>
+<a id="__codelineno-0-682" name="__codelineno-0-682"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-683" name="__codelineno-0-683"></a>    <span class="n">lon</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-684" name="__codelineno-0-684"></a>    <span class="n">lat</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+<a id="__codelineno-0-685" name="__codelineno-0-685"></a>    <span class="n">s</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-686" name="__codelineno-0-686"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-687" name="__codelineno-0-687"></a>    <span class="n">crs</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="mi">4326</span><span class="p">,</span>
+<a id="__codelineno-0-688" name="__codelineno-0-688"></a>    <span class="n">text_size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-689" name="__codelineno-0-689"></a>    <span class="n">color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#ffffff&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-690" name="__codelineno-0-690"></a>    <span class="n">halo_color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#000000&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-691" name="__codelineno-0-691"></a>    <span class="n">halo_width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-692" name="__codelineno-0-692"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-693" name="__codelineno-0-693"></a>    <span class="n">size</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-694" name="__codelineno-0-694"></a>    <span class="n">string</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-695" name="__codelineno-0-695"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-696" name="__codelineno-0-696"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Place a single line of text at a coordinate.</span>
+<a id="__codelineno-0-697" name="__codelineno-0-697"></a>
+<a id="__codelineno-0-698" name="__codelineno-0-698"></a><span class="sd">    The &quot;label this spot&quot; case, which needed a whole GeoDataFrame before —</span>
+<a id="__codelineno-0-699" name="__codelineno-0-699"></a><span class="sd">    :meth:`~digitalearth.web.vector.VectorMixin.labels` is the data-driven counterpart.</span>
+<a id="__codelineno-0-700" name="__codelineno-0-700"></a>
+<a id="__codelineno-0-701" name="__codelineno-0-701"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-702" name="__codelineno-0-702"></a><span class="sd">        lon: X of the anchor point, in `crs` — a longitude by default.</span>
+<a id="__codelineno-0-703" name="__codelineno-0-703"></a><span class="sd">        lat: Y of the anchor point, in `crs` — a latitude by default.</span>
+<a id="__codelineno-0-704" name="__codelineno-0-704"></a><span class="sd">        s: The string to draw. Named `s` as it is on the static and interactive tiers (#260), which</span>
+<a id="__codelineno-0-705" name="__codelineno-0-705"></a><span class="sd">            follow matplotlib&#39;s own spelling.</span>
+<a id="__codelineno-0-706" name="__codelineno-0-706"></a><span class="sd">        crs: What `lon`/`lat` are measured in. EPSG:4326 by default; a point in another CRS is</span>
+<a id="__codelineno-0-707" name="__codelineno-0-707"></a><span class="sd">            reprojected into the CRS this tier places data in, exactly as a feature is (#260).</span>
+<a id="__codelineno-0-708" name="__codelineno-0-708"></a><span class="sd">        text_size: Text size in pixels (``14.0`` when omitted — the signature&#39;s ``None`` is the</span>
+<a id="__codelineno-0-709" name="__codelineno-0-709"></a><span class="sd">            &quot;not passed&quot; sentinel the deprecated spelling is resolved against). Named for the text</span>
+<a id="__codelineno-0-710" name="__codelineno-0-710"></a><span class="sd">            rather than ``size``, which means the visual size of a marker everywhere else.</span>
+<a id="__codelineno-0-711" name="__codelineno-0-711"></a><span class="sd">        color: Text colour.</span>
+<a id="__codelineno-0-712" name="__codelineno-0-712"></a><span class="sd">        halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.</span>
+<a id="__codelineno-0-713" name="__codelineno-0-713"></a><span class="sd">        halo_width: Halo width in pixels; ``0`` disables it.</span>
+<a id="__codelineno-0-714" name="__codelineno-0-714"></a><span class="sd">        string: **Deprecated** spelling of `s`; forwarded unchanged, after a</span>
+<a id="__codelineno-0-715" name="__codelineno-0-715"></a><span class="sd">            ``DeprecationWarning`` that ``string=`` will be removed in a future release.</span>
+<a id="__codelineno-0-716" name="__codelineno-0-716"></a><span class="sd">        name: What a layer switcher calls this annotation; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-717" name="__codelineno-0-717"></a><span class="sd">        size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a</span>
+<a id="__codelineno-0-718" name="__codelineno-0-718"></a><span class="sd">            ``DeprecationWarning`` that ``size=`` will be removed in a future release.</span>
+<a id="__codelineno-0-719" name="__codelineno-0-719"></a>
+<a id="__codelineno-0-720" name="__codelineno-0-720"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-721" name="__codelineno-0-721"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-722" name="__codelineno-0-722"></a>
+<a id="__codelineno-0-723" name="__codelineno-0-723"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-724" name="__codelineno-0-724"></a><span class="sd">        TypeError: when both ``text_size`` and the deprecated ``size`` are passed — they name one</span>
+<a id="__codelineno-0-725" name="__codelineno-0-725"></a><span class="sd">            parameter, so preferring either would silently drop the other.</span>
+<a id="__codelineno-0-726" name="__codelineno-0-726"></a>
+<a id="__codelineno-0-727" name="__codelineno-0-727"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-728" name="__codelineno-0-728"></a><span class="sd">        - Mark a place:</span>
+<a id="__codelineno-0-729" name="__codelineno-0-729"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-730" name="__codelineno-0-730"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                     # doctest: +SKIP</span>
+<a id="__codelineno-0-731" name="__codelineno-0-731"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().text(4.9, 52.4, &quot;Amsterdam&quot;)         # doctest: +SKIP</span>
 <a id="__codelineno-0-732" name="__codelineno-0-732"></a>
-<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-734" name="__codelineno-0-734"></a><span class="sd">        digitalearth.web.vector.VectorMixin.labels: label many features from a column.</span>
-<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-736" name="__codelineno-0-736"></a>    <span class="n">s</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
-<a id="__codelineno-0-737" name="__codelineno-0-737"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;s&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-738" name="__codelineno-0-738"></a>        <span class="n">value</span><span class="o">=</span><span class="n">s</span><span class="p">,</span>
-<a id="__codelineno-0-739" name="__codelineno-0-739"></a>        <span class="n">old</span><span class="o">=</span><span class="s2">&quot;string&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-740" name="__codelineno-0-740"></a>        <span class="n">alias</span><span class="o">=</span><span class="n">string</span><span class="p">,</span>
-<a id="__codelineno-0-741" name="__codelineno-0-741"></a>        <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;WebMap.text()&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-742" name="__codelineno-0-742"></a>    <span class="p">)</span>
-<a id="__codelineno-0-743" name="__codelineno-0-743"></a>    <span class="k">if</span> <span class="n">s</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-744" name="__codelineno-0-744"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
-<a id="__codelineno-0-745" name="__codelineno-0-745"></a>            <span class="s2">&quot;text() needs the string to draw; pass it as the third argument&quot;</span>
-<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="p">)</span>
-<a id="__codelineno-0-747" name="__codelineno-0-747"></a>    <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_as_display_point</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">lon</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
-<a id="__codelineno-0-748" name="__codelineno-0-748"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
-<a id="__codelineno-0-749" name="__codelineno-0-749"></a>    <span class="n">text_size</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
-<a id="__codelineno-0-750" name="__codelineno-0-750"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;text_size&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-751" name="__codelineno-0-751"></a>        <span class="n">value</span><span class="o">=</span><span class="n">text_size</span><span class="p">,</span>
-<a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="n">old</span><span class="o">=</span><span class="s2">&quot;size&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-753" name="__codelineno-0-753"></a>        <span class="n">alias</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
-<a id="__codelineno-0-754" name="__codelineno-0-754"></a>        <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;WebMap.text()&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-755" name="__codelineno-0-755"></a>        <span class="n">default</span><span class="o">=</span><span class="mf">14.0</span><span class="p">,</span>
-<a id="__codelineno-0-756" name="__codelineno-0-756"></a>    <span class="p">)</span>
-<a id="__codelineno-0-757" name="__codelineno-0-757"></a>    <span class="n">src_id</span><span class="p">,</span> <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;text-src&quot;</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-758" name="__codelineno-0-758"></a>    <span class="n">source</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-759" name="__codelineno-0-759"></a>        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;geojson&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-760" name="__codelineno-0-760"></a>        <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">{</span>
-<a id="__codelineno-0-761" name="__codelineno-0-761"></a>            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Feature&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-762" name="__codelineno-0-762"></a>            <span class="s2">&quot;geometry&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Point&quot;</span><span class="p">,</span> <span class="s2">&quot;coordinates&quot;</span><span class="p">:</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">lon</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat</span><span class="p">)]},</span>
-<a id="__codelineno-0-763" name="__codelineno-0-763"></a>            <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">s</span><span class="p">},</span>
-<a id="__codelineno-0-764" name="__codelineno-0-764"></a>        <span class="p">},</span>
-<a id="__codelineno-0-765" name="__codelineno-0-765"></a>    <span class="p">}</span>
-<a id="__codelineno-0-766" name="__codelineno-0-766"></a>    <span class="n">layer</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
-<a id="__codelineno-0-767" name="__codelineno-0-767"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">layer_id</span><span class="p">,</span>
-<a id="__codelineno-0-768" name="__codelineno-0-768"></a>        <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
-<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
-<a id="__codelineno-0-770" name="__codelineno-0-770"></a>        <span class="n">layout</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-771" name="__codelineno-0-771"></a>            <span class="s2">&quot;text-field&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;get&quot;</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">],</span>
-<a id="__codelineno-0-772" name="__codelineno-0-772"></a>            <span class="s2">&quot;text-size&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">text_size</span><span class="p">),</span>
-<a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="s2">&quot;text-allow-overlap&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-774" name="__codelineno-0-774"></a>        <span class="p">},</span>
-<a id="__codelineno-0-775" name="__codelineno-0-775"></a>        <span class="n">paint</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-776" name="__codelineno-0-776"></a>            <span class="s2">&quot;text-color&quot;</span><span class="p">:</span> <span class="n">color</span><span class="p">,</span>
-<a id="__codelineno-0-777" name="__codelineno-0-777"></a>            <span class="s2">&quot;text-halo-color&quot;</span><span class="p">:</span> <span class="n">halo_color</span><span class="p">,</span>
-<a id="__codelineno-0-778" name="__codelineno-0-778"></a>            <span class="s2">&quot;text-halo-width&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">halo_width</span><span class="p">),</span>
-<a id="__codelineno-0-779" name="__codelineno-0-779"></a>        <span class="p">},</span>
-<a id="__codelineno-0-780" name="__codelineno-0-780"></a>    <span class="p">)</span>
-<a id="__codelineno-0-781" name="__codelineno-0-781"></a>
-<a id="__codelineno-0-782" name="__codelineno-0-782"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">widget</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-783" name="__codelineno-0-783"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_source</span><span class="p">(</span><span class="n">src_id</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
-<a id="__codelineno-0-784" name="__codelineno-0-784"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-<a id="__codelineno-0-785" name="__codelineno-0-785"></a>
-<a id="__codelineno-0-786" name="__codelineno-0-786"></a>    <span class="n">apply</span><span class="o">.</span><span class="n">_digitalearth_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>  <span class="c1"># type: ignore[attr-defined]</span>
-<a id="__codelineno-0-787" name="__codelineno-0-787"></a>    <span class="c1"># An annotation is decoration, not data: it must not decide where the map looks. On its own it is</span>
-<a id="__codelineno-0-788" name="__codelineno-0-788"></a>    <span class="c1"># a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.</span>
-<a id="__codelineno-0-789" name="__codelineno-0-789"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;text&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-790" name="__codelineno-0-790"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue_layer</span><span class="p">(</span><span class="n">apply</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-733" name="__codelineno-0-733"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-734" name="__codelineno-0-734"></a>
+<a id="__codelineno-0-735" name="__codelineno-0-735"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-736" name="__codelineno-0-736"></a><span class="sd">        digitalearth.web.vector.VectorMixin.labels: label many features from a column.</span>
+<a id="__codelineno-0-737" name="__codelineno-0-737"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-738" name="__codelineno-0-738"></a>    <span class="n">s</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
+<a id="__codelineno-0-739" name="__codelineno-0-739"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;s&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-740" name="__codelineno-0-740"></a>        <span class="n">value</span><span class="o">=</span><span class="n">s</span><span class="p">,</span>
+<a id="__codelineno-0-741" name="__codelineno-0-741"></a>        <span class="n">old</span><span class="o">=</span><span class="s2">&quot;string&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-742" name="__codelineno-0-742"></a>        <span class="n">alias</span><span class="o">=</span><span class="n">string</span><span class="p">,</span>
+<a id="__codelineno-0-743" name="__codelineno-0-743"></a>        <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;WebMap.text()&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-744" name="__codelineno-0-744"></a>    <span class="p">)</span>
+<a id="__codelineno-0-745" name="__codelineno-0-745"></a>    <span class="k">if</span> <span class="n">s</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-746" name="__codelineno-0-746"></a>        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
+<a id="__codelineno-0-747" name="__codelineno-0-747"></a>            <span class="s2">&quot;text() needs the string to draw; pass it as the third argument&quot;</span>
+<a id="__codelineno-0-748" name="__codelineno-0-748"></a>        <span class="p">)</span>
+<a id="__codelineno-0-749" name="__codelineno-0-749"></a>    <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_as_display_point</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">lon</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
+<a id="__codelineno-0-750" name="__codelineno-0-750"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-751" name="__codelineno-0-751"></a>    <span class="n">text_size</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
+<a id="__codelineno-0-752" name="__codelineno-0-752"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;text_size&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-753" name="__codelineno-0-753"></a>        <span class="n">value</span><span class="o">=</span><span class="n">text_size</span><span class="p">,</span>
+<a id="__codelineno-0-754" name="__codelineno-0-754"></a>        <span class="n">old</span><span class="o">=</span><span class="s2">&quot;size&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-755" name="__codelineno-0-755"></a>        <span class="n">alias</span><span class="o">=</span><span class="n">size</span><span class="p">,</span>
+<a id="__codelineno-0-756" name="__codelineno-0-756"></a>        <span class="n">caller</span><span class="o">=</span><span class="s2">&quot;WebMap.text()&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-757" name="__codelineno-0-757"></a>        <span class="n">default</span><span class="o">=</span><span class="mf">14.0</span><span class="p">,</span>
+<a id="__codelineno-0-758" name="__codelineno-0-758"></a>    <span class="p">)</span>
+<a id="__codelineno-0-759" name="__codelineno-0-759"></a>    <span class="n">src_id</span><span class="p">,</span> <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;text-src&quot;</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-760" name="__codelineno-0-760"></a>    <span class="n">source</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-761" name="__codelineno-0-761"></a>        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;geojson&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-762" name="__codelineno-0-762"></a>        <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="p">{</span>
+<a id="__codelineno-0-763" name="__codelineno-0-763"></a>            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Feature&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-764" name="__codelineno-0-764"></a>            <span class="s2">&quot;geometry&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;Point&quot;</span><span class="p">,</span> <span class="s2">&quot;coordinates&quot;</span><span class="p">:</span> <span class="p">[</span><span class="nb">float</span><span class="p">(</span><span class="n">lon</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat</span><span class="p">)]},</span>
+<a id="__codelineno-0-765" name="__codelineno-0-765"></a>            <span class="s2">&quot;properties&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;text&quot;</span><span class="p">:</span> <span class="n">s</span><span class="p">},</span>
+<a id="__codelineno-0-766" name="__codelineno-0-766"></a>        <span class="p">},</span>
+<a id="__codelineno-0-767" name="__codelineno-0-767"></a>    <span class="p">}</span>
+<a id="__codelineno-0-768" name="__codelineno-0-768"></a>    <span class="n">layer</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
+<a id="__codelineno-0-769" name="__codelineno-0-769"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">layer_id</span><span class="p">,</span>
+<a id="__codelineno-0-770" name="__codelineno-0-770"></a>        <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
+<a id="__codelineno-0-771" name="__codelineno-0-771"></a>        <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
+<a id="__codelineno-0-772" name="__codelineno-0-772"></a>        <span class="n">layout</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-773" name="__codelineno-0-773"></a>            <span class="s2">&quot;text-field&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;get&quot;</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-774" name="__codelineno-0-774"></a>            <span class="s2">&quot;text-size&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">text_size</span><span class="p">),</span>
+<a id="__codelineno-0-775" name="__codelineno-0-775"></a>            <span class="s2">&quot;text-allow-overlap&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-776" name="__codelineno-0-776"></a>        <span class="p">},</span>
+<a id="__codelineno-0-777" name="__codelineno-0-777"></a>        <span class="n">paint</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-778" name="__codelineno-0-778"></a>            <span class="s2">&quot;text-color&quot;</span><span class="p">:</span> <span class="n">color</span><span class="p">,</span>
+<a id="__codelineno-0-779" name="__codelineno-0-779"></a>            <span class="s2">&quot;text-halo-color&quot;</span><span class="p">:</span> <span class="n">halo_color</span><span class="p">,</span>
+<a id="__codelineno-0-780" name="__codelineno-0-780"></a>            <span class="s2">&quot;text-halo-width&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">halo_width</span><span class="p">),</span>
+<a id="__codelineno-0-781" name="__codelineno-0-781"></a>        <span class="p">},</span>
+<a id="__codelineno-0-782" name="__codelineno-0-782"></a>    <span class="p">)</span>
+<a id="__codelineno-0-783" name="__codelineno-0-783"></a>
+<a id="__codelineno-0-784" name="__codelineno-0-784"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">widget</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-785" name="__codelineno-0-785"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_source</span><span class="p">(</span><span class="n">src_id</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
+<a id="__codelineno-0-786" name="__codelineno-0-786"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-787" name="__codelineno-0-787"></a>
+<a id="__codelineno-0-788" name="__codelineno-0-788"></a>    <span class="n">apply</span><span class="o">.</span><span class="n">_digitalearth_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>  <span class="c1"># type: ignore[attr-defined]</span>
+<a id="__codelineno-0-789" name="__codelineno-0-789"></a>    <span class="c1"># An annotation is decoration, not data: it must not decide where the map looks. On its own it is</span>
+<a id="__codelineno-0-790" name="__codelineno-0-790"></a>    <span class="c1"># a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.</span>
+<a id="__codelineno-0-791" name="__codelineno-0-791"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;text&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-792" name="__codelineno-0-792"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue_layer</span><span class="p">(</span><span class="n">apply</span><span class="p">,</span> <span class="s2">&quot;text&quot;</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -6786,9 +6776,7 @@ to divide — either produces a grid with no lines and no hint as to why.</p>
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/decoration.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-832">832</a></span>
-<span class="normal"><a href="#__codelineno-0-833">833</a></span>
-<span class="normal"><a href="#__codelineno-0-834">834</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-834">834</a></span>
 <span class="normal"><a href="#__codelineno-0-835">835</a></span>
 <span class="normal"><a href="#__codelineno-0-836">836</a></span>
 <span class="normal"><a href="#__codelineno-0-837">837</a></span>
@@ -6900,121 +6888,123 @@ to divide — either produces a grid with no lines and no hint as to why.</p>
 <span class="normal"><a href="#__codelineno-0-943">943</a></span>
 <span class="normal"><a href="#__codelineno-0-944">944</a></span>
 <span class="normal"><a href="#__codelineno-0-945">945</a></span>
-<span class="normal"><a href="#__codelineno-0-946">946</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-832" name="__codelineno-0-832"></a><span class="k">def</span><span class="w"> </span><span class="nf">graticule</span><span class="p">(</span>
-<a id="__codelineno-0-833" name="__codelineno-0-833"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-834" name="__codelineno-0-834"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="n">lon_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="n">lat_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-837" name="__codelineno-0-837"></a>    <span class="n">spacing</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-838" name="__codelineno-0-838"></a>    <span class="n">color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#888888&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-839" name="__codelineno-0-839"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
-<a id="__codelineno-0-840" name="__codelineno-0-840"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.6</span><span class="p">,</span>
-<a id="__codelineno-0-841" name="__codelineno-0-841"></a>    <span class="n">labels</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-842" name="__codelineno-0-842"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-843" name="__codelineno-0-843"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-844" name="__codelineno-0-844"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-845" name="__codelineno-0-845"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw a lat/lon grid over the map.</span>
-<a id="__codelineno-0-846" name="__codelineno-0-846"></a>
-<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="sd">    A graticule is a property of the map, not of a tile service — no basemap provides one, so this tier</span>
-<a id="__codelineno-0-848" name="__codelineno-0-848"></a><span class="sd">    had no way to show one at all. The lines are ordinary GeoJSON, so they embed in the page and a map</span>
-<a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">    saved with ``offline=True`` keeps its grid with no network.</span>
-<a id="__codelineno-0-850" name="__codelineno-0-850"></a>
-<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-852" name="__codelineno-0-852"></a><span class="sd">        lon_step: Degrees between meridians; `30` by default, as on the interactive tier (#263).</span>
-<a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">        lat_step: Degrees between parallels; `30` by default.</span>
-<a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">        spacing: One step for both, for a caller who wants a square grid; it overrides the two above.</span>
-<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">            ``30`` gives a readable global grid. The grid is always</span>
-<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">            global — it is not clipped to the view, because a web map is pannable and a grid that</span>
-<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">            stopped at the opening extent would end mid-pan — so a tight spacing is expensive:</span>
-<a id="__codelineno-0-858" name="__codelineno-0-858"></a><span class="sd">            ``10`` embeds ~43 KiB of GeoJSON, ``1`` embeds ~420 KiB and 521 labels. Prefer the</span>
-<a id="__codelineno-0-859" name="__codelineno-0-859"></a><span class="sd">            coarsest spacing that reads.</span>
-<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">        color: Line colour.</span>
-<a id="__codelineno-0-861" name="__codelineno-0-861"></a><span class="sd">        width: Line width in pixels.</span>
-<a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="sd">        opacity: Line opacity in ``[0, 1]``; a graticule is reference, so it should sit under the data</span>
-<a id="__codelineno-0-863" name="__codelineno-0-863"></a><span class="sd">            visually as well as in the stack.</span>
-<a id="__codelineno-0-864" name="__codelineno-0-864"></a><span class="sd">        labels: Whether to label each line with its degree value at the map&#39;s edge.</span>
-<a id="__codelineno-0-865" name="__codelineno-0-865"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
-<a id="__codelineno-0-866" name="__codelineno-0-866"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
-<a id="__codelineno-0-867" name="__codelineno-0-867"></a>
-<a id="__codelineno-0-868" name="__codelineno-0-868"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-869" name="__codelineno-0-869"></a><span class="sd">        The same map instance, so builder calls chain.</span>
-<a id="__codelineno-0-870" name="__codelineno-0-870"></a>
-<a id="__codelineno-0-871" name="__codelineno-0-871"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-872" name="__codelineno-0-872"></a><span class="sd">        ValueError: when a step is not positive, or is wider than the 180° of latitude there is</span>
-<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">            to divide — either produces a grid with no lines and no hint as to why.</span>
-<a id="__codelineno-0-874" name="__codelineno-0-874"></a>
-<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-876" name="__codelineno-0-876"></a><span class="sd">        - A 10° grid under the data:</span>
-<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap        # doctest: +SKIP</span>
-<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().graticule()             # doctest: +SKIP</span>
-<a id="__codelineno-0-880" name="__codelineno-0-880"></a>
-<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-882" name="__codelineno-0-882"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-883" name="__codelineno-0-883"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
-<a id="__codelineno-0-884" name="__codelineno-0-884"></a>    <span class="c1"># One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square</span>
-<a id="__codelineno-0-885" name="__codelineno-0-885"></a>    <span class="c1"># grid; the two steps are what every other tier takes, and what a reader of a world map usually wants</span>
-<a id="__codelineno-0-886" name="__codelineno-0-886"></a>    <span class="c1"># (#263). A tier default of 30 degrees matches the interactive tier&#39;s.</span>
-<a id="__codelineno-0-887" name="__codelineno-0-887"></a>    <span class="n">lon_step</span> <span class="o">=</span> <span class="n">_DEFAULT_GRID_STEP</span> <span class="k">if</span> <span class="n">lon_step</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">lon_step</span>
-<a id="__codelineno-0-888" name="__codelineno-0-888"></a>    <span class="n">lat_step</span> <span class="o">=</span> <span class="n">_DEFAULT_GRID_STEP</span> <span class="k">if</span> <span class="n">lat_step</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">lat_step</span>
-<a id="__codelineno-0-889" name="__codelineno-0-889"></a>    <span class="k">if</span> <span class="n">spacing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-890" name="__codelineno-0-890"></a>        <span class="n">lon_step</span> <span class="o">=</span> <span class="n">lat_step</span> <span class="o">=</span> <span class="n">spacing</span>
-<a id="__codelineno-0-891" name="__codelineno-0-891"></a>    <span class="k">for</span> <span class="n">name_of</span><span class="p">,</span> <span class="n">step</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">&quot;lon_step&quot;</span><span class="p">,</span> <span class="n">lon_step</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;lat_step&quot;</span><span class="p">,</span> <span class="n">lat_step</span><span class="p">)):</span>
-<a id="__codelineno-0-892" name="__codelineno-0-892"></a>        <span class="k">if</span> <span class="n">step</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">step</span> <span class="o">&gt;</span> <span class="mi">180</span><span class="p">:</span>
-<a id="__codelineno-0-893" name="__codelineno-0-893"></a>            <span class="c1"># 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,</span>
-<a id="__codelineno-0-894" name="__codelineno-0-894"></a>            <span class="c1"># while anything wider leaves a grid with a single line in it.</span>
-<a id="__codelineno-0-895" name="__codelineno-0-895"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-<a id="__codelineno-0-896" name="__codelineno-0-896"></a>                <span class="sa">f</span><span class="s2">&quot;graticule(</span><span class="si">{</span><span class="n">name_of</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">step</span><span class="si">!r}</span><span class="s2">) must be greater than 0 and at most 180 degrees&quot;</span>
-<a id="__codelineno-0-897" name="__codelineno-0-897"></a>            <span class="p">)</span>
-<a id="__codelineno-0-898" name="__codelineno-0-898"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">_graticule_features</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">lon_step</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat_step</span><span class="p">))</span>
-<a id="__codelineno-0-899" name="__codelineno-0-899"></a>    <span class="n">src_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;graticule-src&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-900" name="__codelineno-0-900"></a>    <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;graticule&quot;</span><span class="p">,</span> <span class="n">name</span> <span class="ow">or</span> <span class="s2">&quot;Graticule&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-901" name="__codelineno-0-901"></a>    <span class="n">source</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;geojson&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">features</span><span class="p">}</span>
-<a id="__codelineno-0-902" name="__codelineno-0-902"></a>    <span class="n">line</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
-<a id="__codelineno-0-903" name="__codelineno-0-903"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">layer_id</span><span class="p">,</span>
-<a id="__codelineno-0-904" name="__codelineno-0-904"></a>        <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">LINE</span><span class="p">,</span>
-<a id="__codelineno-0-905" name="__codelineno-0-905"></a>        <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
-<a id="__codelineno-0-906" name="__codelineno-0-906"></a>        <span class="n">paint</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-907" name="__codelineno-0-907"></a>            <span class="s2">&quot;line-color&quot;</span><span class="p">:</span> <span class="n">color</span><span class="p">,</span>
-<a id="__codelineno-0-908" name="__codelineno-0-908"></a>            <span class="s2">&quot;line-width&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
-<a id="__codelineno-0-909" name="__codelineno-0-909"></a>            <span class="s2">&quot;line-opacity&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">),</span>
-<a id="__codelineno-0-910" name="__codelineno-0-910"></a>        <span class="p">},</span>
-<a id="__codelineno-0-911" name="__codelineno-0-911"></a>        <span class="n">layout</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="p">{</span><span class="s2">&quot;visibility&quot;</span><span class="p">:</span> <span class="s2">&quot;none&quot;</span><span class="p">},</span>
-<a id="__codelineno-0-912" name="__codelineno-0-912"></a>    <span class="p">)</span>
-<a id="__codelineno-0-913" name="__codelineno-0-913"></a>    <span class="n">text</span> <span class="o">=</span> <span class="kc">None</span>
-<a id="__codelineno-0-914" name="__codelineno-0-914"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
-<a id="__codelineno-0-915" name="__codelineno-0-915"></a>        <span class="n">label_layout</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
-<a id="__codelineno-0-916" name="__codelineno-0-916"></a>            <span class="s2">&quot;text-field&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;get&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span>
-<a id="__codelineno-0-917" name="__codelineno-0-917"></a>            <span class="s2">&quot;text-size&quot;</span><span class="p">:</span> <span class="mf">10.0</span><span class="p">,</span>
-<a id="__codelineno-0-918" name="__codelineno-0-918"></a>            <span class="s2">&quot;symbol-placement&quot;</span><span class="p">:</span> <span class="s2">&quot;line&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-919" name="__codelineno-0-919"></a>        <span class="p">}</span>
-<a id="__codelineno-0-920" name="__codelineno-0-920"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">visible</span><span class="p">:</span>
-<a id="__codelineno-0-921" name="__codelineno-0-921"></a>            <span class="c1"># Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.</span>
-<a id="__codelineno-0-922" name="__codelineno-0-922"></a>            <span class="n">label_layout</span><span class="p">[</span><span class="s2">&quot;visibility&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;none&quot;</span>
-<a id="__codelineno-0-923" name="__codelineno-0-923"></a>        <span class="n">text</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
-<a id="__codelineno-0-924" name="__codelineno-0-924"></a>            <span class="nb">id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;graticule-label&quot;</span><span class="p">),</span>
-<a id="__codelineno-0-925" name="__codelineno-0-925"></a>            <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
-<a id="__codelineno-0-926" name="__codelineno-0-926"></a>            <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
-<a id="__codelineno-0-927" name="__codelineno-0-927"></a>            <span class="n">layout</span><span class="o">=</span><span class="n">label_layout</span><span class="p">,</span>
-<a id="__codelineno-0-928" name="__codelineno-0-928"></a>            <span class="n">paint</span><span class="o">=</span><span class="p">{</span>
-<a id="__codelineno-0-929" name="__codelineno-0-929"></a>                <span class="s2">&quot;text-color&quot;</span><span class="p">:</span> <span class="n">color</span><span class="p">,</span>
-<a id="__codelineno-0-930" name="__codelineno-0-930"></a>                <span class="s2">&quot;text-halo-color&quot;</span><span class="p">:</span> <span class="s2">&quot;#000000&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-931" name="__codelineno-0-931"></a>                <span class="s2">&quot;text-halo-width&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-932" name="__codelineno-0-932"></a>            <span class="p">},</span>
-<a id="__codelineno-0-933" name="__codelineno-0-933"></a>        <span class="p">)</span>
-<a id="__codelineno-0-934" name="__codelineno-0-934"></a>
-<a id="__codelineno-0-935" name="__codelineno-0-935"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">widget</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-936" name="__codelineno-0-936"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_source</span><span class="p">(</span><span class="n">src_id</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
-<a id="__codelineno-0-937" name="__codelineno-0-937"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
-<a id="__codelineno-0-938" name="__codelineno-0-938"></a>        <span class="k">if</span> <span class="n">text</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-939" name="__codelineno-0-939"></a>            <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
-<a id="__codelineno-0-940" name="__codelineno-0-940"></a>
-<a id="__codelineno-0-941" name="__codelineno-0-941"></a>    <span class="n">apply</span><span class="o">.</span><span class="n">_digitalearth_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>  <span class="c1"># type: ignore[attr-defined]</span>
-<a id="__codelineno-0-942" name="__codelineno-0-942"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;graticule&quot;</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
-<a id="__codelineno-0-943" name="__codelineno-0-943"></a>    <span class="c1"># Reference geography says nothing about where to look, so it does not frame the map. It is</span>
-<a id="__codelineno-0-944" name="__codelineno-0-944"></a>    <span class="c1"># added to the reference band: over the basemap (an underlay would be hidden beneath opaque</span>
-<a id="__codelineno-0-945" name="__codelineno-0-945"></a>    <span class="c1"># tiles) and under the data, which it must not obscure.</span>
-<a id="__codelineno-0-946" name="__codelineno-0-946"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue_layer</span><span class="p">(</span><span class="n">apply</span><span class="p">,</span> <span class="s2">&quot;graticule&quot;</span><span class="p">)</span>
+<span class="normal"><a href="#__codelineno-0-946">946</a></span>
+<span class="normal"><a href="#__codelineno-0-947">947</a></span>
+<span class="normal"><a href="#__codelineno-0-948">948</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-834" name="__codelineno-0-834"></a><span class="k">def</span><span class="w"> </span><span class="nf">graticule</span><span class="p">(</span>
+<a id="__codelineno-0-835" name="__codelineno-0-835"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-836" name="__codelineno-0-836"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-837" name="__codelineno-0-837"></a>    <span class="n">lon_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-838" name="__codelineno-0-838"></a>    <span class="n">lat_step</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-839" name="__codelineno-0-839"></a>    <span class="n">spacing</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-840" name="__codelineno-0-840"></a>    <span class="n">color</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;#888888&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-841" name="__codelineno-0-841"></a>    <span class="n">width</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+<a id="__codelineno-0-842" name="__codelineno-0-842"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.6</span><span class="p">,</span>
+<a id="__codelineno-0-843" name="__codelineno-0-843"></a>    <span class="n">labels</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-844" name="__codelineno-0-844"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-845" name="__codelineno-0-845"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-846" name="__codelineno-0-846"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-847" name="__codelineno-0-847"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Draw a lat/lon grid over the map.</span>
+<a id="__codelineno-0-848" name="__codelineno-0-848"></a>
+<a id="__codelineno-0-849" name="__codelineno-0-849"></a><span class="sd">    A graticule is a property of the map, not of a tile service — no basemap provides one, so this tier</span>
+<a id="__codelineno-0-850" name="__codelineno-0-850"></a><span class="sd">    had no way to show one at all. The lines are ordinary GeoJSON, so they embed in the page and a map</span>
+<a id="__codelineno-0-851" name="__codelineno-0-851"></a><span class="sd">    saved with ``offline=True`` keeps its grid with no network.</span>
+<a id="__codelineno-0-852" name="__codelineno-0-852"></a>
+<a id="__codelineno-0-853" name="__codelineno-0-853"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-854" name="__codelineno-0-854"></a><span class="sd">        lon_step: Degrees between meridians; `30` by default, as on the interactive tier (#263).</span>
+<a id="__codelineno-0-855" name="__codelineno-0-855"></a><span class="sd">        lat_step: Degrees between parallels; `30` by default.</span>
+<a id="__codelineno-0-856" name="__codelineno-0-856"></a><span class="sd">        spacing: One step for both, for a caller who wants a square grid; it overrides the two above.</span>
+<a id="__codelineno-0-857" name="__codelineno-0-857"></a><span class="sd">            ``30`` gives a readable global grid. The grid is always</span>
+<a id="__codelineno-0-858" name="__codelineno-0-858"></a><span class="sd">            global — it is not clipped to the view, because a web map is pannable and a grid that</span>
+<a id="__codelineno-0-859" name="__codelineno-0-859"></a><span class="sd">            stopped at the opening extent would end mid-pan — so a tight spacing is expensive:</span>
+<a id="__codelineno-0-860" name="__codelineno-0-860"></a><span class="sd">            ``10`` embeds ~43 KiB of GeoJSON, ``1`` embeds ~420 KiB and 521 labels. Prefer the</span>
+<a id="__codelineno-0-861" name="__codelineno-0-861"></a><span class="sd">            coarsest spacing that reads.</span>
+<a id="__codelineno-0-862" name="__codelineno-0-862"></a><span class="sd">        color: Line colour.</span>
+<a id="__codelineno-0-863" name="__codelineno-0-863"></a><span class="sd">        width: Line width in pixels.</span>
+<a id="__codelineno-0-864" name="__codelineno-0-864"></a><span class="sd">        opacity: Line opacity in ``[0, 1]``; a graticule is reference, so it should sit under the data</span>
+<a id="__codelineno-0-865" name="__codelineno-0-865"></a><span class="sd">            visually as well as in the stack.</span>
+<a id="__codelineno-0-866" name="__codelineno-0-866"></a><span class="sd">        labels: Whether to label each line with its degree value at the map&#39;s edge.</span>
+<a id="__codelineno-0-867" name="__codelineno-0-867"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-868" name="__codelineno-0-868"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
+<a id="__codelineno-0-869" name="__codelineno-0-869"></a>
+<a id="__codelineno-0-870" name="__codelineno-0-870"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-871" name="__codelineno-0-871"></a><span class="sd">        The same map instance, so builder calls chain.</span>
+<a id="__codelineno-0-872" name="__codelineno-0-872"></a>
+<a id="__codelineno-0-873" name="__codelineno-0-873"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-874" name="__codelineno-0-874"></a><span class="sd">        ValueError: when a step is not positive, or is wider than the 180° of latitude there is</span>
+<a id="__codelineno-0-875" name="__codelineno-0-875"></a><span class="sd">            to divide — either produces a grid with no lines and no hint as to why.</span>
+<a id="__codelineno-0-876" name="__codelineno-0-876"></a>
+<a id="__codelineno-0-877" name="__codelineno-0-877"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-878" name="__codelineno-0-878"></a><span class="sd">        - A 10° grid under the data:</span>
+<a id="__codelineno-0-879" name="__codelineno-0-879"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-880" name="__codelineno-0-880"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap        # doctest: +SKIP</span>
+<a id="__codelineno-0-881" name="__codelineno-0-881"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().graticule()             # doctest: +SKIP</span>
+<a id="__codelineno-0-882" name="__codelineno-0-882"></a>
+<a id="__codelineno-0-883" name="__codelineno-0-883"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-884" name="__codelineno-0-884"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-885" name="__codelineno-0-885"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-886" name="__codelineno-0-886"></a>    <span class="c1"># One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square</span>
+<a id="__codelineno-0-887" name="__codelineno-0-887"></a>    <span class="c1"># grid; the two steps are what every other tier takes, and what a reader of a world map usually wants</span>
+<a id="__codelineno-0-888" name="__codelineno-0-888"></a>    <span class="c1"># (#263). A tier default of 30 degrees matches the interactive tier&#39;s.</span>
+<a id="__codelineno-0-889" name="__codelineno-0-889"></a>    <span class="n">lon_step</span> <span class="o">=</span> <span class="n">_DEFAULT_GRID_STEP</span> <span class="k">if</span> <span class="n">lon_step</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">lon_step</span>
+<a id="__codelineno-0-890" name="__codelineno-0-890"></a>    <span class="n">lat_step</span> <span class="o">=</span> <span class="n">_DEFAULT_GRID_STEP</span> <span class="k">if</span> <span class="n">lat_step</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">lat_step</span>
+<a id="__codelineno-0-891" name="__codelineno-0-891"></a>    <span class="k">if</span> <span class="n">spacing</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-892" name="__codelineno-0-892"></a>        <span class="n">lon_step</span> <span class="o">=</span> <span class="n">lat_step</span> <span class="o">=</span> <span class="n">spacing</span>
+<a id="__codelineno-0-893" name="__codelineno-0-893"></a>    <span class="k">for</span> <span class="n">name_of</span><span class="p">,</span> <span class="n">step</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">&quot;lon_step&quot;</span><span class="p">,</span> <span class="n">lon_step</span><span class="p">),</span> <span class="p">(</span><span class="s2">&quot;lat_step&quot;</span><span class="p">,</span> <span class="n">lat_step</span><span class="p">)):</span>
+<a id="__codelineno-0-894" name="__codelineno-0-894"></a>        <span class="k">if</span> <span class="n">step</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">step</span> <span class="o">&gt;</span> <span class="mi">180</span><span class="p">:</span>
+<a id="__codelineno-0-895" name="__codelineno-0-895"></a>            <span class="c1"># 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,</span>
+<a id="__codelineno-0-896" name="__codelineno-0-896"></a>            <span class="c1"># while anything wider leaves a grid with a single line in it.</span>
+<a id="__codelineno-0-897" name="__codelineno-0-897"></a>            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+<a id="__codelineno-0-898" name="__codelineno-0-898"></a>                <span class="sa">f</span><span class="s2">&quot;graticule(</span><span class="si">{</span><span class="n">name_of</span><span class="si">}</span><span class="s2">=</span><span class="si">{</span><span class="n">step</span><span class="si">!r}</span><span class="s2">) must be greater than 0 and at most 180 degrees&quot;</span>
+<a id="__codelineno-0-899" name="__codelineno-0-899"></a>            <span class="p">)</span>
+<a id="__codelineno-0-900" name="__codelineno-0-900"></a>    <span class="n">features</span> <span class="o">=</span> <span class="n">_graticule_features</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">lon_step</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat_step</span><span class="p">))</span>
+<a id="__codelineno-0-901" name="__codelineno-0-901"></a>    <span class="n">src_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;graticule-src&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-902" name="__codelineno-0-902"></a>    <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;graticule&quot;</span><span class="p">,</span> <span class="n">name</span> <span class="ow">or</span> <span class="s2">&quot;Graticule&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-903" name="__codelineno-0-903"></a>    <span class="n">source</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;geojson&quot;</span><span class="p">,</span> <span class="s2">&quot;data&quot;</span><span class="p">:</span> <span class="n">features</span><span class="p">}</span>
+<a id="__codelineno-0-904" name="__codelineno-0-904"></a>    <span class="n">line</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
+<a id="__codelineno-0-905" name="__codelineno-0-905"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">layer_id</span><span class="p">,</span>
+<a id="__codelineno-0-906" name="__codelineno-0-906"></a>        <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">LINE</span><span class="p">,</span>
+<a id="__codelineno-0-907" name="__codelineno-0-907"></a>        <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
+<a id="__codelineno-0-908" name="__codelineno-0-908"></a>        <span class="n">paint</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-909" name="__codelineno-0-909"></a>            <span class="s2">&quot;line-color&quot;</span><span class="p">:</span> <span class="n">color</span><span class="p">,</span>
+<a id="__codelineno-0-910" name="__codelineno-0-910"></a>            <span class="s2">&quot;line-width&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">width</span><span class="p">),</span>
+<a id="__codelineno-0-911" name="__codelineno-0-911"></a>            <span class="s2">&quot;line-opacity&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">),</span>
+<a id="__codelineno-0-912" name="__codelineno-0-912"></a>        <span class="p">},</span>
+<a id="__codelineno-0-913" name="__codelineno-0-913"></a>        <span class="n">layout</span><span class="o">=</span><span class="kc">None</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="p">{</span><span class="s2">&quot;visibility&quot;</span><span class="p">:</span> <span class="s2">&quot;none&quot;</span><span class="p">},</span>
+<a id="__codelineno-0-914" name="__codelineno-0-914"></a>    <span class="p">)</span>
+<a id="__codelineno-0-915" name="__codelineno-0-915"></a>    <span class="n">text</span> <span class="o">=</span> <span class="kc">None</span>
+<a id="__codelineno-0-916" name="__codelineno-0-916"></a>    <span class="k">if</span> <span class="n">labels</span><span class="p">:</span>
+<a id="__codelineno-0-917" name="__codelineno-0-917"></a>        <span class="n">label_layout</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-0-918" name="__codelineno-0-918"></a>            <span class="s2">&quot;text-field&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;get&quot;</span><span class="p">,</span> <span class="s2">&quot;label&quot;</span><span class="p">],</span>
+<a id="__codelineno-0-919" name="__codelineno-0-919"></a>            <span class="s2">&quot;text-size&quot;</span><span class="p">:</span> <span class="mf">10.0</span><span class="p">,</span>
+<a id="__codelineno-0-920" name="__codelineno-0-920"></a>            <span class="s2">&quot;symbol-placement&quot;</span><span class="p">:</span> <span class="s2">&quot;line&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-921" name="__codelineno-0-921"></a>        <span class="p">}</span>
+<a id="__codelineno-0-922" name="__codelineno-0-922"></a>        <span class="k">if</span> <span class="ow">not</span> <span class="n">visible</span><span class="p">:</span>
+<a id="__codelineno-0-923" name="__codelineno-0-923"></a>            <span class="c1"># Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.</span>
+<a id="__codelineno-0-924" name="__codelineno-0-924"></a>            <span class="n">label_layout</span><span class="p">[</span><span class="s2">&quot;visibility&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;none&quot;</span>
+<a id="__codelineno-0-925" name="__codelineno-0-925"></a>        <span class="n">text</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
+<a id="__codelineno-0-926" name="__codelineno-0-926"></a>            <span class="nb">id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;graticule-label&quot;</span><span class="p">),</span>
+<a id="__codelineno-0-927" name="__codelineno-0-927"></a>            <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
+<a id="__codelineno-0-928" name="__codelineno-0-928"></a>            <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
+<a id="__codelineno-0-929" name="__codelineno-0-929"></a>            <span class="n">layout</span><span class="o">=</span><span class="n">label_layout</span><span class="p">,</span>
+<a id="__codelineno-0-930" name="__codelineno-0-930"></a>            <span class="n">paint</span><span class="o">=</span><span class="p">{</span>
+<a id="__codelineno-0-931" name="__codelineno-0-931"></a>                <span class="s2">&quot;text-color&quot;</span><span class="p">:</span> <span class="n">color</span><span class="p">,</span>
+<a id="__codelineno-0-932" name="__codelineno-0-932"></a>                <span class="s2">&quot;text-halo-color&quot;</span><span class="p">:</span> <span class="s2">&quot;#000000&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-933" name="__codelineno-0-933"></a>                <span class="s2">&quot;text-halo-width&quot;</span><span class="p">:</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-934" name="__codelineno-0-934"></a>            <span class="p">},</span>
+<a id="__codelineno-0-935" name="__codelineno-0-935"></a>        <span class="p">)</span>
+<a id="__codelineno-0-936" name="__codelineno-0-936"></a>
+<a id="__codelineno-0-937" name="__codelineno-0-937"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">widget</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-938" name="__codelineno-0-938"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_source</span><span class="p">(</span><span class="n">src_id</span><span class="p">,</span> <span class="n">source</span><span class="p">)</span>
+<a id="__codelineno-0-939" name="__codelineno-0-939"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+<a id="__codelineno-0-940" name="__codelineno-0-940"></a>        <span class="k">if</span> <span class="n">text</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-941" name="__codelineno-0-941"></a>            <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+<a id="__codelineno-0-942" name="__codelineno-0-942"></a>
+<a id="__codelineno-0-943" name="__codelineno-0-943"></a>    <span class="n">apply</span><span class="o">.</span><span class="n">_digitalearth_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>  <span class="c1"># type: ignore[attr-defined]</span>
+<a id="__codelineno-0-944" name="__codelineno-0-944"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="n">layer_id</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;graticule&quot;</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">)</span>
+<a id="__codelineno-0-945" name="__codelineno-0-945"></a>    <span class="c1"># Reference geography says nothing about where to look, so it does not frame the map. It is</span>
+<a id="__codelineno-0-946" name="__codelineno-0-946"></a>    <span class="c1"># added to the reference band: over the basemap (an underlay would be hidden beneath opaque</span>
+<a id="__codelineno-0-947" name="__codelineno-0-947"></a>    <span class="c1"># tiles) and under the data, which it must not obscure.</span>
+<a id="__codelineno-0-948" name="__codelineno-0-948"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue_layer</span><span class="p">(</span><span class="n">apply</span><span class="p">,</span> <span class="s2">&quot;graticule&quot;</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -7850,21 +7840,7 @@ digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped pat
 
             <details class="mkdocstrings-source">
               <summary>Source code in <code>src/digitalearth/web/raster.py</code></summary>
-              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-218">218</a></span>
-<span class="normal"><a href="#__codelineno-0-219">219</a></span>
-<span class="normal"><a href="#__codelineno-0-220">220</a></span>
-<span class="normal"><a href="#__codelineno-0-221">221</a></span>
-<span class="normal"><a href="#__codelineno-0-222">222</a></span>
-<span class="normal"><a href="#__codelineno-0-223">223</a></span>
-<span class="normal"><a href="#__codelineno-0-224">224</a></span>
-<span class="normal"><a href="#__codelineno-0-225">225</a></span>
-<span class="normal"><a href="#__codelineno-0-226">226</a></span>
-<span class="normal"><a href="#__codelineno-0-227">227</a></span>
-<span class="normal"><a href="#__codelineno-0-228">228</a></span>
-<span class="normal"><a href="#__codelineno-0-229">229</a></span>
-<span class="normal"><a href="#__codelineno-0-230">230</a></span>
-<span class="normal"><a href="#__codelineno-0-231">231</a></span>
-<span class="normal"><a href="#__codelineno-0-232">232</a></span>
+              <div class="highlight"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre><span></span><span class="normal"><a href="#__codelineno-0-232">232</a></span>
 <span class="normal"><a href="#__codelineno-0-233">233</a></span>
 <span class="normal"><a href="#__codelineno-0-234">234</a></span>
 <span class="normal"><a href="#__codelineno-0-235">235</a></span>
@@ -7954,111 +7930,125 @@ digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped pat
 <span class="normal"><a href="#__codelineno-0-319">319</a></span>
 <span class="normal"><a href="#__codelineno-0-320">320</a></span>
 <span class="normal"><a href="#__codelineno-0-321">321</a></span>
-<span class="normal"><a href="#__codelineno-0-322">322</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-218" name="__codelineno-0-218"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
-<a id="__codelineno-0-219" name="__codelineno-0-219"></a>    <span class="bp">self</span><span class="p">,</span>
-<a id="__codelineno-0-220" name="__codelineno-0-220"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
-<a id="__codelineno-0-221" name="__codelineno-0-221"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
-<a id="__codelineno-0-222" name="__codelineno-0-222"></a>    <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-0-223" name="__codelineno-0-223"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-224" name="__codelineno-0-224"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-225" name="__codelineno-0-225"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
-<a id="__codelineno-0-226" name="__codelineno-0-226"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-<a id="__codelineno-0-227" name="__codelineno-0-227"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<a id="__codelineno-0-228" name="__codelineno-0-228"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
-<a id="__codelineno-0-229" name="__codelineno-0-229"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
-<a id="__codelineno-0-230" name="__codelineno-0-230"></a>
-<a id="__codelineno-0-231" name="__codelineno-0-231"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
-<a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
-<a id="__codelineno-0-233" name="__codelineno-0-233"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
-<a id="__codelineno-0-234" name="__codelineno-0-234"></a>
-<a id="__codelineno-0-235" name="__codelineno-0-235"></a><span class="sd">    Args:</span>
-<a id="__codelineno-0-236" name="__codelineno-0-236"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
-<a id="__codelineno-0-237" name="__codelineno-0-237"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
-<a id="__codelineno-0-238" name="__codelineno-0-238"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
-<a id="__codelineno-0-239" name="__codelineno-0-239"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
-<a id="__codelineno-0-240" name="__codelineno-0-240"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
-<a id="__codelineno-0-241" name="__codelineno-0-241"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
-<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
-<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<span class="normal"><a href="#__codelineno-0-322">322</a></span>
+<span class="normal"><a href="#__codelineno-0-323">323</a></span>
+<span class="normal"><a href="#__codelineno-0-324">324</a></span>
+<span class="normal"><a href="#__codelineno-0-325">325</a></span>
+<span class="normal"><a href="#__codelineno-0-326">326</a></span>
+<span class="normal"><a href="#__codelineno-0-327">327</a></span>
+<span class="normal"><a href="#__codelineno-0-328">328</a></span>
+<span class="normal"><a href="#__codelineno-0-329">329</a></span>
+<span class="normal"><a href="#__codelineno-0-330">330</a></span>
+<span class="normal"><a href="#__codelineno-0-331">331</a></span>
+<span class="normal"><a href="#__codelineno-0-332">332</a></span>
+<span class="normal"><a href="#__codelineno-0-333">333</a></span>
+<span class="normal"><a href="#__codelineno-0-334">334</a></span>
+<span class="normal"><a href="#__codelineno-0-335">335</a></span>
+<span class="normal"><a href="#__codelineno-0-336">336</a></span></pre></div></td><td class="code"><div><pre><span></span><code><a id="__codelineno-0-232" name="__codelineno-0-232"></a><span class="k">def</span><span class="w"> </span><span class="nf">rgb_composite</span><span class="p">(</span>
+<a id="__codelineno-0-233" name="__codelineno-0-233"></a>    <span class="bp">self</span><span class="p">,</span>
+<a id="__codelineno-0-234" name="__codelineno-0-234"></a>    <span class="n">dataset</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<a id="__codelineno-0-235" name="__codelineno-0-235"></a>    <span class="n">bands</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span>
+<a id="__codelineno-0-236" name="__codelineno-0-236"></a>    <span class="o">*</span><span class="p">,</span>
+<a id="__codelineno-0-237" name="__codelineno-0-237"></a>    <span class="n">mask_nodata</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-238" name="__codelineno-0-238"></a>    <span class="n">limits</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-239" name="__codelineno-0-239"></a>    <span class="n">opacity</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">,</span>
+<a id="__codelineno-0-240" name="__codelineno-0-240"></a>    <span class="n">visible</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+<a id="__codelineno-0-241" name="__codelineno-0-241"></a>    <span class="n">name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-0-242" name="__codelineno-0-242"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Self</span><span class="p">:</span>
+<a id="__codelineno-0-243" name="__codelineno-0-243"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Overlay three bands as a true- or false-colour image (recipe W1).</span>
 <a id="__codelineno-0-244" name="__codelineno-0-244"></a>
-<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">    Returns:</span>
-<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
-<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
-<a id="__codelineno-0-248" name="__codelineno-0-248"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
-<a id="__codelineno-0-249" name="__codelineno-0-249"></a>
-<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">    Raises:</span>
-<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when</span>
-<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">            the composite has no finite pixels to draw.</span>
-<a id="__codelineno-0-253" name="__codelineno-0-253"></a>
-<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">    Examples:</span>
-<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
-<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">            ```python</span>
-<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
-<a id="__codelineno-0-258" name="__codelineno-0-258"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
-<a id="__codelineno-0-259" name="__codelineno-0-259"></a>
-<a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">            ```</span>
-<a id="__codelineno-0-261" name="__codelineno-0-261"></a>
-<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">    See Also:</span>
-<a id="__codelineno-0-263" name="__codelineno-0-263"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
-<a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">        digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.</span>
-<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-266" name="__codelineno-0-266"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-245" name="__codelineno-0-245"></a><span class="sd">    Satellite imagery is a headline use of a web map, and the tier could only draw one band through a</span>
+<a id="__codelineno-0-246" name="__codelineno-0-246"></a><span class="sd">    colormap. The stretch comes from :mod:`digitalearth.base.stretch` — the same engine-neutral code</span>
+<a id="__codelineno-0-247" name="__codelineno-0-247"></a><span class="sd">    the static tier&#39;s ``rgb_composite`` uses — so the same three bands look the same on both tiers.</span>
+<a id="__codelineno-0-248" name="__codelineno-0-248"></a>
+<a id="__codelineno-0-249" name="__codelineno-0-249"></a><span class="sd">    Args:</span>
+<a id="__codelineno-0-250" name="__codelineno-0-250"></a><span class="sd">        dataset: A pyramids ``Dataset`` (or anything ``get_stack`` accepts).</span>
+<a id="__codelineno-0-251" name="__codelineno-0-251"></a><span class="sd">        bands: The three 1-based band numbers, in red-green-blue order.</span>
+<a id="__codelineno-0-252" name="__codelineno-0-252"></a><span class="sd">        mask_nodata: Whether NoData becomes NaN (and so transparent) rather than a real value.</span>
+<a id="__codelineno-0-253" name="__codelineno-0-253"></a><span class="sd">        limits: Per-channel ``(lo, hi)`` stretch limits in band order. ``None`` derives them from this</span>
+<a id="__codelineno-0-254" name="__codelineno-0-254"></a><span class="sd">            image; pass a fixed set to keep a series comparable across frames.</span>
+<a id="__codelineno-0-255" name="__codelineno-0-255"></a><span class="sd">        opacity: Raster layer opacity in ``[0, 1]``.</span>
+<a id="__codelineno-0-256" name="__codelineno-0-256"></a><span class="sd">        visible: Whether the layer starts visible, which is what a layer switcher toggles.</span>
+<a id="__codelineno-0-257" name="__codelineno-0-257"></a><span class="sd">        name: What a layer switcher calls this layer; ``None`` uses its generated id.</span>
+<a id="__codelineno-0-258" name="__codelineno-0-258"></a>
+<a id="__codelineno-0-259" name="__codelineno-0-259"></a><span class="sd">    Returns:</span>
+<a id="__codelineno-0-260" name="__codelineno-0-260"></a><span class="sd">        The same map instance, so builder calls chain. A composite that cannot be placed — off-limb</span>
+<a id="__codelineno-0-261" name="__codelineno-0-261"></a><span class="sd">        in the display CRS, or with corners that will not express as lon/lat — is skipped with a</span>
+<a id="__codelineno-0-262" name="__codelineno-0-262"></a><span class="sd">        warning instead, unless the map was built with ``strict=True``.</span>
+<a id="__codelineno-0-263" name="__codelineno-0-263"></a>
+<a id="__codelineno-0-264" name="__codelineno-0-264"></a><span class="sd">    Raises:</span>
+<a id="__codelineno-0-265" name="__codelineno-0-265"></a><span class="sd">        ValueError: when ``bands`` is not exactly three, when ``limits`` does not match them, or when</span>
+<a id="__codelineno-0-266" name="__codelineno-0-266"></a><span class="sd">            the composite has no finite pixels to draw.</span>
 <a id="__codelineno-0-267" name="__codelineno-0-267"></a>
-<a id="__codelineno-0-268" name="__codelineno-0-268"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_stack</span>
-<a id="__codelineno-0-269" name="__codelineno-0-269"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.stretch</span><span class="w"> </span><span class="kn">import</span> <span class="n">require_three_bands</span><span class="p">,</span> <span class="n">stretch_to_unit</span>
-<a id="__codelineno-0-270" name="__codelineno-0-270"></a>
-<a id="__codelineno-0-271" name="__codelineno-0-271"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
-<a id="__codelineno-0-272" name="__codelineno-0-272"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
-<a id="__codelineno-0-273" name="__codelineno-0-273"></a>    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_display_raster_or_skip</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">)</span>
-<a id="__codelineno-0-274" name="__codelineno-0-274"></a>    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-275" name="__codelineno-0-275"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-276" name="__codelineno-0-276"></a>    <span class="n">stack</span> <span class="o">=</span> <span class="n">get_stack</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">bands</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">)</span>
-<a id="__codelineno-0-277" name="__codelineno-0-277"></a>    <span class="n">pixels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">size</span> <span class="o">//</span> <span class="nb">max</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">))</span>
-<a id="__codelineno-0-278" name="__codelineno-0-278"></a>    <span class="k">if</span> <span class="n">pixels</span> <span class="o">&gt;</span> <span class="n">_LARGE_RASTER_PIXELS</span><span class="p">:</span>
-<a id="__codelineno-0-279" name="__codelineno-0-279"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-<a id="__codelineno-0-280" name="__codelineno-0-280"></a>            <span class="s2">&quot;rgb_composite: inlining a </span><span class="si">{}</span><span class="s2">-pixel composite as a data-URI image source bloats the page; &quot;</span>
-<a id="__codelineno-0-281" name="__codelineno-0-281"></a>            <span class="s2">&quot;for large rasters serve COG/XYZ tiles from pyramids instead&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-282" name="__codelineno-0-282"></a>            <span class="n">pixels</span><span class="p">,</span>
-<a id="__codelineno-0-283" name="__codelineno-0-283"></a>        <span class="p">)</span>
-<a id="__codelineno-0-284" name="__codelineno-0-284"></a>    <span class="c1"># `data` is already in the display CRS; warping `dataset` again here would repeat a multi-second</span>
-<a id="__codelineno-0-285" name="__codelineno-0-285"></a>    <span class="c1"># GDAL warp and take the placement from a second, independent reprojection of the same pixels.</span>
-<a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_display_source</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">bands</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
-<a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">source</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
-<a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="k">if</span> <span class="p">(</span>
-<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="n">y</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">y</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-<a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="p">):</span>  <span class="c1"># ascending y → flip so PNG row 0 is the north edge</span>
-<a id="__codelineno-0-291" name="__codelineno-0-291"></a>        <span class="n">stack</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-<a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="n">url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite_png_datauri</span><span class="p">(</span><span class="n">stretch_to_unit</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">limits</span><span class="p">))</span>
-<a id="__codelineno-0-293" name="__codelineno-0-293"></a>    <span class="n">coordinates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lonlat_corners</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
-<a id="__codelineno-0-294" name="__codelineno-0-294"></a>    <span class="k">if</span> <span class="n">coordinates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-295" name="__codelineno-0-295"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_skipped</span><span class="p">(</span>
-<a id="__codelineno-0-296" name="__codelineno-0-296"></a>            <span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-297" name="__codelineno-0-297"></a>            <span class="s2">&quot;the raster&#39;s corners cannot be expressed in lon/lat, which a MapLibre image source &quot;</span>
-<a id="__codelineno-0-298" name="__codelineno-0-298"></a>            <span class="s2">&quot;needs; reproject the dataset so its extent is representable&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-299" name="__codelineno-0-299"></a>        <span class="p">)</span>
-<a id="__codelineno-0-300" name="__codelineno-0-300"></a>        <span class="k">return</span> <span class="bp">self</span>
-<a id="__codelineno-0-301" name="__codelineno-0-301"></a>    <span class="c1"># Already lon/lat, so the framing takes them as they are.</span>
-<a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_note_lonlat_bounds</span><span class="p">(</span>
-<a id="__codelineno-0-303" name="__codelineno-0-303"></a>        <span class="p">(</span><span class="n">coordinates</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">coordinates</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">coordinates</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">coordinates</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
-<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="p">)</span>
-<a id="__codelineno-0-305" name="__codelineno-0-305"></a>    <span class="n">src_id</span><span class="p">,</span> <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;rgb-src&quot;</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
-<a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="n">url</span><span class="p">,</span> <span class="s2">&quot;coordinates&quot;</span><span class="p">:</span> <span class="n">coordinates</span><span class="p">}</span>
-<a id="__codelineno-0-307" name="__codelineno-0-307"></a>    <span class="n">layer</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
-<a id="__codelineno-0-308" name="__codelineno-0-308"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">layer_id</span><span class="p">,</span>
-<a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">RASTER</span><span class="p">,</span>
-<a id="__codelineno-0-310" name="__codelineno-0-310"></a>        <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
-<a id="__codelineno-0-311" name="__codelineno-0-311"></a>        <span class="n">paint</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;raster-opacity&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">)},</span>
-<a id="__codelineno-0-312" name="__codelineno-0-312"></a>        <span class="n">layout</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;visibility&quot;</span><span class="p">:</span> <span class="s2">&quot;visible&quot;</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="s2">&quot;none&quot;</span><span class="p">},</span>
-<a id="__codelineno-0-313" name="__codelineno-0-313"></a>    <span class="p">)</span>
-<a id="__codelineno-0-314" name="__codelineno-0-314"></a>
-<a id="__codelineno-0-315" name="__codelineno-0-315"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">widget</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<a id="__codelineno-0-316" name="__codelineno-0-316"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_source</span><span class="p">(</span><span class="n">src_id</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span>
-<a id="__codelineno-0-317" name="__codelineno-0-317"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
-<a id="__codelineno-0-318" name="__codelineno-0-318"></a>
-<a id="__codelineno-0-319" name="__codelineno-0-319"></a>    <span class="n">apply</span><span class="o">.</span><span class="n">_digitalearth_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>  <span class="c1"># type: ignore[attr-defined]</span>
-<a id="__codelineno-0-320" name="__codelineno-0-320"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>
-<a id="__codelineno-0-321" name="__codelineno-0-321"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">dataset</span><span class="p">)</span>
-<a id="__codelineno-0-322" name="__codelineno-0-322"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue</span><span class="p">(</span><span class="n">apply</span><span class="p">)</span>
+<a id="__codelineno-0-268" name="__codelineno-0-268"></a><span class="sd">    Examples:</span>
+<a id="__codelineno-0-269" name="__codelineno-0-269"></a><span class="sd">        - A true-colour composite from a Landsat-ordered dataset:</span>
+<a id="__codelineno-0-270" name="__codelineno-0-270"></a><span class="sd">            ```python</span>
+<a id="__codelineno-0-271" name="__codelineno-0-271"></a><span class="sd">            &gt;&gt;&gt; from digitalearth.web import WebMap                       # doctest: +SKIP</span>
+<a id="__codelineno-0-272" name="__codelineno-0-272"></a><span class="sd">            &gt;&gt;&gt; WebMap().basemap().rgb_composite(ds, bands=(4, 3, 2))     # doctest: +SKIP</span>
+<a id="__codelineno-0-273" name="__codelineno-0-273"></a>
+<a id="__codelineno-0-274" name="__codelineno-0-274"></a><span class="sd">            ```</span>
+<a id="__codelineno-0-275" name="__codelineno-0-275"></a>
+<a id="__codelineno-0-276" name="__codelineno-0-276"></a><span class="sd">    See Also:</span>
+<a id="__codelineno-0-277" name="__codelineno-0-277"></a><span class="sd">        digitalearth.base.stretch.channel_limits: derives the ``limits`` this accepts.</span>
+<a id="__codelineno-0-278" name="__codelineno-0-278"></a><span class="sd">        digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped path.</span>
+<a id="__codelineno-0-279" name="__codelineno-0-279"></a><span class="sd">    &quot;&quot;&quot;</span>
+<a id="__codelineno-0-280" name="__codelineno-0-280"></a>    <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<a id="__codelineno-0-281" name="__codelineno-0-281"></a>
+<a id="__codelineno-0-282" name="__codelineno-0-282"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_stack</span>
+<a id="__codelineno-0-283" name="__codelineno-0-283"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.stretch</span><span class="w"> </span><span class="kn">import</span> <span class="n">require_three_bands</span><span class="p">,</span> <span class="n">stretch_to_unit</span>
+<a id="__codelineno-0-284" name="__codelineno-0-284"></a>
+<a id="__codelineno-0-285" name="__codelineno-0-285"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-286" name="__codelineno-0-286"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
+<a id="__codelineno-0-287" name="__codelineno-0-287"></a>    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_display_raster_or_skip</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">)</span>
+<a id="__codelineno-0-288" name="__codelineno-0-288"></a>    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-289" name="__codelineno-0-289"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-290" name="__codelineno-0-290"></a>    <span class="n">stack</span> <span class="o">=</span> <span class="n">get_stack</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">bands</span><span class="p">,</span> <span class="n">mask</span><span class="o">=</span><span class="n">mask_nodata</span><span class="p">)</span>
+<a id="__codelineno-0-291" name="__codelineno-0-291"></a>    <span class="n">pixels</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">size</span> <span class="o">//</span> <span class="nb">max</span><span class="p">(</span><span class="n">stack</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">))</span>
+<a id="__codelineno-0-292" name="__codelineno-0-292"></a>    <span class="k">if</span> <span class="n">pixels</span> <span class="o">&gt;</span> <span class="n">_LARGE_RASTER_PIXELS</span><span class="p">:</span>
+<a id="__codelineno-0-293" name="__codelineno-0-293"></a>        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+<a id="__codelineno-0-294" name="__codelineno-0-294"></a>            <span class="s2">&quot;rgb_composite: inlining a </span><span class="si">{}</span><span class="s2">-pixel composite as a data-URI image source bloats the page; &quot;</span>
+<a id="__codelineno-0-295" name="__codelineno-0-295"></a>            <span class="s2">&quot;for large rasters serve COG/XYZ tiles from pyramids instead&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-296" name="__codelineno-0-296"></a>            <span class="n">pixels</span><span class="p">,</span>
+<a id="__codelineno-0-297" name="__codelineno-0-297"></a>        <span class="p">)</span>
+<a id="__codelineno-0-298" name="__codelineno-0-298"></a>    <span class="c1"># `data` is already in the display CRS; warping `dataset` again here would repeat a multi-second</span>
+<a id="__codelineno-0-299" name="__codelineno-0-299"></a>    <span class="c1"># GDAL warp and take the placement from a second, independent reprojection of the same pixels.</span>
+<a id="__codelineno-0-300" name="__codelineno-0-300"></a>    <span class="n">source</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_to_display_source</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">band</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">bands</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span>
+<a id="__codelineno-0-301" name="__codelineno-0-301"></a>    <span class="n">y</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">source</span><span class="o">.</span><span class="n">y</span><span class="o">.</span><span class="n">values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+<a id="__codelineno-0-302" name="__codelineno-0-302"></a>    <span class="k">if</span> <span class="p">(</span>
+<a id="__codelineno-0-303" name="__codelineno-0-303"></a>        <span class="n">y</span><span class="o">.</span><span class="n">size</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">and</span> <span class="n">y</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">y</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-304" name="__codelineno-0-304"></a>    <span class="p">):</span>  <span class="c1"># ascending y → flip so PNG row 0 is the north edge</span>
+<a id="__codelineno-0-305" name="__codelineno-0-305"></a>        <span class="n">stack</span> <span class="o">=</span> <span class="n">stack</span><span class="p">[::</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+<a id="__codelineno-0-306" name="__codelineno-0-306"></a>    <span class="n">url</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_composite_png_datauri</span><span class="p">(</span><span class="n">stretch_to_unit</span><span class="p">(</span><span class="n">stack</span><span class="p">,</span> <span class="n">limits</span><span class="p">))</span>
+<a id="__codelineno-0-307" name="__codelineno-0-307"></a>    <span class="n">coordinates</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_lonlat_corners</span><span class="p">(</span><span class="n">source</span><span class="p">)</span>
+<a id="__codelineno-0-308" name="__codelineno-0-308"></a>    <span class="k">if</span> <span class="n">coordinates</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-309" name="__codelineno-0-309"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_skipped</span><span class="p">(</span>
+<a id="__codelineno-0-310" name="__codelineno-0-310"></a>            <span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-311" name="__codelineno-0-311"></a>            <span class="s2">&quot;the raster&#39;s corners cannot be expressed in lon/lat, which a MapLibre image source &quot;</span>
+<a id="__codelineno-0-312" name="__codelineno-0-312"></a>            <span class="s2">&quot;needs; reproject the dataset so its extent is representable&quot;</span><span class="p">,</span>
+<a id="__codelineno-0-313" name="__codelineno-0-313"></a>        <span class="p">)</span>
+<a id="__codelineno-0-314" name="__codelineno-0-314"></a>        <span class="k">return</span> <span class="bp">self</span>
+<a id="__codelineno-0-315" name="__codelineno-0-315"></a>    <span class="c1"># Already lon/lat, so the framing takes them as they are.</span>
+<a id="__codelineno-0-316" name="__codelineno-0-316"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_note_lonlat_bounds</span><span class="p">(</span>
+<a id="__codelineno-0-317" name="__codelineno-0-317"></a>        <span class="p">(</span><span class="n">coordinates</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">coordinates</span><span class="p">[</span><span class="mi">2</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span> <span class="n">coordinates</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="mi">0</span><span class="p">],</span> <span class="n">coordinates</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span>
+<a id="__codelineno-0-318" name="__codelineno-0-318"></a>    <span class="p">)</span>
+<a id="__codelineno-0-319" name="__codelineno-0-319"></a>    <span class="n">src_id</span><span class="p">,</span> <span class="n">layer_id</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_uid</span><span class="p">(</span><span class="s2">&quot;rgb-src&quot;</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_layer_id</span><span class="p">(</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+<a id="__codelineno-0-320" name="__codelineno-0-320"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;image&quot;</span><span class="p">,</span> <span class="s2">&quot;url&quot;</span><span class="p">:</span> <span class="n">url</span><span class="p">,</span> <span class="s2">&quot;coordinates&quot;</span><span class="p">:</span> <span class="n">coordinates</span><span class="p">}</span>
+<a id="__codelineno-0-321" name="__codelineno-0-321"></a>    <span class="n">layer</span> <span class="o">=</span> <span class="n">Layer</span><span class="p">(</span>
+<a id="__codelineno-0-322" name="__codelineno-0-322"></a>        <span class="nb">id</span><span class="o">=</span><span class="n">layer_id</span><span class="p">,</span>
+<a id="__codelineno-0-323" name="__codelineno-0-323"></a>        <span class="nb">type</span><span class="o">=</span><span class="n">LayerType</span><span class="o">.</span><span class="n">RASTER</span><span class="p">,</span>
+<a id="__codelineno-0-324" name="__codelineno-0-324"></a>        <span class="n">source</span><span class="o">=</span><span class="n">src_id</span><span class="p">,</span>
+<a id="__codelineno-0-325" name="__codelineno-0-325"></a>        <span class="n">paint</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;raster-opacity&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">(</span><span class="n">opacity</span><span class="p">)},</span>
+<a id="__codelineno-0-326" name="__codelineno-0-326"></a>        <span class="n">layout</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;visibility&quot;</span><span class="p">:</span> <span class="s2">&quot;visible&quot;</span> <span class="k">if</span> <span class="n">visible</span> <span class="k">else</span> <span class="s2">&quot;none&quot;</span><span class="p">},</span>
+<a id="__codelineno-0-327" name="__codelineno-0-327"></a>    <span class="p">)</span>
+<a id="__codelineno-0-328" name="__codelineno-0-328"></a>
+<a id="__codelineno-0-329" name="__codelineno-0-329"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">widget</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-0-330" name="__codelineno-0-330"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_source</span><span class="p">(</span><span class="n">src_id</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span>
+<a id="__codelineno-0-331" name="__codelineno-0-331"></a>        <span class="n">widget</span><span class="o">.</span><span class="n">add_layer</span><span class="p">(</span><span class="n">layer</span><span class="p">)</span>
+<a id="__codelineno-0-332" name="__codelineno-0-332"></a>
+<a id="__codelineno-0-333" name="__codelineno-0-333"></a>    <span class="n">apply</span><span class="o">.</span><span class="n">_digitalearth_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>  <span class="c1"># type: ignore[attr-defined]</span>
+<a id="__codelineno-0-334" name="__codelineno-0-334"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_last_layer_id</span> <span class="o">=</span> <span class="n">layer_id</span>
+<a id="__codelineno-0-335" name="__codelineno-0-335"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_index_layer</span><span class="p">(</span><span class="n">layer_id</span><span class="p">,</span> <span class="n">name</span><span class="p">,</span> <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;rgb&quot;</span><span class="p">,</span> <span class="n">visible</span><span class="o">=</span><span class="n">visible</span><span class="p">,</span> <span class="n">source</span><span class="o">=</span><span class="n">dataset</span><span class="p">)</span>
+<a id="__codelineno-0-336" name="__codelineno-0-336"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_queue</span><span class="p">(</span><span class="n">apply</span><span class="p">)</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
