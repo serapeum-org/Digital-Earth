@@ -14,6 +14,7 @@ the tier's HARD RULE); all CRS/reproject work stays in pyramids. The default ``o
 import logging
 import os
 import sys
+from contextlib import suppress
 from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Self, Union
@@ -1407,13 +1408,26 @@ class Scene3DBase:
         drawn and could not be (review H7). `_add_described_layer` already committed only on success; this
         is the path every other change goes through, and it agrees with it now.
 
+        The plotter is rolled back with it. `apply` draws layer by layer and is not atomic, so a change whose
+        second layer is refused has already drawn its first — and rolling back only the description left that
+        actor on the plotter under an id no layer owned, which `remove_layer` could then never reach
+        (review H2). The rollback is the same operation in reverse: bring the plotter from where it got to
+        back to the figure the scene still shows.
+
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
             OffLimbError: when a layer cannot be drawn and the scene is `strict`.
         """
         before = self._figure
         candidate = _with_panel_layers(figure)
-        self._renderer.apply(before, candidate)
+        try:
+            self._renderer.apply(before, candidate)
+        except Exception:
+            # Best effort, and second: the caller's failure is the one worth raising. A rollback that fails
+            # leaves the scene as the original exception found it, which is what it would have been anyway.
+            with suppress(Exception):
+                self._renderer.apply(candidate, before)
+            raise
         self._figure = candidate
 
     def _add_described_layer(

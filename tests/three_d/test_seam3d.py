@@ -512,6 +512,42 @@ class TestTheRemainingArms:
             "the mesh must be the one already drawn"
         )
 
+    def test_a_layer_pointing_at_new_data_is_drawn_again(self, scene):
+        """A rebuilt layer is one whose data changed, and every such change means a new mesh.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The label-only guard was applied to `rebuilt` as well as `restyled`, and it compares only
+            symbology, filter and group — so a layer whose source, kind, slice or `DataRef` changed hit
+            `continue` and kept its old mesh while `figure_spec` advertised the new one (review H1).
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import DataRef
+
+        low = get_source(_dem())
+        high = get_source(_dem() * 10.0)
+        scene.terrain(low)
+        layer_id = scene.layer_ids[0]
+        built = scene.mesh_of(layer_id)
+        figure = scene.figure_spec
+        scene._change(
+            with_fields(
+                figure,
+                sources={
+                    **figure.sources,
+                    layer_id: DataRef.of(high, name=f"h1-{layer_id}"),
+                },
+            )
+        )
+        drawn = scene.mesh_of(layer_id)
+        assert drawn is not built, "new data must be drawn again"
+        assert float(np.nanmax(drawn.points[:, 2])) == float(
+            np.nanmax(high.z.values)
+        ), float(np.nanmax(drawn.points[:, 2]))
+
     def test_a_restyle_that_reaches_the_engine_still_rebuilds(self, scene):
         """The other arm: a colormap is baked into the mesh's scalars, so it is drawn again.
 
@@ -621,6 +657,31 @@ class TestTheRemainingArms:
         with pytest.raises(KeyError, match="does not draw"):
             scene._change(refused)
         assert scene.layer_ids == ["a"], scene.layer_ids
+
+    def test_a_partly_applied_change_leaves_no_actor_behind(self, scene):
+        """`apply` draws layer by layer, so a refusal can come after something was already drawn.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            Rolling back only the description left that actor on the plotter under an id no layer owned —
+            and `remove_layer` refuses an id the scene does not have, so there was no way to reach it
+            again (review H2). The description and the window roll back together now.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import DataRef, LayerSpec
+
+        figure = scene.figure_spec
+        tree = figure.layers.add(LayerSpec("a", "terrain", source_id="a")).add(
+            LayerSpec("chor", "choropleth", source_id="a")
+        )
+        sources = {"a": DataRef.of(get_source(_dem()), name="h2-probe")}
+        with pytest.raises(KeyError, match="does not draw"):
+            scene._change(with_fields(figure, layers=tree, sources=sources))
+        assert scene.layer_ids == [], scene.layer_ids
+        assert scene._renderer.drawn == {}, sorted(scene._renderer.drawn)
 
     def test_the_scene_still_works_after_a_refused_change(self, scene):
         """Nothing is stuck: the layers that were there can still be removed.

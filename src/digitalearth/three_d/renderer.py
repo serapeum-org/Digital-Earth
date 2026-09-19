@@ -235,7 +235,15 @@ class Renderer3D:
         change = before.diff(after)
         for layer_id in change.removed:
             self.remove(layer_id)
-        for layer_id in (*change.rebuilt, *change.restyled):
+        # A rebuilt layer is one whose *data* changed — its kind, source, slice, or the reference behind its
+        # source id — and every one of those means a new mesh. Only a restyle is worth asking about, because
+        # `diff` groups a change of `label` with a change of colormap and one of those never reaches VTK.
+        # The guard ran over both, so a layer that pointed at new data kept its old mesh while `figure_spec`
+        # advertised the new one (review H1).
+        for layer_id in change.rebuilt:
+            self.remove(layer_id)
+            self.draw_layer(after, layer_id)
+        for layer_id in change.restyled:
             if not self._reaches_pyvista(before, after, layer_id):
                 continue
             # VTK has no cheap restyle: a colormap or a class break is baked into the mesh's scalars and the
