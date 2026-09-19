@@ -625,8 +625,7 @@ class Scene3DBase:
             return
         if hasattr(plotter, "set_scale"):
             plotter.set_scale(zscale=self._vertical, render=False)
-        if hasattr(plotter, "camera"):
-            self._apply_camera()
+        self._apply_camera()
 
     def _place(self, data: Any, *, layer: str) -> Any:
         """Return `data` in the scene's display CRS, adopting the data's CRS when the scene has none yet.
@@ -1584,7 +1583,15 @@ class Scene3DBase:
         """Put the stored camera on the plotter, if one was ever set."""
         if not self._camera_set or self._plotter is None:
             return
-        live = self._plotter.camera
+        # Reached for, not asked about. PyVista's `camera` property *resets the camera* when nothing has
+        # set one, so `hasattr(plotter, "camera")` is a question that changes the answer: asked from the
+        # lazy plotter getter, before the first mesh is added, it framed a renderer holding no actors and
+        # every layer drawn afterwards rendered off-camera — a blank image, which is how the 3-D notebooks
+        # found it. Here the reset is harmless, because a camera was set and is about to be written. A
+        # stand-in plotter that implements only half the view API still has no `camera`, and is left alone.
+        live = getattr(self._plotter, "camera", None)
+        if live is None:
+            return
         live.position = tuple(self._camera.position)
         live.focal_point = tuple(self._camera.focal_point)
         live.up = tuple(self._camera.view_up)

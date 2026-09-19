@@ -461,6 +461,29 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_a_drawn_scene_is_in_front_of_its_camera(self, scene, dataset):
+        """The lazy plotter must not frame the empty renderer it is about to be drawn on.
+
+        Args:
+            scene: The scene under test.
+            dataset: A raster whose coordinates are hundreds of kilometres from the origin, which is what
+                makes an empty-scene camera visible: a grid drawn around zero is in shot either way.
+
+        Test scenario:
+            PyVista's `camera` property resets the camera when nothing has set one, so probing it with
+            `hasattr` from inside the lazy `plotter` getter framed a renderer with no actors — and every
+            mesh added afterwards sat outside the view. Only the notebooks noticed, as a blank image, so
+            the frame is read here: the drawn scene has to differ from its own background.
+        """
+        scene.terrain(dataset)
+        frame = scene.screenshot()
+        background = frame[0, 0].astype(int)
+        # The colour bar is furniture and is drawn in the bottom strip whether or not the terrain is in
+        # shot, so it is cropped away; what is left is the scene itself.
+        scene_area = frame[: int(frame.shape[0] * 0.8)]
+        lit = (np.abs(scene_area.astype(int) - background).sum(-1) > 30).mean()
+        assert lit > 0.01, f"the terrain is off-camera: {lit:.1%} of the frame is drawn"
+
     def test_a_replacement_that_names_no_source_is_refused(self, scene):
         """A layer that draws from data cannot be re-described without saying where the data is.
 
