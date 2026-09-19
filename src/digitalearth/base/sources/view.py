@@ -45,13 +45,16 @@ def _off_source(error: BaseException) -> bool:
         error: What the reader raised.
 
     Returns:
-        `True` for pyramids' out-of-bounds report, matched by name so this module needs no import of it — the
-        exception moved package once already, and a viewport that pans off the edge must not depend on where
-        it lives.
+        `True` for pyramids' out-of-bounds report, matched by **type name** so this module needs no import of
+        it — the exception moved package once already, and a viewport that pans off the edge must not depend
+        on where it lives.
+
+        The message is deliberately not searched. "out of bounds" is the text of the most common indexing
+        error Python raises (`IndexError: index 3 is out of bounds for axis 0 with size 2`), so matching it
+        turned any numpy, GDAL or pyramids indexing defect reached through a windowed read into a silent
+        all-`NaN` canvas — a blank map where a traceback belonged (review M2).
     """
-    if "OutOfBounds" in type(error).__name__:
-        return True
-    return "out of bounds" in str(error).lower()
+    return "OutOfBounds" in type(error).__name__
 
 
 class SourceView(Source):
@@ -824,14 +827,43 @@ class SourceView(Source):
         Returns:
             `(across, down)`, or `None` when the source does not say what a cell measures — a reader with no
             geotransform, which is windowed exactly as it was asked.
+
+            The two spacings are read separately. pyramids documents `Dataset.cell_size` as the *magnitude of
+            the x pixel size*, so using it for both axes counted the rows of any grid whose cells are not
+            square as if they were `dy/dx` times as many: a 20x10 raster of 1 x 4 m cells reported 20 x 40,
+            which broke `_native`'s promise never to ask for more cells than the window holds and, with it,
+            the native-resolution test that picks pyramids' reliable masking path (review M3).
         """
-        cell = getattr(data, "cell_size", None)
-        if not cell:
+        across_step, down_step = SourceView._spacing(data)
+        if not across_step or not down_step:
             return None
         xmin, ymin, xmax, ymax = window.as_bbox()
-        across = max(1, int(round((xmax - xmin) / float(cell))))
-        down = max(1, int(round((ymax - ymin) / float(cell))))
+        across = max(1, int(round((xmax - xmin) / across_step)))
+        down = max(1, int(round((ymax - ymin) / down_step)))
         return across, down
+
+    @staticmethod
+    def _spacing(data: Any) -> Tuple[Optional[float], Optional[float]]:
+        """Return what one cell of `data` measures, across and down.
+
+        Args:
+            data: The raster being read.
+
+        Returns:
+            `(dx, dy)` as positive magnitudes, from the source's geotransform where it has one — which is the
+            only place the two are stated separately — and from the square `cell_size` for both when it does
+            not. `(None, None)` for a source that says neither.
+        """
+        transform = getattr(data, "geotransform", None)
+        if isinstance(transform, (tuple, list)) and len(transform) >= 6:
+            across, down = abs(float(transform[1])), abs(float(transform[5]))
+            if across and down:
+                return across, down
+        cell = getattr(data, "cell_size", None)
+        if not cell:
+            return None, None
+        square = abs(float(cell))
+        return square, square
 
     @classmethod
     def _aligned(cls, window: Bounds, data: Any) -> Bounds:

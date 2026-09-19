@@ -1032,12 +1032,16 @@ class TestTheRemainingWindowArms:
             The conversion needs both ends. A windowable object with neither `epsg` nor `crs` gives no target,
             so converting would guess; instead the window stays in the CRS the request named, the only one its
             numbers are known to be in. The window is pixel-aligned, so snapping plays no part in the bbox.
+
+            The canvas is half the window's 4x4 cells, so the read is decimated and goes through `read_part`
+            — the call this test reads. At the window's own resolution it would be read with `read_array`
+            instead, which is the point of `_read_window`'s two paths.
         """
         reader = _WindowedReader(geotransform=(0.0, 1.0, 0.0, 8.0, 0.0, -1.0))
         view = SourceView.of(
             reader,
             request=ViewRequest(
-                bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=4, height=4
+                bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=2, height=2
             ),
         )
         assert reader.calls == [
@@ -1269,6 +1273,76 @@ class TestAWindowThatMissesTheSource:
             ),
         )
         assert np.isnan(view.z.values).all(), view.z.values
+
+    def test_an_indexing_defect_is_not_a_viewport_off_the_edge(self):
+        """ "out of bounds" is what numpy says about a bad index, and it was read as "nothing here".
+
+        Test scenario:
+            The guard matched the phrase anywhere in the message, and
+            `IndexError: index 3 is out of bounds for axis 0 with size 2` is the most common error text in
+            Python. Any indexing defect reached through a windowed read came back as a silent all-`NaN`
+            canvas instead of a traceback (review M2).
+        """
+
+        class _Broken:
+            """A windowable reader whose read raises the commonest indexing error there is."""
+
+            bbox = (0.0, 0.0, 8.0, 8.0)
+            cell_size = 1.0
+            epsg = 4326
+
+            def read_part(self, **_kwargs):
+                """Raise the way numpy does for a bad index.
+
+                Raises:
+                    IndexError: always.
+                """
+                raise IndexError("index 3 is out of bounds for axis 0 with size 2")
+
+        with pytest.raises(IndexError, match="out of bounds"):
+            SourceView.of(
+                _Broken(),
+                request=ViewRequest(
+                    bounds=Bounds(0.0, 0.0, 4.0, 4.0, crs=4326), budget=4
+                ),
+            )
+
+    def test_a_grid_with_tall_cells_is_counted_by_both_its_spacings(self):
+        """A cell is two numbers. Counting rows with the x spacing invents rows that are not there.
+
+        Test scenario:
+            pyramids documents `cell_size` as the magnitude of the *x* pixel size, and it was used for both
+            axes: a window over a 1 x 4 grid reported four times the rows it holds, so `_native`'s cap read
+            at the resampler's resolution rather than the raster's (review M3).
+        """
+
+        class _Tall:
+            """A reader whose cells are four times as tall as they are wide."""
+
+            bbox = (0.0, 0.0, 20.0, 40.0)
+            cell_size = 1.0
+            epsg = 4326
+            geotransform = (0.0, 1.0, 0.0, 40.0, 0.0, -4.0)
+
+        window = Bounds(0.0, 0.0, 20.0, 40.0, crs=4326)
+        assert SourceView._native_cells(window, _Tall()) == (20, 10), (
+            SourceView._native_cells(window, _Tall())
+        )
+
+    def test_a_square_grid_still_counts_by_its_cell_size(self):
+        """A reader with no geotransform says one number, and it means both axes."""
+
+        class _Square:
+            """A reader that states only a square cell size."""
+
+            bbox = (0.0, 0.0, 8.0, 8.0)
+            cell_size = 2.0
+            epsg = 4326
+
+        window = Bounds(0.0, 0.0, 8.0, 8.0, crs=4326)
+        assert SourceView._native_cells(window, _Square()) == (4, 4), (
+            SourceView._native_cells(window, _Square())
+        )
 
     def test_a_read_that_failed_for_another_reason_still_raises(self):
         """A truncated file is not an empty place, and is not hidden as one."""
