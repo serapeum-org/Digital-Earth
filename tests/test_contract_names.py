@@ -252,9 +252,9 @@ class TestTheAttachedIssues:
 
     def test_web_text_still_accepts_the_old_keyword(self):
         """The rename is a promise to the caller who already wrote `string=`."""
-        web = _facade("web")
+        built = _facade("web")()
         with pytest.warns(DeprecationWarning, match="string"):
-            drawn = web().text(4.9, 52.4, string="Amsterdam")
+            drawn = built.text(4.9, 52.4, string="Amsterdam")
         assert drawn.layer_ids, drawn.layer_ids
 
     def test_web_graticule_takes_two_steps(self):

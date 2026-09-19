@@ -277,8 +277,11 @@ class TestACallersOwnMesh:
         scene.add_mesh(mesh, name="ball")
         assert scene.held_objects["ball"] is mesh, scene.held_objects
         stored = json.dumps(scene.figure_spec.layers.get("ball").to_dict())
-        assert "PolyData" not in stored and "points" not in stored, (
-            f"the layer must describe the object, not carry it: {stored}"
+        assert "PolyData" not in stored, (
+            f"the layer must describe the object, not carry its type: {stored}"
+        )
+        assert "points" not in stored, (
+            f"the layer must describe the object, not carry its vertices: {stored}"
         )
 
     def test_removing_it_forgets_the_object(self, scene):

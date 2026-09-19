@@ -117,15 +117,18 @@ class TestRenamingAMethod:
 
     def test_the_warning_names_both_spellings(self):
         """The other half of the promise: the old name must not linger silently."""
+        facade = self._Map()
         with pytest.warns(DeprecationWarning) as caught:
-            self._Map().fit_bounds([0, 0, 1, 1])
+            facade.fit_bounds([0, 0, 1, 1])
         message = str(caught[0].message)
-        assert "Map.fit_bounds()" in message and "Map.set_bounds()" in message, message
+        assert "Map.fit_bounds()" in message, message
+        assert "Map.set_bounds()" in message, message
 
     def test_the_warning_lands_on_the_caller_s_line(self):
         """A warning pointing at the helper is one nobody can act on."""
+        facade = self._Map()
         with pytest.warns(DeprecationWarning) as caught:
-            self._Map().fit_bounds([0, 0, 1, 1])
+            facade.fit_bounds([0, 0, 1, 1])
         assert caught[0].filename == __file__, caught[0].filename
 
     def test_a_parameter_rename_inside_the_new_method_also_points_at_the_caller(self):
@@ -135,8 +138,9 @@ class TestRenamingAMethod:
             The case the one hand-written alias handled by hand: calling the old method *and* the old keyword
             raised two warnings, and without the frame count the second landed in `deprecation.py`.
         """
+        facade = self._Map()
         with pytest.warns(DeprecationWarning) as caught:
-            self._Map().animate("out.gif", framerate=9.0)
+            facade.animate("out.gif", framerate=9.0)
         attributed = {
             str(record.message).split("(")[0]: record.filename for record in caught
         }
@@ -146,11 +150,12 @@ class TestRenamingAMethod:
 
     def test_the_frame_count_is_put_back_afterwards(self):
         """A later call through the new name is not credited with the alias's frame."""
+        facade = self._Map()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            self._Map().animate("out.gif", framerate=9.0)
+            facade.animate("out.gif", framerate=9.0)
         with pytest.warns(DeprecationWarning) as caught:
-            self._Map().save_animation("out.gif", framerate=9.0)
+            facade.save_animation("out.gif", framerate=9.0)
         assert caught[0].filename == __file__, caught[0].filename
 
     def test_the_alias_carries_the_names_it_was_built_with(self):
