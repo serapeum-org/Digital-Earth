@@ -69,6 +69,10 @@ class SourceView(Source):
         selection: Which slice was read.
         request: The request this view answered, when it answered one. Kept so a caller can tell what it
             asked for from what it got — a reader may return fewer cells than the budget allowed.
+        window: The rectangle actually read, in the CRS its cells are measured in, for a windowed read;
+            `None` for a view that read the whole source. It is what a renderer needs to *place* the
+            cells, and the reader is the only one that can say: a canvas one cell wide has no spacing
+            to derive it from, which is why a renderer must not be left to.
 
     Examples:
         - A view knows its own address:
@@ -108,11 +112,35 @@ class SourceView(Source):
         ref: Optional[DataRef] = None,
         selection: Optional[Selection] = None,
         request: Optional[ViewRequest] = None,
+        window: Optional[Bounds] = None,
     ):
         super().__init__(z, x, y, crs, metadata, units)
         self._ref = ref
         self._selection = selection if selection is not None else Selection()
         self._request = request
+        self._window = window
+
+    @property
+    def window(self) -> Optional[Bounds]:
+        """The rectangle this view's cells cover, for a windowed read.
+
+        Returns:
+            The window read, in the CRS its cells are measured in, or `None` when the whole source was
+            read and the axes describe it themselves.
+
+        Examples:
+            - A view of a whole source names no window:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import DimensionInfo
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> axis = DimensionInfo(np.array([0.0, 1.0]), "x")
+                >>> SourceView(None, axis, axis, crs=4326).window is None
+                True
+
+                ```
+        """
+        return self._window
 
     @property
     def ref(self) -> Optional[DataRef]:
@@ -453,7 +481,7 @@ class SourceView(Source):
                 "view per channel"
             )
         request = cls._budgeted(request, picked.budget)
-        windowed, xs, ys, window_crs = cls._windowed(data, picked, request)
+        windowed, xs, ys, window_crs, window = cls._windowed(data, picked, request)
         source = get_source(
             windowed,
             band=picked.first_band,
@@ -474,6 +502,7 @@ class SourceView(Source):
             ref=ref,
             selection=picked,
             request=request,
+            window=window,
         )
 
     @staticmethod
@@ -620,7 +649,7 @@ class SourceView(Source):
     @classmethod
     def _windowed(
         cls, data: Any, selection: Selection, request: Optional[ViewRequest]
-    ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any]]:
+    ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any], Optional[Bounds]]:
         """Narrow `data` to the requested window, and say where the window's cells are.
 
         Args:
@@ -629,9 +658,9 @@ class SourceView(Source):
             request: What was asked for, or ``None``.
 
         Returns:
-            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s: when
-            there is no request, when the object has no `read_part`, or when :meth:`_window_for` can name
-            no rectangle to read.
+            A ``(data, x, y, crs, window)`` tuple. Unwindowed, that is `data` unchanged and four ``None``s:
+            when there is no request, when the object has no `read_part`, or when :meth:`_window_for` can
+            name no rectangle to read.
 
             Windowed, the window is first grown to whole source pixels by :meth:`_aligned`, and the result is
             the **array** ``read_part`` returns for it plus the coordinates of its cell centres and the CRS
@@ -644,7 +673,7 @@ class SourceView(Source):
             ValueError: if the source is a rotated raster — see :meth:`_refuse_rotated`.
             Exception: whatever pyramids raises for a window it cannot read.
         """
-        nothing = (data, None, None, None)
+        nothing = (data, None, None, None, None)
         if request is None or not hasattr(data, "read_part"):
             return nothing
         window = cls._window_for(data, request)
@@ -669,7 +698,7 @@ class SourceView(Source):
             array = np.full((height, width), np.nan)
         rows, columns = array.shape[-2], array.shape[-1]
         xs, ys = cls._axes(window, rows, columns, data)
-        return array, xs, ys, window.crs
+        return array, xs, ys, window.crs, window
 
     @staticmethod
     def _missing(data: Any, band: int) -> Optional[float]:

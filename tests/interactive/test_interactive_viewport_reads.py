@@ -196,6 +196,37 @@ class TestWhatTheFrameShows:
             "Flow",
         ), frame
 
+    def test_a_canvas_of_one_cell_is_still_placed_on_what_it_read(self, cog):
+        """A budget small enough to read one cell has no spacing for a renderer to derive.
+
+        Args:
+            cog: The recording raster.
+
+        Test scenario:
+            HoloViews infers an image's placement from the gaps between its coordinates. Given one sample
+            on an axis there are no gaps: it returned `nan` bounds, and raised
+            `ValueError: cannot convert float NaN to integer` as soon as the other axis had two. The read
+            knows the rectangle, so it carries it.
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        m.large_image(cog, dynamic=False, max_pixels=4)
+        drawn = m.layers[0].bounds.lbrt()
+        assert all(edge == edge for edge in drawn), f"nan bounds: {drawn}"
+        assert [round(float(edge), 3) for edge in drawn] == [
+            round(float(edge), 3) for edge in cog.bbox
+        ], f"{drawn} is not the raster's {cog.bbox}"
+
+    def test_a_one_cell_canvas_does_not_raise(self, cog):
+        """The budget below that one drew nothing and said nothing; it is a picture now.
+
+        Args:
+            cog: The recording raster.
+        """
+        m = InteractiveMap(crs=cog.epsg)
+        m.large_image(cog, dynamic=False, max_pixels=1)
+        values = m.layers[0].dimension_values(2, flat=False)
+        assert values.shape == (1, 1), values.shape
+
     def test_a_nodata_cell_does_not_reach_the_colour_range(self, cog):
         """The sentinel is `NaN` in the frame, not -9999 at the end of the ramp.
 

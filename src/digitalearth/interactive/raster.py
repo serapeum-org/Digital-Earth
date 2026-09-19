@@ -61,11 +61,22 @@ class RasterMixin(_MixinBase):
 
         Returns:
             holoviews.Image: the raster as a plain HoloViews image in the display CRS.
+
+            A view that read a window is placed on the rectangle it read, rather than on one derived from
+            its axes: a zoom that lands on a single cell leaves an axis with no spacing to derive from,
+            and HoloViews answers that with `nan` bounds and a raised frame (#300).
         """
         gv, hv = _require_holoviz()
         arr = _masked_to_nan(src.z.values)
         name = vname or self._vdim_name(src)
-        return self._raster_element(src.x.values, src.y.values, arr, name)
+        window = getattr(src, "window", None)
+        return self._raster_element(
+            src.x.values,
+            src.y.values,
+            arr,
+            name,
+            bounds=None if window is None else window.as_bbox(),
+        )
 
     @_skips_off_limb
     def image(

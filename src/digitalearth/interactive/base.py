@@ -255,7 +255,9 @@ class InteractiveMapBase:
         # delegating it to HoloViews' global option Store.
         self._styles: Dict[int, dict] = {}
 
-    def _raster_element(self, x: Any, y: Any, arr: Any, name: str) -> Any:
+    def _raster_element(
+        self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
+    ) -> Any:
         """Build the raster element: plain ``hv.Image`` (Bokeh path) or ``gv.Image`` under a projection.
 
         With no display projection set the element is a plain ``hv.Image`` already in the display CRS
@@ -268,18 +270,25 @@ class InteractiveMapBase:
             y: 1-D y / latitude cell-centre coordinates (display CRS).
             arr: 2-D value array (masked nodata already filled with ``NaN``).
             name: Value-dimension name.
+            bounds: The rectangle the cells cover, as ``(west, south, east, north)``, when the reader knows
+                it. Given, the element is built from the array and placed on it; left out, HoloViews derives
+                the placement from the axes — which it cannot do for an axis of one cell, because one sample
+                has no spacing (it returns `nan` bounds and then raises on the next frame).
 
         Returns:
             An ``hv.Image`` or ``gv.Image`` element.
         """
         gv, hv = _require_holoviz()
+        data = (x, y, arr) if bounds is None else arr
+        placement = {} if bounds is None else {"bounds": tuple(bounds)}
         if self._projection is None:
-            return hv.Image((x, y, arr), kdims=["x", "y"], vdims=[name])
+            return hv.Image(data, kdims=["x", "y"], vdims=[name], **placement)
         return gv.Image(
-            (x, y, arr),
+            data,
             kdims=["x", "y"],
             vdims=[name],
             crs=gv.util.process_crs(self.crs),
+            **placement,
         )
 
     def add_element(self, element: Any) -> Self:
