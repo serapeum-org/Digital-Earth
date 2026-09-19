@@ -1053,9 +1053,9 @@ class TestAPopupOverAnUndescribedLayer:
             counts. Pointing the popup at them to satisfy the tree lookup produced an empty popup for
             every feature a caller clicked (review H8).
         """
-        from digitalearth.web import WebMap
-
         import inspect
+
+        from digitalearth.web import WebMap
 
         m = WebMap().cluster(points)
         m.popup(["v"])

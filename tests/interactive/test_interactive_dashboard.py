@@ -456,6 +456,65 @@ class TestBothOverridePathsRestyleTheSameElements:
         )
 
 
+class TestTheLayerControlSeesTheSameLayersItLabels:
+    """Review H9/H10 — a deferred basemap is a layer, and the labels are positional."""
+
+    @staticmethod
+    def _labels(control) -> list:
+        """Return the checkbox options a layer control built.
+
+        Args:
+            control: What `layer_control()` returned.
+
+        Returns:
+            The option strings, or an empty list when there are none.
+        """
+        widgets = list(control[0]) if hasattr(control, "__getitem__") else list(control)
+        return next(
+            (w.options for w in widgets if hasattr(w, "options") and w.options), []
+        )
+
+    def test_the_labels_are_built_after_the_basemap_is_drawn(self, dataset):
+        """`tiles()` inserts the basemap at index 0, and the labels are indices.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            The labels were frozen before the flush, so every one of them named the layer to its left once
+            the basemap arrived — and the control drew the basemap where the data should be (review H10).
+        """
+        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        labels = self._labels(m.layer_control())
+        assert labels == ["0: WMTS", "1: Image"], labels
+
+    def test_the_layer_control_draws_the_deferred_basemap(self, dataset):
+        """The other widget path flushes too, which is what round-1 H9 fixed on only one of them.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        labels = self._labels(m.layer_control())
+        drawn = m._compose_visible_layers(list(labels))
+        assert self._names(drawn) == ["WMTS", "Image"], self._names(drawn)
+
+    @staticmethod
+    def _names(obj) -> list:
+        """Return the element type names of a composed figure, in draw order.
+
+        Args:
+            obj: The composed HoloViews object.
+
+        Returns:
+            One name per element.
+        """
+        return [
+            type(element).__name__
+            for element in (list(obj) if isinstance(obj, hv.Overlay) else [obj])
+        ]
+
+
 class TestADynamicLayerIsClassifiedByWhatItDraws:
     """Review H5 — a `DynamicMap` is a wrapper, and two builders wrap very different elements."""
 

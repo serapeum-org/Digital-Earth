@@ -498,6 +498,10 @@ class DashboardMixin(_MixinBase):
         """
         gv, hv = _require_holoviz()
         pn = _require_panel()
+        # Before the labels are built. A map built with `tiles=` defers its basemap until something renders,
+        # and the flush inserts it at index 0 — so labels frozen beforehand named the layer one place to
+        # their left, and the control drew the basemap where the data should be (review H10).
+        self._flush_deferred_tiles()
         if reorder:
             raise NotImplementedError(
                 "layer_control(reorder=True) is not implemented — reordering needs a stable per-layer "
@@ -584,6 +588,10 @@ class DashboardMixin(_MixinBase):
             opacity ``op``, over the chosen basemap when one is selected.
         """
         gv, hv = _require_holoviz()
+        # The other widget path does this too: a deferred basemap is one of the layers, and composing
+        # without flushing drew a map that never had one (review H9). `layer_control` has already flushed,
+        # so this is a no-op there and the indices below still mean what the labels meant.
+        self._flush_deferred_tiles()
         chosen = [self.layers[int(label.split(":")[0])] for label in shown]
         if not chosen:
             return hv.Overlay([])
