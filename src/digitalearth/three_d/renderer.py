@@ -85,12 +85,13 @@ def drawer_for(kind: str) -> Any:
         ) from None
 
 
-def draw_custom(scene: Any, data: Any, layer: LayerSpec) -> Optional[Tuple[Any, Any]]:
+def draw_custom(scene: Any, _data: Any, layer: LayerSpec) -> Optional[Tuple[Any, Any]]:
     """Draw an object the caller built themselves and handed to the scene.
 
     Args:
         scene: The scene holding the object and the plotter.
-        data: Unused — a custom layer has no source; the object is held by the scene (#293).
+        _data: The source slot every drawer takes, unread here — a custom layer has no source, and the
+            object is held by the scene (#293).
         layer: The layer to draw. Its `volume` property says whether it is ray-cast.
 
     Returns:

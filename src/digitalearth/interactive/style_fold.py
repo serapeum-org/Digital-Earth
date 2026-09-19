@@ -381,7 +381,7 @@ def fold_symbology(
     for group, options in grouped.items():
         for key in options:
             if key not in allowed.get(group, frozenset()):
-                raise ValueError(_refusal(key, element, backend, allowed))
+                raise ValueError(_refusal(key, element, backend))
     return grouped, unsupported
 
 
@@ -438,16 +438,16 @@ def _group_of(key: str, allowed: Mapping[str, FrozenSet[str]], element: str) -> 
     return "style"
 
 
-def _refusal(
-    key: str, element: str, backend: str, allowed: Mapping[str, FrozenSet[str]]
-) -> str:
+def _refusal(key: str, element: str, backend: str) -> str:
     """Return the message for an option this element does not take.
+
+    The accepted options are not passed in: the suggestion comes from HoloViews' own fuzzy match over the
+    element's keywords, which is a richer answer than the flat set the caller checked against.
 
     Args:
         key: The option that was refused.
         element: The element type it was folded for.
         backend: The backend it was checked against.
-        allowed: What the element accepts, by group.
 
     Returns:
         A sentence naming the key, the element and the backend, with the closest accepted options when

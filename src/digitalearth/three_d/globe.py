@@ -314,12 +314,13 @@ def draw_globe(scene: Any, data: Any, layer: LayerSpec) -> Any:
     )
 
 
-def draw_coastlines(scene: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_coastlines(scene: Any, _data: Any, layer: LayerSpec) -> Any:
     """Draw the coastlines a globe asked for.
 
     Args:
         scene: The scene being drawn into.
-        data: Unused — coastlines are geometry geovista holds, not a layer's source.
+        _data: The source slot every drawer takes, unread here — coastlines are geometry geovista holds
+            rather than anything a layer points at.
         layer: The layer's description, whose props carry the resolution and the colour.
 
     Returns:
