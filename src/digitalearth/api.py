@@ -579,7 +579,49 @@ def quickmap(
         return _quickmap_web(
             data, crs=crs, basemap=basemap, colorbar=colorbar, **kwargs
         )
-    scene = Map(crs=3857 if crs is _UNSET else crs, domain=domain)
+    return _quickmap_matplotlib(
+        data,
+        crs=3857 if crs is _UNSET else crs,
+        kind=kind,
+        domain=domain,
+        basemap=basemap,
+        coastlines=coastlines,
+        colorbar=colorbar,
+        **kwargs,
+    )
+
+
+def _quickmap_matplotlib(
+    data: PlottableData,
+    *,
+    crs: Any,
+    kind: str,
+    domain: Any,
+    basemap: bool | str | Any,
+    coastlines: bool,
+    colorbar: bool,
+    **kwargs,
+) -> Map:
+    """Build a finished :class:`~digitalearth.static.map.Map` from ``data`` (the default backend's path).
+
+    The fourth of the per-tier builders, so `quickmap` itself is one dispatch table rather than a dispatch
+    table with one tier's assembly inlined after it. Nothing here is new: it is the steps the default path
+    always took, in the order it took them.
+
+    Args:
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
+        crs: Display CRS for the map.
+        kind: Raster renderer (``"auto"`` → ``imshow``).
+        domain: A named region / bbox to frame on, or `None` to leave the extent to the data.
+        basemap: ``True`` for the backend's default tile source, or the source itself.
+        coastlines: When True, overlay coastlines.
+        colorbar: When True, add a colour key if the drawn layer has one to draw.
+        **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
+
+    Returns:
+        The decorated map.
+    """
+    scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
         _best_effort("coastlines", scene.coastlines)
@@ -589,14 +631,25 @@ def quickmap(
         _best_effort("basemap", scene.basemap, _basemap_source(basemap))
     if domain is not None:
         scene.set_domain()
-    if (
-        colorbar
-        and scene.layers
-        and scene.layers[-1][1] is not None
-        and not _last_layer_is_categorical(scene)
-    ):
+    if colorbar and _has_a_key_to_draw(scene):
         _add_colorbar(scene)
     return scene
+
+
+def _has_a_key_to_draw(scene: Map) -> bool:
+    """Whether the map's last layer is one a colorbar can describe.
+
+    Args:
+        scene: The map that was just drawn.
+
+    Returns:
+        `False` for a map with no layers, for a layer with no mappable — a globe fill or an outline-only
+        polygon draw registers one without — and for a categorical layer, which is keyed by the legend its
+        builder drew rather than by a continuous ramp.
+    """
+    if not scene.layers or scene.layers[-1][1] is None:
+        return False
+    return not _last_layer_is_categorical(scene)
 
 
 def _basemap_source(basemap: Any) -> Any:

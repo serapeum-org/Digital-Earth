@@ -582,6 +582,41 @@ class SourceView(Source):
             return max(1, min(width, budget)), 1
         return 1, max(1, min(height, budget))
 
+    @staticmethod
+    def _window_for(data: Any, request: ViewRequest) -> Optional[Bounds]:
+        """Return the rectangle to read, in the CRS the data's own cells are measured in.
+
+        Two questions in one, kept apart from the reading: *which* rectangle, and *whose* CRS it is
+        described in. `read_part` answers in the dataset's CRS, so a window given in another one is
+        converted before it is read rather than after.
+
+        Args:
+            data: The opened object.
+            request: What was asked for.
+
+        Returns:
+            The window, or `None` when there is no rectangle to name: the request gives no region, and
+            either names no usable size (no budget, and not both of width and height) or meets an object
+            with no `bbox` of its own to window that size against.
+        """
+        bbox = request.as_bbox()
+        if bbox is not None:
+            window = Bounds.from_bbox(list(bbox), crs=request.crs)
+            target = getattr(data, "epsg", None) or getattr(data, "crs", None)
+            if request.crs is not None and target is not None:
+                window = window.to_crs(target)
+            return window
+        # A size with no region still has to be honoured: the object *can* window, so skipping here
+        # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
+        # canvas all 13x14 cells. The source's own bbox is the region.
+        source_bbox = getattr(data, "bbox", None)
+        # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
+        # one read a 64x64 floor square that honoured nothing the caller named.
+        canvas = request.width is not None and request.height is not None
+        if source_bbox is None or (request.budget is None and not canvas):
+            return None
+        return Bounds.from_bbox(list(source_bbox), crs=getattr(data, "epsg", None))
+
     @classmethod
     def _windowed(
         cls, data: Any, selection: Selection, request: Optional[ViewRequest]
@@ -595,9 +630,8 @@ class SourceView(Source):
 
         Returns:
             A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s: when
-            there is no request, the object has no `read_part`, or the request names no region and either
-            names no usable size (no budget, and not both of width and height) or meets an object with no
-            `bbox` to window the size against.
+            there is no request, when the object has no `read_part`, or when :meth:`_window_for` can name
+            no rectangle to read.
 
             Windowed, the window is first grown to whole source pixels by :meth:`_aligned`, and the result is
             the **array** ``read_part`` returns for it plus the coordinates of its cell centres and the CRS
@@ -613,27 +647,9 @@ class SourceView(Source):
         nothing = (data, None, None, None)
         if request is None or not hasattr(data, "read_part"):
             return nothing
-        bbox = request.as_bbox()
-        if bbox is None:
-            # A size with no region still has to be honoured: the object *can* window, so skipping here
-            # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
-            # canvas all 13x14 cells. The source's own bbox is the region.
-            source_bbox = getattr(data, "bbox", None)
-            # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
-            # one read a 64x64 floor square that honoured nothing the caller named.
-            canvas = request.width is not None and request.height is not None
-            if source_bbox is None or (request.budget is None and not canvas):
-                return nothing
-            window = Bounds.from_bbox(
-                list(source_bbox), crs=getattr(data, "epsg", None)
-            )
-        else:
-            # read_part returns data in the *dataset's* CRS, so a bbox given in another one is converted
-            # first and the window described in the CRS its cells are actually measured in.
-            window = Bounds.from_bbox(list(bbox), crs=request.crs)
-            target = getattr(data, "epsg", None) or getattr(data, "crs", None)
-            if request.crs is not None and target is not None:
-                window = window.to_crs(target)
+        window = cls._window_for(data, request)
+        if window is None:
+            return nothing
         # Snap the window outward to whole source pixels *before* reading. read_part does this internally
         # (floor/ceil through world_to_pixel) and returns a buffer spanning the snapped window — so labelling
         # the result from the requested bbox misplaces every cell by up to one source pixel per edge, worst
