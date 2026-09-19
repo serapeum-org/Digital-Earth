@@ -196,10 +196,11 @@ class BigDataMixin(_MixinBase):
         # One closure adds the bubbles, their counts and the loose points, so tagging it with the
         # indexed id removes all three together — they are one thing to a viewer.
         apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
-        # The id the tree holds, not one of the three MapLibre layers it stands for: `popup()` and
-        # `tooltip()` default to this, and naming a layer nobody indexed made `cluster(...).popup(...)`
-        # raise (review H3).
-        self._last_layer_id = clusters.id
+        # The loose points, which are the layer carrying the caller's own columns: the bubbles are
+        # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
+        # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
+        # description is skipped — which is what the guard in `_record_tooltip` is for.
+        self._last_layer_id = unclustered.id
         self._index_layer(clusters.id, None, kind="clusters", source=gdf)
         return self._queue(apply)
 

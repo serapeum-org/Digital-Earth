@@ -993,18 +993,23 @@ class TestAPopupOverAnUndescribedLayer:
         assert m.popup(["v"]) is not None, "a clustered map must take a popup"
         assert m.layer_ids == ["clusters-2"], m.layer_ids
 
-    def test_a_popup_naming_a_layer_the_tree_does_not_hold_is_drawn(self, points):
-        """A cluster sub-layer, a graticule's labels, a basemap: real layers, not described ones.
+    def test_a_popup_naming_a_layer_this_map_has_not_drawn_is_refused(self, points):
+        """An id a caller wrote is checked; skipping it accepted a typo in silence.
 
         Args:
             points: The fixture points.
+
+        Test scenario:
+            The guard exists for the ids the *tier* chooses — a cluster's sub-layers, a graticule's labels
+            — which are drawn and simply not described. Applying it to an explicit `layer=` meant the
+            closure was still queued, so the saved page called `map.on('click', 'typoed', ...)` and failed
+            in a browser console with nothing said on the Python side (review H7).
         """
         from digitalearth.web import WebMap
 
         m = WebMap().points(points, name="obs")
-        assert m.popup(["v"], layer="obs-clusters") is not None, (
-            "the popup must be drawn"
-        )
+        with pytest.raises(KeyError, match="no layer 'obs-clusters' on this map"):
+            m.popup(["v"], layer="obs-clusters")
 
     def test_a_layer_with_both_records_both(self, points):
         """A click popup and a hover tooltip are two interactions, and a layer may carry both.
@@ -1036,6 +1041,34 @@ class TestAPopupOverAnUndescribedLayer:
         symbology = m.figure_spec.layers.get("obs").symbology
         assert symbology.encodings["tooltip"].resolve() == ("geometry",), symbology
         assert symbology.props["tooltip_trigger"] == "hover", symbology.props
+
+    def test_a_cluster_s_popup_goes_on_the_layer_carrying_the_columns(self, points):
+        """A cluster draws bubbles, their counts, and the loose points; only one has the caller's data.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The bubbles are aggregates whose only properties are `cluster`, `cluster_id` and the point
+            counts. Pointing the popup at them to satisfy the tree lookup produced an empty popup for
+            every feature a caller clicked (review H8).
+        """
+        from digitalearth.web import WebMap
+
+        import inspect
+
+        m = WebMap().cluster(points)
+        m.popup(["v"])
+        bound = [
+            held.get("layer_id")
+            for held in (
+                inspect.getclosurevars(item).nonlocals
+                for item in m.layers
+                if callable(item)
+            )
+            if "layer_id" in held
+        ]
+        assert bound == ["unclustered-4"], bound
 
     def test_a_described_layer_still_records_what_pops_up(self, points):
         """The guard skips the description, and must not skip it for a layer that has one.
@@ -1111,16 +1144,16 @@ class TestAColourKeyDescribesTheLayerItNames:
 class TestACustomLayerIsAddedUnderTheIdItIsGiven:
     """Review H5 — the tree was renamed and the MapLibre object was not."""
 
-    def test_a_colliding_custom_id_is_rewritten_to_the_allocated_one(self, points):
-        """What `layer_ids` advertises has to be what `addLayer` sends.
+    def test_a_colliding_custom_id_is_refused_without_touching_the_object(self, points):
+        """What `layer_ids` advertises has to be what `addLayer` sends — and the object is the caller's.
 
         Args:
             points: The fixture points.
 
         Test scenario:
-            The measured defect: the map said `obs-2` while the object still said `obs`, so `get_layer`,
-            `layer_control` and `popup(layer=...)` all named a layer the browser did not have — and the
-            duplicate id made MapLibre drop the real one with only a console error.
+            Suffixing left the map naming `obs-2` while the object said `obs`. Rewriting the object closed
+            that and opened a worse one: the object may already be on another map, which then advertised an
+            id its own page never adds (review H6). A collision is refused, and nothing is mutated.
         """
         from maplibre.layer import Layer, LayerType
 
@@ -1128,9 +1161,28 @@ class TestACustomLayerIsAddedUnderTheIdItIsGiven:
 
         m = WebMap().points(points, name="obs")
         own = Layer(id="obs", type=LayerType.CIRCLE, source="s")
-        m.add_layer(own)
-        assert m.layer_ids == ["obs", "obs-2"], m.layer_ids
-        assert own.id == "obs-2", own.id
+        with pytest.raises(ValueError, match="is already on this map"):
+            m.add_layer(own)
+        assert own.id == "obs", own.id
+        assert m.layer_ids == ["obs"], m.layer_ids
+
+    def test_a_layer_held_by_another_map_is_left_alone(self, points):
+        """The measured defect: adding to a second map re-pointed the first map's layer.
+
+        Args:
+            points: The fixture points.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        own = Layer(id="obs", type=LayerType.CIRCLE, source="s")
+        first = WebMap().add_layer(own)
+        second = WebMap().points(points, name="obs")
+        with pytest.raises(ValueError, match="is already on this map"):
+            second.add_layer(own)
+        assert own.id == "obs", own.id
+        assert first.layer_ids == ["obs"], first.layer_ids
 
     def test_one_object_cannot_be_added_twice(self, points):
         """One object is one layer on the page, and the queue cannot tell two registrations apart.
@@ -1150,10 +1202,10 @@ class TestACustomLayerIsAddedUnderTheIdItIsGiven:
 
         m = WebMap().points(points, name="obs")
         own = Layer(id="mine", type=LayerType.CIRCLE, source="s")
-        m.add_layer(own, name="a")
-        with pytest.raises(ValueError, match="already on the map as 'a'"):
-            m.add_layer(own, name="b")
-        assert m.layer_ids == ["obs", "a"], m.layer_ids
+        m.add_layer(own)
+        with pytest.raises(ValueError, match="already on the map as 'mine'"):
+            m.add_layer(own)
+        assert m.layer_ids == ["obs", "mine"], m.layer_ids
 
     def test_two_objects_are_removed_independently(self, points):
         """The ordinary case: two layers, and removing one leaves the other drawn.
@@ -1171,35 +1223,6 @@ class TestACustomLayerIsAddedUnderTheIdItIsGiven:
         m.remove_layer("x")
         assert m.layer_ids == ["y"], m.layer_ids
         assert len(m.layers) == 1, m.layers
-
-    def test_an_object_that_refuses_a_new_id_is_answered_by_name(self, points):
-        """Not every layer-like object lets its id be set, and the caller is told what to do.
-
-        Args:
-            points: The fixture points.
-        """
-        from digitalearth.web import WebMap
-
-        class _Fixed:
-            """A layer-like object whose id cannot be reassigned."""
-
-            id = "obs"
-
-            def __setattr__(self, name, value):
-                """Refuse every assignment.
-
-                Args:
-                    name: The attribute.
-                    value: What it would be set to.
-
-                Raises:
-                    AttributeError: always.
-                """
-                raise AttributeError(f"{name} is read-only")
-
-        m = WebMap().points(points, name="obs")
-        with pytest.raises(ValueError, match="cannot rename this layer to 'obs-2'"):
-            m.add_layer(_Fixed())
 
     def test_an_uncontested_id_is_left_as_it_was(self, points):
         """A caller's own id survives when nothing is claiming it.
@@ -1389,12 +1412,27 @@ class TestACallersOwnLayer:
             "wells"
         )
 
-    def test_a_name_wins_over_the_object_s_own_id(self):
-        """The caller's `name=` is the id the map is addressed by."""
+    def test_a_name_that_contradicts_the_object_s_id_is_refused(self):
+        """The object's id is what `addLayer` sends, so a different `name=` would name nothing.
+
+        Test scenario:
+            `name=` used to win, and the object kept its own id — so the map advertised one id while the
+            page added another. Rewriting the object instead reached into every other map holding it
+            (review H6), so the two are simply required to agree.
+        """
         from digitalearth.web import WebMap
 
-        m = WebMap().add_layer(self._layer("wells"), name="Boreholes")
-        assert m.layer_ids == ["Boreholes"], m.layer_ids
+        with pytest.raises(
+            ValueError, match="draws this layer under the id it carries"
+        ):
+            WebMap().add_layer(self._layer("wells"), name="Boreholes")
+
+    def test_a_name_matching_the_object_s_id_is_accepted(self):
+        """Saying the same thing twice is not a contradiction."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"), name="wells")
+        assert m.layer_ids == ["wells"], m.layer_ids
 
     def test_an_unnamed_object_gets_a_generated_id(self):
         """Anything without an id of its own is still addressable."""
@@ -1403,12 +1441,19 @@ class TestACallersOwnLayer:
         m = WebMap().add_layer(lambda widget: None)
         assert m.layer_ids == ["custom-1"], m.layer_ids
 
-    def test_a_repeated_name_is_suffixed(self):
-        """Two layers cannot share an id, as they cannot through any builder's `name=`."""
+    def test_a_repeated_id_is_refused_rather_than_suffixed(self):
+        """Two layers cannot share an id, and the object carries the one the page will use.
+
+        Test scenario:
+            Suffixing gave the tree `wells-2` while the object still said `wells`, so MapLibre dropped the
+            second layer with a console error and the map named one that was never added (review H5/H6).
+        """
         from digitalearth.web import WebMap
 
-        m = WebMap().add_layer(self._layer("wells")).add_layer(self._layer("wells"))
-        assert m.layer_ids == ["wells", "wells-2"], m.layer_ids
+        m = WebMap().add_layer(self._layer("wells"))
+        with pytest.raises(ValueError, match="is already on this map"):
+            m.add_layer(self._layer("wells"))
+        assert m.layer_ids == ["wells"], m.layer_ids
 
     def test_a_band_puts_it_under_the_data(self, points):
         """A caller's own ground cover is drawn first, and the tree says so.

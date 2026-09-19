@@ -1166,7 +1166,9 @@ class DecorationMixin(_MixinBase):
         # Tagged with the layer it belongs to, so `remove_layer` takes the popup off with it rather than
         # leaving a page that pops up over a layer nobody can see.
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._record_tooltip(layer_id, fields, trigger="click")
+        self._record_tooltip(
+            layer_id, fields, trigger="click", explicit=layer is not None
+        )
         return self._queue(apply)
 
     def tooltip(
@@ -1197,5 +1199,7 @@ class DecorationMixin(_MixinBase):
             widget.add_tooltip(layer_id, **kwargs)
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._record_tooltip(layer_id, fields, trigger="hover")
+        self._record_tooltip(
+            layer_id, fields, trigger="hover", explicit=layer is not None
+        )
         return self._queue(apply)

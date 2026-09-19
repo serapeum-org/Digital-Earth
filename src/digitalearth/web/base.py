@@ -995,7 +995,9 @@ class WebMapBase:
         """
         self._furniture = [held for held in self._furniture if held.kind != kind]
 
-    def _record_tooltip(self, layer_id: str, fields: Any, *, trigger: str) -> None:
+    def _record_tooltip(
+        self, layer_id: str, fields: Any, *, trigger: str, explicit: bool = False
+    ) -> None:
         """Record what a popup or tooltip shows, as a channel on the layer it is bound to (#292).
 
         Per-layer interaction is an encoding, not a separate object: put it on the layer and it travels with
@@ -1005,16 +1007,29 @@ class WebMapBase:
         A MapLibre layer is not always a described one. A cluster draws three — the bubbles, their counts
         and the loose points — under one tree entry; a graticule draws its labels beside its lines; a basemap
         is a layer the tier never indexes. A popup over any of those is a real popup, so it is drawn and
-        simply not described: the alternative was the `KeyError` this guard replaces, which broke
-        `cluster(...).popup(...)` outright (review H3).
+        simply not described: the alternative was a `KeyError` that broke `cluster(...).popup(...)`
+        outright (review H3).
+
+        A *named* layer is different. `popup(fields, layer="typoed")` is a caller naming something, and
+        skipping the description for it accepted the typo in silence while still queueing the closure — so
+        the saved page called `map.on('click', 'typoed', ...)` and failed in a browser console instead
+        (review H7). An id the caller wrote is checked; an id the tier chose is not.
 
         Args:
             layer_id: The layer the popup or tooltip is bound to.
             fields: The field names shown; `None`, like an empty list, means every field, which is what the
                 builders already mean by it.
             trigger: `"click"` for a popup, `"hover"` for a tooltip.
+            explicit: Whether the caller named the layer, rather than it defaulting to the last one drawn.
+
+        Raises:
+            KeyError: when the caller named a layer this map has not drawn.
         """
         if layer_id not in self._layer_tree.ids:
+            if explicit:
+                raise KeyError(
+                    f"no layer {layer_id!r} on this map; its layers are {self.layer_ids}"
+                )
             return
         held = self._layer_tree.get(layer_id)
         shown = () if fields is None else tuple(fields)
@@ -1513,20 +1528,26 @@ class WebMapBase:
                 f"this layer is already on the map as {already!r}; add a second one to draw it twice, or "
                 f"remove_layer({already!r}) first"
             )
-        layer_id = self._layer_id("custom", name or getattr(layer, "id", None))
-        # The allocator suffixes an id that is already taken, and what it allocates is what `layer_ids`,
-        # `get_layer`, `layer_control` and `popup(layer=...)` all name. A `maplibre` Layer carries its own
-        # id, and leaving it behind meant those names addressed a layer the browser had never heard of —
-        # while the real, duplicate id made MapLibre drop the layer with only a console error (review H5).
-        if getattr(layer, "id", None) not in (None, layer_id):
-            try:
-                layer.id = layer_id
-            except (AttributeError, ValueError, TypeError) as error:
+        # An object that carries an id is drawn under *that* id: it is what `addLayer` sends, so it is what
+        # `layer_ids`, `get_layer`, `layer_control` and `popup(layer=...)` have to name (review H5). The
+        # allocator's suffixing would break that, and rewriting the object's id instead reached across to
+        # every other map already holding it (review H6) — so a collision is refused, by name, rather than
+        # papered over. An object with no id of its own is numbered as before.
+        own = getattr(layer, "id", None)
+        if own is None:
+            layer_id = self._layer_id("custom", name)
+        else:
+            layer_id = str(own)
+            if name is not None and str(name) != layer_id:
                 raise ValueError(
-                    f"add_layer cannot rename this layer to {layer_id!r}: its id {layer.id!r} is already "
-                    f"taken on this map and the object refuses a new one ({error}). Pass name= with a free "
-                    "id, or build the layer with one"
-                ) from error
+                    f"add_layer draws this layer under the id it carries, {layer_id!r}, so name={name!r} "
+                    f"would name something the page never adds; drop name=, or build the layer with that id"
+                )
+            if layer_id in self._layer_tree.ids:
+                raise ValueError(
+                    f"layer id {layer_id!r} is already on this map; MapLibre drops the second layer with "
+                    f"that id, so build this one with a free id (the ids in use are {self.layer_ids})"
+                )
         self._index_layer(layer_id, name, kind=custom_kind("maplibre"), band=band)
         self._custom[layer_id] = layer
         return self._queue_in_band(layer, band)
