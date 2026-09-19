@@ -289,6 +289,25 @@ class TestTheOtherOptionGroups:
         grouped, _ = fold_symbology(Symbology(props={option: True}), "Image")
         assert grouped["norm"] == {option: True}, grouped
 
+    def test_a_tooltip_that_names_fields_reports_that_it_cannot_limit_them(self):
+        """The hover tool reads the element's own dimensions; the named columns go nowhere.
+
+        Test scenario:
+            The fields were dropped in silence. The module's contract is that anything it cannot express is
+            reported rather than discarded (review L17), so they are — while the tool is still added.
+        """
+        grouped, unsupported = fold_symbology(
+            Symbology.of(tooltip=("pop", "area")), "Points"
+        )
+        assert grouped["plot"]["tools"] == ["hover"], grouped
+        assert "cannot be limited to" in unsupported["tooltip"], unsupported
+
+    def test_a_tooltip_that_names_none_reports_nothing(self):
+        """Asking for hover without naming columns is exactly what the tool does, so nothing is lost."""
+        grouped, unsupported = fold_symbology(Symbology.of(tooltip=()), "Points")
+        assert grouped["plot"]["tools"] == ["hover"], grouped
+        assert "tooltip" not in unsupported, unsupported
+
     def test_the_usual_groups_are_always_there(self):
         """A caller reads `style` and `plot` without asking whether they exist."""
         grouped, _ = fold_symbology(Symbology(props={"cmap": "magma"}), "Image")
