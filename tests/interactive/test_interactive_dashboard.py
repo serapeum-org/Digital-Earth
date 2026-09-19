@@ -507,15 +507,22 @@ class TestOverridesMergeOverRecordedStyle:
     def test_recorded_style_is_read_back_for_the_colour_mapped_layers(
         self, dataset, point_fc
     ):
-        """The override base comes from the map's own style record, raster layers only."""
+        """The override base comes from each layer's own style record, raster layers only.
+
+        Test scenario:
+            The base used to be one dict merged across every colour-mapped layer; it is each layer's own
+            record now, which is what stops two rasters sharing the last one's colours (#300).
+        """
         m = InteractiveMap().image(dataset, cmap="viridis", clim=(0.0, 10.0))
         m.points(point_fc, value_column="fid", cmap="magma")
-        recorded = m._recorded_overridable_style()
-        assert recorded["cmap"] == "viridis", (
-            f"the raster layer's recorded cmap must drive the merge: {recorded}"
+        raster = m._restyled_layers({"alpha": 0.5})[0]
+        style = hv.Store.lookup_options("bokeh", raster, "style").kwargs
+        plot = hv.Store.lookup_options("bokeh", raster, "plot").kwargs
+        assert style["cmap"] == "viridis", (
+            f"the raster layer's own recorded cmap must be the base: {style}"
         )
-        assert tuple(recorded["clim"]) == (0.0, 10.0), (
-            f"the recorded clim must be part of the merge base: {recorded}"
+        assert tuple(plot["clim"]) == (0.0, 10.0), (
+            f"the recorded clim must survive beside the override: {plot}"
         )
 
     def test_override_wins_over_the_recorded_style(self, dataset):

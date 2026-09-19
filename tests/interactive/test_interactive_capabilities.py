@@ -156,6 +156,32 @@ class TestEachLayerKeepsItsOwnStyle:
         styles = self._styles(m._render_with_overrides({"cmap": "viridis"}))
         assert [style.get("cmap") for style in styles] == ["viridis", "viridis"], styles
 
+    def test_the_layer_switcher_s_slider_keeps_each_raster_s_style(self):
+        """The other widget path. Moving the opacity slider must not repaint one raster in the other's colours.
+
+        Test scenario:
+            `_render_with_overrides` and `_compose_visible_layers` are two entry points onto the same
+            question, and only the first was fixed: the layer control's slider still merged every
+            colour-mapped layer's style into one dict and applied it per element type.
+        """
+        m = InteractiveMap()
+        m.image(_dem(), cmap="magma", clim=(0.0, 10.0))
+        m.image(_dem(), cmap="Blues", clim=(0.0, 80.0))
+        styles = self._styles(
+            m._compose_visible_layers(["0: Image", "1: Image"], op=0.5)
+        )
+        assert [style.get("cmap") for style in styles] == ["magma", "Blues"], styles
+
+    def test_the_layer_switcher_s_slider_still_reaches_every_layer(self):
+        """The opacity the slider names is applied to each of them, over its own style."""
+        m = InteractiveMap()
+        m.image(_dem(), cmap="magma")
+        m.image(_dem(), cmap="Blues")
+        styles = self._styles(
+            m._compose_visible_layers(["0: Image", "1: Image"], op=0.25)
+        )
+        assert [style.get("alpha") for style in styles] == [0.25, 0.25], styles
+
     def test_a_map_with_no_overrides_renders_as_it_was_built(self):
         """No widget moved, so nothing is restyled and the figure is the rendered one."""
         m = InteractiveMap()
