@@ -457,7 +457,9 @@ class TestTheRemainingArms:
         held = scene.figure_spec.layers.get(layer_id)
         scene.replace_layer(with_fields(held, label="renamed"))
         assert scene.figure_spec.layers.get(layer_id).label == "renamed", "renamed"
-        assert scene.mesh_of(layer_id) is built, "the mesh must be the one already drawn"
+        assert scene.mesh_of(layer_id) is built, (
+            "the mesh must be the one already drawn"
+        )
 
     def test_a_restyle_that_reaches_the_engine_still_rebuilds(self, scene):
         """The other arm: a colormap is baked into the mesh's scalars, so it is drawn again.
