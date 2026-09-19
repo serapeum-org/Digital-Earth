@@ -236,6 +236,8 @@ class Renderer3D:
         for layer_id in change.removed:
             self.remove(layer_id)
         for layer_id in (*change.rebuilt, *change.restyled):
+            if not self._reaches_pyvista(before, after, layer_id):
+                continue
             # VTK has no cheap restyle: a colormap or a class break is baked into the mesh's scalars and the
             # actor's mapper, so the layer is drawn again from its description.
             self.remove(layer_id)
@@ -246,6 +248,35 @@ class Renderer3D:
             self.set_visible(layer_id, True)
         for layer_id in change.hidden:
             self.set_visible(layer_id, False)
+
+    @staticmethod
+    def _reaches_pyvista(before: FigureSpec, after: FigureSpec, layer_id: str) -> bool:
+        """Whether a restyle changes anything PyVista draws.
+
+        `diff` groups a change to `label` — what a layer switcher calls the layer — with a change to its
+        colormap, because both are "the description changed". Only one of them reaches the engine, and
+        answering both with a rebuild meant renaming a layer re-opened its source, re-ran the reprojection
+        and built the whole mesh again (review M8).
+
+        Args:
+            before: The figure the plotter shows.
+            after: The figure it should show.
+            layer_id: The layer whose restyle is being judged.
+
+        Returns:
+            `True` when the layer's symbology, filter or group differs — the parts a drawer reads — and for
+            a layer the previous figure did not hold. `False` for a change to `label` alone.
+        """
+        try:
+            was = before.layers.get(layer_id)
+        except KeyError:
+            return True
+        now = after.layers.get(layer_id)
+        return (was.symbology, was.filter, was.group) != (
+            now.symbology,
+            now.filter,
+            now.group,
+        )
 
     def remove(self, layer_id: str) -> None:
         """Take a layer off the plotter and forget what was drawn for it.

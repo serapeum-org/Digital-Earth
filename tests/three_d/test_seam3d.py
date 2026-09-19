@@ -438,6 +438,44 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_renaming_a_layer_does_not_rebuild_its_mesh(self, scene):
+        """`label` is what a layer switcher calls the layer, and it never reaches PyVista.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `diff` groups a label change with a colormap change — both are "the description changed" — and
+            `apply` answered both with remove-and-draw. Renaming a layer therefore re-opened its source,
+            re-ran the reprojection and rebuilt the whole `StructuredGrid` (review M8).
+        """
+        from dataclasses import replace as with_fields
+
+        scene.terrain(get_source(_dem()))
+        layer_id = scene.layer_ids[0]
+        built = scene.mesh_of(layer_id)
+        held = scene.figure_spec.layers.get(layer_id)
+        scene.replace_layer(with_fields(held, label="renamed"))
+        assert scene.figure_spec.layers.get(layer_id).label == "renamed", "renamed"
+        assert scene.mesh_of(layer_id) is built, "the mesh must be the one already drawn"
+
+    def test_a_restyle_that_reaches_the_engine_still_rebuilds(self, scene):
+        """The other arm: a colormap is baked into the mesh's scalars, so it is drawn again.
+
+        Args:
+            scene: The scene under test.
+        """
+        from dataclasses import replace as with_fields
+
+        scene.terrain(get_source(_dem()))
+        layer_id = scene.layer_ids[0]
+        built = scene.mesh_of(layer_id)
+        held = scene.figure_spec.layers.get(layer_id)
+        scene.replace_layer(
+            with_fields(held, symbology=held.symbology.with_props(cmap="magma"))
+        )
+        assert scene.mesh_of(layer_id) is not built, "a restyle must redraw"
+
     def test_a_plotter_handed_to_the_scene_gets_the_scene_s_view(self, scene):
         """Swapping the window is not a reset of the scene.
 
