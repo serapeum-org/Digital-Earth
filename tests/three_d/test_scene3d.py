@@ -854,6 +854,34 @@ class TestVerticalExaggeration:
         finally:
             scene.close()
 
+    def test_a_scale_set_before_the_window_exists_reaches_it(self):
+        """The exaggeration belongs to the scene, so the window built later is born carrying it.
+
+        Test scenario:
+            The setter has nothing to set when `_plotter` is None — it stores the value — so the *only*
+            place that value reaches a render window is the builder in the `plotter` property. Nothing
+            covered that path before, which is how a guard on it could be changed unnoticed.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            scene.vertical_exaggeration = 2.0
+            assert list(scene.plotter.scale) == [1.0, 1.0, 2.0], scene.plotter.scale
+        finally:
+            scene.close()
+
+    def test_a_scene_nobody_exaggerated_builds_an_unscaled_window(self):
+        """The other arm of the same builder: true scale is what an untouched scene renders at.
+
+        Test scenario:
+            The builder applies the scene's scale unconditionally, so this is what says the identity case
+            is left exactly as a fresh plotter is.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            assert list(scene.plotter.scale) == [1.0, 1.0, 1.0], scene.plotter.scale
+        finally:
+            scene.close()
+
     def test_it_scales_actors_added_afterwards(self):
         """The view scale propagates to every actor, including ones added after it was set.
 

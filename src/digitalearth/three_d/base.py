@@ -581,9 +581,11 @@ class Scene3DBase:
             settings["theme"] = settings["theme"] or house_theme()
             self._plotter = pv.Plotter(**settings)
             # A view scale or a camera set before anything was drawn belongs to the scene, not to whichever
-            # plotter happens to exist: both are applied to the new window rather than quietly lost.
-            if self._vertical != 1.0:
-                self._plotter.set_scale(zscale=self._vertical, render=False)
+            # plotter happens to exist: both are applied to the new window rather than quietly lost. The
+            # scale is applied unconditionally -- `set_scale(zscale=1.0)` leaves a fresh plotter at
+            # `[1.0, 1.0, 1.0]`, so skipping it for the identity bought nothing and asked a float to be
+            # exactly 1.0 to be correct. The setter already applies every value the same way.
+            self._plotter.set_scale(zscale=self._vertical, render=False)
             self._apply_camera()
         return self._plotter
 
