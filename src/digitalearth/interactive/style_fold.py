@@ -206,6 +206,12 @@ UNEXPRESSIBLE: Mapping[str, str] = {
 }
 
 
+#: The option groups HoloViews sorts an element's keywords into, in the order a key is looked for. `style` is
+#: first because that is where a colour or a width lives; `norm` holds `framewise`/`axiswise`, and `output`
+#: the renderer's own settings.
+OPTION_GROUPS: Tuple[str, ...] = ("style", "plot", "norm", "output")
+
+
 def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]]:
     """Split a builder's flat keywords into a `Symbology` and the engine options left over.
 
@@ -290,7 +296,11 @@ def allowed_options(
     """
     import holoviews as hv
 
-    hv.extension(backend)
+    # Registers the backend's option tree without making it the current one. `hv.extension(backend)` is
+    # `Store.set_current_backend`, so asking what options an element takes — a read — left the whole process
+    # rendering through whichever backend was asked about last (review M15). `base.py` already uses this
+    # idiom, with the comment "register mpl opts before applying them".
+    hv.renderer(backend)
     store = hv.Store.options(backend=backend)
     try:
         options = store[element]
@@ -358,7 +368,10 @@ def fold_symbology(
             ```
     """
     allowed = allowed_options(element, backend)
-    grouped: Dict[str, Dict[str, Any]] = {"style": {}, "plot": {}}
+    # Every group `_group_of` can name, so a standard option that belongs to one of the other two — HoloViews
+    # puts `framewise` and `axiswise` under `norm` — lands in it instead of raising a bare `KeyError('norm')`
+    # where the did-you-mean belonged (review M16). Empty groups are dropped before this returns.
+    grouped: Dict[str, Dict[str, Any]] = {name: {} for name in OPTION_GROUPS}
     unsupported: Dict[str, str] = {}
     for channel, encoding in dict(symbology.encodings).items():
         if channel in UNEXPRESSIBLE:
@@ -382,7 +395,13 @@ def fold_symbology(
         for key in options:
             if key not in allowed.get(group, frozenset()):
                 raise ValueError(_refusal(key, element, backend))
-    return grouped, unsupported
+    # `style` and `plot` are always present — a caller reads them without asking whether they are there —
+    # and the other two only when something landed in them.
+    return {
+        group: options
+        for group, options in grouped.items()
+        if options or group in ("style", "plot")
+    }, unsupported
 
 
 def _fold_channel(
@@ -428,11 +447,11 @@ def _group_of(key: str, allowed: Mapping[str, FrozenSet[str]], element: str) -> 
         element: The element type, for the message.
 
     Returns:
-        `"style"` or `"plot"` — whichever group declares the key, style first, since that is where a colour or
-        a width lives. A key nothing declares is returned as `"style"` so the check below refuses it there,
+        Whichever of :data:`OPTION_GROUPS` declares the key, style first, since that is where a colour or a
+        width lives. A key nothing declares is returned as `"style"` so the check below refuses it there,
         with a suggestion.
     """
-    for group in ("style", "plot", "norm", "output"):
+    for group in OPTION_GROUPS:
         if key in allowed.get(group, frozenset()):
             return group
     return "style"

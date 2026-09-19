@@ -195,6 +195,11 @@ class TestSaveDispatch:
         Args:
             tmp_path: pytest's per-test directory.
             monkeypatch: pytest's patcher.
+
+        Test scenario:
+            Patched on `save_animation`, which is the contract's name for it. `save` used to call the
+            `animate` alias, so a caller who wrote `save()` was told to write `save_animation()` from a
+            line inside the library (review M14).
         """
         called = {}
 
@@ -203,7 +208,7 @@ class TestSaveDispatch:
             called["path"] = path
             return str(path)
 
-        monkeypatch.setattr(WebMap, "animate", fake_gif)
+        monkeypatch.setattr(WebMap, "save_animation", fake_gif)
         out = tmp_path / "out.gif"
         WebMap().basemap().save(str(out))
         assert called["path"] == str(out), called

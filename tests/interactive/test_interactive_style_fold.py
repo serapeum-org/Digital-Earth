@@ -18,6 +18,8 @@ pytest.importorskip("holoviews")
 # tier draws both, so the table is checked against a store that knows them.
 pytest.importorskip("geoviews")
 
+import holoviews as hv  # noqa: E402
+
 from digitalearth.interactive.style_fold import (  # noqa: E402
     CHANNEL_OPTIONS,
     INTERACTIVE_STYLE_SCHEMA,
@@ -268,3 +270,37 @@ class TestTheImportCost:
             [sys.executable, "-c", code], capture_output=True, text=True, check=True
         )
         assert result.stdout.strip() == "False True", result.stdout or result.stderr
+
+
+class TestTheOtherOptionGroups:
+    """Review M15/M16 — a read stays a read, and a standard option gets an answer."""
+
+    @pytest.mark.parametrize("option", ["framewise", "axiswise"])
+    def test_a_norm_group_option_is_folded_rather_than_raised(self, option):
+        """HoloViews sorts these under `norm`, and the fold only had `style` and `plot` to put them in.
+
+        Args:
+            option: The option under test.
+
+        Test scenario:
+            `grouped[_group_of(...)][key]` raised a bare `KeyError('norm')` — no message, no did-you-mean,
+            which is the whole point of the module.
+        """
+        grouped, _ = fold_symbology(Symbology(props={option: True}), "Image")
+        assert grouped["norm"] == {option: True}, grouped
+
+    def test_the_usual_groups_are_always_there(self):
+        """A caller reads `style` and `plot` without asking whether they exist."""
+        grouped, _ = fold_symbology(Symbology(props={"cmap": "magma"}), "Image")
+        assert set(grouped) == {"style", "plot"}, grouped
+
+    def test_asking_what_an_element_takes_does_not_switch_the_backend(self):
+        """`allowed_options` is a question, and it was changing the answer to every later one.
+
+        Test scenario:
+            `hv.extension(backend)` is `Store.set_current_backend`, so one cross-backend validation left the
+            whole process rendering through matplotlib (review M15).
+        """
+        hv.extension("bokeh")
+        allowed_options("Image", backend="matplotlib")
+        assert hv.Store.current_backend == "bokeh", hv.Store.current_backend

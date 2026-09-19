@@ -2265,7 +2265,9 @@ class WebMapBase:
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
         kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
         if kind == "gif":
-            return self.animate(path, title=title, **kwargs)
+            # The contract's name: calling the alias told a caller who wrote `save()` to write
+            # `save_animation()`, from a line inside the library (review M14).
+            return self.save_animation(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)

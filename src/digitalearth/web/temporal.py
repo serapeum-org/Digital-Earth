@@ -315,7 +315,10 @@ class TemporalMixin(_MixinBase):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
             # without a slider then shows one frame rather than the whole stack piled up.
             previous = self._last_layer_id
-            self.add_raster(
+            # The contract's name, not the alias: `renamed_method` warns at `stacklevel=2`, so calling the
+            # old spelling here made ordinary use of `timeslider` emit three DeprecationWarnings pointing at
+            # *this* line, which no caller can act on (review M14).
+            self.field(
                 member,
                 band=band,
                 cmap=cmap,
