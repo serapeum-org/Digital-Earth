@@ -1018,13 +1018,23 @@ class WebMapBase:
             return
         held = self._layer_tree.get(layer_id)
         shown = () if fields is None else tuple(fields)
+        # A click popup and a hover tooltip are two interactions, and a layer may carry both. Writing one
+        # `tooltip` encoding meant the second call replaced the first: `popup(["v"]).tooltip(["w"])` drew
+        # both and described only the hover, losing the popup's own fields (review M10). What each trigger
+        # shows is kept beside the channel; the channel itself carries the hover's fields where there is
+        # one, since that is the reading a renderer with a single hover slot needs.
+        bound = {
+            **dict(held.symbology.props.get("interactions", {})),
+            trigger: list(shown),
+        }
+        primary = "hover" if "hover" in bound else trigger
         symbology = Symbology(
             encodings={
                 **dict(held.symbology.encodings),
-                "tooltip": Encoding.constant("tooltip", shown),
+                "tooltip": Encoding.constant("tooltip", tuple(bound[primary])),
             },
-            props=dict(held.symbology.props),
-        ).with_props(tooltip_trigger=trigger)
+            props={**dict(held.symbology.props), "interactions": bound},
+        ).with_props(tooltip_trigger=primary)
         self._layer_tree = self._layer_tree.replace(
             replace_fields(held, symbology=symbology)
         )
@@ -1049,12 +1059,22 @@ class WebMapBase:
             self._forget_furniture("time_slider")
             return
         if layer_id in named:
+            # The frame at the same position goes with it. Dropping the layer alone left a slider with more
+            # stops than layers — three frames for two layers — so a renderer drawing the control from the
+            # description stepped onto a frame that names nothing (review M9).
+            kept = [index for index, held in enumerate(named) if held != layer_id]
+            frames = tuple(slider.options.get("frames", ()))
             self._record_furniture(
                 "time_slider",
                 anchor=slider.anchor,
                 **{
                     **dict(slider.options),
-                    "layers": tuple(held for held in named if held != layer_id),
+                    "layers": tuple(named[index] for index in kept),
+                    **(
+                        {"frames": tuple(frames[index] for index in kept)}
+                        if len(frames) == len(named)
+                        else {}
+                    ),
                 },
             )
 

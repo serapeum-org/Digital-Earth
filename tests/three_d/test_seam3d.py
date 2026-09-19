@@ -438,6 +438,31 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_a_plotter_handed_to_the_scene_gets_the_scene_s_view(self, scene):
+        """Swapping the window is not a reset of the scene.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The measured defect: the view scale and camera were applied only where the scene *built* a
+            plotter, so assigning one — the documented way to swap one in — left the replacement at true
+            scale and PyVista's default viewpoint, with nothing to re-apply them later (review M7).
+        """
+        scene.vertical_exaggeration = 3.0
+        scene.camera = Camera((9.0, 9.0, 9.0))
+        replacement = pv.Plotter(off_screen=True)
+        try:
+            scene.plotter = replacement
+            assert tuple(replacement.scale) == (1.0, 1.0, 3.0), replacement.scale
+            assert [round(value) for value in replacement.camera.position] == [
+                9,
+                9,
+                9,
+            ], replacement.camera.position
+        finally:
+            replacement.close()
+
     def test_two_layers_of_one_kind_describe_their_own_data(self, scene):
         """A source is keyed by the layer that draws it, not by the kind of layer it is.
 

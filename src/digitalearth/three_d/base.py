@@ -584,23 +584,41 @@ class Scene3DBase:
             settings = dict(self._plotter_settings)
             settings["theme"] = settings["theme"] or house_theme()
             self._plotter = pv.Plotter(**settings)
-            # A view scale or a camera set before anything was drawn belongs to the scene, not to whichever
-            # plotter happens to exist: both are applied to the new window rather than quietly lost. The
-            # scale is applied unconditionally -- `set_scale(zscale=1.0)` leaves a fresh plotter at
-            # `[1.0, 1.0, 1.0]`, so skipping it for the identity bought nothing and asked a float to be
-            # exactly 1.0 to be correct. The setter already applies every value the same way.
-            self._plotter.set_scale(zscale=self._vertical, render=False)
-            self._apply_camera()
+            self._dress_plotter()
         return self._plotter
 
     @plotter.setter
     def plotter(self, plotter: Any) -> None:
         """Replace the plotter the scene draws on.
 
+        The scene's view state — its vertical exaggeration and its camera — is applied to the new plotter,
+        which is what makes this a swap of the *window* rather than a reset of the scene.
+
         Args:
             plotter: The plotter to use from now on; a stand-in with the methods the scene calls will do.
         """
         self._plotter = plotter
+        # A stand-in need not implement the view API; it is still a valid plotter to draw on.
+        if hasattr(plotter, "set_scale"):
+            self._dress_plotter()
+
+    def _dress_plotter(self) -> None:
+        """Put the scene's own view state onto the plotter it is about to draw on.
+
+        A view scale or a camera set before anything was drawn belongs to the scene, not to whichever plotter
+        happens to exist, so both are applied to a window the scene has just been given — whether it built it
+        or a caller handed it over. Only the lazy build did this, so swapping a plotter in silently reverted
+        the scene to true scale and PyVista's default viewpoint, permanently (review M7).
+
+        The scale is applied unconditionally: `set_scale(zscale=1.0)` leaves a fresh plotter at
+        `[1.0, 1.0, 1.0]`, so skipping it for the identity bought nothing and asked a float to be exactly 1.0
+        to be correct.
+        """
+        plotter = self._plotter
+        if plotter is None:  # pragma: no cover - only called with one in hand
+            return
+        plotter.set_scale(zscale=self._vertical, render=False)
+        self._apply_camera()
 
     def _place(self, data: Any, *, layer: str) -> Any:
         """Return `data` in the scene's display CRS, adopting the data's CRS when the scene has none yet.

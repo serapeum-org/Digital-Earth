@@ -951,6 +951,29 @@ class TestTheSwitcherFollowsTheLiveLayers:
         assert exported[exported.rfind("var data = ") :].count('"addControl"') == 0
 
 
+class TestTheSliderKeepsOneFramePerLayer:
+    """Review M9 — a control drawn from the description must not offer a stop that names nothing."""
+
+    def test_a_removed_layer_takes_its_frame_with_it(self, raster_stack):
+        """A slider has one stop per layer, and it has to stay that way.
+
+        Args:
+            raster_stack: Three rasters the slider steps through.
+
+        Test scenario:
+            The measured defect: `layers` was trimmed and `frames` was not, so a control drawn from the
+            description offered three stops for two layers — the third naming nothing (review M9).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().timeslider(raster_stack, labels=["a", "b", "c"])
+        slider = m.figure_spec.panels[0].furniture[0]
+        assert len(slider.options["frames"]) == len(slider.options["layers"]), slider
+        m.remove_layer(m.layer_ids[0])
+        slider = m.figure_spec.panels[0].furniture[0]
+        assert len(slider.options["frames"]) == len(slider.options["layers"]), slider
+
+
 class TestAPopupOverAnUndescribedLayer:
     """Review H3 — not every MapLibre layer is a described one, and a popup over one is still a popup."""
 
@@ -982,6 +1005,37 @@ class TestAPopupOverAnUndescribedLayer:
         assert m.popup(["v"], layer="obs-clusters") is not None, (
             "the popup must be drawn"
         )
+
+    def test_a_layer_with_both_records_both(self, points):
+        """A click popup and a hover tooltip are two interactions, and a layer may carry both.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: both were drawn — three applies queued — but one `tooltip` encoding held
+            them, so the second call replaced the first and the popup's own fields were lost from the
+            figure (review M10).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs").popup(["v"]).tooltip(["v", "geometry"])
+        bound = m.figure_spec.layers.get("obs").symbology.props["interactions"]
+        assert tuple(bound["click"]) == ("v",), bound
+        assert tuple(bound["hover"]) == ("v", "geometry"), bound
+
+    def test_the_channel_carries_the_hover_fields_when_there_are_both(self, points):
+        """One hover slot, and the hover's fields are what belongs in it.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs").popup(["v"]).tooltip(["geometry"])
+        symbology = m.figure_spec.layers.get("obs").symbology
+        assert symbology.encodings["tooltip"].resolve() == ("geometry",), symbology
+        assert symbology.props["tooltip_trigger"] == "hover", symbology.props
 
     def test_a_described_layer_still_records_what_pops_up(self, points):
         """The guard skips the description, and must not skip it for a layer that has one.
