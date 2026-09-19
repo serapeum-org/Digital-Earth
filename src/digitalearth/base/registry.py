@@ -731,11 +731,14 @@ def kinds() -> Tuple[str, ...]:
             True
 
             ```
-        - The names come back sorted:
+        - The names come back sorted, so a caller can present them as they are:
             ```python
             >>> from digitalearth.base.registry import kinds
-            >>> kinds()[:3]
-            ('basemap', 'borders', 'choropleth')
+            >>> names = kinds()
+            >>> list(names) == sorted(names)
+            True
+            >>> "raster" in names
+            True
 
             ```
     """
@@ -991,11 +994,14 @@ def furniture_kinds() -> Tuple[str, ...]:
             True
 
             ```
-        - The names come back sorted:
+        - The names come back sorted, so a caller can present them as they are:
             ```python
             >>> from digitalearth.base.registry import furniture_kinds
-            >>> furniture_kinds()[:3]
-            ('attribution', 'fullscreen', 'layer_switcher')
+            >>> names = furniture_kinds()
+            >>> list(names) == sorted(names)
+            True
+            >>> "scale_bar" in names
+            True
 
             ```
     """
@@ -1079,7 +1085,7 @@ _BUILT_IN_KINDS = (
     (
         "raster",
         "raster",
-        "a band drawn as an image — static imshow, interactive image/large_image, web add_raster",
+        "a band drawn as an image — static imshow, interactive image/large_image, web field",
         "data",
     ),
     (

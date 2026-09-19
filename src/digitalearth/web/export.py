@@ -9,7 +9,8 @@ The headline of the tier: turn any ``WebMap`` into a shareable artifact.
   gated** dependency (not in the ``[web]`` extra): ``save(*.png)`` raises an actionable ``ImportError`` when
   neither Playwright nor Selenium is installed, rather than failing obscurely.
 * ``animate`` — one screenshot per time step, encoded as a GIF at ``fps`` frames per second (the rate every
-  tier's animation entry point takes). ``animate`` and ``to_gif`` are its deprecated names, and ``duration=`` its deprecated
+  tier's animation entry point takes). ``animate`` and ``to_gif`` are its deprecated names, and
+  ``duration=`` its deprecated
   seconds-per-frame spelling, converted to ``fps`` rather than reinterpreted.
 
 ``WebMapBase.save`` dispatches HTML vs. PNG and the ``offline`` flag here (the base sits first in the MRO, so

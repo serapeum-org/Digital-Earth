@@ -1101,13 +1101,12 @@ class WebMapBase:
                 tree says what the MapLibre layout says; the builders without one always build visible. It is
                 recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
                 and records one.
-
+            band: Where the layer is drawn, when its kind does not say — what a caller's own object needs,
+                since `custom:maplibre` names the engine rather than what it draws. `None` takes the kind's band.
             source: What the layer draws, recorded in the figure's sources under the layer's id — a path, a
                 URL, or the object itself. `None` for a layer drawn from no data, such as a graticule.
             symbology: How the layer looks, as values rather than as the compiled engine expression. `None`
                 records an empty symbology.
-            band: Where the layer is drawn, when its kind does not say — what a caller's own object needs,
-                since `custom:maplibre` names the engine rather than what it draws. `None` takes the kind's band.
 
         Note:
             The tree places the layer in the band its kind declares, so nothing here computes a position. Queue

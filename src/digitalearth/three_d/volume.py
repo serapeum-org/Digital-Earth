@@ -44,7 +44,11 @@ def _cube(data: Any) -> np.ndarray:
 
 
 def _to_vtk_axes(cube: np.ndarray) -> np.ndarray:
-    """Reorder a ``(nz, ny, nx)`` cube to VTK's ``(nx, ny, nz)`` Fortran-ravelled scalar (lon→X, lat→Y, level→Z)."""
+    """Reorder a ``(nz, ny, nx)`` cube to VTK's Fortran-ravelled ``(nx, ny, nz)`` scalar.
+
+    Returns:
+        The ravelled scalars, with lon on X, lat on Y and level on Z.
+    """
     return cube.transpose(2, 1, 0).ravel(order="F")
 
 

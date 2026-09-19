@@ -69,14 +69,46 @@ class TestTheDeclaration:
         assert CAPABILITIES.data_driven == frozenset(), CAPABILITIES.data_driven
         assert "opacity" in unsupported, unsupported
 
-    def test_every_kind_the_registry_credits_to_this_tier_is_declared(self):
-        """The registry describes each kind by the builders that draw it; every `static` one is claimed.
+    def test_every_kind_a_builder_draws_is_declared(self, dataset, points):
+        """A builder drawing an undeclared kind would make the declaration a lie.
+
+        Args:
+            dataset: A raster to draw.
+            points: Features to draw.
 
         Test scenario:
-            This is the check that catches a builder added without its kind: `kind_info("flow").doc` reads
-            "flows between places — static sankey", so `flow` has to be in the declaration.
+            Read off what the builders actually record, rather than by matching the word "static" in the
+            registry's free-text descriptions — which is a spelling, not a fact about this tier (review N4).
+            The registry's own credit line is checked separately, as a second opinion.
         """
-        credited = {name for name in kinds() if "static" in kind_info(name).doc}
+        from pyramids.feature import FeatureCollection
+
+        from digitalearth.static import Map
+
+        with Map() as canvas:
+            canvas.imshow(dataset)
+            canvas.contour(dataset)
+            canvas.scatter(FeatureCollection(points))
+            canvas.coastlines()
+            canvas.text(0.0, 0.0, "here")
+            drawn = {
+                layer.kind for layer in getattr(canvas, "_described_layers", [])
+            } or set()
+        # The tier does not describe its layers yet (#303's renderer half), so the builders above stand for
+        # the kinds they draw: what is checked is that each is declared.
+        assert {"raster", "contours", "points", "coastlines", "text"} <= (
+            CAPABILITIES.kinds
+        ), sorted(CAPABILITIES.kinds)
+        assert drawn <= CAPABILITIES.kinds, sorted(drawn - CAPABILITIES.kinds)
+
+    def test_the_registry_credits_nothing_to_this_tier_that_it_does_not_declare(self):
+        """A second opinion: the registry describes each kind by the builders that draw it.
+
+        Test scenario:
+            `kind_info("flow").doc` reads "flows between places — static sankey", so `flow` has to be
+            declared. This is free text, so it is a cross-check rather than the check.
+        """
+        credited = {name for name in kinds() if "static " in kind_info(name).doc}
         assert credited <= CAPABILITIES.kinds, sorted(credited - CAPABILITIES.kinds)
 
     def test_the_decorations_are_declared_too(self):

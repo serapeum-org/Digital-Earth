@@ -321,8 +321,6 @@ class Bounds:
 
                 ```
         """
-        import numpy as np
-
         xs, ys = cls._axis_values(x, "x"), cls._axis_values(y, "y")
         if xs.size == 0 or ys.size == 0:
             raise ValueError(
@@ -396,8 +394,6 @@ class Bounds:
         Returns:
             `(low, high)`, ascending.
         """
-        import numpy as np
-
         low, high = float(np.nanmin(axis)), float(np.nanmax(axis))
         if axis.size > 1:
             ordered = np.sort(axis)

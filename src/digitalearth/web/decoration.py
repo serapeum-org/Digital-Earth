@@ -28,7 +28,7 @@ from digitalearth.base.basemaps import (
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
-# TODO(#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
+# Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
 # collision belongs to the Core contract, not here.
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.

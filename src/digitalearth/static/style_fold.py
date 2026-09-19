@@ -170,10 +170,12 @@ def fold_color_scaling(out: Dict[str, Any]) -> None:
     built = out.get(COLOR_GROUP_PARAM)
     if built is not None:
         if written:
+            scale = getattr(getattr(built, "kind", None), "value", "linear")
+            builder = str(scale).replace("-", "_")
             raise ValueError(
                 f"{COLOR_GROUP_PARAM}={type(built).__name__}(...) and {written} style the same thing; pass "
                 f"one or the other — the flat keywords are the group's own fields, so "
-                f"{COLOR_GROUP_PARAM}={type(built).__name__}({written[0]}=...) carries them"
+                f"{COLOR_GROUP_PARAM}={type(built).__name__}.{builder}({written[0]}=...) carries them"
             )
         return
     if not written:

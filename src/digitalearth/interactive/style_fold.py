@@ -219,14 +219,12 @@ def route_flat_style(flat: Mapping[str, Any]) -> Tuple[Symbology, Dict[str, Any]
         flat: The keywords a builder was called with.
 
     Returns:
-        A `(symbology, leftover)` pair: a keyword that drives a channel becomes an `Encoding`, a declared
-        keyword that drives none becomes a property the fold checks against the element, and anything
-        undeclared comes back in `leftover` for the builder to deal with.
-
-    Raises:
-        ValueError: never here. A keyword the schema declares becomes an encoding or a property; one it does
-            not is carried as a property and refused by :func:`fold_symbology`, which knows the element and so
-            can tell a raw HoloViews option from a misspelling.
+        A `(symbology, leftover)` pair, where `leftover` is **always empty** — the shape is the one every
+        tier's `route_flat_style` returns, and this tier has nothing to leave over. A keyword that drives a
+        channel becomes an `Encoding`; every other keyword becomes a property, whether the schema declares it
+        or not, because only :func:`fold_symbology` knows the element and can tell a raw HoloViews option
+        from a misspelling. Handing an undeclared keyword back here would refuse the first and the second
+        alike.
 
     Examples:
         - A channel keyword and an engine option travel in one dict and are separated:
@@ -388,7 +386,7 @@ def fold_symbology(
         if element not in entry.elements:
             unsupported[channel] = entry.reason
             continue
-        _fold_channel(entry, encoding, grouped)
+        _fold_channel(entry, encoding, grouped, unsupported)
     for key, value in dict(symbology.props).items():
         grouped[_group_of(key, allowed, element)][key] = value
     for group, options in grouped.items():
@@ -405,7 +403,10 @@ def fold_symbology(
 
 
 def _fold_channel(
-    entry: ChannelOption, encoding: Encoding, grouped: Dict[str, Dict[str, Any]]
+    entry: ChannelOption,
+    encoding: Encoding,
+    grouped: Dict[str, Dict[str, Any]],
+    unexpressible: Dict[str, str],
 ) -> None:
     """Write one channel's option into the grouped result.
 
@@ -413,6 +414,8 @@ def _fold_channel(
         entry: The channel's row in :data:`CHANNEL_OPTIONS`.
         encoding: What drives the channel.
         grouped: The result, mutated in place.
+        unexpressible: What this tier cannot express, mutated in place — reported rather than raised, as
+            the rest of the fold reports it.
 
     Raises:
         ValueError: for a field-driven channel that is not colour — HoloViews colours by a column, but sizes
@@ -420,6 +423,15 @@ def _fold_channel(
     """
     if entry.channel == "tooltip":
         grouped["plot"].setdefault("tools", []).append("hover")
+        # The hover tool reads the element's own dimensions, so *which* columns it shows is not something
+        # `.opts()` can be told. The fields were dropped in silence; the module's contract is that anything
+        # it cannot express is reported, so they are (review L17).
+        shown = encoding.value if encoding.is_constant else None
+        if shown:
+            unexpressible["tooltip"] = (
+                f"HoloViews' hover tool shows the element's own dimensions, so it cannot be limited to "
+                f"{list(shown)}; build the element with those columns as its vdims"
+            )
         return
     if encoding.is_constant:
         grouped[entry.group][entry.option] = encoding.value

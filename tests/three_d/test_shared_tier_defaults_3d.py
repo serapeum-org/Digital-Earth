@@ -40,7 +40,8 @@ class TestTheAnimationRateIsTheSharedOne:
         Test scenario:
             Both take ``fps=None`` as the "not passed" sentinel and hand it to ``renamed_parameter`` with a
             ``default=``; that default is the number a caller actually animates at, so it is what has to be
-            the shared one. This tier used to answer 12 for ``orbit`` and 8 for its callback loop, which is ``record`` since #299.
+            the shared one. This tier used to answer 12 for ``orbit`` and 8 for its callback loop, which
+            is ``record`` since #299.
         """
         import inspect
 

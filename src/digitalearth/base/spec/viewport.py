@@ -136,7 +136,8 @@ class Viewport:
             not an EPSG integer, a string or a CRS object pyramids reads), or one pyramids cannot read (`0`, `""`);
             `bounds` that is not a `Bounds`, carries no CRS or is in a different CRS; `bounds` and `domain` together;
             a `domain` that is neither a non-empty name nor four finite numbers, or a domain box with west past east
-            or south past north — a box cannot cross the antimeridian; a non-boolean `globe`; a `center` that is not two finite numbers; or a `zoom` that is not a finite number.
+            or south past north — a box cannot cross the antimeridian; a non-boolean `globe`; a `center`
+            that is not two finite numbers; or a `zoom` that is not a finite number.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
