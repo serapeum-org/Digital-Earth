@@ -23,6 +23,7 @@ from typing import FrozenSet, Mapping, Optional, Tuple
 
 __all__ = [
     "ALIASES",
+    "PLANNED_RENAMES",
     "CORE",
     "PENDING",
     "TIER2",
@@ -30,6 +31,7 @@ __all__ = [
     "alias_table",
     "core_method",
     "pending_for",
+    "planned_renames",
 ]
 
 
@@ -221,9 +223,13 @@ TIER2: Tuple[Method, ...] = (
     Method("projection", "Draw in another projection, by name.", frozenset()),
 )
 
-#: What each tier used to call a contract name, as `{backend: {old: new}}`. Every entry is a live alias: the
-#: old spelling works, warns once and names its replacement. A tier whose seam has not landed carries its
-#: entries here too, so the rename is agreed before it is adopted (#300 interactive, #303 static).
+#: What each tier used to call a contract name, as `{backend: {old: new}}`. **Every entry here is live**: the
+#: old spelling works, warns once and names its replacement, and a contract test holds each tier to that.
+#:
+#: A rename that has been agreed but not adopted lives in :data:`PLANNED_RENAMES` instead. Both were in this
+#: table once, with a docstring that claimed liveness in one sentence and disclaimed it in the next — so
+#: `alias_table("matplotlib")` told a caller that `imshow` was deprecated in favour of a `field` that does not
+#: exist, and `imshow` itself warned nobody (review M5). Two claims, two tables.
 ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "web": MappingProxyType(
@@ -238,6 +244,17 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
             }
         ),
         "3d": MappingProxyType({"animate": "record"}),
+    }
+)
+
+#: The renames a tier has agreed to and not yet adopted, as `{backend: {old: new}}`. Nothing here warns and
+#: nothing here forwards: the old name is simply what the tier still calls the method, and the new one is what
+#: it will be called when its seam lands (#300 interactive, #303 static). Kept in the contract because the
+#: agreement is part of it — a tier that seams later should not have to re-decide the spelling — and kept
+#: apart from :data:`ALIASES` because "you may still write this" and "we intend to rename this" are answers to
+#: different questions.
+PLANNED_RENAMES: Mapping[str, Mapping[str, str]] = MappingProxyType(
+    {
         "interactive": MappingProxyType(
             {
                 "image": "field",
@@ -251,7 +268,9 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "scatter": "points",
                 "shapes": "polygons",
                 "set_extent": "set_bounds",
-                "point_cloud": "grid_points",
+                # `point_cloud` is not listed: it is a second *current* spelling of `grid_points`, which the
+                # tier offers and deprecates neither of. A rename is a name on its way out, and nothing has
+                # been agreed about that one (review M5).
             }
         ),
     }
@@ -367,7 +386,9 @@ def alias_table(backend: str) -> Mapping[str, str]:
         backend: The tier, as `quickmap(backend=...)` spells it.
 
     Returns:
-        `{old: new}`, empty for a tier that renamed nothing.
+        `{old: new}` for the aliases that are **live** — every one of them forwards and warns. A tier whose
+        renames are agreed but unadopted answers `{}` here and names them through
+        :func:`planned_renames`, because a caller reads this table to know what still works.
 
     Examples:
         - The web tier's raster builder was `add_raster`:
@@ -377,8 +398,44 @@ def alias_table(backend: str) -> Mapping[str, str]:
             'field'
 
             ```
+        - A tier whose seam has not landed has renamed nothing yet:
+            ```python
+            >>> from digitalearth.base.contract import alias_table
+            >>> dict(alias_table("matplotlib"))
+            {}
+
+            ```
     """
     return ALIASES.get(backend, MappingProxyType({}))
+
+
+def planned_renames(backend: str) -> Mapping[str, str]:
+    """Return the renames one tier has agreed to and not yet adopted.
+
+    Args:
+        backend: The tier, as `quickmap(backend=...)` spells it.
+
+    Returns:
+        `{old: new}`, empty for a tier with none. Nothing here forwards or warns today: the old name is what
+        the tier still calls the method.
+
+    Examples:
+        - The static tier's raster builder is still `imshow`, and is to become `field`:
+            ```python
+            >>> from digitalearth.base.contract import planned_renames
+            >>> planned_renames("matplotlib")["imshow"]
+            'field'
+
+            ```
+        - A tier that has adopted its renames has none planned:
+            ```python
+            >>> from digitalearth.base.contract import planned_renames
+            >>> dict(planned_renames("web"))
+            {}
+
+            ```
+    """
+    return PLANNED_RENAMES.get(backend, MappingProxyType({}))
 
 
 def pending_for(backend: str) -> Mapping[str, str]:

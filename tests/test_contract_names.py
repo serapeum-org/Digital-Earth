@@ -128,7 +128,7 @@ class TestTheSeamedTiersAnswerToTheCore:
         built = [name for name in pending_for(backend) if hasattr(facade, name)]
         assert built == [], f"{backend} lists {built} as pending, but has them"
 
-    @pytest.mark.parametrize("backend", SEAMED)
+    @pytest.mark.parametrize("backend", sorted(FACADES))
     def test_every_old_spelling_still_works(self, backend):
         """An alias is a promise to the caller who already wrote the old name.
 
@@ -139,7 +139,7 @@ class TestTheSeamedTiersAnswerToTheCore:
         broken = [old for old in alias_table(backend) if not hasattr(facade, old)]
         assert broken == [], f"{backend} dropped {broken} instead of deprecating them"
 
-    @pytest.mark.parametrize("backend", SEAMED)
+    @pytest.mark.parametrize("backend", sorted(FACADES))
     def test_every_alias_warns_and_names_its_replacement(self, backend):
         """The other half of the promise: the old name must not linger silently.
 
@@ -159,6 +159,45 @@ class TestTheSeamedTiersAnswerToTheCore:
             assert new in source or new in (held.__doc__ or ""), (
                 f"{backend}.{old} does not name {new} as its replacement"
             )
+
+
+class TestAPlannedRenameIsNotAnAlias:
+    """Review M5 — `ALIASES` promises the old name works; a rename nobody has adopted promises nothing."""
+
+    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
+    def test_the_old_name_is_what_the_tier_still_calls_it(self, backend):
+        """A planned rename names a method that exists today under its old spelling.
+
+        Args:
+            backend: The tier under test.
+        """
+        from digitalearth.base.contract import planned_renames
+
+        facade = _facade(backend)
+        missing = [old for old in planned_renames(backend) if not hasattr(facade, old)]
+        assert missing == [], f"{backend} has no {missing}, so the rename names nothing"
+
+    @pytest.mark.parametrize("backend", ["interactive", "matplotlib"])
+    def test_a_planned_rename_is_not_claimed_as_live(self, backend):
+        """The two tables must not overlap: one says "still works", the other says "will be called".
+
+        Args:
+            backend: The tier under test.
+
+        Test scenario:
+            This is the guard that makes the split self-correcting. When a tier's seam lands and adopts a
+            rename, moving the entry to `ALIASES` is what makes the liveness tests above cover it — and
+            leaving it here is what this test refuses once the new name exists.
+        """
+        from digitalearth.base.contract import planned_renames
+
+        facade = _facade(backend)
+        adopted = [
+            old for old, new in planned_renames(backend).items() if hasattr(facade, new)
+        ]
+        assert adopted == [], (
+            f"{backend} has adopted {adopted}; move them to ALIASES so their liveness is checked"
+        )
 
 
 class TestTheUnseamedTiersDeclareTheirGap:
