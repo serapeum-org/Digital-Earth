@@ -614,6 +614,26 @@ class TestTheRemainingArms:
             float(np.nanmax(high.z.values)),
         ], drawn
 
+    def test_a_removed_layer_lets_its_object_go(self, scene):
+        """The web tier forgets a removed layer's object; this tier registered and never did.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `forget_object` was added as the counterpart to `register_object` and wired into the web tier
+            only — here it was imported and unused, so every layer of every scene left a strong reference
+            behind for the life of the process (review M1).
+        """
+        from digitalearth.base.registry import _OBJECTS
+
+        before = len(_OBJECTS)
+        scene.terrain(get_source(_dem()))
+        scene.remove_layer(scene.layer_ids[0])
+        assert len(_OBJECTS) == before, (
+            f"the removed layer left {len(_OBJECTS) - before} entries behind"
+        )
+
     def test_a_second_scene_leaves_the_first_scene_s_sources_alone(self, scene):
         """Two scenes number their layers the same way; their data must not share an entry.
 

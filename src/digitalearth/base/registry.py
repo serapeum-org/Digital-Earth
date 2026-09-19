@@ -55,6 +55,7 @@ __all__ = [
     "register_classifier",
     "SOURCES_GROUP",
     "clear_objects",
+    "forget_namespace",
     "forget_object",
     "object_namespace",
     "register_object",
@@ -210,6 +211,38 @@ def forget_object(uri: str) -> None:
     """
     key = uri.split(":", 1)[1] if uri.startswith(f"{OBJECT_SCHEME}:") else uri
     _OBJECTS.pop(key, None)
+
+
+def forget_namespace(namespace: str) -> None:
+    """Forget every object one figure registered under its namespace.
+
+    What a figure calls when it is finished with its data — and what a finalizer calls for a figure nobody
+    finished with, which in a notebook is the ordinary case: re-run the cell, drop the old map. Without it
+    the table held a strong reference to every dataset ever drawn, and namespacing made that *worse*, since
+    the entries no longer collided (review M2).
+
+    Args:
+        namespace: The prefix :func:`object_namespace` gave the figure.
+
+    Examples:
+        - A namespace's entries go together:
+            ```python
+            >>> from digitalearth.base.registry import (
+            ...     forget_namespace, object_namespace, register_object, resolve_uri
+            ... )
+            >>> ns = object_namespace()
+            >>> uri = register_object([1, 2, 3], name=f"{ns}:demo")
+            >>> forget_namespace(ns)
+            >>> resolve_uri(uri)
+            Traceback (most recent call last):
+                ...
+            KeyError: ...
+
+            ```
+    """
+    prefix = f"{namespace}:"
+    for key in [held for held in _OBJECTS if held.startswith(prefix)]:
+        del _OBJECTS[key]
 
 
 def clear_objects() -> None:

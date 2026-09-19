@@ -25,6 +25,7 @@ from digitalearth.base.crs import OffLimbError, declared_crs, reproject
 from digitalearth.base.custom import custom_kind
 from digitalearth.base.display import auto_cmap, needs_reproject
 from digitalearth.base.registry import (
+    forget_namespace,
     forget_object,
     kind_info,
     object_namespace,
@@ -1224,17 +1225,22 @@ class Scene3DBase:
             raise KeyError(
                 f"no layer {layer_id!r} in this scene; its layers are {self.layer_ids}"
             )
+        dropped = self._figure.layers.get(layer_id).source_id
         sources = {
-            key: ref
-            for key, ref in self._figure.sources.items()
-            if key != self._figure.layers.get(layer_id).source_id
+            key: ref for key, ref in self._figure.sources.items() if key != dropped
         }
+        held = self._figure.sources.get(dropped) if dropped is not None else None
         self._change(
             self._figure_with(
                 layers=self._figure.layers.remove(layer_id), sources=sources
             )
         )
         self._custom.pop(layer_id, None)
+        # Let the object go with the layer, as the web tier does. The registry holds strong references, and
+        # this tier registered into it and never forgot — so every layer of every scene left one behind for
+        # the life of the process (review M1).
+        if held is not None:
+            forget_object(held.uri)
         return self
 
     def set_visible(self, layer_id: str, visible: bool = True) -> Self:
@@ -1913,6 +1919,11 @@ class Scene3DBase:
         # A scene that never drew has no render window to free, and must not open one in order to close it.
         if self._plotter is not None:
             self._plotter.close()
+        # And the data goes with it. The registry holds strong references, so a session that builds scenes
+        # keeps every dataset they drew until something says otherwise — and this is the caller saying so
+        # (review M1/M2). A captured `figure_spec` cannot resolve an `object:` source afterwards, which is
+        # what "closed" means for a figure whose data lived only in this process.
+        forget_namespace(self._objects_ns)
 
     def __enter__(self) -> Self:
         """Enter the runtime context, returning the scene.

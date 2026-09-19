@@ -65,6 +65,10 @@ CAPABILITIES = Capabilities(
             "not a rendering choice on top of one"
         ),
         "basemap": "there are no map tiles to drape under a scene drawn in three dimensions",
+        "coastline_overlay": (
+            "a globe draws its own shoreline onto the sphere, and a flat scene has none to trace, so there "
+            "is no builder to add one to a scene"
+        ),
         # `legend` and `colorbar` are not listed: they are Core *methods* this tier has not built, which is
         # `contract.PENDING`'s answer, not this one. "We decided against it" and "nobody has written it yet"
         # are different, and a name cannot be both (review M19).

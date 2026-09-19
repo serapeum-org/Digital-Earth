@@ -40,6 +40,7 @@ from digitalearth.base.display import (
 from digitalearth.base.registry import (
     KIND_BANDS,
     band_of,
+    forget_namespace,
     forget_object,
     kind_info,
     object_namespace,
@@ -2331,6 +2332,52 @@ class WebMapBase:
         ):  # plain-script use: returning the widget is all there is to show
             pass
         return widget
+
+    def close(self) -> None:
+        """Let go of the in-memory data this map registered.
+
+        The object registry is process-global and holds strong references, so a session that builds maps
+        keeps every dataset they drew until something says otherwise. This is the caller saying so. Closing
+        twice is harmless, and a map that registered nothing has nothing to forget.
+
+        An `object:` source in a `figure_spec` captured from this map cannot be opened afterwards — which is
+        what "closed" means for a figure whose data lived only in this process. Save the data and reference
+        it by path to keep such a figure readable (review M2).
+
+        Examples:
+            - A closed map's in-memory source no longer resolves:
+                ```python
+                >>> import geopandas as gpd                                    # doctest: +SKIP
+                >>> from shapely.geometry import Point                         # doctest: +SKIP
+                >>> from digitalearth.web import WebMap                        # doctest: +SKIP
+                >>> pts = gpd.GeoDataFrame(                                    # doctest: +SKIP
+                ...     {"v": [1]}, geometry=[Point(0, 0)], crs=4326
+                ... )
+                >>> m = WebMap().points(pts)                                   # doctest: +SKIP
+                >>> m.close()                                                  # doctest: +SKIP
+
+                ```
+
+        See Also:
+            __exit__: calls this on the way out of a ``with`` block.
+        """
+        forget_namespace(self._objects_ns)
+
+    def __enter__(self) -> Self:
+        """Enter the runtime context, returning the map.
+
+        Returns:
+            The same map, so ``with WebMap() as m:`` binds this object and :meth:`close` runs on the way out.
+        """
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        """Let the map's in-memory data go on the way out of a ``with`` block.
+
+        Args:
+            *exc: The exception triple, ignored — closing is unconditional, as it is for a file.
+        """
+        self.close()
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
         """Render the map inline in notebooks by delegating to the MapLibre widget.

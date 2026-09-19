@@ -1270,6 +1270,39 @@ class TestOneMapsSourcesAreItsOwn:
             other
         ), "and the second map's must be its own"
 
+    def test_a_closed_map_lets_its_data_go(self, points):
+        """A map that is finished with lets go of the data it registered.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The registry holds strong references, and namespacing made this *worse* — every layer got its
+            own permanent key instead of colliding on one (review M2). `close()` is the caller saying they
+            are finished with the data; a `with` block says it for them.
+        """
+        from digitalearth.base.registry import _OBJECTS
+        from digitalearth.web import WebMap
+
+        before = len(_OBJECTS)
+        for _ in range(5):
+            with WebMap() as m:
+                m.points(points, name="obs")
+        assert len(_OBJECTS) == before, (
+            f"five closed maps left {len(_OBJECTS) - before} entries behind"
+        )
+
+    def test_an_open_map_still_resolves_its_sources(self, points):
+        """Closing is the caller's decision, and until they make it the figure reads.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        assert m.figure_spec.sources["obs"].open() is not None, "still readable"
+
     def test_a_removed_layer_lets_its_data_go(self, points):
         """The registry holds strong references, so a drawn-and-removed layer would leak one.
 

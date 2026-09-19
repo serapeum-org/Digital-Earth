@@ -84,7 +84,7 @@ CAPABILITIES = Capabilities(
             "a raster is drawn as an image and contours are their own builder, so there is no choice of "
             "renderer to make on top of one"
         ),
-        "coastlines": (
+        "coastline_overlay": (
             "coastlines come with the basemap style a caller picks, rather than as a Natural Earth layer the "
             "tier draws"
         ),
