@@ -272,11 +272,18 @@ class TestTheContractsColourLimits:
         with pytest.raises(ValueError, match="takes limits= or vmin=/vmax=, not both"):
             WebMap().field(dataset, limits=(0.0, 10.0), vmin=1.0)
 
-    def test_limits_that_are_not_a_pair_name_the_shape(self, dataset):
-        """A single number is the plausible mistake, and it is answered rather than unpacked.
+    @pytest.mark.parametrize("given", [10.0, "ab", (0.0, 1.0, 2.0), ("a", "b")])
+    def test_limits_that_are_not_a_pair_of_numbers_name_the_shape(self, dataset, given):
+        """A pair of numbers, checked as one — several plausible mistakes unpack just as happily.
 
         Args:
             dataset: The raster fixture.
+            given: What the caller passed.
+
+        Test scenario:
+            `low, high = limits` accepts a two-character string and a two-element iterator, and a triple
+            silently loses its third value; `"ab"` reached numpy and came back as *"could not convert
+            string to float: 'a'"* (review L9/L11).
         """
         with pytest.raises(ValueError, match=r"limits must be a \(vmin, vmax\) pair"):
-            WebMap().field(dataset, limits=10.0)
+            WebMap().field(dataset, limits=given)

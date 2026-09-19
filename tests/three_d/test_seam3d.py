@@ -102,6 +102,24 @@ class TestTheDescription:
         kinds = {scene.figure_spec.layers.get(name).kind for name in scene.layer_ids}
         assert kinds <= CAPABILITIES.kinds, f"undeclared kinds drawn: {kinds}"
 
+    def test_the_two_lists_of_drawable_kinds_are_held_to_each_other(self, monkeypatch):
+        """One list said twice, and drift either way gives a wrong answer rather than a wrong list.
+
+        Args:
+            monkeypatch: pytest's patcher, to make the two disagree.
+
+        Test scenario:
+            A kind in the drawer table and not in `DRAWN_KINDS` would be refused with a message that is
+            false; one in `DRAWN_KINDS` with no drawer would raise a bare `KeyError` where the helpful
+            message belongs (review L3). Neither can be reached without editing one and not the other,
+            which is what this does.
+        """
+        from digitalearth.three_d import renderer
+
+        monkeypatch.setattr(renderer, "DRAWN_KINDS", ("terrain",))
+        with pytest.raises(KeyError, match="drawer table and DRAWN_KINDS disagree"):
+            renderer.drawer_for("terrain")
+
     def test_every_kind_the_tier_has_a_drawer_for_is_declared(self):
         """The builders above need no optional dependency; the tier draws more kinds than they cover.
 
