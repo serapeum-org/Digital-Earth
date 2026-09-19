@@ -293,7 +293,20 @@ class TestCameraConstruction:
         assert camera.focal_point == (0.0, 0.0, 0.0), camera.focal_point
         assert camera.view_up == (0.0, 0.0, 1.0), camera.view_up
         assert camera.view_angle == DEFAULT_VIEW_ANGLE, camera.view_angle
-        assert camera.vertical_exaggeration == 1.0, camera.vertical_exaggeration
+        assert camera.vertical_exaggeration is None, camera.vertical_exaggeration
+
+    def test_a_camera_names_no_exaggeration_unless_it_is_asked_to(self):
+        """`None` and `1.0` are different answers: one is "unsaid", the other is "true scale".
+
+        Test scenario:
+            A scene reads this field as an instruction. Reading the default as `1.0` flattened a scene built
+            with `terrain(z_exaggeration=3.0)` the moment a caller set a viewpoint (review H6), so the
+            default has to be sayable-apart from an explicit `1.0`.
+        """
+        unsaid = Camera((0.0, -10.0, 5.0))
+        true_scale = Camera((0.0, -10.0, 5.0), vertical_exaggeration=1.0)
+        assert unsaid.vertical_exaggeration is None, unsaid.vertical_exaggeration
+        assert true_scale.vertical_exaggeration == 1.0, true_scale.vertical_exaggeration
 
     def test_vectors_are_stored_as_tuples_of_floats(self):
         """A list of ints is frozen into floats, so equality does not depend on how it was spelled."""
@@ -657,7 +670,7 @@ class TestCameraSerialisation:
             "view_angle": 30.0,
             "parallel": False,
             "parallel_scale": None,
-            "vertical_exaggeration": 1.0,
+            "vertical_exaggeration": None,
         }
 
     def test_from_dict_needs_a_position(self):

@@ -422,6 +422,33 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_a_viewpoint_does_not_flatten_the_relief(self, scene):
+        """A camera that names no exaggeration says where to stand, not how tall the relief is.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The measured defect: `terrain(z_exaggeration=3.0)` followed by any `Camera.look_at(...)` came
+            back at true scale, with the plotter rescaled and nothing said (review H6). `Camera`'s default
+            was `1.0`, and the setter read that as an instruction.
+        """
+        scene.terrain(get_source(_dem()), z_exaggeration=3.0)
+        scene.camera = Camera.look_at(
+            (0.0, 0.0, 0.0), azimuth=45, elevation=30, distance=10.0
+        )
+        assert scene.vertical_exaggeration == 3.0, scene.vertical_exaggeration
+
+    def test_a_camera_that_names_one_still_sets_it(self, scene):
+        """The other arm: an exaggeration written on the view is the view's to apply.
+
+        Args:
+            scene: The scene under test.
+        """
+        scene.terrain(get_source(_dem()), z_exaggeration=3.0)
+        scene.camera = Camera((7.0, -7.0, 7.0), vertical_exaggeration=2.0)
+        assert scene.vertical_exaggeration == 2.0, scene.vertical_exaggeration
+
     def test_a_camera_set_after_a_render_is_applied_at_once(self, scene):
         """There is a plotter to put it on, so it does not wait for the next render.
 

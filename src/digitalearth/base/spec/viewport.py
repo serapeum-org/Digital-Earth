@@ -503,7 +503,10 @@ class Camera:
             as VTK's `parallel_scale` is. In a parallel projection this — not the distance or the view angle — is
             the zoom, so two views that differ only in it are different cameras. ``None``, the default, leaves the
             renderer to fit the scene. Ignored by a perspective projection, as `view_angle` is by a parallel one.
-        vertical_exaggeration: The factor applied to the z axis, strictly positive. It lives on the view, as the 3-D
+        vertical_exaggeration: The factor applied to the z axis, strictly positive, or `None` for a camera
+            that does not name one — which is not the same as naming `1.0`. A viewpoint built with
+            `Camera.look_at(...)` says where to stand, not how tall the relief is, so assigning one leaves a
+            scene's exaggeration alone; a camera that *does* name a factor sets it. It lives on the view, as the 3-D
             tier already keeps it, rather than in the mesh coordinates.
         crs: The CRS `position` and `focal_point` are measured in — the scene's display CRS — or `None` when the
             scene declares none. A CRS object is held in its written spelling, as `Viewport` holds one.
@@ -548,7 +551,7 @@ class Camera:
     view_angle: float = DEFAULT_VIEW_ANGLE
     parallel: bool = False
     parallel_scale: Optional[float] = None
-    vertical_exaggeration: float = 1.0
+    vertical_exaggeration: Optional[float] = None
     crs: Any = None
 
     def __post_init__(self) -> None:
@@ -595,14 +598,15 @@ class Camera:
                 f"Camera view_angle must be strictly between 0 and 180 degrees; got {angle}"
             )
         object.__setattr__(self, "view_angle", angle)
-        factor = finite_number(
-            "Camera", "vertical_exaggeration", self.vertical_exaggeration
-        )
-        if factor <= 0.0:
-            raise ValueError(
-                f"Camera vertical_exaggeration must be positive; got {factor}"
+        if self.vertical_exaggeration is not None:
+            factor = finite_number(
+                "Camera", "vertical_exaggeration", self.vertical_exaggeration
             )
-        object.__setattr__(self, "vertical_exaggeration", factor)
+            if factor <= 0.0:
+                raise ValueError(
+                    f"Camera vertical_exaggeration must be positive; got {factor}"
+                )
+            object.__setattr__(self, "vertical_exaggeration", factor)
         parallel = true_or_false(self.parallel)
         if parallel is None:
             raise ValueError(
@@ -627,7 +631,7 @@ class Camera:
         view_angle: float = DEFAULT_VIEW_ANGLE,
         parallel: bool = False,
         parallel_scale: Optional[float] = None,
-        vertical_exaggeration: float = 1.0,
+        vertical_exaggeration: Optional[float] = None,
     ) -> "Camera":
         """Place a camera by the direction it looks from, in the terms a map reader uses.
 
@@ -644,7 +648,7 @@ class Camera:
             parallel: Whether the projection is parallel rather than perspective.
             parallel_scale: Half the view's height in scene units, for a parallel projection; ``None`` fits the
                 scene.
-            vertical_exaggeration: The z-axis factor.
+            vertical_exaggeration: The z-axis factor, or `None` to leave the scene's own alone.
 
         Returns:
             The camera.
@@ -917,6 +921,6 @@ class Camera:
             view_angle=data.get("view_angle", DEFAULT_VIEW_ANGLE),
             parallel=data.get("parallel", False),
             parallel_scale=data.get("parallel_scale"),
-            vertical_exaggeration=data.get("vertical_exaggeration", 1.0),
+            vertical_exaggeration=data.get("vertical_exaggeration"),
             crs=data.get("crs"),
         )

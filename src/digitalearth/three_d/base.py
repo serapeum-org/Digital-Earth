@@ -1495,7 +1495,11 @@ class Scene3DBase:
             )
         self._camera = camera
         self._camera_set = True
-        self.vertical_exaggeration = camera.vertical_exaggeration
+        # Only a camera that names one. `Camera.look_at(...)` says where to stand; it does not say the
+        # relief is flat, and reading its default as an instruction reset a scene built with
+        # `terrain(z_exaggeration=3.0)` to true scale without a word (review H6).
+        if camera.vertical_exaggeration is not None:
+            self.vertical_exaggeration = camera.vertical_exaggeration
         if self._plotter is not None:
             self._apply_camera()
 
