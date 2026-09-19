@@ -257,10 +257,11 @@ class TestTheContractsColourLimits:
         Args:
             dataset: The raster fixture.
         """
-        by_pair = WebMap().field(dataset, limits=(0.0, 10.0))
-        by_ends = WebMap().field(dataset, vmin=0.0, vmax=10.0)
-        assert by_pair.layer_ids == by_ends.layer_ids, "the same layer is drawn"
-        assert by_pair._panels == by_ends._panels, "and coloured the same way"
+        by_pair = WebMap().field(dataset, limits=(0.0, 10.0)).to_html()
+        by_ends = WebMap().field(dataset, vmin=0.0, vmax=10.0).to_html()
+        other = WebMap().field(dataset, limits=(0.0, 50.0)).to_html()
+        assert by_pair == by_ends, "the two spellings must colour the same raster alike"
+        assert by_pair != other, "and different limits must colour it differently"
 
     def test_naming_the_limits_twice_is_refused(self, dataset):
         """They are one thing, and there is no right answer to being given two.

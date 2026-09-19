@@ -402,6 +402,31 @@ def fold_symbology(
     }, unsupported
 
 
+def _named_fields(value: Any) -> list:
+    """Return the column names a tooltip encoding asks for, however it was written.
+
+    The `tooltip` channel is a plain text channel, so nothing in the vocabulary stops a caller writing one
+    column as a bare string or passing something that is not a sequence at all. Listing the value directly
+    spelled a string out letter by letter and raised `TypeError` on a number (review M9).
+
+    Args:
+        value: What the encoding carries — a sequence of names, one name, or anything else.
+
+    Returns:
+        The names as a list: a string becomes one name, a sequence keeps its order, and `None` or an empty
+        value becomes `[]`. Anything else is named as the single thing it is, so the message can still say
+        what could not be honoured.
+    """
+    if value is None or value == ():
+        return []
+    if isinstance(value, str):
+        return [value]
+    try:
+        return [str(name) for name in value]
+    except TypeError:
+        return [str(value)]
+
+
 def _fold_channel(
     entry: ChannelOption,
     encoding: Encoding,
@@ -426,11 +451,11 @@ def _fold_channel(
         # The hover tool reads the element's own dimensions, so *which* columns it shows is not something
         # `.opts()` can be told. The fields were dropped in silence; the module's contract is that anything
         # it cannot express is reported, so they are (review L17).
-        shown = encoding.value if encoding.is_constant else None
+        shown = _named_fields(encoding.value if encoding.is_constant else None)
         if shown:
             unexpressible["tooltip"] = (
                 f"HoloViews' hover tool shows the element's own dimensions, so it cannot be limited to "
-                f"{list(shown)}; build the element with those columns as its vdims"
+                f"{shown}; build the element with those columns as its vdims"
             )
         return
     if encoding.is_constant:

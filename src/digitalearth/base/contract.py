@@ -159,7 +159,11 @@ CORE: Tuple[Method, ...] = (
     ),
     Method(
         "replace_layer",
-        "Swap a layer's description for another, keeping its id and place.",
+        (
+            "Swap a layer's description for another, keeping its id and its place — except where the new "
+            "description changes the layer's band, which re-places it at the top of the band it now "
+            "belongs to, as adding it there would."
+        ),
         frozenset(),
         builds_in=_LAYER_MANAGEMENT_WAVE,
     ),

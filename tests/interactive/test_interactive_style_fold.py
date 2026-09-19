@@ -302,6 +302,29 @@ class TestTheOtherOptionGroups:
         assert grouped["plot"]["tools"] == ["hover"], grouped
         assert "cannot be limited to" in unsupported["tooltip"], unsupported
 
+    @pytest.mark.parametrize(
+        "value, named",
+        [
+            (("pop", "area"), ["pop", "area"]),
+            ("pop", ["pop"]),
+            (1, ["1"]),
+            (True, ["True"]),
+        ],
+    )
+    def test_the_named_fields_are_read_however_they_were_written(self, value, named):
+        """The channel is plain text, so nothing stops one column being written as a bare string.
+
+        Args:
+            value: What the caller put on the channel.
+            named: The columns the report should name.
+
+        Test scenario:
+            Listing the value directly spelled a string out letter by letter — `['p', 'o', 'p']` — and
+            raised `TypeError: 'int' object is not iterable` on a number, from inside the fold (review M9).
+        """
+        _, unsupported = fold_symbology(Symbology.of(tooltip=value), "Points")
+        assert f"{named}" in unsupported["tooltip"], unsupported["tooltip"]
+
     def test_a_tooltip_that_names_none_reports_nothing(self):
         """Asking for hover without naming columns is exactly what the tool does, so nothing is lost."""
         grouped, unsupported = fold_symbology(Symbology.of(tooltip=()), "Points")
