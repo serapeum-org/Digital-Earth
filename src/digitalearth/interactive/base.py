@@ -36,6 +36,7 @@ from digitalearth.base.display import (
 )
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec.bounds import same_crs
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
 # vector builder auto-routes to its tier's big-data renderer (#250) lives in `digitalearth.base.bigdata`, so
@@ -254,7 +255,9 @@ class InteractiveMapBase:
         # delegating it to HoloViews' global option Store.
         self._styles: Dict[int, dict] = {}
 
-    def _raster_element(self, x: Any, y: Any, arr: Any, name: str) -> Any:
+    def _raster_element(
+        self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
+    ) -> Any:
         """Build the raster element: plain ``hv.Image`` (Bokeh path) or ``gv.Image`` under a projection.
 
         With no display projection set the element is a plain ``hv.Image`` already in the display CRS
@@ -267,24 +270,47 @@ class InteractiveMapBase:
             y: 1-D y / latitude cell-centre coordinates (display CRS).
             arr: 2-D value array (masked nodata already filled with ``NaN``).
             name: Value-dimension name.
+            bounds: The rectangle the cells cover, as ``(west, south, east, north)``, when the reader knows
+                it. Given, the element is built from the array and placed on it; left out, HoloViews derives
+                the placement from the axes — which it cannot do for an axis of one cell, because one sample
+                has no spacing (it returns `nan` bounds and then raises on the next frame).
 
         Returns:
             An ``hv.Image`` or ``gv.Image`` element.
         """
         gv, hv = _require_holoviz()
+        # The axes are the better answer wherever they have one: they carry the grid's *direction*, which
+        # `SourceView._axes` derives from the geotransform's step signs, and `hv.Image(arr, bounds=...)`
+        # assumes row 0 is north and column 0 is west. Placing every read by its bounds mirrored a south-up
+        # or east-left raster, silently, because a flipped raster draws perfectly happily (review H4).
+        # Bounds are the fallback for the one case the axes cannot answer: a single cell has no spacing.
+        degenerate = len(getattr(x, "ravel", lambda: x)()) < 2 or (
+            len(getattr(y, "ravel", lambda: y)()) < 2
+        )
+        use_bounds = bounds is not None and degenerate
+        data = arr if use_bounds else (x, y, arr)
+        placement = {"bounds": tuple(bounds)} if use_bounds else {}
         if self._projection is None:
-            return hv.Image((x, y, arr), kdims=["x", "y"], vdims=[name])
+            return hv.Image(data, kdims=["x", "y"], vdims=[name], **placement)
         return gv.Image(
-            (x, y, arr),
+            data,
             kdims=["x", "y"],
             vdims=[name],
             crs=gv.util.process_crs(self.crs),
+            **placement,
         )
 
     def add_element(self, element: Any) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here.
+
+        An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
+        kind `custom:holoviews`, a label, a band and whether it is visible — and never the object, which has no
+        description to write. The object stays with the scene that was handed it, so a figure saved and loaded
+        again names the layer but cannot rebuild it, and another backend cannot draw it at all
+        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
+        layer tree as its seam lands (#300); until then the object is drawn and nothing else is kept.
 
         Args:
             element: Any HoloViews/GeoViews element (or overlay-able object).
@@ -317,13 +343,14 @@ class InteractiveMapBase:
         return self
 
     def _needs_reproject(self, data: Any) -> bool:
-        """Whether ``data`` must be reprojected (via pyramids) to the display CRS.
+        """Whether `data` must be reprojected (via pyramids) to the display CRS.
 
         Args:
-            data: A pyramids object exposing ``.epsg`` (``Dataset``/``FeatureCollection``).
+            data: A pyramids object exposing `.crs` and/or `.epsg` (`Dataset`/`FeatureCollection`).
 
         Returns:
-            ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+            `False` when the data's CRS and the display CRS name the same reference system, however either
+            is spelled; `True` otherwise.
 
         Note:
             This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
@@ -537,7 +564,11 @@ class InteractiveMapBase:
         return source.metadata("variable", None) or source.z.name or "value"
 
     def _styled(
-        self, element: Any, common: Optional[dict] = None, bokeh: Optional[dict] = None
+        self,
+        element: Any,
+        common: Optional[dict] = None,
+        bokeh: Optional[dict] = None,
+        owner: Any = None,
     ) -> Any:
         """Apply backend-agnostic style opts plus Bokeh-only frame opts to ``element``.
 
@@ -553,6 +584,8 @@ class InteractiveMapBase:
             element: The HoloViews/GeoViews element to style.
             common: Backend-agnostic options; ``None``-valued entries are dropped.
             bokeh: Extra Bokeh-only options merged over the default frame.
+            owner: The registered layer this element is a *frame* of, for a dynamic layer whose frames are
+                drawn one per viewport. `None` for an element that is itself the layer.
 
         Returns:
             The styled element.
@@ -568,8 +601,41 @@ class InteractiveMapBase:
             frame["title"] = self.title
         frame.update(bokeh or {})
         element = element.opts(backend="bokeh", **frame)
-        self._styles[id(element)] = {"common": dict(common), "bokeh": dict(frame)}
+        self._record_style(
+            element, {"common": dict(common), "bokeh": dict(frame)}, owner
+        )
         return element
+
+    def _record_style(self, element: Any, style: dict, owner: Any = None) -> None:
+        """File the style of a just-drawn element, and of the layer it is a frame of.
+
+        A dynamic layer is registered as a `DynamicMap` and redrawn as a fresh element per frame, so the
+        style recorded against the frame answered for nothing a caller holds: `style_of` on a
+        `large_image(dynamic=True)` layer read empty, and the dashboard's widgets — which look the style up
+        to merge over it — passed such a layer by (review M17). The style is filed against the registered
+        layer as well, when the frame says which one it belongs to.
+
+        It has to *say*. Reading `self.layers[-1]` instead was a guess, and a wrong one: every builder
+        styles its element before registering it, so while a builder styles, the last registered layer is
+        still the **previous** one — a static layer drawn after a dynamic one overwrote the dynamic layer's
+        style, and with it the widget values merged over it (review H3).
+
+        The table is then trimmed to the registered layers plus this element. Every frame is a new object
+        under a new `id()`, so the old keying grew one dead entry per pan — sixteen after fifteen of them —
+        keyed by the id of a collected object, which another object may later be handed (review M18).
+
+        Args:
+            element: The element that was styled.
+            style: What was applied to it.
+            owner: The registered layer `element` is a frame of, or `None` when it is the layer itself.
+        """
+        self._styles[id(element)] = style
+        if owner is not None:
+            self._styles[id(owner)] = style
+        live = {id(layer) for layer in self.layers} | {id(element)}
+        if owner is not None:
+            live.add(id(owner))
+        self._styles = {key: held for key, held in self._styles.items() if key in live}
 
     def style_of(self, layer: Any) -> dict:
         """Return the style options :meth:`_styled` applied to ``layer``.
@@ -671,12 +737,33 @@ class InteractiveMapBase:
         Raises:
             ValueError: when ``self.crs`` is not ``3857``.
         """
-        if self.crs != 3857:
+        if not same_crs(self.crs, 3857):
             raise ValueError(
                 f"{method}() needs the Web-Mercator display CRS (crs=3857) — Bokeh renders tiles/"
                 f"features in EPSG:3857 only, and this map uses crs={self.crs!r}. Either build the "
                 "map with InteractiveMap(crs=3857) (the default) or drop the decoration."
             )
+
+    def _compose(self, layers: Any) -> Any:
+        """Overlay layers in draw order.
+
+        The one place the tier turns a sequence of elements into one figure, so a caller that renders a subset
+        — the layer switcher, a dashboard widget restyling each layer on its own (#300) — composes exactly as
+        `render` does rather than growing a second reduce beside it.
+
+        Args:
+            layers: The elements to overlay, bottom first.
+
+        Returns:
+            An empty `hv.Overlay` for none, the element itself for one, and their product otherwise.
+        """
+        _, hv = _require_holoviz()
+        drawn = list(layers)
+        if not drawn:
+            return hv.Overlay([])
+        if len(drawn) == 1:
+            return drawn[0]
+        return reduce(mul, drawn)
 
     def render(self) -> Any:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
@@ -709,23 +796,38 @@ class InteractiveMapBase:
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        self._flush_deferred_tiles()
+        return self._projected(self._compose(self.layers))
+
+    def _flush_deferred_tiles(self) -> None:
+        """Draw a basemap that was asked for before there was a figure to draw it on.
+
+        `InteractiveMap(tiles=...)` records the provider and defers it, because the tile layer has to sit
+        under layers that do not exist yet. This is where it is applied, once, and it has to run before the
+        layers are read — it adds one.
+        """
         if self._tiles_provider is not None and hasattr(self, "tiles"):
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
             self.tiles(provider)
-        if not self.layers:
-            obj = hv.Overlay([])
-        elif len(self.layers) == 1:
-            obj = self.layers[0]
-        else:
-            obj = reduce(mul, self.layers)
-        if self._projection is not None:
-            if (
-                "matplotlib" not in hv.Store.renderers
-            ):  # register mpl opts before applying them
-                hv.renderer("matplotlib")
-            obj = obj.opts(projection=self._projection, backend="matplotlib")
-        return obj
+
+    def _projected(self, obj: Any) -> Any:
+        """Return `obj` drawn in the map's projection, when one was asked for.
+
+        Args:
+            obj: The composed figure.
+
+        Returns:
+            `obj` unchanged when no projection was set, else the same figure carrying it. The matplotlib
+            renderer is registered first, since that is the backend whose options declare `projection`.
+        """
+        _, hv = _require_holoviz()
+        if self._projection is None:
+            return obj
+        if (
+            "matplotlib" not in hv.Store.renderers
+        ):  # register mpl opts before applying them
+            hv.renderer("matplotlib")
+        return obj.opts(projection=self._projection, backend="matplotlib")
 
     def save(self, path: Any, **kwargs: Any) -> Path:
         """Save the composed map — interactive HTML (Bokeh) or a raster via the matplotlib backend.

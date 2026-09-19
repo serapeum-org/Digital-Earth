@@ -124,11 +124,13 @@ class TestC2Fps:
         Test scenario:
             The tier used to carry two different defaults (12 for ``orbit``, 8 for ``animate``), neither
             matching the other backends. One constant now backs both, so "the default speed" is one number.
+            The callback loop is ``record`` since #299 — ``animate`` means three different things across the
+            tiers — and ``animate`` forwards to it.
         """
         import inspect
 
         assert DEFAULT_FPS == 3.0, f"the shared default must be 3.0, got {DEFAULT_FPS}"
-        for method in ("orbit", "animate"):
+        for method in ("orbit", "record"):
             signature = inspect.signature(getattr(Scene3D, method))
             assert "fps" in signature.parameters, f"{method}() must take fps"
             assert signature.parameters["fps"].default is None, (
@@ -150,12 +152,12 @@ class TestC2Fps:
         scene.terrain(_dem())
         opened = mocker.patch.object(scene.plotter, "open_gif")
         mocker.patch.object(scene.plotter, "write_frame")
-        scene.animate([1.0], str(tmp_path / "a.gif"), lambda s, f: None, fps=7.0)
+        scene.record([1.0], str(tmp_path / "a.gif"), lambda s, f: None, fps=7.0)
         assert opened.call_args.kwargs["fps"] == 7.0, (
             f"the writer must be opened at the fps given, got {opened.call_args!r}"
         )
 
-    @pytest.mark.parametrize("method", ["orbit", "animate"])
+    @pytest.mark.parametrize("method", ["orbit", "record"])
     def test_framerate_still_works_and_warns(self, scene, tmp_path, mocker, method):
         """The deprecated ``framerate=`` still sets the frame rate, and says so once.
 
@@ -178,7 +180,7 @@ class TestC2Fps:
         call = (
             (lambda: scene.orbit(out, n_frames=4, framerate=9.0))
             if method == "orbit"
-            else (lambda: scene.animate([1.0], out, lambda s, f: None, framerate=9.0))
+            else (lambda: scene.record([1.0], out, lambda s, f: None, framerate=9.0))
         )
         with pytest.warns(DeprecationWarning, match="fps"):
             call()
@@ -200,7 +202,7 @@ class TestC2Fps:
             used to raise ``ValueError`` here while web silently preferred the old spelling).
         """
         with pytest.raises(TypeError) as excinfo:
-            scene.animate(
+            scene.record(
                 [1.0],
                 str(tmp_path / "a.gif"),
                 lambda s, f: None,
@@ -599,32 +601,43 @@ class TestC7SkipAndWarn:
             scene.point_cloud(np.zeros((0, 3)), values=np.ones(3))
 
 
-class TestC13NoDisplayCrs:
-    """C13 — the 3-D tier declares that it has no display CRS."""
+class TestC13TheDisplayCrs:
+    """C13 — the 3-D tier declares the display CRS it draws every layer in (rewritten for #291)."""
 
-    def test_display_crs_is_declared_none(self, scene):
-        """``display_crs`` exists and is ``None``, on the class and on an instance.
+    def test_a_scene_given_no_crs_declares_none_until_a_layer_does(self, scene):
+        """``display_crs`` is readable, and ``None`` until a layer carrying a CRS is added.
 
         Args:
             scene: The scene under test.
 
         Test scenario:
-            "There is no display CRS" has to be *readable*, not merely true: the dispatcher refuses ``crs=``
-            for this backend on the strength of it, and a docstring cannot be queried. Declared on the class
-            so it can be checked without building a plotter.
+            Readable rather than implied, as the 2-D tiers' ``crs`` is: a caller asks the scene what it draws in.
         """
-        assert Scene3DBase.display_crs is None, (
-            "Scene3DBase must declare display_crs = None"
-        )
-        assert scene.display_crs is None, "a built scene must report no display CRS"
+        assert scene.display_crs is None, scene.display_crs
 
-    def test_the_docstring_says_so_too(self):
-        """The class docstring states the absence, for the reader who never looks at the attribute.
+    def test_the_first_layer_with_a_crs_sets_it(self, scene):
+        """A raster in EPSG:32618 makes the scene's display CRS EPSG:32618.
 
-        Test scenario:
-            The contract asks for both halves — a class attribute and a docstring line — because the
-            attribute tells the dispatcher and the docstring tells the person wondering where ``crs=`` went.
+        Args:
+            scene: The scene under test.
         """
-        assert "no display CRS" in Scene3DBase.__doc__, (
-            "the class docstring must state that this tier has no display CRS"
+        from pyramids.dataset import Dataset
+
+        scene.terrain(Dataset.read_file("examples/data/acc4000.tif"))
+        assert scene.display_crs == 32618, scene.display_crs
+
+    def test_a_crs_given_to_the_scene_is_declared(self):
+        """``Scene3DBase(crs=...)`` is what the scene reports, before any layer."""
+        built = Scene3DBase(off_screen=True, crs=4326)
+        try:
+            assert built.display_crs == 4326, built.display_crs
+        finally:
+            built.close()
+
+    def test_the_docstring_states_the_rule(self):
+        """The class docstring says every layer is placed in one display CRS, for the reader who never looks at
+        the attribute.
+        """
+        assert "one display CRS" in Scene3DBase.__doc__, (
+            "the class docstring must state the display CRS rule"
         )

@@ -25,10 +25,10 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
-from digitalearth.base.deprecation import renamed_parameter
+from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
-# TODO(#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
+# Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
 # collision belongs to the Core contract, not here.
 
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
@@ -184,7 +184,12 @@ def _legend_rows(kind: str, values: list, colors: list, labels: Optional[list]) 
     )
 
 
-def _graticule_features(spacing: float) -> dict:
+#: Degrees between graticule lines when a caller names neither step — the interactive tier's own default, so
+#: one `graticule()` call draws the same grid on both (#263).
+_DEFAULT_GRID_STEP: float = 30.0
+
+
+def _graticule_features(lon_step: float, lat_step: float) -> dict:
     """Build the meridians and parallels of a graticule as a GeoJSON FeatureCollection.
 
     Generated rather than fetched: a lat/lon grid is arithmetic, not data, so it needs no source and works
@@ -192,7 +197,8 @@ def _graticule_features(spacing: float) -> dict:
     that a projection curves them smoothly.
 
     Args:
-        spacing: Degrees between lines.
+        lon_step: Degrees between meridians.
+        lat_step: Degrees between parallels.
 
     Returns:
         A GeoJSON ``FeatureCollection`` whose features each carry a ``label`` property, e.g. ``"10°E"``.
@@ -216,8 +222,8 @@ def _graticule_features(spacing: float) -> dict:
         return [(index, index * step) for index in range(-count, count + 1)]
 
     features = []
-    last_meridian = int(180.0 // spacing)
-    for index, lon in anchored(180.0, spacing):
+    last_meridian = int(180.0 // lon_step)
+    for index, lon in anchored(180.0, lon_step):
         if index == last_meridian and lon >= 180.0:
             continue  # the antimeridian is the same line as -180
         features.append(
@@ -227,7 +233,7 @@ def _graticule_features(spacing: float) -> dict:
                 [[lon, lat] for lat in steps(-85.0, 85.0, 5.0)],
             )
         )
-    for index, lat in anchored(80.0, spacing):
+    for index, lat in anchored(80.0, lat_step):
         features.append(
             _graticule_line(
                 lat,
@@ -505,9 +511,11 @@ class DecorationMixin(_MixinBase):
     def legend(
         self,
         *,
+        layer_id: Optional[str] = None,
         title: Optional[str] = None,
         position: str = "bottom-right",
         labels: Optional[list] = None,
+        visible: bool = True,
     ) -> Self:
         """Add a key for the most recent classified layer (recipe W2).
 
@@ -532,10 +540,16 @@ class DecorationMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
 
+        Args:
+            layer_id: Which layer's classes to describe. `None` takes the most recently classified layer,
+                which is what the tier recorded before layers had ids.
+            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
+
         Raises:
-            ValueError: when ``position`` is not one of the four legal MapLibre corners, or when no
-                classified layer has been added — there is nothing to build a key from, and an empty box
-                would be worse than an error.
+            ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`
+                names a layer that carries no classification, or when no classified layer has been added at
+                all — there is nothing to build a key from, and an empty box would be worse than an error.
+            KeyError: when `layer_id` names no layer on this map.
 
         Examples:
             - A choropleth and its key:
@@ -550,9 +564,11 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
         """
+        if not visible:
+            return self
         _require_maplibre()
         _check_position(position)
-        spec = self.last_legend
+        spec = self.last_legend if layer_id is None else self._legend_of(layer_id)
         if not spec:
             raise ValueError(
                 "legend() has nothing to describe: no classified layer has been added yet. Add a "
@@ -655,20 +671,25 @@ class DecorationMixin(_MixinBase):
             "theme": theme,
             "position": position,
         }
+        self._record_furniture(
+            "layer_switcher", anchor=position, layers=tuple(wanted), theme=theme
+        )
         return self
 
     def text(
         self,
         lon: float,
         lat: float,
-        string: str,
+        s: Optional[str] = None,
         *,
+        crs: Any = 4326,
         text_size: Optional[float] = None,
         color: str = "#ffffff",
         halo_color: str = "#000000",
         halo_width: float = 1.0,
         name: Optional[str] = None,
         size: Optional[float] = None,
+        string: Optional[str] = None,
     ) -> Self:
         """Place a single line of text at a coordinate.
 
@@ -676,15 +697,20 @@ class DecorationMixin(_MixinBase):
         :meth:`~digitalearth.web.vector.VectorMixin.labels` is the data-driven counterpart.
 
         Args:
-            lon: Longitude in the display CRS' lon/lat.
-            lat: Latitude.
-            string: The text to draw.
+            lon: X of the anchor point, in `crs` — a longitude by default.
+            lat: Y of the anchor point, in `crs` — a latitude by default.
+            s: The string to draw. Named `s` as it is on the static and interactive tiers (#260), which
+                follow matplotlib's own spelling.
+            crs: What `lon`/`lat` are measured in. EPSG:4326 by default; a point in another CRS is
+                reprojected into the CRS this tier places data in, exactly as a feature is (#260).
             text_size: Text size in pixels (``14.0`` when omitted — the signature's ``None`` is the
                 "not passed" sentinel the deprecated spelling is resolved against). Named for the text
                 rather than ``size``, which means the visual size of a marker everywhere else.
             color: Text colour.
             halo_color: Colour of the outline behind the glyphs, which keeps it legible over imagery.
             halo_width: Halo width in pixels; ``0`` disables it.
+            string: **Deprecated** spelling of `s`; forwarded unchanged, after a
+                ``DeprecationWarning`` that ``string=`` will be removed in a future release.
             name: What a layer switcher calls this annotation; ``None`` uses its generated id.
             size: **Deprecated** spelling of ``text_size``; forwarded unchanged, after a
                 ``DeprecationWarning`` that ``size=`` will be removed in a future release.
@@ -707,6 +733,18 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.labels: label many features from a column.
         """
+        s = renamed_parameter(
+            new="s",
+            value=s,
+            old="string",
+            alias=string,
+            caller="WebMap.text()",
+        )
+        if s is None:
+            raise TypeError(
+                "text() needs the string to draw; pass it as the third argument"
+            )
+        lon, lat = self._as_display_point(float(lon), float(lat), crs)
         Layer, LayerType = _require_layer_api()
         text_size = renamed_parameter(
             new="text_size",
@@ -722,7 +760,7 @@ class DecorationMixin(_MixinBase):
             "data": {
                 "type": "Feature",
                 "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
-                "properties": {"text": string},
+                "properties": {"text": s},
             },
         }
         layer = Layer(
@@ -749,9 +787,9 @@ class DecorationMixin(_MixinBase):
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
         # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
         self._index_layer(layer_id, name, kind="text")
-        return self.add_layer(layer=apply)
+        return self._queue_layer(apply, "text")
 
-    def title(
+    def set_title(
         self,
         heading: str,
         *,
@@ -788,12 +826,15 @@ class DecorationMixin(_MixinBase):
         if subtitle:
             body += f'<div style="opacity:.75;margin-top:2px">{_text(subtitle)}</div>'
         self._panels["title"] = (f"<div>{body}</div>", position)
+        self._title = heading
         return self
 
     def graticule(
         self,
         *,
-        spacing: float = 10.0,
+        lon_step: Optional[float] = None,
+        lat_step: Optional[float] = None,
+        spacing: Optional[float] = None,
         color: str = "#888888",
         width: float = 0.5,
         opacity: float = 0.6,
@@ -808,7 +849,10 @@ class DecorationMixin(_MixinBase):
         saved with ``offline=True`` keeps its grid with no network.
 
         Args:
-            spacing: Degrees between lines. ``10`` gives a readable global grid. The grid is always
+            lon_step: Degrees between meridians; `30` by default, as on the interactive tier (#263).
+            lat_step: Degrees between parallels; `30` by default.
+            spacing: One step for both, for a caller who wants a square grid; it overrides the two above.
+                ``30`` gives a readable global grid. The grid is always
                 global — it is not clipped to the view, because a web map is pannable and a grid that
                 stopped at the opening extent would end mid-pan — so a tight spacing is expensive:
                 ``10`` embeds ~43 KiB of GeoJSON, ``1`` embeds ~420 KiB and 521 labels. Prefer the
@@ -825,7 +869,7 @@ class DecorationMixin(_MixinBase):
             The same map instance, so builder calls chain.
 
         Raises:
-            ValueError: when ``spacing`` is not positive, or is wider than the 180° of latitude there is
+            ValueError: when a step is not positive, or is wider than the 180° of latitude there is
                 to divide — either produces a grid with no lines and no hint as to why.
 
         Examples:
@@ -837,13 +881,21 @@ class DecorationMixin(_MixinBase):
                 ```
         """
         Layer, LayerType = _require_layer_api()
-        if spacing <= 0 or spacing > 180:
-            # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,
-            # while anything wider leaves a grid with a single line in it.
-            raise ValueError(
-                f"graticule(spacing={spacing!r}) must be greater than 0 and at most 180 degrees"
-            )
-        features = _graticule_features(float(spacing))
+        # One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square
+        # grid; the two steps are what every other tier takes, and what a reader of a world map usually wants
+        # (#263). A tier default of 30 degrees matches the interactive tier's.
+        lon_step = _DEFAULT_GRID_STEP if lon_step is None else lon_step
+        lat_step = _DEFAULT_GRID_STEP if lat_step is None else lat_step
+        if spacing is not None:
+            lon_step = lat_step = spacing
+        for name_of, step in (("lon_step", lon_step), ("lat_step", lat_step)):
+            if step <= 0 or step > 180:
+                # 180 is the widest meaningful step: it still yields the prime meridian and the antimeridian,
+                # while anything wider leaves a grid with a single line in it.
+                raise ValueError(
+                    f"graticule({name_of}={step!r}) must be greater than 0 and at most 180 degrees"
+                )
+        features = _graticule_features(float(lon_step), float(lat_step))
         src_id = self._uid("graticule-src")
         layer_id = self._layer_id("graticule", name or "Graticule")
         source = {"type": "geojson", "data": features}
@@ -887,13 +939,15 @@ class DecorationMixin(_MixinBase):
                 widget.add_layer(text)
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._index_layer(
-            layer_id, layer_id, kind="graticule", visible=visible, reference=True
-        )
+        self._index_layer(layer_id, layer_id, kind="graticule", visible=visible)
         # Reference geography says nothing about where to look, so it does not frame the map. It is
         # added to the reference band: over the basemap (an underlay would be hidden beneath opaque
         # tiles) and under the data, which it must not obscure.
-        return self.add_reference(apply)
+        return self._queue_layer(apply, "graticule")
+
+    #: Deprecated spelling of :meth:`set_title`, the contract's name for a figure's heading (#299). The
+    #: web tier's other `title=` -- the HTML document's -- is untouched: it names a different thing.
+    title = renamed_method(new="set_title", old="title", owner="WebMap")
 
     def navigation(
         self,
@@ -930,7 +984,14 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        return self.add_layer(layer=apply)
+        self._record_furniture(
+            "navigation",
+            anchor=position,
+            show_compass=show_compass,
+            show_zoom=show_zoom,
+            visualize_pitch=visualize_pitch,
+        )
+        return self._queue(apply)
 
     def scale_bar(
         self,
@@ -961,7 +1022,10 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        return self.add_layer(layer=apply)
+        self._record_furniture(
+            "scale_bar", anchor=position, unit=unit, max_width=int(max_width)
+        )
+        return self._queue(apply)
 
     def fullscreen(self, *, position: str = "top-right") -> Self:
         """Add a MapLibre fullscreen toggle control (ED.13).
@@ -984,7 +1048,8 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_control(control, position)
 
-        return self.add_layer(layer=apply)
+        self._record_furniture("fullscreen", anchor=position)
+        return self._queue(apply)
 
     def controls(
         self, *, navigation: bool = True, scale: bool = True, fullscreen: bool = False
@@ -1050,7 +1115,8 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_mapbox_draw(options, position)
 
-        return self.add_layer(layer=apply)
+        self._record_furniture("measure", anchor=position, distance=distance, area=area)
+        return self._queue(apply)
 
     @staticmethod
     def _attribute_template(fields: Optional[List[str]]) -> dict:
@@ -1097,7 +1163,13 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_popup(layer_id, **kwargs)
 
-        return self.add_layer(apply)
+        # Tagged with the layer it belongs to, so `remove_layer` takes the popup off with it rather than
+        # leaving a page that pops up over a layer nobody can see.
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._record_tooltip(
+            layer_id, fields, trigger="click", explicit=layer is not None
+        )
+        return self._queue(apply)
 
     def tooltip(
         self, fields: Optional[List[str]] = None, *, layer: Optional[str] = None
@@ -1126,4 +1198,8 @@ class DecorationMixin(_MixinBase):
         def apply(widget: Any) -> None:
             widget.add_tooltip(layer_id, **kwargs)
 
-        return self.add_layer(apply)
+        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        self._record_tooltip(
+            layer_id, fields, trigger="hover", explicit=layer is not None
+        )
+        return self._queue(apply)

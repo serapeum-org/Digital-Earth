@@ -42,6 +42,25 @@ class TestQuickplot3DBackend:
         assert len(out.layers) == 1  # one terrain layer
         out.close()
 
+    def test_a_crs_draws_the_scene_in_it(self, raster):
+        """``quickmap(backend="3d", crs=4326)`` draws the scene in EPSG:4326, reprojecting the UTM raster (#291).
+
+        Test scenario:
+            ``crs=`` used to be refused for this backend. Now it is the scene's display CRS, so the terrain's x
+            coordinates are longitudes.
+        """
+        from digitalearth.api import quickmap
+
+        out = quickmap(raster, backend="3d", crs=4326)
+        try:
+            described = (out.display_crs, out.layers[0][0].bounds[0])
+        finally:
+            out.close()
+        assert described[0] == 4326, described
+        assert -76.0 < described[1] < -74.0, (
+            f"the terrain starts at x={described[1]}, not a longitude"
+        )
+
     def test_points_return_scene3d_point_cloud(self):
         from digitalearth.api import quickplot
         from digitalearth.three_d import Scene3D

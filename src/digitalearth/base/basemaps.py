@@ -71,7 +71,7 @@ Extent = tuple[float, float, float, float]
 #: A light basemap is the default rather than a dark one because data is drawn *on top* of it: most colormaps
 #: are designed to read against white, and a dark ground inverts that contrast.
 #:
-#: TODO(#247): ``tiles()`` takes either a provider name or a URL template in the same parameter, so a
+#: Note (#247): ``tiles()`` takes either a provider name or a URL template in the same parameter, so a
 #: provider name and a URL are indistinguishable at the call site. Renaming that parameter is Core-contract
 #: work and is deliberately not done here.
 DEFAULT_BASEMAP_PROVIDER: str = "CartoLight"

@@ -64,19 +64,17 @@ class GeoLayerBase(Scene):
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
 
     def _needs_reproject(self, dataset: Any) -> bool:
-        """Whether ``dataset`` must be reprojected to the display CRS.
+        """Whether `dataset` must be reprojected to the display CRS.
 
-        Only an EPSG-int display CRS can be compared cheaply against ``dataset.epsg``. For a proj4/string
-        display CRS (e.g. an orthographic globe) we always reproject — and ``dataset.epsg`` is unreliable for
-        non-EPSG results anyway (pyramids returns 4326 for a no-code projection), so we never compare against
-        a proj4 CRS structurally here.
+        A thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code and tests
+        call it.
 
         Args:
-            dataset: A pyramids ``Dataset`` whose ``.epsg`` is compared against the display CRS.
+            dataset: A pyramids `Dataset` whose CRS is compared against the display CRS.
 
         Returns:
-            ``False`` only when the display CRS is an ``int`` equal to ``dataset.epsg`` (data already in the
-            display CRS); ``True`` otherwise — i.e. for a differing EPSG code or any proj4/string CRS.
+            `False` when the dataset's CRS and the display CRS name the same reference system, however either
+            is spelled (`3857`, `"EPSG:3857"`, a pyproj `CRS`); `True` otherwise.
         """
         return needs_reproject(dataset, self.crs)
 

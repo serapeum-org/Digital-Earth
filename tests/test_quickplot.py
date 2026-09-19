@@ -180,7 +180,7 @@ def test_web_basemap_branches_reach_the_tier(dataset, mocker, basemap, expected_
     """
     web = pytest.importorskip("digitalearth.web")
     tiles = mocker.patch.object(web.WebMap, "basemap")
-    mocker.patch.object(web.WebMap, "add_raster")
+    mocker.patch.object(web.WebMap, "field")
     qp.quickplot(dataset, backend="web", basemap=basemap)
     assert tiles.call_args.args == expected_args, (
         f"basemap={basemap!r} must call basemap{expected_args}, got {tiles.call_args!r}"
@@ -201,6 +201,25 @@ def test_quickmap_shapes_without_column_skips_colorbar():
     fc["geometry"] = fc.geometry.buffer(500.0)
     m = qp.quickmap(fc, crs=fc.epsg)  # no column -> shapes (outline only)
     assert m.ax.collections
+
+
+def test_an_empty_map_has_no_key_to_draw(dataset):
+    """`_has_a_key_to_draw` is the question the four-clause colorbar condition was asking.
+
+    Args:
+        dataset: A raster to draw.
+
+    Test scenario:
+        Nothing drawn is the first of its three answers, and the one a bare `quickmap` reaches when every
+        builder skipped. A drawn field is the other, so both arms are read here.
+    """
+    from digitalearth.api import _has_a_key_to_draw
+    from digitalearth.static import Map
+
+    with Map() as canvas:
+        assert _has_a_key_to_draw(canvas) is False, "an empty map has nothing to key"
+        canvas.imshow(dataset)
+        assert _has_a_key_to_draw(canvas) is True, "a drawn field has a key"
 
 
 def test_module_choropleth(dataset):
@@ -328,7 +347,6 @@ class TestBackendCapabilityRefusal:
     @pytest.mark.parametrize(
         ("backend", "parameter", "value"),
         [
-            ("3d", "crs", 4326),
             ("3d", "domain", "europe"),
             ("3d", "coastlines", True),
             ("3d", "basemap", True),
@@ -440,9 +458,20 @@ class TestBackendCapabilityRefusal:
             figure. Checking first is what keeps every rejected call free of a resource nobody will close.
         """
         three_d = mocker.patch.object(qp, "_quickmap_3d")
-        with pytest.raises(ValueError, match="crs="):
-            qp.quickmap(dataset, backend="3d", crs=4326)
+        with pytest.raises(ValueError, match="domain="):
+            qp.quickmap(dataset, backend="3d", domain="europe")
         assert not three_d.called, "a refused call must not reach the backend builder"
+
+    def test_a_crs_is_forwarded_to_the_3d_backend(self, dataset, mocker):
+        """The 3-D tier has a display CRS, so ``crs=`` reaches its builder instead of being refused (#291).
+
+        Args:
+            dataset: The raster to draw.
+            mocker: Replaces the 3-D backend builder with a recorder.
+        """
+        three_d = mocker.patch.object(qp, "_quickmap_3d")
+        qp.quickmap(dataset, backend="3d", crs=4326)
+        assert three_d.call_args.kwargs["crs"] == 4326, three_d.call_args
 
     def test_every_backend_has_a_capability_entry(self):
         """The dispatcher and the capability table name the same backends.

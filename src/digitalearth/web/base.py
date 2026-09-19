@@ -3,7 +3,7 @@
 ``WebMapBase`` owns the layer registry (in add order), the display-CRS reproject-through-pyramids
 plumbing, and the render/save/show lifecycle around the ``maplibre`` (py-maplibregl) anywidget. Capability
 mixins (raster, vector, big-data, 3-D, temporal, decoration, export) live in sibling modules and add
-``add_raster()`` / ``choropleth()`` / … builder methods that call ``self.add_layer(...)``; the public
+``field()`` / ``choropleth()`` / … builder methods that call ``self.add_layer(...)``; the public
 :class:`digitalearth.web.map.WebMap` composes the base with those mixins — mirroring the 2-D
 ``Map(GeoLayerBase, RasterMixin, …)``, the 3-D ``Scene3D(Scene3DBase, …)`` and the interactive
 ``InteractiveMap(InteractiveMapBase, …)`` patterns exactly.
@@ -20,6 +20,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
+from dataclasses import replace as replace_fields
 from typing import Any, Dict, List, Optional, Self
 
 from loguru import logger
@@ -29,12 +30,32 @@ from digitalearth.base.bigdata import (
     DEFAULT_BIG_DATA_THRESHOLD as _SHARED_BIG_DATA_THRESHOLD,
 )
 from digitalearth.base.crs import OffLimbError, reproject
+from digitalearth.base.custom import custom_kind
+from digitalearth.base.deprecation import renamed_method
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
     to_display_source,
 )
+from digitalearth.base.registry import (
+    KIND_BANDS,
+    band_of,
+    forget_object,
+    kind_info,
+    object_namespace,
+)
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import (
+    Bounds,
+    DataRef,
+    Encoding,
+    FigureSpec,
+    Furniture,
+    PanelSpec,
+    Symbology,
+    Viewport,
+)
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.symbology import sample_cmap
 
@@ -318,6 +339,12 @@ def _resolve_style(style: Any) -> Any:
     return f"https://basemaps.cartocdn.com/gl/{slug}-gl-style/style.json"
 
 
+#: The id of the one panel a web map draws into. A map is a single view of a single set of layers, so the
+#: figure it writes has exactly one panel; the name is fixed so a stored figure reads the same way every
+#: time.
+PANEL_ID: str = "main"
+
+
 class WebMapBase:
     """Core host: ordered layer registry + display CRS + render/save lifecycle over the MapLibre widget.
 
@@ -435,6 +462,14 @@ class WebMapBase:
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
         #: :attr:`last_breaks`, which stays the raw-numbers accessor it has always been.
         self.last_legend: Optional[dict] = None
+        #: The classification each layer was drawn with, keyed by layer id, so a colour key asked for by id
+        #: describes *that* layer. `last_legend` alone answers only "the most recent one", which made
+        #: `colorbar("A")` draw layer B's ramp under A's label (review H4).
+        self._legends: Dict[str, dict] = {}
+        #: The legend dict most recently filed above. A classifying builder always writes a *fresh* dict, so
+        #: identity is what tells a new classification from the one still sitting in `last_legend` when an
+        #: unclassified layer is indexed after it.
+        self._filed_legend: Optional[dict] = None
         #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
         self._deck_layers: Optional[List[dict]] = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never
@@ -442,7 +477,7 @@ class WebMapBase:
         #: can override it with its own ``big_data_threshold=`` without changing the map's setting.
         self.big_data_threshold = DEFAULT_BIG_DATA_THRESHOLD
         #: What the most recently drawn raster's values are measured in, or ``None``: the caller's
-        #: ``add_raster(units=)`` / ``contours(units=)`` when they named one, else the
+        #: ``field(units=)`` / ``contours(units=)`` when they named one, else the
         #: :func:`~digitalearth.base.autostyle.auto_style` hint. Carried so a key built from that raster's
         #: values can say what they are measured in (see :meth:`_auto_units`).
         self.last_units: Optional[str] = None
@@ -451,10 +486,27 @@ class WebMapBase:
         self._data_bounds: Optional[List[float]] = None
         #: An explicit :meth:`fit_bounds` request, which always wins over the accumulated extent.
         self._fit: Optional[dict] = None
+        #: The projection MapLibre draws in, as `globe()` sets it; recorded so the view can say so.
+        self._projection: str = "mercator"
+        #: Where each layer's data came from, keyed by layer id — the figure's sources (#296).
+        self._sources: Dict[str, DataRef] = {}
+        #: This map's prefix in the process-global object registry. Every map restarts its layer numbering,
+        #: so without one two maps in a session both wrote `circle-2` and the second won (review H2).
+        self._objects_ns: str = object_namespace()
+        #: The controls the map draws, as furniture on its panel (#292).
+        self._furniture: List[Furniture] = []
+        #: The panel's title, as `title()` set it.
+        self._title: Optional[str] = None
         #: How many layers sit in the basemap band, so :meth:`add_reference` can insert just above them.
         self._underlay_count = 0
         #: How many sit in the reference band, so two of them keep the order they were added in.
         self._reference_count = 0
+        #: The engine objects a caller handed to :meth:`add_layer`, keyed by layer id. Held here rather than
+        #: in the tree, which describes layers and stores no objects (see :mod:`digitalearth.base.custom`).
+        self._custom: Dict[str, Any] = {}
+        #: How many sit in the overlay band — text and labels, drawn above the data — so :meth:`add_layer` can
+        #: insert beneath them instead of appending on top.
+        self._overlay_count = 0
         #: The floating panels — legend and title — as ``{kind: (content, position)}``. Held as state so
         #: calling either twice replaces it rather than stacking two identical boxes in one corner.
         self._panels: dict = {}
@@ -595,7 +647,7 @@ class WebMapBase:
         """Union a layer's lon/lat extent into the running data extent.
 
         Called by the builders' shared choke points — :meth:`_display_gdf` for vector data and
-        ``add_raster`` for rasters — so a new builder inherits framing without doing anything.
+        ``field`` for rasters — so a new builder inherits framing without doing anything.
 
         Args:
             bounds: ``(west, south, east, north)`` in the **display CRS**, which is converted to lon/lat
@@ -645,7 +697,7 @@ class WebMapBase:
             frame the map on the wrong place, and silently feeding metres to ``fitBounds`` did exactly
             that.
         """
-        if self.crs in (4326, "EPSG:4326", None):
+        if self.crs is None or same_crs(self.crs, 4326):
             return west, south, east, north
         try:
             xs, ys = reproject_coordinates(
@@ -656,7 +708,7 @@ class WebMapBase:
         values = (float(xs[0]), float(ys[0]), float(xs[1]), float(ys[1]))
         return values if all(math.isfinite(v) for v in values) else None
 
-    def fit_bounds(
+    def set_bounds(
         self,
         bounds: Optional[Any] = None,
         *,
@@ -687,21 +739,21 @@ class WebMapBase:
             - Frame on an explicit box:
                 ```python
                 >>> from digitalearth.web import WebMap                     # doctest: +SKIP
-                >>> WebMap().basemap().fit_bounds((4.0, 51.0, 7.0, 54.0))   # doctest: +SKIP
+                >>> WebMap().basemap().set_bounds((4.0, 51.0, 7.0, 54.0))  # doctest: +SKIP
 
                 ```
         """
         if bounds is None:
             if self._data_bounds is None:
                 raise ValueError(
-                    "fit_bounds() has nothing to frame on: no layer with an extent has been added yet. "
+                    "set_bounds() has nothing to frame on: no layer with an extent has been added yet. "
                     "Add the data first, or pass bounds=(west, south, east, north)."
                 )
             bounds = list(self._data_bounds)
         values = [float(value) for value in bounds]
         if len(values) != 4:
             raise ValueError(
-                f"fit_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
+                f"set_bounds(bounds=...) takes (west, south, east, north); got {len(values)} values"
             )
         west, south, east, north = values
         self._fit = {
@@ -712,6 +764,9 @@ class WebMapBase:
             "animate": bool(animate),
         }
         return self
+
+    #: Deprecated spelling of :meth:`set_bounds`, the contract's name for framing a figure on a region (#299).
+    fit_bounds = renamed_method(new="set_bounds", old="fit_bounds", owner="WebMap")
 
     def _switcher_request(self) -> Optional[dict]:
         """Return the layer switcher to add to the widget being built, or ``None`` for no switcher.
@@ -746,12 +801,12 @@ class WebMapBase:
     def _map_view(self) -> Optional[dict]:
         """Return the framing to apply to the built widget, or ``None`` to leave the view alone.
 
-        An explicit :meth:`fit_bounds` always wins. Otherwise the accumulated data extent is used, but only
+        An explicit :meth:`set_bounds` always wins. Otherwise the accumulated data extent is used, but only
         when the caller expressed no view of their own — passing ``center`` or a non-default ``zoom`` is
         taken as "I have chosen the view", and it is not overridden.
 
         Returns:
-            The ``fit_bounds`` keyword arguments, or ``None``.
+            The ``fit_bounds`` keyword arguments MapLibre takes, or ``None``.
         """
         if self._fit is not None:
             return self._fit
@@ -801,6 +856,243 @@ class WebMapBase:
         """
         return list(self._layer_tree.ids)
 
+    @property
+    def figure_spec(self) -> FigureSpec:
+        """What the map draws, as data: its layers, their sources, the view, and the panel's furniture.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`. Its layers are the tree in
+            draw order, its sources are what each builder was given, and its view is a
+            :class:`~digitalearth.base.spec.Viewport` in EPSG:4326 — the CRS the tier places data in — carrying
+            the centre, zoom and fitted bounds the map was asked for. The panel also holds the title and the
+            furniture: the navigation, scale-bar, fullscreen, measure, layer-switcher and time-slider controls,
+            each under the name #292 registers it with.
+
+        Examples:
+            - A map describes what it drew, and where it is looking:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> points = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> figure = WebMap(center=(4.9, 52.4), zoom=7).points(points, name="obs").figure_spec
+                >>> figure.layers.get("obs").kind, figure.panels[0].view.zoom
+                ('points', 7.0)
+
+                ```
+            - Controls are the panel's furniture, not layers:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> panel = WebMap().navigation().scale_bar().figure_spec.panels[0]
+                >>> sorted(item.kind for item in panel.furniture)
+                ['navigation', 'scale_bar']
+
+                ```
+        """
+        tree = self._layer_tree
+        panel = PanelSpec(
+            PANEL_ID,
+            self.viewport,
+            layers=tuple(tree.ids),
+            title=self._title,
+            furniture=tuple(self._furniture),
+        )
+        return FigureSpec(
+            panels=(panel,),
+            layers=tree,
+            sources={
+                key: ref for key, ref in self._sources.items() if key in set(tree.ids)
+            },
+        )
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Viewport` in the CRS the tier places data in (EPSG:4326, which
+            is what `WebMap(crs=)` accepts), carrying the `center` and `zoom` the map was built with and the
+            bounds an explicit :meth:`set_bounds` asked for. The projection MapLibre draws in is a property of
+            the style rather than of the data, which is why it is not this CRS.
+
+        Examples:
+            - What a map was built to look at is readable as a value:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> view = WebMap(center=(4.9, 52.4), zoom=7).viewport
+                >>> view.center, view.zoom, view.crs
+                ((4.9, 52.4), 7.0, 4326)
+
+                ```
+            - A region asked for with `set_bounds` frames the view:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().set_bounds([3.0, 50.0, 7.0, 54.0]).viewport.bounds.as_bbox()
+                [3.0, 50.0, 7.0, 54.0]
+
+                ```
+        """
+        fitted = self._fit if isinstance(self._fit, dict) else {}
+        box = fitted.get("bounds")
+        bounds = (
+            Bounds(box[0], box[1], box[2], box[3], crs=self.crs)
+            if box is not None
+            else None
+        )
+        return Viewport(
+            self.crs,
+            bounds=bounds,
+            globe=self._projection == "globe",
+            center=tuple(self.center) if self.center is not None else None,
+            zoom=float(self.zoom) if self.zoom is not None else None,
+        )
+
+    def _as_display_point(self, x: float, y: float, crs: Any) -> tuple:
+        """Return one coordinate pair in the CRS this tier places data in.
+
+        Args:
+            x: The x coordinate, in `crs`.
+            y: The y coordinate, in `crs`.
+            crs: What they are measured in.
+
+        Returns:
+            `(lon, lat)` in the display CRS. A point already in it is returned unchanged, so the common call
+            costs nothing; anything else goes through pyramids, as every other placement in this tier does.
+
+        Raises:
+            ValueError: when the point cannot be expressed in the display CRS.
+        """
+        if crs is None or same_crs(crs, self.crs):
+            return x, y
+        # A point is a rectangle with no width: `Bounds.to_crs` is the tier's own reprojection, through
+        # pyramids, and using it keeps geopandas out of this module (the import guard, and the rule that
+        # pyramids owns every CRS operation).
+        moved = Bounds(x, y, x, y, crs=crs).to_crs(self.crs)
+        return float(moved.xmin), float(moved.ymin)
+
+    def _record_furniture(
+        self, kind: str, *, anchor: Any = None, **options: Any
+    ) -> None:
+        """Record a control the map draws, as furniture on its panel (#292).
+
+        Calling a control builder twice records one item: MapLibre would add a second control in the same
+        corner, which is a caller repeating themselves rather than asking for two.
+
+        Args:
+            kind: The registered furniture name — `"navigation"`, `"scale_bar"`, ….
+            anchor: The corner it sits in; `None` takes the registered default.
+            **options: What the control was built with, for a renderer that draws it from the description.
+        """
+        item = Furniture(kind, anchor=anchor, options=options)
+        self._furniture = [held for held in self._furniture if held.kind != kind]
+        self._furniture.append(item)
+
+    def _forget_furniture(self, kind: str) -> None:
+        """Forget a control the map no longer draws.
+
+        Args:
+            kind: The registered furniture name.
+        """
+        self._furniture = [held for held in self._furniture if held.kind != kind]
+
+    def _record_tooltip(
+        self, layer_id: str, fields: Any, *, trigger: str, explicit: bool = False
+    ) -> None:
+        """Record what a popup or tooltip shows, as a channel on the layer it is bound to (#292).
+
+        Per-layer interaction is an encoding, not a separate object: put it on the layer and it travels with
+        it, so removing the layer removes what pops up over it — which is what left a page emitting
+        `addPopup` for a layer that was no longer there.
+
+        A MapLibre layer is not always a described one. A cluster draws three — the bubbles, their counts
+        and the loose points — under one tree entry; a graticule draws its labels beside its lines; a basemap
+        is a layer the tier never indexes. A popup over any of those is a real popup, so it is drawn and
+        simply not described: the alternative was a `KeyError` that broke `cluster(...).popup(...)`
+        outright (review H3).
+
+        A *named* layer is different. `popup(fields, layer="typoed")` is a caller naming something, and
+        skipping the description for it accepted the typo in silence while still queueing the closure — so
+        the saved page called `map.on('click', 'typoed', ...)` and failed in a browser console instead
+        (review H7). An id the caller wrote is checked; an id the tier chose is not.
+
+        Args:
+            layer_id: The layer the popup or tooltip is bound to.
+            fields: The field names shown; `None`, like an empty list, means every field, which is what the
+                builders already mean by it.
+            trigger: `"click"` for a popup, `"hover"` for a tooltip.
+            explicit: Whether the caller named the layer, rather than it defaulting to the last one drawn.
+
+        Raises:
+            KeyError: when the caller named a layer this map has not drawn.
+        """
+        if layer_id not in self._layer_tree.ids:
+            if explicit:
+                raise KeyError(
+                    f"no layer {layer_id!r} on this map; its layers are {self.layer_ids}"
+                )
+            return
+        held = self._layer_tree.get(layer_id)
+        shown = () if fields is None else tuple(fields)
+        # A click popup and a hover tooltip are two interactions, and a layer may carry both. Writing one
+        # `tooltip` encoding meant the second call replaced the first: `popup(["v"]).tooltip(["w"])` drew
+        # both and described only the hover, losing the popup's own fields (review M10). What each trigger
+        # shows is kept beside the channel; the channel itself carries the hover's fields where there is
+        # one, since that is the reading a renderer with a single hover slot needs.
+        bound = {
+            **dict(held.symbology.props.get("interactions", {})),
+            trigger: list(shown),
+        }
+        primary = "hover" if "hover" in bound else trigger
+        symbology = Symbology(
+            encodings={
+                **dict(held.symbology.encodings),
+                "tooltip": Encoding.constant("tooltip", tuple(bound[primary])),
+            },
+            props={**dict(held.symbology.props), "interactions": bound},
+        ).with_props(tooltip_trigger=primary)
+        self._layer_tree = self._layer_tree.replace(
+            replace_fields(held, symbology=symbology)
+        )
+
+    def _forget_slider_frame(self, layer_id: str) -> None:
+        """Drop a removed layer from the time slider, and the slider itself when nothing is left to step.
+
+        Args:
+            layer_id: The layer being removed.
+
+        Note:
+            A slider that still named a removed layer filtered a layer that was not there — the page kept a
+            control that did nothing, which is the dangling reference this seam is meant to end.
+        """
+        slider = next(
+            (item for item in self._furniture if item.kind == "time_slider"), None
+        )
+        if slider is None:
+            return
+        named = slider.options.get("layers", ())
+        if layer_id == slider.options.get("layer") or tuple(named) == (layer_id,):
+            self._forget_furniture("time_slider")
+            return
+        if layer_id in named:
+            # The frame at the same position goes with it. Dropping the layer alone left a slider with more
+            # stops than layers — three frames for two layers — so a renderer drawing the control from the
+            # description stepped onto a frame that names nothing (review M9).
+            kept = [index for index, held in enumerate(named) if held != layer_id]
+            frames = tuple(slider.options.get("frames", ()))
+            self._record_furniture(
+                "time_slider",
+                anchor=slider.anchor,
+                **{
+                    **dict(slider.options),
+                    "layers": tuple(named[index] for index in kept),
+                    **(
+                        {"frames": tuple(frames[index] for index in kept)}
+                        if len(frames) == len(named)
+                        else {}
+                    ),
+                },
+            )
+
     def _index_layer(
         self,
         layer_id: str,
@@ -808,39 +1100,196 @@ class WebMapBase:
         *,
         kind: str,
         visible: bool = True,
-        reference: bool = False,
+        band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
     ) -> None:
         """Record a data layer so it can be addressed later.
 
         Args:
             layer_id: The MapLibre layer id.
-            label: What a layer switcher should call it; ``None`` falls back to the id.
-            kind: What sort of layer it is — ``"raster"``, ``"heatmap"``, the vector builder's paint type — so
-                the tree describes the layer rather than only naming it.
+            label: What a layer switcher should call it; `None` falls back to the id.
+            kind: What sort of layer it is — a registered, engine-neutral kind such as `"raster"`,
+                `"choropleth"` or `"points"` (:func:`~digitalearth.base.registry.kinds`), not the MapLibre layer
+                type — so the tree describes the layer rather than only naming it.
             visible: Whether the layer was built visible. A builder that takes `visible=` passes it on, so the
                 tree says what the MapLibre layout says; the builders without one always build visible. It is
                 recorded by truthiness, as the builders decide the layout by it: `visible=0` draws a hidden layer
                 and records one.
-            reference: Whether the layer is about to join the reference band through :meth:`add_reference`. It
-                then joins the tree at the top of that band — beneath every data layer — rather than on top, so
-                the tree's order stays the order the map draws in. Call this before `add_reference`.
+            band: Where the layer is drawn, when its kind does not say — what a caller's own object needs,
+                since `custom:maplibre` names the engine rather than what it draws. `None` takes the kind's band.
+            source: What the layer draws, recorded in the figure's sources under the layer's id — a path, a
+                URL, or the object itself. `None` for a layer drawn from no data, such as a graticule.
+            symbology: How the layer looks, as values rather than as the compiled engine expression. `None`
+                records an empty symbology.
+
+        Note:
+            The tree places the layer in the band its kind declares, so nothing here computes a position. Queue
+            the drawn layer with :meth:`_queue_layer`, which puts the MapLibre closure in the same band, and the
+            tree's order stays the order the map draws in.
 
         Raises:
+            KeyError: when `kind` is not a registered layer kind — a builder passing a name the registry cannot
+                look up, which no caller input reaches.
             ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
                 the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
                 whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
-        index = None
-        if reference:
-            band = self.layers[: self._underlay_count + self._reference_count]
-            banded = {getattr(layer, "_digitalearth_layer_id", None) for layer in band}
-            index = sum(1 for existing in self._layer_tree.ids if existing in banded)
+        kind_info(kind)
+        # Whatever this builder classified belongs to the layer it is indexing. Captured here because this
+        # is the one place every builder passes its own id, right after drawing. By identity, so the
+        # classification of an earlier layer is not filed again under a later unclassified one.
+        if self.last_legend is not None and self.last_legend is not self._filed_legend:
+            self._legends[layer_id] = self.last_legend
+            self._filed_legend = self.last_legend
+        if source is not None:
+            # Namespaced per map: every `WebMap` restarts its layer numbering, so two maps in one session
+            # both minted `circle-2` and the second registration replaced the first — map A's stored figure
+            # then described map B's data (review H2).
+            self._sources[layer_id] = DataRef.of(
+                source, name=f"{self._objects_ns}:{layer_id}"
+            )
         self._layer_tree = self._layer_tree.add(
             # By truthiness, as every builder decides the MapLibre layout: `LayerSpec` takes only a real boolean,
             # and handing it `visible=0` turned a call that built a hidden layer into a ValueError.
-            LayerSpec(layer_id, kind, label=label or layer_id, visible=bool(visible)),
-            index=index,
+            LayerSpec(
+                layer_id,
+                kind,
+                source_id=layer_id if source is not None else None,
+                symbology=Symbology() if symbology is None else symbology,
+                label=label or layer_id,
+                visible=bool(visible),
+                band=band,
+            )
         )
+
+    def _rekind_layer(self, layer_id: str, kind: str) -> None:
+        """Record a different kind for a layer already in the tree, keeping its id, label, visibility and place.
+
+        A builder that draws through another one — `contours` through `lines` or `polygons` — gets the kind of the
+        builder it called. This corrects the record to what was actually drawn.
+
+        Args:
+            layer_id: The layer to re-describe.
+            kind: The registered kind it is.
+
+        Raises:
+            KeyError: when `kind` is not registered, or no layer has `layer_id`.
+        """
+        kind_info(kind)
+        held = self._layer_tree.get(layer_id)
+        self._layer_tree = self._layer_tree.replace(replace_fields(held, kind=kind))
+
+    def get_layer(self, layer_id: str) -> LayerSpec:
+        """Return the description of one layer, by id.
+
+        Args:
+            layer_id: The layer to look up.
+
+        Returns:
+            Its :class:`~digitalearth.base.spec.LayerSpec` — kind, source, symbology, band and visibility.
+
+        Raises:
+            KeyError: if no layer has that id, naming the ids that do.
+
+        Examples:
+            - What a builder recorded, read back by id:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Point
+                >>> from digitalearth.web import WebMap
+                >>> points = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326)
+                >>> WebMap().points(points, name="obs").get_layer("obs").kind
+                'points'
+
+                ```
+        """
+        present = self.layer_ids
+        if layer_id not in present:
+            raise KeyError(
+                f"no layer {layer_id!r} on this map; added layers are {present}"
+            )
+        return self._layer_tree.get(layer_id)
+
+    def colorbar(
+        self,
+        layer_id: Optional[str] = None,
+        *,
+        label: Optional[str] = None,
+        visible: bool = True,
+    ) -> Self:
+        """Show the continuous colour key of a layer.
+
+        The contract's name for a colour key (#299, #261). On this tier the key is drawn by :meth:`legend`,
+        which builds a panel from what a layer's classification recorded; a continuous ramp is that panel with
+        the ramp's ends labelled, which is why this is a thin call onto it rather than a second mechanism.
+
+        Args:
+            layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
+                takes the most recently classified layer, which is what the tier recorded before layers had
+                ids.
+            label: What to call the key — the variable and its units, usually.
+            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
+
+        Returns:
+            This map (chainable).
+
+        Raises:
+            KeyError: if `layer_id` names no layer on this map.
+            ValueError: when the named layer carries no classification to describe, or — for `None` — when
+                no layer on the map does, as :meth:`legend` raises.
+
+        Examples:
+            - A classified layer's key, titled:
+                ```python
+                >>> import geopandas as gpd
+                >>> from shapely.geometry import Polygon
+                >>> from digitalearth.web import WebMap
+                >>> squares = gpd.GeoDataFrame(
+                ...     {"pop": [1, 9]},
+                ...     geometry=[
+                ...         Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                ...         Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+                ...     ],
+                ...     crs=4326,
+                ... )
+                >>> m = WebMap().choropleth(squares, column="pop", name="area")
+                >>> sorted(m.colorbar("area", label="People")._panels)
+                ['legend']
+
+                ```
+            - `visible=False` asks for no key at all, and draws none:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().colorbar(visible=False)._panels
+                {}
+
+                ```
+        """
+        return self.legend(layer_id=layer_id, title=label, visible=visible)
+
+    def _legend_of(self, layer_id: str) -> dict:
+        """Return the classification one layer was drawn with.
+
+        Args:
+            layer_id: The layer whose classes are wanted.
+
+        Returns:
+            What the builder recorded for it. Reading `last_legend` instead described the most recently
+            classified layer under the caller's chosen label — a wrong map that looks right (review H4).
+
+        Raises:
+            KeyError: when no layer on this map has that id.
+            ValueError: when the layer carries no classification to describe.
+        """
+        self.get_layer(layer_id)  # refuses an id nobody drew, by name
+        keyed = self._legends.get(layer_id)
+        if keyed is None:
+            raise ValueError(
+                f"layer {layer_id!r} was not drawn with a classification, so it has no colour key to show; "
+                f"the layers that were are {sorted(self._legends)}"
+            )
+        return keyed
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.
@@ -858,7 +1307,7 @@ class WebMapBase:
             The running data extent, and the classification a legend describes, are only cleared when the
             last layer goes. They are "most recent" accessors rather than a model of what is on the map,
             so after removing one layer of several they still describe the removed one; call
-            :meth:`fit_bounds` or rebuild the legend if that matters.
+            :meth:`set_bounds` or rebuild the legend if that matters.
 
         Raises:
             KeyError: when no such layer was added, listing the ids that were — a silent no-op here would
@@ -889,6 +1338,30 @@ class WebMapBase:
                 f"no layer {layer_id!r} on this map; added layers are {present}"
             )
         self._layer_tree = self._layer_tree.remove(layer_id)
+        # A caller's own object is matched by identity: a `maplibre` `Layer` is a model that refuses the marker
+        # attribute the builders' closures carry, so there is nothing on it to compare by id.
+        held = self._custom.pop(layer_id, None)
+        # Let the object go with the layer: the registry holds strong references, so a session that draws
+        # and removes keeps every dataset alive otherwise (review H2).
+        dropped = self._sources.pop(layer_id, None)
+        if dropped is not None:
+            forget_object(dropped.uri)
+        self._legends.pop(layer_id, None)
+        self._forget_slider_frame(layer_id)
+
+        def _is_layer(layer: Any) -> bool:
+            """Whether a queued layer is the one being removed.
+
+            Args:
+                layer: The queued closure or object.
+
+            Returns:
+                `True` for the builder closure that carries this id, or for the caller's own held object.
+            """
+            if getattr(layer, "_digitalearth_layer_id", None) == layer_id:
+                return True
+            return held is not None and layer is held
+
         # The reference band is addressed by a count, so a layer removed from it gives its slot back. Otherwise the
         # next `add_reference` inserts one place too high — above data it belongs beneath.
         self._reference_count -= sum(
@@ -896,13 +1369,19 @@ class WebMapBase:
             for layer in self.layers[
                 self._underlay_count : self._underlay_count + self._reference_count
             ]
-            if getattr(layer, "_digitalearth_layer_id", None) == layer_id
+            if _is_layer(layer)
         )
-        self.layers = [
-            layer
-            for layer in self.layers
-            if getattr(layer, "_digitalearth_layer_id", None) != layer_id
-        ]
+        self._underlay_count -= sum(
+            1 for layer in self.layers[: self._underlay_count] if _is_layer(layer)
+        )
+        # The overlay band is counted from the top, for the same reason: remove a label and the next data layer
+        # would otherwise be queued one place too low, beneath a label that is no longer there.
+        self._overlay_count -= sum(
+            1
+            for layer in self.layers[len(self.layers) - self._overlay_count :]
+            if _is_layer(layer)
+        )
+        self.layers = [layer for layer in self.layers if not _is_layer(layer)]
         remaining = self.layer_ids
         if self._last_layer_id == layer_id:
             self._last_layer_id = remaining[-1] if remaining else None
@@ -982,21 +1461,48 @@ class WebMapBase:
         self._issued_ids.add(candidate)
         return candidate
 
-    def add_layer(self, layer: Any) -> Self:
-        """Register ``layer`` and return ``self`` (chainable).
+    def add_layer(
+        self, layer: Any, *, name: Optional[str] = None, band: str = "data"
+    ) -> Self:
+        """Register a layer **you built yourself** and return ``self`` (chainable).
 
-        The low-level entry point the capability mixins build on — every builder method ends here. A layer
-        is replayed onto the MapLibre widget at :meth:`render` time (see :meth:`_apply_layer`).
+        This is where a caller's own MapLibre layer or ``apply(widget)`` callable joins the map. It is recorded
+        in the layer tree as a custom layer — kind ``custom:maplibre`` — so it can be addressed like any other:
+        `layer_ids` lists it and :meth:`remove_layer` takes it off. What is kept in the figure is the
+        *description* (id, kind, label, band, visibility); the object itself is held by this map and is never
+        written to a figure, because a MapLibre layer has no description to write. A figure loaded from a dict
+        therefore names the layer but cannot rebuild it (see :mod:`digitalearth.base.custom`).
+
+        The package's own builders do not come through here — they describe what they draw and queue it in the
+        band their kind declares.
 
         Args:
             layer: A ``maplibre`` ``Layer``/spec, or a callable ``apply(widget)``.
+            name: The id to address it by. Left out, a MapLibre layer's own ``id`` is used, and anything else
+                gets a generated one; a name already on the map is suffixed, as every builder's ``name=`` is.
+            band: Where it is drawn — ``"underlay"``, ``"reference"``, ``"data"`` (the default) or
+                ``"overlay"``. A caller's object can draw anything, so only the caller can say whether it is
+                ground cover or a label.
 
         Returns:
-            This map, so builder calls chain: ``m.add_raster(dem).basemap()``.
+            This map, so builder calls chain: ``m.field(dem).basemap()``.
+
+        Raises:
+            ValueError: if `band` is not one of the four bands.
 
         Examples:
-            - Registration appends in order and returns the map for chaining (any object stands in for a
-              layer here — the registry does not inspect it):
+            - A layer you built is addressable, and can be taken off again (any object stands in for a layer
+              here — the queue does not inspect it):
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().add_layer("wells-layer", name="wells")
+                >>> m.layer_ids
+                ['wells']
+                >>> m.remove_layer("wells").layer_ids
+                []
+
+                ```
+            - Registration keeps the drawing order, and returns the map for chaining:
                 ```python
                 >>> from digitalearth.web import WebMap
                 >>> m = WebMap()
@@ -1007,17 +1513,108 @@ class WebMapBase:
 
                 ```
         """
-        self.layers.append(layer)
-        return self
+        if band not in KIND_BANDS:
+            raise ValueError(
+                f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
+            )
+        already = next(
+            (held for held, obj in self._custom.items() if obj is layer), None
+        )
+        if already is not None:
+            # One object is one layer on the page. Registering it twice gave two tree entries the queue
+            # could not tell apart — removing either removed both — and, since the allocated id is written
+            # onto the object, the first entry named an id the object no longer carried (review M13).
+            raise ValueError(
+                f"this layer is already on the map as {already!r}; add a second one to draw it twice, or "
+                f"remove_layer({already!r}) first"
+            )
+        # An object that carries an id is drawn under *that* id: it is what `addLayer` sends, so it is what
+        # `layer_ids`, `get_layer`, `layer_control` and `popup(layer=...)` have to name (review H5). The
+        # allocator's suffixing would break that, and rewriting the object's id instead reached across to
+        # every other map already holding it (review H6) — so a collision is refused, by name, rather than
+        # papered over. An object with no id of its own is numbered as before.
+        own = getattr(layer, "id", None)
+        if own is None:
+            layer_id = self._layer_id("custom", name)
+        else:
+            layer_id = str(own)
+            if name is not None and str(name) != layer_id:
+                raise ValueError(
+                    f"add_layer draws this layer under the id it carries, {layer_id!r}, so name={name!r} "
+                    f"would name something the page never adds; drop name=, or build the layer with that id"
+                )
+            if layer_id in self._layer_tree.ids:
+                raise ValueError(
+                    f"layer id {layer_id!r} is already on this map; MapLibre drops the second layer with "
+                    f"that id, so build this one with a free id (the ids in use are {self.layer_ids})"
+                )
+        self._index_layer(layer_id, name, kind=custom_kind("maplibre"), band=band)
+        self._custom[layer_id] = layer
+        return self._queue_in_band(layer, band)
 
-    def _needs_reproject(self, data: Any) -> bool:
-        """Whether ``data`` must be reprojected (via pyramids) to the display CRS.
+    def _queue(self, layer: Any) -> Self:
+        """Queue a drawn layer among the data, without recording it, and return ``self``.
+
+        What the package's own builders use: they have already described the layer with :meth:`_index_layer`,
+        so queueing it again through :meth:`add_layer` would record it twice — once as what it draws and once
+        as a caller's own object.
+
+        A layer is queued on top of the data, but beneath the overlay band: text added before a raster is still
+        drawn over it, which is what the tree says and what a reader expects of a place name.
 
         Args:
-            data: A pyramids object exposing ``.epsg`` (``Dataset``/``FeatureCollection``).
+            layer: A ``maplibre`` ``Layer``/spec, or a callable ``apply(widget)``.
 
         Returns:
-            ``False`` only when the display CRS is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+            This map (chainable).
+        """
+        self.layers.insert(len(self.layers) - self._overlay_count, layer)
+        return self
+
+    def _queue_layer(self, layer: Any, kind: str) -> Self:
+        """Queue a drawn layer in the band its kind belongs to, and return ``self``.
+
+        MapLibre draws its layers in the order they are added, and the tree bands them by kind
+        (:data:`~digitalearth.base.registry.KIND_BANDS`). This is what keeps the two saying the same thing: a
+        graticule queued after a raster still draws beneath it, and a raster queued after a label still draws
+        beneath the label.
+
+        Args:
+            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            kind: The layer's registered kind, as passed to :meth:`_index_layer`.
+
+        Returns:
+            This map (chainable).
+        """
+        return self._queue_in_band(layer, band_of(kind))
+
+    def _queue_in_band(self, layer: Any, band: str) -> Self:
+        """Queue a drawn layer in one band, and return ``self``.
+
+        Args:
+            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            band: One of :data:`~digitalearth.base.registry.KIND_BANDS`.
+
+        Returns:
+            This map (chainable).
+        """
+        if band == "overlay":
+            return self.add_overlay(layer)
+        if band == "reference":
+            return self.add_reference(layer)
+        if band == "underlay":
+            return self.add_underlay(layer)
+        return self._queue(layer)
+
+    def _needs_reproject(self, data: Any) -> bool:
+        """Whether `data` must be reprojected (via pyramids) to the display CRS.
+
+        Args:
+            data: A pyramids object exposing `.crs` and/or `.epsg` (`Dataset`/`FeatureCollection`).
+
+        Returns:
+            `False` when the data's CRS and the display CRS name the same reference system, however either
+            is spelled; `True` otherwise.
 
         Note:
             This is a thin alias for :func:`digitalearth.base.display.needs_reproject`, kept because tier code
@@ -1083,7 +1680,7 @@ class WebMapBase:
         if isinstance(getattr(data, "columns", None), int):
             raise TypeError(
                 f"{method}() does not take a raster; got {type(data).__name__}. For a single raster use "
-                f"add_raster(); for a raster time stack pass a DatasetCollection to timeslider()."
+                f"field(); for a raster time stack pass a DatasetCollection to timeslider()."
             )
 
     @staticmethod
@@ -1130,7 +1727,7 @@ class WebMapBase:
                 >>> try:
                 ...     WebMap._require_vector(42, "points")
                 ... except TypeError as err:
-                ...     print("add_raster" in str(err), "DatasetCollection" in str(err))
+                ...     print("field" in str(err), "DatasetCollection" in str(err))
                 True True
 
                 ```
@@ -1156,7 +1753,7 @@ class WebMapBase:
             )
         raise TypeError(
             f"{method}() needs a vector layer (a pyramids FeatureCollection / GeoDataFrame); got "
-            f"{type(features).__name__}. For a single raster use add_raster(); for a raster time stack "
+            f"{type(features).__name__}. For a single raster use field(); for a raster time stack "
             f"use timeslider() with a DatasetCollection."
         )
 
@@ -1328,10 +1925,10 @@ class WebMapBase:
             if self._needs_reproject(features):
                 features = self._placed(features, method=method)
             return self._noted(self._json_safe(features))
-        crs_epsg = getattr(getattr(features, "crs", None), "to_epsg", lambda: None)()
-        if (
-            crs_epsg is not None and crs_epsg != self.crs
-        ):  # a bare GeoDataFrame in another CRS
+        own_crs = getattr(features, "crs", None)
+        # A bare GeoDataFrame in another CRS. Compared by meaning, not by EPSG code: a projection with no
+        # authority code has none, and was drawn as if its metres were degrees.
+        if own_crs is not None and not same_crs(own_crs, self.crs):
             return self._noted(self._json_safe(self._placed(features, method=method)))
         return self._noted(self._json_safe(features))
 
@@ -1377,6 +1974,40 @@ class WebMapBase:
         """
         self.layers.insert(self._underlay_count + self._reference_count, layer)
         self._reference_count += 1
+        return self
+
+    def add_overlay(self, layer: Any) -> Self:
+        """Register ``layer`` **above the data** (drawn last) and return ``self``.
+
+        Text and labels call this: a place name is drawn over the field it names, and stays over it when a
+        raster is added afterwards. The mirror of :meth:`add_underlay`, and the reason :meth:`add_layer` inserts
+        beneath this band rather than appending.
+
+        Args:
+            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+
+        Returns:
+            This map (chainable).
+
+        Examples:
+            - What joins the overlay band stays above what is added afterwards (any object stands in for a
+              layer here — the queue does not inspect it):
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().add_overlay("label").add_layer("raster-layer").layers
+                ['raster-layer', 'label']
+
+                ```
+            - Two overlays keep the order they arrived in:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> WebMap().add_overlay("towns").add_overlay("cities").layers
+                ['towns', 'cities']
+
+                ```
+        """
+        self.layers.append(layer)
+        self._overlay_count += 1
         return self
 
     def add_underlay(self, layer: Any) -> Self:
@@ -1460,7 +2091,7 @@ class WebMapBase:
         """Resolve the units a key labels values with: the caller's if given, else the autostyle hint.
 
         The same three-way contract as :meth:`_auto_cmap` and :meth:`_auto_levels`, and like theirs the
-        caller's half is a real public argument — ``add_raster(units=)`` and ``contours(units=)``. The
+        caller's half is a real public argument — ``field(units=)`` and ``contours(units=)``. The
         library's hint is canonical rather than measured (it says ``"hPa"`` for mean sea-level pressure),
         so a band that is genuinely in something else needs a way to say so that does not also throw away
         the column name ``legend()`` derives; that is what the argument is for (review L3).
@@ -1658,7 +2289,7 @@ class WebMapBase:
                 ...     WebMap().save("frames.gif")
                 ... except ValueError as error:
                 ...     print(str(error).split(";")[0])
-                animate() needs a raster time series with at least two steps
+                save_animation() needs a raster time series with at least two steps
 
                 ```
 
@@ -1669,7 +2300,9 @@ class WebMapBase:
         suffix = pathlib.Path(str(path)).suffix.lower().lstrip(".")
         kind = (fmt or (suffix if suffix in {"png", "gif"} else "html")).lower()
         if kind == "gif":
-            return self.animate(path, title=title, **kwargs)
+            # The contract's name: calling the alias told a caller who wrote `save()` to write
+            # `save_animation()`, from a line inside the library (review M14).
+            return self.save_animation(path, title=title, **kwargs)
         if kind == "png":
             return self._render_png(path, title=title, **kwargs)
         html = self._build_map_widget().to_html(title=title, **kwargs)

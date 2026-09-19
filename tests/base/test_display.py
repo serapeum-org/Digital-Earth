@@ -17,10 +17,11 @@ from digitalearth.base.sources import DimensionInfo, Source
 
 
 class _Placed:
-    """A stand-in for a pyramids object that declares an EPSG code."""
+    """A stand-in for a pyramids object that declares an EPSG code, and optionally a CRS definition."""
 
     def __init__(self, epsg):
         self.epsg = epsg
+        self.crs = None
 
 
 class TestNeedsReproject:
@@ -42,14 +43,80 @@ class TestNeedsReproject:
         """
         assert needs_reproject(_Placed(4326), 3857) is True
 
-    def test_a_proj4_display_crs_always_warps(self):
-        """A CRS with no authority code cannot be compared, so it is never assumed equal.
+    def test_a_proj4_display_crs_of_another_system_warps(self):
+        """An orthographic display CRS is not EPSG:4326, so data in 4326 has to be warped into it.
 
         Test scenario:
-            pyramids reports 4326 for a projection that names no authority, so comparing structurally would
-            answer "already there" for data that is not — an orthographic globe drawn as plain lon/lat.
+            The globe case: drawing lon/lat data on an orthographic frame without warping it would draw it
+            flat.
         """
         assert needs_reproject(_Placed(4326), "+proj=ortho +lat_0=53") is True
+
+    @pytest.mark.parametrize("spelling", ["EPSG:4326", "epsg:4326"])
+    def test_a_string_spelling_of_the_same_system_needs_no_warp(self, spelling):
+        """The comparison is by meaning, not by the Python type of the display CRS.
+
+        Args:
+            spelling: A string naming EPSG:4326.
+
+        Test scenario:
+            The rule used to skip a warp only for an int, so a view holding ``"EPSG:4326"`` warped data that
+            was already in EPSG:4326 — the spelling `Viewport` and `Bounds` write for a CRS object.
+        """
+        assert needs_reproject(_Placed(4326), spelling) is False
+
+    def test_a_crs_object_naming_the_data_system_needs_no_warp(self):
+        """A pyproj `CRS`, which is what a `GeoDataFrame.crs` holds, compares by meaning too.
+
+        Test scenario:
+            A view built from a GeoDataFrame's CRS would otherwise warp every layer it draws.
+        """
+        from pyproj import CRS
+
+        display = CRS.from_epsg(4326)
+        assert needs_reproject(_Placed(4326), display) is False
+
+    def test_the_data_own_crs_is_read_before_its_epsg(self):
+        """A declared CRS definition outranks an EPSG code that does not describe it.
+
+        Test scenario:
+            A projection with no authority code has an unreliable `epsg`; reading the definition itself means
+            an orthographic dataset reporting 4326 is still warped to EPSG:4326, and is not warped to its own
+            orthographic CRS.
+        """
+        ortho = "+proj=ortho +lat_0=53 +lon_0=4 +datum=WGS84"
+        data = _Placed(4326)
+        data.crs = ortho
+        answers = (needs_reproject(data, 4326), needs_reproject(data, ortho))
+        assert answers == (True, False), f"expected (True, False), got {answers}"
+
+    @pytest.mark.parametrize("spelling", ["code", "string"])
+    def test_a_real_dataset_needs_no_warp_to_its_own_crs(self, dataset, spelling):
+        """A pyramids `Dataset` compared with its own CRS, whichever way the CRS is written.
+
+        Args:
+            dataset: `examples/data/acc4000.tif`, in EPSG:32618.
+            spelling: Whether the display CRS is the integer code or its `"EPSG:<code>"` string.
+
+        Test scenario:
+            The real reader, not a stand-in: its `crs` is a WKT definition, which is what the rule reads.
+        """
+        display = dataset.epsg if spelling == "code" else f"EPSG:{dataset.epsg}"
+        assert needs_reproject(dataset, display) is False
+
+    def test_a_real_orthographic_dataset_compares_by_its_definition(self, dataset):
+        """An orthographic result has no EPSG code; its definition still answers both ways.
+
+        Args:
+            dataset: `examples/data/acc4000.tif`, in EPSG:32618.
+
+        Test scenario:
+            The case the integer rule gave up on: it warped such data to any CRS, including its own.
+        """
+        ortho = "+proj=ortho +lat_0=4.5 +lon_0=-75.3 +datum=WGS84"
+        warped = dataset.to_crs(ortho)
+        answers = (needs_reproject(warped, 4326), needs_reproject(warped, ortho))
+        assert answers == (True, False), f"expected (True, False), got {answers}"
 
     def test_data_declaring_no_crs_is_answered_rather_than_raising(self):
         """The tolerant reading, which the static copy did not have.

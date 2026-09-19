@@ -1200,6 +1200,34 @@ class TestTheEnvelopeIsReprojectedAsAShape:
             "a non-finite reprojection was treated as an extent"
         )
 
+    @pytest.mark.parametrize("spelling", ["epsg:4326", "crs object"])
+    def test_a_lon_lat_map_in_another_spelling_is_read_without_reprojecting(
+        self, spelling, mocker
+    ):
+        """Axes already in lon/lat are returned as they are, however EPSG:4326 is written (#287).
+
+        Args:
+            spelling: How the display CRS is given.
+
+        Test scenario:
+            The check listed ``4326`` and ``"EPSG:4326"`` only, so a pyproj ``CRS`` or a lower-case code sampled
+            and reprojected the edges into the CRS they were already in.
+        """
+        from pyproj import CRS
+
+        from digitalearth import Map
+
+        crs = "epsg:4326" if spelling == "epsg:4326" else CRS.from_epsg(4326)
+        transform = mocker.patch(
+            "digitalearth.static.maps.decoration.reproject_coordinates"
+        )
+        m = Map(crs=crs)
+        m.ax.set_xlim(5.0, 6.0)
+        m.ax.set_ylim(52.0, 53.0)
+        extent = m._axes_lonlat_extent()
+        assert transform.call_count == 0, "lon/lat limits were reprojected into lon/lat"
+        assert extent == (5.0, 52.0, 6.0, 53.0), extent
+
 
 class TestACredentialWithNothingToAuthenticate:
     """L6: a caller who passes api_key believes they are authenticating; silence would be wrong."""

@@ -19,6 +19,7 @@ from operator import mul as _mul
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence
 
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import _require_holoviz
 from digitalearth.interactive.decoration import DEFAULT_BASEMAP_PROVIDER
 
@@ -34,8 +35,35 @@ _BASEMAP_CHOICES = list(
 #: a provider, so a map that already carries tiles still responds to the switcher.
 _TILE_TYPES = ("WMTS", "Tiles")
 
+
+def _drawn_type(layer: Any) -> str:
+    """Return the name of the element type a registered layer actually draws.
+
+    A `DynamicMap` is a wrapper: `large_image` produces `Image` frames through one, and `datashade`,
+    `trajectory` and a bundled `network` produce **RGB** frames through one. Choosing the restyle branch by
+    the wrapper's own type name sent `cmap` to all of them — and HoloViews refuses `cmap` on an RGB, from
+    inside the callback, where `param` logs the error and the map silently stops updating (review H5).
+
+    Args:
+        layer: A registered layer.
+
+    Returns:
+        The produced element's type name where a wrapper declares one, else the layer's own. A `DynamicMap`
+        that has not drawn a frame yet declares nothing, and comes back as `"DynamicMap"` — which is in
+        neither style table, so such a layer is left alone until it has drawn.
+    """
+    produced = getattr(layer, "type", None)
+    if produced is not None:
+        return str(produced.__name__)
+    return type(layer).__name__
+
+
 #: Element type names the dashboard's ``cmap``/``alpha`` overrides apply to (the colour-mapped raster
 #: elements). Their recorded style is what an override is merged over.
+#:
+#: A dynamic layer is classified by what it *draws* — see :func:`_drawn_type` — so a `large_image` lands
+#: here through its `Image` frames while a `datashade` lands in :data:`_ALPHA_ONLY_TYPES` through its `RGB`
+#: ones. Naming `DynamicMap` itself here sent `cmap` to both (review H5).
 _COLOR_MAPPED_TYPES = ("Image", "QuadMesh")
 
 #: Style keys a widget may override on a colour-mapped layer. Anything the builders recorded under these
@@ -203,60 +231,44 @@ class DashboardMixin(_MixinBase):
             bindings[name] = widget
         return controls, bindings
 
-    def _recorded_overridable_style(self) -> dict:
-        """Merge the overridable style the builders recorded for the colour-mapped layers.
+    def _restyled_layers(self, overrides: dict, layers: Any = None) -> list:
+        """Return each layer restyled with **its own** recorded style, the widget's values over the top.
 
-        Read back through :meth:`~digitalearth.interactive.base.InteractiveMapBase.style_of`, so a widget
-        override lands *over* the styling the builders applied instead of on top of nothing — a recorded
-        ``clim`` survives a ``cmap`` change, and the widget value is what differs.
-
-        Returns:
-            dict: the ``cmap``/``clim``/``alpha`` entries recorded for the ``Image``/``QuadMesh`` layers.
-        """
-        merged: dict = {}
-        for layer in self.layers:
-            if type(layer).__name__ not in _COLOR_MAPPED_TYPES:
-                continue
-            recorded = self.style_of(layer)["common"]
-            merged.update(
-                {
-                    key: value
-                    for key, value in recorded.items()
-                    if key in _OVERRIDABLE_STYLE
-                }
-            )
-        return merged
-
-    def _restyle(self, obj: Any, merged: dict) -> Any:
-        """Apply ``merged`` to every element type a dashboard widget claims to restyle.
-
-        The single place the widget-to-element mapping is spelled, so the dashboard's ``cmap``/``alpha``
-        overrides and the layer control's opacity slider cannot restyle different element sets: a
-        ``QuadMesh`` that ignored the opacity slider and an ``RGB`` that ignored the colormap selector
-        were the two halves of that drift, each silent while its widget still moved.
-
-        The colour-mapped types take the whole merged style; :data:`_ALPHA_ONLY_TYPES` take its alpha
-        alone, because an ``RGB`` composite is already three colour channels and has no scalar for a
-        ``cmap``/``clim`` to map. HoloViews applies each spec only to the matching elements and tolerates
-        a map carrying none of them, so a vector-only map comes back unchanged rather than raising.
+        The defect this replaces: the widget values were merged with the style of *every* colour-mapped layer
+        into one dict — last layer wins — and that dict was applied to all of them through
+        ``hv.opts.Image(**merged)``, which HoloViews applies per element *type*. Moving the opacity slider on a
+        map with two rasters therefore gave both the second one's colormap and colour limits. A layer's style
+        is the layer's, so it is applied to the layer.
 
         Args:
-            obj: The composed HoloViews object to restyle.
-            merged: ``cmap``/``clim``/``alpha`` entries — widget values merged over the recorded style.
+            overrides: The widget values — `cmap`, `alpha` — to apply over each layer's own style.
+            layers: The layers to restyle, for a widget that shows a subset of them — the layer switcher
+                hides the ones nobody ticked. `None` (the default) restyles the whole map.
 
         Returns:
-            ``obj`` with one opts spec applied per restyled element type.
+            The layers in draw order, each carrying its own styling with the overrides on top. A layer no
+            widget claims is returned unchanged.
         """
-        gv, hv = _require_holoviz()
-        specs = [getattr(hv.opts, name)(**merged) for name in _COLOR_MAPPED_TYPES]
         alpha_only = {
-            key: value for key, value in merged.items() if key in _ALPHA_ONLY_STYLE
+            key: value for key, value in overrides.items() if key in _ALPHA_ONLY_STYLE
         }
-        if alpha_only:
-            specs += [
-                getattr(hv.opts, name)(**alpha_only) for name in _ALPHA_ONLY_TYPES
-            ]
-        return obj.opts(*specs)
+        styled = []
+        for layer in self.layers if layers is None else layers:
+            name = _drawn_type(layer)
+            if name in _COLOR_MAPPED_TYPES:
+                recorded = {
+                    key: value
+                    for key, value in self.style_of(layer)["common"].items()
+                    if key in _OVERRIDABLE_STYLE
+                }
+                styled.append(layer.opts(**{**recorded, **overrides}))
+            elif name in _ALPHA_ONLY_TYPES and alpha_only:
+                # An RGB composite is already three colour channels: it has no scalar for a cmap or a clim
+                # to map, so only the opacity reaches it.
+                styled.append(layer.opts(**alpha_only))
+            else:
+                styled.append(layer)
+        return styled
 
     def _with_basemap(
         self, obj: Any, provider: str, *, context: str = "dashboard basemap"
@@ -299,19 +311,27 @@ class DashboardMixin(_MixinBase):
             values: Widget values keyed by widget name (``cmap``/``alpha``/``basemap``).
 
         Returns:
-            The composed HoloViews object with the overrides applied — every element type
-            :meth:`_restyle` covers redrawn with the widget values merged over their recorded style,
-            over the chosen tile basemap.
+            The composed HoloViews object with the overrides applied — each layer redrawn with the widget
+            values over **its own** recorded style, over the chosen tile basemap.
+
+            Whether a widget moved decides how the layers are styled, and nothing else: both branches flush
+            the deferred basemap and apply the map's projection, which is what `render()` does besides
+            composing. Skipping them left a map built with `tiles=` without one, permanently — both default
+            widgets carry a value, so the override branch is taken on the very first render.
         """
-        obj = self.render()
         overrides: dict = {}
         if values.get("cmap"):
             overrides["cmap"] = values["cmap"]
         if values.get("alpha") is not None:
             overrides["alpha"] = values["alpha"]
-        if overrides:
-            merged = {**self._recorded_overridable_style(), **overrides}
-            obj = self._restyle(obj, merged)
+        # Before the layers are read: a deferred basemap is one of them.
+        self._flush_deferred_tiles()
+        if not overrides:
+            obj = self._projected(self._compose(self.layers))
+        else:
+            # Composed from the restyled layers rather than restyled after composing: `.opts()` on an overlay
+            # applies per element *type*, so one spec cannot give two rasters different colormaps (#300).
+            obj = self._projected(self._compose(self._restyled_layers(overrides)))
         if values.get("basemap"):
             obj = self._with_basemap(obj, values["basemap"])
         return obj
@@ -478,6 +498,10 @@ class DashboardMixin(_MixinBase):
         """
         gv, hv = _require_holoviz()
         pn = _require_panel()
+        # Before the labels are built. A map built with `tiles=` defers its basemap until something renders,
+        # and the flush inserts it at index 0 — so labels frozen beforehand named the layer one place to
+        # their left, and the control drew the basemap where the data should be (review H10).
+        self._flush_deferred_tiles()
         if reorder:
             raise NotImplementedError(
                 "layer_control(reorder=True) is not implemented — reordering needs a stable per-layer "
@@ -532,7 +556,7 @@ class DashboardMixin(_MixinBase):
             ValueError: when ``requested`` is true and the display CRS is not EPSG:3857; the message
                 names the CRS the map actually uses.
         """
-        if self.crs != 3857:
+        if not same_crs(self.crs, 3857):
             if requested:
                 self._require_web_mercator("layer_control basemap")
             from loguru import logger
@@ -549,9 +573,10 @@ class DashboardMixin(_MixinBase):
     ) -> Any:
         """Compose the layers named in ``shown`` into a styled overlay (the layer-control view).
 
-        The opacity is merged over the style the builders recorded for those layers (read back through
-        :meth:`~digitalearth.interactive.base.InteractiveMapBase.style_of`), so hiding and re-showing a
-        layer cannot quietly drop its ``cmap``/``clim``.
+        The opacity is applied over the style the builders recorded for **each** of those layers (read back
+        through :meth:`~digitalearth.interactive.base.InteractiveMapBase.style_of`), so hiding and re-showing
+        a layer cannot quietly drop its ``cmap``/``clim`` — nor repaint it in another layer's colours, which
+        is what merging them into one spec did (#300).
 
         Args:
             shown: The ``"i: Type"`` labels of the visible layers (from the toggle widget).
@@ -563,12 +588,14 @@ class DashboardMixin(_MixinBase):
             opacity ``op``, over the chosen basemap when one is selected.
         """
         gv, hv = _require_holoviz()
+        # The other widget path does this too: a deferred basemap is one of the layers, and composing
+        # without flushing drew a map that never had one (review H9). `layer_control` has already flushed,
+        # so this is a no-op there and the indices below still mean what the labels meant.
+        self._flush_deferred_tiles()
         chosen = [self.layers[int(label.split(":")[0])] for label in shown]
         if not chosen:
             return hv.Overlay([])
-        overlay = chosen[0] if len(chosen) == 1 else reduce(_mul, chosen)
-        merged = {**self._recorded_overridable_style(), "alpha": op}
-        overlay = self._restyle(overlay, merged)
+        overlay = self._compose(self._restyled_layers({"alpha": op}, layers=chosen))
         if basemap:
             overlay = self._with_basemap(
                 overlay, basemap, context="layer_control basemap"

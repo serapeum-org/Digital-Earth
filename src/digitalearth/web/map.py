@@ -72,7 +72,7 @@ class WebMap(
             >>> from digitalearth.web import WebMap
             >>> dem = Dataset.read_file("examples/data/acc4000.tif")
             >>> with tempfile.TemporaryDirectory() as folder:
-            ...     written = WebMap().add_raster(dem).basemap().save(Path(folder) / "map.html")
+            ...     written = WebMap().field(dem).basemap().save(Path(folder) / "map.html")
             ...     (written.name, written.is_file())
             ('map.html', True)
 

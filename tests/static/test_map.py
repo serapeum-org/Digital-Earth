@@ -37,6 +37,14 @@ def test_prepare_skips_when_already_in_crs(dataset):
     assert src.crs == dataset.epsg
 
 
+def test_reproject_skips_a_string_spelling_of_the_dataset_crs(dataset, mocker):
+    """A display CRS written ``"EPSG:<code>"`` is the dataset's own CRS, so no warp runs."""
+    warp = mocker.patch("digitalearth.static.maps.base.reproject")
+    placed = Map(crs=f"EPSG:{dataset.epsg}")._reproject(dataset)
+    assert warp.call_count == 0, f"reproject was called {warp.call_count} time(s)"
+    assert placed is dataset, "the dataset should come back unchanged"
+
+
 def test_imshow_renders_in_display_crs(dataset):
     """imshow draws the reprojected raster on the shared axes with an extent in the display CRS."""
     m = Map(crs=3857)

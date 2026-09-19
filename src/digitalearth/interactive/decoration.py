@@ -22,9 +22,10 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import _require_holoviz, _skips_off_limb
 
-# TODO(#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
+# Note (#247): `tiles()` takes a provider *name*, a keyed preset and a raw XYZ *URL* through the one
 # `provider=` argument. Splitting that collision (a `tiles(url=...)` vs `basemap(provider=...)` rename)
 # is Core-contract work and is deliberately out of this batch.
 
@@ -626,7 +627,7 @@ class DecorationMixin(_MixinBase):
 
         xs = np.atleast_1d(lon).astype(float).tolist()
         ys = np.atleast_1d(lat).astype(float).tolist()
-        if crs == self.crs:
+        if same_crs(crs, self.crs):
             return xs, ys
         from pyramids.feature.geometry import reproject_coordinates
 

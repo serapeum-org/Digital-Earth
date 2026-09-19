@@ -174,7 +174,7 @@ class TestTimeSliderRejectsUnsupportedInput:
             WebMap().timeslider(dataset)
         message = str(excinfo.value)
         assert type(dataset).__name__ in message, "the rejected type is not named"
-        assert "add_raster" in message, "the single-raster builder is not named"
+        assert "field" in message, "the single-raster builder is not named"
         assert "DatasetCollection" in message, "the supported stack form is not named"
 
     def test_guard_runs_before_the_reprojection(self, dataset, monkeypatch):
@@ -269,7 +269,7 @@ class TestRequireVector:
         assert "set_geometry" in message, (
             f"the fix for a geometry-less table is not named: {message}"
         )
-        assert "add_raster" not in message, (
+        assert "field" not in message, (
             f"a table must not be given raster advice: {message}"
         )
 
@@ -285,7 +285,7 @@ class TestRequireVector:
         with pytest.raises(TypeError) as excinfo:
             WebMap._require_vector(dataset, "timeslider")
         message = str(excinfo.value)
-        assert "add_raster" in message, f"the raster branch lost its advice: {message}"
+        assert "field" in message, f"the raster branch lost its advice: {message}"
         assert "set_geometry" not in message, (
             f"a raster must not be told to set_geometry: {message}"
         )
@@ -358,7 +358,7 @@ class TestTimeSliderRasterStack:
             Member ``k`` spans ``[10k, 10k+2.4]``, so a per-member range would differ on every frame; the
             acceptance criterion is that it does not.
         """
-        add_raster = mocker.spy(WebMap, "add_raster")
+        add_raster = mocker.spy(WebMap, "field")
         WebMap().timeslider(raster_stack)
         limits = {
             (c.kwargs["vmin"], c.kwargs["vmax"]) for c in add_raster.call_args_list
@@ -379,7 +379,7 @@ class TestTimeSliderRasterStack:
             The scan reads every member, so a caller with a large stack must be able to bypass it.
         """
         scan = mocker.spy(WebMap, "_global_clim")
-        add_raster = mocker.spy(WebMap, "add_raster")
+        add_raster = mocker.spy(WebMap, "field")
         WebMap().timeslider(raster_stack, clim=(-5.0, 5.0))
         assert scan.call_count == 0, "an explicit clim must skip the global scan"
         assert {
@@ -392,7 +392,7 @@ class TestTimeSliderRasterStack:
         Test scenario:
             A stack must not silently colour frames differently from what the caller asked for.
         """
-        add_raster = mocker.spy(WebMap, "add_raster")
+        add_raster = mocker.spy(WebMap, "field")
         WebMap().timeslider(raster_stack, band=1, cmap="magma", opacity=0.5)
         assert all(c.kwargs["cmap"] == "magma" for c in add_raster.call_args_list), (
             "cmap not forwarded"

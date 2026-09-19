@@ -16,7 +16,7 @@ layers it shows. Two decisions:
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union
 
 from digitalearth.base.registry import OBJECT_SCHEME
 from digitalearth.base.spec._serial import (
@@ -30,10 +30,11 @@ from digitalearth.base.spec._serial import (
     require,
 )
 from digitalearth.base.spec.dataref import DataRef
+from digitalearth.base.spec.furniture import Furniture
 from digitalearth.base.spec.layer import LayerSpec, LayerTree
 from digitalearth.base.spec.viewport import Camera, Viewport
 
-__all__ = ["FigureSpec", "PanelSpec", "SCHEMA_VERSION"]
+__all__ = ["FigureDiff", "FigureSpec", "PanelSpec", "SCHEMA_VERSION"]
 
 #: The version of the figure description this package writes and reads. Bumped when a stored figure written by an
 #: older version would be read differently; a reader refuses any version it does not know.
@@ -105,11 +106,16 @@ class PanelSpec:
             panel has its own, so two panels can be drawn in two CRSs.
         layers: The ids of the layers the panel shows. The draw order is the figure's tree order, not this tuple's.
         title: The panel's title, or ``None``.
+        furniture: What is fixed to the panel's frame rather than drawn on the ground — a scale bar, a north
+            arrow, zoom buttons, a time slider. Each item names a registered kind and the corner it sits in; a
+            tier that cannot draw one skips it. Anything with a place on the ground is a layer instead, and
+            anything explaining an encoding is a guide on that encoding.
 
     Raises:
         ValueError: for an id that is not a non-empty string, a view that is neither a
             `Viewport` nor a `Camera`, `layers` given as a bare string, a layer id that is not a non-empty string, a
-            layer listed twice, or a title that is not a non-empty string.
+            layer listed twice, a title that is not a non-empty string, a furniture entry that is not a
+            :class:`~digitalearth.base.spec.furniture.Furniture`, or one furniture kind listed twice.
 
     Examples:
         - Two panels over the same layer, in two projections:
@@ -129,6 +135,14 @@ class PanelSpec:
             (3857, ('dem', 'roads'))
 
             ```
+        - Furniture is anchored to the frame, wherever the map is panned:
+            ```python
+            >>> from digitalearth.base.spec import Furniture, PanelSpec
+            >>> panel = PanelSpec("main", furniture=(Furniture("scale_bar"), Furniture("north_arrow")))
+            >>> [(item.kind, item.anchor) for item in panel.furniture]
+            [('scale_bar', 'bottom-left'), ('north_arrow', 'top-right')]
+
+            ```
         - A bare string is refused rather than read as one layer id per letter:
             ```python
             >>> from digitalearth.base.spec import PanelSpec
@@ -144,6 +158,7 @@ class PanelSpec:
     view: Union[Viewport, Camera] = field(default_factory=Viewport)
     layers: Tuple[str, ...] = ()
     title: Optional[str] = None
+    furniture: Tuple[Furniture, ...] = ()
 
     def __post_init__(self) -> None:
         """Refuse a panel that could not be drawn or addressed.
@@ -176,6 +191,23 @@ class PanelSpec:
             )
         object.__setattr__(self, "layers", layers)
         _optional_title("PanelSpec", self.title)
+        furniture = tuple(self.furniture)
+        for item in furniture:
+            if not isinstance(item, Furniture):
+                raise ValueError(
+                    f"PanelSpec furniture must be Furniture items; got {type(item).__name__}"
+                )
+        kinds_listed = [item.kind for item in furniture]
+        repeated_kinds = sorted(
+            {kind for kind in kinds_listed if kinds_listed.count(kind) > 1}
+        )
+        if repeated_kinds:
+            # Two scale bars on one panel is a caller who added the same item twice, not a design: whichever is
+            # drawn second would sit on top of the first, in the same corner.
+            raise ValueError(
+                f"panel {self.id!r} lists furniture {repeated_kinds} more than once"
+            )
+        object.__setattr__(self, "furniture", furniture)
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a figure stores.
@@ -210,6 +242,8 @@ class PanelSpec:
             out["layers"] = [plain_text(layer_id) for layer_id in self.layers]
         if self.title is not None:
             out["title"] = plain_text(self.title)
+        if self.furniture:
+            out["furniture"] = [item.to_dict() for item in self.furniture]
         return out
 
     @classmethod
@@ -248,7 +282,9 @@ class PanelSpec:
                 ```
         """
         refuse_unknown(
-            "PanelSpec", data, ("id", "viewport", "camera", "layers", "title")
+            "PanelSpec",
+            data,
+            ("id", "viewport", "camera", "layers", "title", "furniture"),
         )
         if ("viewport" in data) == ("camera" in data):
             raise ValueError(
@@ -267,7 +303,91 @@ class PanelSpec:
             view=view,
             layers=as_list("PanelSpec", "layers", data.get("layers", ())),
             title=data.get("title"),
+            furniture=tuple(
+                read_entry("PanelSpec", "furniture", Furniture.from_dict, item)
+                for item in as_list("PanelSpec", "furniture", data.get("furniture", ()))
+            ),
         )
+
+
+@dataclass(frozen=True)
+class FigureDiff:
+    """What changed between two figures, sorted into the updates a renderer makes.
+
+    Built by :meth:`FigureSpec.diff`. Every field is empty when nothing changed, and the diff is then falsy, so a
+    renderer can skip an update with ``if not diff``.
+
+    Attributes:
+        added: Ids of layers only the new figure holds, in its draw order.
+        removed: Ids of layers only the old figure holds, in its draw order.
+        rebuilt: Ids of layers on both sides whose data changed — a new kind, source, elevation source or
+            selection, or a source id that now points at a different `DataRef`. A renderer cannot restyle its way
+            to other data, so these are drawn again from scratch.
+        restyled: Ids of layers on both sides whose data is the same but whose symbology, filter, label or group
+            changed. A layer that was rebuilt is not listed here as well.
+        shown: Ids of layers on both sides that are drawn in the new figure and were not in the old one — by their
+            own switch or their group's.
+        hidden: Ids of layers on both sides that were drawn and no longer are.
+        order: The new figure's full draw order when the layers on both sides changed their relative order;
+            `None` otherwise. Added and removed layers alone are not a reorder.
+        sources: Ids of sources added, removed, or pointing at a different `DataRef`, sorted.
+        panels: Ids of panels whose view, layer list or title changed, or that exist on one side only — the new
+            figure's panels first, in its order, then panels only the old figure had.
+        figure: Whether the figure's own `size` or `title` changed.
+
+    Examples:
+        - Nothing changed between two figures built alike:
+            ```python
+            >>> from digitalearth.base.spec import FigureSpec, PanelSpec
+            >>> diff = FigureSpec(panels=(PanelSpec("p"),)).diff(FigureSpec(panels=(PanelSpec("p"),)))
+            >>> bool(diff), diff.added, diff.order
+            (False, (), None)
+
+            ```
+        - A layer added on top of an existing one:
+            ```python
+            >>> from digitalearth.base.spec import FigureSpec, LayerSpec, LayerTree, PanelSpec
+            >>> before = FigureSpec(
+            ...     panels=(PanelSpec("p", layers=("a",)),), layers=LayerTree((LayerSpec("a", "text"),))
+            ... )
+            >>> after = FigureSpec(
+            ...     panels=(PanelSpec("p", layers=("a", "b")),),
+            ...     layers=LayerTree((LayerSpec("a", "text"), LayerSpec("b", "graticule"))),
+            ... )
+            >>> diff = before.diff(after)
+            >>> diff.added, diff.panels, diff.order
+            (('b',), ('p',), None)
+
+            ```
+    """
+
+    added: Tuple[str, ...] = ()
+    removed: Tuple[str, ...] = ()
+    rebuilt: Tuple[str, ...] = ()
+    restyled: Tuple[str, ...] = ()
+    shown: Tuple[str, ...] = ()
+    hidden: Tuple[str, ...] = ()
+    order: Optional[Tuple[str, ...]] = None
+    sources: Tuple[str, ...] = ()
+    panels: Tuple[str, ...] = ()
+    figure: bool = False
+
+    def __bool__(self) -> bool:
+        """Whether anything changed.
+
+        Returns:
+            `True` when any field reports a change.
+
+        Examples:
+            - An empty diff is falsy; one with a change is truthy:
+                ```python
+                >>> from digitalearth.base.spec import FigureDiff
+                >>> bool(FigureDiff()), bool(FigureDiff(hidden=("roads",)))
+                (False, True)
+
+                ```
+        """
+        return self != FigureDiff()
 
 
 @dataclass(frozen=True, eq=True)
@@ -614,6 +734,100 @@ class FigureSpec:
         shown = set(self.panel(panel_id).layers)
         return tuple(layer for layer in self.layers if layer.id in shown)
 
+    def diff(self, other: "FigureSpec") -> FigureDiff:
+        """Return what turns this figure into `other`, sorted into the updates a renderer makes.
+
+        Layers are matched by id. A layer on both sides is **rebuilt** when what it draws changed — its kind,
+        source, elevation source or selection, or the `DataRef` behind its source id — and **restyled** when only
+        its symbology, filter, label or group did. A new selection is a rebuild rather than a restyle: another band
+        or time step is other pixels to read. Visibility is **effective** visibility
+        (:meth:`LayerTree.is_visible <digitalearth.base.spec.layer.LayerTree.is_visible>`), so hiding a group
+        reports every layer it hides, and a change of a layer's own `visible` is reported only there.
+
+        Args:
+            other: The figure to compare with.
+
+        Returns:
+            The changes, as a :class:`FigureDiff`.
+
+        Raises:
+            TypeError: if `other` is not a `FigureSpec`.
+
+        Examples:
+            - Hiding a group reports the layers it hides:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec, LayerSpec, LayerTree, PanelSpec
+                >>> layers = (LayerSpec("s", "points", group="obs"), LayerSpec("t", "text"))
+                >>> before = FigureSpec(panels=(PanelSpec("p", layers=("s", "t")),), layers=LayerTree(layers))
+                >>> after = FigureSpec(
+                ...     panels=(PanelSpec("p", layers=("s", "t")),),
+                ...     layers=LayerTree(layers, hidden_groups=frozenset({"obs"})),
+                ... )
+                >>> before.diff(after).hidden
+                ('s',)
+
+                ```
+            - Swapping two layers reports the whole new order:
+                ```python
+                >>> from digitalearth.base.spec import FigureSpec, LayerSpec, LayerTree, PanelSpec
+                >>> a, b = LayerSpec("a", "text"), LayerSpec("b", "graticule")
+                >>> panels = (PanelSpec("p", layers=("a", "b")),)
+                >>> before = FigureSpec(panels=panels, layers=LayerTree((a, b)))
+                >>> after = FigureSpec(panels=panels, layers=LayerTree((b, a)))
+                >>> before.diff(after).order
+                ('b', 'a')
+
+                ```
+        """
+        if not isinstance(other, FigureSpec):
+            raise TypeError(
+                f"FigureSpec.diff needs a FigureSpec; got {type(other).__name__}"
+            )
+        old_ids, new_ids = self.layers.ids, other.layers.ids
+        old_set, new_set = set(old_ids), set(new_ids)
+        kept = tuple(layer_id for layer_id in new_ids if layer_id in old_set)
+        changed_sources = tuple(
+            sorted(
+                source_id
+                for source_id in set(self.sources) | set(other.sources)
+                if self.sources.get(source_id) != other.sources.get(source_id)
+            )
+        )
+        rebuilt, restyled, shown, hidden = _kept_layer_changes(
+            self.layers, other.layers, kept, set(changed_sources)
+        )
+        kept_set = set(kept)
+        survivors_before = tuple(
+            layer_id for layer_id in old_ids if layer_id in kept_set
+        )
+        return FigureDiff(
+            added=tuple(layer_id for layer_id in new_ids if layer_id not in old_set),
+            removed=tuple(layer_id for layer_id in old_ids if layer_id not in new_set),
+            rebuilt=rebuilt,
+            restyled=restyled,
+            shown=shown,
+            hidden=hidden,
+            order=None if survivors_before == kept else new_ids,
+            sources=changed_sources,
+            panels=self._changed_panels(other),
+            figure=(self.size, self.title) != (other.size, other.title),
+        )
+
+    def _changed_panels(self, other: "FigureSpec") -> Tuple[str, ...]:
+        """Return the ids of panels that differ between this figure and `other`.
+
+        Args:
+            other: The figure being compared with.
+
+        Returns:
+            Panels of `other` that are new or differ, in `other`'s order, then panels only this figure has.
+        """
+        old = {panel.id: panel for panel in self.panels}
+        new_ids = {panel.id for panel in other.panels}
+        changed = [panel.id for panel in other.panels if old.get(panel.id) != panel]
+        gone = [panel.id for panel in self.panels if panel.id not in new_ids]
+        return tuple(changed + gone)
+
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form of the whole figure.
 
@@ -763,3 +977,81 @@ class FigureSpec:
             title=data.get("title"),
             schema_version=version,
         )
+
+
+def _kept_layer_changes(
+    old_tree: LayerTree,
+    new_tree: LayerTree,
+    kept: Tuple[str, ...],
+    changed_sources: Set[str],
+) -> Tuple[Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Tuple[str, ...]]:
+    """Sort the layers two figures share into rebuilt, restyled, shown and hidden.
+
+    Args:
+        old_tree: The old figure's layers.
+        new_tree: The new figure's layers.
+        kept: Ids on both sides, in the new figure's draw order.
+        changed_sources: Ids of sources whose `DataRef` changed.
+
+    Returns:
+        ``(rebuilt, restyled, shown, hidden)``, each in the new figure's draw order.
+    """
+    old_layers = {layer.id: layer for layer in old_tree}
+    new_layers = {layer.id: layer for layer in new_tree}
+    rebuilt: List[str] = []
+    restyled: List[str] = []
+    shown: List[str] = []
+    hidden: List[str] = []
+    for layer_id in kept:
+        old, new = old_layers[layer_id], new_layers[layer_id]
+        if _draws_other_data(old, new, changed_sources):
+            rebuilt.append(layer_id)
+        elif _restyled(old, new):
+            restyled.append(layer_id)
+        was, now = old_tree.is_visible(layer_id), new_tree.is_visible(layer_id)
+        if was != now:
+            (shown if now else hidden).append(layer_id)
+    return tuple(rebuilt), tuple(restyled), tuple(shown), tuple(hidden)
+
+
+def _draws_other_data(
+    old: LayerSpec, new: LayerSpec, changed_sources: Set[str]
+) -> bool:
+    """Whether a layer kept across two figures now draws something a renderer has to read or build again.
+
+    Args:
+        old: The layer in the old figure.
+        new: The layer with the same id in the new figure.
+        changed_sources: Ids of sources whose `DataRef` changed between the figures.
+
+    Returns:
+        `True` for a new kind, source, elevation source or selection, or a source id whose data changed.
+    """
+    if (old.kind, old.source_id, old.z_source, old.selection) != (
+        new.kind,
+        new.source_id,
+        new.z_source,
+        new.selection,
+    ):
+        return True
+    reads = {new.source_id, None if new.z_layer is not None else new.z_source}
+    return bool(reads & changed_sources)
+
+
+def _restyled(old: LayerSpec, new: LayerSpec) -> bool:
+    """Whether a layer drawing the same data changed how it is presented.
+
+    Args:
+        old: The layer in the old figure.
+        new: The layer with the same id in the new figure.
+
+    Returns:
+        `True` when its symbology, filter, label or group differ. `visible` is left out: it is reported as a
+        visibility change.
+    """
+    return (old.symbology, old.filter, old.label, old.group) != (
+        new.symbology,
+        new.filter,
+        new.label,
+        new.group,
+    )

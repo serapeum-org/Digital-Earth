@@ -118,9 +118,14 @@ def _drawn(web_map):
         web_map: The map.
 
     Returns:
-        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none.
+        Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none. A
+        caller's own object carries no marker either, so it is looked up in the map's custom table by identity.
     """
-    ids = [getattr(layer, "_digitalearth_layer_id", None) for layer in web_map.layers]
+    held = {id(obj): layer_id for layer_id, obj in web_map._custom.items()}
+    ids = [
+        getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
+        for layer in web_map.layers
+    ]
     return [layer_id for layer_id in ids if layer_id is not None]
 
 
@@ -157,8 +162,9 @@ class TestTheRegistryIsAddressable:
 
         Test scenario:
             The index held `(id, label)` pairs and the label was never read back. Backed by a `LayerTree`, each
-            entry says what sort of layer it is — the builder's paint type — and carries the caller's name as its
-            label, which is what a later export or a layer switcher needs.
+            entry says what sort of layer it is — an engine-neutral kind from the registry (#288), not the
+            MapLibre paint type — and carries the caller's name as its label, which is what a later export or a
+            layer switcher needs.
         """
         from digitalearth.web import WebMap
 
@@ -170,11 +176,124 @@ class TestTheRegistryIsAddressable:
         )
         fill, circle = m.layer_ids
         assert m._layer_tree.ids == (fill, circle), m._layer_tree.ids
-        assert m._layer_tree.get(fill).kind == "fill", m._layer_tree.get(fill)
+        assert m._layer_tree.get(fill).kind == "choropleth", m._layer_tree.get(fill)
         assert m._layer_tree.get(fill).display_label == "Population", m._layer_tree.get(
             fill
         )
-        assert m._layer_tree.get(circle).kind == "circle", m._layer_tree.get(circle)
+        assert m._layer_tree.get(circle).kind == "points", m._layer_tree.get(circle)
+
+    @pytest.mark.parametrize(
+        "method, fixture, kwargs, kind",
+        [
+            ("points", "points", {}, "points"),
+            ("lines", "lines", {}, "lines"),
+            ("polygons", "polygons", {}, "polygons"),
+            ("choropleth", "polygons", {"column": "pop"}, "choropleth"),
+            ("contours", "raster", {"levels": [0.3, 0.6]}, "contours"),
+            (
+                "contours",
+                "raster",
+                {"levels": [0.3, 0.6], "filled": True},
+                "filled_contours",
+            ),
+        ],
+        ids=[
+            "points",
+            "lines",
+            "polygons",
+            "choropleth",
+            "contours",
+            "filled-contours",
+        ],
+    )
+    def test_the_vector_builders_record_engine_neutral_kinds(
+        self, request, method, fixture, kwargs, kind
+    ):
+        """A vector layer's kind names what is drawn, not the MapLibre layer type drawing it (#288).
+
+        Args:
+            request: pytest's request, used to fetch the input fixture the builder needs.
+            method: The `WebMap` builder under test.
+            fixture: The fixture holding the builder's data.
+            kwargs: Keyword arguments the builder needs.
+            kind: The kind the builder must record.
+
+        Test scenario:
+            The tree recorded the MapLibre type, so `polygons`, `choropleth` and filled `contours` were all
+            `fill`, `points` was `circle`, and contour lines were `line` — a figure could not tell them apart.
+        """
+        from digitalearth.web import WebMap
+
+        m = getattr(WebMap().basemap(), method)(
+            request.getfixturevalue(fixture), **kwargs
+        )
+        recorded = m._layer_tree.get(m.layer_ids[0]).kind
+        assert recorded == kind, (
+            f"{method} recorded kind {recorded!r}, expected {kind!r}"
+        )
+
+    def test_the_layer_ids_keep_their_engine_prefixes(self, points, polygons):
+        """Changing the recorded kind leaves the public ids as they were: `fill-…` and `circle-…`."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().polygons(polygons).points(points)
+        prefixes = [layer_id.split("-")[0] for layer_id in m.layer_ids]
+        assert prefixes == ["fill", "circle"], m.layer_ids
+
+    def test_an_unregistered_kind_is_refused_before_anything_is_indexed(self):
+        """A builder passing a kind the registry cannot look up fails, and the tree is left unchanged.
+
+        Test scenario:
+            The index would otherwise describe a layer with a name no renderer can resolve.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        with pytest.raises(KeyError, match="no layer kind 'fill' is registered"):
+            m._index_layer("fill-0", None, kind="fill")
+        assert m._layer_tree.ids == (), m._layer_tree.ids
+
+    def test_rekinding_to_an_unregistered_kind_keeps_the_recorded_kind(self, points):
+        """`_rekind_layer` checks the kind first, so a refused name leaves the layer described as it was."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points)
+        layer_id = m.layer_ids[0]
+        with pytest.raises(KeyError, match="no layer kind 'dots' is registered"):
+            m._rekind_layer(layer_id, "dots")
+        assert m._layer_tree.get(layer_id).kind == "points", m._layer_tree.get(layer_id)
+
+    def test_rekinding_keeps_the_label_visibility_and_place(self, points, polygons):
+        """Only the kind changes: the layer keeps its label, visibility and position in draw order."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().polygons(polygons, name="Areas", visible=False).points(points)
+        first = m.layer_ids[0]
+        m._rekind_layer(first, "choropleth")
+        held = m._layer_tree.get(first)
+        described = (held.kind, held.display_label, held.visible, m.layer_ids[0])
+        assert described == ("choropleth", "Areas", False, first), described
+
+    def test_every_kind_the_tree_records_is_registered(self, points, polygons, raster):
+        """No builder writes a kind the registry cannot look up (#288)."""
+        from digitalearth.base.registry import kinds
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .basemap()
+            .add_raster(raster)
+            .contours(raster, levels=[0.3], labels=True)
+            .choropleth(polygons, column="pop")
+            .points(points)
+            .heatmap(points)
+            .graticule()
+            .text(4.9, 52.4, "Amsterdam")
+        )
+        unregistered = sorted(
+            {m._layer_tree.get(layer).kind for layer in m.layer_ids} - set(kinds())
+        )
+        assert unregistered == [], unregistered
 
     @pytest.mark.parametrize(
         "method, fixture, args, kwargs, kind",
@@ -186,7 +305,7 @@ class TestTheRegistryIsAddressable:
             ("extrusion", "polygons", (), {"height": "pop"}, "extrusion"),
             ("text", None, (4.9, 52.4, "Amsterdam"), {}, "text"),
             ("graticule", None, (), {}, "graticule"),
-            ("labels", "points", ("v",), {}, "label"),
+            ("labels", "points", ("v",), {}, "labels"),
         ],
         ids=[
             "add_raster",
@@ -215,8 +334,7 @@ class TestTheRegistryIsAddressable:
         Test scenario:
             The vector builders record their paint type, asserted above. The raster, composite, big-data, 3-D and
             decoration builders each pass their own kind, and a wrong one would describe the layer as something
-            it is not in any later export. `labels` builds a symbol layer and records `"label"`, the one vector
-            kind that is not a paint type.
+            it is not in any later export. `labels` builds a MapLibre symbol layer and records `"labels"`.
         """
         from digitalearth.web import WebMap
 
@@ -367,6 +485,62 @@ class TestTheRegistryIsAddressable:
         (graticule,) = [layer for layer in m.layer_ids if layer != "data-1"]
         assert _drawn(m) == [graticule, "data-1"], _drawn(m)
         assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_data_added_after_a_label_is_drawn_beneath_it(self, points):
+        """A place name stays over the data that arrives after it, and the tree says the same (#292).
+
+        Args:
+            points: The features drawn under the label.
+
+        Test scenario:
+            `text` joins the overlay band, which the tree bands by kind. The queue appended, so the points were
+            drawn over the label while the tree listed the label on top — the two disagreed the moment a data
+            layer followed a label.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "A", name="label").points(points, name="obs")
+        assert _drawn(m) == ["obs", "label"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_labels_from_a_column_join_the_same_band(self, points):
+        """`labels` is text too, so it is drawn over data added afterwards.
+
+        Args:
+            points: The features the labels are taken from.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().labels(points, column="v", name="names").points(points, name="obs")
+        assert _drawn(m) == ["obs", "names"], _drawn(m)
+
+    def test_removing_a_label_gives_its_place_back(self, points):
+        """The overlay band is counted, so removing a label does not strand the count.
+
+        Args:
+            points: The features drawn under the label.
+
+        Test scenario:
+            The mirror of the reference-band regression: with the count left at one, the next data layer would be
+            queued one place too low — beneath a label that is no longer there.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "A", name="label").points(points, name="obs")
+        m.remove_layer("label").points(points, name="more")
+        assert _drawn(m) == ["obs", "more"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_add_overlay_queues_above_a_layer_added_later(self):
+        """The low-level entry points band the queue the way the builders do.
+
+        Test scenario:
+            Any object stands in for a layer here — the queue does not inspect it.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_overlay("label").add_layer("data").add_underlay("tiles")
+        assert m.layers == ["tiles", "data", "label"], m.layers
 
     @pytest.mark.parametrize("name", [" amsterdam", "amsterdam ", "   "])
     def test_a_padded_or_blank_layer_name_still_builds_a_layer(self, name):
@@ -777,6 +951,342 @@ class TestTheSwitcherFollowsTheLiveLayers:
         assert exported[exported.rfind("var data = ") :].count('"addControl"') == 0
 
 
+class TestTheSliderKeepsOneFramePerLayer:
+    """Review M9 — a control drawn from the description must not offer a stop that names nothing."""
+
+    def test_a_removed_layer_takes_its_frame_with_it(self, raster_stack):
+        """A slider has one stop per layer, and it has to stay that way.
+
+        Args:
+            raster_stack: Three rasters the slider steps through.
+
+        Test scenario:
+            The measured defect: `layers` was trimmed and `frames` was not, so a control drawn from the
+            description offered three stops for two layers — the third naming nothing (review M9).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().timeslider(raster_stack, labels=["a", "b", "c"])
+        slider = m.figure_spec.panels[0].furniture[0]
+        assert len(slider.options["frames"]) == len(slider.options["layers"]), slider
+        m.remove_layer(m.layer_ids[0])
+        slider = m.figure_spec.panels[0].furniture[0]
+        assert len(slider.options["frames"]) == len(slider.options["layers"]), slider
+
+
+class TestAPopupOverAnUndescribedLayer:
+    """Review H3 — not every MapLibre layer is a described one, and a popup over one is still a popup."""
+
+    def test_a_clustered_map_can_be_given_a_popup(self, points):
+        """`cluster(...).popup(...)` is a documented recipe, and it raised.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            A cluster draws three MapLibre layers under one tree entry, and `cluster` left the *unclustered*
+            id as the one a following `popup()` would default to — an id guaranteed absent from the tree.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().cluster(points)
+        assert m.popup(["v"]) is not None, "a clustered map must take a popup"
+        assert m.layer_ids == ["clusters-2"], m.layer_ids
+
+    def test_a_popup_naming_a_layer_this_map_has_not_drawn_is_refused(self, points):
+        """An id a caller wrote is checked; skipping it accepted a typo in silence.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The guard exists for the ids the *tier* chooses — a cluster's sub-layers, a graticule's labels
+            — which are drawn and simply not described. Applying it to an explicit `layer=` meant the
+            closure was still queued, so the saved page called `map.on('click', 'typoed', ...)` and failed
+            in a browser console with nothing said on the Python side (review H7).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        with pytest.raises(KeyError, match="no layer 'obs-clusters' on this map"):
+            m.popup(["v"], layer="obs-clusters")
+
+    def test_a_layer_with_both_records_both(self, points):
+        """A click popup and a hover tooltip are two interactions, and a layer may carry both.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: both were drawn — three applies queued — but one `tooltip` encoding held
+            them, so the second call replaced the first and the popup's own fields were lost from the
+            figure (review M10).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs").popup(["v"]).tooltip(["v", "geometry"])
+        bound = m.figure_spec.layers.get("obs").symbology.props["interactions"]
+        assert tuple(bound["click"]) == ("v",), bound
+        assert tuple(bound["hover"]) == ("v", "geometry"), bound
+
+    def test_the_channel_carries_the_hover_fields_when_there_are_both(self, points):
+        """One hover slot, and the hover's fields are what belongs in it.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs").popup(["v"]).tooltip(["geometry"])
+        symbology = m.figure_spec.layers.get("obs").symbology
+        assert symbology.encodings["tooltip"].resolve() == ("geometry",), symbology
+        assert symbology.props["tooltip_trigger"] == "hover", symbology.props
+
+    def test_a_cluster_s_popup_goes_on_the_layer_carrying_the_columns(self, points):
+        """A cluster draws bubbles, their counts, and the loose points; only one has the caller's data.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The bubbles are aggregates whose only properties are `cluster`, `cluster_id` and the point
+            counts. Pointing the popup at them to satisfy the tree lookup produced an empty popup for
+            every feature a caller clicked (review H8).
+        """
+        import inspect
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().cluster(points)
+        m.popup(["v"])
+        bound = [
+            held.get("layer_id")
+            for held in (
+                inspect.getclosurevars(item).nonlocals
+                for item in m.layers
+                if callable(item)
+            )
+            if "layer_id" in held
+        ]
+        assert bound == ["unclustered-4"], bound
+
+    def test_a_described_layer_still_records_what_pops_up(self, points):
+        """The guard skips the description, and must not skip it for a layer that has one.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        m.popup(["v"])
+        shown = m.figure_spec.layers.get("obs").symbology.encodings["tooltip"]
+        assert shown.resolve() == ("v",), shown
+
+
+class TestAColourKeyDescribesTheLayerItNames:
+    """Review H4 — `colorbar(layer_id)` used the id only to validate, then drew someone else's key."""
+
+    @staticmethod
+    def _squares(column, values):
+        """Return two squares carrying `values` in `column`.
+
+        Args:
+            column: The column name.
+            values: Two numbers.
+
+        Returns:
+            A GeoDataFrame.
+        """
+        return gpd.GeoDataFrame(
+            {column: values},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+            ],
+            crs=4326,
+        )
+
+    def test_each_layer_s_key_shows_its_own_range(self):
+        """The measured defect: both keys ended 500/900 — layer B's — one of them labelled "A"."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.choropleth(self._squares("rain", [500, 900]), column="rain", name="B")
+        m.colorbar("A", label="People")
+        drawn = m._panels["legend"][0]
+        assert ">1<" in drawn and ">100<" in drawn.replace(">1<", ""), drawn
+
+    def test_the_other_layer_still_shows_its_own(self):
+        """The same call for B is B's range, so this is selection rather than a reversed default."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.choropleth(self._squares("rain", [500, 900]), column="rain", name="B")
+        m.colorbar("B", label="Rain")
+        drawn = m._panels["legend"][0]
+        assert ">500<" in drawn, drawn
+
+    def test_a_layer_with_no_classification_says_so(self, points):
+        """An unclassified layer has no ramp; naming it is answered rather than substituted.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.points(points, name="plain")
+        with pytest.raises(ValueError, match="was not drawn with a classification"):
+            m.colorbar("plain")
+
+
+class TestACustomLayerIsAddedUnderTheIdItIsGiven:
+    """Review H5 — the tree was renamed and the MapLibre object was not."""
+
+    def test_a_colliding_custom_id_is_refused_without_touching_the_object(self, points):
+        """What `layer_ids` advertises has to be what `addLayer` sends — and the object is the caller's.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            Suffixing left the map naming `obs-2` while the object said `obs`. Rewriting the object closed
+            that and opened a worse one: the object may already be on another map, which then advertised an
+            id its own page never adds (review H6). A collision is refused, and nothing is mutated.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        own = Layer(id="obs", type=LayerType.CIRCLE, source="s")
+        with pytest.raises(ValueError, match="is already on this map"):
+            m.add_layer(own)
+        assert own.id == "obs", own.id
+        assert m.layer_ids == ["obs"], m.layer_ids
+
+    def test_a_layer_held_by_another_map_is_left_alone(self, points):
+        """The measured defect: adding to a second map re-pointed the first map's layer.
+
+        Args:
+            points: The fixture points.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        own = Layer(id="obs", type=LayerType.CIRCLE, source="s")
+        first = WebMap().add_layer(own)
+        second = WebMap().points(points, name="obs")
+        with pytest.raises(ValueError, match="is already on this map"):
+            second.add_layer(own)
+        assert own.id == "obs", own.id
+        assert first.layer_ids == ["obs"], first.layer_ids
+
+    def test_one_object_cannot_be_added_twice(self, points):
+        """One object is one layer on the page, and the queue cannot tell two registrations apart.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: `add_layer(obj, name="a").add_layer(obj, name="b")` gave two tree entries
+            matched by identity, so `remove_layer("a")` dropped both from the queue — the map still listed
+            `b` and nothing drew it (review M13). With the allocated id written onto the object, the first
+            entry also named an id the object no longer carried.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        own = Layer(id="mine", type=LayerType.CIRCLE, source="s")
+        m.add_layer(own)
+        with pytest.raises(ValueError, match="already on the map as 'mine'"):
+            m.add_layer(own)
+        assert m.layer_ids == ["obs", "mine"], m.layer_ids
+
+    def test_two_objects_are_removed_independently(self, points):
+        """The ordinary case: two layers, and removing one leaves the other drawn.
+
+        Args:
+            points: The fixture points.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.add_layer(Layer(id="x", type=LayerType.CIRCLE, source="s"), name="x")
+        m.add_layer(Layer(id="y", type=LayerType.CIRCLE, source="s"), name="y")
+        m.remove_layer("x")
+        assert m.layer_ids == ["y"], m.layer_ids
+        assert len(m.layers) == 1, m.layers
+
+    def test_an_uncontested_id_is_left_as_it_was(self, points):
+        """A caller's own id survives when nothing is claiming it.
+
+        Args:
+            points: The fixture points.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        own = Layer(id="mine", type=LayerType.CIRCLE, source="s")
+        m.add_layer(own)
+        assert own.id == "mine", own.id
+        assert "mine" in m.layer_ids, m.layer_ids
+
+
+class TestOneMapsSourcesAreItsOwn:
+    """#296 / review H2 — the object registry is process-global; a figure's sources must not be shared."""
+
+    def test_two_maps_in_one_session_keep_their_own_data(self, points):
+        """Every map restarts its layer numbering, so two of them mint the same id.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: both maps registered under `circle-2`, the second replaced the first, and
+            map A's stored figure then described map B's data — in a notebook, where two maps in one
+            session is the ordinary case.
+        """
+        from digitalearth.web import WebMap
+
+        other = points.iloc[:1].copy()
+        first = WebMap().points(points)
+        second = WebMap().points(other)
+        assert first.layer_ids == second.layer_ids, (
+            "the ids must collide for this to mean anything"
+        )
+        assert len(first.figure_spec.sources[first.layer_ids[0]].open()) == len(
+            points
+        ), "the first map's source must still be the data it was given"
+        assert len(second.figure_spec.sources[second.layer_ids[0]].open()) == len(
+            other
+        ), "and the second map's must be its own"
+
+    def test_a_removed_layer_lets_its_data_go(self, points):
+        """The registry holds strong references, so a drawn-and-removed layer would leak one.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.base.registry import _OBJECTS
+        from digitalearth.web import WebMap
+
+        before = len(_OBJECTS)
+        m = WebMap().points(points)
+        m.remove_layer(m.layer_ids[0])
+        assert len(_OBJECTS) == before, (
+            f"the registry grew by {len(_OBJECTS) - before} after a draw and a remove"
+        )
+
+
 class TestIdsAreAllocatedOnce:
     """A caller name and a generated id come out of the same allocator."""
 
@@ -854,3 +1364,134 @@ class TestTheDeckRefusalNamesTheRealCause:
         with pytest.raises(ValueError, match="deck.gl overlay") as err:
             web_map.polygons(points, big=True, name="Cities")
         assert "threshold" not in str(err.value), str(err.value)
+
+
+class TestACallersOwnLayer:
+    """A MapLibre layer the caller built is addressable, like every other layer (#293)."""
+
+    @staticmethod
+    def _layer(layer_id):
+        """Return a minimal MapLibre layer.
+
+        Args:
+            layer_id: The id the layer carries.
+
+        Returns:
+            A `maplibre` `Layer`.
+        """
+        from maplibre import Layer, LayerType
+
+        return Layer(id=layer_id, type=LayerType.CIRCLE, source=f"{layer_id}-src")
+
+    def test_a_layer_the_caller_built_is_addressable(self):
+        """The reproduction from the issue: `layer_ids` listed nothing and `remove_layer` raised.
+
+        Test scenario:
+            The object never reached the tree, so a caller could add a layer and then not refer to it again.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        assert m.layer_ids == ["wells"], m.layer_ids
+        assert m.remove_layer("wells").layer_ids == [], m.layer_ids
+
+    def test_removing_it_takes_the_object_off_the_map_too(self):
+        """A `maplibre` `Layer` carries no marker attribute, so removal matches it by identity."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        m.remove_layer("wells")
+        assert m.layers == [], m.layers
+
+    def test_it_is_recorded_as_a_custom_layer_of_its_engine(self):
+        """The kind names the engine that built the object, which is what a renderer reads."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        assert m._layer_tree.get("wells").kind == "custom:maplibre", m._layer_tree.get(
+            "wells"
+        )
+
+    def test_a_name_that_contradicts_the_object_s_id_is_refused(self):
+        """The object's id is what `addLayer` sends, so a different `name=` would name nothing.
+
+        Test scenario:
+            `name=` used to win, and the object kept its own id — so the map advertised one id while the
+            page added another. Rewriting the object instead reached into every other map holding it
+            (review H6), so the two are simply required to agree.
+        """
+        from digitalearth.web import WebMap
+
+        with pytest.raises(
+            ValueError, match="draws this layer under the id it carries"
+        ):
+            WebMap().add_layer(self._layer("wells"), name="Boreholes")
+
+    def test_a_name_matching_the_object_s_id_is_accepted(self):
+        """Saying the same thing twice is not a contradiction."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"), name="wells")
+        assert m.layer_ids == ["wells"], m.layer_ids
+
+    def test_an_unnamed_object_gets_a_generated_id(self):
+        """Anything without an id of its own is still addressable."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(lambda widget: None)
+        assert m.layer_ids == ["custom-1"], m.layer_ids
+
+    def test_a_repeated_id_is_refused_rather_than_suffixed(self):
+        """Two layers cannot share an id, and the object carries the one the page will use.
+
+        Test scenario:
+            Suffixing gave the tree `wells-2` while the object still said `wells`, so MapLibre dropped the
+            second layer with a console error and the map named one that was never added (review H5/H6).
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().add_layer(self._layer("wells"))
+        with pytest.raises(ValueError, match="is already on this map"):
+            m.add_layer(self._layer("wells"))
+        assert m.layer_ids == ["wells"], m.layer_ids
+
+    def test_a_band_puts_it_under_the_data(self, points):
+        """A caller's own ground cover is drawn first, and the tree says so.
+
+        Args:
+            points: The features drawn over it.
+        """
+        from digitalearth.web import WebMap
+
+        m = (
+            WebMap()
+            .points(points, name="obs")
+            .add_layer(self._layer("tiles"), band="underlay")
+        )
+        assert _drawn(m) == ["tiles", "obs"], _drawn(m)
+        assert list(m._layer_tree.ids) == _drawn(m), (m._layer_tree.ids, _drawn(m))
+
+    def test_a_band_no_tier_could_draw_is_refused(self):
+        """A misspelt band names the four that work."""
+        from digitalearth.web import WebMap
+
+        drawn = WebMap()
+        wells = self._layer("wells")
+        with pytest.raises(ValueError, match="band must be one of"):
+            drawn.add_layer(wells, band="middle")
+
+    def test_a_builder_s_own_layer_is_not_recorded_twice(self, points):
+        """The package's builders describe what they draw, so they do not come through this entry point.
+
+        Args:
+            points: The features drawn.
+
+        Test scenario:
+            `points` records one `points` layer. Were the builder still queueing through `add_layer`, the same
+            layer would also be recorded as a caller's own object, under a second id.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        assert m.layer_ids == ["obs"], m.layer_ids
+        assert m._layer_tree.get("obs").kind == "points", m._layer_tree.get("obs")

@@ -75,6 +75,44 @@ def _vector(owner: str, name: str, value: Any) -> Vector3:
     return (x, y, z)
 
 
+def _written_crs(owner: str, crs: Any) -> Any:
+    """Return a CRS in the spelling a figure stores, refusing one it cannot store or pyramids cannot read.
+
+    Args:
+        owner: The field being set, for the message — `"Viewport.crs"`, `"Camera.crs"`.
+        crs: The CRS given. Not `None`: each caller decides what an absent CRS means.
+
+    Returns:
+        An EPSG integer or a string as given, or a CRS object written as `"EPSG:<code>"` or WKT.
+
+    Raises:
+        ValueError: for a boolean, a value with no written form (a float, a list), or one pyramids cannot read
+            (`0`, `""`, `"junk"`).
+    """
+    if isinstance(crs, bool):
+        raise ValueError(
+            f"{owner} holds a bool that is not a readable CRS; got {crs!r}"
+        )
+    try:
+        written = crs_to_json(crs, owner)
+    except TypeError as error:
+        # Checked when the value is built, not only when it is written: a CRS a figure cannot store was otherwise
+        # found by `to_dict`, at save time, far from the line that built it.
+        raise ValueError(str(error)) from error
+    # Written spellings are an int or a string, which `crs_to_json` passes through unread: `0`, `""` and "junk"
+    # built a view that failed only when `framed` asked pyramids to reproject into it.
+    from pyramids.base.crs import crs_from_user_input
+
+    try:
+        crs_from_user_input(written)
+    # Whatever pyramids cannot read names no system anything could be drawn in.
+    except Exception as error:  # noqa: BLE001
+        raise ValueError(
+            f"{owner} {crs!r} names no coordinate reference system pyramids can read"
+        ) from error
+    return written
+
+
 @dataclass(frozen=True)
 class Viewport:
     """What a flat map shows: the CRS it is drawn in, and optionally the region.
@@ -87,13 +125,19 @@ class Viewport:
         domain: A named region (``"europe"``) or a ``(west, south, east, north)`` box in degrees — the static
             tier's ``domain=`` — or ``None``. A view holds one region, so `bounds` and `domain` are not set together.
         globe: Whether the map is drawn on a globe frame rather than a flat projection.
+        center: Where a pan-and-zoom map is looking, as `(x, y)` in `crs` — what the web tier calls `center=`.
+            `None` leaves the renderer to frame the data. A region and a centre are not the same request: a
+            region says *what to fit*, a centre and a zoom say *where to stand*, which is why both can be set.
+        zoom: The zoom level of a pan-and-zoom map — MapLibre's, where each step doubles the scale. `None`
+            leaves it to the renderer.
 
     Raises:
         ValueError: for a `None` or boolean CRS, one a figure could not store (a float, a list — anything that is
             not an EPSG integer, a string or a CRS object pyramids reads), or one pyramids cannot read (`0`, `""`);
             `bounds` that is not a `Bounds`, carries no CRS or is in a different CRS; `bounds` and `domain` together;
             a `domain` that is neither a non-empty name nor four finite numbers, or a domain box with west past east
-            or south past north — a box cannot cross the antimeridian; or a non-boolean `globe`.
+            or south past north — a box cannot cross the antimeridian; a non-boolean `globe`; a `center`
+            that is not two finite numbers; or a `zoom` that is not a finite number.
 
     Examples:
         - A map framed on a region, in the CRS it is drawn in:
@@ -102,6 +146,14 @@ class Viewport:
             >>> view = Viewport(4326, bounds=Bounds(-10.0, 35.0, 30.0, 60.0, crs=4326))
             >>> view.crs, view.bounds.as_bbox()
             (4326, [-10.0, 35.0, 30.0, 60.0])
+
+            ```
+        - A pan-and-zoom map says where it is standing rather than what to fit:
+            ```python
+            >>> from digitalearth.base.spec import Viewport
+            >>> view = Viewport(4326, center=(4.9, 52.4), zoom=7)
+            >>> view.center, view.zoom
+            ((4.9, 52.4), 7.0)
 
             ```
         - A named domain, as the static tier spells it:
@@ -126,6 +178,8 @@ class Viewport:
     bounds: Optional[Bounds] = None
     domain: Optional[Union[str, Tuple[float, float, float, float]]] = None
     globe: bool = False
+    center: Optional[Tuple[float, float]] = None
+    zoom: Optional[float] = None
 
     def __post_init__(self) -> None:
         """Refuse a view nothing could be drawn in.
@@ -135,24 +189,7 @@ class Viewport:
         """
         if self.crs is None or isinstance(self.crs, bool):
             raise ValueError(f"Viewport needs a display CRS; got {self.crs!r}")
-        try:
-            written = crs_to_json(self.crs, "Viewport.crs")
-        except TypeError as error:
-            # Checked here, not only when the view is written: a CRS a figure cannot store was otherwise found by
-            # `to_dict`, at save time, far from the line that built the view.
-            raise ValueError(str(error)) from error
-        # Written spellings are an int or a string, which `crs_to_json` passes through unread: `0`, `""` and "junk"
-        # built a view that failed only when `framed` asked pyramids to reproject into it.
-        from pyramids.base.crs import crs_from_user_input
-
-        try:
-            crs_from_user_input(written)
-        # Whatever pyramids cannot read names no system a map could be drawn in.
-        except Exception as error:  # noqa: BLE001
-            raise ValueError(
-                f"Viewport.crs {self.crs!r} names no coordinate reference system pyramids can read"
-            ) from error
-        object.__setattr__(self, "crs", written)
+        object.__setattr__(self, "crs", _written_crs("Viewport.crs", self.crs))
         self._check_bounds()
         object.__setattr__(self, "domain", self._checked_domain(self.domain))
         if self.bounds is not None and self.domain is not None:
@@ -167,6 +204,38 @@ class Viewport:
                 f"Viewport globe must be True or False; got {self.globe!r}"
             )
         object.__setattr__(self, "globe", globe)
+        object.__setattr__(self, "center", self._checked_center(self.center))
+        if self.zoom is not None:
+            object.__setattr__(
+                self, "zoom", finite_number("Viewport", "zoom", self.zoom)
+            )
+
+    @staticmethod
+    def _checked_center(center: Any) -> Optional[Tuple[float, float]]:
+        """Return the centre as two floats, or `None`.
+
+        Args:
+            center: What the constructor was given.
+
+        Returns:
+            `(x, y)` as floats, or `None`.
+
+        Raises:
+            ValueError: for anything that is not two finite numbers — a centre with three numbers is a caller
+                who meant a bounding box, and one with a `None` in it would place the map nowhere.
+        """
+        if center is None:
+            return None
+        try:
+            x, y = center
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"Viewport center must be (x, y) in the view's CRS; got {center!r}"
+            ) from None
+        return (
+            finite_number("Viewport", "center x", x),
+            finite_number("Viewport", "center y", y),
+        )
 
     def _check_bounds(self) -> None:
         """Refuse bounds that are not a `Bounds`, or that are in a different CRS from the view.
@@ -286,26 +355,27 @@ class Viewport:
         """Whether `data` has to be reprojected to be drawn in this view.
 
         Args:
-            data: A pyramids object exposing ``.epsg``.
+            data: A pyramids object exposing `.crs` and/or `.epsg`.
 
         Returns:
-            ``False`` only when the view's CRS is an EPSG integer equal to ``data.epsg`` — the rule every tier
-            shares, from :func:`digitalearth.base.display.needs_reproject`.
+            `False` when the data's own CRS and the view's name the same reference system, however either is
+            spelled — the rule every tier shares, from :func:`digitalearth.base.display.needs_reproject`.
 
         Examples:
-            - Data already in the view's CRS needs no warp:
+            - Data already in the view's CRS needs no warp, whether the view holds a code or its string:
                 ```python
                 >>> from types import SimpleNamespace
                 >>> from digitalearth.base.spec import Viewport
-                >>> Viewport(4326).needs_reproject(SimpleNamespace(epsg=4326))
-                False
+                >>> data = SimpleNamespace(epsg=4326)
+                >>> Viewport(4326).needs_reproject(data), Viewport("EPSG:4326").needs_reproject(data)
+                (False, False)
 
                 ```
-            - A CRS spelled as a string always warps, even when it names the data's own system:
+            - Data in another system warps:
                 ```python
                 >>> from types import SimpleNamespace
                 >>> from digitalearth.base.spec import Viewport
-                >>> Viewport("EPSG:4326").needs_reproject(SimpleNamespace(epsg=4326))
+                >>> Viewport(3857).needs_reproject(SimpleNamespace(epsg=4326))
                 True
 
                 ```
@@ -352,6 +422,10 @@ class Viewport:
             )
         if self.globe:
             out["globe"] = True
+        if self.center is not None:
+            out["center"] = [float(value) for value in self.center]
+        if self.zoom is not None:
+            out["zoom"] = float(self.zoom)
         return out
 
     @classmethod
@@ -396,9 +470,12 @@ class Viewport:
 
                 ```
         """
-        refuse_unknown("Viewport", data, ("crs", "bounds", "domain", "globe"))
+        refuse_unknown(
+            "Viewport", data, ("crs", "bounds", "domain", "globe", "center", "zoom")
+        )
         bounds = data.get("bounds")
         domain = data.get("domain")
+        center = data.get("center")
         return cls(
             crs=require("Viewport", data, "crs"),
             bounds=None
@@ -406,6 +483,8 @@ class Viewport:
             else read_entry("Viewport", "bounds", Bounds.from_dict, bounds),
             domain=tuple(domain) if isinstance(domain, list) else domain,
             globe=data.get("globe", False),
+            center=None if center is None else tuple(center),
+            zoom=data.get("zoom"),
         )
 
 
@@ -425,8 +504,13 @@ class Camera:
             as VTK's `parallel_scale` is. In a parallel projection this — not the distance or the view angle — is
             the zoom, so two views that differ only in it are different cameras. ``None``, the default, leaves the
             renderer to fit the scene. Ignored by a perspective projection, as `view_angle` is by a parallel one.
-        vertical_exaggeration: The factor applied to the z axis, strictly positive. It lives on the view, as the 3-D
+        vertical_exaggeration: The factor applied to the z axis, strictly positive, or `None` for a camera
+            that does not name one — which is not the same as naming `1.0`. A viewpoint built with
+            `Camera.look_at(...)` says where to stand, not how tall the relief is, so assigning one leaves a
+            scene's exaggeration alone; a camera that *does* name a factor sets it. It lives on the view, as the 3-D
             tier already keeps it, rather than in the mesh coordinates.
+        crs: The CRS `position` and `focal_point` are measured in — the scene's display CRS — or `None` when the
+            scene declares none. A CRS object is held in its written spelling, as `Viewport` holds one.
 
     Raises:
         ValueError: for a vector that is not three finite numbers, a camera placed at its own focal point, a zero or
@@ -468,7 +552,8 @@ class Camera:
     view_angle: float = DEFAULT_VIEW_ANGLE
     parallel: bool = False
     parallel_scale: Optional[float] = None
-    vertical_exaggeration: float = 1.0
+    vertical_exaggeration: Optional[float] = None
+    crs: Any = None
 
     def __post_init__(self) -> None:
         """Refuse a camera that could not frame anything.
@@ -476,6 +561,8 @@ class Camera:
         Raises:
             ValueError: as described on the class.
         """
+        if self.crs is not None:
+            object.__setattr__(self, "crs", _written_crs("Camera.crs", self.crs))
         position = _vector("Camera", "position", self.position)
         focal = _vector("Camera", "focal_point", self.focal_point)
         up = _vector("Camera", "view_up", self.view_up)
@@ -512,14 +599,15 @@ class Camera:
                 f"Camera view_angle must be strictly between 0 and 180 degrees; got {angle}"
             )
         object.__setattr__(self, "view_angle", angle)
-        factor = finite_number(
-            "Camera", "vertical_exaggeration", self.vertical_exaggeration
-        )
-        if factor <= 0.0:
-            raise ValueError(
-                f"Camera vertical_exaggeration must be positive; got {factor}"
+        if self.vertical_exaggeration is not None:
+            factor = finite_number(
+                "Camera", "vertical_exaggeration", self.vertical_exaggeration
             )
-        object.__setattr__(self, "vertical_exaggeration", factor)
+            if factor <= 0.0:
+                raise ValueError(
+                    f"Camera vertical_exaggeration must be positive; got {factor}"
+                )
+            object.__setattr__(self, "vertical_exaggeration", factor)
         parallel = true_or_false(self.parallel)
         if parallel is None:
             raise ValueError(
@@ -544,7 +632,7 @@ class Camera:
         view_angle: float = DEFAULT_VIEW_ANGLE,
         parallel: bool = False,
         parallel_scale: Optional[float] = None,
-        vertical_exaggeration: float = 1.0,
+        vertical_exaggeration: Optional[float] = None,
     ) -> "Camera":
         """Place a camera by the direction it looks from, in the terms a map reader uses.
 
@@ -561,7 +649,7 @@ class Camera:
             parallel: Whether the projection is parallel rather than perspective.
             parallel_scale: Half the view's height in scene units, for a parallel projection; ``None`` fits the
                 scene.
-            vertical_exaggeration: The z-axis factor.
+            vertical_exaggeration: The z-axis factor, or `None` to leave the scene's own alone.
 
         Returns:
             The camera.
@@ -726,8 +814,8 @@ class Camera:
         """Return the plain-dict form a figure stores.
 
         Returns:
-            Every field. A camera is small, and a stored view is only reproducible if it records the settings
-            that were in force rather than relying on today's defaults.
+            Every field, and `crs` when one is set. A camera is small, and a stored view is only reproducible if it
+            records the settings that were in force rather than relying on today's defaults.
 
         Examples:
             - Every setting is written, defaults included:
@@ -736,6 +824,15 @@ class Camera:
                 >>> stored = Camera((0.0, -10.0, 5.0), parallel=True).to_dict()
                 >>> stored["position"], stored["parallel"], stored["view_angle"]
                 ([0.0, -10.0, 5.0], True, 30.0)
+
+                ```
+            - A CRS is written only when the camera has one:
+                ```python
+                >>> from digitalearth.base.spec import Camera
+                >>> "crs" in Camera((0.0, -10.0, 5.0)).to_dict()
+                False
+                >>> Camera((0.0, -10.0, 5.0), crs=4326).to_dict()["crs"]
+                4326
 
                 ```
             - The dict survives a JSON round trip and rebuilds an equal camera:
@@ -756,6 +853,9 @@ class Camera:
             "parallel": self.parallel,
             "parallel_scale": self.parallel_scale,
             "vertical_exaggeration": self.vertical_exaggeration,
+            # Written only when set: a camera with no CRS stores what it stored before the field existed, so a
+            # reader that refuses unknown keys still reads it.
+            **({} if self.crs is None else {"crs": self.crs}),
         }
 
     @classmethod
@@ -810,6 +910,7 @@ class Camera:
                 "parallel",
                 "parallel_scale",
                 "vertical_exaggeration",
+                "crs",
             ),
         )
         return cls(
@@ -821,5 +922,6 @@ class Camera:
             view_angle=data.get("view_angle", DEFAULT_VIEW_ANGLE),
             parallel=data.get("parallel", False),
             parallel_scale=data.get("parallel_scale"),
-            vertical_exaggeration=data.get("vertical_exaggeration", 1.0),
+            vertical_exaggeration=data.get("vertical_exaggeration"),
+            crs=data.get("crs"),
         )

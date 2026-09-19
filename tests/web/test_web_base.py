@@ -1021,6 +1021,50 @@ class TestJsonSafeDatetimes:
             f"expected the display CRS, got {out.crs.to_epsg()}"
         )
 
+    def test_a_frame_in_a_projection_with_no_epsg_code_is_placed(self):
+        """A plain GeoDataFrame whose CRS has no EPSG code is reprojected, not drawn as if in degrees (#287).
+
+        Test scenario:
+            ``_display_gdf`` reprojected a plain frame only when ``crs.to_epsg()`` returned a code, so a point at
+            lon 5, lat 52 in an orthographic projection centred there came back at (0, 0).
+        """
+        gpd = pytest.importorskip("geopandas")
+        from shapely.geometry import Point
+
+        ortho = "+proj=ortho +lat_0=52 +lon_0=5 +datum=WGS84 +units=m"
+        frame = gpd.GeoDataFrame(
+            {"v": [1]}, geometry=[Point(5.0, 52.0)], crs=4326
+        ).to_crs(ortho)
+        out = WebMap()._display_gdf(frame, method="points")
+        point = out.geometry.iloc[0]
+        assert (round(point.x, 6), round(point.y, 6)) == (5.0, 52.0), point
+
+    def test_lon_lat_extent_in_another_spelling_is_not_reprojected(self, mocker):
+        """``_as_lonlat`` returns an extent already in lon/lat as it is, however EPSG:4326 is written (#287)."""
+        transform = mocker.patch("digitalearth.web.base.reproject_coordinates")
+        m = WebMap()
+        m.crs = "epsg:4326"
+        extent = m._as_lonlat(5.0, 52.0, 6.0, 53.0)
+        assert transform.call_count == 0, (
+            "a lon/lat extent was reprojected into lon/lat"
+        )
+        assert extent == (5.0, 52.0, 6.0, 53.0), extent
+
+    def test_an_extent_in_another_crs_is_reprojected_to_lon_lat(self):
+        """A display CRS that is not EPSG:4326 — however it is spelled — is reprojected for ``fitBounds``.
+
+        Test scenario:
+            The other side of the same-system check: ``"EPSG:3857"`` names Web Mercator, so the metres are
+            converted rather than handed to MapLibre as degrees.
+        """
+        m = WebMap()
+        m.crs = "EPSG:3857"
+        west, south, east, north = m._as_lonlat(
+            556597.0, 6800125.0, 668219.0, 6982997.0
+        )
+        rounded = (round(west), round(south), round(east), round(north))
+        assert rounded == (5, 52, 6, 53), (west, south, east, north)
+
 
 class TestDatetimeFramesReachTheMap:
     """End-to-end: a dated frame now renders and saves through every vector builder (issue #156)."""

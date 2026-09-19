@@ -230,6 +230,26 @@ class TestViewport:
         """
         assert Viewport(4326).needs_reproject(SimpleNamespace(epsg=epsg)) is expected
 
+    @pytest.mark.parametrize("spelling", ["string", "crs object"])
+    def test_needs_reproject_reads_the_view_crs_by_meaning(self, spelling):
+        """A view in EPSG:4326 spelled as a string, or built from a CRS object, does not warp 4326 data.
+
+        Args:
+            spelling: How the view's CRS is given.
+
+        Test scenario:
+            A view built from a `GeoDataFrame.crs` stores ``"EPSG:4326"``; under the integer rule every layer
+            drawn through it was warped into the CRS it was already in.
+        """
+        from pyproj import CRS
+
+        view = (
+            Viewport("EPSG:4326")
+            if spelling == "string"
+            else Viewport(CRS.from_epsg(4326))
+        )
+        assert view.needs_reproject(SimpleNamespace(epsg=4326)) is False
+
     @pytest.mark.parametrize(
         "view",
         [
@@ -259,8 +279,8 @@ class TestViewport:
 
     def test_from_dict_refuses_an_unknown_key(self):
         """A key a newer writer added is refused, not dropped."""
-        stored = {"crs": 4326, "zoom": 3}
-        with pytest.raises(ValueError, match=r"unknown keys \['zoom'\]"):
+        stored = {"crs": 4326, "pitch": 30}
+        with pytest.raises(ValueError, match=r"unknown keys \['pitch'\]"):
             Viewport.from_dict(stored)
 
 
@@ -273,7 +293,20 @@ class TestCameraConstruction:
         assert camera.focal_point == (0.0, 0.0, 0.0), camera.focal_point
         assert camera.view_up == (0.0, 0.0, 1.0), camera.view_up
         assert camera.view_angle == DEFAULT_VIEW_ANGLE, camera.view_angle
-        assert camera.vertical_exaggeration == 1.0, camera.vertical_exaggeration
+        assert camera.vertical_exaggeration is None, camera.vertical_exaggeration
+
+    def test_a_camera_names_no_exaggeration_unless_it_is_asked_to(self):
+        """`None` and `1.0` are different answers: one is "unsaid", the other is "true scale".
+
+        Test scenario:
+            A scene reads this field as an instruction. Reading the default as `1.0` flattened a scene built
+            with `terrain(z_exaggeration=3.0)` the moment a caller set a viewpoint (review H6), so the
+            default has to be sayable-apart from an explicit `1.0`.
+        """
+        unsaid = Camera((0.0, -10.0, 5.0))
+        true_scale = Camera((0.0, -10.0, 5.0), vertical_exaggeration=1.0)
+        assert unsaid.vertical_exaggeration is None, unsaid.vertical_exaggeration
+        assert true_scale.vertical_exaggeration == 1.0, true_scale.vertical_exaggeration
 
     def test_vectors_are_stored_as_tuples_of_floats(self):
         """A list of ints is frozen into floats, so equality does not depend on how it was spelled."""
@@ -543,6 +576,55 @@ class TestLookingAtAPoint:
         ) == (45.0, True, 12.0, 4.0)
 
 
+class TestCameraCrs:
+    """`Camera.crs` — what the camera's coordinates are measured in (TD-5a, #291)."""
+
+    def test_a_camera_has_no_crs_unless_given_one(self):
+        """The field is optional, so every existing camera keeps building."""
+        assert Camera((0.0, -10.0, 5.0)).crs is None
+
+    def test_a_crs_object_is_held_in_its_written_spelling(self):
+        """A pyproj `CRS` is stored as `"EPSG:<code>"`, as `Viewport` stores one, so the camera hashes."""
+        from pyproj import CRS
+
+        camera = Camera((0.0, -10.0, 5.0), crs=CRS.from_epsg(32618))
+        assert (camera.crs, isinstance(hash(camera), int)) == ("EPSG:32618", True), (
+            camera
+        )
+
+    @pytest.mark.parametrize(
+        "crs", [4326.0, True, "junk", 0], ids=["float", "bool", "junk", "zero"]
+    )
+    def test_a_crs_that_names_no_system_is_refused(self, crs):
+        """A CRS a figure cannot store, or pyramids cannot read, is refused where the camera is built.
+
+        Args:
+            crs: The rejected value.
+        """
+        with pytest.raises(ValueError, match="Camera.crs"):
+            Camera((0.0, -10.0, 5.0), crs=crs)
+
+    def test_to_dict_writes_the_crs_only_when_set(self):
+        """A camera without a CRS stores exactly what it stored before, so older readers still load it."""
+        without, with_crs = (
+            Camera((0.0, -10.0, 5.0)).to_dict(),
+            Camera((0.0, -10.0, 5.0), crs=4326).to_dict(),
+        )
+        assert ("crs" in without, with_crs["crs"]) == (False, 4326), (without, with_crs)
+
+    def test_the_crs_survives_a_json_round_trip(self):
+        """A stored camera reads back with its CRS."""
+        import json
+
+        text = json.dumps(Camera((0.0, -10.0, 5.0), crs="EPSG:3857").to_dict())
+        assert Camera.from_dict(json.loads(text)).crs == "EPSG:3857", text
+
+    def test_a_stored_camera_without_a_crs_loads(self):
+        """A dict written before the field existed is read as a camera with no CRS."""
+        stored = {"position": [0.0, -10.0, 5.0], "view_angle": 30.0}
+        assert Camera.from_dict(stored).crs is None
+
+
 class TestCameraSerialisation:
     """A camera round-trips, so a view can be captured and replayed (#204)."""
 
@@ -588,7 +670,7 @@ class TestCameraSerialisation:
             "view_angle": 30.0,
             "parallel": False,
             "parallel_scale": None,
-            "vertical_exaggeration": 1.0,
+            "vertical_exaggeration": None,
         }
 
     def test_from_dict_needs_a_position(self):
@@ -602,3 +684,42 @@ class TestCameraSerialisation:
         stored = {"position": [0, -10, 5], "roll": 15}
         with pytest.raises(ValueError, match=r"unknown keys \['roll'\]"):
             Camera.from_dict(stored)
+
+
+class TestWhereAPanAndZoomMapLooks:
+    """`center` and `zoom` — what a web map says about where it is standing (#296)."""
+
+    def test_a_centre_and_a_zoom_are_kept_as_floats(self):
+        """The two values a pan-and-zoom map is built with are part of its view."""
+        view = Viewport(4326, center=(4.9, 52.4), zoom=7)
+        assert (view.center, view.zoom) == ((4.9, 52.4), 7.0), view.to_dict()
+
+    def test_a_view_with_neither_says_nothing_about_either(self):
+        """An unframed view leaves the framing to the renderer, as it always did."""
+        assert (Viewport(4326).center, Viewport(4326).zoom) == (None, None), "unset"
+
+    @pytest.mark.parametrize(
+        "center", [(1.0, 2.0, 3.0), (1.0, None), "4.9,52.4", (float("nan"), 1.0)]
+    )
+    def test_a_centre_that_is_not_a_place_is_refused(self, center):
+        """A centre with three numbers is a caller who meant a box; one with a hole places nothing.
+
+        Args:
+            center: The unusable centre under test.
+        """
+        with pytest.raises(ValueError, match="center"):
+            Viewport(4326, center=center)
+
+    def test_a_zoom_that_is_not_a_number_is_refused(self):
+        """A zoom level is a number of doublings, not a word."""
+        with pytest.raises(ValueError, match="zoom"):
+            Viewport(4326, zoom="far")
+
+    def test_the_centre_and_zoom_round_trip(self):
+        """A stored view reads back as the view it was written from."""
+        view = Viewport(3857, center=(0.0, 0.0), zoom=3.5)
+        assert Viewport.from_dict(view.to_dict()) == view, view.to_dict()
+
+    def test_a_view_with_neither_stores_neither(self):
+        """The fields are additive: a view that names no centre is the dict it was before."""
+        assert sorted(Viewport(4326).to_dict()) == ["crs"], Viewport(4326).to_dict()

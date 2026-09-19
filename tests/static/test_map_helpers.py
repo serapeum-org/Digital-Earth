@@ -170,15 +170,17 @@ class TestExtentOf:
     """Tests for Map._extent_of (PA-9)."""
 
     def test_bbox_order_from_arrays(self):
-        """_extent_of returns [xmin, ymin, xmax, ymax] from 1-D coordinate arrays.
+        """_extent_of returns [xmin, ymin, xmax, ymax] covering the cells, from 1-D coordinate arrays.
 
         Test scenario:
-            Unsorted x/y arrays still yield the correct min/max bbox in cleopatra order.
+            Unsorted x/y arrays still yield the correct bbox in cleopatra order — and since #301 that bbox is
+            the rectangle the cells *cover*, half a cell outside the outermost centres, rather than the line
+            through them. Three cells one unit apart, centred at 0/1/2, span -0.5 to 2.5.
         """
         x = np.array([2.0, 0.0, 1.0])
         y = np.array([5.0, 9.0, 7.0])
-        assert Map._extent_of(x, y) == [0.0, 5.0, 2.0, 9.0], (
-            "bbox order/values incorrect"
+        assert Map._extent_of(x, y) == [-0.5, 4.0, 2.5, 10.0], (
+            "the extent must cover the cells, not stop at their centres"
         )
 
     def test_extent_delegates_to_extent_of(self):

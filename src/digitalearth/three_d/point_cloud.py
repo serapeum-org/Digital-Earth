@@ -13,7 +13,6 @@ all CRS work upstream.
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pyvista as pv
 
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
@@ -77,6 +76,10 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+from digitalearth.base.spec import LayerSpec
+from digitalearth.three_d.layer import drawing_props
+
+
 class PointCloudMixin(_MixinBase):
     """Adds :meth:`point_cloud` — render scattered 3-D points — to a :class:`Scene3D`.
 
@@ -99,6 +102,7 @@ class PointCloudMixin(_MixinBase):
         self,
         data: Any,
         *,
+        name: Any = None,
         values: np.ndarray | None = None,
         value_column: str | None = None,
         size: float | None = None,
@@ -111,6 +115,9 @@ class PointCloudMixin(_MixinBase):
         **kwargs: Any,
     ) -> Any:
         """Render a point cloud (LiDAR / observations / raster cells) and register it as a layer.
+
+        A GeoDataFrame is placed in the scene's display CRS — setting it when the scene has none, reprojected
+        through pyramids when it is in another. A numpy point table declares no CRS and is placed as given.
 
         Args:
             data: A numpy ``(N, 3)``/``(N, 2)`` point table (e.g. ``Dataset.to_xyz()`` or LiDAR xyz), or a
@@ -140,8 +147,9 @@ class PointCloudMixin(_MixinBase):
         Raises:
             TypeError: if both ``size`` and the deprecated ``point_size`` are given — they name one
                 parameter, so neither can be silently preferred.
-            ValueError: if ``values`` does not have one entry per point, or if ``scheme`` cannot classify
-                the values. Also — only when the scene was built with ``strict=True`` —
+            ValueError: if ``values`` does not have one entry per point, if ``scheme`` cannot classify
+                the values, or if `data` declares a CRS other than the scene's and cannot be reprojected (a
+                `PointArrays`). Also — only when the scene was built with ``strict=True`` —
                 :class:`~digitalearth.base.crs.OffLimbError` for an empty cloud, which is otherwise skipped
                 with a warning.
 
@@ -190,38 +198,74 @@ class PointCloudMixin(_MixinBase):
             caller="Scene3D.point_cloud()",
             default=5.0,
         )
-        if hasattr(data, "geometry"):
-            points, gdf_values = _coords_from_geodataframe(data, value_column)
-        else:
-            points, gdf_values = _coords_from_array(data), None
-
-        scalar = values if values is not None else gdf_values
-        if len(points) == 0:
-            # Validate the scalar length first so an empty cloud paired with values is still a caller error,
-            # not a silently skipped layer.
-            if scalar is not None and len(scalar) != 0:
-                raise ValueError(
-                    f"values length {len(scalar)} does not match {len(points)} points"
-                )
-            self._skip_empty("point_cloud", "the point table is empty")
-            return None
-        cloud = pv.PolyData(points)
-
-        add_kwargs = dict(
-            point_size=size,
+        return self._add_described_layer(
+            kind="point_cloud",
+            data=data,
+            name=name,
+            values=values,
+            value_column=value_column,
+            size=size,
+            scheme=scheme,
+            k=k,
             render_points_as_spheres=render_points_as_spheres,
+            eye_dome_lighting=eye_dome_lighting,
+            cmap=cmap,
             **kwargs,
         )
-        if scalar is not None:
-            if len(scalar) != len(points):
-                raise ValueError(
-                    f"values length {len(scalar)} does not match {len(points)} points"
-                )
-            style = classified_scalars(scalar, scheme=scheme, k=k, cmap=cmap)
-            cloud[SCALAR] = style.pop("scalars")
-            add_kwargs.update(scalars=SCALAR, **style)
 
-        actor = self.plotter.add_points(cloud, **add_kwargs)
-        if eye_dome_lighting:
-            self.plotter.enable_eye_dome_lighting()
-        return self._add_actor(cloud, actor)
+
+def draw_point_cloud(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the cloud a `point_cloud` layer describes and add it to the scene's plotter.
+
+    Args:
+        scene: The scene being drawn into.
+        data: The layer's source object: a point table, or a GeoDataFrame of points.
+        layer: The layer's description, whose props carry the values, the classification and the point style.
+
+    Returns:
+        The `(cloud, actor)` pair, or `None` when the table held no points and the scene is not `strict`.
+
+    Raises:
+        ValueError: if the values do not have one entry per point, or the scheme cannot classify them.
+        OffLimbError: when the table is empty and the scene is `strict`.
+    """
+    props = drawing_props(layer.symbology.props)
+    values = props.pop("values", None)
+    value_column = props.pop("value_column", None)
+    scheme = props.pop("scheme", None)
+    k = props.pop("k", 5)
+    cmap = props.pop("cmap", "viridis")
+    eye_dome_lighting = props.pop("eye_dome_lighting", True)
+    props["point_size"] = props.pop("size", None)
+    placed = scene._place(data, layer="point_cloud")
+    if hasattr(placed, "geometry"):
+        points, gdf_values = _coords_from_geodataframe(placed, value_column)
+    else:
+        points, gdf_values = _coords_from_array(placed), None
+
+    scalar = np.asarray(values) if values is not None else gdf_values
+    if len(points) == 0:
+        # Validate the scalar length first so an empty cloud paired with values is still a caller error,
+        # not a silently skipped layer.
+        if scalar is not None and len(scalar) != 0:
+            raise ValueError(
+                f"values length {len(scalar)} does not match {len(points)} points"
+            )
+        scene._skip_empty("point_cloud", "the point table is empty")
+        return None
+    import pyvista as pv
+
+    cloud = pv.PolyData(points)
+    if scalar is not None:
+        if len(scalar) != len(points):
+            raise ValueError(
+                f"values length {len(scalar)} does not match {len(points)} points"
+            )
+        style = classified_scalars(scalar, scheme=scheme, k=k, cmap=cmap)
+        cloud[SCALAR] = style.pop("scalars")
+        props.update(scalars=SCALAR, **style)
+
+    actor = scene.plotter.add_points(cloud, **props)
+    if eye_dome_lighting:
+        scene.plotter.enable_eye_dome_lighting()
+    return cloud, actor

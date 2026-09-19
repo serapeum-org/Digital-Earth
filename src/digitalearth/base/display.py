@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, Optional
 
 from digitalearth.base.crs import reproject
 from digitalearth.base.sources import Source, get_source
+from digitalearth.base.spec.bounds import same_crs
 
 __all__ = ["auto_cmap", "needs_reproject", "to_display_source"]
 
@@ -41,42 +42,53 @@ def needs_reproject(data: Any, crs: Any) -> bool:
     """Whether `data` must be reprojected to reach the display CRS.
 
     Args:
-        data: A pyramids object exposing ``.epsg`` — a ``Dataset`` or ``FeatureCollection``.
-        crs: The display CRS.
+        data: A pyramids object — a `Dataset` or `FeatureCollection` — exposing `.crs` and/or `.epsg`.
+        crs: The display CRS, in any spelling pyramids reads: an EPSG `int`, an `"EPSG:<code>"` string, a
+            proj4 or WKT string, or a pyproj `CRS`.
 
     Returns:
-        ``False`` only when `crs` is an ``int`` equal to ``data.epsg``; ``True`` otherwise.
+        `False` when the data's own CRS and `crs` name the same reference system; `True` otherwise,
+        including for data that declares no CRS at all.
 
-        Only an EPSG-int display CRS can be compared cheaply. For a proj4/WKT display CRS — an orthographic
-        globe, say — the answer is always ``True``: ``data.epsg`` is unreliable for a projection with no
-        authority code (pyramids reports 4326 for one), so comparing against it structurally would answer
-        "already there" for data that is not.
+        The two are compared by meaning, through :func:`~digitalearth.base.spec.bounds.same_crs`, the rule
+        `Bounds` and `Viewport` already use. Comparing Python values instead skipped a warp only for an
+        `int` display CRS, so a view holding `"EPSG:4326"` — the spelling `Viewport` writes for a CRS
+        object — warped data that was already in EPSG:4326.
 
-        Read with ``getattr``, which is how the interactive and web tiers wrote it: the static copy used
-        ``data.epsg`` directly and raised ``AttributeError`` on an input that declares no CRS at all. The
-        tolerant reading is a superset, so lifting it changes no answer that was previously returned.
+        The data's CRS **definition** (`.crs`) is read before its EPSG code, which is only the fallback. An
+        EPSG code says nothing about a projection with no authority code, while the definition does: an
+        orthographic dataset still warps to EPSG:4326, and needs no warp to its own orthographic CRS.
+
+        Both attributes are read with `getattr`, so an input declaring no CRS gets an answer rather than an
+        `AttributeError`.
 
     Examples:
-        - Matching EPSG ints need no warp:
+        - The same system needs no warp, however the display CRS is spelled:
             ```python
+            >>> from types import SimpleNamespace
             >>> from digitalearth.base.display import needs_reproject
-            >>> class Ds:
-            ...     epsg = 4326
-            >>> needs_reproject(Ds(), 4326)
-            False
+            >>> data = SimpleNamespace(epsg=4326)
+            >>> needs_reproject(data, 4326), needs_reproject(data, "EPSG:4326")
+            (False, False)
 
             ```
-        - A proj4 display CRS always warps, because the comparison cannot be trusted:
+        - A different system warps, and so does data that declares no CRS:
             ```python
+            >>> from types import SimpleNamespace
             >>> from digitalearth.base.display import needs_reproject
-            >>> class Ds:
-            ...     epsg = 4326
-            >>> needs_reproject(Ds(), "+proj=ortho +lat_0=53 +lon_0=4")
+            >>> needs_reproject(SimpleNamespace(epsg=4326), "+proj=ortho +lat_0=53 +lon_0=4")
+            True
+            >>> needs_reproject(SimpleNamespace(), 4326)
             True
 
             ```
     """
-    return not (isinstance(crs, int) and getattr(data, "epsg", None) == crs)
+    own = getattr(data, "crs", None)
+    if own is None:
+        own = getattr(data, "epsg", None)
+    if own is None:
+        return True
+    return not same_crs(own, crs)
 
 
 def to_display_source(data: Any, crs: Any, *, band: int = 1) -> Source:

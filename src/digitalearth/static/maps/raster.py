@@ -10,6 +10,7 @@ import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
 
 from digitalearth.base.autostyle import auto_style
+from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
 from digitalearth.base.spec import Bounds
@@ -92,9 +93,7 @@ class RasterMixin(_MixinBase):
         # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that
         # label a colorbar the caller did not label itself.
         style = auto_style(src)
-        if cmap is None:
-            cmap = style.get("cmap") or default_cmap
-        opts["cmap"] = cmap
+        opts["cmap"] = auto_cmap(src, cmap, default_cmap, lookup=lambda _: style)
         if levels is None and kind in _CONTOUR_KINDS:
             levels = style.get("levels")  # the variable's canonical contour levels
         if levels is not None:
@@ -181,7 +180,12 @@ class RasterMixin(_MixinBase):
 
     @staticmethod
     def _extent_of(x: Any, y: Any) -> List[float]:
-        """Return the bbox-order extent enclosing 1-D x/y coordinate arrays, as cleopatra takes it.
+        """Return the bbox-order extent of the cells 1-D x/y centres describe, as cleopatra takes it.
+
+        The coordinates name the middle of each cell, and the extent is the rectangle those cells *cover* —
+        half the outermost spacing further out on every side (:meth:`Bounds.cell_edges`). Taken from the
+        smallest and largest centre instead, the image would be drawn one cell narrower and one shorter than
+        the data, with every pixel at ``(n - 1) / n`` of its size (#301).
 
         Args:
             x: X coordinates, already in the display CRS.
@@ -195,16 +199,16 @@ class RasterMixin(_MixinBase):
             in the display one, and a CRS that changes nothing is a parameter every caller must think about
             for no benefit.
         """
-        return Bounds.from_points(x, y, crs=None).as_bbox()
+        return Bounds.cell_edges(x, y, crs=None).as_bbox()
 
     def _extent(self, ds: Any) -> List[float]:
-        """Return the bbox-order extent of a dataset's cell-centre coords, as cleopatra takes it.
+        """Return the bbox-order extent of the cells a dataset's coordinates describe, as cleopatra takes it.
 
         Args:
-            ds: The display-CRS source whose ``x``/``y`` coordinates bound the image.
+            ds: The display-CRS source whose ``x``/``y`` cell centres bound the image.
 
         Returns:
-            ``[xmin, ymin, xmax, ymax]``.
+            ``[xmin, ymin, xmax, ymax]`` — the rectangle the cells cover, as :meth:`_extent_of` places it.
         """
         return self._extent_of(ds.x, ds.y)
 

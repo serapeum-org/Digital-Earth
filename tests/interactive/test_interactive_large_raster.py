@@ -1,8 +1,10 @@
 """DI.14 — large-raster / COG viewport loading (large_image).
 
-Drives the pyramids ``read_part``/``preview`` viewport surface through a fake COG dataset (so the test
-needs no multi-GB file or network): the static frame uses ``preview``; a viewport ``RangeXY`` event
-issues a ``read_part`` whose bbox follows the requested window. Runs in the ``interactive`` pixi env.
+Drives pyramids' windowed read through a fake COG dataset (so the test needs no multi-GB file or network).
+Since #297 every frame is read through :class:`~digitalearth.base.sources.view.SourceView` with a request
+from :class:`~digitalearth.base.spec.RenderTarget`, so what these assert is the *read request*: the first
+frame windows the whole raster within the budget, and a ``RangeXY`` event reads the window it asks for.
+Runs in the ``interactive`` pixi env.
 """
 
 import numpy as np
@@ -41,19 +43,44 @@ def m() -> InteractiveMap:
 class TestLargeImage:
     """``large_image`` — viewport-driven decimated reads via pyramids."""
 
-    def test_static_frame_uses_preview(self, m):
+    def test_the_static_frame_windows_the_whole_raster(self, m):
+        """The first frame reads the source's own extent, within the budget.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            Rewritten for #297: the frame came from `preview(max_size=side)`, a square whatever the map's
+            shape. It is now a windowed read of the whole raster through the data tier, so what is asserted
+            is the window rather than the call that produced it.
+        """
         cog = _FakeCOG()
         m.large_image(cog, dynamic=False, max_pixels=64 * 64)
         assert isinstance(m.layers[0], hv.Image), f"got {type(m.layers[0])}"
-        assert cog.preview_calls, (
-            "the static frame must come from a cheap overview preview"
+        assert cog.read_calls, (
+            "the first frame must read through pyramids' windowed read"
+        )
+        assert cog.read_calls[-1][0] == pytest.approx(cog.bbox), (
+            f"the first frame must window the whole raster, got {cog.read_calls[-1][0]}"
         )
 
-    def test_canvas_stays_under_max_pixels(self, m):
+    def test_the_canvas_stays_under_max_pixels(self, m):
+        """`max_pixels` is a budget of cells, and the canvas follows the map's aspect within it.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            Rewritten for #297: the canvas was `max(64, sqrt(max_pixels))` square. It now comes from
+            `RenderTarget.view_request`, so the two sides may differ — what must hold is that their product
+            fits the budget.
+        """
         cog = _FakeCOG()
         m.large_image(cog, dynamic=False, max_pixels=128 * 128)
-        side = cog.preview_calls[-1]
-        assert side * side <= 128 * 128, f"preview side {side} exceeds the pixel budget"
+        _, width, height = cog.read_calls[-1]
+        assert width * height <= 128 * 128, (
+            f"a {width}x{height} canvas exceeds the budget"
+        )
 
     def test_dynamic_returns_dynamicmap(self, m):
         cog = _FakeCOG()
@@ -109,13 +136,27 @@ class TestLargeImage:
             m.large_image(cog, band=0)
 
     def test_band_passed_to_pyramids_is_zero_based(self, m):
-        """The 1-based default ``band=1`` reaches pyramids ``preview`` as 0-based ``band=0``."""
+        """The 1-based default ``band=1`` reaches pyramids' windowed read as 0-based ``band=0``.
+
+        Args:
+            m: The map under test.
+
+        Test scenario:
+            The frame is read through the data tier since #297, so the conversion is asserted where the read
+            happens rather than on `preview`.
+        """
         recorded = {}
 
         class _BandCOG(_FakeCOG):
-            def preview(self, *, max_size=1024, band=1):
+            def read_part(self, *, bbox, dst_width, dst_height, bbox_crs=4326, band=1):
                 recorded["band"] = band
-                return np.random.default_rng(0).random((max_size, max_size))
+                return super().read_part(
+                    bbox=bbox,
+                    dst_width=dst_width,
+                    dst_height=dst_height,
+                    bbox_crs=bbox_crs,
+                    band=band,
+                )
 
         m.large_image(_BandCOG(), dynamic=False, max_pixels=64 * 64)
         assert recorded["band"] == 0, (

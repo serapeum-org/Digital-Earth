@@ -57,8 +57,14 @@ cmap, sampling it, the missing colour). :class:`~digitalearth.base.spec.style.Sy
 
 from digitalearth.base.spec.bounds import Bounds
 from digitalearth.base.spec.dataref import DataRef
-from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding
-from digitalearth.base.spec.figure import SCHEMA_VERSION, FigureSpec, PanelSpec
+from digitalearth.base.spec.encoding import CHANNELS, Channel, Encoding, Guide
+from digitalearth.base.spec.figure import (
+    SCHEMA_VERSION,
+    FigureDiff,
+    FigureSpec,
+    PanelSpec,
+)
+from digitalearth.base.spec.furniture import Furniture
 from digitalearth.base.spec.layer import LAYER_REFERENCE, LayerSpec, LayerTree
 from digitalearth.base.spec.legend import (
     DEFAULT_RAMP_STOPS,
@@ -85,7 +91,10 @@ __all__ = [
     "Channel",
     "DataRef",
     "Encoding",
+    "FigureDiff",
     "FigureSpec",
+    "Furniture",
+    "Guide",
     "LAYER_REFERENCE",
     "LEGEND_KINDS",
     "LegendEntry",
