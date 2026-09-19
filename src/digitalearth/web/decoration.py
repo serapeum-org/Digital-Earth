@@ -529,6 +529,8 @@ class DecorationMixin(_MixinBase):
         gradient bar with its end values.
 
         Args:
+            layer_id: Which layer's classes to describe. `None` takes the most recently classified layer,
+                which is what the tier recorded before layers had ids.
             title: Heading above the key. ``None`` uses the classified column's name, followed by the
                 units in parentheses when :func:`~digitalearth.base.autostyle.auto_style` supplied them
                 for the raster the classification came from. A title given here always wins, and a unit
@@ -536,14 +538,11 @@ class DecorationMixin(_MixinBase):
             position: One of the four MapLibre corners.
             labels: Explicit row labels, replacing the derived ones — for units, or for renaming
                 categories. Ignored for a continuous ramp, which has no rows.
+            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
+                The corner is still checked, so one spelling of it is not valid only half the time.
 
         Returns:
             The same map instance, so builder calls chain.
-
-        Args:
-            layer_id: Which layer's classes to describe. `None` takes the most recently classified layer,
-                which is what the tier recorded before layers had ids.
-            visible: `False` draws no key, so a caller passing a flag through does not have to branch.
 
         Raises:
             ValueError: when ``position`` is not one of the four legal MapLibre corners, when `layer_id`

@@ -854,11 +854,12 @@ class SourceView(Source):
             only place the two are stated separately — and from the square `cell_size` for both when it does
             not. `(None, None)` for a source that says neither.
         """
-        transform = getattr(data, "geotransform", None)
-        if isinstance(transform, (tuple, list)) and len(transform) >= 6:
-            across, down = abs(float(transform[1])), abs(float(transform[5]))
-            if across and down:
-                return across, down
+        # Through `_grid`, which already reads the geotransform and rejects a zero step: two readings of
+        # one thing, with guards that disagreed, is how they drift apart (review N9).
+        grid = SourceView._grid(data)
+        if grid is not None:
+            _, step_x, _, step_y = grid
+            return abs(float(step_x)), abs(float(step_y))
         cell = getattr(data, "cell_size", None)
         if not cell:
             return None, None

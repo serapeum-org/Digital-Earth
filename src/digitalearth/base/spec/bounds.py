@@ -327,23 +327,51 @@ class Bounds:
                 "Bounds.cell_edges needs coordinates on both axes; got "
                 f"{xs.size} x and {ys.size} y"
             )
-        if step is None:
-            steps: Tuple[Any, Any] = (None, None)
-        else:
-            try:
-                steps = (step[0], step[1])
-            except (TypeError, IndexError, KeyError):
-                raise ValueError(
-                    f"Bounds.cell_edges step must be a (dx, dy) pair; got {step!r}"
-                ) from None
+        steps = cls._checked_step(step)
         # A lone cell has no spacing of its own, so it borrows the other axis's: a raster one row tall is a
         # row of square cells, not a line of zero height. Without this a 1 x 25 raster was placed on a
         # rectangle with no height at all and drawn invisible (review M4). A caller who knows better says so
         # with `step=`, and an axis whose partner is also degenerate stays a point.
-        spacings = (cls._spacing(xs), cls._spacing(ys))
-        west, east = cls._edges(xs, steps[0] if steps[0] is not None else spacings[1])
-        south, north = cls._edges(ys, steps[1] if steps[1] is not None else spacings[0])
+        # A named spacing is the caller's answer for *that* axis; the other axis' spacing is only borrowed
+        # where they did not give one. Reading the derived spacings alone meant `step=(10, None)` collapsed
+        # the y axis to a point although the caller had named the x cell size (review L11).
+        across = steps[0] if steps[0] is not None else cls._spacing(ys) or steps[1]
+        down = steps[1] if steps[1] is not None else cls._spacing(xs) or steps[0]
+        west, east = cls._edges(xs, across)
+        south, north = cls._edges(ys, down)
         return cls(west, south, east, north, crs)
+
+    @staticmethod
+    def _checked_step(step: Any) -> Tuple[Any, Any]:
+        """Return the `(dx, dy)` a caller named, refusing anything that is not one.
+
+        Args:
+            step: What the caller passed for `step`, or `None`.
+
+        Returns:
+            `(dx, dy)` as given, or `(None, None)` for `None`.
+
+        Raises:
+            ValueError: for anything that is not a pair of two numbers — including a string, which unpacks
+                two characters just as happily, and a triple, whose third value was silently ignored
+                (review L11).
+        """
+        if step is None:
+            return (None, None)
+        if isinstance(step, (str, bytes)) or not isinstance(step, Sequence):
+            raise ValueError(
+                f"Bounds.cell_edges step must be a (dx, dy) pair; got {step!r}"
+            )
+        if len(step) != 2:
+            raise ValueError(
+                f"Bounds.cell_edges step must be a (dx, dy) pair; got {len(step)} values"
+            )
+        for value in step:
+            if value is not None and not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"Bounds.cell_edges step must be a (dx, dy) pair of numbers; got {step!r}"
+                )
+        return (step[0], step[1])
 
     @staticmethod
     def _axis_values(axis: Any, name: str) -> Any:

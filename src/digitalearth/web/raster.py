@@ -124,6 +124,8 @@ class RasterMixin(_MixinBase):
             with a warning, or the error is raised when the map was built with ``strict=True``.
 
         Raises:
+            ValueError: when `limits` is given alongside `vmin`/`vmax` — they name the same thing — or is
+                not a `(vmin, vmax)` pair of numbers.
             OffLimbError: only when the map was built with ``strict=True`` and the band cannot be
                 placed; by default that layer is skipped with a warning instead, so one unplaceable
                 raster does not cost the map the layers around it.

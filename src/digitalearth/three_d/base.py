@@ -1136,8 +1136,11 @@ class Scene3DBase:
             This scene (chainable).
 
         Raises:
-            KeyError: if no layer has that id.
-            ValueError: if `layer` is not a `LayerSpec`.
+            KeyError: if no layer has that id, or if the replacement names a kind nobody registered — a
+                plugin's kind on a machine without the plugin reads as the second.
+            ValueError: if `layer` is not a `LayerSpec`, or if it draws from data and names no `source_id`:
+                the drawers read the source from the figure, and a missing one reached `get_source(None)`
+                and answered with a `TypeError` nothing documents.
 
         Examples:
             - A layer redrawn in another colormap keeps its id:

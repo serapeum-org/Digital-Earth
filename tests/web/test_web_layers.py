@@ -1115,7 +1115,8 @@ class TestAColourKeyDescribesTheLayerItNames:
         m.choropleth(self._squares("rain", [500, 900]), column="rain", name="B")
         m.colorbar("A", label="People")
         drawn = m._panels["legend"][0]
-        assert ">1<" in drawn and ">100<" in drawn.replace(">1<", ""), drawn
+        assert ">1<" in drawn, drawn
+        assert ">100<" in drawn, drawn
 
     def test_the_other_layer_still_shows_its_own(self):
         """The same call for B is B's range, so this is selection rather than a reversed default."""

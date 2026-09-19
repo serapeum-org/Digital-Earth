@@ -799,6 +799,11 @@ class InteractiveMapBase:
         self._flush_deferred_tiles()
         return self._projected(self._compose(self.layers))
 
+    # Note: the dashboard's widget paths call `_flush_deferred_tiles`, `_compose` and `_projected`
+    # themselves rather than this method, because they compose from a *restyled* or *chosen* subset of the
+    # layers rather than from all of them. A subclass overriding `render` to change how the figure is put
+    # together should override `_compose`, which both routes share (review N10).
+
     def _flush_deferred_tiles(self) -> None:
         """Draw a basemap that was asked for before there was a figure to draw it on.
 

@@ -1499,7 +1499,10 @@ class WebMapBase:
             This map, so builder calls chain: ``m.field(dem).basemap()``.
 
         Raises:
-            ValueError: if `band` is not one of the four bands.
+            ValueError: if `band` is not one of the four bands; if the object carries an id another layer
+                on this map already uses, since MapLibre drops the second layer with that id; if `name=`
+                names something other than the id the object carries, which the page would never add; or
+                if this exact object is already on the map, which is one layer, not two.
 
         Examples:
             - A layer you built is addressable, and can be taken off again (any object stands in for a layer
