@@ -604,9 +604,9 @@ class Scene3DBase:
             plotter: The plotter to use from now on; a stand-in with the methods the scene calls will do.
         """
         self._plotter = plotter
-        # A stand-in need not implement the view API; it is still a valid plotter to draw on.
-        if hasattr(plotter, "set_scale"):
-            self._dress_plotter()
+        # A stand-in need not implement the whole view API; it is still a valid plotter to draw on, and
+        # `_dress_plotter` applies whichever halves it has (review L14).
+        self._dress_plotter()
 
     def _dress_plotter(self) -> None:
         """Put the scene's own view state onto the plotter it is about to draw on.
@@ -623,8 +623,10 @@ class Scene3DBase:
         plotter = self._plotter
         if plotter is None:  # pragma: no cover - only called with one in hand
             return
-        plotter.set_scale(zscale=self._vertical, render=False)
-        self._apply_camera()
+        if hasattr(plotter, "set_scale"):
+            plotter.set_scale(zscale=self._vertical, render=False)
+        if hasattr(plotter, "camera"):
+            self._apply_camera()
 
     def _place(self, data: Any, *, layer: str) -> Any:
         """Return `data` in the scene's display CRS, adopting the data's CRS when the scene has none yet.

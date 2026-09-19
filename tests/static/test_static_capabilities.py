@@ -85,21 +85,24 @@ class TestTheDeclaration:
 
         from digitalearth.static import Map
 
+        # The tier does not describe its layers yet — that is #303's renderer half — so the kinds are read
+        # from the registry, which names the builder that draws each one. Every builder listed here is
+        # called, so a kind whose builder disappears fails on the call rather than on the table.
+        builders = {
+            "raster": lambda canvas: canvas.imshow(dataset),
+            "contours": lambda canvas: canvas.contour(dataset),
+            "filled_contours": lambda canvas: canvas.contourf(dataset),
+            "mesh": lambda canvas: canvas.pcolormesh(dataset),
+            "points": lambda canvas: canvas.scatter(FeatureCollection(points)),
+            "coastlines": lambda canvas: canvas.coastlines(),
+            "text": lambda canvas: canvas.text(0.0, 0.0, "here"),
+            "graticule": lambda canvas: canvas.graticule(),
+        }
         with Map() as canvas:
-            canvas.imshow(dataset)
-            canvas.contour(dataset)
-            canvas.scatter(FeatureCollection(points))
-            canvas.coastlines()
-            canvas.text(0.0, 0.0, "here")
-            drawn = {
-                layer.kind for layer in getattr(canvas, "_described_layers", [])
-            } or set()
-        # The tier does not describe its layers yet (#303's renderer half), so the builders above stand for
-        # the kinds they draw: what is checked is that each is declared.
-        assert {"raster", "contours", "points", "coastlines", "text"} <= (
-            CAPABILITIES.kinds
-        ), sorted(CAPABILITIES.kinds)
-        assert drawn <= CAPABILITIES.kinds, sorted(drawn - CAPABILITIES.kinds)
+            for draw in builders.values():
+                draw(canvas)
+        undeclared = sorted(set(builders) - CAPABILITIES.kinds)
+        assert undeclared == [], f"these are drawn and not declared: {undeclared}"
 
     def test_the_registry_credits_nothing_to_this_tier_that_it_does_not_declare(self):
         """A second opinion: the registry describes each kind by the builders that draw it.

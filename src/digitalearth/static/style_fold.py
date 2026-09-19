@@ -51,6 +51,20 @@ COLOR_SCALE_ALIASES = {
     "equalize": ColorScale.EQUALIZE,
 }
 
+#: The variant constructor each scale is built with, which cleopatra's own docstring says to prefer over
+#: the raw dataclass. Not derivable from the enum's value: three of the seven spell the builder differently
+#: (``sym-lognorm`` -> ``sym_log``, ``lognorm`` -> ``log``, ``boundary-norm`` -> ``boundary``), so deriving it
+#: advised an `AttributeError` for those three (review L1).
+COLOR_SCALE_BUILDERS = {
+    ColorScale.LINEAR: "linear",
+    ColorScale.POWER: "power",
+    ColorScale.LOGNORM: "log",
+    ColorScale.SYM_LOGNORM: "sym_log",
+    ColorScale.BOUNDARY_NORM: "boundary",
+    ColorScale.MIDPOINT: "midpoint",
+    ColorScale.EQUALIZE: "equalize",
+}
+
 #: The ``plot()`` parameter the colour group is passed under.
 COLOR_GROUP_PARAM = "color"
 
@@ -170,8 +184,7 @@ def fold_color_scaling(out: Dict[str, Any]) -> None:
     built = out.get(COLOR_GROUP_PARAM)
     if built is not None:
         if written:
-            scale = getattr(getattr(built, "kind", None), "value", "linear")
-            builder = str(scale).replace("-", "_")
+            builder = COLOR_SCALE_BUILDERS.get(getattr(built, "kind", None), "linear")
             raise ValueError(
                 f"{COLOR_GROUP_PARAM}={type(built).__name__}(...) and {written} style the same thing; pass "
                 f"one or the other — the flat keywords are the group's own fields, so "

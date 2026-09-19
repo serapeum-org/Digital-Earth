@@ -79,6 +79,12 @@ def drawer_for(kind: str) -> Any:
 
             ```
     """
+    # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
+    # without loading every builder behind them (review L4).
+    if kind not in DRAWN_KINDS:
+        raise KeyError(
+            f"the 3-D tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+        )
     # Imported here rather than at module level: every builder module imports the scene, so a module-level
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.
     from digitalearth.three_d import globe, point_cloud, terrain, vector, volume
@@ -94,9 +100,13 @@ def drawer_for(kind: str) -> Any:
         "coastlines": globe.draw_coastlines,
         "custom:pyvista": draw_custom,
     }
-    if kind not in DRAWN_KINDS:
+    # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
+    # in `DRAWN_KINDS` would be refused with a message that is false, and one in `DRAWN_KINDS` with no drawer
+    # would raise a bare `KeyError` where the message belongs (review L3).
+    if set(drawers) != set(DRAWN_KINDS):
         raise KeyError(
-            f"the 3-D tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+            f"the 3-D tier's drawer table and DRAWN_KINDS disagree: "
+            f"{sorted(set(drawers).symmetric_difference(DRAWN_KINDS))}"
         )
     return drawers[kind]
 
@@ -273,13 +283,17 @@ class Renderer3D:
 
         Returns:
             `True` when the layer's symbology, filter or group differs — the parts a drawer reads — and for
-            a layer the previous figure did not hold. `False` for a change to `label` alone.
+            a layer either figure does not hold, which is a question about the layer rather than about its
+            style. `False` for a change to `label` alone.
         """
         try:
             was = before.layers.get(layer_id)
+            now = after.layers.get(layer_id)
         except KeyError:
+            # `restyled` only ever names ids both figures hold, so neither lookup raises on the path that
+            # calls this. Guarding both rather than the first is what makes that true of a direct call too
+            # (review L13) — and the answer for a layer that is not in both is to draw it.
             return True
-        now = after.layers.get(layer_id)
         return (was.symbology, was.filter, was.group) != (
             now.symbology,
             now.filter,

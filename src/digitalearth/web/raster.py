@@ -10,7 +10,7 @@ matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazil
 the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Self
+from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
@@ -28,7 +28,9 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def _colour_limits(limits: Any, vmin: Any, vmax: Any, *, caller: str) -> tuple:
+def _colour_limits(
+    limits: Optional[Sequence[float]], vmin: Any, vmax: Any, *, caller: str
+) -> Tuple[Any, Any]:
     """Resolve the contract's `limits=` against this tier's own `vmin`/`vmax`.
 
     `limits` is the one spelling every tier answers to (#299); `vmin`/`vmax` are what this tier took before
@@ -52,13 +54,23 @@ def _colour_limits(limits: Any, vmin: Any, vmax: Any, *, caller: str) -> tuple:
         raise ValueError(
             f"{caller} takes limits= or vmin=/vmax=, not both; they name the same thing"
         )
+    # A sequence of two numbers, checked as such. `low, high = limits` unpacks a two-character string and a
+    # two-element iterator just as happily, and the failure surfaced further down as numpy's own message
+    # about a value this function had already seen (review L9).
+    if isinstance(limits, (str, bytes)) or not isinstance(limits, Sequence):
+        raise ValueError(
+            f"{caller} limits must be a (vmin, vmax) pair of numbers; got {limits!r}"
+        )
+    if len(limits) != 2:
+        raise ValueError(
+            f"{caller} limits must be a (vmin, vmax) pair of numbers; got {len(limits)} values"
+        )
     try:
-        low, high = limits
+        return float(limits[0]), float(limits[1])
     except (TypeError, ValueError):
         raise ValueError(
-            f"{caller} limits must be a (vmin, vmax) pair; got {limits!r}"
+            f"{caller} limits must be a (vmin, vmax) pair of numbers; got {limits!r}"
         ) from None
-    return low, high
 
 
 class RasterMixin(_MixinBase):
@@ -72,7 +84,7 @@ class RasterMixin(_MixinBase):
         cmap: Optional[str] = None,
         units: Optional[str] = None,
         opacity: float = 1.0,
-        limits: Optional[Any] = None,
+        limits: Optional[Sequence[float]] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         visible: bool = True,

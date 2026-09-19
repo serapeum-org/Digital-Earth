@@ -277,8 +277,10 @@ class TestWhatTheFrameShows:
         """
         m = InteractiveMap(crs=cog.epsg)
         m.large_image(cog, dynamic=False, max_pixels=4)
+        import math
+
         drawn = m.layers[0].bounds.lbrt()
-        assert all(edge == edge for edge in drawn), f"nan bounds: {drawn}"
+        assert not any(math.isnan(edge) for edge in drawn), f"nan bounds: {drawn}"
         assert [round(float(edge), 3) for edge in drawn] == [
             round(float(edge), 3) for edge in cog.bbox
         ], f"{drawn} is not the raster's {cog.bbox}"

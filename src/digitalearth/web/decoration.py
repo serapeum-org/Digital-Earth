@@ -564,10 +564,13 @@ class DecorationMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.choropleth: the builder whose classes this describes.
         """
+        # Validated before the flag is read: `legend(position="middle", visible=False)` was accepted while
+        # `legend(position="middle")` raised, so a caller passing a flag through was checked half the time
+        # (review L7).
+        _check_position(position)
         if not visible:
             return self
         _require_maplibre()
-        _check_position(position)
         spec = self.last_legend if layer_id is None else self._legend_of(layer_id)
         if not spec:
             raise ValueError(

@@ -194,7 +194,8 @@ def forget_object(uri: str) -> None:
 
     Args:
         uri: The ``object:<id>`` URI, or the id on its own. An id that is not registered is ignored, so a
-            caller can forget the same layer twice.
+            caller can forget the same layer twice, and so is `None` or an empty string — a layer that drew
+            from no data has no reference to forget (review N5).
 
     Examples:
         - A forgotten id no longer resolves:
@@ -209,6 +210,8 @@ def forget_object(uri: str) -> None:
 
             ```
     """
+    if not uri:
+        return
     key = uri.split(":", 1)[1] if uri.startswith(f"{OBJECT_SCHEME}:") else uri
     _OBJECTS.pop(key, None)
 

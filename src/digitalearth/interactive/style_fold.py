@@ -453,7 +453,7 @@ def _fold_channel(
         # it cannot express is reported, so they are (review L17).
         shown = _named_fields(encoding.value if encoding.is_constant else None)
         if shown:
-            unexpressible["tooltip"] = (
+            unexpressible["tooltip.fields"] = (
                 f"HoloViews' hover tool shows the element's own dimensions, so it cannot be limited to "
                 f"{shown}; build the element with those columns as its vdims"
             )

@@ -243,6 +243,7 @@ ALIASES: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 "title": "set_title",
                 "animate": "save_animation",
                 "to_gif": "save_animation",
+                "save_gif": "save_animation",
                 "terrain": "terrain_tiles",
                 "globe": "projection",
             }

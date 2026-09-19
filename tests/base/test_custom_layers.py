@@ -255,8 +255,31 @@ class TestLettingAnObjectGo:
         with pytest.raises(KeyError, match="test-forget-two"):
             resolve_uri("object:test-forget-two")
 
-    def test_forgetting_what_was_never_registered_is_quiet(self):
-        """So a caller can forget the same layer twice."""
-        from digitalearth.base.registry import forget_object
+    def test_forgetting_what_was_never_registered_leaves_the_rest_alone(self):
+        """So a caller can forget the same layer twice, and nothing else goes with it."""
+        from digitalearth.base.registry import _OBJECTS, forget_object, register_object
 
-        assert forget_object("object:never-registered") is None, "no complaint"
+        register_object([1], name="test-forget-bystander")
+        held = len(_OBJECTS)
+        forget_object("object:never-registered")
+        assert len(_OBJECTS) == held, "forgetting an unknown id must touch nothing"
+        forget_object("test-forget-bystander")
+
+    def test_an_object_of_another_engine_is_refused_before_it_is_handed_over(self):
+        """The one case the function exists to tell apart, and the one the reordering changed.
+
+        Test scenario:
+            The held object was returned before the engine was checked, so a layer id that collides across
+            tiers handed a renderer an object built with another engine (review L4). The engine is read
+            first, so the answer does not depend on whether the id happens to be in this table.
+        """
+        from digitalearth.base.custom import MissingObject, held_object
+
+        with pytest.raises(MissingObject, match="cannot be drawn by the web backend"):
+            held_object(
+                "wells",
+                "custom:pyvista",
+                {"wells": "a pyvista mesh"},
+                engine="maplibre",
+                backend="web",
+            )

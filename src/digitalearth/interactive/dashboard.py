@@ -231,7 +231,9 @@ class DashboardMixin(_MixinBase):
             bindings[name] = widget
         return controls, bindings
 
-    def _restyled_layers(self, overrides: dict, layers: Any = None) -> list:
+    def _restyled_layers(
+        self, overrides: dict, layers: Optional[Sequence[Any]] = None
+    ) -> list:
         """Return each layer restyled with **its own** recorded style, the widget's values over the top.
 
         The defect this replaces: the widget values were merged with the style of *every* colour-mapped layer

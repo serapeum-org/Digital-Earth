@@ -115,7 +115,12 @@ class TestTheDescription:
 
         undeclared = sorted(set(DRAWN_KINDS) - CAPABILITIES.kinds)
         assert undeclared == [], f"the tier draws {undeclared} without declaring them"
-        unresolved = [kind for kind in DRAWN_KINDS if drawer_for(kind) is None]
+        unresolved = []
+        for kind in DRAWN_KINDS:
+            try:
+                drawer_for(kind)
+            except KeyError:
+                unresolved.append(kind)
         assert unresolved == [], f"{unresolved} are declared drawable with no drawer"
 
 
@@ -467,11 +472,18 @@ class TestTheRemainingArms:
             `_reaches_pyvista` judges a restyle by what changed; for an id the old figure never had, the
             answer has to be "draw it" rather than a `KeyError` from the lookup.
         """
+        from dataclasses import replace as with_fields
+
         from digitalearth.three_d.renderer import Renderer3D
 
         scene.terrain(get_source(_dem()))
-        figure = scene.figure_spec
-        assert Renderer3D._reaches_pyvista(figure, figure, "nobody") is True, "drawn"
+        before = scene.figure_spec
+        after = with_fields(
+            before, layers=before.layers.add(LayerSpec("later", "point_cloud"))
+        )
+        assert Renderer3D._reaches_pyvista(before, after, "later") is True, (
+            "a layer the previous figure did not hold is drawn, not compared"
+        )
 
     def test_an_object_pyvista_refuses_is_not_kept(self, scene):
         """The scene holds a custom object for its layer; a failed draw records no layer.

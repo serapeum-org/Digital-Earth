@@ -300,7 +300,7 @@ class TestTheOtherOptionGroups:
             Symbology.of(tooltip=("pop", "area")), "Points"
         )
         assert grouped["plot"]["tools"] == ["hover"], grouped
-        assert "cannot be limited to" in unsupported["tooltip"], unsupported
+        assert "cannot be limited to" in unsupported["tooltip.fields"], unsupported
 
     @pytest.mark.parametrize(
         "value, named",
@@ -323,13 +323,15 @@ class TestTheOtherOptionGroups:
             raised `TypeError: 'int' object is not iterable` on a number, from inside the fold (review M9).
         """
         _, unsupported = fold_symbology(Symbology.of(tooltip=value), "Points")
-        assert f"{named}" in unsupported["tooltip"], unsupported["tooltip"]
+        assert f"{named}" in unsupported["tooltip.fields"], unsupported[
+            "tooltip.fields"
+        ]
 
     def test_a_tooltip_that_names_none_reports_nothing(self):
         """Asking for hover without naming columns is exactly what the tool does, so nothing is lost."""
         grouped, unsupported = fold_symbology(Symbology.of(tooltip=()), "Points")
         assert grouped["plot"]["tools"] == ["hover"], grouped
-        assert "tooltip" not in unsupported, unsupported
+        assert "tooltip.fields" not in unsupported, unsupported
 
     def test_the_usual_groups_are_always_there(self):
         """A caller reads `style` and `plot` without asking whether they exist."""
@@ -343,6 +345,11 @@ class TestTheOtherOptionGroups:
             `hv.extension(backend)` is `Store.set_current_backend`, so one cross-backend validation left the
             whole process rendering through matplotlib (review M15).
         """
-        hv.extension("bokeh")
-        allowed_options("Image", backend="matplotlib")
-        assert hv.Store.current_backend == "bokeh", hv.Store.current_backend
+        held = hv.Store.current_backend
+        try:
+            hv.extension("bokeh")
+            allowed_options("Image", backend="matplotlib")
+            assert hv.Store.current_backend == "bokeh", hv.Store.current_backend
+        finally:
+            # The session's backend is shared state; a test that sets it puts it back (review N6).
+            hv.Store.set_current_backend(held)
