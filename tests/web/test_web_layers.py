@@ -951,6 +951,150 @@ class TestTheSwitcherFollowsTheLiveLayers:
         assert exported[exported.rfind("var data = ") :].count('"addControl"') == 0
 
 
+class TestAPopupOverAnUndescribedLayer:
+    """Review H3 — not every MapLibre layer is a described one, and a popup over one is still a popup."""
+
+    def test_a_clustered_map_can_be_given_a_popup(self, points):
+        """`cluster(...).popup(...)` is a documented recipe, and it raised.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            A cluster draws three MapLibre layers under one tree entry, and `cluster` left the *unclustered*
+            id as the one a following `popup()` would default to — an id guaranteed absent from the tree.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().cluster(points)
+        assert m.popup(["v"]) is not None, "a clustered map must take a popup"
+        assert m.layer_ids == ["clusters-2"], m.layer_ids
+
+    def test_a_popup_naming_a_layer_the_tree_does_not_hold_is_drawn(self, points):
+        """A cluster sub-layer, a graticule's labels, a basemap: real layers, not described ones.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        assert m.popup(["v"], layer="obs-clusters") is not None, (
+            "the popup must be drawn"
+        )
+
+    def test_a_described_layer_still_records_what_pops_up(self, points):
+        """The guard skips the description, and must not skip it for a layer that has one.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        m.popup(["v"])
+        shown = m.figure_spec.layers.get("obs").symbology.encodings["tooltip"]
+        assert shown.resolve() == ("v",), shown
+
+
+class TestAColourKeyDescribesTheLayerItNames:
+    """Review H4 — `colorbar(layer_id)` used the id only to validate, then drew someone else's key."""
+
+    @staticmethod
+    def _squares(column, values):
+        """Return two squares carrying `values` in `column`.
+
+        Args:
+            column: The column name.
+            values: Two numbers.
+
+        Returns:
+            A GeoDataFrame.
+        """
+        return gpd.GeoDataFrame(
+            {column: values},
+            geometry=[
+                Polygon([(0, 0), (1, 0), (1, 1), (0, 1)]),
+                Polygon([(2, 0), (3, 0), (3, 1), (2, 1)]),
+            ],
+            crs=4326,
+        )
+
+    def test_each_layer_s_key_shows_its_own_range(self):
+        """The measured defect: both keys ended 500/900 — layer B's — one of them labelled "A"."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.choropleth(self._squares("rain", [500, 900]), column="rain", name="B")
+        m.colorbar("A", label="People")
+        drawn = m._panels["legend"][0]
+        assert ">1<" in drawn and ">100<" in drawn.replace(">1<", ""), drawn
+
+    def test_the_other_layer_still_shows_its_own(self):
+        """The same call for B is B's range, so this is selection rather than a reversed default."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.choropleth(self._squares("rain", [500, 900]), column="rain", name="B")
+        m.colorbar("B", label="Rain")
+        drawn = m._panels["legend"][0]
+        assert ">500<" in drawn, drawn
+
+    def test_a_layer_with_no_classification_says_so(self, points):
+        """An unclassified layer has no ramp; naming it is answered rather than substituted.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().choropleth(self._squares("pop", [1, 100]), column="pop", name="A")
+        m.points(points, name="plain")
+        with pytest.raises(ValueError, match="was not drawn with a classification"):
+            m.colorbar("plain")
+
+
+class TestACustomLayerIsAddedUnderTheIdItIsGiven:
+    """Review H5 — the tree was renamed and the MapLibre object was not."""
+
+    def test_a_colliding_custom_id_is_rewritten_to_the_allocated_one(self, points):
+        """What `layer_ids` advertises has to be what `addLayer` sends.
+
+        Args:
+            points: The fixture points.
+
+        Test scenario:
+            The measured defect: the map said `obs-2` while the object still said `obs`, so `get_layer`,
+            `layer_control` and `popup(layer=...)` all named a layer the browser did not have — and the
+            duplicate id made MapLibre drop the real one with only a console error.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        own = Layer(id="obs", type=LayerType.CIRCLE, source="s")
+        m.add_layer(own)
+        assert m.layer_ids == ["obs", "obs-2"], m.layer_ids
+        assert own.id == "obs-2", own.id
+
+    def test_an_uncontested_id_is_left_as_it_was(self, points):
+        """A caller's own id survives when nothing is claiming it.
+
+        Args:
+            points: The fixture points.
+        """
+        from maplibre.layer import Layer, LayerType
+
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points, name="obs")
+        own = Layer(id="mine", type=LayerType.CIRCLE, source="s")
+        m.add_layer(own)
+        assert own.id == "mine", own.id
+        assert "mine" in m.layer_ids, m.layer_ids
+
+
 class TestOneMapsSourcesAreItsOwn:
     """#296 / review H2 — the object registry is process-global; a figure's sources must not be shared."""
 

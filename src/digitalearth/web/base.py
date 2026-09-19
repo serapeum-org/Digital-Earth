@@ -462,6 +462,14 @@ class WebMapBase:
         #: the ``column`` it read, the class ``values`` and the ``colors`` actually rendered. Set alongside
         #: :attr:`last_breaks`, which stays the raw-numbers accessor it has always been.
         self.last_legend: Optional[dict] = None
+        #: The classification each layer was drawn with, keyed by layer id, so a colour key asked for by id
+        #: describes *that* layer. `last_legend` alone answers only "the most recent one", which made
+        #: `colorbar("A")` draw layer B's ramp under A's label (review H4).
+        self._legends: Dict[str, dict] = {}
+        #: The legend dict most recently filed above. A classifying builder always writes a *fresh* dict, so
+        #: identity is what tells a new classification from the one still sitting in `last_legend` when an
+        #: unclassified layer is indexed after it.
+        self._filed_legend: Optional[dict] = None
         #: Accumulated deck.gl JSON layers, applied in one ``add_deck_layers`` call at render (DW.3).
         self._deck_layers: Optional[List[dict]] = None
         #: Feature count above which ``points``/``polygons`` auto-route to a GPU layer (logged, never
@@ -994,12 +1002,20 @@ class WebMapBase:
         it, so removing the layer removes what pops up over it — which is what left a page emitting
         `addPopup` for a layer that was no longer there.
 
+        A MapLibre layer is not always a described one. A cluster draws three — the bubbles, their counts
+        and the loose points — under one tree entry; a graticule draws its labels beside its lines; a basemap
+        is a layer the tier never indexes. A popup over any of those is a real popup, so it is drawn and
+        simply not described: the alternative was the `KeyError` this guard replaces, which broke
+        `cluster(...).popup(...)` outright (review H3).
+
         Args:
             layer_id: The layer the popup or tooltip is bound to.
             fields: The field names shown; `None`, like an empty list, means every field, which is what the
                 builders already mean by it.
             trigger: `"click"` for a popup, `"hover"` for a tooltip.
         """
+        if layer_id not in self._layer_tree.ids:
+            return
         held = self._layer_tree.get(layer_id)
         shown = () if fields is None else tuple(fields)
         symbology = Symbology(
@@ -1086,6 +1102,12 @@ class WebMapBase:
                 whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
         """
         kind_info(kind)
+        # Whatever this builder classified belongs to the layer it is indexing. Captured here because this
+        # is the one place every builder passes its own id, right after drawing. By identity, so the
+        # classification of an earlier layer is not filed again under a later unclassified one.
+        if self.last_legend is not None and self.last_legend is not self._filed_legend:
+            self._legends[layer_id] = self.last_legend
+            self._filed_legend = self.last_legend
         if source is not None:
             # Namespaced per map: every `WebMap` restarts its layer numbering, so two maps in one session
             # both minted `circle-2` and the second registration replaced the first — map A's stored figure
@@ -1169,8 +1191,9 @@ class WebMapBase:
         the ramp's ends labelled, which is why this is a thin call onto it rather than a second mechanism.
 
         Args:
-            layer_id: Which layer's key to show. `None` takes the most recently classified layer, which is
-                what the tier recorded before layers had ids.
+            layer_id: Which layer's key to show — the classification *that* layer was drawn with. `None`
+                takes the most recently classified layer, which is what the tier recorded before layers had
+                ids.
             label: What to call the key — the variable and its units, usually.
             visible: `False` draws no key, so a caller passing a flag through does not have to branch.
 
@@ -1179,7 +1202,8 @@ class WebMapBase:
 
         Raises:
             KeyError: if `layer_id` names no layer on this map.
-            ValueError: when there is no classification to describe, as :meth:`legend` raises.
+            ValueError: when the named layer carries no classification to describe, or — for `None` — when
+                no layer on the map does, as :meth:`legend` raises.
 
         Examples:
             - A classified layer's key, titled:
@@ -1210,9 +1234,24 @@ class WebMapBase:
         """
         if not visible:
             return self
-        if layer_id is not None:
-            self.get_layer(layer_id)  # refuses an id nobody drew, by name
-        return self.legend(title=label)
+        if layer_id is None:
+            return self.legend(title=label)
+        self.get_layer(layer_id)  # refuses an id nobody drew, by name
+        keyed = self._legends.get(layer_id)
+        if keyed is None:
+            classified = sorted(self._legends)
+            raise ValueError(
+                f"layer {layer_id!r} was not drawn with a classification, so it has no colour key to show; "
+                f"the layers that were are {classified}"
+            )
+        # The named layer's own classification, put in front of `legend()` for the call. Reading
+        # `last_legend` instead drew the most recently classified layer's ramp under this layer's label —
+        # a wrong map that looks right (review H4).
+        before, self.last_legend = self.last_legend, keyed
+        try:
+            return self.legend(title=label)
+        finally:
+            self.last_legend = before
 
     def remove_layer(self, layer_id: str) -> Self:
         """Drop a previously added layer from the map.
@@ -1269,6 +1308,7 @@ class WebMapBase:
         dropped = self._sources.pop(layer_id, None)
         if dropped is not None:
             forget_object(dropped.uri)
+        self._legends.pop(layer_id, None)
         self._forget_slider_frame(layer_id)
 
         def _is_layer(layer: Any) -> bool:
@@ -1440,6 +1480,19 @@ class WebMapBase:
                 f"add_layer band must be one of {list(KIND_BANDS)}; got {band!r}"
             )
         layer_id = self._layer_id("custom", name or getattr(layer, "id", None))
+        # The allocator suffixes an id that is already taken, and what it allocates is what `layer_ids`,
+        # `get_layer`, `layer_control` and `popup(layer=...)` all name. A `maplibre` Layer carries its own
+        # id, and leaving it behind meant those names addressed a layer the browser had never heard of —
+        # while the real, duplicate id made MapLibre drop the layer with only a console error (review H5).
+        if getattr(layer, "id", None) not in (None, layer_id):
+            try:
+                layer.id = layer_id
+            except (AttributeError, ValueError, TypeError) as error:
+                raise ValueError(
+                    f"add_layer cannot rename this layer to {layer_id!r}: its id {layer.id!r} is already "
+                    f"taken on this map and the object refuses a new one ({error}). Pass name= with a free "
+                    "id, or build the layer with one"
+                ) from error
         self._index_layer(layer_id, name, kind=custom_kind("maplibre"), band=band)
         self._custom[layer_id] = layer
         return self._queue_in_band(layer, band)
