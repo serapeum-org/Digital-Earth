@@ -115,10 +115,21 @@ class TestTheRule:
         with pytest.raises(ValueError, match="needs numbers for x"):
             Bounds.cell_edges("not coordinates", [1.0, 2.0], crs=4326)
 
-    def test_a_step_that_is_not_a_pair_names_the_shape(self):
-        """`step=4000.0` is the plausible mistake, and it is answered rather than indexed into."""
+    @pytest.mark.parametrize(
+        "step", [4000.0, "ab", (1.0, 2.0, 3.0), ("a", "b"), {"dx": 1.0, "dy": 2.0}]
+    )
+    def test_a_step_that_is_not_a_pair_of_numbers_names_the_shape(self, step):
+        """Several plausible mistakes index into a pair just as happily as a pair does.
+
+        Args:
+            step: What the caller passed for `step`.
+
+        Test scenario:
+            `step[0], step[1]` reads two characters out of `"ab"` and drops the third value of a triple,
+            so the wrong cell size reached the edges without a word (review L11).
+        """
         with pytest.raises(ValueError, match=r"step must be a \(dx, dy\) pair"):
-            Bounds.cell_edges([1.0], [1.0], crs=4326, step=4000.0)
+            Bounds.cell_edges([1.0], [1.0], crs=4326, step=step)
 
     def test_the_crs_is_stored_as_given(self):
         """The rule places coordinates; it does not reproject them."""

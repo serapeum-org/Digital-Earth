@@ -518,7 +518,7 @@ class TestTheLayerControlSeesTheSameLayersItLabels:
 class TestADynamicLayerIsClassifiedByWhatItDraws:
     """Review H5 — a `DynamicMap` is a wrapper, and two builders wrap very different elements."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def scattered(self):
         """Return points enough to datashade.
 

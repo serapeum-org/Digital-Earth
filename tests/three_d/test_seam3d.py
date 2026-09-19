@@ -476,8 +476,9 @@ class TestTheRemainingArms:
 
         scene.terrain(get_source(_dem()))
         held = scene.figure_spec.layers.get("terrain-1")
+        sourceless = with_fields(held, source_id=None)
         with pytest.raises(ValueError, match="needs a source_id"):
-            scene.replace_layer(with_fields(held, source_id=None))
+            scene.replace_layer(sourceless)
         assert scene.layer_ids == ["terrain-1"], scene.layer_ids
 
     def test_a_layer_added_by_the_change_is_drawn_rather_than_compared(self, scene):
@@ -514,8 +515,9 @@ class TestTheRemainingArms:
             keyword propagated with the object still held under an id no layer owned, for the life of the
             scene (review L8).
         """
+        sphere = pv.Sphere(radius=0.5)
         with pytest.raises(TypeError):
-            scene.add_mesh(pv.Sphere(radius=0.5), nonsense_kwarg=1)
+            scene.add_mesh(sphere, nonsense_kwarg=1)
         assert scene.held_objects == {}, scene.held_objects
         assert scene.layer_ids == [], scene.layer_ids
 
@@ -728,8 +730,9 @@ class TestTheRemainingArms:
             LayerSpec("chor", "choropleth", source_id="a")
         )
         sources = {"a": DataRef.of(get_source(_dem()), name="h2-probe")}
+        refused = with_fields(figure, layers=tree, sources=sources)
         with pytest.raises(KeyError, match="does not draw"):
-            scene._change(with_fields(figure, layers=tree, sources=sources))
+            scene._change(refused)
         assert scene.layer_ids == [], scene.layer_ids
         assert scene._renderer.drawn == {}, sorted(scene._renderer.drawn)
 

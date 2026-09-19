@@ -1299,13 +1299,10 @@ class TestAWindowThatMissesTheSource:
                 """
                 raise IndexError("index 3 is out of bounds for axis 0 with size 2")
 
+        reader = _Broken()
+        request = ViewRequest(bounds=Bounds(0.0, 0.0, 4.0, 4.0, crs=4326), budget=4)
         with pytest.raises(IndexError, match="out of bounds"):
-            SourceView.of(
-                _Broken(),
-                request=ViewRequest(
-                    bounds=Bounds(0.0, 0.0, 4.0, 4.0, crs=4326), budget=4
-                ),
-            )
+            SourceView.of(reader, request=request)
 
     def test_a_grid_with_tall_cells_is_counted_by_both_its_spacings(self):
         """A cell is two numbers. Counting rows with the x spacing invents rows that are not there.

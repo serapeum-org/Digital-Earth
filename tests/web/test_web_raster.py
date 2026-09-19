@@ -269,8 +269,9 @@ class TestTheContractsColourLimits:
         Args:
             dataset: The raster fixture.
         """
+        m = WebMap()
         with pytest.raises(ValueError, match="takes limits= or vmin=/vmax=, not both"):
-            WebMap().field(dataset, limits=(0.0, 10.0), vmin=1.0)
+            m.field(dataset, limits=(0.0, 10.0), vmin=1.0)
 
     @pytest.mark.parametrize("given", [10.0, "ab", (0.0, 1.0, 2.0), ("a", "b")])
     def test_limits_that_are_not_a_pair_of_numbers_name_the_shape(self, dataset, given):
@@ -285,5 +286,6 @@ class TestTheContractsColourLimits:
             silently loses its third value; `"ab"` reached numpy and came back as *"could not convert
             string to float: 'a'"* (review L9/L11).
         """
+        m = WebMap()
         with pytest.raises(ValueError, match=r"limits must be a \(vmin, vmax\) pair"):
-            WebMap().field(dataset, limits=given)
+            m.field(dataset, limits=given)

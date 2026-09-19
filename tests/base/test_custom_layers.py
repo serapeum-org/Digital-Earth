@@ -265,6 +265,44 @@ class TestLettingAnObjectGo:
         assert len(_OBJECTS) == held, "forgetting an unknown id must touch nothing"
         forget_object("test-forget-bystander")
 
+    def test_an_empty_id_is_nothing_to_forget(self):
+        """A layer that drew from no data has no reference to forget (review N5)."""
+        from digitalearth.base.registry import _OBJECTS, forget_object, register_object
+
+        register_object([1], name="test-forget-empty-bystander")
+        held = len(_OBJECTS)
+        forget_object("")
+        forget_object(None)
+        assert len(_OBJECTS) == held, "an empty id must not reach the table"
+        forget_object("test-forget-empty-bystander")
+
+    def test_a_namespace_goes_all_at_once_and_takes_nothing_else(self):
+        """What a figure calls when it closes, so a notebook does not hold every dataset ever drawn.
+
+        Test scenario:
+            Namespacing stopped the entries colliding, so re-running a cell left the previous figure's
+            data in the table for the life of the session (review M2).
+        """
+        from digitalearth.base.registry import (
+            forget_namespace,
+            object_namespace,
+            register_object,
+            resolve_uri,
+        )
+
+        mine, theirs = object_namespace(), object_namespace()
+        ours = [
+            register_object([1], name=f"{mine}:a"),
+            register_object([2], name=f"{mine}:b"),
+        ]
+        kept = register_object([3], name=f"{theirs}:a")
+        forget_namespace(mine)
+        for uri in ours:
+            with pytest.raises(KeyError, match="no object is registered"):
+                resolve_uri(uri)
+        assert resolve_uri(kept) == [3], "another figure's namespace is untouched"
+        forget_namespace(theirs)
+
     def test_an_object_of_another_engine_is_refused_before_it_is_handed_over(self):
         """The one case the function exists to tell apart, and the one the reordering changed.
 

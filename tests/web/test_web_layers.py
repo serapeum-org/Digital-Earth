@@ -1569,10 +1569,12 @@ class TestACallersOwnLayer:
         """
         from digitalearth.web import WebMap
 
+        m = WebMap()
+        layer = self._layer("wells")
         with pytest.raises(
             ValueError, match="draws this layer under the id it carries"
         ):
-            WebMap().add_layer(self._layer("wells"), name="Boreholes")
+            m.add_layer(layer, name="Boreholes")
 
     def test_a_name_matching_the_object_s_id_is_accepted(self):
         """Saying the same thing twice is not a contradiction."""
@@ -1598,8 +1600,9 @@ class TestACallersOwnLayer:
         from digitalearth.web import WebMap
 
         m = WebMap().add_layer(self._layer("wells"))
+        again = self._layer("wells")
         with pytest.raises(ValueError, match="is already on this map"):
-            m.add_layer(self._layer("wells"))
+            m.add_layer(again)
         assert m.layer_ids == ["wells"], m.layer_ids
 
     def test_a_band_puts_it_under_the_data(self, points):
