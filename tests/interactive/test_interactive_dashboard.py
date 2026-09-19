@@ -456,6 +456,52 @@ class TestBothOverridePathsRestyleTheSameElements:
         )
 
 
+class TestTheOverrideBranchIsStillARender:
+    """#300 / review H9 — the widget path must do everything `render()` does, not only compose."""
+
+    @staticmethod
+    def _names(obj) -> list:
+        """Return the element type names of a composed figure, in draw order.
+
+        Args:
+            obj: The composed HoloViews object.
+
+        Returns:
+            One name per element.
+        """
+        return [
+            type(element).__name__
+            for element in (list(obj) if isinstance(obj, hv.Overlay) else [obj])
+        ]
+
+    def test_a_deferred_basemap_is_drawn_through_the_override_branch(self, dataset):
+        """A map built with `tiles=` defers the basemap until it renders; a widget must not lose it.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            Both default widgets produce a value (`cmap='viridis'`, `alpha=1.0`), so the override branch is
+            taken on the *first* render — and it skipped the deferred-tiles flush entirely, leaving an
+            `InteractiveMap(tiles="OSM")` dashboard with no basemap for the life of the map.
+        """
+        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        names = self._names(m._render_with_overrides({"cmap": "viridis", "alpha": 1.0}))
+        assert "WMTS" in names, names
+
+    def test_the_two_branches_draw_the_same_layers(self, dataset):
+        """Whether a widget moved is not a question about which layers exist.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        with_override = InteractiveMap(crs=3857, tiles="OSM").image(dataset)
+        without = InteractiveMap(crs=3857, tiles="OSM").image(dataset)
+        assert self._names(
+            with_override._render_with_overrides({"alpha": 0.5})
+        ) == self._names(without._render_with_overrides({})), "the branches must agree"
+
+
 class TestInertFlagsAreRefused:
     """#242 / #243 — flags that are not implemented are refused, not silently ignored."""
 

@@ -739,18 +739,38 @@ class InteractiveMapBase:
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        self._flush_deferred_tiles()
+        return self._projected(self._compose(self.layers))
+
+    def _flush_deferred_tiles(self) -> None:
+        """Draw a basemap that was asked for before there was a figure to draw it on.
+
+        `InteractiveMap(tiles=...)` records the provider and defers it, because the tile layer has to sit
+        under layers that do not exist yet. This is where it is applied, once, and it has to run before the
+        layers are read — it adds one.
+        """
         if self._tiles_provider is not None and hasattr(self, "tiles"):
             provider, self._tiles_provider = self._tiles_provider, None  # apply once
             self.tiles(provider)
-        obj = self._compose(self.layers)
-        if self._projection is not None:
-            if (
-                "matplotlib" not in hv.Store.renderers
-            ):  # register mpl opts before applying them
-                hv.renderer("matplotlib")
-            obj = obj.opts(projection=self._projection, backend="matplotlib")
-        return obj
+
+    def _projected(self, obj: Any) -> Any:
+        """Return `obj` drawn in the map's projection, when one was asked for.
+
+        Args:
+            obj: The composed figure.
+
+        Returns:
+            `obj` unchanged when no projection was set, else the same figure carrying it. The matplotlib
+            renderer is registered first, since that is the backend whose options declare `projection`.
+        """
+        _, hv = _require_holoviz()
+        if self._projection is None:
+            return obj
+        if (
+            "matplotlib" not in hv.Store.renderers
+        ):  # register mpl opts before applying them
+            hv.renderer("matplotlib")
+        return obj.opts(projection=self._projection, backend="matplotlib")
 
     def save(self, path: Any, **kwargs: Any) -> Path:
         """Save the composed map — interactive HTML (Bokeh) or a raster via the matplotlib backend.

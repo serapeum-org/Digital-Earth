@@ -286,18 +286,25 @@ class DashboardMixin(_MixinBase):
         Returns:
             The composed HoloViews object with the overrides applied — each layer redrawn with the widget
             values over **its own** recorded style, over the chosen tile basemap.
+
+            Whether a widget moved decides how the layers are styled, and nothing else: both branches flush
+            the deferred basemap and apply the map's projection, which is what `render()` does besides
+            composing. Skipping them left a map built with `tiles=` without one, permanently — both default
+            widgets carry a value, so the override branch is taken on the very first render.
         """
         overrides: dict = {}
         if values.get("cmap"):
             overrides["cmap"] = values["cmap"]
         if values.get("alpha") is not None:
             overrides["alpha"] = values["alpha"]
+        # Before the layers are read: a deferred basemap is one of them.
+        self._flush_deferred_tiles()
         if not overrides:
-            obj = self.render()
+            obj = self._projected(self._compose(self.layers))
         else:
             # Composed from the restyled layers rather than restyled after composing: `.opts()` on an overlay
             # applies per element *type*, so one spec cannot give two rasters different colormaps (#300).
-            obj = self._compose(self._restyled_layers(overrides))
+            obj = self._projected(self._compose(self._restyled_layers(overrides)))
         if values.get("basemap"):
             obj = self._with_basemap(obj, values["basemap"])
         return obj
