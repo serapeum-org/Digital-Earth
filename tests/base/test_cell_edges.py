@@ -110,6 +110,16 @@ class TestTheRule:
         with pytest.raises(ValueError, match="needs coordinates on both axes"):
             Bounds.cell_edges([], [1.0, 2.0], crs=4326)
 
+    def test_coordinates_that_are_not_numbers_name_the_axis(self):
+        """numpy's own `TypeError` says what it could not convert, not which argument it came from."""
+        with pytest.raises(ValueError, match="needs numbers for x"):
+            Bounds.cell_edges("not coordinates", [1.0, 2.0], crs=4326)
+
+    def test_a_step_that_is_not_a_pair_names_the_shape(self):
+        """`step=4000.0` is the plausible mistake, and it is answered rather than indexed into."""
+        with pytest.raises(ValueError, match=r"step must be a \(dx, dy\) pair"):
+            Bounds.cell_edges([1.0], [1.0], crs=4326, step=4000.0)
+
     def test_the_crs_is_stored_as_given(self):
         """The rule places coordinates; it does not reproject them."""
         assert Bounds.cell_edges([1.0, 2.0], [1.0, 2.0], crs="EPSG:3857").crs == (

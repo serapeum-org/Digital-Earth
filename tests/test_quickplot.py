@@ -203,6 +203,25 @@ def test_quickmap_shapes_without_column_skips_colorbar():
     assert m.ax.collections
 
 
+def test_an_empty_map_has_no_key_to_draw(dataset):
+    """`_has_a_key_to_draw` is the question the four-clause colorbar condition was asking.
+
+    Args:
+        dataset: A raster to draw.
+
+    Test scenario:
+        Nothing drawn is the first of its three answers, and the one a bare `quickmap` reaches when every
+        builder skipped. A drawn field is the other, so both arms are read here.
+    """
+    from digitalearth.api import _has_a_key_to_draw
+    from digitalearth.static import Map
+
+    with Map() as canvas:
+        assert _has_a_key_to_draw(canvas) is False, "an empty map has nothing to key"
+        canvas.imshow(dataset)
+        assert _has_a_key_to_draw(canvas) is True, "a drawn field has a key"
+
+
 def test_module_choropleth(dataset):
     """The module-level choropleth colours polygons by a column."""
     from pyramids.feature import FeatureCollection

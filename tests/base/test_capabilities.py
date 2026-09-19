@@ -306,3 +306,22 @@ class TestTheTwoDeclarationsDoNotContradict:
 
         assert "colorbar" in CAPABILITIES.features, sorted(CAPABILITIES.features)
         assert "colorbar" in pending_for("3d"), sorted(pending_for("3d"))
+
+
+class TestADeclarationIsAValue:
+    """Review L2 — frozen, and hashable, so a declaration can be a set member or a dict key."""
+
+    def test_two_declarations_of_the_same_thing_hash_alike(self):
+        """Built twice from the same fields, it is the same value."""
+        from digitalearth.base.capabilities import Capabilities
+
+        made = Capabilities("flat", kinds={"raster"}, absent={"domain": "no extent"})
+        again = Capabilities("flat", kinds={"raster"}, absent={"domain": "no extent"})
+        assert hash(made) == hash(again), "a value type hashes by what it holds"
+
+    def test_a_declaration_can_go_in_a_set(self):
+        """Which is what `frozen=True` promised and `absent` being a mapping took away."""
+        from digitalearth.base.capabilities import Capabilities
+
+        held = {Capabilities("flat"), Capabilities("flat"), Capabilities("other")}
+        assert len(held) == 2, sorted(item.backend for item in held)

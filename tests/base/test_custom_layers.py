@@ -224,3 +224,39 @@ class TestTheDiffOfACustomLayer:
         """
         difference = self._figure().diff(self._figure())
         assert not difference, difference
+
+
+class TestLettingAnObjectGo:
+    """Review H2 — `forget_object` is the counterpart to `register_object`."""
+
+    def test_a_forgotten_uri_no_longer_resolves(self):
+        """A figure that no longer draws an object should not keep it alive."""
+        from digitalearth.base.registry import (
+            forget_object,
+            register_object,
+            resolve_uri,
+        )
+
+        uri = register_object([1, 2, 3], name="test-forget-one")
+        forget_object(uri)
+        with pytest.raises(KeyError, match="test-forget-one"):
+            resolve_uri(uri)
+
+    def test_a_bare_id_is_accepted_too(self):
+        """The id on its own, for a caller holding the key rather than the URI."""
+        from digitalearth.base.registry import (
+            forget_object,
+            register_object,
+            resolve_uri,
+        )
+
+        register_object([1], name="test-forget-two")
+        forget_object("test-forget-two")
+        with pytest.raises(KeyError, match="test-forget-two"):
+            resolve_uri("object:test-forget-two")
+
+    def test_forgetting_what_was_never_registered_is_quiet(self):
+        """So a caller can forget the same layer twice."""
+        from digitalearth.base.registry import forget_object
+
+        assert forget_object("object:never-registered") is None, "no complaint"

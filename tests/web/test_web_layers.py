@@ -1172,6 +1172,35 @@ class TestACustomLayerIsAddedUnderTheIdItIsGiven:
         assert m.layer_ids == ["y"], m.layer_ids
         assert len(m.layers) == 1, m.layers
 
+    def test_an_object_that_refuses_a_new_id_is_answered_by_name(self, points):
+        """Not every layer-like object lets its id be set, and the caller is told what to do.
+
+        Args:
+            points: The fixture points.
+        """
+        from digitalearth.web import WebMap
+
+        class _Fixed:
+            """A layer-like object whose id cannot be reassigned."""
+
+            id = "obs"
+
+            def __setattr__(self, name, value):
+                """Refuse every assignment.
+
+                Args:
+                    name: The attribute.
+                    value: What it would be set to.
+
+                Raises:
+                    AttributeError: always.
+                """
+                raise AttributeError(f"{name} is read-only")
+
+        m = WebMap().points(points, name="obs")
+        with pytest.raises(ValueError, match="cannot rename this layer to 'obs-2'"):
+            m.add_layer(_Fixed())
+
     def test_an_uncontested_id_is_left_as_it_was(self, points):
         """A caller's own id survives when nothing is claiming it.
 

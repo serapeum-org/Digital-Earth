@@ -241,3 +241,41 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
         # OffLimbError, not a bare ValueError: one exception type across the four tiers (M6).
         with pytest.raises(OffLimbError, match="cannot be expressed in lon/lat"):
             self._call(m, builder, dataset)
+
+
+class TestTheContractsColourLimits:
+    """#299 / review L12 — `limits=` is the spelling every tier answers to."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip the class when the web extra is not installed."""
+        pytest.importorskip("maplibre")
+
+    def test_limits_colours_the_same_band_as_vmin_and_vmax(self, dataset):
+        """The contract's name and this tier's own reach the same colouring.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        by_pair = WebMap().field(dataset, limits=(0.0, 10.0))
+        by_ends = WebMap().field(dataset, vmin=0.0, vmax=10.0)
+        assert by_pair.layer_ids == by_ends.layer_ids, "the same layer is drawn"
+        assert by_pair._panels == by_ends._panels, "and coloured the same way"
+
+    def test_naming_the_limits_twice_is_refused(self, dataset):
+        """They are one thing, and there is no right answer to being given two.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        with pytest.raises(ValueError, match="takes limits= or vmin=/vmax=, not both"):
+            WebMap().field(dataset, limits=(0.0, 10.0), vmin=1.0)
+
+    def test_limits_that_are_not_a_pair_name_the_shape(self, dataset):
+        """A single number is the plausible mistake, and it is answered rather than unpacked.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        with pytest.raises(ValueError, match=r"limits must be a \(vmin, vmax\) pair"):
+            WebMap().field(dataset, limits=10.0)

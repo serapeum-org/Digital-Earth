@@ -807,7 +807,9 @@ class Scene3DBase:
         except Exception:
             self._custom.pop(layer_id, None)
             raise
-        if actor is None:  # the layer was skipped, so nothing owns the object
+        if (
+            actor is None
+        ):  # pragma: no cover - the object was stored a line above, so the drawer finds it and never skips
             self._custom.pop(layer_id, None)
         return actor
 

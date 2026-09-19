@@ -168,3 +168,21 @@ class TestRenamingAMethod:
     def test_the_alias_documents_where_it_forwards(self):
         """`help(Map.fit_bounds)` must name its replacement."""
         assert "set_bounds" in (self._Map.__dict__["fit_bounds"].__doc__ or ""), "doc"
+
+
+class TestTheRenamesNobodyHasAdopted:
+    """Review M5 — `PLANNED_RENAMES` is read through its own accessor."""
+
+    def test_a_tier_that_has_agreed_a_rename_names_it(self):
+        """The static tier's raster builder is `imshow`, and is to become `field`."""
+        from digitalearth.base.contract import planned_renames
+
+        assert planned_renames("matplotlib")["imshow"] == "field", planned_renames(
+            "matplotlib"
+        )
+
+    def test_a_tier_with_none_answers_empty(self):
+        """`planned_renames` is a question about a tier, not about the table's keys."""
+        from digitalearth.base.contract import planned_renames
+
+        assert dict(planned_renames("nobody")) == {}, planned_renames("nobody")

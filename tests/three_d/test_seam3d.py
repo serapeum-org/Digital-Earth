@@ -438,6 +438,41 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_a_replacement_that_names_no_source_is_refused(self, scene):
+        """A layer that draws from data cannot be re-described without saying where the data is.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The drawers hand a missing source straight to `get_source`, which answered with an undocumented
+            `TypeError` — and, going through `_change`, used to leave the scene holding a figure it could
+            not draw (review L9).
+        """
+        from dataclasses import replace as with_fields
+
+        scene.terrain(get_source(_dem()))
+        held = scene.figure_spec.layers.get("terrain-1")
+        with pytest.raises(ValueError, match="needs a source_id"):
+            scene.replace_layer(with_fields(held, source_id=None))
+        assert scene.layer_ids == ["terrain-1"], scene.layer_ids
+
+    def test_a_layer_added_by_the_change_is_drawn_rather_than_compared(self, scene):
+        """A layer the previous figure did not hold has nothing to compare against.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            `_reaches_pyvista` judges a restyle by what changed; for an id the old figure never had, the
+            answer has to be "draw it" rather than a `KeyError` from the lookup.
+        """
+        from digitalearth.three_d.renderer import Renderer3D
+
+        scene.terrain(get_source(_dem()))
+        figure = scene.figure_spec
+        assert Renderer3D._reaches_pyvista(figure, figure, "nobody") is True, "drawn"
+
     def test_an_object_pyvista_refuses_is_not_kept(self, scene):
         """The scene holds a custom object for its layer; a failed draw records no layer.
 
