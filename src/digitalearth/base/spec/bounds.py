@@ -18,7 +18,7 @@ Reprojection is pyramids' job, not this package's: :meth:`Bounds.to_crs` delegat
 import warnings
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -285,8 +285,9 @@ class Bounds:
             y: The cell-centre y coordinates, ascending or descending.
             crs: What they are measured in, stored as given.
             step: `(dx, dy)`, the cell size, for an axis with one cell — which has no spacing of its own to
-                read. `None` leaves a one-cell axis as a line, since guessing a width would place the data
-                somewhere nobody asked for.
+                read. `None` lets such an axis take the *other* axis' spacing, which is what a raster one row
+                tall or one column wide means: a row of square cells. When neither axis has two cells there
+                is nothing to borrow and the rectangle stays a point.
 
         Returns:
             The rectangle, ascending in both axes whichever way the axes run.
@@ -328,9 +329,29 @@ class Bounds:
                 f"{xs.size} x and {ys.size} y"
             )
         steps = (None, None) if step is None else (step[0], step[1])
-        west, east = cls._edges(xs, steps[0])
-        south, north = cls._edges(ys, steps[1])
+        # A lone cell has no spacing of its own, so it borrows the other axis's: a raster one row tall is a
+        # row of square cells, not a line of zero height. Without this a 1 x 25 raster was placed on a
+        # rectangle with no height at all and drawn invisible (review M4). A caller who knows better says so
+        # with `step=`, and an axis whose partner is also degenerate stays a point.
+        spacings = (cls._spacing(xs), cls._spacing(ys))
+        west, east = cls._edges(xs, steps[0] if steps[0] is not None else spacings[1])
+        south, north = cls._edges(ys, steps[1] if steps[1] is not None else spacings[0])
         return cls(west, south, east, north, crs)
+
+    @staticmethod
+    def _spacing(axis: Any) -> Optional[float]:
+        """Return the spacing between an axis' outermost cells, or `None` when it has only one.
+
+        Args:
+            axis: The cell centres along the axis.
+
+        Returns:
+            The magnitude of the gap at the axis' near end, which is what a cell measures there.
+        """
+        if axis.size < 2:
+            return None
+        ordered = np.sort(axis)
+        return abs(float(ordered[1] - ordered[0]))
 
     @staticmethod
     def _edges(axis: Any, step: Any) -> Tuple[float, float]:

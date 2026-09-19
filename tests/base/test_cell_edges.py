@@ -79,6 +79,27 @@ class TestTheRule:
         assert line.as_bbox() == [5.0, 5.0, 5.0, 5.0], line.as_bbox()
         assert widened.as_bbox() == [0.0, 3.0, 10.0, 7.0], widened.as_bbox()
 
+    def test_a_raster_one_row_tall_covers_a_row_of_cells(self):
+        """One row is a row of square cells, not a line of zero height.
+
+        Test scenario:
+            Both 2-D tiers adopted this rule without a `step=`, so a raster one cell tall was placed on a
+            rectangle with no height and drawn invisible (review M4). The other axis says what a cell
+            measures, which is the whole reason a raster has two axes.
+        """
+        edges = Bounds.cell_edges([0.5, 1.5, 2.5, 3.5, 4.5], [9.5], crs=4326)
+        assert edges.as_bbox() == [0.0, 9.0, 5.0, 10.0], edges.as_bbox()
+
+    def test_a_raster_one_column_wide_covers_a_column_of_cells(self):
+        """The same, the other way round."""
+        edges = Bounds.cell_edges([4.25], [52.0, 53.0, 54.0], crs=4326)
+        assert edges.as_bbox() == [3.75, 51.5, 4.75, 54.5], edges.as_bbox()
+
+    def test_a_given_step_still_wins_over_the_borrowed_one(self):
+        """A caller who knows what a cell measures is not overruled by the other axis."""
+        edges = Bounds.cell_edges([0.0, 2.0], [5.0], crs=4326, step=(2.0, 10.0))
+        assert edges.as_bbox() == [-1.0, 0.0, 3.0, 10.0], edges.as_bbox()
+
     def test_an_irregular_grid_is_placed_by_its_own_outermost_cells(self):
         """Half of the first spacing at one end and half of the last at the other, not an average."""
         edges = Bounds.cell_edges([0.0, 2.0, 10.0], [0.0, 1.0, 2.0], crs=4326)
