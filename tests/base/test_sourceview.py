@@ -1329,6 +1329,21 @@ class TestAWindowThatMissesTheSource:
             SourceView._native_cells(window, _Tall())
         )
 
+    def test_a_degenerate_geotransform_falls_back_to_the_cell_size(self):
+        """A geotransform that states a zero spacing says nothing usable, so the square size is read."""
+
+        class _Zeroed:
+            """A reader whose geotransform carries no pixel size."""
+
+            bbox = (0.0, 0.0, 8.0, 8.0)
+            cell_size = 2.0
+            epsg = 4326
+            geotransform = (0.0, 0.0, 0.0, 8.0, 0.0, 0.0)
+
+        assert SourceView._spacing(_Zeroed()) == (2.0, 2.0), SourceView._spacing(
+            _Zeroed()
+        )
+
     def test_a_square_grid_still_counts_by_its_cell_size(self):
         """A reader with no geotransform says one number, and it means both axes."""
 
