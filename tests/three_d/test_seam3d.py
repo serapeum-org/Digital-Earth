@@ -422,6 +422,46 @@ class TestTheRemainingArms:
             scene.plotter.renderer.scale
         )
 
+    def test_a_figure_the_renderer_refuses_does_not_become_the_scene(self, scene):
+        """A change the plotter would not accept leaves the scene as it was.
+
+        Args:
+            scene: The scene under test.
+
+        Test scenario:
+            The measured defect: the figure was installed first and `apply` raised afterwards, so a scene
+            that had refused a layer still listed it — `layer_ids`, `figure_spec` and `to_dict` all
+            advertising something that was never drawn and could not be (review H7).
+        """
+        from dataclasses import replace as with_fields
+
+        scene.terrain(get_source(_dem()), name="a")
+        figure = scene.figure_spec
+        refused = with_fields(
+            figure, layers=figure.layers.add(LayerSpec("chor", "choropleth"))
+        )
+        with pytest.raises(KeyError, match="does not draw"):
+            scene._change(refused)
+        assert scene.layer_ids == ["a"], scene.layer_ids
+
+    def test_the_scene_still_works_after_a_refused_change(self, scene):
+        """Nothing is stuck: the layers that were there can still be removed.
+
+        Args:
+            scene: The scene under test.
+        """
+        from dataclasses import replace as with_fields
+
+        scene.terrain(get_source(_dem()), name="a")
+        figure = scene.figure_spec
+        refused = with_fields(
+            figure, layers=figure.layers.add(LayerSpec("chor", "choropleth"))
+        )
+        with pytest.raises(KeyError):
+            scene._change(refused)
+        scene.remove_layer("a")
+        assert scene.layer_ids == [], scene.layer_ids
+
     def test_a_viewpoint_does_not_flatten_the_relief(self, scene):
         """A camera that names no exaggeration says where to stand, not how tall the relief is.
 

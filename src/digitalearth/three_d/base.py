@@ -1360,13 +1360,20 @@ class Scene3DBase:
         Args:
             figure: The figure the scene should show.
 
+        The scene moves only if the plotter does. A figure that cannot be drawn -- a kind this tier has no
+        drawer for, a layer whose data will not load -- used to be installed first and left in place when
+        `apply` raised, so `layer_ids`, `figure_spec` and `to_dict` all advertised a layer that was never
+        drawn and could not be (review H7). `_add_described_layer` already committed only on success; this
+        is the path every other change goes through, and it agrees with it now.
+
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
             OffLimbError: when a layer cannot be drawn and the scene is `strict`.
         """
         before = self._figure
-        self._figure = _with_panel_layers(figure)
-        self._renderer.apply(before, self._figure)
+        candidate = _with_panel_layers(figure)
+        self._renderer.apply(before, candidate)
+        self._figure = candidate
 
     def _add_described_layer(
         self,
