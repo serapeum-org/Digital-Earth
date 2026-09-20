@@ -14,9 +14,18 @@ gv = pytest.importorskip("geoviews")
 
 
 @pytest.fixture
-def m() -> InteractiveMap:
-    """A fresh Web-Mercator map for each test."""
-    return InteractiveMap()
+def m():
+    """Yield a fresh Web-Mercator map for each test, closing it on the way out.
+
+    The object registry is process-global and holds strong references, so a map that is never closed
+    keeps the data it drew for the rest of the session.
+
+    Yields:
+        The map.
+    """
+    interactive_map = InteractiveMap()
+    yield interactive_map
+    interactive_map.close()
 
 
 class TestTiles:
@@ -116,6 +125,26 @@ class TestCoastlinesAndFeatures:
     def test_features_none_requested_is_noop(self, m):
         m.features()
         assert m.layers == []
+
+    def test_feature_style_opts_reach_the_natural_earth_element(self, m):
+        """A style recorded for a Natural-Earth layer has to end up on the element that is drawn.
+
+        Args:
+            m: A fresh Web-Mercator map.
+
+        Test scenario:
+            The five Natural-Earth kinds are now drawn from their description rather than built in the
+            `features` loop, and `draw_natural_earth` clones the shared `gv.feature` singleton before
+            styling it. A drawer that built the clone and dropped the recorded options would still
+            register an element of the right type in the right band, so every other check in this class
+            would pass while the caller's styling silently vanished. Read off the element, because that
+            — not the record — is what a viewer sees.
+        """
+        m.features(land=True, alpha=0.3)
+        style = hv.Store.lookup_options("bokeh", m.layers[-1], "style").kwargs
+        assert style.get("alpha") == 0.3, (
+            f"feature opts not applied: {style.get('alpha')}"
+        )
 
     def test_non_mercator_features_raise(self):
         interactiveMap = InteractiveMap(crs=4326)

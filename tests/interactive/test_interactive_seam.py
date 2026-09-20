@@ -613,7 +613,9 @@ class TestTheDescribedOrderIsTheDrawnOrder:
         interactive_map.graticule()
         drawn = interactive_map._renderer.drawn
         composed = [id(element) for element in interactive_map.layers]
-        described = [id(drawn[layer_id].element) for layer_id in interactive_map.layer_ids]
+        described = [
+            id(drawn[layer_id].element) for layer_id in interactive_map.layer_ids
+        ]
         assert composed == described, (
             f"composed {composed} but described {interactive_map.layer_ids}"
         )
@@ -631,7 +633,9 @@ class TestTheDescribedOrderIsTheDrawnOrder:
         ]
         assert ordered == ["graticule", "points"], ordered
 
-    def test_reference_geography_is_composed_over_the_basemap_not_under_it(self, new_map):
+    def test_reference_geography_is_composed_over_the_basemap_not_under_it(
+        self, new_map
+    ):
         """Land added after a basemap must sit on top of it in the overlay, or it is invisible.
 
         Test scenario:
@@ -654,3 +658,121 @@ class TestTheDescribedOrderIsTheDrawnOrder:
             "basemap",
             "land",
         ], "land must be composed after the basemap it sits on"
+
+
+class TestClosingAMapLetsItsDataGo:
+    """`close()` is how a figure says it is finished with the data it registered."""
+
+    def test_a_closed_map_can_no_longer_open_the_source_it_registered(self, point_fc):
+        """Closing is only observable through the figure: the source stops resolving.
+
+        Args:
+            point_fc: The collection the builder is given.
+
+        Test scenario:
+            The object table is process-global and holds a strong reference, so a session that builds
+            maps kept every dataset they drew for the rest of the process. `close()` drops the entries
+            this map made, which is what the figure's source failing to open proves.
+        """
+        interactive_map = InteractiveMap().points(point_fc)
+        source = interactive_map.figure_spec.sources[interactive_map.layer_ids[0]]
+        assert source.open() is point_fc, "the source never resolved"
+        interactive_map.close()
+        with pytest.raises(KeyError):
+            source.open()
+
+    def test_closing_twice_is_quiet(self, point_fc):
+        """A caller that closes a map a finalizer already closed must not see an error.
+
+        Args:
+            point_fc: The collection the builder is given.
+
+        Test scenario:
+            A notebook drops a map by re-running its cell, so a finalizer and an explicit `close()` both
+            reach the same figure. Forgetting a namespace twice has to be quiet — and the map has to be
+            readable afterwards, since closing releases the data, not the description.
+        """
+        interactive_map = InteractiveMap().points(point_fc)
+        interactive_map.close()
+        interactive_map.close()
+        assert interactive_map.layer_ids == ["points-1"], interactive_map.layer_ids
+
+    def test_closing_one_map_leaves_another_maps_data_alone(self, point_fc):
+        """Each figure registers under its own namespace, so closing is not a global clear.
+
+        Args:
+            point_fc: The collection one map draws.
+
+        Test scenario:
+            Both maps call their first point layer `points-1` and the object table is keyed by name, so
+            without a per-figure namespace the second map's registration re-pointed the first map's
+            already-captured source at its own data, and closing either took the other's entry with it.
+            Two separately read collections are used so the two sides are told apart by identity — a
+            second map drawing a *different kind* would never collide and so could not catch this.
+        """
+        from pyramids.feature import FeatureCollection
+
+        other_fc = FeatureCollection.read_file("tests/data/points.geojson")
+        assert other_fc is not point_fc, "the two maps must draw two distinct objects"
+        closed = InteractiveMap().points(point_fc)
+        kept = InteractiveMap().points(other_fc)
+        source = kept.figure_spec.sources[kept.layer_ids[0]]
+        closed.close()
+        try:
+            assert source.open() is other_fc, (
+                "closing one map forgot another map's source"
+            )
+        finally:
+            kept.close()
+
+    def test_the_context_manager_hands_back_the_map_it_was_given(self, point_fc):
+        """`with InteractiveMap() as m` has to bind the map, not whatever `__enter__` returned.
+
+        Args:
+            point_fc: The collection the builder is given.
+
+        Test scenario:
+            An `__enter__` that returned anything else — `None` is the usual slip, since the body is one
+            statement — leaves the name bound to something the builders are not on, and every `with`
+            block in a caller's notebook fails on its first builder call rather than here.
+        """
+        built = InteractiveMap()
+        with built as bound:
+            bound.points(point_fc)
+        assert bound is built, "the context manager bound a different object"
+
+    def test_leaving_the_with_block_closes_the_map(self, point_fc):
+        """The reason the tier is a context manager at all: the data goes when the block ends.
+
+        Args:
+            point_fc: The collection the builder is given.
+
+        Test scenario:
+            The source is opened inside the block first, so the check after it cannot pass because the
+            source never resolved at all — which is what an assertion on the closed state alone would
+            allow.
+        """
+        with InteractiveMap() as interactive_map:
+            interactive_map.points(point_fc)
+            source = interactive_map.figure_spec.sources[interactive_map.layer_ids[0]]
+            assert source.open() is point_fc, "the source never resolved"
+        with pytest.raises(KeyError):
+            source.open()
+
+    def test_an_exception_inside_the_block_still_closes_the_map(self, point_fc):
+        """`__exit__` closes unconditionally, as a file does, so a raising block leaks nothing.
+
+        Args:
+            point_fc: The collection the builder is given.
+
+        Test scenario:
+            An `__exit__` that returned early on an exception — or one written as a `finally` around the
+            body rather than as the protocol method — would leave the data registered exactly when the
+            caller is least likely to notice.
+        """
+        interactive_map = InteractiveMap().points(point_fc)
+        source = interactive_map.figure_spec.sources[interactive_map.layer_ids[0]]
+        with pytest.raises(RuntimeError, match="deliberate"), interactive_map:
+            raise RuntimeError("deliberate")
+        with pytest.raises(KeyError):
+            source.open()
