@@ -41,6 +41,7 @@ CAPABILITIES = Capabilities(
             "choropleth",
             "labels",
             "heatmap",
+            "flow",
             "unstructured",
             "text",
             "graticule",

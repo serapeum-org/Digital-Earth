@@ -29,17 +29,6 @@ pytest.importorskip(
 #: A credential that is not a real key, used to show one never reaches a written figure.
 FAKE_KEY = "FAKE-KEY-NOT-REAL"
 
-#: The kinds this tier draws that the shared vocabulary does not hold, and which its `Capabilities`
-#: therefore cannot declare — `Capabilities` refuses a kind nobody registered.
-#:
-#: Each of the four names a *builder* rather than a registered kind, and the registry already has a name
-#: for what it draws: `hexbin` and `kde` are `heatmap` ("point density"), `graph` is `flow` ("flows between
-#: places"), and `barbs` is a recipe of `vectors`, whose registry entry reads "interactive
-#: vectorfield/barbs" in so many words. Pinned here rather than waved through: this list must shrink as the
-#: four builders start recording the registered name, and a *fifth* undeclared kind must fail here rather
-#: than be discovered by a reader of a figure that cannot be read back.
-UNREGISTERED_KINDS = ("barbs", "graph", "hexbin", "kde")
-
 
 @pytest.fixture
 def point_fc():
@@ -96,33 +85,33 @@ class TestWhatTheTierSaysItDraws:
                 unresolved.append(kind)
         assert unresolved == [], f"{unresolved} are declared drawable with no drawer"
 
-    def test_the_kinds_it_draws_are_registered_names_bar_four_that_name_builders(self):
+    def test_every_kind_it_draws_is_a_registered_name(self):
         """A kind nobody registered is a name only this tier knows, so no reader can resolve it.
 
         Test scenario:
             A figure records `kind` as a value and is read back by whatever opens it — another tier, a
-            saved file, the registry's own `band_of`. Four of this tier's builders record their own method
-            name instead of the registered kind that already means what they draw, so `band_of` answers
-            them from its default rather than from an entry, and `Capabilities` cannot declare them at all.
-            The list is pinned so it can only shrink.
+            saved file, the registry's own `band_of`. Four builders here once recorded their own method
+            name (`barbs`, `graph`, `hexbin`, `kde`) instead of the registered kind that already meant
+            what they drew, so `band_of` answered them from its default rather than from an entry and
+            `Capabilities` could not declare them at all. Two builders may still draw one kind — the
+            recipe under `via` keeps them apart — but neither may invent a word for it.
         """
-        unregistered = tuple(sorted(set(DRAWN_KINDS) - set(kinds())))
-        assert unregistered == UNREGISTERED_KINDS, (
-            f"the drawable kinds nobody registered changed: {unregistered}"
+        unregistered = sorted(set(DRAWN_KINDS) - set(kinds()))
+        assert unregistered == [], (
+            f"the tier draws {unregistered}, which no reader of a figure can resolve"
         )
 
-    def test_the_undeclared_kinds_are_exactly_the_unregistered_ones(self):
-        """One gap, not two: the declaration is short only where the registry is.
+    def test_everything_it_draws_is_declared(self):
+        """What a tier draws and what it says it can draw are one list, or the declaration is fiction.
 
         Test scenario:
-            `Capabilities` refuses a kind nobody registered, so a tier cannot declare what it draws until
-            the kind exists. Holding the two differences against each other says that registering those
-            four names is the whole of the fix, rather than the first half of it.
+            `Capabilities` refuses a kind nobody registered, so while four builders recorded invented
+            names the tier could not declare them — it drew four kinds it did not claim and claimed a
+            `heatmap` nothing drew. `api.BACKEND_CAPABILITIES` is derived from these declarations, so an
+            undeclared kind is a layer the dispatcher will route here and find unbuildable.
         """
-        undeclared = tuple(sorted(set(DRAWN_KINDS) - CAPABILITIES.kinds))
-        assert undeclared == UNREGISTERED_KINDS, (
-            f"the tier draws {undeclared} without declaring them"
-        )
+        undeclared = sorted(set(DRAWN_KINDS) - CAPABILITIES.kinds)
+        assert undeclared == [], f"the tier draws {undeclared} without declaring them"
 
     def test_a_declared_kind_the_tier_does_not_draw_is_still_declared(self):
         """The declaration may be wider than the drawer table; it must not be narrower.
@@ -604,3 +593,64 @@ class TestTheBandOfALayerIsItsKinds:
         placed = interactive_map.layer_ids
         assert band_of("graticule") == "reference", band_of("graticule")
         assert placed.index("graticule-3") < placed.index("points-2"), placed
+
+
+class TestTheDescribedOrderIsTheDrawnOrder:
+    """One list decides draw order, or a figure shows something other than what it reports."""
+
+    def test_a_reference_layer_added_last_is_still_composed_under_the_data(
+        self, new_map, point_fc
+    ):
+        """The band decides where a layer is drawn, whenever the builder was called.
+
+        Test scenario:
+            `figure_spec` read the band-sorted tree while `_compose` overlaid insertion order, so
+            `points(fc).graticule()` *described* the graticule under the points and *drew* it over them.
+            The two orders are one construction now: a layer is inserted where the tree puts it.
+        """
+        interactive_map = new_map()
+        interactive_map.points(point_fc)
+        interactive_map.graticule()
+        drawn = interactive_map._renderer.drawn
+        composed = [id(element) for element in interactive_map.layers]
+        described = [id(drawn[layer_id].element) for layer_id in interactive_map.layer_ids]
+        assert composed == described, (
+            f"composed {composed} but described {interactive_map.layer_ids}"
+        )
+
+    def test_the_graticule_is_described_beneath_the_points_it_annotates(
+        self, new_map, point_fc
+    ):
+        """The order itself, spelled out: a reference layer belongs under the data."""
+        interactive_map = new_map()
+        interactive_map.points(point_fc)
+        interactive_map.graticule()
+        ordered = [
+            interactive_map.figure_spec.layers.get(layer_id).kind
+            for layer_id in interactive_map.layer_ids
+        ]
+        assert ordered == ["graticule", "points"], ordered
+
+    def test_reference_geography_is_composed_over_the_basemap_not_under_it(self, new_map):
+        """Land added after a basemap must sit on top of it in the overlay, or it is invisible.
+
+        Test scenario:
+            Both are underlays, and both used to be inserted at the *front* of the element list, so the
+            one added second went beneath the first: `tiles()` then `features(land=True)` put opaque
+            land under an opaque basemap, where no viewer could ever see it. Asserted against the
+            composed elements rather than the tree, because the tree ordered these two correctly even
+            while the drawing did not — reading it alone is a check that cannot fail.
+        """
+        interactive_map = new_map()
+        interactive_map.tiles()
+        interactive_map.features(land=True)
+        drawn = interactive_map._renderer.drawn
+        composed = [id(element) for element in interactive_map.layers]
+        kinds_by_element = {
+            id(record.element): interactive_map.figure_spec.layers.get(layer_id).kind
+            for layer_id, record in drawn.items()
+        }
+        assert [kinds_by_element[marker] for marker in composed] == [
+            "basemap",
+            "land",
+        ], "land must be composed after the basemap it sits on"

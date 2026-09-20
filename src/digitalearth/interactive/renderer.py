@@ -59,12 +59,11 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "mesh",
     "contours",
     "filled_contours",
-    "hexbin",
-    "kde",
-    "graph",
+    "heatmap",
+    "flow",
     "vectors",
-    "barbs",
     "streamlines",
+    "unstructured",
     "basemap",
     "labels",
     "land",
@@ -125,17 +124,16 @@ def _recipes() -> Dict[str, Dict[str, Any]]:
             "timecube": temporal.draw_timecube,
         },
         "rgb": {"rgb": raster.draw_rgb},
-        "mesh": {
-            "quadmesh": raster.draw_quadmesh,
-            "trimesh": vector.draw_trimesh,
-        },
+        "mesh": {"quadmesh": raster.draw_quadmesh},
         "contours": {"contours": raster.draw_contours},
-        "hexbin": {"hexbin": vector.draw_hexbin},
-        "kde": {"kde": vector.draw_kde},
-        "graph": {"graph": vector.draw_graph},
-        "vectors": {"vectorfield": vector.draw_uv_field},
-        "barbs": {"barbs": vector.draw_uv_field},
+        # Two ways to draw one density, told apart by the recipe rather than by two invented kinds.
+        "heatmap": {"hexbin": vector.draw_hexbin, "kde": vector.draw_kde},
+        "flow": {"graph": vector.draw_graph},
+        # Arrows and wind barbs are one u/v field drawn with two glyphs, which is what the registry's
+        # `vectors` entry already says ("static quiver/barbs, interactive vectorfield/barbs").
+        "vectors": {"vectorfield": vector.draw_uv_field, "barbs": vector.draw_uv_field},
         "streamlines": {"streamlines": vector.draw_uv_field},
+        "unstructured": {"trimesh": vector.draw_trimesh},
         "filled_contours": {"contours": raster.draw_contours},
     }
 

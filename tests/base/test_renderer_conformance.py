@@ -683,23 +683,3 @@ class TestInteractiveRendererConformance(RendererConformance):
     """The interactive tier, signing the contract the 3-D and web tiers already pass."""
 
     contract = InteractiveContract()
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "the tier draws 'barbs', 'graph', 'hexbin' and 'kde', which name builders rather than "
-            "registered kinds — the registry already calls them 'vectors', 'flow' and 'heatmap' — so "
-            "`Capabilities` cannot declare them (it refuses a kind nobody registered). Pinned as a known "
-            "gap rather than hidden in the adapter: it fails the moment the four builders record the "
-            "registered name, which is when this override should be deleted. "
-            "tests/interactive/test_interactive_seam.py holds the same gap from the tier's side."
-        ),
-    )
-    def test_the_drawer_table_and_the_declaration_are_one_list(self):
-        """The shared check, run unchanged against a declaration that is four kinds short.
-
-        Test scenario:
-            Marked `strict`, so this is not a licence to drift: a fifth undrawn-but-declared kind still
-            fails here, and closing the gap turns the expected failure into an unexpected pass.
-        """
-        super().test_the_drawer_table_and_the_declaration_are_one_list()

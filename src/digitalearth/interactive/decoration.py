@@ -366,10 +366,9 @@ class DecorationMixin(_MixinBase):
         return self.add_element(
             None,
             kind="basemap",
-            band=None if level == "overlay" else "underlay",
-            # Under everything already drawn, which is what an underlay basemap means — and what the
-            # element list used to say by an insert that described nothing.
-            at=None if level == "overlay" else 0,
+            # `level="overlay"` asks for a basemap drawn *over* the data — a labels-and-roads layer on top
+            # of imagery, say — so it declares the band that overrides its kind's.
+            band="overlay" if level == "overlay" else None,
             key=api_key,
             symbology=Symbology(
                 props={
@@ -554,12 +553,12 @@ class DecorationMixin(_MixinBase):
         """
         _require_holoviz()
         self._require_web_mercator("features")
-        for name, requested, at in (
-            ("land", land, 0),
-            ("ocean", ocean, 0),
-            ("borders", borders, None),
-            ("rivers", rivers, None),
-            ("lakes", lakes, None),
+        for name, requested in (
+            ("land", land),
+            ("ocean", ocean),
+            ("borders", borders),
+            ("rivers", rivers),
+            ("lakes", lakes),
         ):
             if requested:
                 # Each is its own kind, so a figure says which piece of reference geography it drew —
@@ -567,7 +566,6 @@ class DecorationMixin(_MixinBase):
                 self.add_element(
                     None,
                     kind=name,
-                    at=at,
                     symbology=Symbology(
                         props={
                             "via": "natural_earth",

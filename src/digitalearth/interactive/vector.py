@@ -1139,7 +1139,7 @@ class VectorMixin(_MixinBase):
         )
         return self.add_element(
             None,
-            kind="barbs",
+            kind="vectors",
             source=(u, v),
             symbology=Symbology(
                 props={
@@ -1265,7 +1265,7 @@ class VectorMixin(_MixinBase):
             return self.rasterize(trimesh, dynamic=True, cmap=cmap, **opts)
         return self.add_element(
             None,
-            kind="mesh",
+            kind="unstructured",
             source=data,
             symbology=Symbology(
                 props={
@@ -1347,7 +1347,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         return self.add_element(
             None,
-            kind="hexbin",
+            kind="heatmap",
             source=features,
             symbology=Symbology(
                 props={
@@ -1384,7 +1384,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         return self.add_element(
             None,
-            kind="kde",
+            kind="heatmap",
             source=features,
             symbology=Symbology(
                 props={
@@ -1429,7 +1429,7 @@ class VectorMixin(_MixinBase):
         _require_holoviz()
         return self.add_element(
             None,
-            kind="graph",
+            kind="flow",
             # One source, because the layer draws the join of the two: neither the node table nor the
             # edge table describes it on its own.
             source=(nodes, edges),

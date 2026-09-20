@@ -458,7 +458,6 @@ class InteractiveMapBase:
         band: Optional[str] = None,
         source: Any = None,
         symbology: Any = None,
-        at: Optional[int] = None,
         key: Any = None,
     ) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
@@ -545,10 +544,11 @@ class InteractiveMapBase:
                 self._sources.pop(layer_id, None)
                 return self
             element = drawn.element
-        if at is None:
-            self.layers.append(element)
-        else:
-            self.layers.insert(at, element)
+        # Placed where the description puts it, not where the call happened to arrive. The tree orders by
+        # draw-order band, so a basemap added last still goes under the data and a graticule added first
+        # still goes over it — and the list `_compose` overlays cannot disagree with the figure the map
+        # reports, which is what it did when a builder had to remember to insert at the front itself.
+        self.layers.insert(self._layer_tree.ids.index(layer_id), element)
         return self
 
     def _needs_reproject(self, data: Any) -> bool:
