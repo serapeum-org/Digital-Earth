@@ -437,9 +437,9 @@ class TestExportHtml:
         """
         message = 'The "trame" plotter component is not registered. Install trame-pyvista: pip install trame-pyvista'
         scene = _stub_scene(error=ImportError(message))
-        str2 = str(tmp_path / "s.html")
+        destination = str(tmp_path / "s.html")
         with pytest.raises(ImportError, match="trame-pyvista") as exc_info:
-            scene.export_html(str2)
+            scene.export_html(destination)
         assert "not registered" in str(exc_info.value), (
             f"The actionable message was lost: {exc_info.value}"
         )
@@ -533,9 +533,9 @@ class TestVtkBuildReconciliation:
         monkeypatch.setenv("VTK_MODULE_NAME", "vtk_a_different_build")
         component = _RecordingComponent()
         scene = _stub_scene(component=component)
-        str2 = str(tmp_path / "s.html")
+        destination = str(tmp_path / "s.html")
         with pytest.raises(RuntimeError, match="VTK_MODULE_NAME") as exc_info:
-            scene.export_html(str2)
+            scene.export_html(destination)
         assert "vtk_a_different_build" in str(exc_info.value), (
             f"The resolved build was not named: {exc_info.value}"
         )
@@ -558,9 +558,9 @@ class TestVtkBuildReconciliation:
         monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
         monkeypatch.setenv("VTK_MODULE_NAME", "vtk_a_different_build")
         scene = _stub_scene()
-        str2 = str(tmp_path / "s.html")
+        destination = str(tmp_path / "s.html")
         with pytest.raises(RuntimeError, match="VTK_MODULE_NAME"):
-            scene.export_html(str2)
+            scene.export_html(destination)
         assert scene.plotter.calls == [], (
             f"A mismatched build must not export, got {scene.plotter.calls}"
         )
@@ -583,9 +583,9 @@ class TestVtkBuildReconciliation:
         monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
         monkeypatch.delenv("VTK_MODULE_NAME", raising=False)
         scene = _stub_scene(component=_RecordingComponent())
-        str2 = str(tmp_path / "s.html")
+        destination = str(tmp_path / "s.html")
         with pytest.raises(RuntimeError, match="cvista"):
-            scene.export_html(str2)
+            scene.export_html(destination)
 
     def test_a_matched_non_vtk_backend_is_not_blocked(self, monkeypatch, tmp_path):
         """A correctly matched non-`vtk*` backend must export, not trip the guard.
@@ -625,9 +625,9 @@ class TestVtkBuildReconciliation:
         )
         monkeypatch.setenv("VTK_MODULE_NAME", base._pyvista_vtk_root())
         scene = _stub_scene(component=_RecordingComponent())
-        str2 = str(tmp_path / "s.html")
+        destination = str(tmp_path / "s.html")
         with pytest.raises(RuntimeError, match="vtk_some_other_build"):
-            scene.export_html(str2)
+            scene.export_html(destination)
 
 
 class TestSave:
@@ -761,9 +761,9 @@ class TestSave:
             directory must be left empty.
         """
         scene = _stub_scene()
-        str2 = str(tmp_path / "scene")
+        destination_value = str(tmp_path / "scene")
         with pytest.raises(ValueError, match="has no suffix"):
-            scene.save(str2)
+            scene.save(destination_value)
         assert list(tmp_path.iterdir()) == [], (
             "Nothing may be written for a destination save() cannot honour"
         )
@@ -779,9 +779,9 @@ class TestSave:
             caller can fix the call without reading the source.
         """
         scene = _stub_scene()
-        str2 = str(tmp_path / "scene.xyz")
+        destination = str(tmp_path / "scene.xyz")
         with pytest.raises(ValueError) as raised:
-            scene.save(str2)
+            scene.save(destination)
         message = str(raised.value)
         assert supported_destinations() in message, (
             "The error must name the supported suffixes"
@@ -803,9 +803,9 @@ class TestSave:
             AttributeError from deep inside the call.
         """
         scene = _stub_scene()
-        str2 = str(tmp_path / "scene.vtksz")
+        destination = str(tmp_path / "scene.vtksz")
         with pytest.raises(ValueError, match="export_vtksz"):
-            scene.save(str2)
+            scene.save(destination)
 
     def test_a_tif_destination_really_writes_a_tiff(self, tmp_path):
         """`.tif` screenshots to a TIFF — the format the suffix names, not a PNG under another name.

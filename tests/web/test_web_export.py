@@ -78,9 +78,9 @@ class TestExportNeedsEngine:
         monkeypatch.setattr(WebMap, "_png_via_playwright", staticmethod(_no_browser))
         monkeypatch.setattr(WebMap, "_png_via_selenium", staticmethod(_no_browser))
         m = WebMap().polygons(polygons_gdf)
-        str2 = str(tmp_path / "m.png")
+        destination = str(tmp_path / "m.png")
         with pytest.raises(ImportError, match="headless browser"):
-            m.save(str2)
+            m.save(destination)
 
     def test_fmt_png_forces_png_dispatch(self, tmp_path, polygons_gdf, monkeypatch):
         """``fmt='png'`` routes to the PNG path even when the suffix is not .png."""

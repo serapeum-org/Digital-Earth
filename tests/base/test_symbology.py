@@ -96,9 +96,9 @@ def test_unsortable_mixed_keeps_first_seen_order():
 
 
 def test_empty_raises():
-    float2 = float("nan")
+    not_a_number = float("nan")
     with pytest.raises(ValueError, match="no non-null"):
-        categorical_colors([None, float2])
+        categorical_colors([None, not_a_number])
 
 
 def test_resolve_categorical_cmap_swaps_continuous_default():

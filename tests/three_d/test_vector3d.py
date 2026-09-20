@@ -253,9 +253,9 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
         """
         scene = Scene3D(off_screen=True)
         try:
-            float2 = float("nan")
+            not_a_number = float("nan")
             with pytest.raises(ValueError, match="finite extrusion height"):
-                scene.extruded_polygons(squares, height=float2)
+                scene.extruded_polygons(squares, height=not_a_number)
         finally:
             scene.close()
 

@@ -63,7 +63,7 @@ class TestSaveAnimation:
         assert out.stat().st_size > 1_000
 
     def test_save_without_timecube_raises(self, tmp_path):
-        str2 = str(tmp_path / "x.gif")
+        destination = str(tmp_path / "x.gif")
         interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="no time cube"):
-            interactiveMap.save_animation(str2)
+            interactiveMap.save_animation(destination)
