@@ -51,7 +51,7 @@ from digitalearth.base.spec import (
     Symbology,
     Viewport,
 )
-from digitalearth.static.render_compat import prepare_plot_kwargs
+from digitalearth.static.render_compat import plot_takes, prepare_plot_kwargs
 from digitalearth.static.renderer import DrawnLayer, Renderer
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
@@ -221,6 +221,12 @@ class Scene(WatermarkMixin):
         # by layer id. Deliberately not part of `symbology`: a figure is written to JSON and read back, and
         # neither a shapely geometry nor an API key belongs in one (see `LayerRecord.key`).
         self._layer_keys: Dict[str, Any] = {}
+        # Whether this scene has already drawn a glyph onto `ax` (#313). A cleopatra glyph clears every
+        # glyph's artists off its axes unless it is told to compose, so from the *second* layer onwards a
+        # render has to compose or it takes the layer below it off again. Only from the second: the first
+        # one keeps replacing, so a scene handed an axes another figure was drawn on — including one an
+        # earlier scene drew — still supersedes it rather than stacking on top of it silently.
+        self._drew_on_axes: bool = False
         #: The renderer that turns this scene's description into artists on :attr:`ax`.
         self._renderer: Renderer = Renderer(self)
 
@@ -503,6 +509,9 @@ class Scene(WatermarkMixin):
         # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
         # than removable: it is dropped, not removed.
         self._renderer = Renderer(self)
+        # The next frame's first layer draws onto an emptied axes, so it is a first render again and clears
+        # rather than composes — which is what keeps a frame from composing over the frame before it.
+        self._drew_on_axes = False
 
     def _default_label(self, layer: int) -> Optional[str]:
         """Return the default colorbar label recorded for ``layer``, or ``None`` when there is none.
@@ -538,6 +547,15 @@ class Scene(WatermarkMixin):
         - ``"plot"``: ``glyph.plot()`` returns ``(fig, ax, artist)`` and the mappable is that third element
           (``Scatter`` / ``Polygon`` / ``Vector`` / ``KDE`` / ``Flow`` glyphs).
 
+        It is also where a layer is told to draw **over** the ones already on the axes rather than in place
+        of them (#313). A cleopatra glyph clears every glyph's artists off its axes by default, so a scene
+        that added two field layers kept only the second: the axes held one image while :attr:`figure_spec`
+        described two layers. Every render after this scene's first therefore passes ``compose=True``, which
+        narrows that clear to the glyph's own artists. Only after the first: the opening render still
+        replaces, so a scene handed an axes something else was drawn on supersedes it rather than stacking
+        on it. A rebuilt layer composes too and still leaves one copy of itself, because
+        :meth:`~digitalearth.static.renderer.Renderer.remove` has already taken the previous artists off.
+
         Args:
             glyph: An already-constructed cleopatra glyph bound to this Scene's ``ax``/``fig``.
             *plot_args: Positional arguments forwarded to ``glyph.plot`` (e.g. the data array for a mesh).
@@ -552,7 +570,15 @@ class Scene(WatermarkMixin):
             taken off the axes.
         """
         plot_kwargs, deferred_alpha = prepare_plot_kwargs(glyph, plot_kwargs)
+        # Only the glyphs that clear on render take the keyword; the rest (scatter, polygon, KDE, flow) add
+        # to the axes without clearing it and declare no such parameter, so forwarding one would slip
+        # through their `**kwargs` and reach matplotlib as an unknown artist property.
+        if self._drew_on_axes and plot_takes(glyph, "compose"):
+            plot_kwargs.setdefault("compose", True)
         result = glyph.plot(*plot_args, **plot_kwargs)
+        # After the call, so a glyph that raised part-way does not leave the next layer composing over a
+        # render that never happened.
+        self._drew_on_axes = True
         mappable = glyph.im if artist == "im" else result[2]
         if deferred_alpha is not None and mappable is not None:
             mappable.set_alpha(deferred_alpha)

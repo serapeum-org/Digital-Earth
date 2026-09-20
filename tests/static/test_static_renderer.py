@@ -50,9 +50,10 @@ def drawn_map(dataset):
 def _text_layer(layer_id, crs):
     """Return a drawable text layer, the cheapest thing this tier really puts on an axes.
 
-    A *label* rather than a second raster on purpose: cleopatra's glyphs replace what is already on the
-    axes unless a render opts into composing, so a second raster would take the first one's image off and
-    the rollback would have nothing recognisable to restore.
+    A *label* rather than a second raster on purpose: it is the cheapest drawable thing this tier has — one
+    ``Text``, no reprojection and no glyph — so a rollback test spends its time on the rollback. It used to
+    be forced as well: until #313 a second raster took the first one's image off and the rollback had
+    nothing recognisable to restore. Layers compose now, and the label is kept for the first reason.
 
     Args:
         layer_id: The id to give it.

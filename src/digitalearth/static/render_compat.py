@@ -60,6 +60,7 @@ __all__ = [
     "fold_color_scaling",
     "fold_symbology",
     "group_render_kwargs",
+    "plot_takes",
     "prepare_plot_kwargs",
     "relocate_flat_style",
     "route_flat_style",
@@ -573,6 +574,40 @@ def group_render_kwargs(
 def _plot_params(glyph_cls: type) -> frozenset:
     """The parameter names of a glyph class's ``plot`` method (cached per class)."""
     return frozenset(inspect.signature(glyph_cls.plot).parameters)
+
+
+def plot_takes(glyph: Any, param: str) -> bool:
+    """Whether ``glyph``'s ``plot`` declares `param` as a named parameter of its own.
+
+    The same question :func:`prepare_plot_kwargs` asks of the style groups, asked of one keyword: cleopatra's
+    glyphs do not all take the same ones, and every one of them ends in ``**kwargs``, so a keyword the glyph
+    has no parameter for is not refused — it is forwarded to matplotlib, where it fails as something else
+    entirely. Asking first is what keeps a keyword meant for the glyphs that understand it from reaching the
+    ones that do not.
+
+    Args:
+        glyph: The cleopatra glyph about to be drawn.
+        param: The parameter name to look for.
+
+    Returns:
+        ``True`` when `param` is an explicit parameter of ``type(glyph).plot``.
+
+    Examples:
+        - ``ArrayGlyph`` can compose over an existing axes; ``ScatterGlyph`` has no such parameter (it never
+          clears anything, so it has no need of one):
+            ```python
+            >>> import numpy as np
+            >>> from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph
+            >>> from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph
+            >>> from digitalearth.static.render_compat import plot_takes
+            >>> plot_takes(ArrayGlyph(np.zeros((2, 2))), "compose")
+            True
+            >>> plot_takes(ScatterGlyph(np.zeros(2), np.zeros(2)), "compose")
+            False
+
+            ```
+    """
+    return param in _plot_params(type(glyph))
 
 
 def prepare_plot_kwargs(
