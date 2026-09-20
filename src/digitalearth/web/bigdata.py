@@ -79,9 +79,9 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         A :class:`~digitalearth.web.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
         unclustered points.
     """
-    from digitalearth.web.renderer import DrawnLayer
-
     from maplibre.sources import GeoJSONSource, geopandas_to_geojson
+
+    from digitalearth.web.renderer import DrawnLayer
 
     Layer, LayerType = _require_layer_api()
     props = dict(layer.symbology.props)

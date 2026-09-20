@@ -328,6 +328,37 @@ class _Described:
         return self.layer_id
 
 
+def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Hand back the caller's own MapLibre layer, or the callable that adds it.
+
+    A custom layer has no description to rebuild from — that is what `custom:<engine>` means — so the
+    object the caller handed in is held by the map and looked up here. A figure loaded from a dict names
+    the layer but holds no object, and `held_object` refuses it by name rather than drawing something else.
+
+    Args:
+        web_map: The map being drawn.
+        _data: Unused — a custom layer's data is inside the caller's own object.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` carrying the object, or `None` when this process
+        does not hold it.
+    """
+    from digitalearth.base.custom import held_object
+    from digitalearth.web.renderer import DrawnLayer
+
+    obj = held_object(
+        layer.id,
+        layer.kind,
+        web_map._custom,
+        engine="maplibre",
+        backend="web",
+    )
+    if obj is None:
+        return None
+    return DrawnLayer(source_id=None, source_spec=None, layer=obj)
+
+
 def _new_renderer(web_map: Any) -> Any:
     """Return the renderer a map draws through.
 
@@ -1253,7 +1284,9 @@ class WebMapBase:
                 self._layer_tree = self._layer_tree.remove(layer_id)
                 self._sources.pop(layer_id, None)
                 return False
-            self._queue_layer(_Described(layer_id), kind)
+            # In the layer's *own* band when it declares one — what a caller's `custom:maplibre` object
+            # needs, since the engine name says nothing about what it draws — else the kind's.
+            self._queue_in_band(_Described(layer_id), band or band_of(kind))
         return True
 
     def _rekind_layer(self, layer_id: str, kind: str) -> None:
@@ -1661,9 +1694,11 @@ class WebMapBase:
                     f"layer id {layer_id!r} is already on this map; MapLibre drops the second layer with "
                     f"that id, so build this one with a free id (the ids in use are {self.layer_ids})"
                 )
-        self._index_layer(layer_id, name, kind=custom_kind("maplibre"), band=band)
+        # Held before the description is recorded: `draw_custom` reads the object from here, so it has
+        # to be in place by the time `_index_layer` draws.
         self._custom[layer_id] = layer
-        return self._queue_in_band(layer, band)
+        self._index_layer(layer_id, name, kind=custom_kind("maplibre"), band=band)
+        return self
 
     def _queue(self, layer: Any) -> Self:
         """Queue a drawn layer among the data, without recording it, and return ``self``.

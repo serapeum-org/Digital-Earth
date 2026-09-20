@@ -130,10 +130,10 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     Returns:
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
     """
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     Layer, _ = _require_layer_api()
-    props = dict(layer.symbology.props)
+    props = required_props(layer, "maplibre_type", "paint")
     spec_layout = dict(props.get("layout") or {})
     if not layer.visible:
         spec_layout["visibility"] = "none"

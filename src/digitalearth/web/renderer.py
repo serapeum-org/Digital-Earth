@@ -69,7 +69,22 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "heatmap",
     "clusters",
     "extrusion",
+    "custom:maplibre",
 )
+
+
+def _custom_drawer() -> Any:
+    """Return the drawer for a caller's own MapLibre layer.
+
+    Resolved through a function so the drawer table stays a table of names: `draw_custom` lives beside the
+    map that holds the objects, in :mod:`digitalearth.web.base`, rather than in a builder module.
+
+    Returns:
+        The drawer.
+    """
+    from digitalearth.web.base import draw_custom
+
+    return draw_custom
 
 
 def drawer_for(kind: str) -> Any:
@@ -111,6 +126,7 @@ def drawer_for(kind: str) -> Any:
         "heatmap": bigdata.draw_heatmap,
         "clusters": bigdata.draw_clusters,
         "extrusion": threed.draw_extruded_polygons,
+        "custom:maplibre": _custom_drawer(),
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
     # in `DRAWN_KINDS` would be refused with a message that is false, and one in `DRAWN_KINDS` with no
@@ -121,6 +137,35 @@ def drawer_for(kind: str) -> Any:
             f"{sorted(set(drawers).symmetric_difference(DRAWN_KINDS))}"
         )
     return drawers[kind]
+
+
+def required_props(layer: LayerSpec, *names: str) -> dict:
+    """Return a layer's symbology props, checking the ones its drawer needs are present.
+
+    A `LayerSpec` can reach a drawer without them: built by hand, or loaded from a figure an older version
+    wrote before this tier recorded what it draws. The dict lookup would then raise a bare `KeyError` naming
+    a MapLibre key, far from the layer that is actually malformed.
+
+    Args:
+        layer: The layer being drawn.
+        *names: The props its drawer reads.
+
+    Returns:
+        The props, as a plain dict.
+
+    Raises:
+        ValueError: naming the layer, its kind and what is missing.
+    """
+    props = dict(layer.symbology.props)
+    missing = [name for name in names if name not in props]
+    if missing:
+        raise ValueError(
+            f"layer {layer.id!r} ({layer.kind}) cannot be drawn by the web tier: its symbology records "
+            f"none of {missing}. A layer is drawn from what its builder recorded, so a description built "
+            f"by hand — or loaded from a figure written before this tier recorded its styling — has to "
+            f"carry them."
+        )
+    return props
 
 
 class Renderer:
@@ -201,6 +246,28 @@ class Renderer:
             so this reconciles the *record* of what is drawn and the next build reflects it. The failure
             modes it must still avoid are the same, which is why the order below matches that tier's —
             removals first, then data changes, then styling, then additions.
+        """
+        # `apply` is not atomic: it draws layer by layer, so a refusal on the third layer has already
+        # drawn the first two. Rolling back only the caller's description would leave this record holding
+        # layers no figure owns — the same defect the 3-D tier fixed in its own `_change`, found here by
+        # the shared conformance contract (#305).
+        held = dict(self._drawn)
+        try:
+            self._reconcile(before, after)
+        except Exception:
+            self._drawn = held
+            raise
+
+    def _reconcile(self, before: FigureSpec, after: FigureSpec) -> None:
+        """Draw the difference between two figures, layer by layer.
+
+        Args:
+            before: The figure the map currently draws.
+            after: The figure it should draw.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw.
+            ValueError: when a layer's description does not carry what its drawer needs.
         """
         change = before.diff(after)
         for layer_id in change.removed:
