@@ -224,7 +224,10 @@ class DecorationMixin(_MixinBase):
         # one-shot hook does not also prepend a second basemap (L2).
         self._tiles_provider = None
         if level == "overlay":
-            self.add_element(element)
+            self.add_element(
+                element,
+                kind="basemap",
+            )
         else:
             self.layers.insert(0, element)
         return self
@@ -346,7 +349,10 @@ class DecorationMixin(_MixinBase):
         element = gv.feature.coastline.clone().opts(scale=resolution)
         if opts:
             element = element.opts(**opts)
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="coastlines",
+        )
 
     def features(
         self,
@@ -410,7 +416,10 @@ class DecorationMixin(_MixinBase):
             ("lakes", lakes),
         ):
             if requested:
-                self.add_element(_styled_feature(getattr(gv.feature, overlay)))
+                self.add_element(
+                    _styled_feature(getattr(gv.feature, overlay)),
+                    kind="borders",
+                )
         return self
 
     def borders(self, resolution: str = "110m", **opts: Any) -> Self:
@@ -652,7 +661,10 @@ class DecorationMixin(_MixinBase):
         element = gv.Text(x, y, s, crs=gv.util.process_crs(self.crs))
         if opts:
             element = element.opts(**opts)
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="text",
+        )
 
     @_skips_off_limb
     def labels(
@@ -695,7 +707,11 @@ class DecorationMixin(_MixinBase):
         )
         if opts:
             element = element.opts(**opts)
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="labels",
+            source=features,
+        )
 
     def colorbar(self, show: bool = True) -> Self:
         """Toggle the colorbar on the most recently added layer.

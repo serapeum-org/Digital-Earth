@@ -28,14 +28,25 @@ from digitalearth.base.bigdata import (
     validate_big_data_threshold,
 )
 from digitalearth.base.crs import OffLimbError
+from digitalearth.base.custom import custom_kind
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.display import (
     auto_cmap,
     needs_reproject,
     to_display_source,
 )
+from digitalearth.base.registry import object_namespace
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import (
+    DataRef,
+    FigureSpec,
+    LayerSpec,
+    LayerTree,
+    PanelSpec,
+    Symbology,
+    Viewport,
+)
 from digitalearth.base.spec.bounds import same_crs
 
 # `DEFAULT_BIG_DATA_THRESHOLD` is imported above rather than declared here: the row/face count above which a
@@ -44,6 +55,10 @@ from digitalearth.base.spec.bounds import same_crs
 # carries it as an attribute, and every big-data builder takes a per-call override of the same name, so a map
 # configured once keeps the setting for every later layer. It stays importable from this module because that
 # is where this tier's callers and tests already reach for it.
+
+#: The id of the one panel this tier draws into. A map is a single view; the constant is named so a
+#: reader of `figure_spec` sees the same panel id every tier writes.
+PANEL_ID: str = "main"
 
 #: The pip extra / pixi env that provides the HoloViz engine, quoted in the lazy-import error.
 _INSTALL_HINT = (
@@ -254,6 +269,14 @@ class InteractiveMapBase:
         # public `style_of` / `layer_styles` accessors — the tier owns its styling state instead of
         # delegating it to HoloViews' global option Store.
         self._styles: Dict[int, dict] = {}
+        # What the map draws, as data. `self.layers` holds the built HoloViews elements — the drawing —
+        # and this holds the description each was built from, which is what a figure can be written to and
+        # read back from (#300).
+        self._layer_tree = LayerTree()
+        self._sources: Dict[str, DataRef] = {}
+        self._objects_ns: str = object_namespace()
+        self._id_counter: int = 0
+        self._issued_ids: set = set()
 
     def _raster_element(
         self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
@@ -300,7 +323,118 @@ class InteractiveMapBase:
             **placement,
         )
 
-    def add_element(self, element: Any) -> Self:
+    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+        """Return a unique layer id: the caller's name when they gave one, else a generated one.
+
+        Args:
+            prefix: What a generated id counts — the kind, usually.
+            name: The caller's own name for the layer, used as its id when it is free.
+
+        Returns:
+            The id. A caller's name that collides with one already issued is suffixed, because two layers
+            sharing an id makes the second unaddressable.
+        """
+        candidate = name or ""
+        while not candidate or candidate in self._issued_ids:
+            self._id_counter += 1
+            candidate = (
+                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
+            )
+        self._issued_ids.add(candidate)
+        return candidate
+
+    def _index_layer(
+        self,
+        layer_id: str,
+        label: Optional[str],
+        *,
+        kind: str,
+        visible: bool = True,
+        band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
+    ) -> None:
+        """Record a layer so the figure describes it rather than only holding its element.
+
+        Args:
+            layer_id: The layer's id, as `layer_ids` reports it.
+            label: What a layer switcher should call it; `None` falls back to the id.
+            kind: The registered, engine-neutral kind — `"raster"`, `"points"`, `"choropleth"` — not the
+                HoloViews element type, which cannot tell a choropleth from a plain polygon draw.
+            visible: Whether the layer was built visible.
+            band: Where it is drawn, when its kind does not say — what a caller's own object needs, since
+                `custom:holoviews` names the engine rather than what it draws.
+            source: What the layer draws, recorded under its id. `None` for a layer drawn from no data.
+            symbology: How it looks, as values rather than as the applied HoloViews options.
+        """
+        if source is not None:
+            self._sources[layer_id] = DataRef.of(
+                source, name=f"{self._objects_ns}:{layer_id}"
+            )
+        self._layer_tree = self._layer_tree.add(
+            LayerSpec(
+                layer_id,
+                kind,
+                source_id=layer_id if source is not None else None,
+                symbology=Symbology() if symbology is None else symbology,
+                label=label or layer_id,
+                visible=bool(visible),
+                band=band,
+            )
+        )
+
+    @property
+    def layer_ids(self) -> List[str]:
+        """The ids of the layers this map draws, in draw order, bottom first.
+
+        Returns:
+            One id per described layer. A layer the caller named carries that name; an unnamed one gets a
+            generated id counting the layers of its kind.
+        """
+        return list(self._layer_tree.ids)
+
+    @property
+    def figure_spec(self) -> FigureSpec:
+        """What the map draws, as data: its layers, their sources and the view.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`, whose layers are the
+            tree in draw order and whose sources are what each builder was given.
+        """
+        tree = self._layer_tree
+        panel = PanelSpec(
+            PANEL_ID,
+            self.viewport,
+            layers=tuple(tree.ids),
+        )
+        return FigureSpec(
+            panels=(panel,),
+            layers=tree,
+            sources={
+                key: ref for key, ref in self._sources.items() if key in set(tree.ids)
+            },
+        )
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Viewport` in the CRS this tier places data in.
+        """
+        return Viewport(crs=self.crs)
+
+    def add_element(
+        self,
+        element: Any,
+        *,
+        kind: Optional[str] = None,
+        name: Optional[str] = None,
+        visible: bool = True,
+        band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
+    ) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
         The low-level entry point the capability mixins build on — every builder method ends here.
@@ -340,6 +474,18 @@ class InteractiveMapBase:
                 ```
         """
         self.layers.append(element)
+        # A builder that says what it drew is described; one that does not is a caller's own object, which
+        # has no description to write beyond the fact that it exists (:mod:`digitalearth.base.custom`).
+        resolved = kind or custom_kind("holoviews")
+        self._index_layer(
+            self._layer_id(resolved.split(":")[-1], name),
+            name,
+            kind=resolved,
+            visible=visible,
+            band=band,
+            source=source,
+            symbology=symbology,
+        )
         return self
 
     def _needs_reproject(self, data: Any) -> bool:

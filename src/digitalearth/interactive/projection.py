@@ -156,7 +156,10 @@ class ProjectionMixin(_MixinBase):
             )
         if opts:
             element = element.opts(**opts)
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="graticule",
+        )
 
     @staticmethod
     def _graticule_step(lon_step: float, lat_step: float) -> int:

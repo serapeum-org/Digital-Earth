@@ -172,4 +172,7 @@ class TemporalMixin(_MixinBase):
             )
 
         dmap = hv.DynamicMap(frame, kdims=[kdim]).redim.values(**{kdim: keys})
-        return self.add_element(dmap)
+        return self.add_element(
+            dmap,
+            kind="raster",
+        )

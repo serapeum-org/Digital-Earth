@@ -25,6 +25,7 @@ from digitalearth.base.spec import (
     DataRef,
     RenderTarget,
     Selection,
+    Symbology,
     Viewport,
 )
 from digitalearth.base.stretch import (
@@ -134,7 +135,12 @@ class RasterMixin(_MixinBase):
             },
             bokeh={"tools": ["hover"]},
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="raster",
+            source=data,
+            symbology=Symbology(props=dict(opts or {})),
+        )
 
     @_skips_off_limb
     def rgb(
@@ -193,7 +199,12 @@ class RasterMixin(_MixinBase):
             kdims=["x", "y"],
             vdims=["R", "G", "B"],
         )
-        return self.add_element(self._styled(element, common=opts or None))
+        return self.add_element(
+            self._styled(element, common=opts or None),
+            kind="rgb",
+            source=data,
+            symbology=Symbology(props=dict(opts or {})),
+        )
 
     @_skips_off_limb
     def quadmesh(
@@ -249,7 +260,12 @@ class RasterMixin(_MixinBase):
             },
             bokeh={"tools": ["hover"]},
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="mesh",
+            source=data,
+            symbology=Symbology(props=dict(opts or {})),
+        )
 
     @_skips_off_limb
     def contours(
@@ -330,7 +346,12 @@ class RasterMixin(_MixinBase):
             filled=filled,
         )
         element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="filled_contours" if filled else "contours",
+            source=data,
+            symbology=Symbology(props=dict(opts or {})),
+        )
 
     #: Colour cycle used to distinguish ensemble members in :meth:`spaghetti` (Category10-ish).
     _SPAGHETTI_COLORS = (
@@ -523,12 +544,22 @@ class RasterMixin(_MixinBase):
             )
 
         if not dynamic:
-            return self.add_element(_frame())
+            return self.add_element(
+                _frame(),
+                kind="raster",
+                source=dataset,
+                symbology=Symbology(props=dict(opts or {})),
+            )
         from holoviews.streams import RangeXY
 
         dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
         owner["layer"] = dmap
-        return self.add_element(dmap)
+        return self.add_element(
+            dmap,
+            kind="raster",
+            source=dataset,
+            symbology=Symbology(props=dict(opts or {})),
+        )
 
     def _windowable(self, dataset: Any) -> Any:
         """Return the raster to read windows from, warped lazily when the display CRS asks for it.

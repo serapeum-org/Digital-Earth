@@ -135,7 +135,11 @@ class BigDataMixin(_MixinBase):
             common={"cmap": cmap, "colorbar": True, **opts},
             bokeh={"tools": ["hover"]},
         )
-        return self.add_element(rasterized)
+        return self.add_element(
+            rasterized,
+            kind="raster",
+            source=layer,
+        )
 
     def datashade(
         self,
@@ -189,7 +193,11 @@ class BigDataMixin(_MixinBase):
             dynamic=dynamic,
             **op_kwargs,
         )
-        return self.add_element(self._styled(shaded, common=opts or None))
+        return self.add_element(
+            self._styled(shaded, common=opts or None),
+            kind="points",
+            source=layer,
+        )
 
     def trajectory(
         self,
@@ -264,7 +272,11 @@ class BigDataMixin(_MixinBase):
         shaded = _datashade(path, dynamic=dynamic, **op_kwargs)
         if dynspread:
             shaded = _dynspread(shaded)
-        return self.add_element(self._styled(shaded, common=opts or None))
+        return self.add_element(
+            self._styled(shaded, common=opts or None),
+            kind="lines",
+            source=features,
+        )
 
     def _ensure_categorical(self, features: Any, column: str) -> Any:
         """Return ``features`` with ``column`` as a pandas category dtype (logged, never silent).

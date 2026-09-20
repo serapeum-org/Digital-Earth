@@ -219,7 +219,11 @@ class VectorMixin(_MixinBase):
         # precedence `_graduated_polygons` applies, so one scheme cannot mean two things (review M4).
         common: dict = {"size": size, **styling, **opts}
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="points",
+            source=features,
+        )
 
     @_skips_off_limb
     def path(self, features: Any, **opts: Any) -> Self:
@@ -247,7 +251,11 @@ class VectorMixin(_MixinBase):
         gdf = self._display_gdf(features)
         element = self._vector_element("Path", gdf)
         element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="lines",
+            source=features,
+        )
 
     @_skips_off_limb
     def polygons(
@@ -347,7 +355,11 @@ class VectorMixin(_MixinBase):
         else:
             common.setdefault("fill_alpha", 0.0)
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="polygons",
+            source=features,
+        )
 
     def _categorical_polygons(
         self, features: Any, column: str, *, cmap: str = "viridis", **opts: Any
@@ -385,7 +397,11 @@ class VectorMixin(_MixinBase):
             element, common={**styling, **opts}, bokeh={"tools": ["hover"]}
         )
         self.last_breaks = categories
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="choropleth",
+            source=features,
+        )
 
     def _categorical_style(self, gdf: Any, column: str, *, cmap: str) -> tuple:
         """Relabel ``column`` as discrete strings and return the options that colour one per value.
@@ -533,7 +549,11 @@ class VectorMixin(_MixinBase):
             element, common={**classified, **opts}, bokeh={"tools": ["hover"]}
         )
         self.last_breaks = list(classified["color_levels"])
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="choropleth",
+            source=features,
+        )
 
     @_skips_off_limb
     def choropleth(
@@ -675,7 +695,10 @@ class VectorMixin(_MixinBase):
         if color_by == "magnitude":
             common.update({"color": "Magnitude", "cmap": cmap, "colorbar": True})
         element = self._styled(element, common=common, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="vectors",
+        )
 
     @_skips_off_limb
     def streamlines(
@@ -711,7 +734,10 @@ class VectorMixin(_MixinBase):
             "streamlines render through the matplotlib backend (Bokeh has no streamline glyph); "
             "save to a .png/.svg, not interactive .html"
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="streamlines",
+        )
 
     def barbs(
         self, u: Any, v: Any, *, band: int = 1, density: float = 1.0, **opts: Any
@@ -753,7 +779,10 @@ class VectorMixin(_MixinBase):
             "barbs render through the matplotlib backend only (Bokeh has no wind-barb glyph); "
             "save to a .png/.svg, not interactive .html"
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="barbs",
+        )
 
     @_skips_off_limb
     def trimesh(
@@ -869,7 +898,11 @@ class VectorMixin(_MixinBase):
         element = self._styled(
             trimesh, common=common or None, bokeh={"tools": ["hover"]}
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="mesh",
+            source=data,
+        )
 
     def _mesh_inputs(self, data: Any, value_column: Optional[str]) -> tuple:
         """Return ``(nodes_points, simplices, vdims)`` for :meth:`trimesh`.
@@ -972,7 +1005,11 @@ class VectorMixin(_MixinBase):
             common={"cmap": cmap, "colorbar": True, **opts},
             bokeh={"gridsize": gridsize, "aggregator": reducer, "tools": ["hover"]},
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="hexbin",
+            source=features,
+        )
 
     @_skips_off_limb
     def kde(
@@ -1004,7 +1041,11 @@ class VectorMixin(_MixinBase):
             common={"cmap": cmap, **opts},
             bokeh={"filled": filled, "colorbar": True},
         )
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="kde",
+            source=features,
+        )
 
     @_skips_off_limb
     def graph(
@@ -1082,7 +1123,11 @@ class VectorMixin(_MixinBase):
         if weight:
             common.update({"edge_color": weight, "edge_cmap": cmap, "colorbar": True})
         element = self._styled(graph, common=common or None, bokeh={"tools": ["hover"]})
-        return self.add_element(element)
+        return self.add_element(
+            element,
+            kind="graph",
+            source=nodes,
+        )
 
     def flow(
         self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any

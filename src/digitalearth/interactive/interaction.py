@@ -190,7 +190,10 @@ class InteractionMixin(_MixinBase):
                 f"unknown draw kind {kind!r}; choose 'box'/'poly'/'point'/'freehand'"
             )
         self._draw_stream = stream
-        self.add_element(layer)
+        self.add_element(
+            layer,
+            kind="custom:holoviews",
+        )
         return self
 
     @property
