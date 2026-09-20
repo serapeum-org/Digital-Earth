@@ -227,6 +227,33 @@ class TestAFigureSurvivesBeingWrittenDown:
         assert drawn is not None, "a reloaded description must be drawable"
         assert drawn.layer.id == "grid", drawn.layer.id
 
+    def test_the_drawing_uses_the_recorded_values_rather_than_its_own_defaults(self):
+        """A description that survives but is not *read* is a description in name only.
+
+        Test scenario:
+            The round-trip check above asserts the props are written and read back. It does not assert the
+            drawer uses them — and a drawer that ignored them and drew its defaults passed the whole suite.
+            Two grids an octave apart must differ in the drawing, not only in the record.
+        """
+        from digitalearth.web import WebMap
+
+        coarse = WebMap().graticule(name="grid", lon_step=60.0, lat_step=60.0)
+        fine = WebMap().graticule(name="grid", lon_step=15.0, lat_step=15.0)
+        coarse_lines = coarse._renderer.drawn["grid"].source_spec["data"]["features"]
+        fine_lines = fine._renderer.drawn["grid"].source_spec["data"]["features"]
+        assert len(fine_lines) > len(coarse_lines), (
+            f"a finer grid must draw more lines; got {len(fine_lines)} vs {len(coarse_lines)}"
+        )
+
+    def test_a_text_annotation_draws_the_string_it_recorded(self):
+        """The same question for the other source-less kind."""
+        from digitalearth.web import WebMap
+
+        m = WebMap().text(4.9, 52.4, "Amsterdam", name="lbl", text_size=18.0)
+        built = m._renderer.drawn["lbl"]
+        assert built.source_spec["data"]["properties"]["text"] == "Amsterdam"
+        assert built.layer.layout["text-size"] == 18.0, built.layer.layout
+
     def test_an_in_memory_source_is_refused_rather_than_written_as_a_dead_reference(
         self, points_gdf
     ):
