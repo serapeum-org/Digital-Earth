@@ -26,9 +26,9 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.base.domains import resolve_domain
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
-from digitalearth.static.domains import resolve_domain
 
 logger = logging.getLogger(__name__)
 

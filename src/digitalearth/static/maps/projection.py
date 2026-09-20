@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
 
+from digitalearth.base.domains import DomainLike, resolve_domain
 from digitalearth.base.spec import Bounds
 from digitalearth.static import projections
-from digitalearth.static.domains import DomainLike, resolve_domain
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase

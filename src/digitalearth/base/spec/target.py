@@ -16,6 +16,7 @@ from numbers import Integral
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Union
 
+from digitalearth.base.domains import resolve_domain
 from digitalearth.base.spec._serial import (
     plain_text,
     positive_number,
@@ -252,17 +253,17 @@ class RenderTarget:
             The `(west, south, east, north)` box, read in degrees and reprojected into the view's CRS.
 
         Raises:
-            ValueError: for a named domain. Names resolve in `digitalearth.static.domains`, which `base` cannot
-                import without importing a renderer; a request with no region would read the whole source instead
-                of the region the view names. Also, from `Bounds.to_crs`, for a box part of which the view's CRS
-                cannot show.
+            KeyError: for a name no region is registered under, from `resolve_domain`, which names the ones
+                that are.
+            ValueError: from `Bounds.to_crs`, for a box part of which the view's CRS cannot show.
+
+        Note:
+            A named domain used to be refused here, because the table lived in `static/` and `base` cannot
+            import a renderer — so a view framed by `domain="europe"` read its whole source instead of Europe.
+            The table is `base/domains.py` now, and a name resolves to the same box on every tier.
         """
-        if isinstance(view.domain, str):
-            raise ValueError(
-                f"RenderTarget.view_request cannot resolve the named domain {view.domain!r}; frame the view with "
-                "Viewport.framed(bounds), or give the domain as (west, south, east, north)"
-            )
-        return Bounds.from_bbox(list(view.domain), crs=4326).to_crs(view.crs)  # type: ignore[arg-type]
+        region = resolve_domain(view.domain)
+        return Bounds.from_bbox(list(region), crs=4326).to_crs(view.crs)  # type: ignore[arg-type]
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the plain-dict form a figure stores.
