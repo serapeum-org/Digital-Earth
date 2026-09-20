@@ -399,7 +399,7 @@ class RasterMixin(_MixinBase):
         import numpy as np
 
         from digitalearth.base.sources import get_stack
-        from digitalearth.base.stretch import require_three_bands, stretch_to_unit
+        from digitalearth.base.stretch import require_three_bands
 
         Layer, LayerType = _require_layer_api()
         require_three_bands("rgb_composite", bands)

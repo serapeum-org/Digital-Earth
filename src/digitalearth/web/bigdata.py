@@ -245,7 +245,6 @@ class BigDataMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="cluster")

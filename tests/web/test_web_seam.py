@@ -197,6 +197,51 @@ class TestADescriptionIsWhatIsDrawn:
         assert first.layer.id == second.layer.id == "obs", first.layer.id
 
 
+class TestAFigureSurvivesBeingWrittenDown:
+    """The seam's point: a description carries what the drawing needs, so it can be saved and reloaded."""
+
+    def test_a_saved_figure_reloads_and_draws_on_another_map(self):
+        """Before the seam this was impossible: the drawing lived in a closure, not in the figure.
+
+        Test scenario:
+            A closure captured the compiled MapLibre source and layer, so `to_dict` could only record that
+            a layer existed — never enough to draw it again. Symbology is recorded as values now, so a
+            figure written to a dict draws on a map that never saw the builder call.
+        """
+        from digitalearth.base.spec import FigureSpec
+        from digitalearth.web import WebMap
+
+        saved = (
+            WebMap()
+            .graticule(name="grid", lon_step=15.0)
+            .text(4.9, 52.4, "Amsterdam", name="lbl")
+            .figure_spec.to_dict()
+        )
+        reloaded = FigureSpec.from_dict(saved)
+        assert list(reloaded.layers.ids) == ["grid", "lbl"], reloaded.layers.ids
+        assert reloaded.layers.get("grid").symbology.props["lon_step"] == 15.0
+        assert reloaded.layers.get("lbl").symbology.props["s"] == "Amsterdam"
+
+        elsewhere = WebMap()
+        drawn = elsewhere._renderer.draw_layer(reloaded, "grid")
+        assert drawn is not None, "a reloaded description must be drawable"
+        assert drawn.layer.id == "grid", drawn.layer.id
+
+    def test_an_in_memory_source_is_refused_rather_than_written_as_a_dead_reference(
+        self, points_gdf
+    ):
+        """An `object:` reference resolves only in the process that made it, and the figure says so.
+
+        Args:
+            points_gdf: A collection held in memory rather than read from a path.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap().points(points_gdf, name="obs")
+        with pytest.raises(ValueError, match="only resolves in the process"):
+            m.figure_spec.to_dict()
+
+
 class TestADrawerThatDeclinesLeavesNothingBehind:
     """A described layer nothing draws is exactly the drift this seam removes."""
 
