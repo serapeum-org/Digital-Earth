@@ -20,6 +20,7 @@ calling a builder/render method raises an actionable ``ImportError`` (``pip inst
 
 import math
 import pathlib
+from dataclasses import dataclass
 from dataclasses import replace as replace_fields
 from typing import Any, Dict, List, Optional, Self
 
@@ -302,6 +303,49 @@ def _date_encoded(series: Any) -> Any:
     return None
 
 
+@dataclass(frozen=True)
+class _Described:
+    """A queue entry standing for a layer the renderer draws from its description.
+
+    The queue is what orders layers into their bands — `_queue_layer` inserts by the kind's band, and
+    `remove_layer` gives the slot back. A converted layer keeps a place in it so that ordering keeps
+    working unchanged; what the place holds is a *reference* to the description rather than a closure over
+    a compiled MapLibre layer, which is the whole point of the seam.
+
+    Attributes:
+        layer_id: The layer this stands for.
+    """
+
+    layer_id: str
+
+    @property
+    def _digitalearth_layer_id(self) -> str:
+        """The id `remove_layer` matches queue entries on.
+
+        Returns:
+            The layer's id, so a described layer is removed by the same path as a queued closure.
+        """
+        return self.layer_id
+
+
+def _new_renderer(web_map: Any) -> Any:
+    """Return the renderer a map draws through.
+
+    Imported here rather than at module scope: :mod:`digitalearth.web.renderer` resolves its drawers from
+    the builder modules, and every one of those imports this module, so a top-level import would close a
+    cycle.
+
+    Args:
+        web_map: The map the renderer serves.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.Renderer` bound to it.
+    """
+    from digitalearth.web.renderer import Renderer
+
+    return Renderer(web_map)
+
+
 def _require_layer_api() -> tuple:
     """Import and return ``(Layer, LayerType)``, raising the actionable error when the engine is absent.
 
@@ -443,7 +487,10 @@ class WebMapBase:
         self.height = height
         #: Whether an unplaceable layer raises (``True``) or is skipped with a warning (``False``).
         self.strict = bool(strict)
-        self.layers: List[Any] = []
+        self._queued: List[Any] = []
+        # Created once and kept: what it holds is what `layers` reports and what `_build_map_widget`
+        # adds, so a layer drawn when its builder ran is still there at render time.
+        self._renderer = _new_renderer(self)
         #: Monotonic counter handing out unique source/layer ids (see :meth:`_uid`).
         self._id_counter = 0
         #: Every id this map has minted, named or generated. Both allocators reserve from it, so a caller
@@ -858,6 +905,32 @@ class WebMapBase:
         return list(self._layer_tree.ids)
 
     @property
+    def layers(self) -> List[Any]:
+        """What the map draws, in draw order — the view this tier has always exposed.
+
+        Returns:
+            One entry per drawn layer: the MapLibre ``Layer`` for a layer the renderer built from its
+            description, and the queued ``apply(widget)`` callable or spec for one still drawn the old way.
+
+        Note:
+            This is a **compatibility view** of what is drawn, not the map's state. The map is described by
+            :attr:`figure_spec`, and layers are addressed by id through :attr:`layer_ids`,
+            :meth:`remove_layer` and :meth:`set_visible`. It is kept because it is the shape callers and this
+            tier's own tests have always read — the same reason the 3-D tier kept its `(mesh, actor)` pairs
+            after its seam.
+        """
+        drawn = self._renderer.drawn
+        resolved = []
+        for entry in self._queued:
+            if isinstance(entry, _Described):
+                built = drawn.get(entry.layer_id)
+                if built is not None:
+                    resolved.append(built.layer)
+                continue
+            resolved.append(entry)
+        return resolved
+
+    @property
     def figure_spec(self) -> FigureSpec:
         """What the map draws, as data: its layers, their sources, the view, and the panel's furniture.
 
@@ -1163,6 +1236,13 @@ class WebMapBase:
                 band=band,
             )
         )
+        # Drawn as it is recorded, for the kinds the renderer owns: what it holds is what `layers` reports
+        # and what the widget is built from, so a description and its drawing cannot drift apart.
+        from digitalearth.web.renderer import DRAWN_KINDS
+
+        if kind in DRAWN_KINDS:
+            self._renderer.draw_layer(self.figure_spec, layer_id)
+            self._queue_layer(_Described(layer_id), kind)
 
     def _rekind_layer(self, layer_id: str, kind: str) -> None:
         """Record a different kind for a layer already in the tree, keeping its id, label, visibility and place.
@@ -1377,22 +1457,22 @@ class WebMapBase:
         # next `add_reference` inserts one place too high — above data it belongs beneath.
         self._reference_count -= sum(
             1
-            for layer in self.layers[
+            for layer in self._queued[
                 self._underlay_count : self._underlay_count + self._reference_count
             ]
             if _is_layer(layer)
         )
         self._underlay_count -= sum(
-            1 for layer in self.layers[: self._underlay_count] if _is_layer(layer)
+            1 for layer in self._queued[: self._underlay_count] if _is_layer(layer)
         )
         # The overlay band is counted from the top, for the same reason: remove a label and the next data layer
         # would otherwise be queued one place too low, beneath a label that is no longer there.
         self._overlay_count -= sum(
             1
-            for layer in self.layers[len(self.layers) - self._overlay_count :]
+            for layer in self._queued[len(self._queued) - self._overlay_count :]
             if _is_layer(layer)
         )
-        self.layers = [layer for layer in self.layers if not _is_layer(layer)]
+        self._queued = [layer for layer in self._queued if not _is_layer(layer)]
         remaining = self.layer_ids
         if self._last_layer_id == layer_id:
             self._last_layer_id = remaining[-1] if remaining else None
@@ -1589,7 +1669,7 @@ class WebMapBase:
         Returns:
             This map (chainable).
         """
-        self.layers.insert(len(self.layers) - self._overlay_count, layer)
+        self._queued.insert(len(self._queued) - self._overlay_count, layer)
         return self
 
     def _queue_layer(self, layer: Any, kind: str) -> Self:
@@ -1993,7 +2073,7 @@ class WebMapBase:
         Returns:
             This map (chainable).
         """
-        self.layers.insert(self._underlay_count + self._reference_count, layer)
+        self._queued.insert(self._underlay_count + self._reference_count, layer)
         self._reference_count += 1
         return self
 
@@ -2027,7 +2107,7 @@ class WebMapBase:
 
                 ```
         """
-        self.layers.append(layer)
+        self._queued.append(layer)
         self._overlay_count += 1
         return self
 
@@ -2043,7 +2123,7 @@ class WebMapBase:
         Returns:
             This map (chainable).
         """
-        self.layers.insert(0, layer)
+        self._queued.insert(0, layer)
         self._underlay_count += 1
         return self
 
@@ -2154,8 +2234,7 @@ class WebMapBase:
             options["center"] = self.center
         return options
 
-    @staticmethod
-    def _apply_layer(widget: Any, layer: Any) -> None:
+    def _apply_layer(self, widget: Any, layer: Any) -> None:
         """Apply one registered ``layer`` onto the MapLibre ``widget``.
 
         A callable layer is a mixin-supplied ``apply(widget)`` (it wires its own source(s) + layer(s));
@@ -2165,7 +2244,16 @@ class WebMapBase:
             widget: The MapLibre ``MapWidget`` being assembled.
             layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
         """
-        if callable(layer):
+        if isinstance(layer, _Described):
+            built = self._renderer.drawn.get(layer.layer_id)
+            if built is None:
+                return
+            if built.source_id is not None:
+                widget.add_source(built.source_id, built.source_spec)
+            widget.add_layer(built.layer)
+            for extra in built.extra_layers:
+                widget.add_layer(extra)
+        elif callable(layer):
             layer(widget)
         else:
             widget.add_layer(layer)
@@ -2192,7 +2280,7 @@ class WebMapBase:
         if self.height is not None:
             kwargs["height"] = int(self.height)
         widget = MapWidget(**kwargs)
-        for layer in self.layers:
+        for layer in self._queued:
             self._apply_layer(widget, layer)
         if self._panels:
             from maplibre.controls import InfoBoxControl

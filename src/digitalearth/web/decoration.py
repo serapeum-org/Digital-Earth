@@ -26,6 +26,7 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
+from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.web.base import _require_layer_api, _require_maplibre
 
 # Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
@@ -304,6 +305,70 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.web.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_graticule(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre lines (and degree labels) for a graticule layer.
+
+    A graticule draws from no data: its geometry is generated from the two steps the caller asked for, which
+    is why `_data` is unused and why the layer carries no source. Everything it needs is in its symbology.
+
+    Args:
+        web_map: The map being drawn.
+        _data: Unused — a graticule has no source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the GeoJSON source and one or two layers.
+    """
+    from digitalearth.web.renderer import DrawnLayer
+
+    Layer, LayerType = _require_layer_api()
+    props = dict(layer.symbology.props)
+    features = _graticule_features(float(props["lon_step"]), float(props["lat_step"]))
+    source_id = f"{layer.id}-src"
+    color = props["color"]
+    visible = layer.visible
+    line = Layer(
+        id=layer.id,
+        type=LayerType.LINE,
+        source=source_id,
+        paint={
+            "line-color": color,
+            "line-width": float(props["width"]),
+            "line-opacity": float(props["opacity"]),
+        },
+        layout=None if visible else {"visibility": "none"},
+    )
+    extra = []
+    if props["labels"]:
+        label_layout: dict = {
+            "text-field": ["get", "label"],
+            "text-size": 10.0,
+            "symbol-placement": "line",
+        }
+        if not visible:
+            # Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.
+            label_layout["visibility"] = "none"
+        extra.append(
+            Layer(
+                id=f"{layer.id}-label",
+                type=LayerType.SYMBOL,
+                source=source_id,
+                layout=label_layout,
+                paint={
+                    "text-color": color,
+                    "text-halo-color": "#000000",
+                    "text-halo-width": 1.0,
+                },
+            )
+        )
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec={"type": "geojson", "data": features},
+        layer=line,
+        extra_layers=tuple(extra),
+    )
 
 
 class DecorationMixin(_MixinBase):
@@ -903,55 +968,28 @@ class DecorationMixin(_MixinBase):
                 raise ValueError(
                     f"graticule({name_of}={step!r}) must be greater than 0 and at most 180 degrees"
                 )
-        features = _graticule_features(float(lon_step), float(lat_step))
-        src_id = self._uid("graticule-src")
         layer_id = self._layer_id("graticule", name or "Graticule")
-        source = {"type": "geojson", "data": features}
-        line = Layer(
-            id=layer_id,
-            type=LayerType.LINE,
-            source=src_id,
-            paint={
-                "line-color": color,
-                "line-width": float(width),
-                "line-opacity": float(opacity),
-            },
-            layout=None if visible else {"visibility": "none"},
+        # What was asked for, as values. The lines themselves are built by `draw_graticule` from exactly
+        # this, so the figure describes the grid rather than naming one that a closure drew elsewhere.
+        self._index_layer(
+            layer_id,
+            layer_id,
+            kind="graticule",
+            visible=visible,
+            symbology=Symbology(
+                props={
+                    "lon_step": float(lon_step),
+                    "lat_step": float(lat_step),
+                    "color": color,
+                    "width": float(width),
+                    "opacity": float(opacity),
+                    "labels": bool(labels),
+                }
+            ),
         )
-        text = None
-        if labels:
-            label_layout: dict = {
-                "text-field": ["get", "label"],
-                "text-size": 10.0,
-                "symbol-placement": "line",
-            }
-            if not visible:
-                # Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.
-                label_layout["visibility"] = "none"
-            text = Layer(
-                id=self._uid("graticule-label"),
-                type=LayerType.SYMBOL,
-                source=src_id,
-                layout=label_layout,
-                paint={
-                    "text-color": color,
-                    "text-halo-color": "#000000",
-                    "text-halo-width": 1.0,
-                },
-            )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(line)
-            if text is not None:
-                widget.add_layer(text)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._index_layer(layer_id, layer_id, kind="graticule", visible=visible)
-        # Reference geography says nothing about where to look, so it does not frame the map. It is
-        # added to the reference band: over the basemap (an underlay would be hidden beneath opaque
-        # tiles) and under the data, which it must not obscure.
-        return self._queue_layer(apply, "graticule")
+        # Reference geography says nothing about where to look, so it does not frame the map. Its band —
+        # over the basemap, under the data — comes from the kind's registration, not from here.
+        return self
 
     #: Deprecated spelling of :meth:`set_title`, the contract's name for a figure's heading (#299). The
     #: web tier's other `title=` -- the HTML document's -- is untouched: it names a different thing.

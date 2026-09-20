@@ -120,12 +120,24 @@ def _drawn(web_map):
     Returns:
         Each registered layer's id, in `layers` order, skipping basemaps and controls, which carry none. A
         caller's own object carries no marker either, so it is looked up in the map's custom table by identity.
+
+    Note:
+        A layer drawn from its description (#296) is a MapLibre ``Layer``, which carries its id as ``.id``
+        rather than as the marker a queued closure is tagged with. That form is read too, guarded by the
+        map's own registry so an unregistered layer cannot be mistaken for one.
     """
     held = {id(obj): layer_id for layer_id, obj in web_map._custom.items()}
-    ids = [
-        getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
-        for layer in web_map.layers
-    ]
+    registered = set(web_map.layer_ids)
+
+    def identify(layer):
+        """Return the layer id an entry stands for, or `None` when it carries none."""
+        marker = getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
+        if marker is not None:
+            return marker
+        own = getattr(layer, "id", None)
+        return own if own in registered else None
+
+    ids = [identify(layer) for layer in web_map.layers]
     return [layer_id for layer_id in ids if layer_id is not None]
 
 
