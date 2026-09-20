@@ -1,6 +1,6 @@
 """RasterMixin — web-tier raster builder (DW.1b, recipe W1).
 
-``add_raster`` puts a pyramids raster on the web map as a MapLibre **image source**: the band is reprojected
+``field`` puts a pyramids raster on the web map as a MapLibre **image source**: the band is reprojected
 to lon/lat through pyramids, colour-mapped to an RGBA PNG (NoData → transparent), embedded as a ``data:`` URI,
 and placed by its lon/lat corner coordinates. This is the offline, size-limited path; the large-raster
 COG/XYZ-tile path (pyramids ``to_cog``/``to_xyz``) is a follow-up — it needs a tile server or PMTiles and is
@@ -10,11 +10,12 @@ matplotlib (the colormap → RGBA → PNG encoding) and numpy are imported lazil
 the tier needs neither the ``web`` extra nor matplotlib at module load.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Self
+from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 
 from loguru import logger
 
-from digitalearth.base.spec import Scale
+from digitalearth.base.deprecation import renamed_method
+from digitalearth.base.spec import Bounds, Scale
 from digitalearth.web.base import _require_layer_api
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
@@ -27,10 +28,55 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def _colour_limits(
+    limits: Optional[Sequence[float]], vmin: Any, vmax: Any, *, caller: str
+) -> Tuple[Any, Any]:
+    """Resolve the contract's `limits=` against this tier's own `vmin`/`vmax`.
+
+    `limits` is the one spelling every tier answers to (#299); `vmin`/`vmax` are what this tier took before
+    it, and both still work. What is refused is naming the same thing twice, which has no right answer.
+
+    Args:
+        limits: `(vmin, vmax)`, or `None`.
+        vmin: The lower limit, or `None`.
+        vmax: The upper limit, or `None`.
+        caller: The method, for the message.
+
+    Returns:
+        The `(vmin, vmax)` pair to colour with.
+
+    Raises:
+        ValueError: when `limits` is given alongside either of the others, or is not a pair.
+    """
+    if limits is None:
+        return vmin, vmax
+    if vmin is not None or vmax is not None:
+        raise ValueError(
+            f"{caller} takes limits= or vmin=/vmax=, not both; they name the same thing"
+        )
+    # A sequence of two numbers, checked as such. `low, high = limits` unpacks a two-character string and a
+    # two-element iterator just as happily, and the failure surfaced further down as numpy's own message
+    # about a value this function had already seen (review L9).
+    if isinstance(limits, (str, bytes)) or not isinstance(limits, Sequence):
+        raise ValueError(
+            f"{caller} limits must be a (vmin, vmax) pair of numbers; got {limits!r}"
+        )
+    if len(limits) != 2:
+        raise ValueError(
+            f"{caller} limits must be a (vmin, vmax) pair of numbers; got {len(limits)} values"
+        )
+    try:
+        return float(limits[0]), float(limits[1])
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{caller} limits must be a (vmin, vmax) pair of numbers; got {limits!r}"
+        ) from None
+
+
 class RasterMixin(_MixinBase):
     """Raster builder for :class:`~digitalearth.web.map.WebMap` (image-source path)."""
 
-    def add_raster(
+    def field(
         self,
         data: Any,
         *,
@@ -38,6 +84,7 @@ class RasterMixin(_MixinBase):
         cmap: Optional[str] = None,
         units: Optional[str] = None,
         opacity: float = 1.0,
+        limits: Optional[Sequence[float]] = None,
         vmin: Optional[float] = None,
         vmax: Optional[float] = None,
         visible: bool = True,
@@ -46,7 +93,7 @@ class RasterMixin(_MixinBase):
         """Overlay a pyramids raster band as a colour-mapped MapLibre image source (recipe W1).
 
         The band is reprojected to the display CRS (lon/lat) through pyramids, normalised over its finite
-        range (or the explicit ``vmin``/``vmax``), colour-mapped with ``cmap`` (autostyle default when
+        range (or the explicit ``limits``/``vmin``/``vmax``), colour-mapped with ``cmap`` (autostyle default when
         ``None``), and embedded as an RGBA PNG data-URI placed by its lon/lat corners. Masked / non-finite
         cells become fully transparent.
 
@@ -54,6 +101,9 @@ class RasterMixin(_MixinBase):
             data: A pyramids ``Dataset`` (or anything ``get_source`` accepts).
             band: 1-based band to draw.
             cmap: matplotlib colormap name; ``None`` resolves the autostyle default for the variable.
+            limits: The contract's name for the colour limits, as ``(vmin, vmax)`` — the one spelling every
+                tier answers to (#299). ``vmin``/``vmax`` remain, and naming both is refused rather than
+                silently resolved one way.
             units: What the band's values are measured in, recorded as
                 :attr:`~digitalearth.web.base.WebMapBase.last_units` so a key built from them can say so.
                 ``None`` (the default) takes the variable's units from
@@ -74,6 +124,8 @@ class RasterMixin(_MixinBase):
             with a warning, or the error is raised when the map was built with ``strict=True``.
 
         Raises:
+            ValueError: when `limits` is given alongside `vmin`/`vmax` — they name the same thing — or is
+                not a `(vmin, vmax)` pair of numbers.
             OffLimbError: only when the map was built with ``strict=True`` and the band cannot be
                 placed; by default that layer is skipped with a warning instead, so one unplaceable
                 raster does not cost the map the layers around it.
@@ -90,16 +142,16 @@ class RasterMixin(_MixinBase):
                 ...     x=np.array([0.0, 1.0, 2.0, 3.0]),
                 ...     y=np.array([2.0, 1.0, 0.0]),
                 ... )
-                >>> m = WebMap().add_raster(src, cmap="viridis", name="dem")  # doctest: +SKIP
+                >>> m = WebMap().field(src, cmap="viridis", name="dem")       # doctest: +SKIP
                 >>> m.layer_ids, len(m.layers)                       # doctest: +SKIP
                 (['dem'], 1)
 
                 ```
             - The band also hands the map its extent, so the view frames itself and
-              :meth:`~digitalearth.web.base.WebMapBase.fit_bounds` has something to frame on;
+              :meth:`~digitalearth.web.base.WebMapBase.set_bounds` has something to frame on;
               on an empty map the same call raises instead:
                 ```python
-                >>> m.fit_bounds() is m                              # doctest: +SKIP
+                >>> m.set_bounds() is m                              # doctest: +SKIP
                 True
 
                 ```
@@ -107,7 +159,7 @@ class RasterMixin(_MixinBase):
               :meth:`~digitalearth.web.temporal.TemporalMixin.timeslider` stacks one layer per time
               step without every frame showing at once — in a saved page too, which has no slider:
                 ```python
-                >>> m = WebMap().add_raster(src, visible=False, name="t0")  # doctest: +SKIP
+                >>> m = WebMap().field(src, visible=False, name="t0")       # doctest: +SKIP
                 >>> m.layer_ids                                      # doctest: +SKIP
                 ['t0']
 
@@ -119,8 +171,9 @@ class RasterMixin(_MixinBase):
         """
         import numpy as np
 
+        vmin, vmax = _colour_limits(limits, vmin, vmax, caller="WebMap.field()")
         Layer, LayerType = _require_layer_api()
-        source = self._display_source_or_skip(data, band=band, layer="add_raster")
+        source = self._display_source_or_skip(data, band=band, layer="field")
         if source is None:
             return self
         cmap_name = self._auto_cmap(source, cmap)
@@ -130,7 +183,7 @@ class RasterMixin(_MixinBase):
         values = source.z.values
         if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:
             logger.warning(
-                "add_raster: inlining a {}-pixel band as a data-URI image source bloats the page; for large "
+                "field: inlining a {}-pixel band as a data-URI image source bloats the page; for large "
                 "rasters serve COG/XYZ tiles from pyramids instead",
                 getattr(values, "size", 0),
             )
@@ -143,7 +196,7 @@ class RasterMixin(_MixinBase):
         coordinates = self._lonlat_corners(source)
         if coordinates is None:
             self._skipped(
-                "add_raster",
+                "field",
                 "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
                 "needs; reproject the dataset so its extent is representable",
             )
@@ -169,8 +222,12 @@ class RasterMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind="raster", visible=visible)
-        return self.add_layer(apply)
+        self._index_layer(layer_id, name, kind="raster", visible=visible, source=data)
+        return self._queue(apply)
+
+    #: Deprecated spelling of :meth:`field`, the contract's name for a raster band drawn as a coloured field
+    #: (#299). It forwards and warns.
+    add_raster = renamed_method(new="field", old="add_raster", owner="WebMap")
 
     def rgb_composite(
         self,
@@ -275,8 +332,8 @@ class RasterMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind="rgb", visible=visible)
-        return self.add_layer(apply)
+        self._index_layer(layer_id, name, kind="rgb", visible=visible, source=dataset)
+        return self._queue(apply)
 
     @staticmethod
     def _composite_png_datauri(unit_stack: Any) -> str:
@@ -337,6 +394,11 @@ class RasterMixin(_MixinBase):
     def _image_coordinates(x: Any, y: Any) -> List[List[float]]:
         """Return the image-source corner coordinates ``[TL, TR, BR, BL]`` in ``[lng, lat]``.
 
+        The corners are the cell *edges* — half the outermost spacing beyond the centres on each side
+        (:meth:`Bounds.cell_edges`). Taken from the centres themselves, an image source is drawn half a cell
+        inside the data all the way round, and a map framed on those corners is inset by the same amount
+        (#301).
+
         Args:
             x: 1-D x / longitude cell-centre coordinates (display CRS, lon/lat).
             y: 1-D y / latitude cell-centre coordinates.
@@ -345,12 +407,7 @@ class RasterMixin(_MixinBase):
             The four corners top-left, top-right, bottom-right, bottom-left as ``[lng, lat]`` pairs — the
             order MapLibre's image source expects.
         """
-        import numpy as np
-
-        xs = np.asarray(x, dtype=float)
-        ys = np.asarray(y, dtype=float)
-        west, east = float(xs.min()), float(xs.max())
-        south, north = float(ys.min()), float(ys.max())
+        west, south, east, north = Bounds.cell_edges(x, y, crs=None).as_bbox()
         return [[west, north], [east, north], [east, south], [west, south]]
 
     @staticmethod
@@ -394,7 +451,7 @@ class RasterMixin(_MixinBase):
         )
         valid = np.isfinite(data)
         if not valid.any():
-            raise ValueError("add_raster got a band with no finite values to colour")
+            raise ValueError("field() got a band with no finite values to colour")
         # The domain, the explicit-limit override and the constant-band widening are one rule, in base/spec.
         # `valid` is already computed above, so the finite subset is handed over rather than derived twice —
         # this is the tier with the explicit inline-pixel budget.

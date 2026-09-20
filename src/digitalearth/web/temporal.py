@@ -234,6 +234,15 @@ class TemporalMixin(_MixinBase):
             "kdim": kdim,
             "times": times,
         }
+        # The slider is anchored to the frame, so it is furniture; its frames are the values it steps
+        # through, which is what a renderer needs to draw it from the description (#292).
+        self._record_furniture(
+            "time_slider",
+            mode="vector",
+            layer=self._last_layer_id,
+            kdim=kdim,
+            frames=tuple(str(step) for step in times),
+        )
         return self
 
     def _timeslider_stack(
@@ -306,7 +315,10 @@ class TemporalMixin(_MixinBase):
             # Only the first frame is built visible. The slider toggles from there, and a page saved
             # without a slider then shows one frame rather than the whole stack piled up.
             previous = self._last_layer_id
-            self.add_raster(
+            # The contract's name, not the alias: `renamed_method` warns at `stacklevel=2`, so calling the
+            # old spelling here made ordinary use of `timeslider` emit three DeprecationWarnings pointing at
+            # *this* line, which no caller can act on (review M14).
+            self.field(
                 member,
                 band=band,
                 cmap=cmap,
@@ -331,12 +343,20 @@ class TemporalMixin(_MixinBase):
                 return self
             layer_ids.append(self._last_layer_id)
 
+        steps = list(labels) if labels is not None else list(range(count))
         self._temporal = {
             "mode": "raster",
             "layer_ids": layer_ids,
             "kdim": kdim,
-            "times": list(labels) if labels is not None else list(range(count)),
+            "times": steps,
         }
+        self._record_furniture(
+            "time_slider",
+            mode="raster",
+            layers=tuple(layer_ids),
+            kdim=kdim,
+            frames=tuple(str(step) for step in steps),
+        )
         return self
 
     def _check_stack_is_drawable(self, members: Sequence, band: int) -> None:

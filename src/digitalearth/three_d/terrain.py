@@ -17,10 +17,11 @@ non-uniform spacing. The one subtlety VTK imposes: scalars/elevation attach in *
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import pyvista as pv
 
 from digitalearth.base.crs import is_geographic
 from digitalearth.base.sources import Source, get_source
+from digitalearth.base.spec import LayerSpec, Selection
+from digitalearth.three_d.layer import drawing_props
 
 #: Attribute name the elevation scalar is stored under on the generated mesh.
 ELEVATION = "elevation"
@@ -57,7 +58,7 @@ def _vertical_unit_scale(crs: Any) -> float:
 
 def _terrain_mesh(
     z: np.ndarray, x: np.ndarray, y: np.ndarray, vertical_scale: float
-) -> pv.StructuredGrid:
+) -> "pv.StructuredGrid":
     """Build a ``StructuredGrid`` surface from a 2-D elevation array and 1-D coordinate vectors.
 
     Args:
@@ -78,6 +79,8 @@ def _terrain_mesh(
         np.nan_to_num(z, nan=float(np.nanmin(z)) if np.isfinite(z).any() else 0.0)
         * vertical_scale
     )
+    import pyvista as pv
+
     grid = pv.StructuredGrid(xx, yy, zz)
     # VTK structured points are Fortran-ordered: ravel(order="F") keeps the terrain right-side up (see module docs).
     grid.point_data[ELEVATION] = z.ravel(order="F")
@@ -85,6 +88,8 @@ def _terrain_mesh(
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
+    import pyvista as pv
+
     from digitalearth.three_d.base import Scene3DBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
@@ -112,6 +117,7 @@ class TerrainMixin(_MixinBase):
         self,
         data: Any,
         *,
+        name: Any = None,
         band: int = 1,
         z_exaggeration: float | None = None,
         cmap: str | None = None,
@@ -123,6 +129,17 @@ class TerrainMixin(_MixinBase):
         The raster is read through pyramids (via :func:`~digitalearth.base.sources.get_source` — numpy + coords +
         CRS, no xarray), turned into a ``StructuredGrid``, and added to the plotter. Colour by elevation
         (default) or pass ``scalars=None`` to colour by something else / a uniform colour.
+
+        The raster is placed in the scene's display CRS: it sets that CRS when the scene has none, and is
+        reprojected through pyramids when it is in another.
+
+        **The surface spans the cell centres, not the cell edges.** One height is set per node, at the middle
+        of each cell, which is what a surface through sampled elevations means — so the mesh is half a cell
+        narrower than the raster's own extent on each side. The 2-D tiers draw the cells themselves and cover
+        that extent (#301); whether a draped surface should too is decided with draping (#202).
+
+        Metre elevations over a geographic scene are converted to degrees by the scene's CRS, not the
+        raster's.
 
         **Vertical exaggeration is a property of the scene, not of this layer.** ``z_exaggeration`` sets
         :attr:`~digitalearth.three_d.base.Scene3DBase.vertical_exaggeration`, a PyVista view scale that applies
@@ -153,6 +170,8 @@ class TerrainMixin(_MixinBase):
             OffLimbError: only when the scene was built with ``strict=True`` and the raster is empty or
                 entirely nodata; by default that layer is skipped with a warning instead, so one blank tile
                 does not cost a composed scene its other layers.
+            ValueError: if `data` is a `Source` in a CRS other than the scene's — extracted coordinates cannot be
+                reprojected.
 
         Examples:
             - A ramped DEM renders as a non-flat, correctly-oriented surface, and the exaggeration asked for is
@@ -194,24 +213,56 @@ class TerrainMixin(_MixinBase):
 
                 ```
         """
-        src = data if isinstance(data, Source) else get_source(data, band=band)
-        elevation = np.asarray(src.z.values, dtype="float64")
-        if elevation.size == 0 or not np.isfinite(elevation).any():
-            # A grid with no finite cell has no surface: PyVista would still build a mesh from it and render
-            # a blank sheet at z=0, which reads as "the terrain is flat here" rather than "there is no data".
-            self._skip_empty("terrain", "the raster holds no finite elevation")
-            return None
         if z_exaggeration is not None:
             self.vertical_exaggeration = z_exaggeration
-        # Geographic DEMs carry lon/lat (degrees) horizontally but metre elevation vertically; rescale the
-        # vertical so true scale is a faithful, *visible* surface rather than a needle. That is a unit
-        # conversion this layer's CRS dictates — exaggeration is the view scale set just above.
-        mesh = _terrain_mesh(
-            src.z.values, src.x.values, src.y.values, _vertical_unit_scale(src.crs)
-        )
-        return self.add_mesh(
-            mesh,
+        return self._add_described_layer(
+            kind="terrain",
+            data=data,
+            name=name,
+            selection=Selection(band=(band,)),
+            cmap=cmap,
             scalars=scalars,
-            cmap=self._auto_cmap(src, cmap, fallback="terrain"),
             **kwargs,
         )
+
+
+def draw_terrain(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the surface a `terrain` layer describes and add it to the scene's plotter.
+
+    Args:
+        scene: The scene being drawn into — its display CRS places the raster and its `strict` policy decides
+            what an empty one does.
+        data: The layer's source object: a pyramids raster, a `Source`, or a 2-D array.
+        layer: The layer's description. Its selection names the band; its symbology's props carry `cmap`,
+            `scalars` and whatever else was passed to PyVista.
+
+    Returns:
+        The `(mesh, actor)` pair, or `None` when the raster held no finite elevation and the scene is not
+        `strict`.
+
+    Raises:
+        OffLimbError: when the raster holds nothing to draw and the scene is `strict`.
+        ValueError: if `data` is a `Source` in a CRS other than the scene's.
+    """
+    props = drawing_props(layer.symbology.props)
+    cmap = props.pop("cmap", None)
+    band = layer.selection.band[0] if layer.selection.band else 1
+    placed = scene._place(data, layer="terrain")
+    src = placed if isinstance(placed, Source) else get_source(placed, band=band)
+    elevation = np.asarray(src.z.values, dtype="float64")
+    if elevation.size == 0 or not np.isfinite(elevation).any():
+        # A grid with no finite cell has no surface: PyVista would still build a mesh from it and render
+        # a blank sheet at z=0, which reads as "the terrain is flat here" rather than "there is no data".
+        scene._skip_empty("terrain", "the raster holds no finite elevation")
+        return None
+    # Geographic DEMs carry lon/lat (degrees) horizontally but metre elevation vertically; rescale the
+    # vertical so true scale is a faithful, *visible* surface rather than a needle. That is a unit
+    # conversion the scene's CRS dictates — the horizontal units every layer is drawn in — and the
+    # layer's own only when the scene has none; exaggeration is the view scale, kept on the camera.
+    units_crs = src.crs if scene.display_crs is None else scene.display_crs
+    mesh = _terrain_mesh(
+        src.z.values, src.x.values, src.y.values, _vertical_unit_scale(units_crs)
+    )
+    return mesh, scene.plotter.add_mesh(
+        mesh, cmap=scene._auto_cmap(src, cmap, fallback="terrain"), **props
+    )

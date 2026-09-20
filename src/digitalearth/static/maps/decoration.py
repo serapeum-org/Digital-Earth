@@ -26,6 +26,7 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
 from digitalearth.static.domains import resolve_domain
 
@@ -748,7 +749,7 @@ class DecorationMixin(_MixinBase):
         south, north = (float(v) for v in self.ax.get_ylim())
         if (west, east, south, north) == (0.0, 1.0, 0.0, 1.0):
             return None  # matplotlib's default unit square — nothing has been drawn yet
-        if self.crs in (4326, "EPSG:4326", None):
+        if self.crs is None or same_crs(self.crs, 4326):
             return west, south, east, north
         xs, ys = _edge_samples(west, south, east, north)
         try:

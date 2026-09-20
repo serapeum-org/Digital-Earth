@@ -340,13 +340,14 @@ def test_globe_resolves_an_unspecified_cmap_through_auto_style():
     dataset.band_names = ["t2m"]
     captured = {}
     scene = Scene3D(off_screen=True)
-    original = scene.add_mesh
+    original = scene.plotter.add_mesh
 
     def recorder(mesh, **kwargs):
         captured.update(kwargs)
         return original(mesh, **kwargs)
 
-    scene.add_mesh = recorder
+    # The builder describes its layer and the renderer draws it (#295), so the styling is read at the plotter.
+    scene.plotter.add_mesh = recorder
     try:
         scene.globe(dataset, coastlines=False)
     finally:

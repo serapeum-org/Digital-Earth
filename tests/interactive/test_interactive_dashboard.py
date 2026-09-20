@@ -254,6 +254,21 @@ class TestBasemapWidgetIsWired:
         with pytest.raises(ValueError, match="Web-Mercator"):
             non_mercator.dashboard(widgets=("basemap",))
 
+    def test_tiles_accept_web_mercator_spelled_as_a_string(self):
+        """``crs="EPSG:3857"`` is Web Mercator, so tiles are drawn rather than refused (#287).
+
+        Test scenario:
+            The check compared ``self.crs != 3857``; the constructor keeps the string, so the map was refused
+            for not being in the CRS it is in.
+        """
+        m = InteractiveMap(crs="EPSG:3857").tiles()
+        assert len(m.layers) == 1, m.layers
+
+    def test_the_basemap_select_is_built_for_web_mercator_spelled_as_a_string(self):
+        """The layer-control basemap switch reads the display CRS by meaning too (#287)."""
+        select = InteractiveMap(crs="EPSG:3857")._basemap_select(pn, requested=True)
+        assert isinstance(select, pn.widgets.Select), type(select)
+
     def test_layer_control_binds_its_basemap_select(self, multi):
         """The layer-control Select is passed to pn.bind, not merely laid out."""
         panel_obj = multi.layer_control(basemap_switch=True)
@@ -441,6 +456,177 @@ class TestBothOverridePathsRestyleTheSameElements:
         )
 
 
+class TestTheLayerControlSeesTheSameLayersItLabels:
+    """Review H9/H10 — a deferred basemap is a layer, and the labels are positional."""
+
+    @staticmethod
+    def _labels(control) -> list:
+        """Return the checkbox options a layer control built.
+
+        Args:
+            control: What `layer_control()` returned.
+
+        Returns:
+            The option strings, or an empty list when there are none.
+        """
+        widgets = list(control[0]) if hasattr(control, "__getitem__") else list(control)
+        return next(
+            (w.options for w in widgets if hasattr(w, "options") and w.options), []
+        )
+
+    def test_the_labels_are_built_after_the_basemap_is_drawn(self, dataset):
+        """`tiles()` inserts the basemap at index 0, and the labels are indices.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            The labels were frozen before the flush, so every one of them named the layer to its left once
+            the basemap arrived — and the control drew the basemap where the data should be (review H10).
+        """
+        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        labels = self._labels(m.layer_control())
+        assert labels == ["0: WMTS", "1: Image"], labels
+
+    def test_the_layer_control_draws_the_deferred_basemap(self, dataset):
+        """The other widget path flushes too, which is what round-1 H9 fixed on only one of them.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        labels = self._labels(m.layer_control())
+        drawn = m._compose_visible_layers(list(labels))
+        assert self._names(drawn) == ["WMTS", "Image"], self._names(drawn)
+
+    @staticmethod
+    def _names(obj) -> list:
+        """Return the element type names of a composed figure, in draw order.
+
+        Args:
+            obj: The composed HoloViews object.
+
+        Returns:
+            One name per element.
+        """
+        return [
+            type(element).__name__
+            for element in (list(obj) if isinstance(obj, hv.Overlay) else [obj])
+        ]
+
+
+class TestADynamicLayerIsClassifiedByWhatItDraws:
+    """Review H5 — a `DynamicMap` is a wrapper, and two builders wrap very different elements."""
+
+    @pytest.fixture
+    def scattered(self):
+        """Return points enough to datashade.
+
+        Returns:
+            A GeoDataFrame of 200 points in EPSG:4326.
+        """
+        import geopandas as gpd
+        import numpy as np
+        from shapely.geometry import Point
+
+        rng = np.random.default_rng(0)
+        return gpd.GeoDataFrame(
+            {"v": rng.random(200)},
+            geometry=[Point(float(a), float(b)) for a, b in rng.random((200, 2)) * 10],
+            crs="EPSG:4326",
+        )
+
+    def test_a_datashaded_layer_is_read_as_the_rgb_it_draws(self, scattered):
+        """`datashade` produces RGB frames, which have no scalar for a colormap to map.
+
+        Args:
+            scattered: The points to shade.
+
+        Test scenario:
+            The branch was chosen from the wrapper's own type name, so naming `DynamicMap` as colour-mapped
+            sent `cmap` to every datashaded, trajectory and bundled-network layer. HoloViews refuses it —
+            from inside the callback, where `param` logs the error and the map stops updating (review H5).
+        """
+        from digitalearth.interactive.dashboard import _drawn_type
+
+        m = InteractiveMap(crs=4326)
+        m.datashade(scattered)
+        layer = m.layers[0]
+        layer[()]  # draw a frame, so the wrapper knows what it produces
+        assert _drawn_type(layer) == "RGB", _drawn_type(layer)
+
+    def test_a_colormap_override_does_not_break_a_datashaded_layer(self, scattered):
+        """The whole point: the widget moves and the map keeps drawing.
+
+        Args:
+            scattered: The points to shade.
+        """
+        m = InteractiveMap(crs=4326)
+        m.datashade(scattered)
+        m.layers[0][()]
+        composed = m._render_with_overrides({"cmap": "viridis", "alpha": 0.5})
+        assert composed[()] is not None, "the frame must still draw"
+
+    def test_a_large_image_is_still_read_as_an_image(self, dataset):
+        """The other half: a dynamic raster keeps taking the colormap widget.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        from digitalearth.interactive.dashboard import _drawn_type
+
+        m = InteractiveMap(crs=dataset.epsg)
+        m.large_image(dataset, cmap="magma")
+        m.layers[0][()]
+        assert _drawn_type(m.layers[0]) == "Image", _drawn_type(m.layers[0])
+
+
+class TestTheOverrideBranchIsStillARender:
+    """#300 / review H9 — the widget path must do everything `render()` does, not only compose."""
+
+    @staticmethod
+    def _names(obj) -> list:
+        """Return the element type names of a composed figure, in draw order.
+
+        Args:
+            obj: The composed HoloViews object.
+
+        Returns:
+            One name per element.
+        """
+        return [
+            type(element).__name__
+            for element in (list(obj) if isinstance(obj, hv.Overlay) else [obj])
+        ]
+
+    def test_a_deferred_basemap_is_drawn_through_the_override_branch(self, dataset):
+        """A map built with `tiles=` defers the basemap until it renders; a widget must not lose it.
+
+        Args:
+            dataset: The raster fixture.
+
+        Test scenario:
+            Both default widgets produce a value (`cmap='viridis'`, `alpha=1.0`), so the override branch is
+            taken on the *first* render — and it skipped the deferred-tiles flush entirely, leaving an
+            `InteractiveMap(tiles="OSM")` dashboard with no basemap for the life of the map.
+        """
+        m = InteractiveMap(crs=3857, tiles="OSM").image(dataset, cmap="magma")
+        names = self._names(m._render_with_overrides({"cmap": "viridis", "alpha": 1.0}))
+        assert "WMTS" in names, names
+
+    def test_the_two_branches_draw_the_same_layers(self, dataset):
+        """Whether a widget moved is not a question about which layers exist.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        with_override = InteractiveMap(crs=3857, tiles="OSM").image(dataset)
+        without = InteractiveMap(crs=3857, tiles="OSM").image(dataset)
+        assert self._names(
+            with_override._render_with_overrides({"alpha": 0.5})
+        ) == self._names(without._render_with_overrides({})), "the branches must agree"
+
+
 class TestInertFlagsAreRefused:
     """#242 / #243 — flags that are not implemented are refused, not silently ignored."""
 
@@ -492,15 +678,22 @@ class TestOverridesMergeOverRecordedStyle:
     def test_recorded_style_is_read_back_for_the_colour_mapped_layers(
         self, dataset, point_fc
     ):
-        """The override base comes from the map's own style record, raster layers only."""
+        """The override base comes from each layer's own style record, raster layers only.
+
+        Test scenario:
+            The base used to be one dict merged across every colour-mapped layer; it is each layer's own
+            record now, which is what stops two rasters sharing the last one's colours (#300).
+        """
         m = InteractiveMap().image(dataset, cmap="viridis", clim=(0.0, 10.0))
         m.points(point_fc, value_column="fid", cmap="magma")
-        recorded = m._recorded_overridable_style()
-        assert recorded["cmap"] == "viridis", (
-            f"the raster layer's recorded cmap must drive the merge: {recorded}"
+        raster = m._restyled_layers({"alpha": 0.5})[0]
+        style = hv.Store.lookup_options("bokeh", raster, "style").kwargs
+        plot = hv.Store.lookup_options("bokeh", raster, "plot").kwargs
+        assert style["cmap"] == "viridis", (
+            f"the raster layer's own recorded cmap must be the base: {style}"
         )
-        assert tuple(recorded["clim"]) == (0.0, 10.0), (
-            f"the recorded clim must be part of the merge base: {recorded}"
+        assert tuple(plot["clim"]) == (0.0, 10.0), (
+            f"the recorded clim must survive beside the override: {plot}"
         )
 
     def test_override_wins_over_the_recorded_style(self, dataset):

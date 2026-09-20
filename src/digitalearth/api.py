@@ -28,8 +28,15 @@ from typing import Any
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
+from digitalearth.base.capabilities import Capabilities
 from digitalearth.base.types import PlottableData
+from digitalearth.interactive.capabilities import (
+    CAPABILITIES as CAPABILITIES_INTERACTIVE,
+)
 from digitalearth.static import Map
+from digitalearth.static.capabilities import CAPABILITIES as CAPABILITIES_STATIC
+from digitalearth.three_d.capabilities import CAPABILITIES as CAPABILITIES_3D
+from digitalearth.web.capabilities import CAPABILITIES as CAPABILITIES_WEB
 
 logger = logging.getLogger(__name__)
 
@@ -56,15 +63,88 @@ class _Unset:
 #: and ``colorbar=True`` in particular — so the default value cannot itself signal absence: without this,
 #: ``quickmap(ds, backend="3d")`` would be refused for a ``crs`` the caller never asked for.
 _UNSET = _Unset()
+#: Which capability each of `quickmap`'s map-shaped parameters needs, in the vocabulary every tier now
+#: declares itself in (#294).
+#: A keyword is honoured when the backend supports any of the capabilities listed for it: `colorbar=` is the
+#: web tier's legend and the 3-D tier's scalar bar, which are one request with two names.
+_KEYWORD_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "crs": ("display_crs",),
+    "kind": ("raster_renderer",),
+    "domain": ("domain",),
+    "basemap": ("basemap",),
+    # The *overlay*, not the kind: the 3-D tier draws a `coastlines` layer — a globe puts its own shoreline
+    # on the sphere — while having no builder to add one to a scene, and `quickmap(coastlines=True)` asks for
+    # the second. One name answering both questions accepted a request the tier cannot honour (review M6).
+    "coastlines": ("coastline_overlay",),
+    "colorbar": ("colorbar", "legend"),
+}
+
+#: Every tier's declaration. Each replaces a row that used to be written out here, and the last of them —
+#: `matplotlib` — landed with the static seam's own `capabilities.py`, so no row is hand-written any more.
+_DECLARATIONS: dict[str, Capabilities] = {
+    "matplotlib": CAPABILITIES_STATIC,
+    "3d": CAPABILITIES_3D,
+    "web": CAPABILITIES_WEB,
+    "interactive": CAPABILITIES_INTERACTIVE,
+}
+
+
+def _declared_row(declaration: Capabilities) -> frozenset[str]:
+    """Return the `quickmap` keywords a declaration says the backend honours.
+
+    Args:
+        declaration: The tier's `Capabilities`.
+
+    Returns:
+        The keyword names, as :data:`BACKEND_CAPABILITIES` holds them.
+
+    Examples:
+        - The 3-D tier's row is read from its own declaration rather than written here:
+            ```python
+            >>> from digitalearth.api import BACKEND_CAPABILITIES
+            >>> sorted(BACKEND_CAPABILITIES["3d"])
+            ['colorbar', 'crs']
+
+            ```
+    """
+    return frozenset(
+        keyword
+        for keyword, capabilities in _KEYWORD_CAPABILITIES.items()
+        if any(declaration.supports(capability) for capability in capabilities)
+    )
+
+
+def _refusal_reason(backend: str, keyword: str) -> str:
+    """Return the tier's own reason for not honouring a keyword, when it declared one.
+
+    Args:
+        backend: The backend that was asked.
+        keyword: The `quickmap` keyword it cannot honour.
+
+    Returns:
+        The declared reason, or `""` when the tier keeps no declaration yet or said nothing about it.
+    """
+    declaration = _DECLARATIONS.get(backend)
+    if declaration is None:
+        return ""
+    reasons = [
+        declaration.reason(capability)
+        for capability in _KEYWORD_CAPABILITIES.get(keyword, ())
+    ]
+    return next((reason for reason in reasons if reason), "")
+
 
 #: Which of ``quickmap``'s map-shaped parameters each backend can actually honour. Anything a caller passes
 #: that is not listed for their backend is refused by name rather than dropped (:func:`_reject_unsupported`).
+#: Every row is **derived** from that tier's own :class:`~digitalearth.base.capabilities.Capabilities`
+#: (#294): the rows are read here, and decided there.
 #:
 #: * ``matplotlib`` is the only tier with an extent setter, so it is the only one that takes ``domain``.
 #: * ``interactive`` pans and zooms, so it has no fixed extent; it does have a display CRS, coastlines and a
 #:   colorbar toggle.
-#: * ``3d`` has no display CRS at all (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs` is ``None``
-#:   and says so) and no coastline or extent concept; its scalar bar is the ``colorbar`` toggle.
+#: * ``3d`` draws every layer in one display CRS, given as ``crs`` or taken from the first layer
+#:   (:attr:`digitalearth.three_d.base.Scene3DBase.display_crs`); it has no coastline or extent concept, and its
+#:   scalar bar is the ``colorbar`` toggle.
 #: * ``web`` places inline data in lon/lat and carries a ``crs`` of its own, which it validates. It has no
 #:   coastline layer. Its colour key is ``WebMap.legend``, which is a builder rather than a toggle, so
 #:   ``colorbar=`` is translated here rather than forwarded: ``True`` builds the key only when a layer
@@ -72,12 +152,8 @@ _UNSET = _Unset()
 #:   tier methods themselves — a builder that takes content vs a visibility flag — is Core-contract work
 #:   and stays with U-3.
 BACKEND_CAPABILITIES: dict[str, frozenset[str]] = {
-    "matplotlib": frozenset(
-        {"crs", "kind", "domain", "basemap", "coastlines", "colorbar"}
-    ),
-    "interactive": frozenset({"crs", "kind", "basemap", "coastlines", "colorbar"}),
-    "3d": frozenset({"colorbar"}),
-    "web": frozenset({"crs", "basemap", "colorbar"}),
+    backend: _declared_row(declaration)
+    for backend, declaration in _DECLARATIONS.items()
 }
 
 #: The value of a checked parameter that asks for **nothing**, where one exists. Passing it to a backend that
@@ -205,9 +281,11 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             for other in sorted(BACKEND_CAPABILITIES)
             if name in BACKEND_CAPABILITIES[other]
         )
+        reason = _refusal_reason(backend, name)
         raise ValueError(
-            f"{name}= is not supported by backend={backend!r}; it is honoured by {honoured} — "
-            f"drop the argument, or pick one of those backends"
+            f"{name}= is not supported by backend={backend!r}; "
+            + (f"{reason}. " if reason else "")
+            + f"It is honoured by {honoured} — drop the argument, or pick one of those backends"
         )
 
 
@@ -357,9 +435,9 @@ def quickmap(
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
-        crs: Display CRS for the map (``backend="matplotlib"``/``"interactive"``, where it defaults to
-            ``3857``, and ``"web"``, which accepts only ``4326``). ``backend="3d"`` has no display CRS, so
-            passing it there is refused rather than ignored — reproject with pyramids before plotting.
+        crs: Display CRS for the map (`backend="matplotlib"`/`"interactive"`, where it defaults to `3857`, and
+            `"web"`, which accepts only `4326`). With `backend="3d"` the scene is drawn in it; left out, the 3-D
+            scene takes the data's own CRS.
         kind: Renderer for raster input (``"auto"`` → ``imshow``; or ``contourf``/``contour``/``pcolormesh``).
             ``backend="matplotlib"``/``"interactive"`` only — the web tier picks its own renderer and the 3-D
             tier has no 2-D analogue — so naming a renderer on those is refused, while ``"auto"`` (asking for
@@ -459,10 +537,10 @@ def quickmap(
             >>> from digitalearth.api import quickmap
             >>> ds = Dataset.read_file("examples/data/acc4000.tif")
             >>> try:
-            ...     quickmap(ds, backend="3d", crs=4326)
+            ...     quickmap(ds, backend="3d", domain="europe")
             ... except ValueError as error:
             ...     print(str(error).split(";")[0])
-            crs= is not supported by backend='3d'
+            domain= is not supported by backend='3d'
 
             ```
     """
@@ -486,7 +564,9 @@ def quickmap(
     coastlines = False if coastlines is _UNSET else coastlines
     domain = None if domain is _UNSET else domain
     if backend == "3d":
-        return _quickmap_3d(data, colorbar=colorbar, **kwargs)
+        return _quickmap_3d(
+            data, colorbar=colorbar, crs=None if crs is _UNSET else crs, **kwargs
+        )
     if backend == "interactive":
         return _quickmap_interactive(
             data,
@@ -501,7 +581,49 @@ def quickmap(
         return _quickmap_web(
             data, crs=crs, basemap=basemap, colorbar=colorbar, **kwargs
         )
-    scene = Map(crs=3857 if crs is _UNSET else crs, domain=domain)
+    return _quickmap_matplotlib(
+        data,
+        crs=3857 if crs is _UNSET else crs,
+        kind=kind,
+        domain=domain,
+        basemap=basemap,
+        coastlines=coastlines,
+        colorbar=colorbar,
+        **kwargs,
+    )
+
+
+def _quickmap_matplotlib(
+    data: PlottableData,
+    *,
+    crs: Any,
+    kind: str,
+    domain: Any,
+    basemap: bool | str | Any,
+    coastlines: bool,
+    colorbar: bool,
+    **kwargs,
+) -> Map:
+    """Build a finished :class:`~digitalearth.static.map.Map` from ``data`` (the default backend's path).
+
+    The fourth of the per-tier builders, so `quickmap` itself is one dispatch table rather than a dispatch
+    table with one tier's assembly inlined after it. Nothing here is new: it is the steps the default path
+    always took, in the order it took them.
+
+    Args:
+        data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (vector).
+        crs: Display CRS for the map.
+        kind: Raster renderer (``"auto"`` → ``imshow``).
+        domain: A named region / bbox to frame on, or `None` to leave the extent to the data.
+        basemap: ``True`` for the backend's default tile source, or the source itself.
+        coastlines: When True, overlay coastlines.
+        colorbar: When True, add a colour key if the drawn layer has one to draw.
+        **kwargs: Forwarded to the chosen builder (e.g. ``cmap``, ``column``).
+
+    Returns:
+        The decorated map.
+    """
+    scene = Map(crs=crs, domain=domain)
     _draw(scene, data, kind, **kwargs)
     if coastlines:
         _best_effort("coastlines", scene.coastlines)
@@ -511,14 +633,25 @@ def quickmap(
         _best_effort("basemap", scene.basemap, _basemap_source(basemap))
     if domain is not None:
         scene.set_domain()
-    if (
-        colorbar
-        and scene.layers
-        and scene.layers[-1][1] is not None
-        and not _last_layer_is_categorical(scene)
-    ):
+    if colorbar and _has_a_key_to_draw(scene):
         _add_colorbar(scene)
     return scene
+
+
+def _has_a_key_to_draw(scene: Map) -> bool:
+    """Whether the map's last layer is one a colorbar can describe.
+
+    Args:
+        scene: The map that was just drawn.
+
+    Returns:
+        `False` for a map with no layers, for a layer with no mappable — a globe fill or an outline-only
+        polygon draw registers one without — and for a categorical layer, which is keyed by the legend its
+        builder drew rather than by a continuous ramp.
+    """
+    if not scene.layers or scene.layers[-1][1] is None:
+        return False
+    return not _last_layer_is_categorical(scene)
 
 
 def _basemap_source(basemap: Any) -> Any:
@@ -718,7 +851,7 @@ def _quickmap_web(
     if isinstance(data, FeatureCollection):
         _draw_web_vector(scene, data, kwargs)
     elif isinstance(data, Dataset):
-        scene.add_raster(data, **kwargs)
+        scene.field(data, **kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
     if basemap:
@@ -735,22 +868,23 @@ def _quickmap_web(
     return scene
 
 
-def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any:
+def _quickmap_3d(
+    data: PlottableData, *, colorbar: bool = True, crs: Any = None, **kwargs
+) -> Any:
     """Build a finished ``Scene3D`` from ``data`` (the ``backend="3d"`` path, DX.1).
 
     Dispatches by input type, mirroring :func:`_draw`: a raster ``Dataset`` becomes 3-D relief
     (``terrain``); a point ``FeatureCollection`` becomes a ``point_cloud`` (coloured by ``column`` when
     given); a polygon ``FeatureCollection`` becomes ``extruded_polygons`` (extruded by, and coloured by,
-    ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. The
-    map-only kwargs (``crs``/``kind``/``domain``/``basemap``/``coastlines``) have no 3-D analogue and are
-    not accepted here — ``crs``/``domain``/``coastlines`` are refused by name in :func:`quickmap` before this
-    is reached, since :attr:`~digitalearth.three_d.base.Scene3DBase.display_crs` records that this tier
-    projects nothing.
+    ``column``). The ``Scene3D`` import is lazy so the core ``api`` works without the ``3d`` extra. ``crs``
+    becomes the scene's display CRS; the map-only kwargs (``kind``/``domain``/``basemap``/``coastlines``) have
+    no 3-D analogue and are refused by name in :func:`quickmap` before this is reached.
 
     Args:
         data: A pyramids ``Dataset`` (raster) or ``FeatureCollection`` (points/polygons).
         colorbar: When False, hide the scalar bar (``show_scalar_bar=False``); True leaves PyVista's
             default (a bar iff the layer carries scalars).
+        crs: The scene's display CRS; ``None`` takes the data's own.
         **kwargs: Forwarded to the chosen ``Scene3D`` builder (e.g. ``cmap``, ``z_exaggeration``,
             ``column``, ``height``, ``point_size``).
 
@@ -789,9 +923,9 @@ def _quickmap_3d(data: PlottableData, *, colorbar: bool = True, **kwargs) -> Any
         not colorbar
     ):  # PyVista shows a scalar bar by default when scalars exist; force it off here
         kwargs.setdefault("show_scalar_bar", False)
-    scene = (
-        Scene3D()
-    )  # constructed only after validation — the error paths above never leak a plotter
+    scene = Scene3D(
+        crs=crs
+    )  # constructed only after validation, so the error paths above leak no scene
     if isinstance(data, Dataset):
         scene.terrain(data, **kwargs)
     elif geom_kind == "polygons":

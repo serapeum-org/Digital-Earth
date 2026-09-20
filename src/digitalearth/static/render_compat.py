@@ -5,7 +5,7 @@ cleopatra >=0.30 removed the loose ``plot``/``animate`` styling keywords (``leve
 ``DataStyle``, ``ColorScaling``, ``CellValues``, ``PointOverlay``). Digital-Earth keeps accepting the flat
 kwargs as its public surface and folds them here, so callers stay insulated from the upstream regrouping.
 
-Those flat kwargs used to be **undeclared** — 26 keys, in no signature anywhere, so a caller could not ask
+Those flat kwargs used to be **undeclared** — 27 keys, in no signature anywhere, so a caller could not ask
 what a builder accepts and a typo was a silently ignored keyword rather than an error.
 :data:`STATIC_STYLE_SCHEMA` declares them: each with what it controls, and with the visual channel it drives
 where it drives one. That is what :func:`route_flat_style` routes against and what
@@ -24,7 +24,10 @@ the kind of claim that survives unchecked into the wave that was supposed to bui
   constructors now reject them) so they can be forwarded to ``plot`` instead. Also folds the ``size``
   channel onto the constructor spelling a point glyph wants.
 - :func:`group_render_kwargs` — the glyph-agnostic fold into group objects (idempotent; an already-built
-  group object, or an unrelated kwarg, passes through untouched).
+  group object, or an unrelated kwarg, passes through untouched). Every group but one is folded by mapping
+  keys onto fields here, because no other group has a builder upstream; the colour group is built by
+  :func:`digitalearth.static.style_fold.fold_color_scaling`, which calls cleopatra's own
+  ``ColorScaling.from_options``.
 - :func:`prepare_plot_kwargs` — fold the flat members a *given glyph* supports into their group objects, and
   hand back any ``alpha`` the glyph cannot take for the caller to apply to the artist. Applied centrally in
   :meth:`~digitalearth.static.scene.Scene._render_glyph`.
@@ -39,55 +42,28 @@ from typing import Any, Dict, Mapping, Optional, Set, Tuple
 
 from cleopatra.glyphs.gridded.array_glyph import PointOverlay
 from cleopatra.styling.params import CellValues, Classify, Contour, DataStyle
-from cleopatra.styling.scaling import ColorScale, ColorScaling
 
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.spec import StyleKey, StyleSchema, Symbology
+from digitalearth.static.style_fold import (
+    COLOR_GROUP_MEMBERS,
+    COLOR_GROUP_PARAM,
+    COLOR_SCALE_ALIASES,
+    coerce_color_scale,
+    fold_color_scaling,
+)
 
 __all__ = [
+    "COLOR_SCALE_ALIASES",
     "STATIC_STYLE_SCHEMA",
+    "coerce_color_scale",
+    "fold_color_scaling",
     "fold_symbology",
     "group_render_kwargs",
     "prepare_plot_kwargs",
     "relocate_flat_style",
     "route_flat_style",
 ]
-
-#: Flat ``color_scale=`` spellings -> the ``ColorScale`` enum the renderer needs (its ``.value``s carry dashes,
-#: so a bare string like ``"power"`` constructs a ColorScaling but blows up at render time). Digital-Earth keeps
-#: accepting the friendly names.
-_COLOR_SCALE_ALIASES = {
-    "linear": ColorScale.LINEAR,
-    "power": ColorScale.POWER,
-    "lognorm": ColorScale.LOGNORM,
-    "sym_log": ColorScale.SYM_LOGNORM,
-    "symlog": ColorScale.SYM_LOGNORM,
-    "sym_lognorm": ColorScale.SYM_LOGNORM,
-    "boundary": ColorScale.BOUNDARY_NORM,
-    "boundary_norm": ColorScale.BOUNDARY_NORM,
-    "midpoint": ColorScale.MIDPOINT,
-}
-
-
-def _coerce_color_scale(value: Any) -> ColorScale:
-    """Coerce a friendly ``color_scale=`` string (or ``ColorScale``) to a ``ColorScale`` member.
-
-    Raises a clear error for an unrecognised value — otherwise the bare string reaches cleopatra and crashes
-    opaquely at render time (``'str' object has no attribute 'value'``).
-    """
-    if isinstance(value, ColorScale):
-        return value
-    key = str(value).strip().lower().replace("-", "_")
-    if key in _COLOR_SCALE_ALIASES:
-        return _COLOR_SCALE_ALIASES[key]
-    try:
-        return ColorScale(str(value))  # exact enum value (e.g. "sym-lognorm")
-    except ValueError:
-        raise ValueError(
-            f"color_scale={value!r} is not a recognised colour scale; use one of "
-            f"{sorted(_COLOR_SCALE_ALIASES)} (or a cleopatra ColorScale member)"
-        ) from None
-
 
 #: Marker/label styling that folds into a ``PointOverlay`` wrapping the ``points`` array.
 _POINT_FIELDS = {
@@ -135,28 +111,21 @@ _GROUP_SPECS = (
             "category_legend_kwargs": "category_legend_kwargs",
         },
     ),
-    (
-        "color",
-        ColorScaling,
-        {
-            "color_scale": "kind",
-            "gamma": "gamma",
-            "line_threshold": "line_threshold",
-            "line_scale": "line_scale",
-            "bounds": "bounds",
-            "midpoint": "center",
-        },
-    ),
 )
 
 #: The typed group parameters themselves (``color``/``contour``/``data_style``/``classify``/``cells``/``points``)
 #: — the constructors reject these too, so a caller passing a group object directly must also route to ``plot``.
-_GROUP_PARAMS = frozenset({param for param, _, _ in _GROUP_SPECS} | {"points"})
+#: ``color`` is not in :data:`_GROUP_SPECS`: its members fold through
+#: :func:`~digitalearth.static.style_fold.fold_color_scaling` rather than through a field map here.
+_GROUP_PARAMS = frozenset(
+    {param for param, _, _ in _GROUP_SPECS} | {"points", COLOR_GROUP_PARAM}
+)
 
 #: Every styling key cleopatra's glyph constructors now reject — the flat members, plus the typed group params.
 FLAT_STYLE_KEYS = frozenset(
     {"points", *_POINT_FIELDS}
     | {flat for _, _, field_map in _GROUP_SPECS for flat in field_map}
+    | set(COLOR_GROUP_MEMBERS)
     | _GROUP_PARAMS
 )
 
@@ -168,8 +137,8 @@ FLAT_STYLE_KEYS = frozenset(
 MARKER_SIZE_KEY = "size"
 
 #: Every style keyword the static tier accepts, declared: what it controls, and the visual channel it drives
-#: where it drives one. That is the **26** flat members cleopatra's constructors reject, the 6 typed group
-#: parameters they fold into, and :data:`MARKER_SIZE_KEY` — 33 keywords that were in no signature anywhere.
+#: where it drives one. That is the **27** flat members cleopatra's constructors reject, the 6 typed group
+#: parameters they fold into, and :data:`MARKER_SIZE_KEY` — 34 keywords that were in no signature anywhere.
 #:
 #: Most of them are static properties — a threshold, a preset name, a nested kwargs dict — and say so by
 #: declaring no channel. Only two vary a visual variable of the layer as a whole today, and both route
@@ -218,13 +187,17 @@ STATIC_STYLE_SCHEMA: StyleSchema = StyleSchema.of(
     # -- colour scaling
     StyleKey(
         "color_scale",
-        "Colour scaling: linear, power, lognorm, sym_log, boundary or midpoint.",
+        "Colour scaling: linear, power, lognorm, sym_log, boundary, midpoint or equalize.",
     ),
     StyleKey("gamma", "Exponent of the power colour scale."),
     StyleKey("line_threshold", "Half-width of a symmetric-log scale's linear region."),
     StyleKey("line_scale", "Width scaling of a symmetric-log scale's linear region."),
     StyleKey("bounds", "Explicit class bounds for a boundary colour scale."),
     StyleKey("midpoint", "The value a diverging colour scale centres on."),
+    StyleKey(
+        "samples",
+        "Number of samples the equalize colour scale reads the value distribution at.",
+    ),
     # -- already-built group objects, passed straight through
     # NOT the `color` visual channel, despite the name. This is cleopatra's `plot(color=...)` parameter,
     # which takes a ColorScaling group object describing how values are *scaled* onto a ramp. The static
@@ -445,7 +418,10 @@ def relocate_flat_style(
 
 
 #: Flat member kwargs per group parameter (used to spot styling a target glyph cannot accept).
-_GROUP_MEMBERS = {param: frozenset(field_map) for param, _, field_map in _GROUP_SPECS}
+_GROUP_MEMBERS = {
+    **{param: frozenset(field_map) for param, _, field_map in _GROUP_SPECS},
+    COLOR_GROUP_PARAM: frozenset(COLOR_GROUP_MEMBERS),
+}
 
 #: The point-overlay keys (the ``points`` array plus its ``point_*`` styling), rejected on a glyph with no
 #: ``points`` parameter the same way an unsupported group is.
@@ -483,16 +459,26 @@ def _fold_points(out: Dict[str, Any]) -> None:
 def _fold_group(
     out: Dict[str, Any], param: str, cls: type, field_map: Dict[str, str]
 ) -> None:
-    """Fold one group's flat members in ``out`` into a ``param`` group object (in place)."""
+    """Fold one group's flat members in ``out`` into a ``param`` group object (in place).
+
+    Args:
+        out: The ``plot()`` keyword dict, mutated: the flat members are removed and the built group put in
+            their place.
+        param: The ``plot()`` parameter the group is passed under.
+        cls: The cleopatra group class to build.
+        field_map: ``{flat keyword: group field}`` for this group.
+
+    Note:
+        A caller who passed a built group under ``param`` keeps it, and their flat members are left in place
+        for :func:`prepare_plot_kwargs` to refuse by name. The colour group does not come through here — it
+        is built by :func:`~digitalearth.static.style_fold.fold_color_scaling`, which refuses that pair
+        rather than forwarding it.
+    """
     if out.get(param) is not None:
         return  # caller already passed a built group object under this name; leave any flat members in place
     members = {field: out.pop(key) for key, field in field_map.items() if key in out}
     if not members:
         return
-    if (
-        "kind" in members
-    ):  # color_scale=: coerce the friendly string to the ColorScale enum
-        members["kind"] = _coerce_color_scale(members["kind"])
     out[param] = cls(**members)
 
 
@@ -505,6 +491,10 @@ def group_render_kwargs(
     become a ``Contour``; ``scheme``/``k`` a ``Classify``; and so on. Keys that are not flat members — including
     an already-built group object passed under its group name — pass through untouched, so the function is safe
     to apply once, centrally, and idempotent on its own output.
+
+    The colour group is the one built upstream, by ``ColorScaling.from_options`` — see
+    :func:`~digitalearth.static.style_fold.fold_color_scaling`, which also refuses a built ``color=`` passed
+    beside a flat colour keyword instead of forwarding both.
 
     Args:
         kwargs: The ``plot`` keyword dict to fold (not mutated).
@@ -525,6 +515,8 @@ def group_render_kwargs(
             accepted is None or param in accepted
         ):  # skip a group this glyph's plot() cannot take
             _fold_group(out, param, cls, field_map)
+    if accepted is None or COLOR_GROUP_PARAM in accepted:
+        fold_color_scaling(out)
     return out
 
 
@@ -560,7 +552,8 @@ def prepare_plot_kwargs(
         the artist after drawing (``None`` when the glyph folded it into a ``DataStyle`` itself or none was given).
 
     Raises:
-        ValueError: if a styling kwarg has no home on this glyph type (e.g. ``style=`` on a scatter layer).
+        ValueError: if a styling kwarg has no home on this glyph type (e.g. ``style=`` on a scatter layer), or
+            if a built ``color=`` group is passed beside a flat colour keyword.
     """
     accepted = _plot_params(type(glyph))
     grouped = group_render_kwargs(kwargs, accepted)

@@ -17,6 +17,7 @@ import numpy as np
 
 from digitalearth.base.crs import declared_crs, is_geographic, reproject
 from digitalearth.base.sources import Source, get_source
+from digitalearth.base.spec.bounds import same_crs
 
 #: Fallback scalar-array name ``geovista.Transform.from_1d`` assigns to the draped field (used only if the mesh
 #: exposes no active scalars). Prefer ``mesh.active_scalars_name`` so the binding tracks geovista's own choice.
@@ -123,6 +124,10 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+from digitalearth.base.spec import LayerSpec, Selection
+from digitalearth.three_d.layer import drawing_props
+
+
 class GlobeMixin(_MixinBase):
     """Adds :meth:`globe` — render a global lon/lat field on a textured sphere — to a :class:`Scene3D`.
 
@@ -190,6 +195,7 @@ class GlobeMixin(_MixinBase):
         self,
         data: Any,
         *,
+        name: Any = None,
         band: int = 1,
         cmap: str | None = None,
         coastlines: bool = True,
@@ -204,6 +210,12 @@ class GlobeMixin(_MixinBase):
         web tiers do. Only input that cannot be reprojected — a bare
         :class:`~digitalearth.base.sources.Source` or raw array carrying a projected CRS or none at all — is
         rejected, with an error naming what is wrong.
+
+        A globe draws in EPSG:4326, and declares that as the scene's display CRS when the scene has none.
+
+        **The sphere spans the cell centres, not the cell edges**, as `terrain` does: geovista places one
+        vertex per lon/lat pair, so a global field is drawn half a cell inside its own extent at each pole and
+        meridian (#301).
 
         Args:
             data: A pyramids ``Dataset`` (or anything :func:`~digitalearth.base.sources.get_source` accepts), or an
@@ -224,7 +236,8 @@ class GlobeMixin(_MixinBase):
         Raises:
             ImportError: if the optional ``geovista`` dependency is not installed.
             ValueError: if ``data`` cannot be reprojected and is not geographic — a ``Source`` in a projected
-                CRS, or one with no CRS whose coordinates are not lon/lat.
+                CRS, or one with no CRS whose coordinates are not lon/lat — or if the scene is already drawn in
+                a CRS other than EPSG:4326.
 
         Examples:
             - Drape a cosine-of-latitude field on a globe with coastlines (needs the ``3d`` extra / geovista):
@@ -243,22 +256,82 @@ class GlobeMixin(_MixinBase):
 
                 ```
         """
-        gv = _require_geovista()
-        src = self._to_geographic_source(data, band=band)
-        lon = np.asarray(src.x.values, dtype="float64")
-        lat = np.asarray(src.y.values, dtype="float64")
-        field = np.asarray(src.z.values, dtype="float64")
-
-        mesh = gv.Transform.from_1d(lon, lat, data=field)
-        # Colour by whatever scalar geovista set active, so the binding tracks geovista rather than a hardcoded
-        # array name; fall back to the documented constant only if no active scalar is present.
-        scalars = mesh.active_scalars_name or _GEOVISTA_DATA
-        actor = self.add_mesh(
-            mesh, scalars=scalars, cmap=self._auto_cmap(src, cmap), **kwargs
+        actor = self._add_described_layer(
+            kind="raster",
+            data=data,
+            name=name,
+            selection=Selection(band=(band,)),
+            cmap=cmap,
+            **kwargs,
         )
-
         if coastlines:
-            from geovista.geometry import coastlines as _load_coastlines
-
-            self.add_mesh(_load_coastlines(coastline_resolution), color=coastline_color)
+            self._add_described_layer(
+                kind="coastlines",
+                resolution=coastline_resolution,
+                color=coastline_color,
+            )
         return actor
+
+
+def draw_globe(scene: Any, data: Any, layer: LayerSpec) -> Any:
+    """Drape the field a globe layer describes onto a sphere.
+
+    Args:
+        scene: The scene being drawn into. A globe draws in EPSG:4326 and declares it as the scene's CRS.
+        data: The layer's source object: a global raster.
+        layer: The layer's description, whose selection names the band and whose props carry the colormap.
+
+    Returns:
+        The `(mesh, actor)` pair.
+
+    Raises:
+        ImportError: when geovista is not installed.
+        ValueError: when the scene is already drawn in another CRS, or the data cannot be made geographic.
+    """
+    gv = _require_geovista()
+    if scene.display_crs is None:
+        scene.display_crs = GEOGRAPHIC_EPSG
+    elif not same_crs(scene.display_crs, GEOGRAPHIC_EPSG):
+        # geovista wraps lon/lat onto a sphere; the scene's other layers would be flat in another CRS.
+        raise ValueError(
+            f"globe() draws in EPSG:{GEOGRAPHIC_EPSG}, but this scene is drawn in {scene.display_crs!r}; "
+            "draw the globe in its own Scene3D"
+        )
+    props = drawing_props(layer.symbology.props)
+    cmap = props.pop("cmap", None)
+    band = layer.selection.band[0] if layer.selection.band else 1
+    src = scene._to_geographic_source(data, band=band)
+    lon = np.asarray(src.x.values, dtype="float64")
+    lat = np.asarray(src.y.values, dtype="float64")
+    field = np.asarray(src.z.values, dtype="float64")
+
+    mesh = gv.Transform.from_1d(lon, lat, data=field)
+    # Colour by whatever scalar geovista set active, so the binding tracks geovista rather than a hardcoded
+    # array name; fall back to the documented constant only if no active scalar is present.
+    scalars = mesh.active_scalars_name or _GEOVISTA_DATA
+    return mesh, scene.plotter.add_mesh(
+        mesh, scalars=scalars, cmap=scene._auto_cmap(src, cmap), **props
+    )
+
+
+def draw_coastlines(scene: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Draw the coastlines a globe asked for.
+
+    Args:
+        scene: The scene being drawn into.
+        _data: The source slot every drawer takes, unread here — coastlines are geometry geovista holds
+            rather than anything a layer points at.
+        layer: The layer's description, whose props carry the resolution and the colour.
+
+    Returns:
+        The `(mesh, actor)` pair.
+
+    Raises:
+        ImportError: when geovista is not installed.
+    """
+    _require_geovista()
+    from geovista.geometry import coastlines as _load_coastlines
+
+    props = drawing_props(layer.symbology.props)
+    mesh = _load_coastlines(props.pop("resolution", "110m"))
+    return mesh, scene.plotter.add_mesh(mesh, **props)

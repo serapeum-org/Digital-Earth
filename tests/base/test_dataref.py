@@ -4,6 +4,7 @@ Holding the data object inside the layer is what blocks dynamic tiling, level-of
 wants to round-trip through a dict. These cover the reference and the registry that opens it.
 """
 
+import pathlib
 import re
 from pathlib import Path
 
@@ -419,3 +420,27 @@ class TestRegisteringAResolver:
         """
         with pytest.raises(ValueError, match="non-empty scheme"):
             register_resolver("", lambda uri: uri)
+
+
+class TestReferencingWhateverABuilderWasGiven:
+    """`DataRef.of` — one rule for a path, a URL, a reference, or an object (#296)."""
+
+    def test_a_path_is_referenced_as_a_path(self):
+        """A figure over a file can be written and read back anywhere."""
+        assert DataRef.of("data/dem.tif").uri == "data/dem.tif", "the path itself"
+
+    def test_a_path_object_is_referenced_as_its_text(self):
+        """`pathlib.Path` is what a caller usually holds."""
+        assert DataRef.of(pathlib.Path("data") / "dem.tif").uri.endswith("dem.tif"), (
+            DataRef.of(pathlib.Path("data") / "dem.tif").uri
+        )
+
+    def test_a_reference_is_kept_as_it_is(self):
+        """A caller who already made one is not made to make another."""
+        held = DataRef("s3://bucket/dem.tif")
+        assert DataRef.of(held) is held, "the same reference"
+
+    def test_an_object_is_registered_and_reaches_back(self):
+        """A pyramids object does not know where it came from, so it is referenced in memory."""
+        rows = [1, 2, 3]
+        assert DataRef.of(rows, name="test-of").open() is rows, "the same object"

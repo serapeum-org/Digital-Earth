@@ -57,10 +57,19 @@ class TestImageCoordinates:
     """``_image_coordinates`` returns the MapLibre image corners ``[TL, TR, BR, BL]`` in ``[lng, lat]``."""
 
     def test_corner_order(self):
+        """The corners run top-left, top-right, bottom-right, bottom-left, around the cells.
+
+        Test scenario:
+            Since #301 the corners are the edges of the rectangle the cells cover, not their centres: three
+            one-degree cells centred at 10/11/12 span 9.5 to 12.5, so an image source is no longer drawn half
+            a cell inside its own data on every side.
+        """
         x = np.array([10.0, 11.0, 12.0])
         y = np.array([50.0, 51.0, 52.0])
         corners = WebMap()._image_coordinates(x, y)
-        assert corners == [[10.0, 52.0], [12.0, 52.0], [12.0, 50.0], [10.0, 50.0]]
+        assert corners == [[9.5, 52.5], [12.5, 52.5], [12.5, 49.5], [9.5, 49.5]], (
+            corners
+        )
 
 
 class TestAddRasterNeedsEngine:
@@ -232,3 +241,51 @@ class TestARasterThatCannotBeGeoreferencedIsRefused:
         # OffLimbError, not a bare ValueError: one exception type across the four tiers (M6).
         with pytest.raises(OffLimbError, match="cannot be expressed in lon/lat"):
             self._call(m, builder, dataset)
+
+
+class TestTheContractsColourLimits:
+    """#299 / review L12 — `limits=` is the spelling every tier answers to."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip the class when the web extra is not installed."""
+        pytest.importorskip("maplibre")
+
+    def test_limits_colours_the_same_band_as_vmin_and_vmax(self, dataset):
+        """The contract's name and this tier's own reach the same colouring.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        by_pair = WebMap().field(dataset, limits=(0.0, 10.0)).to_html()
+        by_ends = WebMap().field(dataset, vmin=0.0, vmax=10.0).to_html()
+        other = WebMap().field(dataset, limits=(0.0, 50.0)).to_html()
+        assert by_pair == by_ends, "the two spellings must colour the same raster alike"
+        assert by_pair != other, "and different limits must colour it differently"
+
+    def test_naming_the_limits_twice_is_refused(self, dataset):
+        """They are one thing, and there is no right answer to being given two.
+
+        Args:
+            dataset: The raster fixture.
+        """
+        m = WebMap()
+        with pytest.raises(ValueError, match="takes limits= or vmin=/vmax=, not both"):
+            m.field(dataset, limits=(0.0, 10.0), vmin=1.0)
+
+    @pytest.mark.parametrize("given", [10.0, "ab", (0.0, 1.0, 2.0), ("a", "b")])
+    def test_limits_that_are_not_a_pair_of_numbers_name_the_shape(self, dataset, given):
+        """A pair of numbers, checked as one — several plausible mistakes unpack just as happily.
+
+        Args:
+            dataset: The raster fixture.
+            given: What the caller passed.
+
+        Test scenario:
+            `low, high = limits` accepts a two-character string and a two-element iterator, and a triple
+            silently loses its third value; `"ab"` reached numpy and came back as *"could not convert
+            string to float: 'a'"* (review L9/L11).
+        """
+        m = WebMap()
+        with pytest.raises(ValueError, match=r"limits must be a \(vmin, vmax\) pair"):
+            m.field(dataset, limits=given)

@@ -58,7 +58,7 @@ def test_animate_drives_frames_via_callback(tmp_path):
         calls.append(factor)
         s.layers[0][0].points[:, 2] *= factor
 
-    scene.animate([1.05, 1.05, 1.05], str(tmp_path / "grow.gif"), grow)
+    scene.record([1.05, 1.05, 1.05], str(tmp_path / "grow.gif"), grow)
     assert calls == [1.05, 1.05, 1.05]
     assert (tmp_path / "grow.gif").stat().st_size > 0
     scene.close()
@@ -95,7 +95,7 @@ def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
         raise RuntimeError("frame blew up")
 
     with pytest.raises(RuntimeError, match="blew up"):
-        scene.animate([1, 2], str(out), boom)
+        scene.record([1, 2], str(out), boom)
     # finally-block ran: the writer was flushed/closed (no lingering open mwriter)
     assert (
         getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed

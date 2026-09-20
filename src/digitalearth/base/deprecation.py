@@ -22,12 +22,117 @@ those apart is the whole job here. Document the effective default in the paramet
 """
 
 import warnings
+from contextvars import ContextVar
 from typing import Any, Callable, Optional
+
+#: How many frames a deprecated method alias has added between the caller and the code that is running. A
+#: renamed method forwards to its replacement, so a parameter rename resolved *inside* that replacement is one
+#: frame further from the caller than it would otherwise be — and a warning pointing at this module instead of
+#: at the call is one nobody can act on. The alias counts itself here; `renamed_parameter` adds it to its own
+#: stacklevel, which is the only place the two helpers need to know about each other.
+_ALIAS_DEPTH: ContextVar = ContextVar("digitalearth_alias_depth", default=0)
 
 #: What the warning says about when the old spelling stops working. A phrase rather than a version because CI
 #: (commitizen) owns the version number: naming a release here would either go stale or have to be bumped by
 #: hand in every call site. Pass ``removed_in="0.12.0"`` once a removal is actually scheduled.
 REMOVED_IN = "a future release"
+
+
+def renamed_method(
+    *,
+    new: str,
+    old: str,
+    owner: str,
+    removed_in: str = REMOVED_IN,
+) -> Callable[..., Any]:
+    """Build the alias that keeps a renamed method working, warning on the caller's line.
+
+    The method counterpart of :func:`renamed_parameter`, and for the same reason: the one hand-written alias in
+    the package (`WebMap.to_gif`) had its own message shape, and a second hand-written one would have had a
+    third. A rename is a promise to two callers — the one who already wrote the old name, and the one reading
+    the new signature — and this keeps both.
+
+    Args:
+        new: The method that does the work now, looked up on the instance when the alias is called, so a
+            subclass that overrides it is the one that runs.
+        old: The deprecated spelling, named in the warning.
+        owner: The class the methods live on, for the message — `"WebMap"`, `"Scene3D"`.
+        removed_in: When the old spelling stops working. A phrase by default, since CI owns the version
+            number; pass a real version once a removal is scheduled.
+
+    Returns:
+        A function to assign as the old name. It forwards every argument to `new` and returns what that
+        returns, so a chainable builder stays chainable.
+
+    Warns:
+        DeprecationWarning: naming the old spelling, the new one and when the old one goes. The warning points
+            at the caller's line (`stacklevel=2`), not at this module, because that is the line to change.
+
+    Examples:
+        - The alias forwards, and says what to write instead:
+            ```python
+            >>> import warnings
+            >>> from digitalearth.base.deprecation import renamed_method
+            >>> class Map:
+            ...     def set_bounds(self, bounds):
+            ...         return f"framed on {bounds}"
+            ...     fit_bounds = renamed_method(new="set_bounds", old="fit_bounds", owner="Map")
+            >>> with warnings.catch_warnings(record=True) as caught:
+            ...     warnings.simplefilter("always")
+            ...     Map().fit_bounds([0, 0, 1, 1])
+            'framed on [0, 0, 1, 1]'
+            >>> print(caught[0].message)
+            Map.fit_bounds() is deprecated and will be removed in a future release; use Map.set_bounds() instead
+
+            ```
+        - Keywords travel too, so a caller's whole call keeps working:
+            ```python
+            >>> import warnings
+            >>> from digitalearth.base.deprecation import renamed_method
+            >>> class Map:
+            ...     def save_animation(self, path, *, fps=10):
+            ...         return f"{path} at {fps} fps"
+            ...     animate = renamed_method(new="save_animation", old="animate", owner="Map")
+            >>> with warnings.catch_warnings():
+            ...     warnings.simplefilter("ignore")
+            ...     Map().animate("out.gif", fps=24)
+            'out.gif at 24 fps'
+
+            ```
+    """
+
+    def alias(self: Any, *args: Any, **kwargs: Any) -> Any:
+        """Warn, then call the method this name was renamed to.
+
+        Args:
+            self: The instance the alias was called on.
+            *args: Passed straight through.
+            **kwargs: Passed straight through.
+
+        Returns:
+            Whatever the new method returns.
+        """
+        warnings.warn(
+            f"{owner}.{old}() is deprecated and will be removed in {removed_in}; "
+            f"use {owner}.{new}() instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        # The forwarding call is a frame the caller did not write, so a parameter rename resolved inside the
+        # new method counts it and still points at the caller's line.
+        token = _ALIAS_DEPTH.set(_ALIAS_DEPTH.get() + 1)
+        try:
+            return getattr(self, new)(*args, **kwargs)
+        finally:
+            _ALIAS_DEPTH.reset(token)
+
+    alias.__name__ = old
+    alias.__qualname__ = f"{owner}.{old}"
+    alias.__doc__ = (
+        f"Deprecated spelling of :meth:`{new}`; it forwards there and warns.\n\n"
+        f"        Returns:\n            Whatever :meth:`{new}` returns.\n"
+    )
+    return alias
 
 
 def renamed_parameter(
@@ -149,6 +254,7 @@ def renamed_parameter(
     warnings.warn(
         f"{caller}: {old}= is deprecated and will be removed in {removed_in}; use {new}= instead",
         DeprecationWarning,
-        stacklevel=stacklevel,
+        # Plus whatever a deprecated method alias put between the caller and here (see `_ALIAS_DEPTH`).
+        stacklevel=stacklevel + _ALIAS_DEPTH.get(),
     )
     return alias if convert is None else convert(alias)

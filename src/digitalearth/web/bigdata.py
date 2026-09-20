@@ -122,8 +122,8 @@ class BigDataMixin(_MixinBase):
 
         apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
         self._last_layer_id = layer_id
-        self._index_layer(layer_id, None, kind="heatmap")
-        return self.add_layer(layer=apply)
+        self._index_layer(layer_id, None, kind="heatmap", source=gdf)
+        return self._queue(apply)
 
     def cluster(
         self,
@@ -196,9 +196,13 @@ class BigDataMixin(_MixinBase):
         # One closure adds the bubbles, their counts and the loose points, so tagging it with the
         # indexed id removes all three together — they are one thing to a viewer.
         apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
+        # The loose points, which are the layer carrying the caller's own columns: the bubbles are
+        # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
+        # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
+        # description is skipped — which is what the guard in `_record_tooltip` is for.
         self._last_layer_id = unclustered.id
-        self._index_layer(clusters.id, None, kind="clusters")
-        return self.add_layer(layer=apply)
+        self._index_layer(clusters.id, None, kind="clusters", source=gdf)
+        return self._queue(apply)
 
     def _add_deck_layer(self, layer: dict) -> Self:
         """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.
@@ -219,7 +223,7 @@ class BigDataMixin(_MixinBase):
             def apply(widget: Any) -> None:
                 widget.add_deck_layers(deck_layers)
 
-            self.add_layer(layer=apply)
+            self._queue(apply)
         self._deck_layers.append(layer)
         return self
 

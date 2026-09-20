@@ -219,7 +219,9 @@ class TestC2FrameRateIsFps:
             it is actually applied: at the encoder.
         """
         assert DEFAULT_FPS == 3.0
-        assert inspect.signature(WebMap.animate).parameters["fps"].default is None, (
+        assert (
+            inspect.signature(WebMap.save_animation).parameters["fps"].default is None
+        ), (
             "fps must default to the not-passed sentinel so both spellings can be told apart"
         )
         recorded = {}
@@ -330,11 +332,11 @@ class TestC2FrameRateIsFps:
             seen["path"] = path
             return pathlib.Path(path)
 
-        monkeypatch.setattr(WebMap, "animate", fake_animate)
+        monkeypatch.setattr(WebMap, "save_animation", fake_animate)
         out = tmp_path / "series.gif"
         target = str(out)
         scene = WebMap()
-        with pytest.warns(DeprecationWarning, match="use WebMap.animate"):
+        with pytest.warns(DeprecationWarning, match="use WebMap.save_animation"):
             written = scene.to_gif(target)
         assert written == out
         assert seen["path"] == target
@@ -519,7 +521,7 @@ class TestC4SchemeAndK:
 class TestC5CmapResolvesThroughAutostyle:
     """``cmap=None`` is a lookup, never a bare literal in the signature."""
 
-    @pytest.mark.parametrize("builder", ["add_raster", "contours"])
+    @pytest.mark.parametrize("builder", ["field", "contours"])
     def test_the_raster_builders_default_to_none(self, builder):
         """A string default would hide the variable's own colormap behind a generic one.
 
@@ -597,7 +599,7 @@ class TestC6LevelsAndUnitsAreConsumed:
         """Never guess a unit: without one the label is built exactly as it was before."""
         assert WebMap()._auto_units(_source("mystery"), None) is None
 
-    @pytest.mark.parametrize("builder", ["add_raster", "contours"])
+    @pytest.mark.parametrize("builder", ["field", "contours"])
     def test_the_raster_builders_expose_the_units_override(self, builder):
         """The caller half of ``_auto_units`` is a real argument, not dead code (review L3).
 
@@ -792,9 +794,9 @@ class TestC7OffLimbSkipsAndWarns:
         monkeypatch.setattr(WebMap, "_to_display_source", _off_limb)
         m = WebMap().basemap()
         before = len(m.layers)
-        assert m.add_raster(object()) is m, "the builder must stay chainable"
+        assert m.field(object()) is m, "the builder must stay chainable"
         assert len(m.layers) == before
-        assert any("add_raster" in line for line in warning_log), warning_log
+        assert any("field" in line for line in warning_log), warning_log
 
     def test_an_off_limb_composite_is_skipped_with_a_warning(
         self, monkeypatch, warning_log
@@ -930,8 +932,8 @@ class TestC7OffLimbSkipsAndWarns:
             so ``except OffLimbError`` around a strict map silently missed them.
         """
         scene = WebMap(strict=True)
-        with pytest.raises(OffLimbError, match="add_raster: nothing to place"):
-            scene._skipped("add_raster", "nothing to place")
+        with pytest.raises(OffLimbError, match="field: nothing to place"):
+            scene._skipped("field", "nothing to place")
 
     def test_the_shared_exception_type_is_not_a_value_error(self):
         """Naming the change: ``OffLimbError`` derives from ``RuntimeError``, so it is not a ``ValueError``.

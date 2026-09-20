@@ -38,6 +38,25 @@ __all__ = ["DESCRIBING_KEYS", "SourceView"]
 DESCRIBING_KEYS = ("variable", "kind", "standard_name")
 
 
+def _off_source(error: BaseException) -> bool:
+    """Whether a failed windowed read means the window missed the data.
+
+    Args:
+        error: What the reader raised.
+
+    Returns:
+        `True` for pyramids' out-of-bounds report, matched by **type name** so this module needs no import of
+        it — the exception moved package once already, and a viewport that pans off the edge must not depend
+        on where it lives.
+
+        The message is deliberately not searched. "out of bounds" is the text of the most common indexing
+        error Python raises (`IndexError: index 3 is out of bounds for axis 0 with size 2`), so matching it
+        turned any numpy, GDAL or pyramids indexing defect reached through a windowed read into a silent
+        all-`NaN` canvas — a blank map where a traceback belonged (review M2).
+    """
+    return "OutOfBounds" in type(error).__name__
+
+
 class SourceView(Source):
     """A materialised view of data, carrying the reference and slice it was read from.
 
@@ -53,6 +72,10 @@ class SourceView(Source):
         selection: Which slice was read.
         request: The request this view answered, when it answered one. Kept so a caller can tell what it
             asked for from what it got — a reader may return fewer cells than the budget allowed.
+        window: The rectangle actually read, in the CRS its cells are measured in, for a windowed read;
+            `None` for a view that read the whole source. It is what a renderer needs to *place* the
+            cells, and the reader is the only one that can say: a canvas one cell wide has no spacing
+            to derive it from, which is why a renderer must not be left to.
 
     Examples:
         - A view knows its own address:
@@ -92,11 +115,35 @@ class SourceView(Source):
         ref: Optional[DataRef] = None,
         selection: Optional[Selection] = None,
         request: Optional[ViewRequest] = None,
+        window: Optional[Bounds] = None,
     ):
         super().__init__(z, x, y, crs, metadata, units)
         self._ref = ref
         self._selection = selection if selection is not None else Selection()
         self._request = request
+        self._window = window
+
+    @property
+    def window(self) -> Optional[Bounds]:
+        """The rectangle this view's cells cover, for a windowed read.
+
+        Returns:
+            The window read, in the CRS its cells are measured in, or `None` when the whole source was
+            read and the axes describe it themselves.
+
+        Examples:
+            - A view of a whole source names no window:
+                ```python
+                >>> import numpy as np
+                >>> from digitalearth.base.sources import DimensionInfo
+                >>> from digitalearth.base.sources.view import SourceView
+                >>> axis = DimensionInfo(np.array([0.0, 1.0]), "x")
+                >>> SourceView(None, axis, axis, crs=4326).window is None
+                True
+
+                ```
+        """
+        return self._window
 
     @property
     def ref(self) -> Optional[DataRef]:
@@ -437,7 +484,7 @@ class SourceView(Source):
                 "view per channel"
             )
         request = cls._budgeted(request, picked.budget)
-        windowed, xs, ys, window_crs = cls._windowed(data, picked, request)
+        windowed, xs, ys, window_crs, window = cls._windowed(data, picked, request)
         source = get_source(
             windowed,
             band=picked.first_band,
@@ -458,6 +505,7 @@ class SourceView(Source):
             ref=ref,
             selection=picked,
             request=request,
+            window=window,
         )
 
     @staticmethod
@@ -566,10 +614,45 @@ class SourceView(Source):
             return max(1, min(width, budget)), 1
         return 1, max(1, min(height, budget))
 
+    @staticmethod
+    def _window_for(data: Any, request: ViewRequest) -> Optional[Bounds]:
+        """Return the rectangle to read, in the CRS the data's own cells are measured in.
+
+        Two questions in one, kept apart from the reading: *which* rectangle, and *whose* CRS it is
+        described in. `read_part` answers in the dataset's CRS, so a window given in another one is
+        converted before it is read rather than after.
+
+        Args:
+            data: The opened object.
+            request: What was asked for.
+
+        Returns:
+            The window, or `None` when there is no rectangle to name: the request gives no region, and
+            either names no usable size (no budget, and not both of width and height) or meets an object
+            with no `bbox` of its own to window that size against.
+        """
+        bbox = request.as_bbox()
+        if bbox is not None:
+            window = Bounds.from_bbox(list(bbox), crs=request.crs)
+            target = getattr(data, "epsg", None) or getattr(data, "crs", None)
+            if request.crs is not None and target is not None:
+                window = window.to_crs(target)
+            return window
+        # A size with no region still has to be honoured: the object *can* window, so skipping here
+        # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
+        # canvas all 13x14 cells. The source's own bbox is the region.
+        source_bbox = getattr(data, "bbox", None)
+        # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
+        # one read a 64x64 floor square that honoured nothing the caller named.
+        canvas = request.width is not None and request.height is not None
+        if source_bbox is None or (request.budget is None and not canvas):
+            return None
+        return Bounds.from_bbox(list(source_bbox), crs=getattr(data, "epsg", None))
+
     @classmethod
     def _windowed(
         cls, data: Any, selection: Selection, request: Optional[ViewRequest]
-    ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any]]:
+    ) -> Tuple[Any, Optional[Any], Optional[Any], Optional[Any], Optional[Bounds]]:
         """Narrow `data` to the requested window, and say where the window's cells are.
 
         Args:
@@ -578,10 +661,9 @@ class SourceView(Source):
             request: What was asked for, or ``None``.
 
         Returns:
-            A ``(data, x, y, crs)`` tuple. Unwindowed, that is `data` unchanged and three ``None``s: when
-            there is no request, the object has no `read_part`, or the request names no region and either
-            names no usable size (no budget, and not both of width and height) or meets an object with no
-            `bbox` to window the size against.
+            A ``(data, x, y, crs, window)`` tuple. Unwindowed, that is `data` unchanged and four ``None``s:
+            when there is no request, when the object has no `read_part`, or when :meth:`_window_for` can
+            name no rectangle to read.
 
             Windowed, the window is first grown to whole source pixels by :meth:`_aligned`, and the result is
             the **array** ``read_part`` returns for it plus the coordinates of its cell centres and the CRS
@@ -594,30 +676,12 @@ class SourceView(Source):
             ValueError: if the source is a rotated raster — see :meth:`_refuse_rotated`.
             Exception: whatever pyramids raises for a window it cannot read.
         """
-        nothing = (data, None, None, None)
+        nothing = (data, None, None, None, None)
         if request is None or not hasattr(data, "read_part"):
             return nothing
-        bbox = request.as_bbox()
-        if bbox is None:
-            # A size with no region still has to be honoured: the object *can* window, so skipping here
-            # returned the whole raster — blowing a budget silently, or handing a caller who asked for a 4x3
-            # canvas all 13x14 cells. The source's own bbox is the region.
-            source_bbox = getattr(data, "bbox", None)
-            # A full canvas counts; half of one does not. `_shape` cannot use a lone width, so windowing on
-            # one read a 64x64 floor square that honoured nothing the caller named.
-            canvas = request.width is not None and request.height is not None
-            if source_bbox is None or (request.budget is None and not canvas):
-                return nothing
-            window = Bounds.from_bbox(
-                list(source_bbox), crs=getattr(data, "epsg", None)
-            )
-        else:
-            # read_part returns data in the *dataset's* CRS, so a bbox given in another one is converted
-            # first and the window described in the CRS its cells are actually measured in.
-            window = Bounds.from_bbox(list(bbox), crs=request.crs)
-            target = getattr(data, "epsg", None) or getattr(data, "crs", None)
-            if request.crs is not None and target is not None:
-                window = window.to_crs(target)
+        window = cls._window_for(data, request)
+        if window is None:
+            return nothing
         # Snap the window outward to whole source pixels *before* reading. read_part does this internally
         # (floor/ceil through world_to_pixel) and returns a buffer spanning the snapped window — so labelling
         # the result from the requested bbox misplaces every cell by up to one source pixel per edge, worst
@@ -625,19 +689,182 @@ class SourceView(Source):
         # the window asked for and the window read are the same rectangle.
         cls._refuse_rotated(data)
         window = cls._aligned(window, data)
-        width, height = cls._shape(request)
-        array = np.asarray(
+        width, height = cls._native(window, data, *cls._shape(request))
+        band = selection.first_band
+        try:
+            array = cls._read_window(data, window, width, height, band)
+        # A viewport panned off the data is a place with nothing in it, not a failed read: the canvas comes
+        # back empty, as it does for a window over a hole in the raster, and the map keeps panning.
+        except Exception as error:  # noqa: BLE001
+            if not _off_source(error):
+                raise
+            array = np.full((height, width), np.nan)
+        rows, columns = array.shape[-2], array.shape[-1]
+        xs, ys = cls._axes(window, rows, columns, data)
+        return array, xs, ys, window.crs, window
+
+    @staticmethod
+    def _missing(data: Any, band: int) -> Optional[float]:
+        """Return the value a windowed read of this band uses for "no data", in the units it returns.
+
+        Args:
+            data: The raster being read.
+            band: The 1-based band.
+
+        Returns:
+            The sentinel as the read returns it — scaled and offset when the band is packed, since a windowed
+            read unpacks its values — or `None` when the band declares none.
+
+        Note:
+            A native-resolution read masks through pyramids (`read_array(masked=True)`), which is the reliable
+            way and the one :func:`~digitalearth.base.arrays.read_masked_band` uses. A decimated read cannot:
+            pyramids refuses `masked=True` together with `out_shape=`, so until it does not
+            (serapeum-org/pyramids#1156) a viewport read compares against the sentinel itself.
+        """
+        sentinels = getattr(data, "no_data_value", None)
+        if not sentinels or band - 1 >= len(sentinels):
+            return None
+        sentinel = sentinels[band - 1]
+        if sentinel is None:
+            return None
+        scales = getattr(data, "scale", None) or [1.0]
+        offsets = getattr(data, "offset", None) or [0.0]
+        index = band - 1 if band - 1 < len(scales) else 0
+        scale = scales[index] if scales[index] is not None else 1.0
+        offset = (offsets[index] if index < len(offsets) else 0.0) or 0.0
+        return float(sentinel) * float(scale) + float(offset)
+
+    @classmethod
+    def _unmasked(cls, array: np.ndarray, data: Any, band: int) -> np.ndarray:
+        """Return a windowed read as floats, with its nodata cells set to `NaN`.
+
+        Args:
+            array: What the windowed read returned.
+            data: The raster it was read from.
+            band: The 1-based band.
+
+        Returns:
+            A `float64` array. Without this a nodata cell reaches the colour range as its sentinel —
+            -3.4e38 on `acc4000.tif` — which flattens every real value onto one end of the ramp.
+        """
+        values = np.asarray(array, dtype="float64")
+        sentinel = cls._missing(data, band)
+        if sentinel is not None:
+            values = np.where(values == sentinel, np.nan, values)
+        return values
+
+    @classmethod
+    def _read_window(
+        cls, data: Any, window: Bounds, width: int, height: int, band: int
+    ) -> np.ndarray:
+        """Read one window of a raster as floats, with its missing cells as `NaN`.
+
+        Args:
+            data: The raster to read.
+            window: The region, snapped to source pixels and in the source's CRS.
+            width: Cells across the canvas.
+            height: Cells down it.
+            band: The 1-based band.
+
+        Returns:
+            A `float64` array of `(height, width)`.
+
+        Note:
+            **Two reads, one meaning.** At full resolution the window is read with `masked=True`, so pyramids
+            decides what is missing — the only reliable answer, and the one a packed band needs, since its
+            nodata cells unpack to ordinary-looking numbers. Decimated, that is not available (pyramids
+            refuses `masked=True` with `out_shape=`, serapeum-org/pyramids#1156), so the read is compared
+            against the sentinel instead. The difference is visible: on `acc4000.tif` the resampler carries
+            values across the nodata boundary, so a decimated frame has fewer missing cells than the raster
+            does. Reading at full resolution when the window allows it is what keeps a zoomed-in frame honest.
+        """
+        native = cls._native_cells(window, data)
+        if native is not None and (width, height) == native:
+            values = np.ma.asarray(
+                data.read_array(band=band - 1, bbox=window.as_bbox(), masked=True)
+            ).astype("float64")
+            return np.ma.filled(values, np.nan)
+        return cls._unmasked(
             data.read_part(
                 bbox=window.as_bbox(),
                 dst_width=width,
                 dst_height=height,
                 bbox_crs=window.crs,
-                band=selection.first_band - 1,  # pyramids' windowed read is 0-based
-            )
+                band=band - 1,  # pyramids' windowed read is 0-based
+            ),
+            data,
+            band,
         )
-        rows, columns = array.shape[-2], array.shape[-1]
-        xs, ys = cls._axes(window, rows, columns, data)
-        return array, xs, ys, window.crs
+
+    @staticmethod
+    def _native(window: Bounds, data: Any, width: int, height: int) -> Tuple[int, int]:
+        """Return the canvas, never asking for more cells than the window holds at full resolution.
+
+        Args:
+            window: The region being read, in the source's CRS.
+            data: The raster being read.
+            width: The canvas width the budget allowed.
+            height: The canvas height it allowed.
+
+        Returns:
+            `(width, height)`, each capped at the number of source cells the window spans. Reading 100x100
+            cells from a 13x14 raster is interpolation dressed as data: it costs more, says no more, and is a
+            picture of the resampler rather than of the raster.
+        """
+        cells = SourceView._native_cells(window, data)
+        if cells is None:
+            return width, height
+        return min(width, cells[0]), min(height, cells[1])
+
+    @staticmethod
+    def _native_cells(window: Bounds, data: Any) -> Optional[Tuple[int, int]]:
+        """Return how many source cells a window spans, across and down.
+
+        Args:
+            window: The region, in the source's CRS.
+            data: The raster being read.
+
+        Returns:
+            `(across, down)`, or `None` when the source does not say what a cell measures — a reader with no
+            geotransform, which is windowed exactly as it was asked.
+
+            The two spacings are read separately. pyramids documents `Dataset.cell_size` as the *magnitude of
+            the x pixel size*, so using it for both axes counted the rows of any grid whose cells are not
+            square as if they were `dy/dx` times as many: a 20x10 raster of 1 x 4 m cells reported 20 x 40,
+            which broke `_native`'s promise never to ask for more cells than the window holds and, with it,
+            the native-resolution test that picks pyramids' reliable masking path (review M3).
+        """
+        across_step, down_step = SourceView._spacing(data)
+        if not across_step or not down_step:
+            return None
+        xmin, ymin, xmax, ymax = window.as_bbox()
+        across = max(1, int(round((xmax - xmin) / across_step)))
+        down = max(1, int(round((ymax - ymin) / down_step)))
+        return across, down
+
+    @staticmethod
+    def _spacing(data: Any) -> Tuple[Optional[float], Optional[float]]:
+        """Return what one cell of `data` measures, across and down.
+
+        Args:
+            data: The raster being read.
+
+        Returns:
+            `(dx, dy)` as positive magnitudes, from the source's geotransform where it has one — which is the
+            only place the two are stated separately — and from the square `cell_size` for both when it does
+            not. `(None, None)` for a source that says neither.
+        """
+        # Through `_grid`, which already reads the geotransform and rejects a zero step: two readings of
+        # one thing, with guards that disagreed, is how they drift apart (review N9).
+        grid = SourceView._grid(data)
+        if grid is not None:
+            _, step_x, _, step_y = grid
+            return abs(float(step_x)), abs(float(step_y))
+        cell = getattr(data, "cell_size", None)
+        if not cell:
+            return None, None
+        square = abs(float(cell))
+        return square, square
 
     @classmethod
     def _aligned(cls, window: Bounds, data: Any) -> Bounds:

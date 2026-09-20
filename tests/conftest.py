@@ -6,6 +6,33 @@ import pytest
 from geopandas.geodataframe import GeoDataFrame
 from pyramids.dataset import Dataset
 
+
+def pytest_addoption(parser):
+    """Register the options that switch the 3-D image baselines between rendering, comparing and generating.
+
+    Args:
+        parser: pytest's option parser.
+    """
+    group = parser.getgroup("image3d", "3-D image baselines (tests marked image3d)")
+    group.addoption(
+        "--image3d-compare",
+        action="store_true",
+        default=False,
+        help="compare each image3d render with its baseline in tests/baseline3d",
+    )
+    group.addoption(
+        "--image3d-generate",
+        action="store_true",
+        default=False,
+        help="write each image3d render as its new baseline in tests/baseline3d",
+    )
+    group.addoption(
+        "--image3d-results",
+        default=None,
+        help="directory to write the renders and baselines of image3d comparisons that fail",
+    )
+
+
 #: Committed Natural-Earth 110m assets (``ne_110m_*.geojson.gz``) that back the
 #: coastline/border/land/ocean/lake/river overlay tests.
 _NATURAL_EARTH_FIXTURES = Path(__file__).parent / "data" / "naturalearth"

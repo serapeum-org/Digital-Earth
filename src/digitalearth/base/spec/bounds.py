@@ -18,7 +18,7 @@ Reprojection is pyramids' job, not this package's: :meth:`Bounds.to_crs` delegat
 import warnings
 from dataclasses import dataclass
 from math import isfinite
-from typing import Any, Dict, List, Mapping, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -267,6 +267,174 @@ class Bounds:
                 float(np.nanmax(ys)),
                 crs,
             )
+
+    @classmethod
+    def cell_edges(cls, x: Any, y: Any, crs: Any, *, step: Any = None) -> "Bounds":
+        """Return the rectangle a raster's cells cover, from the axes through their centres.
+
+        A raster is a grid of cells, and its coordinates name the middle of each one. An extent taken from the
+        smallest and largest of those stops half a cell short on every side: the image is one cell narrower and
+        one shorter than the data, and every pixel is drawn at `(n - 1) / n` of its size. On
+        `examples/data/acc4000.tif` — 14 by 13 cells of 4,000 m — that is 2,000 m missing from each edge, and
+        the picture is wrong by exactly the amount nobody notices.
+
+        This is the rule that places one: half the outermost spacing outward on each side.
+
+        Args:
+            x: The cell-centre x coordinates, ascending or descending.
+            y: The cell-centre y coordinates, ascending or descending.
+            crs: What they are measured in, stored as given.
+            step: `(dx, dy)`, the cell size, for an axis with one cell — which has no spacing of its own to
+                read. `None` lets such an axis take the *other* axis' spacing, which is what a raster one row
+                tall or one column wide means: a row of square cells. When neither axis has two cells there
+                is nothing to borrow and the rectangle stays a point.
+
+        Returns:
+            The rectangle, ascending in both axes whichever way the axes run.
+
+        Raises:
+            ValueError: for an empty axis, for coordinates that are not numbers, or for a `step` that is not
+                a `(dx, dy)` pair. Each is named: this is on the hot path of two tiers, and numpy's own
+                `TypeError` says what it could not convert without saying which argument it came from.
+
+        Examples:
+            - Three cells of 10,000 m, centred at 5,000/15,000/25,000, cover 0 to 30,000:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> axis = [5000.0, 15000.0, 25000.0]
+                >>> Bounds.cell_edges(axis, axis, crs=32618).as_bbox()
+                [0.0, 0.0, 30000.0, 30000.0]
+
+                ```
+            - A descending axis — the row order a north-up raster is stored in — covers the same rectangle:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds.cell_edges([5.0, 15.0, 25.0], [25.0, 15.0, 5.0], crs=4326).as_bbox()
+                [0.0, 0.0, 30.0, 30.0]
+
+                ```
+            - A single cell has no spacing to read, so its width is given or it stays a line:
+                ```python
+                >>> from digitalearth.base.spec import Bounds
+                >>> Bounds.cell_edges([5.0], [5.0], crs=4326, step=(10.0, 10.0)).as_bbox()
+                [0.0, 0.0, 10.0, 10.0]
+
+                ```
+        """
+        xs, ys = cls._axis_values(x, "x"), cls._axis_values(y, "y")
+        if xs.size == 0 or ys.size == 0:
+            raise ValueError(
+                "Bounds.cell_edges needs coordinates on both axes; got "
+                f"{xs.size} x and {ys.size} y"
+            )
+        steps = cls._checked_step(step)
+        # A lone cell has no spacing of its own, so it borrows the other axis's: a raster one row tall is a
+        # row of square cells, not a line of zero height. Without this a 1 x 25 raster was placed on a
+        # rectangle with no height at all and drawn invisible (review M4). A caller who knows better says so
+        # with `step=`, and an axis whose partner is also degenerate stays a point.
+        # A named spacing is the caller's answer for *that* axis; the other axis' spacing is only borrowed
+        # where they did not give one. Reading the derived spacings alone meant `step=(10, None)` collapsed
+        # the y axis to a point although the caller had named the x cell size (review L11).
+        across = steps[0] if steps[0] is not None else cls._spacing(ys) or steps[1]
+        down = steps[1] if steps[1] is not None else cls._spacing(xs) or steps[0]
+        west, east = cls._edges(xs, across)
+        south, north = cls._edges(ys, down)
+        return cls(west, south, east, north, crs)
+
+    @staticmethod
+    def _checked_step(step: Any) -> Tuple[Any, Any]:
+        """Return the `(dx, dy)` a caller named, refusing anything that is not one.
+
+        Args:
+            step: What the caller passed for `step`, or `None`.
+
+        Returns:
+            `(dx, dy)` as given, or `(None, None)` for `None`.
+
+        Raises:
+            ValueError: for anything that is not a pair of two numbers — including a string, which unpacks
+                two characters just as happily, and a triple, whose third value was silently ignored
+                (review L11).
+        """
+        if step is None:
+            return (None, None)
+        if isinstance(step, (str, bytes)) or not isinstance(step, Sequence):
+            raise ValueError(
+                f"Bounds.cell_edges step must be a (dx, dy) pair; got {step!r}"
+            )
+        if len(step) != 2:
+            raise ValueError(
+                f"Bounds.cell_edges step must be a (dx, dy) pair; got {len(step)} values"
+            )
+        for value in step:
+            if value is not None and not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"Bounds.cell_edges step must be a (dx, dy) pair of numbers; got {step!r}"
+                )
+        return (step[0], step[1])
+
+    @staticmethod
+    def _axis_values(axis: Any, name: str) -> Any:
+        """Return one axis' coordinates as a flat float array.
+
+        Args:
+            axis: What the caller passed for that axis.
+            name: `"x"` or `"y"`, for the message.
+
+        Returns:
+            The values, flattened.
+
+        Raises:
+            ValueError: when they are not numbers — naming the axis, which numpy's own `TypeError` cannot.
+        """
+        import numpy as np
+
+        try:
+            return np.asarray(axis, dtype="float64").ravel()
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Bounds.cell_edges needs numbers for {name}; got {type(axis).__name__} ({error})"
+            ) from None
+
+    @staticmethod
+    def _spacing(axis: Any) -> Optional[float]:
+        """Return the spacing between an axis' outermost cells, or `None` when it has only one.
+
+        Args:
+            axis: The cell centres along the axis.
+
+        Returns:
+            The magnitude of the gap at the axis' near end, which is what a cell measures there.
+        """
+        if axis.size < 2:
+            return None
+        ordered = np.sort(axis)
+        return abs(float(ordered[1] - ordered[0]))
+
+    @staticmethod
+    def _edges(axis: Any, step: Any) -> Tuple[float, float]:
+        """Return where one axis' cells start and end.
+
+        Args:
+            axis: The cell centres along the axis.
+            step: The cell size, for an axis with one cell; `None` leaves such an axis unwidened.
+
+        Returns:
+            `(low, high)`, ascending.
+        """
+        low, high = float(np.nanmin(axis)), float(np.nanmax(axis))
+        if axis.size > 1:
+            ordered = np.sort(axis)
+            # Half the outermost spacing at each end, so an irregular grid is placed by its own cells rather
+            # than by an average that fits none of them.
+            return (
+                low - 0.5 * float(ordered[1] - ordered[0]),
+                high + 0.5 * float(ordered[-1] - ordered[-2]),
+            )
+        if step is None:
+            return low, high
+        half = 0.5 * abs(float(step))
+        return low - half, high + half
 
     @staticmethod
     def _four(values: Sequence[float], label: str) -> Tuple[float, float, float, float]:

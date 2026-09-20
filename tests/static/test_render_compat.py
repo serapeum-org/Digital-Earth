@@ -9,39 +9,13 @@ from cleopatra.styling.scaling import ColorScale, ColorScaling
 
 from digitalearth.static.render_compat import (
     FLAT_STYLE_KEYS,
-    _coerce_color_scale,
     group_render_kwargs,
     prepare_plot_kwargs,
     relocate_flat_style,
 )
 
-
-@pytest.mark.parametrize(
-    "value, expected",
-    [
-        ("linear", ColorScale.LINEAR),
-        ("power", ColorScale.POWER),
-        ("lognorm", ColorScale.LOGNORM),
-        ("sym_log", ColorScale.SYM_LOGNORM),
-        ("symlog", ColorScale.SYM_LOGNORM),
-        ("sym_lognorm", ColorScale.SYM_LOGNORM),
-        ("sym-lognorm", ColorScale.SYM_LOGNORM),  # exact enum value
-        ("boundary", ColorScale.BOUNDARY_NORM),
-        ("boundary_norm", ColorScale.BOUNDARY_NORM),
-        ("MidPoint", ColorScale.MIDPOINT),  # case-insensitive
-        (ColorScale.POWER, ColorScale.POWER),  # already an enum
-    ],
-)
-def test_coerce_color_scale_maps_friendly_spellings(value, expected):
-    """Friendly color_scale spellings (and a real enum) coerce to the matching ColorScale member."""
-    assert _coerce_color_scale(value) is expected
-
-
-@pytest.mark.parametrize("value", ["bogus", "log"])
-def test_coerce_color_scale_rejects_unknown(value):
-    """An unrecognised color_scale raises a clear error rather than crashing opaquely at render time."""
-    with pytest.raises(ValueError, match="not a recognised colour scale"):
-        _coerce_color_scale(value)
+# The colour group is folded by `style_fold` and covered in `test_style_fold.py`; what it is asserted for
+# here is that it still arrives beside the groups this module folds itself.
 
 
 def test_group_render_kwargs_folds_each_group():
@@ -142,11 +116,15 @@ def test_prepare_plot_kwargs_rejects_points_overlay_on_unsupported_glyph():
 
 
 def test_group_render_kwargs_keeps_flat_member_when_group_object_present():
-    """A flat member passed alongside a built group object of the same group is left in place, not dropped."""
-    scaling = ColorScaling()
-    out = group_render_kwargs({"color": scaling, "gamma": 0.3})
-    assert out["color"] is scaling
-    assert out["gamma"] == 0.3
+    """A flat member passed alongside a built group object of the same group is left in place, not dropped.
+
+    The colour group is the exception: it refuses the pair instead, because forwarding both made cleopatra
+    answer with advice the caller had already followed (see `test_style_fold.py`).
+    """
+    contour = Contour(levels=3)
+    out = group_render_kwargs({"contour": contour, "labels": True})
+    assert out["contour"] is contour
+    assert out["labels"] is True
 
 
 def test_relocate_flat_style_pops_styling_leaves_constructor_options():
@@ -250,3 +228,16 @@ def test_orphaned_point_styling_names_the_keyword_the_caller_wrote():
     """
     with pytest.raises(ValueError, match=r"\['point_color'\]"):
         group_render_kwargs({"points": None, "point_color": "red"})
+
+
+def test_a_group_with_no_members_is_not_built():
+    """A fold that built an empty group would hand cleopatra a spec nobody asked for.
+
+    Test scenario:
+        The other arm of `_fold_group`'s early return, beside the built-group one: a call that names none
+        of a group's flat members leaves that group out entirely.
+    """
+    out = group_render_kwargs({"cmap": "viridis"})
+    assert "contour" not in out, out
+    assert "classify" not in out, out
+    assert out == {"cmap": "viridis"}, out

@@ -175,23 +175,20 @@ class _RecordingPlotter:
 def _stub_scene(component=None, error=None):
     """Build a Scene3DBase around a recording stub, with no real render window to leak.
 
-    `export_html` and `save` only ever touch `self.plotter`, so bypassing `__init__` keeps these tests free of
-    the VTK context a real `Scene3DBase(off_screen=True)` would open and never close.
+    `export_html` and `save` only ever touch `self.plotter`. A scene builds its own plotter only when one is
+    first asked for, so assigning the stub straight after construction means no VTK context is ever opened.
     """
-    scene = Scene3DBase.__new__(Scene3DBase)
+    scene = Scene3DBase(off_screen=True)
     scene.plotter = _RecordingPlotter(component=component, error=error)
-    scene.layers = []
-    scene.strict = False
     return scene
 
 
 def test_stub_scene_mirrors_the_real_attribute_set():
-    """`_stub_scene` builds the same attributes `Scene3DBase.__init__` does.
+    """`_stub_scene` carries the same attributes `Scene3DBase.__init__` builds.
 
     Test scenario:
-        The helper bypasses `__init__` to avoid opening a render window it would never close. That is only
-        safe while the two agree, so a third attribute added to `__init__` must fail here rather than silently
-        leaving the stub scenes half-built.
+        The helper once bypassed `__init__` to avoid opening a render window, which was only safe while it
+        copied every attribute by hand. It now goes through `__init__`, and this keeps it from drifting back.
     """
     real = Scene3DBase(off_screen=True)
     try:
@@ -458,7 +455,7 @@ class TestPyvistaVtkRoot:
             pyvista 0.49 caches its resolved backend there, and it can be any distribution name. Reading it
             first is what makes the comparison exact on the versions where the component branch is reachable.
         """
-        monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
+        monkeypatch.setattr(pv._vtk, "_VTK_ROOT", "cvista", raising=False)
         assert base._pyvista_vtk_root() == "cvista", (
             "the resolved root must win over the MRO walk"
         )
@@ -577,7 +574,7 @@ class TestVtkBuildReconciliation:
             `PYVISTA_VTK_BACKEND` can name any fork. A check that only recognises `vtk`-prefixed names would
             report both sides as `vtkmodules` and pass a genuinely mismatched pair.
         """
-        monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
+        monkeypatch.setattr(pv._vtk, "_VTK_ROOT", "cvista", raising=False)
         monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
         monkeypatch.delenv("VTK_MODULE_NAME", raising=False)
         scene = _stub_scene(component=_RecordingComponent())
@@ -595,7 +592,7 @@ class TestVtkBuildReconciliation:
             This is the working single-build setup. Blocking it would be worse than not checking at all — the
             error would tell the user to switch to the build they deliberately are not using.
         """
-        monkeypatch.setattr(base.pv._vtk, "_VTK_ROOT", "cvista", raising=False)
+        monkeypatch.setattr(pv._vtk, "_VTK_ROOT", "cvista", raising=False)
         monkeypatch.delitem(sys.modules, "vtk_module", raising=False)
         monkeypatch.setenv("VTK_MODULE_NAME", "cvista")
         component = _RecordingComponent()
@@ -854,6 +851,34 @@ class TestVerticalExaggeration:
             assert scene.vertical_exaggeration == 2.5, (
                 "The scene must report the exaggeration it was set to"
             )
+        finally:
+            scene.close()
+
+    def test_a_scale_set_before_the_window_exists_reaches_it(self):
+        """The exaggeration belongs to the scene, so the window built later is born carrying it.
+
+        Test scenario:
+            The setter has nothing to set when `_plotter` is None — it stores the value — so the *only*
+            place that value reaches a render window is the builder in the `plotter` property. Nothing
+            covered that path before, which is how a guard on it could be changed unnoticed.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            scene.vertical_exaggeration = 2.0
+            assert list(scene.plotter.scale) == [1.0, 1.0, 2.0], scene.plotter.scale
+        finally:
+            scene.close()
+
+    def test_a_scene_nobody_exaggerated_builds_an_unscaled_window(self):
+        """The other arm of the same builder: true scale is what an untouched scene renders at.
+
+        Test scenario:
+            The builder applies the scene's scale unconditionally, so this is what says the identity case
+            is left exactly as a fresh plotter is.
+        """
+        scene = Scene3DBase(off_screen=True)
+        try:
+            assert list(scene.plotter.scale) == [1.0, 1.0, 1.0], scene.plotter.scale
         finally:
             scene.close()
 

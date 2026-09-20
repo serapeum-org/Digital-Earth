@@ -4,6 +4,8 @@
 builder accepts, and a typo was a silently ignored keyword rather than an error. These cover the declaration
 that replaces that, and the route/fold pair that is now the only translation between a declared style and the
 flat form the glyphs take.
+
+There are 27 today: `samples` joined them with #302, which is the count below and the reason for it.
 """
 
 import pytest
@@ -35,15 +37,17 @@ class TestTheDeclaredSchema:
         }, "every flat style key must be declared, and nothing else"
 
     def test_the_undeclared_count_is_the_one_the_plan_names(self):
-        """26 flat members, beside the 6 typed group parameters they fold into.
+        """27 flat members, beside the 6 typed group parameters they fold into.
 
         Test scenario:
-            The number the refactor plan and #274 are written against. Pinning it lets a later reader check
-            the claim rather than take it on trust.
+            The number the refactor plan and #274 are written against was 26. `samples` — the `equalize`
+            scale's resolution — is the 27th: it was a `ColorScaling` field with no flat key here, so
+            `color_scale="equalize", samples=64` reached cleopatra as a stray keyword and raised. #302
+            declared it. Pinning the count lets a later reader check the claim rather than take it on trust.
         """
         group_params = {"color", "contour", "data_style", "classify", "cells", "points"}
-        assert len(FLAT_STYLE_KEYS - group_params) == 26, (
-            "the flat members are the 26 keys DE-15 exists to declare"
+        assert len(FLAT_STYLE_KEYS - group_params) == 27, (
+            "the flat members are the 26 keys DE-15 exists to declare, plus #302's `samples`"
         )
 
     def test_every_key_says_what_it_controls(self):

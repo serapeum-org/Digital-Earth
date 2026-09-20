@@ -287,11 +287,13 @@ class TestRereading:
     """The capability the whole task exists for, against a real raster."""
 
     def test_a_view_can_be_read_again_at_another_resolution(self):
-        """`reread` returns the same slice, sized to the new request.
+        """`reread` returns the same slice, sized to the new request but never finer than the data.
 
         Test scenario:
-            This is what `interactive/raster.py` drives by hand and nothing else can reuse. The budget sets
-            the square side, exactly as its inline `max(64, sqrt(max_pixels))` does.
+            This is what `interactive/raster.py` drove by hand and nothing else could reuse. The budget sets
+            how many cells may be read; the source sets how many there are to read. `acc4000.tif` holds
+            13x14 cells, so a budget of 10,000 reads 13x14 — this test pinned 100x100 before #297, which was
+            a picture of the resampler rather than of the raster.
         """
         ref = DataRef(str(RASTER))
         view = SourceView.of(ref.open(), ref=ref, selection=Selection.of(1))
@@ -301,8 +303,8 @@ class TestRereading:
                 budget=10_000,
             )
         )
-        assert again.z.values.shape == (100, 100), (
-            f"a budget of 10,000 cells must read a 100x100 window, got {again.z.values.shape}"
+        assert again.z.values.shape == (13, 14), (
+            f"a whole-raster window must read the raster's own 13x14 cells, got {again.z.values.shape}"
         )
 
     def test_the_address_survives_the_reread(self):
@@ -1030,12 +1032,16 @@ class TestTheRemainingWindowArms:
             The conversion needs both ends. A windowable object with neither `epsg` nor `crs` gives no target,
             so converting would guess; instead the window stays in the CRS the request named, the only one its
             numbers are known to be in. The window is pixel-aligned, so snapping plays no part in the bbox.
+
+            The canvas is half the window's 4x4 cells, so the read is decimated and goes through `read_part`
+            — the call this test reads. At the window's own resolution it would be read with `read_array`
+            instead, which is the point of `_read_window`'s two paths.
         """
         reader = _WindowedReader(geotransform=(0.0, 1.0, 0.0, 8.0, 0.0, -1.0))
         view = SourceView.of(
             reader,
             request=ViewRequest(
-                bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=4, height=4
+                bounds=Bounds(1.0, 2.0, 5.0, 6.0, crs=4326), width=2, height=2
             ),
         )
         assert reader.calls == [
@@ -1184,3 +1190,257 @@ class TestTheRemainingWindowArms:
         assert merged == {"variable": "precip"}, (
             f"the new read's variable must stand alone, got {merged}"
         )
+
+
+class TestAWindowThatMissesTheSource:
+    """A viewport panned off the data draws nothing, rather than raising (#297)."""
+
+    class _Missing(Exception):
+        """Stands in for pyramids' out-of-bounds report, which this module matches by name."""
+
+    class _OffRaster:
+        """A raster whose every windowed read reports the window as out of bounds."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
+        no_data_value = (-9999.0,)
+
+        def read_part(self, **kwargs):
+            """Refuse every window.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OutOfBoundsError: always.
+            """
+            raise _out_of_bounds()
+
+        def read_array(self, **kwargs):
+            """Refuse every window.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OutOfBoundsError: always.
+            """
+            raise _out_of_bounds()
+
+    class _Broken:
+        """A raster whose reads fail for a reason that has nothing to do with the window."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 4.0, 4.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 4.0, 0.0, -1.0)
+        no_data_value = (-9999.0,)
+
+        def read_part(self, **kwargs):
+            """Fail the way a broken file does.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OSError: always.
+            """
+            raise OSError("the file is truncated")
+
+        def read_array(self, **kwargs):
+            """Fail the way a broken file does.
+
+            Args:
+                **kwargs: The window asked for.
+
+            Raises:
+                OSError: always.
+            """
+            raise OSError("the file is truncated")
+
+    def test_an_off_source_window_comes_back_empty(self):
+        """The canvas is all missing, which is what an empty place looks like."""
+        source = self._OffRaster()
+        ref = DataRef.to_object(source, name="off-source-view")
+        view = SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(
+                bounds=Bounds(10.0, 10.0, 12.0, 12.0, crs=4326), budget=64
+            ),
+        )
+        assert np.isnan(view.z.values).all(), view.z.values
+
+    def test_an_indexing_defect_is_not_a_viewport_off_the_edge(self):
+        """ "out of bounds" is what numpy says about a bad index, and it was read as "nothing here".
+
+        Test scenario:
+            The guard matched the phrase anywhere in the message, and
+            `IndexError: index 3 is out of bounds for axis 0 with size 2` is the most common error text in
+            Python. Any indexing defect reached through a windowed read came back as a silent all-`NaN`
+            canvas instead of a traceback (review M2).
+        """
+
+        class _Broken:
+            """A windowable reader whose read raises the commonest indexing error there is."""
+
+            bbox = (0.0, 0.0, 8.0, 8.0)
+            cell_size = 1.0
+            epsg = 4326
+
+            def read_part(self, **_kwargs):
+                """Raise the way numpy does for a bad index.
+
+                Raises:
+                    IndexError: always.
+                """
+                raise IndexError("index 3 is out of bounds for axis 0 with size 2")
+
+        reader = _Broken()
+        request = ViewRequest(bounds=Bounds(0.0, 0.0, 4.0, 4.0, crs=4326), budget=4)
+        with pytest.raises(IndexError, match="out of bounds"):
+            SourceView.of(reader, request=request)
+
+    def test_a_grid_with_tall_cells_is_counted_by_both_its_spacings(self):
+        """A cell is two numbers. Counting rows with the x spacing invents rows that are not there.
+
+        Test scenario:
+            pyramids documents `cell_size` as the magnitude of the *x* pixel size, and it was used for both
+            axes: a window over a 1 x 4 grid reported four times the rows it holds, so `_native`'s cap read
+            at the resampler's resolution rather than the raster's (review M3).
+        """
+
+        class _Tall:
+            """A reader whose cells are four times as tall as they are wide."""
+
+            bbox = (0.0, 0.0, 20.0, 40.0)
+            cell_size = 1.0
+            epsg = 4326
+            geotransform = (0.0, 1.0, 0.0, 40.0, 0.0, -4.0)
+
+        window = Bounds(0.0, 0.0, 20.0, 40.0, crs=4326)
+        assert SourceView._native_cells(window, _Tall()) == (20, 10), (
+            SourceView._native_cells(window, _Tall())
+        )
+
+    def test_a_degenerate_geotransform_falls_back_to_the_cell_size(self):
+        """A geotransform that states a zero spacing says nothing usable, so the square size is read."""
+
+        class _Zeroed:
+            """A reader whose geotransform carries no pixel size."""
+
+            bbox = (0.0, 0.0, 8.0, 8.0)
+            cell_size = 2.0
+            epsg = 4326
+            geotransform = (0.0, 0.0, 0.0, 8.0, 0.0, 0.0)
+
+        assert SourceView._spacing(_Zeroed()) == (2.0, 2.0), SourceView._spacing(
+            _Zeroed()
+        )
+
+    def test_a_square_grid_still_counts_by_its_cell_size(self):
+        """A reader with no geotransform says one number, and it means both axes."""
+
+        class _Square:
+            """A reader that states only a square cell size."""
+
+            bbox = (0.0, 0.0, 8.0, 8.0)
+            cell_size = 2.0
+            epsg = 4326
+
+        window = Bounds(0.0, 0.0, 8.0, 8.0, crs=4326)
+        assert SourceView._native_cells(window, _Square()) == (4, 4), (
+            SourceView._native_cells(window, _Square())
+        )
+
+    def test_a_read_that_failed_for_another_reason_still_raises(self):
+        """A truncated file is not an empty place, and is not hidden as one."""
+        source = self._Broken()
+        ref = DataRef.to_object(source, name="broken-view")
+        selection = Selection.of(1)
+        request = ViewRequest(bounds=Bounds(0.0, 0.0, 2.0, 2.0, crs=4326), budget=64)
+        with pytest.raises(OSError, match="truncated"):
+            SourceView.of(source, ref=ref, selection=selection, request=request)
+
+
+class TestMaskingAWindowedRead:
+    """What a decimated read calls missing, where pyramids cannot mask it (#297)."""
+
+    class _Packed:
+        """A raster whose band is packed, so its sentinel unpacks to an ordinary-looking number."""
+
+        epsg = 4326
+        bbox = (0.0, 0.0, 8.0, 8.0)
+        cell_size = 1.0
+        geotransform = (0.0, 1.0, 0.0, 8.0, 0.0, -1.0)
+        no_data_value = (-9999,)
+        scale = [0.01]
+        offset = [5.0]
+
+        def read_part(self, *, bbox, dst_width, dst_height, bbox_crs=None, band=0):
+            """Return a decimated window whose first cell is the unpacked sentinel.
+
+            Args:
+                bbox: The window.
+                dst_width: Cells across.
+                dst_height: Cells down.
+                bbox_crs: The window's CRS.
+                band: The 0-based band.
+
+            Returns:
+                The canvas, in physical units.
+            """
+            values = np.full((dst_height, dst_width), 7.0)
+            values[0, 0] = -9999 * 0.01 + 5.0
+            return values
+
+    def test_a_packed_sentinel_is_missing_in_the_units_the_read_returns(self):
+        """The sentinel is scaled and offset before it is compared, as the read's values are."""
+        source = self._Packed()
+        ref = DataRef.to_object(source, name="packed-view")
+        view = SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(bounds=Bounds(0.0, 0.0, 8.0, 8.0, crs=4326), budget=16),
+        )
+        assert int(np.isnan(view.z.values).sum()) == 1, view.z.values
+
+    @pytest.mark.parametrize("declared", [(), (None,)], ids=["no-entry", "no-value"])
+    def test_a_band_that_declares_no_sentinel_keeps_every_value(self, declared):
+        """Nothing is guessed: a raster with no nodata value has no missing cells.
+
+        Args:
+            declared: What the band says about its nodata value — nothing at all, or explicitly none.
+        """
+
+        class _Plain(TestMaskingAWindowedRead._Packed):
+            """The same raster, without a usable nodata value."""
+
+            no_data_value = declared
+
+        source = _Plain()
+        ref = DataRef.to_object(source, name="plain-view")
+        view = SourceView.of(
+            source,
+            ref=ref,
+            selection=Selection.of(1),
+            request=ViewRequest(bounds=Bounds(0.0, 0.0, 8.0, 8.0, crs=4326), budget=16),
+        )
+        assert not np.isnan(view.z.values).any(), view.z.values
+
+
+def _out_of_bounds() -> Exception:
+    """Return an exception named the way pyramids names its out-of-bounds report.
+
+    Returns:
+        The exception to raise.
+    """
+
+    class OutOfBoundsError(Exception):
+        """Named, not imported: the module matches by name so the tier does not depend on where it lives."""
+
+    return OutOfBoundsError("the window is outside the raster")
