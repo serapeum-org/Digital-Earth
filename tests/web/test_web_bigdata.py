@@ -9,7 +9,7 @@ import pytest
 from digitalearth.web import WebMap
 
 
-@pytest.fixture()
+@pytest.fixture
 def points_gdf():
     """Five points in lon/lat with a ``value`` column."""
     gpd = pytest.importorskip("geopandas")
@@ -21,7 +21,7 @@ def points_gdf():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygons_gdf():
     """Four triangles in lon/lat with a ``pop`` column."""
     gpd = pytest.importorskip("geopandas")
@@ -61,17 +61,20 @@ class TestBigDataBuildersNeedEngine:
         from maplibre.ipywidget import MapWidget
 
         m = WebMap().heatmap(points_gdf, weight="value")
-        assert len(m.layers) == 1 and m._last_layer_id is not None
+        assert len(m.layers) == 1
+        assert m._last_layer_id is not None
         assert isinstance(m.render(), MapWidget)
 
     def test_heatmap_rejects_polygons(self, polygons_gdf):
         """heatmap is point-only — polygons must raise, not render an empty layer (M4)."""
+        webMap = WebMap()
         with pytest.raises(TypeError, match="point geometries"):
-            WebMap().heatmap(polygons_gdf)
+            webMap.heatmap(polygons_gdf)
 
     def test_cluster_rejects_polygons(self, polygons_gdf):
+        webMap = WebMap()
         with pytest.raises(TypeError, match="point geometries"):
-            WebMap().cluster(polygons_gdf)
+            webMap.cluster(polygons_gdf)
 
     def test_cluster_registers_layer(self, points_gdf):
         from maplibre.ipywidget import MapWidget
@@ -85,7 +88,8 @@ class TestBigDataBuildersNeedEngine:
         assert len(m.layers) == 1, (
             "all deck layers share a single add_deck_layers applier"
         )
-        assert m._deck_layers is not None and len(m._deck_layers) == 2
+        assert m._deck_layers is not None
+        assert len(m._deck_layers) == 2
         assert m._deck_layers[0]["@@type"] == "GeoJsonLayer"
 
     def test_deck_polygons_layer_shape(self, polygons_gdf):

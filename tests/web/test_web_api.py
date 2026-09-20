@@ -11,7 +11,7 @@ from pyramids.feature import FeatureCollection
 from digitalearth.api import quickplot
 
 
-@pytest.fixture()
+@pytest.fixture
 def polys_fc(tmp_path):
     """A 4-polygon pyramids ``FeatureCollection`` (lon/lat) with a spread ``pop`` column for classifying."""
     gpd = pytest.importorskip("geopandas")
@@ -55,14 +55,16 @@ class TestWebBackendDraw:
 
         out = quickplot(dataset, backend="web")
         assert isinstance(out, WebMap)
-        assert len(out.layers) >= 1 and out._last_layer_id is not None
+        assert len(out.layers) >= 1
+        assert out._last_layer_id is not None
 
     def test_points_return_webmap(self):
         from digitalearth.web import WebMap
 
         fc = FeatureCollection.read_file("examples/data/rhine_gauges.geojson")
         out = quickplot(fc, backend="web")
-        assert isinstance(out, WebMap) and out._last_layer_id is not None
+        assert isinstance(out, WebMap)
+        assert out._last_layer_id is not None
 
     def test_polygons_choropleth_by_column(self, polys_fc):
         out = quickplot(polys_fc, backend="web", column="pop", k=4)
@@ -74,7 +76,8 @@ class TestWebBackendDraw:
         from digitalearth.web import WebMap
 
         out = quickplot(polys_fc, backend="web")
-        assert isinstance(out, WebMap) and len(out.layers) >= 1
+        assert isinstance(out, WebMap)
+        assert len(out.layers) >= 1
 
     def test_basemap_adds_underlay(self, polys_fc):
         out = quickplot(polys_fc, backend="web", column="pop", k=4, basemap=True)

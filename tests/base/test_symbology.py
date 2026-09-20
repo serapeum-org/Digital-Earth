@@ -60,9 +60,9 @@ class TestNullsToNone:
     def test_list_cell_is_kept_as_a_value(self):
         """A list-like cell reads as a non-null value (vectorized `pd.isna` stays elementwise), only None drops."""
         out = nulls_to_none(np.array(["a", [1, 2], None], dtype=object))
-        assert out[0] == "a" and out[1] == [1, 2] and out[2] is None, (
-            f"list cell must survive, got {out.tolist()}"
-        )
+        assert out[0] == "a", f"list cell must survive, got {out.tolist()}"
+        assert out[1] == [1, 2], f"list cell must survive, got {out.tolist()}"
+        assert out[2] is None, f"list cell must survive, got {out.tolist()}"
 
 
 def test_distinct_categories_get_distinct_colors():
@@ -74,7 +74,8 @@ def test_distinct_categories_get_distinct_colors():
 
 def test_colors_cycle_when_more_categories_than_cmap():
     cats, colors = categorical_colors(list(range(12)), cmap="tab10")
-    assert len(cats) == 12 and len(colors) == 12, "colours must cycle, never run out"
+    assert len(cats) == 12, "colours must cycle, never run out"
+    assert len(colors) == 12, "colours must cycle, never run out"
 
 
 def test_drops_null_and_nan():
@@ -84,17 +85,20 @@ def test_drops_null_and_nan():
 
 def test_numeric_categories_sorted():
     cats, colors = categorical_colors([3, 1, 2, 1])
-    assert cats == [1, 2, 3] and len(colors) == 3
+    assert cats == [1, 2, 3]
+    assert len(colors) == 3
 
 
 def test_unsortable_mixed_keeps_first_seen_order():
     cats, _ = categorical_colors(["b", 1, "a"])  # str vs int → not mutually comparable
-    assert set(cats) == {"b", 1, "a"} and len(cats) == 3
+    assert set(cats) == {"b", 1, "a"}
+    assert len(cats) == 3
 
 
 def test_empty_raises():
+    float2 = float("nan")
     with pytest.raises(ValueError, match="no non-null"):
-        categorical_colors([None, float("nan")])
+        categorical_colors([None, float2])
 
 
 def test_resolve_categorical_cmap_swaps_continuous_default():

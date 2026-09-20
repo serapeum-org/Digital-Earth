@@ -95,6 +95,55 @@ def load_magics_library() -> Dict[str, dict]:
     return yaml.safe_load(_MAGICS_LIBRARY.read_text(encoding="utf-8")) or {}
 
 
+def _matches_name(params: Dict[str, Any], needle: str) -> bool:
+    """Whether an entry's aliases match a field's name, anchored at a token start.
+
+    Args:
+        params: One library entry.
+        needle: The lower-cased field name.
+
+    Returns:
+        `True` for a hit. Anchoring is what stops ``"tp"`` matching inside ``"output"``.
+    """
+    return any(
+        _alias_in(str(pattern).lower(), needle)
+        for pattern in _as_list(params.get("match"))
+    )
+
+
+def _matches_standard_name(params: Dict[str, Any], needle: str) -> bool:
+    """Whether an entry lists a field's CF ``standard_name``, case-insensitively.
+
+    Args:
+        params: One library entry.
+        needle: The lower-cased standard name.
+
+    Returns:
+        `True` for an exact hit.
+    """
+    return needle in [
+        str(value).lower() for value in _as_list(params.get("standard_name"))
+    ]
+
+
+def _matches_units(params: Dict[str, Any], needle: str) -> bool:
+    """Whether an entry lists a field's units, case-insensitively.
+
+    Only distinctive units are listed in the library, so that a plain ``"m"`` does not collide with
+    elevation; this is the narrow last resort, not a general fallback.
+
+    Args:
+        params: One library entry.
+        needle: The lower-cased units string.
+
+    Returns:
+        `True` for an exact hit.
+    """
+    return needle in [
+        str(value).lower() for value in _as_list(params.get("match_units"))
+    ]
+
+
 def magics_style(
     name: Optional[str] = None,
     standard_name: Optional[str] = None,
@@ -157,28 +206,17 @@ def magics_style(
         load_magics_library: The operational style library this matcher reads.
     """
     lib = library if library is not None else load_magics_library()
-    name_l = str(name or "").lower()
-    sname_l = str(standard_name or "").lower()
-    units_l = str(units or "").lower()
-
-    # 1) by name — each entry's aliases, case-insensitive and anchored at a token start (the primary key).
-    if name_l:
+    # The three passes in the order Magics prefers them, each a (needle, does-this-entry-match) pair. The
+    # first hit wins, and an absent needle skips its pass rather than matching everything.
+    passes = (
+        (str(name or "").lower(), _matches_name),
+        (str(standard_name or "").lower(), _matches_standard_name),
+        (str(units or "").lower(), _matches_units),
+    )
+    for needle, matches in passes:
+        if not needle:
+            continue
         for params in lib.values():
-            if any(
-                _alias_in(str(pat).lower(), name_l)
-                for pat in _as_list(params.get("match"))
-            ):
-                return _style_of(params)
-    # 2) by CF standard_name — exact, case-insensitive.
-    if sname_l:
-        for params in lib.values():
-            if sname_l in [
-                str(s).lower() for s in _as_list(params.get("standard_name"))
-            ]:
-                return _style_of(params)
-    # 3) by units — exact, case-insensitive; narrow last-resort fallback.
-    if units_l:
-        for params in lib.values():
-            if units_l in [str(u).lower() for u in _as_list(params.get("match_units"))]:
+            if matches(params, needle):
                 return _style_of(params)
     return None

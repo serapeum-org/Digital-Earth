@@ -46,9 +46,8 @@ class TestBatch:
     def test_render_one_from_object(self, dataset):
         """render_one passes an in-memory pyramids object straight through to the plotter."""
         m = Batch(colorbar=False).render_one(dataset, crs=dataset.epsg)
-        assert isinstance(m, Map) and len(m.layers) == 1, (
-            "expected one drawn layer on a Map"
-        )
+        assert isinstance(m, Map), "expected one drawn layer on a Map"
+        assert len(m.layers) == 1, "expected one drawn layer on a Map"
 
     def test_render_one_from_path(self, tmp_path, dataset):
         """render_one reads a path input via pyramids before plotting."""
@@ -136,8 +135,9 @@ class TestVectorPaths:
         """
         bogus = tmp_path / "not_geo.tif"
         bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
+        str2 = str(bogus)
         with pytest.raises(RuntimeError, match="not recognized") as exc:
-            load_input(str(bogus))
+            load_input(str2)
         assert exc.value.__cause__ is not None, (
             "the raster cause should be chained onto the vector error"
         )

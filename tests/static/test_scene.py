@@ -17,7 +17,8 @@ def _render(scene, arr, kind="imshow"):
 def test_scene_creates_its_own_axes():
     """A Scene with no axes creates exactly one figure/axes."""
     scene = Scene()
-    assert scene.fig is not None and scene.ax is not None
+    assert scene.fig is not None
+    assert scene.ax is not None
     assert len(scene.fig.axes) == 1
 
 
@@ -105,7 +106,8 @@ def test_accepts_external_axes():
 
     fig, ax = plt.subplots()
     scene = Scene(ax=ax, fig=fig)
-    assert scene.ax is ax and scene.fig is fig
+    assert scene.ax is ax
+    assert scene.fig is fig
 
 
 class _FakeGlyph:

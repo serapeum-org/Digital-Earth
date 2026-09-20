@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Sequence
 
 from digitalearth.base.deprecation import renamed_method, renamed_parameter
 from digitalearth.web.base import _require_layer_api
+from digitalearth.web.bigdata import DECK_TYPE_KEY
 
 #: Default DEM for ``terrain`` — AWS Terrain Tiles (open data), terrarium-encoded terrain-RGB. MapLibre terrain
 #: needs a served ``raster-dem`` tile source, so the default is hosted tiles; to use your own DEM, encode it to
@@ -327,7 +328,7 @@ class ThreeDMixin(_MixinBase):
             z_column,
         )
         layer = {
-            "@@type": "PointCloudLayer",
+            DECK_TYPE_KEY: "PointCloudLayer",
             "id": self._uid("deck-pointcloud"),
             "data": data,
             "getPosition": "@@=position",
@@ -352,7 +353,7 @@ class ThreeDMixin(_MixinBase):
         """
         _require_layer_api()
         layer = {
-            "@@type": "Tile3DLayer",
+            DECK_TYPE_KEY: "Tile3DLayer",
             "id": self._uid("deck-tiles3d"),
             "data": url,
             "opacity": float(opacity),
@@ -384,7 +385,7 @@ class ThreeDMixin(_MixinBase):
         """
         _require_layer_api()
         layer = {
-            "@@type": "ScenegraphLayer",
+            DECK_TYPE_KEY: "ScenegraphLayer",
             "id": self._uid("deck-gltf"),
             "data": [{"position": [float(lng), float(lat)]}],
             "scenegraph": url,

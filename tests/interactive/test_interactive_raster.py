@@ -14,7 +14,7 @@ hv = pytest.importorskip("holoviews")
 pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
@@ -93,7 +93,8 @@ class TestImage:
     def test_bokeh_frame_and_hover_are_bokeh_only(self, m, dataset):
         m.image(dataset)
         plot = hv.Store.lookup_options("bokeh", m.layers[0], "plot").kwargs
-        assert plot["width"] == m.width and plot["height"] == m.height
+        assert plot["width"] == m.width
+        assert plot["height"] == m.height
         assert "hover" in plot["tools"], f"hover tool missing: {plot.get('tools')}"
 
     def test_nodata_renders_as_nan(self, m, dataset):

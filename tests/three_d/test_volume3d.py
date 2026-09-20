@@ -33,7 +33,8 @@ def test_volume_registers_and_renders():
     """volume() ray-casts a cube, registers one layer, and produces a non-empty frame."""
     scene = Scene3D(off_screen=True)
     actor = scene.volume(_gaussian_cube())
-    assert actor is not None and len(scene.layers) == 1
+    assert actor is not None
+    assert len(scene.layers) == 1
     img = scene.screenshot()
     assert img.ndim == 3 and bool(img.any())
     scene.close()
@@ -61,8 +62,9 @@ def test_cube_reads_datasetcollection_values():
 
 def test_non_3d_input_raises():
     """A 2-D array is rejected (volume needs a cube)."""
+    zeros = np.zeros((4, 4))
     with pytest.raises(ValueError):
-        _cube(np.zeros((4, 4)))
+        _cube(zeros)
 
 
 def test_isosurface_auto_levels():

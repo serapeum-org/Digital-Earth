@@ -13,7 +13,7 @@ hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
@@ -34,8 +34,9 @@ class TestTiles:
             m.tiles("NotARealProvider")
 
     def test_non_mercator_map_raises(self):
+        interactiveMap = InteractiveMap(crs=4326)
         with pytest.raises(ValueError, match="crs=3857"):
-            InteractiveMap(crs=4326).tiles()
+            interactiveMap.tiles()
 
     def test_chains(self, m):
         assert m.tiles() is m
@@ -45,7 +46,8 @@ class TestTiles:
         m = InteractiveMap(tiles="CartoLight")
         m.image(dataset)
         first = m.render()
-        assert isinstance(first, hv.Overlay) and len(first) == 2
+        assert isinstance(first, hv.Overlay)
+        assert len(first) == 2
         assert isinstance(m.layers[0], gv.element.WMTS)
         again = m.render()
         assert len(again) == 2, "re-rendering must not stack a second tile layer"
@@ -70,7 +72,8 @@ class TestTiles:
 
     def test_list_tile_providers_is_nonempty_sorted(self, m):
         providers = m.list_tile_providers()
-        assert "CartoLight" in providers and "OSM" in providers
+        assert "CartoLight" in providers
+        assert "OSM" in providers
         assert providers == sorted(providers), "provider catalog must be sorted"
 
     def test_keyed_provider_without_key_raises(self, m):
@@ -115,8 +118,9 @@ class TestCoastlinesAndFeatures:
         assert m.layers == []
 
     def test_non_mercator_features_raise(self):
+        interactiveMap = InteractiveMap(crs=4326)
         with pytest.raises(ValueError, match="crs=3857"):
-            InteractiveMap(crs=4326).coastlines()
+            interactiveMap.coastlines()
 
 
 class TestTogglesAndCompose:

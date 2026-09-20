@@ -34,7 +34,7 @@ class TestInteractiveCharts:
     def _need_engine(self):
         pytest.importorskip("holoviews")
 
-    @pytest.fixture()
+    @pytest.fixture
     def gdf(self):
         gpd = pytest.importorskip("geopandas")
         from shapely.geometry import Point

@@ -36,9 +36,9 @@ class TestGetStack:
         stack = get_stack(three_band, (1, 2, 3))
         assert stack.shape == (2, 2, 3), f"expected (2,2,3), got {stack.shape}"
         assert stack.dtype == np.float64, f"expected float64, got {stack.dtype}"
-        assert (
-            stack[0, 0, 0] == 1.0 and stack[0, 0, 1] == 10.0 and stack[0, 0, 2] == 100.0
-        ), f"band order/values wrong: {stack[0, 0]}"
+        assert stack[0, 0, 0] == 1.0, f"band order/values wrong: {stack[0, 0]}"
+        assert stack[0, 0, 1] == 10.0, f"band order/values wrong: {stack[0, 0]}"
+        assert stack[0, 0, 2] == 100.0, f"band order/values wrong: {stack[0, 0]}"
 
     def test_custom_band_order(self, three_band):
         """get_stack honours an arbitrary band order.
@@ -48,9 +48,8 @@ class TestGetStack:
         """
         stack = get_stack(three_band, (3, 1))
         assert stack.shape == (2, 2, 2), f"expected (2,2,2), got {stack.shape}"
-        assert stack[0, 0, 0] == 100.0 and stack[0, 0, 1] == 1.0, (
-            f"order wrong: {stack[0, 0]}"
-        )
+        assert stack[0, 0, 0] == 100.0, f"order wrong: {stack[0, 0]}"
+        assert stack[0, 0, 1] == 1.0, f"order wrong: {stack[0, 0]}"
 
     def test_masks_nodata_by_default(self):
         """get_stack nulls nodata cells per band when mask=True (the default).

@@ -651,8 +651,9 @@ class TestVisibility:
     """Far-side culling keeps overlays from being drawn through the sphere."""
 
     def test_visibility_needs_a_drawn_globe(self, globe):
+        array = np.array([[1.0, 0.0, 0.0]])
         with pytest.raises(RuntimeError, match="draw"):
-            globe.visible(np.array([[1.0, 0.0, 0.0]]))
+            globe.visible(array)
 
     def test_the_camera_facing_hemisphere_is_visible(self, globe):
         globe.draw(elev=0.0, azim=0.0)
@@ -846,8 +847,9 @@ class TestPoints:
 
     def test_input_without_geometry_is_refused(self, globe):
         globe.draw()
+        object2 = object()
         with pytest.raises(ValueError, match="FeatureCollection"):
-            globe.points(object())
+            globe.points(object2)
 
 
 class TestOverlaysFollowTheSpin:
@@ -2362,8 +2364,9 @@ class TestRenderLifecycle:
             globe.animate(n_frames=frames, interval=100)
 
     def test_saving_before_drawing_is_refused(self, globe, tmp_path):
+        str2 = str(tmp_path / "globe.png")
         with pytest.raises(RuntimeError, match="draw"):
-            globe.save(str(tmp_path / "globe.png"))
+            globe.save(str2)
 
     def test_save_writes_a_file(self, globe, tmp_path):
         globe.draw()
@@ -2373,8 +2376,9 @@ class TestRenderLifecycle:
         assert out.stat().st_size > 0, f"{out} is empty"
 
     def test_saving_an_animation_before_animating_is_refused(self, globe, tmp_path):
+        str2 = str(tmp_path / "globe.mp4")
         with pytest.raises(RuntimeError, match="no animation"):
-            globe.save_animation(str(tmp_path / "globe.mp4"))
+            globe.save_animation(str2)
 
     def test_save_animation_forwards_to_the_shared_saver(self, globe, monkeypatch):
         """The globe delegates to digitalearth.static.animation rather than reimplementing the encode."""
@@ -2425,8 +2429,9 @@ class TestRenderLifecycle:
         assert globe.fig is fig, "fig should follow the supplied axes"
 
     def test_stamping_before_drawing_is_refused(self, globe):
+        zeros = np.zeros((4, 4, 4), dtype=np.uint8)
         with pytest.raises(RuntimeError, match="draw"):
-            globe.stamp(np.zeros((4, 4, 4), dtype=np.uint8))
+            globe.stamp(zeros)
 
     def test_stamp_adds_an_axes_to_the_figure(self, globe):
         fig, _ = globe.draw()

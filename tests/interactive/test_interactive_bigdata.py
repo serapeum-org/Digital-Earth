@@ -16,7 +16,7 @@ gv = pytest.importorskip("geoviews")
 rng = np.random.default_rng(1337)
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
@@ -203,7 +203,7 @@ class TestAutoRouting:
 class TestTrajectory:
     """``trajectory`` — NaN-separated track datashading (DI.2b)."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def tracks(self):
         """Three seeded random-walk tracks (3 x 2,000 points) with a track id and a class."""
         import geopandas as gpd

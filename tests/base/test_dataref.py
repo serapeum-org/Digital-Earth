@@ -149,8 +149,9 @@ class TestTheRegistry:
         Test scenario:
             Both look identical otherwise, and the second is the one a user cannot debug.
         """
+        dataRef = DataRef("nosuchscheme://x")
         with pytest.raises(KeyError, match="known schemes are"):
-            DataRef("nosuchscheme://x").open()
+            dataRef.open()
 
     def test_the_entry_point_group_is_the_shared_contract_string(self):
         """The registry advertises the same group the plugin loader already discovers.

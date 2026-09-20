@@ -45,8 +45,10 @@ class TestRgbaPngDataUri:
         assert rgba[2, 3, 3] > 0.0, "a valid cell must be opaque"
 
     def test_all_nonfinite_raises(self):
+        full = np.full((2, 2), np.nan)
+        webMap = WebMap()
         with pytest.raises(ValueError, match="no finite values"):
-            WebMap()._rgba_png_datauri(np.full((2, 2), np.nan), "viridis")
+            webMap._rgba_png_datauri(full, "viridis")
 
     def test_constant_band_does_not_crash(self):
         uri = WebMap()._rgba_png_datauri(np.full((2, 2), 5.0), "viridis")

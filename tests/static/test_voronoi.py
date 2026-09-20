@@ -108,5 +108,6 @@ def test_voronoi_empty_raises():
     empty = FeatureCollection(
         gpd.GeoDataFrame({"fid": []}, geometry=[], crs="EPSG:4326")
     )
+    map = Map(crs=4326)
     with pytest.raises(ValueError):
-        Map(crs=4326).voronoi(empty)
+        map.voronoi(empty)

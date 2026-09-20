@@ -10,7 +10,7 @@ import pytest
 from digitalearth.web import WebMap
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygons_gdf():
     """Three triangles in lon/lat with a ``pop`` column."""
     gpd = pytest.importorskip("geopandas")
@@ -24,7 +24,7 @@ def polygons_gdf():
     return gpd.GeoDataFrame({"pop": [10.0, 50.0, 90.0]}, geometry=geoms, crs=4326)
 
 
-@pytest.fixture()
+@pytest.fixture
 def points_gdf():
     """Four points in lon/lat with an ``elev`` column."""
     gpd = pytest.importorskip("geopandas")
@@ -51,7 +51,8 @@ class TestPointCloudData:
     def test_from_geodataframe_uses_z_column(self, points_gdf):
         rows = WebMap()._point_cloud_data(points_gdf, "elev")
         assert len(rows) == 4
-        assert rows[0]["position"][2] == 5.0 and rows[3]["position"][2] == 35.0
+        assert rows[0]["position"][2] == 5.0
+        assert rows[3]["position"][2] == 35.0
 
 
 class TestThreeDNeedEngine:
@@ -65,7 +66,8 @@ class TestThreeDNeedEngine:
         from maplibre.ipywidget import MapWidget
 
         m = WebMap().extrusion(polygons_gdf, height="pop", column="pop")
-        assert len(m.layers) == 1 and m._last_layer_id is not None
+        assert len(m.layers) == 1
+        assert m._last_layer_id is not None
         assert isinstance(m.render(), MapWidget)
 
     def test_extrusion_constant_height(self, polygons_gdf):

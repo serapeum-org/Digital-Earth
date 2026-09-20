@@ -283,7 +283,8 @@ class TestPolygonsOf:
         )
         gc = GeometryCollection([a, Point(5, 5)])
         out = Map._polygons_of(gc)
-        assert len(out) == 1 and out[0].geom_type == "Polygon", (
+        assert len(out) == 1, "GeometryCollection should keep only polygons"
+        assert out[0].geom_type == "Polygon", (
             "GeometryCollection should keep only polygons"
         )
 

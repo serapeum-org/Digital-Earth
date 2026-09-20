@@ -31,23 +31,29 @@ from digitalearth.web.base import _require_layer_api, _require_maplibre
 # Note (#247): `tiles()` takes a URL while `basemap()` takes a provider name; the rename that settles that
 # collision belongs to the Core contract, not here.
 
+#: The attribution every OpenStreetMap-derived tile set must carry, and the CARTO variant three of them add
+#: to it. Written once because they are a legal requirement rather than a label: a typo in one copy is a
+#: provider credited wrongly on one basemap and correctly on the others.
+_OSM_ATTRIBUTION = "© OpenStreetMap contributors"
+_CARTO_ATTRIBUTION = f"{_OSM_ATTRIBUTION} © CARTO"
+
 #: Named raster XYZ basemaps → ``(url_template, attribution)``. All are token-free public tile services.
 _BASEMAP_PROVIDERS = {
     "cartodark": (
         "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "© OpenStreetMap contributors © CARTO",
+        _CARTO_ATTRIBUTION,
     ),
     "cartolight": (
         "https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png",
-        "© OpenStreetMap contributors © CARTO",
+        _CARTO_ATTRIBUTION,
     ),
     "cartovoyager": (
         "https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "© OpenStreetMap contributors © CARTO",
+        _CARTO_ATTRIBUTION,
     ),
     "osm": (
         "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "© OpenStreetMap contributors",
+        _OSM_ATTRIBUTION,
     ),
 }
 

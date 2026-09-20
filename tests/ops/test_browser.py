@@ -40,7 +40,8 @@ class TestGallery:
         """Custom captions replace file names and the column count reaches the CSS grid."""
         page = gallery([png], tmp_path / "g.html", columns=5, captions=["Lisbon DEM"])
         text = page.read_text(encoding="utf-8")
-        assert "Lisbon DEM" in text and "repeat(5, 1fr)" in text
+        assert "Lisbon DEM" in text
+        assert "repeat(5, 1fr)" in text
 
     def test_creates_parent_directories(self, tmp_path, png):
         """gallery creates missing parent directories of the output path."""

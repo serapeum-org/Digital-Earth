@@ -109,10 +109,11 @@ def test_prepare_plot_kwargs_rejects_points_overlay_on_unsupported_glyph():
     glyph = ScatterGlyph(
         np.array([0.0, 1]), np.array([0.0, 1]), values=np.array([1.0, 2])
     )
+    zeros = np.zeros((2, 3))
     with pytest.raises(
         ValueError, match=r"does not support the styling option\(s\).*points"
     ):
-        prepare_plot_kwargs(glyph, {"points": np.zeros((2, 3))})
+        prepare_plot_kwargs(glyph, {"points": zeros})
 
 
 def test_group_render_kwargs_keeps_flat_member_when_group_object_present():

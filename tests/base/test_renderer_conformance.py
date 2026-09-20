@@ -250,8 +250,9 @@ class RendererConformance:
         """
         self.contract.draw_one(tier)
         held = tier.figure_spec
+        refused_figure = self.contract.refused_figure(tier)
         with pytest.raises((KeyError, ValueError)):
-            self.contract.apply_figure(tier, self.contract.refused_figure(tier))
+            self.contract.apply_figure(tier, refused_figure)
         assert tier.figure_spec == held, "the tier kept a figure it could not draw"
 
     def test_closing_the_tier_lets_its_registered_data_go(self, tier):

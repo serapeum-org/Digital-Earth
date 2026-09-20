@@ -177,7 +177,7 @@ class TestHistogram:
 class TestAggregateByCategory:
     """Tests for charts.bar_by / line_by (DC.4) and the grouped_series helper."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def gdf(self):
         gpd = pytest.importorskip("geopandas")
         from shapely.geometry import Point
@@ -231,10 +231,10 @@ class TestAggregateByCategory:
     def test_exported_top_level(self):
         import digitalearth
 
-        assert digitalearth.bar_by is charts.bar_by and "bar_by" in digitalearth.__all__
-        assert (
-            digitalearth.line_by is charts.line_by and "line_by" in digitalearth.__all__
-        )
+        assert digitalearth.bar_by is charts.bar_by
+        assert "bar_by" in digitalearth.__all__
+        assert digitalearth.line_by is charts.line_by
+        assert "line_by" in digitalearth.__all__
 
 
 class TestScatter:
@@ -285,9 +285,8 @@ class TestScatter:
     def test_exported_top_level(self):
         import digitalearth
 
-        assert (
-            digitalearth.scatter is charts.scatter and "scatter" in digitalearth.__all__
-        )
+        assert digitalearth.scatter is charts.scatter
+        assert "scatter" in digitalearth.__all__
 
 
 class TestStatistics:
@@ -303,25 +302,27 @@ class TestStatistics:
     def test_custom_quantiles(self):
         """Requested quantiles appear under q<pct> keys."""
         s = charts.statistics(range(101), quantiles=(0.1, 0.9))
-        assert s["q10"] == 10.0 and s["q90"] == 90.0
+        assert s["q10"] == 10.0
+        assert s["q90"] == 90.0
         assert "q50" not in s, "only the requested quantiles should be present"
 
     def test_fractional_quantiles_get_distinct_keys(self):
         """Near-equal quantiles map to distinct keys instead of colliding on one (N2)."""
         s = charts.statistics(range(1001), quantiles=(0.5, 0.505))
-        assert "q50" in s and "q50.5" in s, (
-            f"fractional quantiles must not collide: {sorted(s)}"
-        )
+        assert "q50" in s, f"fractional quantiles must not collide: {sorted(s)}"
+        assert "q50.5" in s, f"fractional quantiles must not collide: {sorted(s)}"
 
     def test_colliding_quantile_keys_raise(self):
         """Two quantiles that format to the same key raise instead of silently overwriting (N2)."""
+        range2 = range(101)
         with pytest.raises(ValueError, match="collide on key"):
-            charts.statistics(range(101), quantiles=(0.5, 0.5000001))
+            charts.statistics(range2, quantiles=(0.5, 0.5000001))
 
     def test_drops_nonfinite(self):
         """NaN/inf are excluded from the summary."""
         s = charts.statistics([1.0, np.nan, 3.0, np.inf])
-        assert s["count"] == 2 and s["mean"] == 2.0
+        assert s["count"] == 2
+        assert s["mean"] == 2.0
 
     def test_geodataframe_column(self):
         """A GeoDataFrame column is summarised when `column` is given."""
@@ -345,7 +346,9 @@ class TestStatistics:
             geo_ref=GeoReference(geo=(0.0, 1.0, 0.0, 2.0, 0.0, -1.0), epsg=4326),
         )
         s = charts.statistics(ds)
-        assert s["count"] == 3 and s["min"] == 1.0 and s["max"] == 3.0
+        assert s["count"] == 3
+        assert s["min"] == 1.0
+        assert s["max"] == 3.0
 
     def test_empty_raises(self):
         with pytest.raises(ValueError, match="no finite values"):

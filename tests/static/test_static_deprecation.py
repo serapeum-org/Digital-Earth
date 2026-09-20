@@ -47,7 +47,8 @@ class TestStaticGlyphDeprecation:
         """
         with pytest.warns(DeprecationWarning, match="digitalearth.Map"):
             fig, ax = StaticGlyph.plot(dataset)
-        assert fig is not None and ax is not None, "legacy plot should still render"
+        assert fig is not None, "legacy plot should still render"
+        assert ax is not None, "legacy plot should still render"
 
     def test_message_recommends_modern_api(self):
         """The deprecation message recommends quickmap / Map.
@@ -57,7 +58,10 @@ class TestStaticGlyphDeprecation:
         """
         from digitalearth.static.glyph import _DEPRECATION_MSG
 
-        assert "quickmap" in _DEPRECATION_MSG and "Map" in _DEPRECATION_MSG, (
+        assert "quickmap" in _DEPRECATION_MSG, (
+            f"message should point to the modern API: {_DEPRECATION_MSG!r}"
+        )
+        assert "Map" in _DEPRECATION_MSG, (
             f"message should point to the modern API: {_DEPRECATION_MSG!r}"
         )
 

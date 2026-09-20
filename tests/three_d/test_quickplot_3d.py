@@ -67,7 +67,8 @@ class TestQuickplot3DBackend:
 
         fc = FeatureCollection.read_file("examples/data/rhine_gauges.geojson")
         out = quickplot(fc, backend="3d")
-        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        assert isinstance(out, Scene3D)
+        assert len(out.layers) == 1
         out.close()
 
     def test_polygons_extrude_and_colour_by_column(self):
@@ -76,7 +77,8 @@ class TestQuickplot3DBackend:
 
         fc = FeatureCollection.read_file("examples/data/rhine_basin.geojson")
         out = quickplot(fc, backend="3d", column="scalerank", height=50_000.0)
-        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        assert isinstance(out, Scene3D)
+        assert len(out.layers) == 1
         out.close()
 
     def test_polygons_default_flat_height_no_column(self):
@@ -86,7 +88,8 @@ class TestQuickplot3DBackend:
 
         fc = FeatureCollection.read_file("examples/data/rhine_basin.geojson")
         out = quickplot(fc, backend="3d")
-        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        assert isinstance(out, Scene3D)
+        assert len(out.layers) == 1
         out.close()
 
     def test_lines_raise_typeerror(self):
@@ -113,7 +116,8 @@ class TestQuickplot3DBackend:
         from digitalearth.three_d import Scene3D
 
         out = quickplot(raster, backend="3d", colorbar=False)
-        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        assert isinstance(out, Scene3D)
+        assert len(out.layers) == 1
         out.close()
 
     def test_colorbar_false_on_points_builds(self):
@@ -123,7 +127,8 @@ class TestQuickplot3DBackend:
 
         fc = FeatureCollection.read_file("examples/data/rhine_gauges.geojson")
         out = quickplot(fc, backend="3d", colorbar=False)
-        assert isinstance(out, Scene3D) and len(out.layers) == 1
+        assert isinstance(out, Scene3D)
+        assert len(out.layers) == 1
         out.close()
 
     def test_empty_featurecollection_raises_valueerror(self):

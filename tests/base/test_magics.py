@@ -91,7 +91,8 @@ class TestLoadMagicsLibrary:
     def test_entries_carry_canonical_style(self):
         """Every entry carries a colormap and a magics_name (its canonical style identity)."""
         for name, params in load_magics_library().items():
-            assert "cmap" in params and "magics_name" in params, name
+            assert "cmap" in params, name
+            assert "magics_name" in params, name
 
     def test_is_cached(self):
         """load_magics_library is lru_cached, so repeated calls return the same object."""
@@ -104,8 +105,10 @@ class TestMagicsStyle:
     def test_match_by_name_exact_alias(self):
         """An exact short name matches its alias and yields the canonical style."""
         style = magics_style("t2m")
-        assert style["cmap"] == "coolwarm" and style["magics_name"] == "t2m"
-        assert style["levels"][0] == -40 and "match" not in style
+        assert style["cmap"] == "coolwarm"
+        assert style["magics_name"] == "t2m"
+        assert style["levels"][0] == -40
+        assert "match" not in style
 
     def test_match_by_name_substring(self):
         """A decorated name (e.g. a daily-mean suffix) still matches by substring."""
@@ -114,7 +117,8 @@ class TestMagicsStyle:
     def test_match_by_standard_name(self):
         """When the short name is unknown, the CF standard_name resolves the field."""
         style = magics_style("unknown", standard_name="air_pressure_at_mean_sea_level")
-        assert style["magics_name"] == "msl" and style["units"] == "hPa"
+        assert style["magics_name"] == "msl"
+        assert style["units"] == "hPa"
 
     def test_match_by_units_fallback(self):
         """Units are a last-resort match (here, gpm -> geopotential height)."""
@@ -156,7 +160,8 @@ class TestMagicsStyle:
             expected: The magics_name the field should resolve to.
         """
         style = magics_style(name, standard_name=standard_name, units=units)
-        assert style is not None and style["magics_name"] == expected, (
+        assert style is not None, f"{name!r}/{standard_name!r}/{units!r} -> {style}"
+        assert style["magics_name"] == expected, (
             f"{name!r}/{standard_name!r}/{units!r} -> {style}"
         )
 
@@ -209,16 +214,15 @@ class TestAutoStyleIntegration:
     def test_magics_supplies_levels(self):
         """A recognised field carries canonical contour levels, not just a colormap."""
         style = auto_style(_source("msl"))
-        assert (
-            style["units"] == "hPa"
-            and style["levels"][0] == 960
-            and style["magics_name"] == "msl"
-        )
+        assert style["units"] == "hPa"
+        assert style["levels"][0] == 960
+        assert style["magics_name"] == "msl"
 
     def test_resolves_by_standard_name(self):
         """auto_style matches on the Source's standard_name when the variable name is opaque."""
         style = auto_style(_source("var123", standard_name="air_temperature"))
-        assert style["cmap"] == "coolwarm" and style["magics_name"] == "t2m"
+        assert style["cmap"] == "coolwarm"
+        assert style["magics_name"] == "t2m"
 
     def test_resolves_by_units(self):
         """auto_style falls through to units matching for an otherwise-unknown field."""
@@ -228,7 +232,8 @@ class TestAutoStyleIntegration:
     def test_falls_back_to_variables_library(self):
         """A field only the lighter library knows (discharge) still resolves there."""
         style = auto_style(_source("discharge_acc"))
-        assert style["cmap"] == "Blues" and "magics_name" not in style
+        assert style["cmap"] == "Blues"
+        assert "magics_name" not in style
 
     def test_unknown_field_uses_default(self):
         """A wholly unknown field falls back to the default colormap."""

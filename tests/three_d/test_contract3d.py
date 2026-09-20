@@ -513,8 +513,9 @@ class TestC4SchemeAndK:
             beats surfacing cleopatra's own error, which names neither.
         """
         points = _points(5)
+        ones = np.ones(5)
         with pytest.raises(ValueError, match="scheme='quantiles'"):
-            scene.point_cloud(points, values=np.ones(5), scheme="quantiles", k=3)
+            scene.point_cloud(points, values=ones, scheme="quantiles", k=3)
 
 
 class TestC7SkipAndWarn:
@@ -597,8 +598,10 @@ class TestC7SkipAndWarn:
             Skipping empty layers must not swallow a real mistake: values with no points to attach them to
             is a mismatch, and telling the caller beats logging "nothing to draw" and moving on.
         """
+        zeros = np.zeros((0, 3))
+        ones = np.ones(3)
         with pytest.raises(ValueError, match="does not match"):
-            scene.point_cloud(np.zeros((0, 3)), values=np.ones(3))
+            scene.point_cloud(zeros, values=ones)
 
 
 class TestC13TheDisplayCrs:

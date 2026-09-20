@@ -12,7 +12,7 @@ hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
@@ -55,7 +55,8 @@ class TestVectorField:
         u, v = uv
         m.vectorfield(u, v, color_by="magnitude", cmap="plasma")
         style = hv.Store.lookup_options("bokeh", m.layers[0], "style").kwargs
-        assert style["color"] == "Magnitude" and style["cmap"] == "plasma"
+        assert style["color"] == "Magnitude"
+        assert style["cmap"] == "plasma"
 
     def test_no_colour_when_color_by_none(self, m, uv):
         u, v = uv
@@ -182,7 +183,7 @@ class TestTextAndLabels:
 class TestGraph:
     """``graph`` / ``flow`` — network / origin-destination flows (DI.15, recipe I9)."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def nodes(self):
         import geopandas as gpd
 

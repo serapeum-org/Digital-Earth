@@ -10,7 +10,7 @@ import pytest
 from digitalearth.web import WebMap
 
 
-@pytest.fixture()
+@pytest.fixture
 def timed_polygons():
     """Six triangles tagged with one of three time steps and a ``pop`` value."""
     gpd = pytest.importorskip("geopandas")
@@ -22,7 +22,7 @@ def timed_polygons():
     return gpd.GeoDataFrame({"time": times, "pop": pop}, geometry=geoms, crs=4326)
 
 
-@pytest.fixture()
+@pytest.fixture
 def timed_points():
     """Six points tagged with one of three time steps and a ``pop`` value."""
     gpd = pytest.importorskip("geopandas")
@@ -39,7 +39,7 @@ def timed_points():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def raster_stack(tmp_path):
     """A 3-member ``DatasetCollection``; member ``k`` spans ``[10k, 10k + 2.4]`` so the stack spans 0-22.4."""
     pytest.importorskip("pyramids")
@@ -61,7 +61,7 @@ def raster_stack(tmp_path):
     return DatasetCollection.from_files(paths)
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_widget():
     """A recording stand-in for the MapLibre ``MapWidget``, usable without the ``web`` extra.
 
@@ -110,8 +110,9 @@ class TestTimeSliderNeedsEngine:
         assert m._temporal["layer_id"] is not None
 
     def test_missing_kdim_raises(self, timed_polygons):
+        webMap = WebMap()
         with pytest.raises(KeyError, match="when"):
-            WebMap().timeslider(timed_polygons, kdim="when")
+            webMap.timeslider(timed_polygons, kdim="when")
 
     def test_render_returns_slider_plus_map(self, timed_polygons):
         import ipywidgets
@@ -165,13 +166,15 @@ class TestTimeSliderRejectsUnsupportedInput:
         pytest.importorskip("maplibre")
 
     def test_single_dataset_is_rejected(self, dataset):
+        webMap = WebMap()
         with pytest.raises(TypeError, match=r"timeslider\(\) does not take a raster"):
-            WebMap().timeslider(dataset)
+            webMap.timeslider(dataset)
 
     def test_message_names_the_input_and_the_single_raster_builder(self, dataset):
         """The error has to say what arrived and where a lone raster belongs instead."""
+        webMap = WebMap()
         with pytest.raises(TypeError) as excinfo:
-            WebMap().timeslider(dataset)
+            webMap.timeslider(dataset)
         message = str(excinfo.value)
         assert type(dataset).__name__ in message, "the rejected type is not named"
         assert "field" in message, "the single-raster builder is not named"
@@ -186,15 +189,18 @@ class TestTimeSliderRejectsUnsupportedInput:
         monkeypatch.setattr(
             type(dataset), "to_crs", lambda self, *a, **k: warps.append(a)
         )
+        webMap = WebMap()
         with pytest.raises(TypeError):
-            WebMap().timeslider(dataset)
+            webMap.timeslider(dataset)
         assert warps == [], "the raster was reprojected before being rejected"
 
     def test_bare_array_is_rejected_too(self):
         """Non-pyramids, non-vector input used to fall through to a misleading ``KeyError``."""
         np = pytest.importorskip("numpy")
+        zeros = np.zeros((4, 5))
+        webMap = WebMap()
         with pytest.raises(TypeError, match="ndarray"):
-            WebMap().timeslider(np.zeros((4, 5)))
+            webMap.timeslider(zeros)
 
     def test_vector_input_still_passes_the_guard(self, timed_polygons):
         """The guard must not disturb the supported path."""
@@ -248,8 +254,9 @@ class TestRequireVector:
         Test scenario:
             Mirrors ``BigDataMixin._require_points``, which quotes its caller the same way.
         """
+        object2 = object()
         with pytest.raises(TypeError, match=r"^somebuilder\(\) needs"):
-            WebMap._require_vector(object(), "somebuilder")
+            WebMap._require_vector(object2, "somebuilder")
 
     def test_a_table_without_an_active_geometry_is_told_to_set_geometry(self):
         """A GeoDataFrame whose geometry was never activated is not misreported as a raster.
@@ -297,8 +304,9 @@ class TestRequireVector:
             The raster/vector split is what this error exists to explain, so both a vector layer with a
             time attribute and a ``DatasetCollection`` must be named.
         """
+        object2 = object()
         with pytest.raises(TypeError) as excinfo:
-            WebMap._require_vector(object(), "timeslider")
+            WebMap._require_vector(object2, "timeslider")
         message = str(excinfo.value)
         assert "vector layer" in message, f"vector form missing from: {message}"
         assert "DatasetCollection" in message, f"stack form missing from: {message}"
@@ -420,8 +428,9 @@ class TestTimeSliderRasterStack:
             Previously an empty series only blew up later, inside ipywidgets, at render time.
         """
         stub = type("EmptyCollection", (), {"datasets": []})()
+        webMap = WebMap()
         with pytest.raises(ValueError, match="at least one time step"):
-            WebMap().timeslider(stub)
+            webMap.timeslider(stub)
 
     @pytest.mark.parametrize(
         "labels, expected",
@@ -441,8 +450,9 @@ class TestTimeSliderRasterStack:
             A wrong count silently mislabels frames; a duplicate collapses two slider stops into one and
             makes a frame unreachable.
         """
+        webMap = WebMap()
         with pytest.raises(ValueError, match=expected):
-            WebMap().timeslider(raster_stack, labels=labels)
+            webMap.timeslider(raster_stack, labels=labels)
 
     def test_only_the_first_member_is_built_visible(self, raster_stack):
         """All members are registered, but only the first starts visible.
@@ -613,8 +623,9 @@ class TestTimeSliderRasterStack:
             The uniqueness check hashes the labels, so an unhashable one used to surface as
             ``TypeError: unhashable type: 'list'`` from deep inside the validation.
         """
+        webMap = WebMap()
         with pytest.raises(ValueError, match="hashable"):
-            WebMap().timeslider(raster_stack, labels=[["a"], ["b"], ["c"]])
+            webMap.timeslider(raster_stack, labels=[["a"], ["b"], ["c"]])
 
     def test_save_shows_exactly_one_frame(self, tmp_path, raster_stack):
         """A saved page carries no slider, so it must not show the whole stack at once.
@@ -793,14 +804,15 @@ class TestTimeSliderGeometryRouting:
             ``SelectionSlider`` rejects empty options, so without this guard the failure surfaced as an
             opaque ``TraitError`` only once the map was rendered.
         """
+        webMap = WebMap()
         with pytest.raises(ValueError, match="at least one time step"):
-            WebMap().timeslider(timed_polygons.iloc[0:0], kdim="time")
+            webMap.timeslider(timed_polygons.iloc[0:0], kdim="time")
 
 
 class TestWrapTemporal:
     """Tests for ``TemporalMixin._wrap_temporal`` — the slider composite and its per-mode wiring."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def configured(self):
         """A map with a vector temporal config set by hand (no engine needed)."""
         m = WebMap()
@@ -812,7 +824,7 @@ class TestWrapTemporal:
         }
         return m
 
-    @pytest.fixture()
+    @pytest.fixture
     def configured_stack(self):
         """A map with a raster temporal config set by hand (no engine needed)."""
         m = WebMap()

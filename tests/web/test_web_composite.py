@@ -63,8 +63,9 @@ class TestTheCompositeEncoder:
     def test_a_stack_with_no_complete_pixel_is_refused(self):
         """An all-transparent image looks like a rendering failure rather than an empty input."""
         web_map = WebMap()
+        full = np.full((2, 2, 3), np.nan)
         with pytest.raises(ValueError, match="no pixel finite"):
-            web_map._composite_png_datauri(np.full((2, 2, 3), np.nan))
+            web_map._composite_png_datauri(full)
 
     def test_values_outside_the_unit_range_are_clipped(self):
         """`stretch_to_unit` can overshoot with explicit limits, and a PNG has no room for it."""

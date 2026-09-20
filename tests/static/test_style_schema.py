@@ -104,7 +104,8 @@ class TestRoutingAndFolding:
         flat = {"alpha": 0.4, "scheme": "quantiles", "k": 4, "hillshade": True}
         sym, rest = route_flat_style(flat)
         folded, unsupported = fold_symbology(sym)
-        assert not rest and not unsupported, "this style is entirely expressible"
+        assert not rest, "this style is entirely expressible"
+        assert not unsupported, "this style is entirely expressible"
         assert folded == flat, f"the fold must reproduce what was routed; got {folded}"
 
     def test_a_channel_the_flat_surface_cannot_express_is_reported_not_raised(self):
@@ -149,7 +150,8 @@ class TestRoutingAndFolding:
         assert dict(sym.props) == {"color": "a-colorscaling-object"}, (
             "it must route as a static property, not as the colour channel"
         )
-        assert not sym.encodings and not rest, "and nowhere else"
+        assert not sym.encodings, "and nowhere else"
+        assert not rest, "and nowhere else"
 
     def test_asking_to_fold_the_colour_channel_explains_why_it_cannot(self):
         """The unsupported reason names the actual reason, not just the absence.
@@ -160,9 +162,10 @@ class TestRoutingAndFolding:
             `color=` key is a different concept wearing the same name.
         """
         _, unsupported = fold_symbology(Symbology.of(color="#f00"))
-        assert (
-            "cmap" in unsupported["color"] and "ColorScaling" in unsupported["color"]
-        ), (
+        assert "cmap" in unsupported["color"], (
+            f"the reason must explain the two-way collision; got {unsupported['color']!r}"
+        )
+        assert "ColorScaling" in unsupported["color"], (
             f"the reason must explain the two-way collision; got {unsupported['color']!r}"
         )
 

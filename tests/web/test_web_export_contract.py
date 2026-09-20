@@ -108,8 +108,9 @@ class TestTheAliasWarningLandsOnTheCallersLine:
         scene, out, _ = two_step_map
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            str2 = str(out)
             with pytest.raises(TypeError, match="pass only fps="):
-                scene.to_gif(str(out), fps=4.0, duration=0.5)
+                scene.to_gif(str2, fps=4.0, duration=0.5)
 
 
 class TestANonFiniteRateIsRefusedByName:
@@ -131,8 +132,9 @@ class TestANonFiniteRateIsRefusedByName:
         scene, out, recorded = two_step_map
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
+            str2 = str(out)
             with pytest.raises(ValueError) as excinfo:
-                scene.animate(str(out), duration=bad)
+                scene.animate(str2, duration=bad)
         assert "duration=" in str(excinfo.value), str(excinfo.value)
         assert "recorded" not in recorded, "the encoder must never be reached"
 
@@ -145,18 +147,20 @@ class TestANonFiniteRateIsRefusedByName:
             two_step_map: The stubbed map, output path and encoder record.
         """
         scene, out, _ = two_step_map
+        str2 = str(out)
         with pytest.raises(ValueError) as excinfo:
-            scene.animate(str(out), fps=bad)
+            scene.animate(str2, fps=bad)
         assert "fps=" in str(excinfo.value), str(excinfo.value)
 
     def test_the_converter_names_the_parameter_the_caller_wrote(self):
         """The message has to say ``duration=``, because that is the keyword in the caller's source."""
         from digitalearth.web.export import _fps_from_duration
 
+        float2 = float("nan")
         with pytest.raises(
             ValueError, match=r"duration= must be a finite number of seconds"
         ):
-            _fps_from_duration(float("nan"))
+            _fps_from_duration(float2)
 
     def test_a_finite_rate_still_converts(self):
         """The guard must not disturb the conversion it protects."""

@@ -16,7 +16,7 @@ hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A map already in EPSG:3857 so a bare Source needs no reprojection."""
     return InteractiveMap(crs=3857)

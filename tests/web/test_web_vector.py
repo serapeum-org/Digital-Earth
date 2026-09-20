@@ -13,7 +13,7 @@ from digitalearth.base.symbology import MISSING_COLOR
 from digitalearth.web import WebMap
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygons_gdf():
     """Four triangles in lon/lat (EPSG:4326) with a ``pop`` value ramp."""
     gpd = pytest.importorskip("geopandas")
@@ -28,7 +28,7 @@ def polygons_gdf():
     return gpd.GeoDataFrame({"pop": [1.0, 5.0, 9.0, 3.0]}, geometry=geoms, crs=4326)
 
 
-@pytest.fixture()
+@pytest.fixture
 def points_gdf():
     """Five points in lon/lat with a ``value`` column."""
     gpd = pytest.importorskip("geopandas")
@@ -112,9 +112,8 @@ class TestColorExpr:
         expr = m._color_expr(np.array([0.0, 10.0]), "v", None, 5, "viridis")
         assert expr[:3] == ["interpolate", ["linear"], ["get", "v"]]
         stops = [expr[i] for i in range(3, len(expr), 2)]
-        assert stops[0] == 0.0 and stops[-1] == 10.0, (
-            f"ramp should span the data: {stops}"
-        )
+        assert stops[0] == 0.0, f"ramp should span the data: {stops}"
+        assert stops[-1] == 10.0, f"ramp should span the data: {stops}"
         colors = [expr[i] for i in range(4, len(expr), 2)]
         assert all(c.startswith("#") for c in colors), (
             f"ramp colours must be hex: {colors}"
@@ -177,9 +176,9 @@ class TestColorExpr:
         assert expr[1] == ["get", "kind"], (
             "the match input must read the column with ['get', column]"
         )
-        assert expr[2] == "a" and expr[4] == "b" and expr[6] == "c", (
-            f"category literals misordered: {expr}"
-        )
+        assert expr[2] == "a", f"category literals misordered: {expr}"
+        assert expr[4] == "b", f"category literals misordered: {expr}"
+        assert expr[6] == "c", f"category literals misordered: {expr}"
         assert expr[-1] == "#cccccc", (
             "the match expression must end with a default colour"
         )
@@ -192,7 +191,8 @@ class TestColorExpr:
         m = WebMap()
         expr = m._color_expr(np.array([1, 2, 1, 3]), "code", "categorical", 5, "tab10")
         literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
-        assert literals == [1, 2, 3] and all(type(v) is int for v in literals)
+        assert literals == [1, 2, 3]
+        assert all(type(v) is int for v in literals)
 
     def test_categorical_whole_float_labels_narrow_to_int(self):
         """Whole-valued float categories become int labels — MapLibre rejects non-integer match labels (M1)."""
@@ -201,7 +201,8 @@ class TestColorExpr:
             np.array([1.0, 2.0, 1.0, 3.0]), "zone", "categorical", 5, "tab10"
         )
         literals = [expr[i] for i in range(2, len(expr) - 1, 2)]
-        assert literals == [1, 2, 3] and all(type(v) is int for v in literals), (
+        assert literals == [1, 2, 3], f"float cats must narrow: {literals}"
+        assert all(type(v) is int for v in literals), (
             f"float cats must narrow: {literals}"
         )
         assert all(type(b) is int for b in m.last_breaks), (
@@ -210,8 +211,10 @@ class TestColorExpr:
 
     def test_categorical_non_integer_float_rejected(self):
         """A non-integer float category cannot key a MapLibre match and is rejected clearly (M1)."""
+        array = np.array([1.5, 2.5])
+        webMap = WebMap()
         with pytest.raises(ValueError, match="non-integer category"):
-            WebMap()._color_expr(np.array([1.5, 2.5]), "x", "categorical", 5, "tab10")
+            webMap._color_expr(array, "x", "categorical", 5, "tab10")
 
     def test_cmap_hex_count_and_format(self):
         """``_cmap_hex`` returns the requested number of hex colours."""
@@ -240,8 +243,9 @@ class TestVectorBuildersNeedEngine:
         assert isinstance(m.render(), MapWidget)
 
     def test_choropleth_missing_column_raises(self, polygons_gdf):
+        webMap = WebMap()
         with pytest.raises(KeyError, match="nope"):
-            WebMap().choropleth(polygons_gdf, column="nope")
+            webMap.choropleth(polygons_gdf, column="nope")
 
     def test_choropleth_constant_column_raises_clear_error(self):
         """A no-spread column surfaces a web-tier-friendly message, not a bare cleopatra error (L2)."""
@@ -253,10 +257,11 @@ class TestVectorBuildersNeedEngine:
             geometry=[Polygon([(i, 0), (i + 1, 0), (i + 0.5, 1)]) for i in range(3)],
             crs=4326,
         )
+        webMap = WebMap()
         with pytest.raises(ValueError, match="cannot classify column 'pop'"):
             # An explicit scheme: `choropleth` is a continuous ramp by default now (C4), and a ramp over
             # a constant column has a range to widen rather than classes to cut.
-            WebMap().choropleth(gdf, column="pop", scheme="quantiles")
+            webMap.choropleth(gdf, column="pop", scheme="quantiles")
 
     def test_points_lines_polygons_chain(self, points_gdf, polygons_gdf):
         m = WebMap()
@@ -278,12 +283,12 @@ class TestDecorationNeedsEngine:
         pytest.importorskip("maplibre")
 
     def test_basemap_unknown_provider_raises(self):
+        webMap = WebMap()
         with pytest.raises(ValueError, match="unknown basemap provider") as exc:
-            WebMap().basemap("NoSuchProvider")
+            webMap.basemap("NoSuchProvider")
         # the suggestion list uses the canonical, correctly-cased names, not "Cartodark"/"Osm" (N1)
-        assert "CartoDark" in str(exc.value) and "OSM" in str(exc.value), (
-            f"mis-cased names: {exc.value}"
-        )
+        assert "CartoDark" in str(exc.value), f"mis-cased names: {exc.value}"
+        assert "OSM" in str(exc.value), f"mis-cased names: {exc.value}"
 
     def test_basemap_registers_an_underlay(self, polygons_gdf):
         """A basemap added after data is still drawn first (underlay at index 0)."""
@@ -293,8 +298,9 @@ class TestDecorationNeedsEngine:
         assert m.layers[0] is not m.layers[-1]
 
     def test_popup_without_a_layer_raises(self):
+        webMap = WebMap()
         with pytest.raises(ValueError, match="popup"):
-            WebMap().popup(["pop"])
+            webMap.popup(["pop"])
 
     def test_popup_defaults_to_the_last_layer_and_queues(self, polygons_gdf):
         """A popup binds to the layer just drawn, and is queued like any other closure.
@@ -361,10 +367,12 @@ class TestDecorationNeedsEngine:
 
     def test_control_position_is_validated(self):
         """An unknown control corner fails fast with a clear error rather than at render time (N3)."""
+        webMap = WebMap()
         with pytest.raises(ValueError, match="unknown control position"):
-            WebMap().navigation(position="middle")
+            webMap.navigation(position="middle")
+        webMap = WebMap()
         with pytest.raises(ValueError, match="unknown control position"):
-            WebMap().scale_bar(position="nowhere")
+            webMap.scale_bar(position="nowhere")
 
 
 class TestAttributeTemplate:
@@ -378,9 +386,9 @@ class TestAttributeTemplate:
 
     def test_multiple_fields_build_html_template(self):
         out = WebMap()._attribute_template(["a", "b"])
-        assert (
-            "template" in out and "{a}" in out["template"] and "{b}" in out["template"]
-        )
+        assert "template" in out
+        assert "{a}" in out["template"]
+        assert "{b}" in out["template"]
 
 
 class TestVectorBuilderRasterGuard:
@@ -478,8 +486,9 @@ class TestVectorBuilderRasterGuard:
         from shapely.geometry import Point
 
         table = gpd.GeoDataFrame({"value": [1.0], "geom": [Point(0, 0)]})
+        webMap = WebMap()
         with pytest.raises(TypeError, match="set_geometry"):
-            WebMap().points(table)
+            webMap.points(table)
 
     def test_point_cloud_still_accepts_a_raw_xyz_sequence(self):
         """``point_cloud`` takes bare coordinate triples, so it must not get the full vector guard.
@@ -505,8 +514,9 @@ class TestAContinuousRampNeedsSomethingToScale:
         import numpy as np
 
         web_map = WebMap()
+        full = np.full(4, np.nan)
         with pytest.raises(ValueError, match="no finite values to colour"):
-            web_map._color_expr(np.full(4, np.nan), "depth", None, 5, "viridis")
+            web_map._color_expr(full, "depth", None, 5, "viridis")
 
 
 class TestForcedBigPolygonsBehaveLikeForcedBigPoints:

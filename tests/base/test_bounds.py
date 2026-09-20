@@ -224,8 +224,9 @@ class TestOperations:
             neither the method, nor the fraction, nor the reason appears, so the caller has to
             reverse-engineer where those numbers came from.
         """
+        bounds = Bounds(0.0, 0.0, 10.0, 10.0, crs=4326)
         with pytest.raises(ValueError, match=r"padded\(-0.75\) would invert"):
-            Bounds(0.0, 0.0, 10.0, 10.0, crs=4326).padded(-0.75)
+            bounds.padded(-0.75)
 
     def test_two_spellings_of_one_crs_are_the_same_crs(self):
         """`4326` and `"EPSG:4326"` name the same system, so a union across them works.
@@ -376,8 +377,10 @@ class TestOperations:
             it re-opened the hole: CPython interns `0`, `''` and `True`, so two rectangles built with `crs=0`
             compared equal and unioned as though they agreed on a CRS neither had.
         """
+        bounds = Bounds(0.0, 0.0, 2.0, 2.0, crs=0)
+        bounds2 = Bounds(0.0, 0.0, 1.0, 1.0, crs=0)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs=0).union(Bounds(0.0, 0.0, 2.0, 2.0, crs=0))
+            bounds2.union(bounds)
 
     def test_two_unset_crss_still_count_as_the_same(self):
         """Two rectangles that declare no CRS need no reprojection between them.

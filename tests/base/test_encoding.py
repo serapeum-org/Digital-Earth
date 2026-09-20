@@ -75,8 +75,9 @@ class TestBinding:
             Silently ignoring it draws one flat colour over data the caller meant to vary — the failure mode
             that looks like working software.
         """
+        from_limits = Scale.from_limits(0.0, 1.0)
         with pytest.raises(ValueError, match="cannot carry a scale"):
-            Encoding(channel="color", value="#f00", scale=Scale.from_limits(0.0, 1.0))
+            Encoding(channel="color", value="#f00", scale=from_limits)
 
     def test_a_field_encoding_needs_its_values_to_resolve(self):
         """Resolving a data-driven channel without the data says so.
@@ -85,8 +86,9 @@ class TestBinding:
             Returning the field *name* — a string, which a colour channel would happily accept — is the
             plausible wrong answer here.
         """
+        by_field = Encoding.by_field("color", "elevation")
         with pytest.raises(ValueError, match="needs its values"):
-            Encoding.by_field("color", "elevation").resolve()
+            by_field.resolve()
 
     def test_a_field_encoding_needs_a_field_name(self):
         """An empty field name is not a binding to the data either.

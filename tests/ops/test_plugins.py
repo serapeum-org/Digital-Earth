@@ -25,7 +25,8 @@ class TestGroups:
 
     def test_declares_known_extension_points(self):
         """GROUPS advertises the styles and sources extension points."""
-        assert "digitalearth.styles" in GROUPS and "digitalearth.sources" in GROUPS
+        assert "digitalearth.styles" in GROUPS
+        assert "digitalearth.sources" in GROUPS
 
     def test_group_names_are_frozen_public_contract(self):
         """GROUPS is exactly these two names, and never tracks where our modules live.

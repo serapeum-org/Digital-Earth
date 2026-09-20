@@ -60,7 +60,8 @@ def test_polar_stereographic_reprojects(dataset):
     m = Map(crs=projections.polar_south(), globe=True)
     m.imshow(dataset)
     m.render()
-    assert len(m.layers) == 1 and m.ax.patches
+    assert len(m.layers) == 1
+    assert m.ax.patches
 
 
 def test_globe_coastlines(dataset):
@@ -68,7 +69,8 @@ def test_globe_coastlines(dataset):
     m = Map(crs=projections.orthographic(10, 25), globe=True)
     m.imshow(dataset)
     segs = m.coastlines(resolution="110m")
-    assert segs and m.ax.lines  # finite projected segments drawn
+    assert segs
+    assert m.ax.lines
     pts = np.vstack([line.get_xydata() for line in m.ax.lines])
     assert np.isfinite(pts).all()  # no inf/nan reached the axes
 
@@ -106,7 +108,8 @@ def test_finite_polygons_drops_nonfinite():
     assert len(polys) == 2
     assert vals.tolist() == [10.0, 30.0]
     polys_only, none_vals = Map._finite_polygons([good, bad])
-    assert len(polys_only) == 1 and none_vals is None
+    assert len(polys_only) == 1
+    assert none_vals is None
 
 
 def test_globe_choropleth_drops_far_side():
@@ -159,14 +162,16 @@ def test_globe_show_applies_frame(dataset):
     m.imshow(dataset)
     assert not m.ax.patches
     m.show()  # MPLBACKEND=Agg makes this a no-op draw, but the frame must still be applied
-    assert m.ax.patches and m._framed is True
+    assert m.ax.patches
+    assert m._framed is True
 
 
 def test_frame_is_memoised(dataset):
     """_frame caches projection_frame per CRS: a second call returns the same cached tuple."""
     m = Map(crs=projections.orthographic(0, 0), globe=True)
     first = m._frame()
-    assert m._frame_cache is not None and m._frame_cache[0] == m.crs
+    assert m._frame_cache is not None
+    assert m._frame_cache[0] == m.crs
     second = m._frame()  # cache hit branch — no recompute
     assert second is first
 
@@ -356,7 +361,8 @@ def test_rivers_drawn_as_lines_on_globe(mocker):
     mocker.patch("digitalearth.static.maps.decoration.natural_earth", return_value=rv)
     m = Map(crs=projections.orthographic(-9, 39), globe=True)
     artists = m.rivers()
-    assert artists and m.ax.lines
+    assert artists
+    assert m.ax.lines
 
 
 def test_land_fill_finite_on_cylindrical_frame(land_fc, mocker):

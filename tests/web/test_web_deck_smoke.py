@@ -67,7 +67,7 @@ def _render_and_collect(uri: str):
     return page_errors, console_errors, canvas_count
 
 
-@pytest.fixture()
+@pytest.fixture
 def points_gdf():
     """A few points in lon/lat for a deck.gl scatter layer."""
     gpd = pytest.importorskip("geopandas")
@@ -80,7 +80,7 @@ def points_gdf():
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygons_gdf():
     """A couple of polygons in lon/lat for a deck.gl polygon layer."""
     gpd = pytest.importorskip("geopandas")

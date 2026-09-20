@@ -35,8 +35,9 @@ class TestSymbology:
             A mismatch makes `encoding("color")` answer with something that styles size — which would draw
             silently, in the wrong channel.
         """
+        constant = Encoding.constant("size", 6)
         with pytest.raises(ValueError, match="drives channel"):
-            Symbology(encodings={"color": Encoding.constant("size", 6)})
+            Symbology(encodings={"color": constant})
 
     def test_a_field_driven_encoding_can_be_passed_whole(self):
         """`of()` takes an already-built encoding as well as a constant.
@@ -183,7 +184,8 @@ class TestTheSchema:
         """
         schema = StyleSchema.of(StyleKey("alpha", "Opacity.", channel="opacity"))
         sym, leftover = schema.route({"alpha": None})
-        assert not sym.encodings and not leftover, "a None must route nowhere"
+        assert not sym.encodings, "a None must route nowhere"
+        assert not leftover, "a None must route nowhere"
 
     def test_the_nearest_declared_key_is_offered_for_a_typo(self):
         """A misspelling can be answered instead of silently ignored.
@@ -222,8 +224,10 @@ class TestTheSchema:
             Which wins would depend on the order the rows happen to be written in, and the losing row's
             documentation would still be shown.
         """
+        styleKey = StyleKey("alpha", "One.")
+        styleKey2 = StyleKey("alpha", "Two.")
         with pytest.raises(ValueError, match="declared twice"):
-            StyleSchema.of(StyleKey("alpha", "One."), StyleKey("alpha", "Two."))
+            StyleSchema.of(styleKey, styleKey2)
 
     def test_the_schema_answers_what_a_builder_accepts(self):
         """`names()` is the discoverability that did not exist.
