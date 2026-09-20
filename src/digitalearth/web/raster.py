@@ -209,7 +209,6 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     import numpy as np
 
     from digitalearth.base.sources import get_stack
-
     from digitalearth.web.renderer import required_props
 
     props = required_props(layer, "bands", "mask_nodata", "limits", "opacity")
