@@ -6006,7 +6006,7 @@ parameter, so preferring either would silently drop the other.</p>
 <a id="__codelineno-0-868" name="__codelineno-0-868"></a>            <span class="s2">&quot;text() needs the string to draw; pass it as the third argument&quot;</span>
 <a id="__codelineno-0-869" name="__codelineno-0-869"></a>        <span class="p">)</span>
 <a id="__codelineno-0-870" name="__codelineno-0-870"></a>    <span class="n">lon</span><span class="p">,</span> <span class="n">lat</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_as_display_point</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">lon</span><span class="p">),</span> <span class="nb">float</span><span class="p">(</span><span class="n">lat</span><span class="p">),</span> <span class="n">crs</span><span class="p">)</span>
-<a id="__codelineno-0-871" name="__codelineno-0-871"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-871" name="__codelineno-0-871"></a>    <span class="n">_require_layer_api</span><span class="p">()</span>
 <a id="__codelineno-0-872" name="__codelineno-0-872"></a>    <span class="n">text_size</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
 <a id="__codelineno-0-873" name="__codelineno-0-873"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;text_size&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-874" name="__codelineno-0-874"></a>        <span class="n">value</span><span class="o">=</span><span class="n">text_size</span><span class="p">,</span>
@@ -6485,7 +6485,7 @@ missing property renders nothing at all, with no error to explain the empty map.
 <a id="__codelineno-0-459" name="__codelineno-0-459"></a><span class="sd">    See Also:</span>
 <a id="__codelineno-0-460" name="__codelineno-0-460"></a><span class="sd">        digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.</span>
 <a id="__codelineno-0-461" name="__codelineno-0-461"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-462" name="__codelineno-0-462"></a>    <span class="n">_</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-462" name="__codelineno-0-462"></a>    <span class="n">_</span><span class="p">,</span> <span class="n">layer_types</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
 <a id="__codelineno-0-463" name="__codelineno-0-463"></a>    <span class="n">text_size</span> <span class="o">=</span> <span class="n">renamed_parameter</span><span class="p">(</span>
 <a id="__codelineno-0-464" name="__codelineno-0-464"></a>        <span class="n">new</span><span class="o">=</span><span class="s2">&quot;text_size&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-465" name="__codelineno-0-465"></a>        <span class="n">value</span><span class="o">=</span><span class="n">text_size</span><span class="p">,</span>
@@ -6515,7 +6515,7 @@ missing property renders nothing at all, with no error to explain the empty map.
 <a id="__codelineno-0-489" name="__codelineno-0-489"></a>    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_vector_layer</span><span class="p">(</span>
 <a id="__codelineno-0-490" name="__codelineno-0-490"></a>        <span class="n">gdf</span><span class="p">,</span>
 <a id="__codelineno-0-491" name="__codelineno-0-491"></a>        <span class="s2">&quot;label&quot;</span><span class="p">,</span>
-<a id="__codelineno-0-492" name="__codelineno-0-492"></a>        <span class="n">LayerType</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
+<a id="__codelineno-0-492" name="__codelineno-0-492"></a>        <span class="n">layer_types</span><span class="o">.</span><span class="n">SYMBOL</span><span class="p">,</span>
 <a id="__codelineno-0-493" name="__codelineno-0-493"></a>        <span class="n">paint</span><span class="p">,</span>
 <a id="__codelineno-0-494" name="__codelineno-0-494"></a>        <span class="n">kind</span><span class="o">=</span><span class="s2">&quot;labels&quot;</span><span class="p">,</span>
 <a id="__codelineno-0-495" name="__codelineno-0-495"></a>        <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
@@ -6906,7 +6906,7 @@ to divide — either produces a grid with no lines and no hint as to why.</p>
 <a id="__codelineno-0-989" name="__codelineno-0-989"></a>
 <a id="__codelineno-0-990" name="__codelineno-0-990"></a><span class="sd">            ```</span>
 <a id="__codelineno-0-991" name="__codelineno-0-991"></a><span class="sd">    &quot;&quot;&quot;</span>
-<a id="__codelineno-0-992" name="__codelineno-0-992"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-992" name="__codelineno-0-992"></a>    <span class="n">_require_layer_api</span><span class="p">()</span>
 <a id="__codelineno-0-993" name="__codelineno-0-993"></a>    <span class="c1"># One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square</span>
 <a id="__codelineno-0-994" name="__codelineno-0-994"></a>    <span class="c1"># grid; the two steps are what every other tier takes, and what a reader of a world map usually wants</span>
 <a id="__codelineno-0-995" name="__codelineno-0-995"></a>    <span class="c1"># (#263). A tier default of 30 degrees matches the interactive tier&#39;s.</span>
@@ -7922,7 +7922,7 @@ digitalearth.web.raster.RasterMixin.add_raster: the single-band, colormapped pat
 <a id="__codelineno-0-401" name="__codelineno-0-401"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.sources</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_stack</span>
 <a id="__codelineno-0-402" name="__codelineno-0-402"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">digitalearth.base.stretch</span><span class="w"> </span><span class="kn">import</span> <span class="n">require_three_bands</span>
 <a id="__codelineno-0-403" name="__codelineno-0-403"></a>
-<a id="__codelineno-0-404" name="__codelineno-0-404"></a>    <span class="n">Layer</span><span class="p">,</span> <span class="n">LayerType</span> <span class="o">=</span> <span class="n">_require_layer_api</span><span class="p">()</span>
+<a id="__codelineno-0-404" name="__codelineno-0-404"></a>    <span class="n">_require_layer_api</span><span class="p">()</span>
 <a id="__codelineno-0-405" name="__codelineno-0-405"></a>    <span class="n">require_three_bands</span><span class="p">(</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">,</span> <span class="n">bands</span><span class="p">)</span>
 <a id="__codelineno-0-406" name="__codelineno-0-406"></a>    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_display_raster_or_skip</span><span class="p">(</span><span class="n">dataset</span><span class="p">,</span> <span class="n">layer</span><span class="o">=</span><span class="s2">&quot;rgb_composite&quot;</span><span class="p">)</span>
 <a id="__codelineno-0-407" name="__codelineno-0-407"></a>    <span class="k">if</span> <span class="n">data</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
