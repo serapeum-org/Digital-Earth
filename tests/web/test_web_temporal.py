@@ -668,8 +668,8 @@ class TestTimeSliderRasterStack:
                 self.added.append(layer)
 
         recorder = _Recorder()
-        for apply in m.layers:
-            apply(recorder)
+        for entry in m.layers:
+            m._apply_layer(recorder, entry)
         return recorder.added
 
 

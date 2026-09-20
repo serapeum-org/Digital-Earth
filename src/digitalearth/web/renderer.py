@@ -56,7 +56,12 @@ class DrawnLayer:
 #: This is a growing subset while the seam is opened (#296). A kind here is built by its drawer and must not
 #: also be queued by its builder; a kind not here is still replayed from the queue. Listing a kind before its
 #: builder stops queuing would draw it twice, so the two move together, one kind per step.
-DRAWN_KINDS: Tuple[str, ...] = ("graticule",)
+DRAWN_KINDS: Tuple[str, ...] = (
+    "graticule",
+    "text",
+    "raster",
+    "rgb",
+)
 
 
 def drawer_for(kind: str) -> Any:
@@ -83,10 +88,13 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the map, so a module-level
     # import would close a cycle, and a map that draws nothing should not pay for loading all of them.
-    from digitalearth.web import decoration
+    from digitalearth.web import decoration, raster
 
     drawers = {
         "graticule": decoration.draw_graticule,
+        "text": decoration.draw_text,
+        "raster": raster.draw_field,
+        "rgb": raster.draw_rgb_composite,
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
     # in `DRAWN_KINDS` would be refused with a message that is false, and one in `DRAWN_KINDS` with no

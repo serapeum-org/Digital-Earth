@@ -152,8 +152,8 @@ def _last_layer(web_map):
             """Record the built layer."""
             built.append(layer)
 
-    for apply in web_map.layers:
-        apply(Recorder())
+    for entry in web_map.layers:
+        web_map._apply_layer(Recorder(), entry)
     assert built, "no layer was registered"
     return built[-1]
 
@@ -179,8 +179,8 @@ def _sources_of(web_map) -> list:
         def add_layer(self, layer):
             """Ignore the layer; only the source is under test."""
 
-    for apply in web_map.layers:
-        apply(Recorder())
+    for entry in web_map.layers:
+        web_map._apply_layer(Recorder(), entry)
     return specs
 
 

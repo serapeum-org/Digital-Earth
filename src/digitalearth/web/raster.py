@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, List, Optional, Self, Sequence, Tuple
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_method
-from digitalearth.base.spec import Bounds, Scale
+from digitalearth.base.spec import Bounds, LayerSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api
 
 #: Pixel count above which the inline image-source path is warned against (use COG/XYZ tiles for big rasters).
@@ -71,6 +71,135 @@ def _colour_limits(
         raise ValueError(
             f"{caller} limits must be a (vmin, vmax) pair of numbers; got {limits!r}"
         ) from None
+
+
+def _placed_corners(web_map: Any, source: Any, caller: str) -> Any:
+    """Return a raster's lon/lat corners and frame the map on them, or report that it cannot be placed.
+
+    Computed here rather than in the builder so a source's corners are read **once**: the builder records
+    what was asked for, and everything derived from the data is derived where the data is read.
+
+    Args:
+        web_map: The map being drawn.
+        source: The display source whose corners are wanted.
+        caller: The builder's name, for the skip message.
+
+    Returns:
+        The four lon/lat corners, or `None` when they cannot be expressed — reported through the map's own
+        skip log, so an unplaceable layer is refused rather than drawn somewhere wrong.
+    """
+    corners = web_map._lonlat_corners(source)
+    if corners is None:
+        web_map._skipped(
+            caller,
+            "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
+            "needs; reproject the dataset so its extent is representable",
+        )
+        return None
+    # Already lon/lat, so the framing takes them as they are.
+    web_map._note_lonlat_bounds(
+        (corners[0][0], corners[2][1], corners[1][0], corners[0][1])
+    )
+    return corners
+
+
+def _image_layer(web_map: Any, layer: LayerSpec, url: str, coordinates: Any) -> Any:
+    """Package an image source and the raster layer reading it.
+
+    Both raster kinds draw the same way — a ``data:`` PNG placed on four lon/lat corners — and differ only
+    in how the image is made, so the MapLibre half is written once.
+
+    Args:
+        web_map: The map being drawn.
+        layer: The layer's description.
+        url: The ``data:image/png;base64,`` URI to place.
+        coordinates: The four lon/lat corners, clockwise from the north-west.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+    """
+    from digitalearth.web.renderer import DrawnLayer
+
+    Layer, LayerType = _require_layer_api()
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec={"type": "image", "url": url, "coordinates": coordinates},
+        layer=Layer(
+            id=layer.id,
+            type=LayerType.RASTER,
+            source=source_id,
+            paint={"raster-opacity": float(layer.symbology.props["opacity"])},
+            layout={"visibility": "visible" if layer.visible else "none"},
+        ),
+    )
+
+
+def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Encode one band as a coloured image and place it on the map.
+
+    Args:
+        web_map: The map being drawn.
+        data: The layer's source — a pyramids dataset or an array.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the raster's corners cannot be
+        expressed in lon/lat, which the builder has already reported.
+    """
+    import numpy as np
+
+    props = dict(layer.symbology.props)
+    source = web_map._display_source_or_skip(data, band=props["band"], layer="field")
+    if source is None:
+        return None
+    values = source.z.values
+    y = np.asarray(source.y.values, dtype=float)
+    if y.size > 1 and y[0] < y[-1]:
+        # Ascending y → flip so PNG row 0 is the northern edge.
+        values = values[::-1]
+    url = web_map._rgba_png_datauri(
+        values, props["cmap"], vmin=props["vmin"], vmax=props["vmax"]
+    )
+    coordinates = _placed_corners(web_map, source, "field")
+    if coordinates is None:
+        return None
+    return _image_layer(web_map, layer, url, coordinates)
+
+
+def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Encode three bands as an RGB image and place it on the map.
+
+    Args:
+        web_map: The map being drawn.
+        data: The layer's source — the dataset the bands are read from.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the raster's corners cannot be
+        expressed in lon/lat, which the builder has already reported.
+    """
+    import numpy as np
+
+    from digitalearth.base.sources import get_stack
+
+    props = dict(layer.symbology.props)
+    bands = list(props["bands"])
+    # `data` is already in the display CRS, so the stack and the placement come from one reprojection
+    # rather than from two independent ones.
+    stack = get_stack(data, bands, mask=props["mask_nodata"])
+    source = web_map._to_display_source(data, band=bands[0])
+    y = np.asarray(source.y.values, dtype=float)
+    if y.size > 1 and y[0] < y[-1]:
+        # Ascending y → flip so PNG row 0 is the north edge.
+        stack = stack[::-1]
+    from digitalearth.base.stretch import stretch_to_unit
+
+    url = web_map._composite_png_datauri(stretch_to_unit(stack, props["limits"]))
+    coordinates = _placed_corners(web_map, source, "rgb_composite")
+    if coordinates is None:
+        return None
+    return _image_layer(web_map, layer, url, coordinates)
 
 
 class RasterMixin(_MixinBase):
@@ -172,7 +301,7 @@ class RasterMixin(_MixinBase):
         import numpy as np
 
         vmin, vmax = _colour_limits(limits, vmin, vmax, caller="WebMap.field()")
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         source = self._display_source_or_skip(data, band=band, layer="field")
         if source is None:
             return self
@@ -192,38 +321,28 @@ class RasterMixin(_MixinBase):
             y.size > 1 and y[0] < y[-1]
         ):  # ascending y → flip so PNG row 0 is the northern edge
             values = values[::-1]
-        url = self._rgba_png_datauri(values, cmap_name, vmin=vmin, vmax=vmax)
-        coordinates = self._lonlat_corners(source)
-        if coordinates is None:
-            self._skipped(
-                "field",
-                "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
-                "needs; reproject the dataset so its extent is representable",
-            )
-            return self
-        # Already lon/lat, so the framing takes them as they are.
-        self._note_lonlat_bounds(
-            (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
-        )
-
-        src_id, layer_id = self._uid("raster-src"), self._layer_id("raster", name)
-        spec = {"type": "image", "url": url, "coordinates": coordinates}
-        layer = Layer(
-            id=layer_id,
-            type=LayerType.RASTER,
-            source=src_id,
-            paint={"raster-opacity": float(opacity)},
-            layout={"visibility": "visible" if visible else "none"},
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, spec)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind="raster", visible=visible, source=data)
-        return self._queue(apply)
+        layer_id = self._layer_id("raster", name)
+        # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
+        # caller's request as much as `cmap=` is; the image itself is encoded by `draw_field`, from the
+        # source this records.
+        if self._index_layer(
+            layer_id,
+            name,
+            kind="raster",
+            visible=visible,
+            source=data,
+            symbology=Symbology(
+                props={
+                    "cmap": cmap_name,
+                    "vmin": vmin,
+                    "vmax": vmax,
+                    "opacity": float(opacity),
+                    "band": band,
+                }
+            ),
+        ):
+            self._last_layer_id = layer_id
+        return self
 
     #: Deprecated spelling of :meth:`field`, the contract's name for a raster band drawn as a coloured field
     #: (#299). It forwards and warns.
@@ -303,37 +422,24 @@ class RasterMixin(_MixinBase):
             y.size > 1 and y[0] < y[-1]
         ):  # ascending y → flip so PNG row 0 is the north edge
             stack = stack[::-1]
-        url = self._composite_png_datauri(stretch_to_unit(stack, limits))
-        coordinates = self._lonlat_corners(source)
-        if coordinates is None:
-            self._skipped(
-                "rgb_composite",
-                "the raster's corners cannot be expressed in lon/lat, which a MapLibre image source "
-                "needs; reproject the dataset so its extent is representable",
-            )
-            return self
-        # Already lon/lat, so the framing takes them as they are.
-        self._note_lonlat_bounds(
-            (coordinates[0][0], coordinates[2][1], coordinates[1][0], coordinates[0][1])
-        )
-        src_id, layer_id = self._uid("rgb-src"), self._layer_id("rgb", name)
-        spec = {"type": "image", "url": url, "coordinates": coordinates}
-        layer = Layer(
-            id=layer_id,
-            type=LayerType.RASTER,
-            source=src_id,
-            paint={"raster-opacity": float(opacity)},
-            layout={"visibility": "visible" if visible else "none"},
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, spec)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind="rgb", visible=visible, source=dataset)
-        return self._queue(apply)
+        layer_id = self._layer_id("rgb", name)
+        if self._index_layer(
+            layer_id,
+            name,
+            kind="rgb",
+            visible=visible,
+            source=dataset,
+            symbology=Symbology(
+                props={
+                    "bands": tuple(int(band) for band in bands),
+                    "limits": limits,
+                    "opacity": float(opacity),
+                    "mask_nodata": bool(mask_nodata),
+                }
+            ),
+        ):
+            self._last_layer_id = layer_id
+        return self
 
     @staticmethod
     def _composite_png_datauri(unit_stack: Any) -> str:

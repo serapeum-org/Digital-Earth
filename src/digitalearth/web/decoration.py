@@ -307,6 +307,56 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def draw_text(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre symbol layer for a single text annotation.
+
+    An annotation draws from no data: its anchor and its string are what the caller passed, which is why
+    `_data` is unused and the layer carries no source.
+
+    Args:
+        web_map: The map being drawn.
+        _data: Unused — an annotation has no source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the point source and the symbol layer.
+    """
+    from digitalearth.web.renderer import DrawnLayer
+
+    Layer, LayerType = _require_layer_api()
+    props = dict(layer.symbology.props)
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec={
+            "type": "geojson",
+            "data": {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [float(props["lon"]), float(props["lat"])],
+                },
+                "properties": {"text": props["s"]},
+            },
+        },
+        layer=Layer(
+            id=layer.id,
+            type=LayerType.SYMBOL,
+            source=source_id,
+            layout={
+                "text-field": ["get", "text"],
+                "text-size": float(props["text_size"]),
+                "text-allow-overlap": True,
+            },
+            paint={
+                "text-color": props["color"],
+                "text-halo-color": props["halo_color"],
+                "text-halo-width": float(props["halo_width"]),
+            },
+        ),
+    )
+
+
 def draw_graticule(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre lines (and degree labels) for a graticule layer.
 
@@ -827,40 +877,26 @@ class DecorationMixin(_MixinBase):
             caller="WebMap.text()",
             default=14.0,
         )
-        src_id, layer_id = self._uid("text-src"), self._layer_id("text", name)
-        source = {
-            "type": "geojson",
-            "data": {
-                "type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
-                "properties": {"text": s},
-            },
-        }
-        layer = Layer(
-            id=layer_id,
-            type=LayerType.SYMBOL,
-            source=src_id,
-            layout={
-                "text-field": ["get", "text"],
-                "text-size": float(text_size),
-                "text-allow-overlap": True,
-            },
-            paint={
-                "text-color": color,
-                "text-halo-color": halo_color,
-                "text-halo-width": float(halo_width),
-            },
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
+        layer_id = self._layer_id("text", name)
         # An annotation is decoration, not data: it must not decide where the map looks. On its own it is
         # a zero-area extent (maximum zoom on a point); beside data it drags the extent to reach it.
-        self._index_layer(layer_id, name, kind="text")
-        return self._queue_layer(apply, "text")
+        self._index_layer(
+            layer_id,
+            name,
+            kind="text",
+            symbology=Symbology(
+                props={
+                    "lon": float(lon),
+                    "lat": float(lat),
+                    "s": s,
+                    "text_size": float(text_size),
+                    "color": color,
+                    "halo_color": halo_color,
+                    "halo_width": float(halo_width),
+                }
+            ),
+        )
+        return self
 
     def set_title(
         self,

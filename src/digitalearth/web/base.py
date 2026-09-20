@@ -1177,7 +1177,7 @@ class WebMapBase:
         band: Optional[str] = None,
         source: Any = None,
         symbology: Any = None,
-    ) -> None:
+    ) -> bool:
         """Record a data layer so it can be addressed later.
 
         Args:
@@ -1196,6 +1196,11 @@ class WebMapBase:
                 URL, or the object itself. `None` for a layer drawn from no data, such as a graticule.
             symbology: How the layer looks, as values rather than as the compiled engine expression. `None`
                 records an empty symbology.
+
+        Returns:
+            `True` when the layer is registered. `False` when its drawer declined to draw it — an
+            unplaceable raster, an empty collection — in which case nothing is left behind and the caller
+            must not treat it as the map's last layer.
 
         Note:
             The tree places the layer in the band its kind declares, so nothing here computes a position. Queue
@@ -1241,8 +1246,15 @@ class WebMapBase:
         from digitalearth.web.renderer import DRAWN_KINDS
 
         if kind in DRAWN_KINDS:
-            self._renderer.draw_layer(self.figure_spec, layer_id)
+            if self._renderer.draw_layer(self.figure_spec, layer_id) is None:
+                # The drawer declined — an unplaceable raster, an empty collection — and has said why.
+                # A described layer nothing draws is exactly the drift this seam removes, so the record
+                # goes with the drawing: the caller sees a map that never registered it.
+                self._layer_tree = self._layer_tree.remove(layer_id)
+                self._sources.pop(layer_id, None)
+                return False
             self._queue_layer(_Described(layer_id), kind)
+        return True
 
     def _rekind_layer(self, layer_id: str, kind: str) -> None:
         """Record a different kind for a layer already in the tree, keeping its id, label, visibility and place.
