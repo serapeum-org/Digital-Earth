@@ -310,21 +310,28 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre symbol layer for a single text annotation.
 
-    An annotation draws from no data: its anchor and its string are what the caller passed, which is why
-    `_data` is unused and the layer carries no source.
+    An annotation draws from no data in the figure: its anchor and its string are what the caller passed,
+    recorded as values on its symbology, which is why `_data` is unused. The one-point GeoJSON source the
+    symbol reads is built here from those values rather than opened from anywhere.
 
     Args:
         _web_map: Unused — every drawer takes the map, and this one draws without it.
-        _data: Unused — an annotation has no source.
+        _data: Unused — an annotation has no source in the figure to open.
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the point source and the symbol layer.
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding that point source and the symbol layer.
+
+    Raises:
+        ValueError: when the description carries none of the values the annotation is built from —
+            its anchor, its string, its text size or its colours — naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
-    props = dict(layer.symbology.props)
+    props = required_props(
+        layer, "lon", "lat", "s", "text_size", "color", "halo_color", "halo_width"
+    )
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
@@ -360,21 +367,30 @@ def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
 def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre lines (and degree labels) for a graticule layer.
 
-    A graticule draws from no data: its geometry is generated from the two steps the caller asked for, which
-    is why `_data` is unused and why the layer carries no source. Everything it needs is in its symbology.
+    A graticule draws from no data in the figure: its geometry is generated here from the two steps the
+    caller asked for, which is why `_data` is unused. Everything it needs is in its symbology, and the
+    GeoJSON source the lines read is built from that rather than opened from anywhere.
 
     Args:
         _web_map: Unused — every drawer takes the map, and this one draws without it.
-        _data: Unused — a graticule has no source.
+        _data: Unused — a graticule has no source in the figure to open.
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer` holding the GeoJSON source and one or two layers.
+        A :class:`~digitalearth.web.renderer.DrawnLayer` holding that GeoJSON source, the line layer, and —
+        when the description asked for labels — the degree labels beside it as an extra layer. A hidden
+        graticule hides its labels too, so the numbers never float with nothing to annotate.
+
+    Raises:
+        ValueError: when the description carries none of the values the grid is generated from — its
+            two steps, its colour, width and opacity, or whether it is labelled — naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
-    props = dict(layer.symbology.props)
+    props = required_props(
+        layer, "lon_step", "lat_step", "color", "width", "opacity", "labels"
+    )
     features = _graticule_features(float(props["lon_step"]), float(props["lat_step"]))
     source_id = f"{layer.id}-src"
     color = props["color"]

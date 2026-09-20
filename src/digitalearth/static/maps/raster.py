@@ -4,7 +4,7 @@ Wires a pyramids ``Dataset`` (reprojected to the display CRS by the base) into c
 renders, plus the RGB/HSV composites and the ensemble spaghetti overlay.
 """
 
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
 import numpy as np
 from cleopatra.glyphs.gridded.array_glyph import ArrayGlyph, RgbBands
@@ -13,7 +13,8 @@ from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
-from digitalearth.base.spec import Bounds, Symbology
+from digitalearth.base.spec import Bounds, LayerSpec, Symbology
+from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -22,6 +23,7 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
+from digitalearth.static.renderer import DrawnLayer, drawing_opts
 from digitalearth.static.scene import LayerRecord
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -50,6 +52,176 @@ FIELD_KINDS = {
 #: belong to a contour render — applying them to ``imshow``/``pcolormesh`` would quietly band a continuous
 #: field the caller asked to see continuously.
 _CONTOUR_KINDS = frozenset({"contour", "contourf"})
+
+
+def draw_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Render the raster field a described layer asks for, through ``cleopatra.ArrayGlyph``.
+
+    The one drawer behind ``imshow``/``pcolormesh``/``contour``/``contourf`` — four registered kinds drawn
+    by one recipe, told apart by the ``via`` the builder recorded, which is cleopatra's own render kind.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``Dataset`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the glyph's mappable.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows. The builder answers
+            it by skipping the layer (or, under ``strict``, letting it out).
+    """
+    props = dict(layer.symbology.props)
+    kind = props["via"]
+    opts = drawing_opts(layer)
+    src = scene._prepare(data, props["band"])
+    z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
+    if opts.pop(
+        "cyclic", False
+    ):  # close the antimeridian seam for global fields (T5.2)
+        z_values, x_values = add_cyclic_column(z_values, x_values)
+    # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that label a
+    # colorbar the caller did not label itself.
+    style = auto_style(src)
+    opts["cmap"] = auto_cmap(
+        src, props["cmap"], props["default_cmap"], lookup=lambda _: style
+    )
+    levels = thawed_value(props["levels"])
+    if levels is None and kind in _CONTOUR_KINDS:
+        levels = style.get("levels")  # the variable's canonical contour levels
+    if levels is not None:
+        opts["levels"] = levels
+    # Geo-reference the data. cleopatra honours `extent` only for imshow (bbox order
+    # [xmin, ymin, xmax, ymax]); contour/contourf/pcolormesh plot in array-index space unless given
+    # `coords=(x, y)`. The two are mutually exclusive, so pick by kind — otherwise the field lands at the
+    # wrong location/zoom.
+    if kind == "imshow":
+        placement = {"extent": scene._extent_of(x_values, y_values)}
+    else:
+        placement = {"coords": (x_values, y_values)}
+    # cleopatra's glyph constructors reject the regrouped styling keys (levels/style/color_scale/…);
+    # relocate them onto the plot() call, where `_render_glyph` folds them into their group objects.
+    plot_style = relocate_flat_style(opts)
+    glyph = ArrayGlyph(
+        z_values,
+        exclude_value=[float("nan")],
+        ax=scene.ax,
+        fig=scene.fig,
+        **placement,
+        **opts,
+    )
+    drawn: DrawnLayer = scene._render_glyph(
+        glyph,
+        kind=kind,
+        add_colorbar=props["add_colorbar"],
+        label=style.get("units"),  # the Scene's colorbar labels itself with it (T6.2)
+        **plot_style,
+    )
+    return drawn
+
+
+def _composite_bands(scene: Any, data: Any, props: Dict[str, Any]) -> tuple:
+    """Return the reprojected dataset and its three stretched channels, band-last.
+
+    The half ``rgb_composite`` and ``hsv_composite`` share: reproject once, read the three bands the
+    description names, and stretch them onto ``0-1`` with whatever limits it froze.
+
+    Args:
+        scene: The map being drawn on.
+        data: The multiband pyramids ``Dataset``.
+        props: The layer's recorded properties, holding ``bands``, ``mask_nodata`` and ``limits``.
+
+    Returns:
+        ``(dataset, stretched)`` — the display-CRS dataset and a ``(rows, cols, 3)`` float array in ``0-1``.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows.
+    """
+    bands = list(props["bands"])
+    ds = scene._reproject(data)
+    # (rows, cols, n); nodata -> NaN unless mask_nodata=False
+    stack = get_stack(ds, bands, mask=props["mask_nodata"])
+    return ds, stretch_to_unit(stack, thawed_value(props["limits"]))
+
+
+def _composite_glyph(scene: Any, ds: Any, band_first: Any, opts: Dict[str, Any]) -> Any:
+    """Build the ``ArrayGlyph`` that draws a three-channel composite as one image.
+
+    Args:
+        scene: The map being drawn on.
+        ds: The display-CRS dataset, whose cells place the image.
+        band_first: The channels as ``(3, rows, cols)`` — cleopatra's ``RgbBands`` path transposes them
+            back to band-last for ``imshow``.
+        opts: The constructor keywords, already stripped of the regrouped styling keys.
+
+    Returns:
+        The glyph, ready to plot.
+    """
+    return ArrayGlyph(
+        band_first,
+        rgb_bands=RgbBands(list(range(band_first.shape[0]))),
+        extent=scene._extent(ds),
+        ax=scene.ax,
+        fig=scene.fig,
+        **opts,
+    )
+
+
+def draw_rgb_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Compose the three bands a described true/false-colour layer asks for into one image.
+
+    Args:
+        scene: The map being drawn on.
+        data: The multiband pyramids ``Dataset`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the image mappable.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows.
+    """
+    props = dict(layer.symbology.props)
+    opts = drawing_opts(layer)
+    ds, stretched = _composite_bands(scene, data, props)
+    # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
+    # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
+    band_first = np.moveaxis(stretched, -1, 0)
+    plot_style = relocate_flat_style(opts)
+    drawn: DrawnLayer = scene._render_glyph(
+        _composite_glyph(scene, ds, band_first, opts), **plot_style
+    )
+    return drawn
+
+
+def draw_hsv_composite(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Read the three bands a described HSV layer asks for as hue/saturation/value and draw the RGB.
+
+    Args:
+        scene: The map being drawn on.
+        data: The multiband pyramids ``Dataset`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the image mappable.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows.
+    """
+    from matplotlib.colors import hsv_to_rgb
+
+    props = dict(layer.symbology.props)
+    opts = drawing_opts(layer)
+    ds, stretched = _composite_bands(scene, data, props)
+    rgb = hsv_to_rgb(stretched)  # (rows, cols, 3) RGB
+    # band-FIRST for cleopatra's RgbBands path (see draw_rgb_composite); it transposes back to band-last.
+    band_first = np.moveaxis(rgb, -1, 0)
+    plot_style = relocate_flat_style(opts)
+    drawn: DrawnLayer = scene._render_glyph(
+        _composite_glyph(scene, ds, band_first, opts), **plot_style
+    )
+    return drawn
 
 
 class RasterMixin(_MixinBase):
@@ -97,71 +269,30 @@ class RasterMixin(_MixinBase):
             entirely outside what the display CRS shows — an off-limb frame draws nothing rather than
             raising, so a rotation past the far side of a globe still renders.
         """
-        # Captured before the resolution below rewrites `cmap` and `levels` and `relocate_flat_style` empties
-        # `opts`: what the figure records is the call the caller made, not the call cleopatra received.
-        asked = dict(opts)
+        record = LayerRecord(
+            FIELD_KINDS[kind],
+            source=dataset,
+            band=draw_band,
+            symbology=Symbology(
+                props={
+                    "via": kind,
+                    "band": band,
+                    "cmap": cmap,
+                    "levels": levels,
+                    "add_colorbar": add_colorbar,
+                    "default_cmap": default_cmap,
+                    # What the figure records is the call the caller made, not the call cleopatra
+                    # receives: `draw_field` resolves the colormap and the levels from it and hands
+                    # cleopatra the result.
+                    "opts": dict(opts),
+                }
+            ),
+        )
         try:
-            src = self._prepare(dataset, band)
+            return self._draw(record)
         except OffLimbError:
             self._skipped_off_limb(kind)
             return None
-
-        z_values, x_values, y_values = src.z.values, src.x.values, src.y.values
-        if opts.pop(
-            "cyclic", False
-        ):  # close the antimeridian seam for global fields (T5.2)
-            z_values, x_values = add_cyclic_column(z_values, x_values)
-        # Per-variable defaults (T6.2): the colormap, the canonical contour levels, and the units that
-        # label a colorbar the caller did not label itself.
-        style = auto_style(src)
-        opts["cmap"] = auto_cmap(src, cmap, default_cmap, lookup=lambda _: style)
-        if levels is None and kind in _CONTOUR_KINDS:
-            levels = style.get("levels")  # the variable's canonical contour levels
-        if levels is not None:
-            opts["levels"] = levels
-        # Geo-reference the data. cleopatra honours `extent` only for imshow (bbox order
-        # [xmin, ymin, xmax, ymax]); contour/contourf/pcolormesh plot in array-index space unless
-        # given `coords=(x, y)`. The two are mutually exclusive, so pick by kind — otherwise the
-        # field lands at the wrong location/zoom.
-        if kind == "imshow":
-            placement = {"extent": self._extent_of(x_values, y_values)}
-        else:
-            placement = {"coords": (x_values, y_values)}
-        # cleopatra's glyph constructors reject the regrouped styling keys (levels/style/color_scale/…);
-        # relocate them onto the plot() call, where `_render_glyph` folds them into their group objects.
-        plot_style = relocate_flat_style(opts)
-        glyph = ArrayGlyph(
-            z_values,
-            exclude_value=[float("nan")],
-            ax=self.ax,
-            fig=self.fig,
-            **placement,
-            **opts,
-        )
-        units = style.get("units")  # the Scene's colorbar labels itself with it (T6.2)
-        return self._render_glyph(
-            glyph,
-            kind=kind,
-            add_colorbar=add_colorbar,
-            label=units,
-            describe=LayerRecord(
-                FIELD_KINDS[kind],
-                source=dataset,
-                band=draw_band,
-                symbology=Symbology(
-                    props={
-                        "via": kind,
-                        "band": band,
-                        "cmap": cmap,
-                        "levels": levels,
-                        "add_colorbar": add_colorbar,
-                        "default_cmap": default_cmap,
-                        "opts": asked,
-                    }
-                ),
-            ),
-            **plot_style,
-        )
 
     def imshow(self, dataset: Any, **kwargs) -> Any:
         """Render a raster as a pixel grid (``ArrayGlyph`` ``kind="imshow"``).
@@ -326,44 +457,53 @@ class RasterMixin(_MixinBase):
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
         require_three_bands("rgb_composite", bands)
-        try:
-            ds = self._reproject(dataset)
-        except OffLimbError:
-            self._skipped_off_limb("rgb_composite")
-            return None
-        stack = get_stack(
-            ds, bands, mask=mask_nodata
-        )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
-        # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
-        # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
-        band_first = np.moveaxis(stretch_to_unit(stack, limits), -1, 0)
-        asked = dict(opts)  # before `relocate_flat_style` empties it (see `_field`)
-        plot_style = relocate_flat_style(opts)
-        glyph = ArrayGlyph(
-            band_first,
-            rgb_bands=RgbBands(list(range(len(bands)))),
-            extent=self._extent(ds),
-            ax=self.ax,
-            fig=self.fig,
-            **opts,
+        return self._composite(
+            "rgb_composite", dataset, bands, mask_nodata, limits, opts
         )
-        return self._render_glyph(
-            glyph,
-            describe=LayerRecord(
-                "rgb",
-                source=dataset,
-                symbology=Symbology(
-                    props={
-                        "via": "rgb_composite",
-                        "bands": tuple(bands),
-                        "mask_nodata": mask_nodata,
-                        "limits": limits,
-                        "opts": asked,
-                    }
-                ),
+
+    def _composite(
+        self,
+        via: str,
+        dataset: Any,
+        bands: Sequence[int],
+        mask_nodata: bool,
+        limits: Optional[ChannelLimits],
+        opts: dict,
+    ) -> Any:
+        """Record a three-band composite and draw it, answering an off-limb warp with a skipped layer.
+
+        The half :meth:`rgb_composite` and :meth:`hsv_composite` share once the band count is validated —
+        they differ only in the recipe they record, which is what picks the drawer.
+
+        Args:
+            via: The recipe the figure records, ``"rgb_composite"`` or ``"hsv_composite"``.
+            dataset: The multiband pyramids ``Dataset``.
+            bands: The three 1-based band indices.
+            mask_nodata: Whether each band's nodata cells are excluded from the stretch.
+            limits: Frozen per-channel ``(lo, hi)`` stretch bounds, or ``None`` for a per-call scan.
+            opts: The caller's styling keywords, recorded as they were written.
+
+        Returns:
+            The image mappable, or ``None`` when the data lies outside what the display CRS shows.
+        """
+        record = LayerRecord(
+            "rgb",
+            source=dataset,
+            symbology=Symbology(
+                props={
+                    "via": via,
+                    "bands": tuple(bands),
+                    "mask_nodata": mask_nodata,
+                    "limits": limits,
+                    "opts": dict(opts),
+                }
             ),
-            **plot_style,
         )
+        try:
+            return self._draw(record)
+        except OffLimbError:
+            self._skipped_off_limb(via)
+            return None
 
     def hsv_composite(
         self,
@@ -434,46 +574,9 @@ class RasterMixin(_MixinBase):
             rgb_composite: The same three bands mapped straight to red/green/blue.
             digitalearth.base.stretch.channel_limits: Derives the ``limits`` this accepts.
         """
-        from matplotlib.colors import hsv_to_rgb
-
         require_three_bands("hsv_composite", bands)
-        try:
-            ds = self._reproject(dataset)
-        except OffLimbError:
-            self._skipped_off_limb("hsv_composite")
-            return None
-        stack = get_stack(
-            ds, bands, mask=mask_nodata
-        )  # (rows, cols, n); nodata -> NaN unless mask_nodata=False
-        rgb = hsv_to_rgb(stretch_to_unit(stack, limits))  # (rows, cols, 3) RGB
-        # band-FIRST for cleopatra's RgbBands path (see rgb_composite); it transposes back to band-last.
-        band_first = np.moveaxis(rgb, -1, 0)
-        asked = dict(opts)  # before `relocate_flat_style` empties it (see `_field`)
-        plot_style = relocate_flat_style(opts)
-        glyph = ArrayGlyph(
-            band_first,
-            rgb_bands=RgbBands([0, 1, 2]),
-            extent=self._extent(ds),
-            ax=self.ax,
-            fig=self.fig,
-            **opts,
-        )
-        return self._render_glyph(
-            glyph,
-            describe=LayerRecord(
-                "rgb",
-                source=dataset,
-                symbology=Symbology(
-                    props={
-                        "via": "hsv_composite",
-                        "bands": tuple(bands),
-                        "mask_nodata": mask_nodata,
-                        "limits": limits,
-                        "opts": asked,
-                    }
-                ),
-            ),
-            **plot_style,
+        return self._composite(
+            "hsv_composite", dataset, bands, mask_nodata, limits, opts
         )
 
     def spaghetti(self, collection: Any, band: int = 1, **opts) -> List[Any]:

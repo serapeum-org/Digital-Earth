@@ -124,6 +124,79 @@ class TestTheTwoPathsAreDisjoint:
         for layer_id in m.layer_ids:
             assert layer_id in added, f"{layer_id} is described but never drawn"
 
+    def test_a_kind_the_seam_has_not_reached_is_described_but_left_to_the_queue(self):
+        """The seam opens one kind at a time, so a kind it has not reached must not be drawn from its record.
+
+        Test scenario:
+            `DRAWN_KINDS` is a growing subset: a kind joins it in the same step its builder stops queuing
+            a closure. Drawing every described layer regardless of that list would hand an unconverted
+            kind to `drawer_for`, which refuses it by name — so a builder that has not been converted yet
+            would stop working the moment it recorded a description. Its layer is still registered; it is
+            simply drawn by its own queued closure rather than from the tree.
+        """
+        from digitalearth.web import WebMap
+
+        unconverted = "terrain"
+        assert unconverted in CAPABILITIES.kinds, (
+            f"{unconverted} must be a kind the tier declares, or this asks nothing"
+        )
+        assert unconverted not in DRAWN_KINDS, (
+            f"{unconverted} is drawn from its description now; ask about a kind that is not"
+        )
+
+        m = WebMap()
+        registered = m._index_layer("dem", "dem", kind=unconverted)
+        assert registered is True, "an unconverted kind is still a registered layer"
+        assert m.layer_ids == ["dem"], m.layer_ids
+        assert m._renderer.drawn == {}, (
+            f"an unconverted kind was drawn from its description: {m._renderer.drawn}"
+        )
+        assert m._queued == [], (
+            f"an unconverted kind was queued as a description: {m._queued}"
+        )
+
+    def test_a_custom_layer_hands_the_widget_no_source_of_its_own(self):
+        """A caller's own object carries its data inside it, so nothing is added beside it.
+
+        Test scenario:
+            Every other description builds a MapLibre source the widget is given before the layer.
+            `draw_custom` has none — `custom:maplibre` means the object *is* the layer — so the widget
+            builder has to skip that step rather than call `add_source(None, None)`, which MapLibre would
+            take as a real source under an unusable id.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        own = _fake_layer("wells")
+        m.add_layer(own, name="wells")
+        sources = []
+        added = []
+
+        class Recorder:
+            """Records both halves of what reaches the widget."""
+
+            def add_source(self, source_id, spec):
+                """Record one added source.
+
+                Args:
+                    source_id: The source id reaching the widget.
+                    spec: The source definition reaching the widget.
+                """
+                sources.append((source_id, spec))
+
+            def add_layer(self, layer):
+                """Record one added layer.
+
+                Args:
+                    layer: The layer reaching the widget.
+                """
+                added.append(layer)
+
+        for entry in m._queued:
+            m._apply_layer(Recorder(), entry)
+        assert sources == [], f"a custom layer added a source of its own: {sources}"
+        assert added == [own], f"the caller's own object must be what is added: {added}"
+
 
 def _is_marker(web_map, layer_id: str) -> bool:
     """Whether a queue entry for `layer_id` is a description marker rather than a drawing.
@@ -334,6 +407,89 @@ class TestADrawerThatDeclinesLeavesNothingBehind:
         for entry in m._queued:
             m._apply_layer(Recorder(), entry)
         assert added == [], "a marker with no drawing must add nothing"
+
+    def test_a_declined_cluster_layer_leaves_no_tooltip_target_behind(
+        self, monkeypatch, points_gdf
+    ):
+        """`cluster` files a tooltip target its own drawer produced, so a refusal must not file one.
+
+        Args:
+            monkeypatch: Used to make the cluster drawer decline.
+            points_gdf: A small point collection.
+
+        Test scenario:
+            The bubbles are aggregates whose only properties are point counts, so `cluster` files the
+            *unclustered* points as the layer a later `.tooltip()` binds to — an id that exists only
+            because the drawer drew it. Filing it whether or not the drawer drew would leave the tooltip
+            bound to a layer no widget holds, which is exactly the drift this seam removes.
+        """
+        from digitalearth.web import WebMap, bigdata
+
+        def _declines(web_map, data, layer):
+            """Behave like a drawer that found nothing to draw.
+
+            Args:
+                web_map: Unused — the drawer declines before it would read the map.
+                data: Unused — the collection it would have clustered.
+                layer: Unused — the description it would have drawn.
+
+            Returns:
+                `None`, the shape a drawer answers in when it declines.
+            """
+            return None
+
+        monkeypatch.setattr(bigdata, "draw_clusters", _declines)
+        m = WebMap().points(points_gdf, name="obs")
+        m.cluster(points_gdf)
+        assert m.layer_ids == ["obs"], m.layer_ids
+        assert m._last_layer_id == "obs", (
+            f"a declined cluster layer moved the tooltip target to {m._last_layer_id!r}"
+        )
+
+    def test_a_raster_redrawn_where_it_cannot_be_placed_is_declined(
+        self, monkeypatch, warning_log, dataset
+    ):
+        """The drawer keeps its own placement guard, because a figure can reach it without its builder.
+
+        Args:
+            monkeypatch: Used to make the display warp place none of the data.
+            warning_log: The tier's loguru warnings.
+            dataset: A small raster.
+
+        Test scenario:
+            `field` checks placement before it records anything, so on that path its drawer never meets
+            an unplaceable source. A *saved* figure does not go through `field`: it is handed straight to
+            `draw_layer`, possibly on a map whose display CRS cannot place the raster at all. Without the
+            drawer's own guard that path raises where every other unplaceable layer is skipped with a
+            warning, and the record is left holding a drawing the figure no longer describes.
+        """
+        from digitalearth.base.crs import OffLimbError
+        from digitalearth.web import WebMap
+
+        m = WebMap().field(dataset, name="band")
+        first = m._renderer.drawn["band"]
+
+        def _off_limb(self, data, band=1):
+            """Behave like a warp that placed none of the data.
+
+            Args:
+                self: The map being drawn on.
+                data: Unused — the source that would have been warped.
+                band: Unused — the band that would have been read.
+
+            Raises:
+                OffLimbError: always, which is what an off-limb warp raises.
+            """
+            raise OffLimbError("the data lies outside what 4326 can show")
+
+        monkeypatch.setattr(WebMap, "_to_display_source", _off_limb)
+        assert m._renderer.draw_layer(m.figure_spec, "band") is None, (
+            "an unplaceable raster must be declined rather than drawn somewhere wrong"
+        )
+        assert m._renderer.drawn["band"] is first, (
+            "a declined redraw replaced what was already drawn"
+        )
+        assert any("field" in line for line in warning_log), warning_log
 
 
 class TestTheBandOfALayerIsItsKinds:

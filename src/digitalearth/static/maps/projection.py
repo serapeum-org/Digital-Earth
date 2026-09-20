@@ -12,14 +12,39 @@ from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 from cleopatra.basemap.projection import apply_projection_frame
 
 from digitalearth.base.domains import DomainLike, resolve_domain
-from digitalearth.base.spec import Bounds, Symbology
+from digitalearth.base.spec import Bounds, LayerSpec, Symbology
 from digitalearth.static import projections
+from digitalearth.static.renderer import DrawnLayer
 from digitalearth.static.scene import LayerRecord
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Build the lon/lat graticule a described layer asks for, at the spacing it recorded.
+
+    The one drawer here that leaves no artist behind. A graticule's lines are drawn by
+    ``apply_projection_frame`` when the globe frame goes on, which is after every data layer — so what
+    "drawing" it means is computing the lines and handing them to the map, and the frame picks them up.
+
+    Args:
+        scene: The map being drawn on.
+        _data: The source slot every drawer takes, unread here — a graticule is computed from the display
+            CRS and two spacings, not from data.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` carrying the projected lines, with no artists:
+        there is nothing on the axes yet to hide or remove.
+    """
+    props = layer.symbology.props
+    scene._graticule_lines = projections.graticule(
+        scene.crs, lon_step=props["lon_step"], lat_step=props["lat_step"]
+    )
+    return DrawnLayer(artist=scene._graticule_lines)
 
 
 class ProjectionMixin(_MixinBase):
@@ -156,9 +181,6 @@ class ProjectionMixin(_MixinBase):
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
         """
-        self._graticule_lines = projections.graticule(
-            self.crs, lon_step=lon_step, lat_step=lat_step
-        )
         symbology = Symbology(
             props={"via": "graticule", "lon_step": lon_step, "lat_step": lat_step}
         )
@@ -169,10 +191,13 @@ class ProjectionMixin(_MixinBase):
             self._layer_tree = self._layer_tree.replace(
                 with_fields(self._layer_tree.get(held), symbology=symbology)
             )
-            return
-        self._graticule_id = self._describe_layer(
-            LayerRecord("graticule", symbology=symbology)
-        )
+        else:
+            held = self._describe_layer(LayerRecord("graticule", symbology=symbology))
+            self._graticule_id = held
+        # Described first, then drawn — but through the renderer directly rather than through
+        # `Scene._draw`, because a second call replaces the layer it already has rather than adding one,
+        # and the funnel only knows how to add.
+        self._renderer.draw_layer(self.figure_spec, held)
 
     def _frame(self) -> tuple:
         """Return the cached ``(boundary, xlim, ylim)`` for the display CRS (computed once per CRS).

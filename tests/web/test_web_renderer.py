@@ -255,6 +255,26 @@ class TestWhatTheRendererReports:
         )
         assert Renderer._reaches_maplibre(figure, added, "later") is True
 
+    def test_the_compatibility_view_skips_a_layer_whose_drawing_is_gone(
+        self, drawn_map
+    ):
+        """`WebMap.layers` resolves each queued marker through the record, which a removal empties.
+
+        Args:
+            drawn_map: A map with one drawn layer.
+
+        Test scenario:
+            The marker in the queue and the drawing in the record go together on every path that removes
+            a layer, but the view must not assume it: a marker left standing alone resolves to nothing,
+            and reading `.layer` off that nothing raises inside a property every caller touches.
+            `tests/web/test_web_seam.py` asks the same question of the widget builder.
+        """
+        drawn_map._renderer.remove("obs")
+        assert drawn_map.layers == [], drawn_map.layers
+        assert len(drawn_map._queued) == 1, (
+            "the marker must still be queued, or an empty queue is what emptied the view"
+        )
+
     def test_the_declared_kinds_are_the_ones_drawn_from_a_description(self):
         """The tuple is the tier's answer to "what do you draw?"."""
         assert "points" in DRAWN_KINDS

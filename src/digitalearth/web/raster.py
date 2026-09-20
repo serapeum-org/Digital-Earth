@@ -87,6 +87,10 @@ def _placed_corners(web_map: Any, source: Any, caller: str) -> Any:
     Returns:
         The four lon/lat corners, or `None` when they cannot be expressed — reported through the map's own
         skip log, so an unplaceable layer is refused rather than drawn somewhere wrong.
+
+    Raises:
+        OffLimbError: when the map is `strict`, which is what that flag asks for: a pipeline that must not
+            publish a half-drawn map gets the refusal back instead of a warning.
     """
     corners = web_map._lonlat_corners(source)
     if corners is None:
@@ -110,15 +114,20 @@ def _image_layer(_web_map: Any, layer: LayerSpec, url: str, coordinates: Any) ->
     in how the image is made, so the MapLibre half is written once.
 
     Args:
-        _web_map: Unused — every drawer takes the map, and this one draws without it.
-        layer: The layer's description.
+        _web_map: Unused — taken so this reads with the same first argument as the two drawers that call
+            it, which do need the map.
+        layer: The layer's description. Its `opacity` prop and its visibility are what MapLibre is given;
+            everything else about the image is already in `url`.
         url: The ``data:image/png;base64,`` URI to place.
         coordinates: The four lon/lat corners, clockwise from the north-west.
 
     Returns:
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the description records no `opacity` for the raster, naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
@@ -129,7 +138,9 @@ def _image_layer(_web_map: Any, layer: LayerSpec, url: str, coordinates: Any) ->
             id=layer.id,
             type=layer_types.RASTER,
             source=source_id,
-            paint={"raster-opacity": float(layer.symbology.props["opacity"])},
+            paint={
+                "raster-opacity": float(required_props(layer, "opacity")["opacity"])
+            },
             layout={"visibility": "visible" if layer.visible else "none"},
         ),
     )
@@ -144,12 +155,20 @@ def draw_field(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the raster's corners cannot be
-        expressed in lon/lat, which the builder has already reported.
+        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the band cannot be placed — it
+        lies outside what the display CRS can show, or its corners will not express as lon/lat. Either way
+        it has been reported through the map's skip log before this answers.
+
+    Raises:
+        ValueError: when the description records none of the values the image is encoded from — its
+            band, its colour map or its colour limits — naming the layer, its kind and what is missing.
+        OffLimbError: when the map is `strict` and the band cannot be placed, in place of the `None`.
     """
     import numpy as np
 
-    props = dict(layer.symbology.props)
+    from digitalearth.web.renderer import required_props
+
+    props = required_props(layer, "band", "cmap", "vmin", "vmax", "opacity")
     source = web_map._display_source_or_skip(data, band=props["band"], layer="field")
     if source is None:
         return None
@@ -176,14 +195,24 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the raster's corners cannot be
-        expressed in lon/lat, which the builder has already reported.
+        A :class:`~digitalearth.web.renderer.DrawnLayer`, or `None` when the composite's corners will not
+        express as lon/lat — reported through the map's skip log before this answers.
+
+    Raises:
+        ValueError: when the description records none of the values the composite is built from — its
+            three bands, its stretch limits or whether NoData is masked — naming the layer, its kind and
+            what is missing; when the recorded limits do not hold one `(lo, hi)` pair per band; or when no
+            pixel is finite in all three, since there is nothing to draw and an empty image would read as
+            a rendering failure rather than as an empty input.
+        OffLimbError: when the map is `strict` and the composite cannot be placed, in place of the `None`.
     """
     import numpy as np
 
     from digitalearth.base.sources import get_stack
 
-    props = dict(layer.symbology.props)
+    from digitalearth.web.renderer import required_props
+
+    props = required_props(layer, "bands", "mask_nodata", "limits", "opacity")
     bands = list(props["bands"])
     # `data` is already in the display CRS, so the stack and the placement come from one reprojection
     # rather than from two independent ones.

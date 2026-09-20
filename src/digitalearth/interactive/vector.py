@@ -143,6 +143,10 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        KeyError: when the recorded ``column`` is absent from the reprojected frame — the value column a
+            hex is coloured by is only read here, so a name that matches nothing is refused here.
     """
     import numpy as np
 

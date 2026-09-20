@@ -1,0 +1,621 @@
+"""Draw a :class:`~digitalearth.base.spec.FigureSpec` onto one matplotlib axes (#303, the static seam).
+
+The first half of #303 gave this tier a description: every builder ends at ``Scene._describe_layer``, so a
+figure can finally say what it draws. It still *drew* the old way — the builder computed the geometry, built
+the cleopatra glyph and registered the artist, and the description was written beside it. Two code paths for
+one layer is exactly the drift the other three tiers removed: a layer could be described one way and drawn
+another, and nothing held them together.
+
+This is the other half. A builder now records what it wants drawn and **this** module draws it, so the layer
+is built once, from the description. What follows from that is the same everywhere: a figure round-trips
+through ``to_dict``/``from_dict`` and renders the same picture, and a change to one layer is a change to one
+layer rather than a rebuild of the scene around it.
+
+**This tier mutates, like the 3-D one.** matplotlib hands out live artists on a live axes, so
+:meth:`Renderer.apply` reconciles against them: a removed layer's artists come off the axes, a rebuilt one is
+drawn again. That is why :meth:`Renderer.apply` has to roll the *engine* back as well as its own record when
+a figure is refused half-way — the web and interactive tiers rebuild their engine object on every render and
+can restore a dict; here, an artist already added to the axes stays on it until something takes it off.
+
+**The drawer table is keyed by kind and then by recipe.** Several builders draw one kind: ``imshow`` and
+``block`` are both a field render, and ``choropleth``, ``voronoi``, ``cartogram``, ``quadtree`` and
+``grid_cells`` are all a ``choropleth``. The kind vocabulary is shared with every other tier and names *what*
+a layer is, so it cannot say which builder made it — each builder records that under ``via``, and that is the
+second key (the shape :mod:`digitalearth.interactive.renderer` settled on).
+"""
+
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Mapping, Optional, Tuple
+
+from digitalearth.base.registry import band_of
+from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec._serial import thawed_value
+
+__all__ = ["DRAWN_KINDS", "DrawnLayer", "Renderer", "drawer_for", "drawing_opts"]
+
+logger = logging.getLogger(__name__)
+
+
+def drawing_opts(layer: LayerSpec) -> Dict[str, Any]:
+    """Return the styling keywords a layer recorded, back in the shape its caller wrote them.
+
+    A `Symbology` stores every sequence as a tuple, so a figure written to JSON and read back compares
+    equal to the one it came from. A drawer hands those values to cleopatra and matplotlib again, and some
+    of them read the two spellings as two different requests — a tuple of contour levels is not a sequence
+    of edges everywhere — so the freeze is undone on the way out.
+
+    Args:
+        layer: The layer being drawn.
+
+    Returns:
+        The recorded ``opts`` as a fresh dict with its tuples back as lists, or an empty dict for a layer
+        that recorded none. It is a copy, so a drawer may mutate it the way a builder used to mutate the
+        caller's own keywords.
+
+    Examples:
+        - A list survives the round trip through the description:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec, Symbology
+            >>> from digitalearth.static.renderer import drawing_opts
+            >>> layer = LayerSpec("a", "raster", symbology=Symbology(props={"opts": {"levels": [1, 2]}}))
+            >>> drawing_opts(layer)
+            {'levels': [1, 2]}
+
+            ```
+    """
+    # Annotated rather than returned straight: `thawed_value` takes and gives a free-form value, so
+    # the shape a drawer can rely on is stated here.
+    opts: Dict[str, Any] = thawed_value(dict(layer.symbology.props.get("opts") or {}))
+    return opts
+
+
+@dataclass(frozen=True)
+class DrawnLayer:
+    """What one drawer produced: the artists a layer put on the axes, plus what the builder hands back.
+
+    Every drawer answers in this shape so the renderer can record, hide and remove whatever came back
+    without knowing which drawer made it — the equivalent of the 3-D tier's ``(mesh, actor)`` pair and of
+    the web tier's source-and-layer.
+
+    Attributes:
+        artist: What the builder returns to its caller — the mappable of a field render, the ``Text`` of a
+            label, the list of polylines a limb-split coastline became. It is whatever that builder has
+            always returned, because the public return type is part of this tier's API and the seam must not
+            change it.
+        glyph: The cleopatra glyph that drew it, or ``None`` for a layer drawn straight onto the axes (a
+            tile basemap, a Natural-Earth overlay, a text label). Kept because a categorical fill's swatch
+            legend is read off the glyph rather than off the artist.
+        artists: Every matplotlib artist the layer owns, which is what :meth:`Renderer.remove` takes off the
+            axes and what :meth:`Renderer.set_visible` toggles. Empty for a layer that left nothing
+            addressable behind — ``cleopatra.basemap.reference.add_features`` draws onto the axes and hands
+            back the axes, so there is no per-layer artist to hold.
+    """
+
+    artist: Any = None
+    glyph: Any = None
+    artists: Tuple[Any, ...] = field(default=())
+
+
+#: The layer kinds this tier draws **from its description**. Names only, so what is drawable can be asked —
+#: by a caller, and by the tier's own capability test — without importing every builder module behind them.
+#: :func:`drawer_for` resolves them to functions and is checked against this tuple, which is what keeps the
+#: two from drifting: a kind with a drawer and no declaration is a refusal message that lies, and a kind
+#: declared with no drawer is a bare `KeyError` where a message belongs.
+#:
+#: It is the whole of :data:`~digitalearth.static.capabilities.CAPABILITIES`'s ``kinds``: every builder this
+#: tier has draws from its description, so there is no half-converted set to keep track of.
+DRAWN_KINDS: Tuple[str, ...] = (
+    "raster",
+    "mesh",
+    "contours",
+    "filled_contours",
+    "rgb",
+    "points",
+    "choropleth",
+    "polygons",
+    "vectors",
+    "streamlines",
+    "unstructured",
+    "heatmap",
+    "flow",
+    "text",
+    "graticule",
+    "basemap",
+    "coastlines",
+    "borders",
+    "land",
+    "ocean",
+    "lakes",
+    "rivers",
+)
+
+
+def _recipes() -> Dict[str, Dict[str, Any]]:
+    """Return the drawers of this tier, by kind and then by the recipe each layer was built with.
+
+    A kind is drawn more than one way here — a ``choropleth`` is a feature collection, a Voronoi
+    tessellation, a cartogram, a quadtree or a raster's own cells — and the kind cannot say which, because
+    the kind vocabulary is shared with every other tier and names *what* a layer is. So each builder records
+    *how* it drew its layer under ``via``, and that is the second key.
+
+    Returns:
+        Kind -> recipe -> ``draw(scene, data, layer) -> DrawnLayer | None``.
+    """
+    # Imported here rather than at module level: every builder module imports the scene, and the scene
+    # builds a renderer, so a module-level import would close a cycle — and a scene that draws nothing
+    # should not pay for loading all of them.
+    from digitalearth.static.maps import decoration, projection, raster, vector
+
+    return {
+        "raster": {"imshow": raster.draw_field},
+        "mesh": {"pcolormesh": raster.draw_field},
+        "contours": {"contour": raster.draw_field},
+        "filled_contours": {"contourf": raster.draw_field},
+        "rgb": {
+            "rgb_composite": raster.draw_rgb_composite,
+            "hsv_composite": raster.draw_hsv_composite,
+        },
+        "points": {
+            "scatter": vector.draw_scatter,
+            "grid_points": vector.draw_grid_points,
+        },
+        # One kind, five builders: what makes a polygon layer a choropleth is that its polygons carry
+        # values, not where the polygons came from.
+        "choropleth": {
+            "grid_cells": vector.draw_grid_cells,
+            "choropleth": vector.draw_choropleth,
+            "voronoi": vector.draw_voronoi,
+            "cartogram": vector.draw_cartogram,
+            "quadtree": vector.draw_quadtree,
+        },
+        # The same three builders again, drawn without values: an outline-only layer is `polygons`.
+        "polygons": {
+            "shapes": vector.draw_shapes,
+            "voronoi": vector.draw_voronoi,
+            "cartogram": vector.draw_cartogram,
+        },
+        # Arrows and wind barbs are one u/v field drawn with two glyphs; a streamplot integrates that field
+        # into flow lines, which is a layer of its own.
+        "vectors": {
+            "quiver": vector.draw_uv_field,
+            "barbs": vector.draw_uv_field,
+        },
+        "streamlines": {"streamplot": vector.draw_uv_field},
+        "unstructured": {
+            "tricontour": vector.draw_tri,
+            "tricontourf": vector.draw_tri,
+            "tripcolor": vector.draw_tri,
+        },
+        "heatmap": {"kde": vector.draw_kde},
+        "flow": {"sankey": vector.draw_sankey},
+        "text": {
+            "text": decoration.draw_text,
+            "annotate": decoration.draw_annotate,
+        },
+        "graticule": {"graticule": projection.draw_graticule},
+        # The recipe is cleopatra's own dataset name, which is the singular `coastline` for the plural kind.
+        "coastlines": {"coastline": decoration.draw_natural_earth},
+        "borders": {"borders": decoration.draw_natural_earth},
+        "land": {"land": decoration.draw_natural_earth},
+        "ocean": {"ocean": decoration.draw_natural_earth},
+        "lakes": {"lakes": decoration.draw_natural_earth},
+        "rivers": {"rivers": decoration.draw_natural_earth},
+        "basemap": {"basemap": decoration.draw_basemap},
+    }
+
+
+def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
+    """Return the drawer for one kind, which picks between the recipes that kind is drawn by.
+
+    Args:
+        kind: The kind being drawn, used only to name it in a refusal.
+        recipes: Recipe name -> drawer.
+
+    Returns:
+        A callable ``draw(scene, data, layer)`` that reads the layer's recorded ``via`` and calls the drawer
+        for it.
+    """
+
+    def draw(scene: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+        """Draw the layer with the drawer its recipe names.
+
+        Args:
+            scene: The scene being drawn on.
+            data: The layer's opened source, or ``None``.
+            layer: The layer's description.
+
+        Returns:
+            What the drawer produced, or ``None`` for a layer it declined to draw.
+
+        Raises:
+            KeyError: when the layer records no recipe this tier knows — a description built by hand, or
+                loaded from a figure written before this tier recorded how it drew its layers.
+        """
+        via = layer.symbology.props.get("via")
+        if via not in recipes:
+            raise KeyError(
+                f"a {kind!r} layer records {via!r} as how it was drawn; this tier draws one of "
+                f"{sorted(recipes)}"
+            )
+        drawn: Optional[DrawnLayer] = recipes[via](scene, data, layer)
+        return drawn
+
+    return draw
+
+
+def drawer_for(kind: str) -> Any:
+    """Return the function that draws one kind of layer in this tier.
+
+    Args:
+        kind: A registered layer kind.
+
+    Returns:
+        A callable ``draw(scene, data, layer) -> DrawnLayer | None``, where `data` is the layer's opened
+        source (or ``None`` for a layer drawn from no source, such as a graticule) and `layer` is its
+        `LayerSpec`.
+
+    Raises:
+        KeyError: when this tier does not draw `kind`, naming the kinds it does; or when the drawer table
+            and :data:`DRAWN_KINDS` disagree, which is a defect in this module rather than in the caller.
+
+    Examples:
+        - Every kind the tier declares has a drawer:
+            ```python
+            >>> from digitalearth.static.capabilities import CAPABILITIES
+            >>> from digitalearth.static.renderer import drawer_for
+            >>> sorted(kind for kind in CAPABILITIES.kinds if drawer_for(kind) is None)
+            []
+
+            ```
+        - A kind from another tier is refused by name:
+            ```python
+            >>> from digitalearth.static.renderer import drawer_for
+            >>> drawer_for("terrain")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            KeyError: "the static tier does not draw 'terrain' layers; it draws [...]"
+
+            ```
+    """
+    # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
+    # without loading every builder behind them.
+    if kind not in DRAWN_KINDS:
+        raise KeyError(
+            f"the static tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+        )
+    recipes = _recipes()
+    if set(recipes) != set(DRAWN_KINDS):
+        raise KeyError(
+            f"the static tier's drawer table and DRAWN_KINDS disagree: "
+            f"{sorted(set(recipes).symmetric_difference(DRAWN_KINDS))}"
+        )
+    return _dispatch(kind, recipes[kind])
+
+
+def _set_visible(artist: Any, visible: bool) -> None:
+    """Show or hide one matplotlib artist.
+
+    Args:
+        artist: The artist to toggle.
+        visible: Whether it is drawn.
+
+    Note:
+        The ``AttributeError`` is caught rather than asked about with ``hasattr``: a property getter can
+        have side effects — PyVista's ``Plotter.camera`` reframes the scene when nothing has set one — and
+        the rule that came out of that is to *call* and answer the failure, never to probe.
+    """
+    try:
+        artist.set_visible(bool(visible))
+    except AttributeError:  # pragma: no cover - every matplotlib artist has it
+        logger.debug("%r cannot be shown or hidden; leaving it as it is", artist)
+
+
+def _detach(artist: Any, axes: Any) -> None:
+    """Take one artist off the axes, and out of cleopatra's record of what it last rendered.
+
+    Args:
+        artist: The artist to remove. One matplotlib has already detached — or one that was never attached,
+            such as a mappable a glyph built but did not add — is left alone, so removing a layer twice is
+            harmless.
+        axes: The axes the layer was drawn on, whose render record is kept in step.
+    """
+    try:
+        artist.remove()
+    except (AttributeError, NotImplementedError, ValueError):
+        # ValueError is matplotlib's own answer to removing an artist that is not on an axes; the other two
+        # are an object that was never one. None of the three is a reason to fail a reconcile.
+        logger.debug("%r was not on the axes to remove", artist)
+    _forget_render_artist(axes, artist)
+
+
+def _forget_render_artist(axes: Any, artist: Any) -> None:
+    """Drop one artist from cleopatra's per-axes record of what it last rendered.
+
+    cleopatra keeps that record so a second ``plot()`` on the same axes can take the first one's artists
+    off before drawing (``_clear_prior_render_artists``). It removes them by calling ``Artist.remove()``
+    and swallows ``KeyError``/``NotImplementedError``/``AttributeError`` — but matplotlib answers a
+    **second** removal with ``ValueError``, which is not on that list. So an artist this renderer has
+    already detached blows up the next render on the same axes, which is exactly what a rebuild, a restyle
+    and a rollback all do.
+
+    Args:
+        axes: The axes whose record is trimmed. One that has never been rendered onto by cleopatra has
+            none, and is left alone.
+        artist: The artist to forget.
+
+    Note:
+        This reaches for a private attribute of an upstream object, which is a workaround rather than a
+        design: the clean fix is for cleopatra to catch ``ValueError`` there, or to expose "forget these
+        artists". Reported rather than patched — cleopatra is an upstream package, not ours to change.
+
+        The ``getattr`` is safe to read, unlike the probes the renderer contract forbids: it is a plain
+        data attribute cleopatra assigns to the axes, not a property whose getter does work.
+    """
+    registry = getattr(axes, "_cleo_render_artists", None)
+    if not isinstance(registry, dict):
+        return
+    for token, artists in list(registry.items()):
+        kept = [held for held in artists if held is not artist]
+        if len(kept) == len(artists):
+            continue
+        if kept:
+            registry[token] = kept
+        else:
+            del registry[token]
+    if not registry:
+        axes._cleo_render_artists = None
+
+
+class Renderer:
+    """Draws a figure's layers onto one matplotlib axes, and reconciles one figure with another.
+
+    Attributes:
+        drawn: Layer id to the :class:`DrawnLayer` its drawer produced, in draw order.
+    """
+
+    def __init__(self, scene: Any) -> None:
+        """Bind the renderer to the scene whose axes it draws on.
+
+        Args:
+            scene: The :class:`~digitalearth.static.scene.Scene` (or subclass) this renderer serves. Held
+                rather than passed per call, because a drawer reads the scene's own helpers — the display
+                CRS, the reprojection, the off-limb policy, the artist registry a colorbar is keyed to.
+        """
+        self._scene = scene
+        self._drawn: Dict[str, DrawnLayer] = {}
+
+    @property
+    def drawn(self) -> Mapping[str, DrawnLayer]:
+        """What has been drawn, by layer id.
+
+        Returns:
+            A read-only copy, in the order the layers were drawn. A layer that was skipped — an off-limb
+            raster, a label on the far side of a globe — has no entry, which is how a caller tells "drawn"
+            from "described".
+        """
+        return dict(self._drawn)
+
+    def draw_layer(self, figure: FigureSpec, layer_id: str) -> Optional[DrawnLayer]:
+        """Draw one of a figure's layers and record what it produced.
+
+        Args:
+            figure: The figure holding the layer and its source.
+            layer_id: Which layer to draw.
+
+        Returns:
+            What the drawer produced, or ``None`` for a layer it declined to draw.
+
+        Raises:
+            KeyError: when no layer has that id, or the tier has no drawer for its kind.
+            OffLimbError: when the layer's data cannot be placed and the scene is ``strict``.
+        """
+        layer = figure.layers.get(layer_id)
+        data = self._source_object(figure, layer)
+        drawn: Optional[DrawnLayer] = drawer_for(layer.kind)(self._scene, data, layer)
+        if drawn is None:
+            return None
+        self._drawn[layer_id] = drawn
+        if not figure.layers.is_visible(layer_id):
+            self.set_visible(layer_id, False)
+        return drawn
+
+    @staticmethod
+    def _source_object(figure: FigureSpec, layer: LayerSpec) -> Any:
+        """Return the object a layer draws, or ``None`` when it draws from no source.
+
+        Args:
+            figure: The figure holding the sources.
+            layer: The layer being drawn.
+
+        Returns:
+            The opened source — a pyramids ``Dataset``, a ``FeatureCollection``, the ``(u, v)`` pair a
+            vector field is drawn from — or ``None`` for a layer drawn from nothing, such as a graticule.
+        """
+        if layer.source_id is None:
+            return None
+        return figure.sources[layer.source_id].open()
+
+    def apply(self, before: FigureSpec, after: FigureSpec) -> None:
+        """Bring what the axes shows from one figure to another.
+
+        Args:
+            before: The figure the axes currently shows.
+            after: The figure it should show.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.
+            ValueError: when a layer's description does not carry what its drawer needs.
+
+        Note:
+            ``apply`` is **not atomic**: it draws layer by layer, so a refusal on the third layer has
+            already drawn the first two. Rolling back only this record would leave artists on the axes that
+            no layer owns, and rolling back only the caller's description would leave the record holding
+            layers no figure owns — the defect the shared conformance contract states, and which every
+            earlier tier hit. Both go back together, which for this tier means taking the new artists off
+            the axes and drawing the old ones again.
+        """
+        held = dict(self._drawn)
+        dropped: List[str] = []
+        try:
+            self._reconcile(before, after, dropped)
+        except BaseException:
+            self._rollback(held, before)
+            raise
+        # The data a removed layer drew is forgotten only once the whole change has gone through: a
+        # rollback re-draws from `before`, and that needs the source it would otherwise have dropped.
+        for layer_id in dropped:
+            self._scene._forget_layer_data(layer_id)
+
+    def _reconcile(
+        self, before: FigureSpec, after: FigureSpec, dropped: List[str]
+    ) -> None:
+        """Draw the difference between two figures, layer by layer.
+
+        Args:
+            before: The figure the axes currently shows.
+            after: The figure it should show.
+            dropped: Collects the ids of layers `after` no longer draws, so their registered data can be
+                forgotten once the change has gone through.
+
+        Raises:
+            KeyError: when a layer names a kind this tier does not draw, or a recipe it does not know.
+            ValueError: when a layer's description does not carry what its drawer needs.
+        """
+        change = before.diff(after)
+        for layer_id in change.removed:
+            self.remove(layer_id, forget=False)
+            dropped.append(layer_id)
+        # A rebuilt layer is one whose *data* changed — its kind, source, slice, or the reference behind its
+        # source id — and every one of those means new artists. Only a restyle is worth asking about,
+        # because `diff` groups a change of `label` with a change of colormap and one of those never reaches
+        # matplotlib.
+        for layer_id in change.rebuilt:
+            self.remove(layer_id, forget=False)
+            self.draw_layer(after, layer_id)
+        for layer_id in change.restyled:
+            if not self._reaches_matplotlib(before, after, layer_id):
+                continue
+            # A cleopatra glyph bakes its colormap and its class breaks into the artist it built, so a
+            # restyle is the layer drawn again from its description rather than a property set on it.
+            self.remove(layer_id, forget=False)
+            self.draw_layer(after, layer_id)
+        for layer_id in change.added:
+            self.draw_layer(after, layer_id)
+        for layer_id in change.shown:
+            self.set_visible(layer_id, True)
+        for layer_id in change.hidden:
+            self.set_visible(layer_id, False)
+
+    def _rollback(self, held: Mapping[str, DrawnLayer], before: FigureSpec) -> None:
+        """Put the axes and this record back the way a refused :meth:`apply` found them.
+
+        Args:
+            held: What was drawn before the refused change, by layer id.
+            before: The figure those layers were drawn from, which is what a restored layer is drawn from
+                again.
+
+        Note:
+            Restoring is a re-draw rather than a re-attach: matplotlib's ``Artist.remove`` unlinks an artist
+            from its axes and from the transform stack, and adding the same object back is not supported.
+            Drawing it again from `before` is, and it is the same call that drew it the first time.
+        """
+        for layer_id in list(self._drawn):
+            if self._drawn[layer_id] is not held.get(layer_id):
+                self.remove(layer_id, forget=False)
+        for layer_id in [key for key in held if key not in self._drawn]:
+            try:
+                self.draw_layer(before, layer_id)
+            except (
+                Exception
+            ) as error:  # pragma: no cover - a drawer that drew once draws again
+                # Never mask the refusal that started the rollback: a layer that cannot be restored is
+                # reported and the original exception carries on out of `apply`.
+                logger.warning(
+                    "rolling back a refused change could not re-draw layer %r: %s",
+                    layer_id,
+                    error,
+                )
+
+    @staticmethod
+    def _reaches_matplotlib(
+        before: FigureSpec, after: FigureSpec, layer_id: str
+    ) -> bool:
+        """Whether a restyle changes anything matplotlib draws.
+
+        ``diff`` groups a change to ``label`` — what a legend calls the layer — with a change to its
+        colormap, because both are "the description changed". Only one of them reaches the engine, and
+        answering both with a redraw meant renaming a layer re-opened its source, re-ran the reprojection
+        and built the whole glyph again.
+
+        Args:
+            before: The figure drawn now.
+            after: The figure to draw.
+            layer_id: The layer whose restyle is in question.
+
+        Returns:
+            ``True`` when the layer's symbology, filter or group differs — the parts a drawer reads — and
+            for a layer either figure does not hold, which is a question about the layer rather than about
+            its style. ``False`` for a change to ``label`` alone.
+        """
+        try:
+            was = before.layers.get(layer_id)
+            now = after.layers.get(layer_id)
+        except KeyError:
+            # `restyled` only ever names ids both figures hold, so neither lookup raises on the path that
+            # calls this. Guarding both rather than the first is what makes that true of a direct call too,
+            # and the answer for a layer that is not in both is to draw it.
+            return True
+        return (was.symbology, was.filter, was.group) != (
+            now.symbology,
+            now.filter,
+            now.group,
+        )
+
+    def remove(self, layer_id: str, *, forget: bool = True) -> None:
+        """Take a layer off the axes and forget what was drawn for it.
+
+        Args:
+            layer_id: The layer to remove. One that was never drawn — skipped, or described but not yet
+                rendered — is ignored, so removing a layer twice is harmless.
+            forget: Whether the in-memory data the layer registered is dropped from the process-wide object
+                table as well. ``False`` is what :meth:`apply` passes while it reconciles, because a layer
+                it is about to draw again — or restore in a rollback — still needs its source; ``apply``
+                commits those forgets itself once the change has gone through.
+        """
+        drawn = self._drawn.pop(layer_id, None)
+        if drawn is None:
+            if forget:
+                self._scene._forget_layer_data(layer_id)
+            return
+        self._scene._unregister_artist(drawn)
+        for artist in drawn.artists:
+            _detach(artist, self._scene.ax)
+        if forget:
+            self._scene._forget_layer_data(layer_id)
+
+    def set_visible(self, layer_id: str, visible: bool) -> None:
+        """Show or hide every artist drawn for a layer.
+
+        Args:
+            layer_id: The layer to toggle. An id nothing was drawn for is ignored.
+            visible: Whether it is drawn.
+        """
+        drawn = self._drawn.get(layer_id)
+        if drawn is None:
+            return
+        for artist in drawn.artists:
+            _set_visible(artist, visible)
+
+    def band_for(self, layer: LayerSpec) -> str:
+        """Return the draw-order band a layer belongs to.
+
+        Args:
+            layer: The layer being placed.
+
+        Returns:
+            The layer's own band when it declares one — what a backdrop raster and a caller's own artist
+            need, since ``custom:matplotlib`` names the engine and says nothing about what it draws — else
+            its kind's band.
+        """
+        return layer.band or band_of(layer.kind)

@@ -13,9 +13,15 @@ Beside the drawing the Scene keeps a **description** of it (#303): a
 :class:`~digitalearth.base.spec.LayerTree` of what each layer *is*, a table of where each one's data came
 from, and the view they are drawn in — read back as :attr:`Scene.figure_spec`. The two are deliberately
 separate structures: ``layers`` holds the matplotlib artists a colorbar is keyed to, and the tree holds the
-engine-neutral record a renderer could rebuild them from. A layer with no mappable to register (a tile
+engine-neutral record a renderer rebuilds them from. A layer with no mappable to register (a tile
 basemap, a graticule, a Natural-Earth overlay drawn straight onto the axes) is described without appearing
 in ``layers``, which is why the description is not simply read off that list.
+
+The description is what the drawing is *made from*, not a note beside it. Every builder ends at
+:meth:`Scene._draw`, which records the layer and then asks
+:class:`~digitalearth.static.renderer.Renderer` to draw it — so the layer is built once, by the drawer that
+replays its recipe. A layer whose drawer declined it (data outside the display CRS, a label on the far side
+of a globe) is dropped from the description again, so a figure never names something that was not drawn.
 """
 
 import os
@@ -31,7 +37,11 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from digitalearth.base.custom import custom_kind
-from digitalearth.base.registry import forget_object, object_namespace
+from digitalearth.base.registry import (
+    forget_namespace,
+    forget_object,
+    object_namespace,
+)
 from digitalearth.base.spec import (
     DataRef,
     FigureSpec,
@@ -42,6 +52,7 @@ from digitalearth.base.spec import (
     Viewport,
 )
 from digitalearth.static.render_compat import prepare_plot_kwargs
+from digitalearth.static.renderer import DrawnLayer, Renderer
 
 #: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
 #: the constant is named — and spelled the same as every other tier's — so a reader of :attr:`Scene.figure_spec`
@@ -81,6 +92,11 @@ class LayerRecord:
             and says nothing about what it draws. ``None`` takes the kind's band.
         visible: Whether the layer was built visible.
         symbology: How it looks, as values. ``None`` records an empty symbology.
+        key: Something the layer's drawer needs that a **description cannot carry** — a clip boundary (a
+            shapely geometry, which a figure written to JSON has no spelling for, and which would make two
+            symbologies uncomparable) or a basemap credential (which must never be written into a figure at
+            all). It is held on the scene under the layer's id instead, and forgotten with the layer.
+            ``None`` for every layer that needs none, which is nearly all of them.
 
     Examples:
         - The record a raster builder writes, beside the drawing it made:
@@ -107,6 +123,7 @@ class LayerRecord:
     band: Optional[str] = None
     visible: bool = True
     symbology: Optional[Symbology] = None
+    key: Any = None
 
 
 class Scene(WatermarkMixin):
@@ -200,6 +217,12 @@ class Scene(WatermarkMixin):
         self._objects_ns: str = object_namespace()
         self._id_counter: int = 0
         self._issued_ids: Set[str] = set()
+        # What a drawer needs that the figure cannot carry — a clip boundary, a basemap credential — keyed
+        # by layer id. Deliberately not part of `symbology`: a figure is written to JSON and read back, and
+        # neither a shapely geometry nor an API key belongs in one (see `LayerRecord.key`).
+        self._layer_keys: Dict[str, Any] = {}
+        #: The renderer that turns this scene's description into artists on :attr:`ax`.
+        self._renderer: Renderer = Renderer(self)
 
     def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
         """Return a unique layer id: the caller's name when they gave one, else a generated one.
@@ -280,6 +303,8 @@ class Scene(WatermarkMixin):
         # A generated id counts the kind, so `custom:matplotlib` numbers `custom-1`: a colon cannot appear in
         # the middle of an id, and the engine name is not what a reader is counting anyway.
         layer_id = self._layer_id(record.kind.split(":")[0], record.name)
+        if record.key is not None:
+            self._layer_keys[layer_id] = record.key
         self._index_layer(
             layer_id,
             record.name,
@@ -290,6 +315,67 @@ class Scene(WatermarkMixin):
             symbology=record.symbology,
         )
         return layer_id
+
+    def _draw(self, record: LayerRecord) -> Any:
+        """Record a layer and draw it, returning whatever its drawer handed back.
+
+        The funnel every builder of a drawn kind ends at. The order is the point: the layer is **described
+        first** and its drawer builds the artists from that description, so the two can never disagree about
+        what the figure holds. A builder that computed the artists itself and described them afterwards was
+        writing the same layer twice, in two vocabularies, with nothing holding them to each other.
+
+        Args:
+            record: What the builder wants drawn, as :class:`LayerRecord` describes it.
+
+        Returns:
+            The drawer's ``artist`` — the mappable a field render produced, the ``Text`` of a label, the
+            polylines a limb-split coastline became — or ``None`` when the drawer declined the layer, which
+            is what an off-limb raster or a far-side label is.
+
+        Raises:
+            Exception: whatever the drawer raises, after the layer has been dropped from the description
+                again — a figure must not name a layer that was not drawn, and that is as true of a refusal
+                as it is of a skip.
+        """
+        layer_id = self._describe_layer(record)
+        try:
+            drawn = self._renderer.draw_layer(self.figure_spec, layer_id)
+        except BaseException:
+            self._forget_layer(layer_id)
+            raise
+        if drawn is None:
+            self._forget_layer(layer_id)
+            return None
+        return drawn.artist
+
+    def _forget_layer(self, layer_id: str) -> None:
+        """Drop a layer from the description, and with it whatever it registered.
+
+        What :meth:`_draw` calls for a layer its drawer declined or refused. The id goes back to the pool
+        of free names too, so a caller who names a layer, watches it skip, and names it again gets the name
+        they asked for rather than a suffixed one.
+
+        Args:
+            layer_id: The layer to forget. One already gone is ignored.
+        """
+        self._layer_tree = self._layer_tree.remove(layer_id)
+        self._issued_ids.discard(layer_id)
+        self._forget_layer_data(layer_id)
+
+    def _forget_layer_data(self, layer_id: str) -> None:
+        """Let go of the in-memory data and the drawer key one layer held.
+
+        The object table is process-global and holds strong references, so a layer that is removed and
+        never forgotten keeps its dataset alive for the life of the process.
+
+        Args:
+            layer_id: The layer whose source and key are dropped. A layer that registered neither — a
+                graticule, a text label — is ignored.
+        """
+        ref = self._sources.pop(layer_id, None)
+        if ref is not None:
+            forget_object(ref.uri)
+        self._layer_keys.pop(layer_id, None)
 
     @property
     def layer_ids(self) -> List[str]:
@@ -332,36 +418,69 @@ class Scene(WatermarkMixin):
         """
         return Viewport()
 
-    def _add_layer(
-        self,
-        glyph: Any,
-        mappable: Any,
-        label: Optional[str] = None,
-        *,
-        describe: Optional[LayerRecord] = None,
+    def _register_artist(
+        self, glyph: Any, mappable: Any, label: Optional[str] = None
     ) -> Any:
-        """Register a rendered glyph and its mappable, returning the mappable.
+        """Register a rendered glyph and its mappable so a colorbar or legend can be keyed to it.
+
+        The drawing half of what :meth:`_add_layer` used to do in one step. A drawer calls this; the
+        description was already written by :meth:`_draw` before the drawer ran, which is what keeps the two
+        structures from disagreeing.
 
         Args:
-            glyph: The cleopatra glyph instance that was drawn on :attr:`ax`.
+            glyph: The cleopatra glyph instance that was drawn on :attr:`ax`, or ``None`` for an artist
+                added to the axes directly (a globe's land fill, an artist the caller built).
             mappable: The matplotlib mappable/artist the glyph produced (e.g. ``glyph.im``).
             label: Optional default colorbar label for this layer (e.g. the units resolved by
                 :func:`~digitalearth.base.autostyle.auto_style`); used only when :meth:`colorbar` is
                 called without one.
-            describe: What the builder drew, recorded in the figure. ``None`` means nobody said — the artist
-                is the caller's own, so it is recorded as ``custom:matplotlib`` and described by id, kind and
-                label alone: an artist somebody built by hand has no source to reference and no symbology to
-                read back, so a figure can name it, hide it and reorder it, but never rebuild it.
 
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
         """
         self.layers.append((glyph, mappable))
         self._layer_labels.append(label)
-        self._describe_layer(
-            describe if describe is not None else LayerRecord(custom_kind(ENGINE))
-        )
         return mappable
+
+    def _unregister_artist(self, drawn: DrawnLayer) -> None:
+        """Drop a removed layer's ``(glyph, mappable)`` pair and its default label.
+
+        Matched by identity rather than by position: :attr:`layers` holds only the layers that registered a
+        mappable, so a layer's index there is not its index in the description and cannot be derived from
+        one.
+
+        Args:
+            drawn: What the renderer recorded for the layer being removed. One that registered no mappable
+                — a graticule, a basemap, a text label — is not in :attr:`layers` and is left alone.
+        """
+        if drawn.artist is None:
+            # A layer that produced no artist registered none, and matching on a pair of `None`s would
+            # unregister whichever layer happened to be first.
+            return
+        for index, (glyph, mappable) in enumerate(self.layers):
+            if glyph is drawn.glyph and mappable is drawn.artist:
+                del self.layers[index]
+                del self._layer_labels[index]
+                return
+
+    def _add_layer(self, glyph: Any, mappable: Any, label: Optional[str] = None) -> Any:
+        """Register an artist the caller built themselves, and describe it as a custom layer.
+
+        The escape hatch, not the builders' path: an artist somebody built by hand has no source to
+        reference and no symbology to read back, so it is recorded as ``custom:matplotlib`` and described by
+        id, kind and label alone. A figure can name it, hide it and reorder it, but never rebuild it — which
+        is what :mod:`digitalearth.base.custom` says a reader of such a layer is looking at.
+
+        Args:
+            glyph: The cleopatra glyph instance that was drawn on :attr:`ax`, or ``None``.
+            mappable: The matplotlib mappable/artist to register.
+            label: Optional default colorbar label for this layer.
+
+        Returns:
+            The ``mappable`` (so callers can chain or attach a colorbar).
+        """
+        self._describe_layer(LayerRecord(custom_kind(ENGINE)))
+        return self._register_artist(glyph, mappable, label)
 
     def _reset_layers(self) -> None:
         """Forget every registered layer — its default label and its description — e.g. between frames.
@@ -372,14 +491,18 @@ class Scene(WatermarkMixin):
         replaced rather than accumulated. Whatever the dropped layers referenced is forgotten too, so a long
         run does not hold every frame's dataset alive through the process-wide object table.
         """
-        for ref in self._sources.values():
-            forget_object(ref.uri)
+        for layer_id in list(self._sources):
+            self._forget_layer_data(layer_id)
         self.layers = []
         self._layer_labels = []
         self._layer_tree = LayerTree()
         self._sources = {}
+        self._layer_keys = {}
         self._id_counter = 0
         self._issued_ids = set()
+        # The artists themselves are gone with the cleared axes, so what the renderer holds is stale rather
+        # than removable: it is dropped, not removed.
+        self._renderer = Renderer(self)
 
     def _default_label(self, layer: int) -> Optional[str]:
         """Return the default colorbar label recorded for ``layer``, or ``None`` when there is none.
@@ -403,14 +526,13 @@ class Scene(WatermarkMixin):
         *plot_args: Any,
         artist: str = "im",
         label: Optional[str] = None,
-        describe: Optional[LayerRecord] = None,
         **plot_kwargs: Any,
-    ) -> Any:
-        """Plot ``glyph`` on the shared axes, register the produced mappable, and return it.
+    ) -> DrawnLayer:
+        """Plot ``glyph`` on the shared axes, register the produced mappable, and report what it drew.
 
-        Consolidates the recipe every plot method shared — call ``glyph.plot(...)``, find the mappable it
-        produced, then :meth:`_add_layer` — so it lives in one place. cleopatra glyphs expose their mappable in
-        one of two ways, selected by ``artist``:
+        Consolidates the recipe every drawer shares — call ``glyph.plot(...)``, find the mappable it
+        produced, then :meth:`_register_artist` — so it lives in one place. cleopatra glyphs expose their
+        mappable in one of two ways, selected by ``artist``:
 
         - ``"im"`` (default): the mappable is ``glyph.im`` (``ArrayGlyph`` / ``MeshGlyph``).
         - ``"plot"``: ``glyph.plot()`` returns ``(fig, ax, artist)`` and the mappable is that third element
@@ -420,22 +542,26 @@ class Scene(WatermarkMixin):
             glyph: An already-constructed cleopatra glyph bound to this Scene's ``ax``/``fig``.
             *plot_args: Positional arguments forwarded to ``glyph.plot`` (e.g. the data array for a mesh).
             artist: Which return convention to read the mappable from (``"im"`` or ``"plot"``).
-            label: Optional default colorbar label recorded with the layer (see :meth:`_add_layer`); it is
-                *not* forwarded to ``glyph.plot``.
-            describe: What this layer is, for the figure — see :class:`LayerRecord`. It is not forwarded to
-                ``glyph.plot`` either; it travels as one value precisely so that its ``kind`` (the layer's)
-                cannot be confused with the ``kind`` in ``plot_kwargs`` (cleopatra's render call).
+            label: Optional default colorbar label recorded with the layer (see :meth:`_register_artist`);
+                it is *not* forwarded to ``glyph.plot``.
             **plot_kwargs: Keyword arguments forwarded to ``glyph.plot`` (e.g. ``kind``, ``outline_only``).
 
         Returns:
-            The registered mappable/artist (so callers can chain a colorbar or keep a reference).
+            A :class:`~digitalearth.static.renderer.DrawnLayer` holding the mappable, the glyph that made it
+            and the artists the layer owns — what the renderer records so the layer can later be hidden or
+            taken off the axes.
         """
         plot_kwargs, deferred_alpha = prepare_plot_kwargs(glyph, plot_kwargs)
         result = glyph.plot(*plot_args, **plot_kwargs)
         mappable = glyph.im if artist == "im" else result[2]
         if deferred_alpha is not None and mappable is not None:
             mappable.set_alpha(deferred_alpha)
-        return self._add_layer(glyph, mappable, label, describe=describe)
+        self._register_artist(glyph, mappable, label)
+        return DrawnLayer(
+            artist=mappable,
+            glyph=glyph,
+            artists=() if mappable is None else (mappable,),
+        )
 
     @contextmanager
     def _preserve_view(self) -> Iterator[None]:
@@ -598,6 +724,44 @@ class Scene(WatermarkMixin):
         """Show the figure via ``matplotlib.pyplot.show``."""
         plt.show()
 
+    def close(self) -> None:
+        """Close the figure and let go of the in-memory data this scene registered.
+
+        Two things are released, because a scene holds two kinds of memory. The **figure** is matplotlib's,
+        and a long run of scenes that never closes one keeps every axes alive. The **object table** is this
+        package's: it is process-global and holds strong references, so a session that builds maps keeps
+        every dataset they drew until something says otherwise. This is the caller saying so, and it is what
+        ``with`` calls on the way out.
+
+        Closing twice is harmless, and a scene that drew nothing has nothing to forget.
+
+        An ``object:`` source in a :attr:`figure_spec` captured from this scene cannot be opened afterwards
+        — which is what "closed" means for a figure whose data lived only in this process. Save the data and
+        reference it by path to keep such a figure readable.
+
+        .. warning::
+            This closes the **entire** ``self.fig``. The panels returned by
+            :func:`~digitalearth.static.figure.grid` share **one** figure, so closing a single panel would
+            close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap the
+            whole workflow or call :meth:`save` and close the figure yourself instead.
+
+        Examples:
+            - A scene that drew nothing closes quietly:
+                ```python
+                >>> import matplotlib
+                >>> matplotlib.use("Agg")
+                >>> from digitalearth.static import Scene
+                >>> Scene().close()
+
+                ```
+
+        See Also:
+            __exit__: calls this on the way out of a ``with`` block.
+        """
+        forget_namespace(self._objects_ns)
+        self._layer_keys = {}
+        plt.close(self.fig)
+
     def __enter__(self) -> "Scene":
         """Enter the runtime context, returning the scene so ``with Scene(...) as s:`` binds it.
 
@@ -607,19 +771,18 @@ class Scene(WatermarkMixin):
         return self
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
-        """Close the figure on exit so a long run of scenes stays memory-bounded.
+        """Close the scene on exit so a long run of them stays memory-bounded.
 
-        The figure is closed whether or not the body raised; any exception propagates (``__exit__`` returns
+        The scene is closed whether or not the body raised; any exception propagates (``__exit__`` returns
         ``False``), so ``with`` never silences errors.
 
-        .. warning::
-            This closes the **entire** ``self.fig``. The panels returned by
-            :func:`~digitalearth.static.figure.grid` share **one** figure, so using ``with`` on a single panel
-            would close the figure for *all* panels — don't context-manage an individual ``grid`` panel; wrap
-            the whole workflow or call :meth:`save` then close the figure yourself instead.
+        Args:
+            exc_type: The exception type, ignored — closing is unconditional, as it is for a file.
+            exc: The exception, ignored.
+            tb: The traceback, ignored.
 
         Returns:
             ``False`` — exceptions are not suppressed.
         """
-        plt.close(self.fig)
+        self.close()
         return False

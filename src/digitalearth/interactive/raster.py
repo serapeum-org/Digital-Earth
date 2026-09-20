@@ -89,6 +89,11 @@ def draw_rgb(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded ``limits`` do not hold one ``(lo, hi)`` pair per channel. The band
+            count is refused by the builder, which names the caller's own argument; the limits are refused
+            here, where the stretch that reads them runs.
     """
     from digitalearth.base.sources import get_stack
     from digitalearth.interactive.renderer import DrawnLayer

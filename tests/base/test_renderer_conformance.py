@@ -683,3 +683,186 @@ class TestInteractiveRendererConformance(RendererConformance):
     """The interactive tier, signing the contract the 3-D and web tiers already pass."""
 
     contract = InteractiveContract()
+
+
+class StaticContract(RendererContract):
+    """The matplotlib tier's adapter for the shared contract (#303).
+
+    The last tier to sign it, and the one closest in shape to the 3-D reference: matplotlib hands out live
+    artists on a live axes, so "what the engine holds" is a real question about real objects rather than a
+    record of what the next render will rebuild. That is why `engine_holds` reads artist *identities* — a
+    redraw puts a different artist on the axes under the same layer id, and a set of ids cannot see that.
+    """
+
+    backend = "matplotlib"
+
+    def make(self):
+        """Return an empty map in Web Mercator.
+
+        Returns:
+            The map. It owns its own figure, which `close` shuts.
+        """
+        from digitalearth.static import Map
+
+        return Map(crs=3857)
+
+    def draw_one(self, tier) -> str:
+        """Draw one raster layer far from the origin, which reaches matplotlib and registers its data.
+
+        The coordinates matter for the same reason they do in the 3-D adapter: a grid drawn around zero is
+        inside a default view either way, and the point of `drawn_is_in_view` is to catch a view that was
+        framed before the data arrived.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            The layer's id.
+        """
+        import numpy as np
+        from pyramids.dataset import Dataset, GeoReference
+
+        grid = np.add.outer(np.linspace(0.0, 1.0, 6), np.linspace(0.0, 2.0, 8))
+        dataset = Dataset.from_array(
+            arr=grid.astype("float32"),
+            # (x origin, cell width, 0, y origin, 0, -cell height) — a 240 x 120 km patch of Web Mercator
+            # a long way from (0, 0), so only a view fitted to the data contains it.
+            geo_ref=GeoReference(
+                geo=(400000.0, 30000.0, 0.0, 5020000.0, 0.0, -20000.0), epsg=3857
+            ),
+        )
+        tier.imshow(dataset)
+        return tier.layer_ids[-1]
+
+    def refused_figure(self, tier):
+        """Return a figure whose second new layer names a kind this tier does not draw.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            The figure.
+        """
+        from dataclasses import replace as with_fields
+
+        from digitalearth.base.spec import Symbology
+
+        figure = tier.figure_spec
+        # One of the two added layers must really draw, or the refusal is reached with nothing drawn and
+        # the rollback check passes for the wrong reason. Two things decide that it does. A text label
+        # rather than a second raster, because cleopatra's glyphs replace what is already on the axes
+        # unless a render opts into composing — a second raster would take the drawn one's image off. And
+        # the undrawable layer is put in the label's own band, because `LayerTree.add` files a layer by
+        # band and `added` follows the tree: a `terrain` layer belongs among the data, so it would
+        # otherwise come first and be refused before the label is ever drawn.
+        label = LayerSpec(
+            "also-drawn",
+            "text",
+            symbology=Symbology(
+                props={"via": "text", "lon": 0.0, "lat": 0.0, "s": "here", "crs": 4326}
+            ),
+        )
+        tree = figure.layers.add(label).add(
+            LayerSpec("refused", "terrain", band="overlay")
+        )
+        return with_fields(figure, layers=tree)
+
+    def apply_figure(self, tier, figure) -> None:
+        """Move the map to `figure` through the renderer.
+
+        Args:
+            tier: The map.
+            figure: The figure.
+        """
+        tier._renderer.apply(tier.figure_spec, figure)
+
+    def engine_holds(self, tier):
+        """Return which layers are drawn, *and which artists they put on the axes*.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            Layer id to the identities of the artists drawn for it.
+        """
+        return {
+            layer_id: tuple(id(artist) for artist in drawn.artists)
+            for layer_id, drawn in tier._renderer.drawn.items()
+        }
+
+    def relabel(self, tier, layer_id: str):
+        """Return the map's figure with one layer's label changed and nothing else.
+
+        Args:
+            tier: The map.
+            layer_id: The layer to relabel.
+
+        Returns:
+            The figure.
+        """
+        from dataclasses import replace as with_fields
+
+        figure = tier.figure_spec
+        renamed = with_fields(figure.layers.get(layer_id), label="a different name")
+        return with_fields(figure, layers=figure.layers.replace(renamed))
+
+    def drawn_is_in_view(self, tier):
+        """Whether the drawn raster overlaps the rectangle the axes will render.
+
+        Args:
+            tier: The map.
+
+        Returns:
+            `True` when the image's extent and the axes limits intersect. matplotlib autoscales to the
+            data, so the answer is only `False` if something framed the axes without looking at what was
+            drawn — which is this tier's form of the blank 3-D render.
+        """
+        drawn = tier._renderer.drawn[tier.layer_ids[-1]]
+        left, right, bottom, top = drawn.artist.get_extent()
+        xlim, ylim = tier.ax.get_xlim(), tier.ax.get_ylim()
+        across = min(right, max(xlim)) > max(left, min(xlim))
+        down = min(top, max(ylim)) > max(bottom, min(ylim))
+        return bool(across and down)
+
+    def declared_kinds(self) -> frozenset:
+        """Return the kinds the tier declares.
+
+        Returns:
+            The declared kinds.
+        """
+        from digitalearth.static.capabilities import CAPABILITIES
+
+        return CAPABILITIES.kinds
+
+    def drawn_kinds(self) -> tuple:
+        """Return the kinds the renderer draws from a description.
+
+        Returns:
+            The drawable kinds.
+        """
+        from digitalearth.static.renderer import DRAWN_KINDS
+
+        return DRAWN_KINDS
+
+    def drawer_for(self, kind: str):
+        """Return the drawer registered for `kind`.
+
+        Args:
+            kind: The layer kind.
+
+        Returns:
+            The drawer.
+        """
+        from digitalearth.static.renderer import drawer_for
+
+        return drawer_for(kind)
+
+
+class TestStaticRendererConformance(RendererConformance):
+    """The matplotlib tier, signing the contract the other three already pass.
+
+    No skip guard: matplotlib is this package's one non-optional engine, so an environment that can import
+    `digitalearth` can run these.
+    """
+
+    contract = StaticContract()

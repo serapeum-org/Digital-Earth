@@ -307,7 +307,7 @@ def _date_encoded(series: Any) -> Any:
 class _Described:
     """A queue entry standing for a layer the renderer draws from its description.
 
-    The queue is what orders layers into their bands — `_queue_layer` inserts by the kind's band, and
+    The queue is what orders layers into their bands — `_queue_in_band` inserts by the kind's band, and
     `remove_layer` gives the slot back. A converted layer keeps a place in it so that ordering keeps
     working unchanged; what the place holds is a *reference* to the description rather than a closure over
     a compiled MapLibre layer, which is the whole point of the seam.
@@ -342,7 +342,12 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.web.renderer.DrawnLayer` carrying the object, or `None` when this process
-        does not hold it.
+        does not hold it. It carries no source of its own: a caller's layer names sources the caller wired
+        up, so there is nothing here to add beside it.
+
+    Raises:
+        OffLimbError: when the map is `strict` and this process does not hold the named object — the same
+            answer every other unplaceable layer on this tier gets, so one ``except`` clause covers them.
     """
     from digitalearth.base.custom import MissingObject, held_object
     from digitalearth.web.renderer import DrawnLayer
@@ -449,9 +454,11 @@ class WebMapBase:
         ValueError: when ``crs`` is not EPSG:4326 (see :meth:`_validate_display_crs`).
 
     Attributes:
-        layers: Registered layers, in add (= draw) order. A layer is either a ``maplibre`` ``Layer``/spec
-            passed to the widget's ``add_layer``, or a callable ``apply(widget)`` a mixin registers to wire
-            up its own source(s) + layer(s).
+        layers: What the map draws, in add (= draw) order — a **derived view**, not the map's state. A
+            layer drawn from its description resolves to the ``maplibre`` ``Layer`` the renderer built for
+            it; one still drawn the old way is the callable ``apply(widget)`` or ``Layer``/spec that was
+            queued. The map itself is described by :attr:`figure_spec` and addressed by id through
+            :attr:`layer_ids`.
 
     Examples:
         - Construct and inspect the display configuration (needs no engine):
@@ -955,6 +962,26 @@ class WebMapBase:
             :meth:`remove_layer` and :meth:`set_visible`. It is kept because it is the shape callers and this
             tier's own tests have always read — the same reason the 3-D tier kept its `(mesh, actor)` pairs
             after its seam.
+
+        Examples:
+            - A layer the renderer drew is reported as the MapLibre layer itself, under the id it was
+              given:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam")
+                >>> [drawn.id for drawn in m.layers]
+                ['amsterdam']
+
+                ```
+            - Draw order, not call order: a graticule added last is still drawn beneath the data it
+              references, and this reports it first:
+                ```python
+                >>> from digitalearth.web import WebMap
+                >>> m = WebMap().text(2.35, 48.86, "Paris", name="paris").graticule(spacing=30)
+                >>> [drawn.id for drawn in m.layers]
+                ['Graticule', 'paris']
+
+                ```
         """
         drawn = self._renderer.drawn
         resolved = []
@@ -1240,9 +1267,12 @@ class WebMapBase:
             must not treat it as the map's last layer.
 
         Note:
-            The tree places the layer in the band its kind declares, so nothing here computes a position. Queue
-            the drawn layer with :meth:`_queue_layer`, which puts the MapLibre closure in the same band, and the
-            tree's order stays the order the map draws in.
+            The tree places the layer in the band its kind declares, so nothing here computes a position.
+            For a kind in :data:`~digitalearth.web.renderer.DRAWN_KINDS` this then **draws it too**, from
+            the description just recorded, and queues a reference to it in that same band — the builder has
+            nothing left to queue. A kind the renderer does not own yet is still drawn by its builder, which
+            queues the MapLibre closure itself — with :meth:`_queue` or one of the band registrations — into
+            the same band. Either way the tree's order stays the order the map draws in.
 
         Raises:
             KeyError: when `kind` is not a registered layer kind — a builder passing a name the registry cannot
@@ -1250,6 +1280,10 @@ class WebMapBase:
             ValueError: when `LayerSpec` refuses the id (an empty string) or the kind, or when the id is already in
                 the tree. A builder reaches none of these: its `name=` becomes the id as given, surrounding
                 whitespace included, and `_layer_id` generates an id for an empty name and suffixes a repeated one.
+                Also when a drawn kind's `symbology` carries none of the props its drawer reads, which a
+                description built by hand can miss.
+            OffLimbError: when the map is `strict` and the drawer found nothing it could place. Without
+                `strict` the layer is skipped with a warning and `False` comes back instead.
         """
         kind_info(kind)
         # Whatever this builder classified belongs to the layer it is indexing. Captured here because this
@@ -1524,6 +1558,10 @@ class WebMapBase:
             if _is_layer(layer)
         )
         self._queued = [layer for layer in self._queued if not _is_layer(layer)]
+        # The renderer keeps its own record of what it drew, and nothing else clears it: `_reconcile` only
+        # removes ids that `diff` reports, and a layer removed here is in neither figure it compares. Left
+        # alone, the MapLibre source and layer objects of every removed layer are held for the map's life.
+        self._renderer.remove(layer_id)
         remaining = self.layer_ids
         if self._last_layer_id == layer_id:
             self._last_layer_id = remaining[-1] if remaining else None
@@ -1717,7 +1755,8 @@ class WebMapBase:
         drawn over it, which is what the tree says and what a reader expects of a place name.
 
         Args:
-            layer: A ``maplibre`` ``Layer``/spec, or a callable ``apply(widget)``.
+            layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
+                ``maplibre`` ``Layer``/spec.
 
         Returns:
             This map (chainable).
@@ -1725,28 +1764,12 @@ class WebMapBase:
         self._queued.insert(len(self._queued) - self._overlay_count, layer)
         return self
 
-    def _queue_layer(self, layer: Any, kind: str) -> Self:
-        """Queue a drawn layer in the band its kind belongs to, and return ``self``.
-
-        MapLibre draws its layers in the order they are added, and the tree bands them by kind
-        (:data:`~digitalearth.base.registry.KIND_BANDS`). This is what keeps the two saying the same thing: a
-        graticule queued after a raster still draws beneath it, and a raster queued after a label still draws
-        beneath the label.
-
-        Args:
-            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
-            kind: The layer's registered kind, as passed to :meth:`_index_layer`.
-
-        Returns:
-            This map (chainable).
-        """
-        return self._queue_in_band(layer, band_of(kind))
-
     def _queue_in_band(self, layer: Any, band: str) -> Self:
         """Queue a drawn layer in one band, and return ``self``.
 
         Args:
-            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
+                ``maplibre`` ``Layer``/spec.
             band: One of :data:`~digitalearth.base.registry.KIND_BANDS`.
 
         Returns:
@@ -2121,7 +2144,8 @@ class WebMapBase:
         puts it beneath the opaque basemap tiles, where it cannot be seen at all.
 
         Args:
-            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
+                ``maplibre`` ``Layer``/spec.
 
         Returns:
             This map (chainable).
@@ -2138,7 +2162,8 @@ class WebMapBase:
         beneath this band rather than appending.
 
         Args:
-            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
+                ``maplibre`` ``Layer``/spec.
 
         Returns:
             This map (chainable).
@@ -2171,7 +2196,8 @@ class WebMapBase:
         the mirror of :meth:`add_layer`, which appends on top.
 
         Args:
-            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
+                ``maplibre`` ``Layer``/spec.
 
         Returns:
             This map (chainable).
@@ -2288,14 +2314,20 @@ class WebMapBase:
         return options
 
     def _apply_layer(self, widget: Any, layer: Any) -> None:
-        """Apply one registered ``layer`` onto the MapLibre ``widget``.
+        """Apply one queued ``layer`` onto the MapLibre ``widget``.
 
-        A callable layer is a mixin-supplied ``apply(widget)`` (it wires its own source(s) + layer(s));
-        anything else is handed to the widget's ``add_layer``.
+        Three shapes reach here, in the order the queue holds them. A described layer is looked up in the
+        renderer, and what it drew is added source-first, then the layer, then whatever extra layers the
+        same description owns (a graticule's degree labels, a cluster's counts and loose points) — a
+        description nothing was drawn for adds nothing, which is how a declined layer stays off the page. A
+        callable layer is a mixin-supplied ``apply(widget)`` that wires its own source(s) + layer(s), the
+        path the kinds outside :data:`~digitalearth.web.renderer.DRAWN_KINDS` still take. Anything else is
+        handed straight to the widget's ``add_layer``.
 
         Args:
             widget: The MapLibre ``MapWidget`` being assembled.
-            layer: A callable ``apply(widget)`` or a ``maplibre`` ``Layer``/spec.
+            layer: A queue entry standing for a drawn description, a callable ``apply(widget)``, or a
+                ``maplibre`` ``Layer``/spec.
         """
         if isinstance(layer, _Described):
             built = self._renderer.drawn.get(layer.layer_id)

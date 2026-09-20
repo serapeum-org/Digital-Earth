@@ -40,6 +40,27 @@ class DrawnLayer:
             addresses.
         extra_layers: Further layers drawn from the same source and owned by the same description, such as
             a graticule's degree labels. They follow `layer` and are removed with it.
+
+    Examples:
+        - A graticule is one description drawing two MapLibre layers off one source — the lines, and the
+          degree labels that follow them:
+            ```python
+            >>> from digitalearth.web import WebMap
+            >>> drawn = WebMap().graticule(spacing=30)._renderer.drawn["Graticule"]
+            >>> drawn.source_id, drawn.layer.id
+            ('Graticule-src', 'Graticule')
+            >>> [extra.id for extra in drawn.extra_layers]
+            ['Graticule-label']
+
+            ```
+        - An annotation draws one layer and nothing follows it, so `extra_layers` is empty:
+            ```python
+            >>> from digitalearth.web import WebMap
+            >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam")
+            >>> m._renderer.drawn["amsterdam"].extra_layers
+            ()
+
+            ```
     """
 
     source_id: Optional[str]
@@ -102,6 +123,27 @@ def drawer_for(kind: str) -> Any:
     Raises:
         KeyError: when this tier does not draw `kind`, naming the kinds it does; or when the drawer table
             and `DRAWN_KINDS` disagree, which is a defect in this module rather than in the caller.
+
+    Examples:
+        - Kinds that differ only in what they mean share the drawer that draws them, because on this tier
+          they are one GeoJSON source and one typed layer:
+            ```python
+            >>> from digitalearth.web.renderer import drawer_for
+            >>> drawer_for("points").__name__, drawer_for("polygons").__name__
+            ('draw_vector', 'draw_vector')
+            >>> drawer_for("raster").__name__
+            'draw_field'
+
+            ```
+        - A kind another tier draws is refused by name, listing what this one does draw:
+            ```python
+            >>> from digitalearth.web.renderer import drawer_for
+            >>> drawer_for("mesh")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            KeyError: "the web tier does not draw 'mesh' layers; it draws [...]"
+
+            ```
     """
     # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
     # without loading every builder behind them.
@@ -155,6 +197,34 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
 
     Raises:
         ValueError: naming the layer, its kind and what is missing.
+
+    Examples:
+        - The props a drawer asked for come back as a plain dict it can read:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec, Symbology
+            >>> from digitalearth.web.renderer import required_props
+            >>> wells = LayerSpec(
+            ...     "wells",
+            ...     "points",
+            ...     symbology=Symbology(
+            ...         props={"maplibre_type": "circle", "paint": {"circle-color": "#cc4444"}}
+            ...     ),
+            ... )
+            >>> required_props(wells, "maplibre_type", "paint")["paint"]
+            {'circle-color': '#cc4444'}
+
+            ```
+        - A description carrying none of them is refused by layer, not by MapLibre key:
+            ```python
+            >>> from digitalearth.base.spec import LayerSpec
+            >>> from digitalearth.web.renderer import required_props
+            >>> try:
+            ...     required_props(LayerSpec("wells", "points"), "paint")
+            ... except ValueError as error:
+            ...     print(str(error).split(".")[0])
+            layer 'wells' (points) cannot be drawn by the web tier: its symbology records none of ['paint']
+
+            ```
     """
     props = dict(layer.symbology.props)
     missing = [name for name in names if name not in props]
@@ -173,6 +243,27 @@ class Renderer:
 
     Attributes:
         drawn: Layer id to the MapLibre objects drawn for it, in draw order.
+
+    Examples:
+        - A map's renderer holds what it drew, keyed by the same ids
+          :attr:`~digitalearth.web.base.WebMapBase.layer_ids` lists:
+            ```python
+            >>> from digitalearth.web import WebMap
+            >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam")
+            >>> sorted(m._renderer.drawn)
+            ['amsterdam']
+            >>> m._renderer.drawn["amsterdam"].source_id
+            'amsterdam-src'
+
+            ```
+        - What it holds is in the order the layers were drawn, which is the order the widget adds them:
+            ```python
+            >>> from digitalearth.web import WebMap
+            >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="ams").text(2.35, 48.86, "Paris", name="par")
+            >>> list(m._renderer.drawn)
+            ['ams', 'par']
+
+            ```
     """
 
     def __init__(self, web_map: Any) -> None:
@@ -190,8 +281,9 @@ class Renderer:
         """What has been drawn, by layer id.
 
         Returns:
-            Layer id to the `(source_id, source_spec, layer)` triple the drawer produced, in the order the
-            layers were drawn.
+            Layer id to the `DrawnLayer` its drawer produced — the source, the layer, and whatever extra
+            layers the same description owns — in the order the layers were drawn. A copy, so writing to it
+            does not change what the map draws.
         """
         return dict(self._drawn)
 
@@ -203,10 +295,16 @@ class Renderer:
             layer_id: Which layer to draw.
 
         Returns:
-            Whatever the drawer produced, or `None` for a layer it declined to draw.
+            The `DrawnLayer` the drawer produced, or `None` for a layer it declined to draw — an
+            unplaceable raster, a custom object this process does not hold. A declined layer is not
+            recorded in :attr:`drawn`.
 
         Raises:
             KeyError: when no layer has that id, or the tier has no drawer for its kind.
+            ValueError: when the layer's description does not carry the props its drawer reads (see
+                :func:`required_props`).
+            OffLimbError: when the map is `strict` and the drawer found nothing it could place; a map that
+                is not `strict` gets `None` back and a warning instead.
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
@@ -232,7 +330,12 @@ class Renderer:
         return figure.sources[layer.source_id].open()
 
     def apply(self, before: FigureSpec, after: FigureSpec) -> None:
-        """Bring what the map draws from one figure to another.
+        """Bring what the map draws from one figure to another, or leave it as it was.
+
+        Reconciling is not atomic — the layers are drawn one after another — so a refusal partway has
+        already drawn the ones before it. Everything drawn in the attempt is therefore rolled back before
+        the refusal is re-raised: a figure this declines changes neither what the map reports nor what it
+        next draws, which is the contract the shared renderer conformance suite states for all three tiers.
 
         Args:
             before: The figure the map currently draws.
@@ -240,6 +343,8 @@ class Renderer:
 
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
+            ValueError: when a layer's description does not carry what its drawer needs.
+            OffLimbError: when the map is `strict` and a layer cannot be placed.
 
         Note:
             Unlike the 3-D tier, nothing is mutated in place: MapLibre's widget is rebuilt on every render,
@@ -268,6 +373,8 @@ class Renderer:
         Raises:
             KeyError: when a layer names a kind this tier does not draw.
             ValueError: when a layer's description does not carry what its drawer needs.
+            OffLimbError: when the map is `strict` and a layer cannot be placed. Nothing is rolled back
+                here — :meth:`apply` is what holds the record together across a refusal.
         """
         change = before.diff(after)
         for layer_id in change.removed:

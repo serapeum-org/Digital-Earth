@@ -128,7 +128,12 @@ def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+        A :class:`~digitalearth.web.renderer.DrawnLayer`. It never declines: any of the five kinds either
+        draws or refuses by raising, which is why their builders do not ask whether the layer survived.
+
+    Raises:
+        ValueError: when the description records no MapLibre type or no paint for the layer, naming the
+            layer rather than the missing MapLibre key.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
@@ -725,13 +730,18 @@ class VectorMixin(_MixinBase):
         visible: bool = True,
         layout: Optional[dict] = None,
     ) -> Self:
-        """Register a GeoJSON source + a typed layer with `paint` and record it as the last data layer.
+        """Describe a GeoJSON source + a typed layer with `paint`, and record it as the last data layer.
+
+        The single funnel the five vector builders register through. It does not build the MapLibre
+        objects: it records what they should be — the type, the paint, the layout — as values on the
+        layer's symbology, and :func:`draw_vector` rebuilds the source and the layer from exactly that.
 
         Args:
             features: The display-CRS GeoDataFrame to serve as the GeoJSON source.
             prefix: The layer id prefix, from the MapLibre type (`"circle"`/`"line"`/`"fill"`/`"label"`).
                 It shapes the public `layer_ids`, so it is kept apart from `kind`.
-            layer_type: The `maplibre` `LayerType` member for the layer.
+            layer_type: The `maplibre` `LayerType` member for the layer. Recorded by its value, not the
+                member itself, so a figure written to disk carries a string MapLibre reads back.
             paint: The MapLibre paint dict for the layer.
             kind: The registered, engine-neutral kind the layer is recorded as — `"points"`, `"polygons"`,
                 `"choropleth"` — which the MapLibre type cannot tell apart.
@@ -977,7 +987,7 @@ class VectorMixin(_MixinBase):
                 ... )
                 >>> m = WebMap().lines(gdf, color="#ffcc00", width=3.0)  # doctest: +SKIP
                 >>> m.layer_ids                                      # doctest: +SKIP
-                ['line-2']
+                ['line-1']
 
                 ```
             - Colouring by a column is a continuous ramp unless a ``scheme`` is named, and the

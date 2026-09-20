@@ -191,6 +191,11 @@ def draw_labels(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        KeyError: when the recorded column is absent from the reprojected frame. The builder refuses a
+            column it can see is missing, but a features object that exposes no ``columns`` — a pyramids
+            ``FeatureCollection`` rather than a GeoDataFrame — is only read here.
     """
     from digitalearth.interactive.renderer import DrawnLayer
 

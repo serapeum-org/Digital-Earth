@@ -25,14 +25,15 @@ from digitalearth.base.crs import reproject
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
-from digitalearth.base.spec import Symbology
+from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.symbology import (
     MISSING_COLOR,
     nulls_to_none,
     resolve_categorical_cmap,
 )
 from digitalearth.static.maps.base import OffLimbError
-from digitalearth.static.render_compat import relocate_flat_style
+from digitalearth.static.render_compat import relocate_flat_style, resolve_marker_size
+from digitalearth.static.renderer import DrawnLayer, drawing_opts
 from digitalearth.static.scene import LayerRecord
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
@@ -44,16 +45,19 @@ _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
 _VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streamlines"}
 
 
-def _polygon_kind(values: Any) -> str:
-    """Return the kind a polygon layer is recorded under, given what it was filled with.
+def _polygon_kind(fill: Any) -> str:
+    """Return the kind a polygon layer is recorded under, given what colours it.
 
     Args:
-        values: The per-polygon values colouring the fill, or `None` for an outline-only draw.
+        fill: Whatever decides the polygons' colour — the column a builder was handed, the band a raster's
+            cells are read from, the per-polygon values themselves. `None` means nothing colours them and
+            only their outlines are drawn.
 
     Returns:
         `"choropleth"` when the polygons are coloured by a value, `"polygons"` when only their outlines are
         drawn. Both come out of the same :meth:`VectorMixin._polygon_layer` recipe and the same cleopatra
-        glyph, so the drawing cannot tell them apart — the values are what makes one a choropleth.
+        glyph, so the drawing cannot tell them apart — the fill is what makes one a choropleth, which is
+        why the builder answers this from its arguments rather than from what it drew.
 
     Examples:
         - A filled and an outline-only layer are different kinds:
@@ -64,7 +68,7 @@ def _polygon_kind(values: Any) -> str:
 
             ```
     """
-    return "polygons" if values is None else "choropleth"
+    return "polygons" if fill is None else "choropleth"
 
 
 def _draw_missing_neutral(artist: Any) -> None:
@@ -126,6 +130,455 @@ def _skips_off_limb(builder: Callable) -> Callable:
             return None
 
     return guarded
+
+
+def draw_scatter(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Draw the point layer a described scatter asks for, through ``cleopatra.ScatterGlyph``.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the scatter ``PathCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty.
+    """
+    opts = drawing_opts(layer)
+    # empty-guard; any geometry (centroid fallback) OK
+    fc = scene._vector_input(data, name="scatter")
+    src = get_source(fc)
+    size_column = layer.symbology.props.get("size_column")
+    sizes = (
+        np.asarray(fc[size_column], dtype=float) if size_column is not None else None
+    )
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
+    plot_style = relocate_flat_style(opts, marker_size_for="Map.scatter()")
+    glyph = ScatterGlyph(
+        src.x.values,
+        src.y.values,
+        values=src.z.values if src.z is not None else None,
+        sizes=sizes,
+        ax=scene.ax,
+        fig=scene.fig,
+        **opts,
+    )
+    return scene._render_glyph(glyph, artist="plot", **plot_style)
+
+
+def draw_grid_points(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Draw a raster's cell centres as points coloured by value (pyramids ``to_xyz`` -> ``ScatterGlyph``).
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``Dataset`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the scatter ``PathCollection``.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows.
+    """
+    opts = drawing_opts(layer)
+    xyz = scene._reproject(data).to_xyz()
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    # The deprecated `point_size=` spelling was already resolved by the builder, so nothing here warns;
+    # this only folds the resolved `size` onto the constructor keyword cleopatra takes.
+    plot_style = relocate_flat_style(opts, marker_size_for="Map.grid_points()")
+    glyph = ScatterGlyph(
+        xyz.iloc[:, 0].to_numpy(),
+        xyz.iloc[:, 1].to_numpy(),
+        values=xyz.iloc[:, 2].to_numpy(),
+        ax=scene.ax,
+        fig=scene.fig,
+        **opts,
+    )
+    return scene._render_glyph(glyph, artist="plot", **plot_style)
+
+
+def draw_grid_cells(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Draw a raster's cells as value-coloured polygons (pyramids ``get_cell_polygons`` -> ``PolygonGlyph``).
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``Dataset`` the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows.
+    """
+    opts = drawing_opts(layer)
+    ds = scene._reproject(data)
+    if ds.epsg is None:
+        # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
+        # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
+        # orthographic globe). We read only the cell geometry, in display-CRS coordinates computed from
+        # the geotransform, so the authority code is cosmetic; give the transient reprojected copy a
+        # placeholder EPSG (coordinates are untouched) so the call runs. Drop this once pyramids#979 ships.
+        ds.epsg = 4326
+    polygons = [np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry]
+    # 1-based band, nodata -> NaN (shared helper)
+    values = read_masked_band(ds, layer.symbology.props["band"]).ravel()
+    # drop far-side cells on a globe
+    polygons, values = scene._finite_polygons(polygons, values)
+    return scene._polygon_layer(polygons, values, **opts)
+
+
+def draw_uv_field(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Draw the u/v field a described arrow, barb or streamline layer asks for (``cleopatra.VectorGlyph``).
+
+    Args:
+        scene: The map being drawn on.
+        data: The ``(u_dataset, v_dataset)`` pair the layer draws — neither component draws the field on
+            its own, which is why the pair is the layer's one source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the vector mappable.
+
+    Raises:
+        OffLimbError: when the data lies entirely outside what the display CRS shows.
+    """
+    props = dict(layer.symbology.props)
+    kind = props["via"]
+    opts = drawing_opts(layer)
+    u_dataset, v_dataset = data
+    su = scene._prepare(u_dataset, props["band"])
+    sv = scene._prepare(v_dataset, props["band"])
+    xs, ys = su.x.values, su.y.values
+    u, v = su.z.values, sv.z.values
+    # streamplot (and a tidy grid generally) needs strictly increasing axes; raster y runs north->south,
+    # so flip any descending axis and its data columns/rows to match.
+    if xs[0] > xs[-1]:
+        xs, u, v = xs[::-1], u[:, ::-1], v[:, ::-1]
+    if ys[0] > ys[-1]:
+        ys, u, v = ys[::-1], u[::-1, :], v[::-1, :]
+    x_grid, y_grid = np.meshgrid(xs, ys)
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    plot_style = relocate_flat_style(opts)
+    glyph = VectorGlyph(x_grid, y_grid, u, v, ax=scene.ax, fig=scene.fig, **opts)
+    drawn = scene._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
+    scene._last_vector = (drawn.glyph, drawn.artist, kind)  # remembered for quiverkey()
+    return drawn
+
+
+def draw_tri(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Triangulate scattered points and draw the render a described unstructured layer asks for.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``Dataset`` (its cells become points) or ``FeatureCollection`` the layer draws.
+        layer: The layer's description, whose ``via`` names the triangulated render.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the mappable.
+
+    Raises:
+        OffLimbError: when the data lies outside the display CRS, or when enough points were supplied but
+            too few of them survive the reprojection to triangulate — a vector warp sends off-view points
+            to infinity rather than raising, and losing them all means the same thing as an off-limb
+            raster: nothing on the view to draw.
+        ValueError: when fewer than three points were supplied in the first place, which no projection can
+            fix.
+    """
+    from matplotlib.tri import Triangulation
+
+    kind = layer.symbology.props["via"]
+    opts = drawing_opts(layer)
+    x, y, z = scene._scattered(data)
+    # drop far-side points on a globe (Triangulation needs finite)
+    finite = np.isfinite(x) & np.isfinite(y)
+    supplied = np.asarray(x).size
+    x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
+    if x.size < 3:
+        if supplied < 3:
+            # Never enough points to triangulate, whatever the projection — a caller error, and the
+            # accurate complaint is the one matplotlib would give.
+            raise ValueError(
+                f"{kind}() needs at least three points to triangulate, got {supplied}"
+            )
+        raise OffLimbError(
+            f"{kind}: only {x.size} of {supplied} points survive the warp into "
+            f"{scene.crs!r}, which is too few to triangulate"
+        )
+    tri = Triangulation(x, y)
+    glyph = MeshGlyph(x, y, tri.triangles, ax=scene.ax, fig=scene.fig)
+    # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
+    if kind == "tripcolor":
+        face_values = z[tri.triangles].mean(axis=1)
+        return scene._render_glyph(
+            glyph, face_values, location="face", colorbar=False, **opts
+        )
+    return scene._render_glyph(
+        glyph,
+        z,
+        location="node",
+        filled=(kind == "tricontourf"),
+        colorbar=False,
+        **opts,
+    )
+
+
+def draw_choropleth(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Fill the polygons a described choropleth asks for, coloured by the column it names.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of polygons the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty or holds non-polygon geometry.
+    """
+    props = dict(layer.symbology.props)
+    opts = drawing_opts(layer)
+    gdf = scene._vector_input(
+        data,
+        geom_types=("Polygon", "MultiPolygon"),
+        name="choropleth",
+        geom_label="polygon",
+    )
+    polygons, repeats = scene._polygon_vertices(gdf.geometry)
+    values = np.repeat(gdf[props["column"]].to_numpy(), repeats)
+    # drop far-side polygons on a globe
+    polygons, values = scene._finite_polygons(polygons, values)
+    scheme = props["scheme"]
+    if scheme is not None:  # None means a continuous ramp: classify nothing
+        opts["scheme"], opts["k"] = scheme, props["k"]
+    return scene._polygon_layer(polygons, values, **opts)
+
+
+def draw_shapes(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Draw the polygon outlines a described shapes layer asks for, without fill.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of polygons the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty or holds non-polygon geometry.
+    """
+    gdf = scene._vector_input(
+        data,
+        geom_types=("Polygon", "MultiPolygon"),
+        name="shapes",
+        geom_label="polygon",
+    )
+    polygons, _ = scene._polygon_vertices(gdf.geometry)
+    # drop far-side polygons on a globe
+    polygons, _ = scene._finite_polygons(polygons)
+    return scene._polygon_layer(polygons, **drawing_opts(layer))
+
+
+def draw_voronoi(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Tessellate the points a described Voronoi layer names and draw the cells.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of points the layer draws.
+        layer: The layer's description; the clip boundary, which a figure cannot carry, is held on the
+            scene under the layer's id.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
+    """
+    column = layer.symbology.props["column"]
+    gdf = scene._vector_input(
+        data, geom_types=("Point",), name="voronoi", geom_label="point"
+    )
+    geom = gdf.geometry
+    col_vals = gdf[column].to_numpy() if column is not None else None
+    # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
+    # then keeps cell i aligned with input point i, so values map by position.
+    xs, ys, col_vals = scene._finite_point_xy(geom, col_vals)
+    if xs.size == 0:
+        raise ValueError("voronoi: no finite points in the display CRS")
+    cells = voronoi_polygons(MultiPoint(list(zip(xs, ys))), ordered=True)
+    boundary = scene._clip_geometry(scene._layer_keys.get(layer.id))
+    polygons, values = _clipped_cell_rings(cells, boundary, col_vals, column)
+    values_arr = np.asarray(values) if values is not None else None
+    # drop far-side cells on a globe
+    polygons, values_arr = scene._finite_polygons(polygons, values_arr)
+    return scene._polygon_layer(polygons, values_arr, **drawing_opts(layer))
+
+
+def draw_cartogram(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Scale each polygon about its centroid by the column a described cartogram names, and draw it.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of polygons the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty or holds non-polygon geometry.
+    """
+    props = dict(layer.symbology.props)
+    opts = drawing_opts(layer)
+    gdf = scene._vector_input(
+        data,
+        geom_types=("Polygon", "MultiPolygon"),
+        name="cartogram",
+        geom_label="polygon",
+    )
+    factors = scene._scale_factors(
+        gdf[props["scale"]].to_numpy(dtype=float), tuple(props["limits"])
+    )
+    scaled = [
+        affine_scale(g, xfact=f, yfact=f, origin="centroid")
+        for g, f in zip(gdf.geometry, factors)
+    ]
+    polygons, repeats = scene._polygon_vertices(scaled)
+    column = props["column"]
+    if column is None:
+        polygons, _ = scene._finite_polygons(polygons)
+        return scene._polygon_layer(polygons, **opts)
+    values = np.repeat(gdf[column].to_numpy(), repeats)
+    polygons, values = scene._finite_polygons(polygons, values)
+    return scene._polygon_layer(polygons, values, **opts)
+
+
+def draw_quadtree(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Aggregate the points a described quadtree names into adaptive cells and draw them.
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of points the layer draws.
+        layer: The layer's description; the clip boundary and the per-cell reducer, neither of which a
+            figure can carry, are held on the scene under the layer's id.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``PolyCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
+    """
+    props = dict(layer.symbology.props)
+    column = props["column"]
+    agg, clip = scene._layer_keys.get(layer.id, ("mean", None))
+    gdf = scene._vector_input(
+        data, geom_types=("Point",), name="quadtree", geom_label="point"
+    )
+    # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
+    col_vals_full = gdf[column].to_numpy(dtype=float) if column is not None else None
+    xs, ys, col_vals = scene._finite_point_xy(gdf.geometry, col_vals_full)
+    if xs.size == 0:
+        raise ValueError("quadtree: no finite points in the display CRS")
+    agg_fn = _quadtree_reducer(agg, column, col_vals)
+    cells = scene._quadtree_cells(xs, ys, agg_fn, props["nmax"], props["nmin"])
+    polygons, values = _clipped_cell_boxes(cells, scene._clip_geometry(clip))
+    values_arr = np.asarray(values, dtype=float)
+    polygons, values_arr = scene._finite_polygons(polygons, values_arr)
+    return scene._polygon_layer(polygons, values_arr, **drawing_opts(layer))
+
+
+def draw_kde(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Estimate the point density a described heatmap asks for and draw it (``cleopatra.KDEGlyph``).
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of points the layer draws.
+        layer: The layer's description; the clip boundary, which a figure cannot carry, is held on the
+            scene under the layer's id.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the contour set.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty, holds non-point geometry, or leaves no finite point.
+    """
+    opts = drawing_opts(layer)
+    gdf = scene._vector_input(
+        data, geom_types=("Point",), name="kde", geom_label="point"
+    )
+    # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before the KDE.
+    xs, ys, _ = scene._finite_point_xy(gdf.geometry)
+    if xs.size == 0:
+        raise ValueError("kde: no finite points in the display CRS")
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    # levels/… -> plot() contour/data_style groups
+    plot_style = relocate_flat_style(opts)
+    glyph = KDEGlyph(
+        xs,
+        ys,
+        clip_path=scene._clip_path(scene._layer_keys.get(layer.id)),
+        ax=scene.ax,
+        fig=scene.fig,
+        **opts,
+    )
+    return scene._render_glyph(glyph, artist="plot", **plot_style)
+
+
+def draw_sankey(scene: Any, data: Any, layer: LayerSpec) -> DrawnLayer:
+    """Draw the flow paths a described Sankey layer asks for (``cleopatra.FlowGlyph``).
+
+    Args:
+        scene: The map being drawn on.
+        data: The pyramids ``FeatureCollection`` of lines the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.static.renderer.DrawnLayer` holding the ``LineCollection``.
+
+    Raises:
+        OffLimbError: when the warp places none of the geometry in the display CRS.
+        ValueError: when the collection is empty or holds non-line geometry.
+    """
+    props = dict(layer.symbology.props)
+    opts = drawing_opts(layer)
+    gdf = scene._vector_input(
+        data,
+        geom_types=("LineString", "MultiLineString"),
+        name="sankey",
+        geom_label="line",
+    )
+    paths: List[np.ndarray] = []
+    repeats: List[int] = []
+    for geometry in gdf.geometry:
+        parts = (
+            list(geometry.geoms)
+            if geometry.geom_type == "MultiLineString"
+            else [geometry]
+        )
+        paths.extend(np.asarray(part.coords) for part in parts)
+        repeats.append(len(parts))
+    rep = np.asarray(repeats)
+    column, scale = props["column"], props["scale"]
+    values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
+    widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
+    opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
+    plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
+    glyph = FlowGlyph(
+        paths, values=values, widths=widths, ax=scene.ax, fig=scene.fig, **opts
+    )
+    return scene._render_glyph(glyph, artist="plot", **plot_style)
 
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -356,10 +809,8 @@ class VectorMixin(_MixinBase):
         self,
         polygons: List[np.ndarray],
         values: Optional[np.ndarray] = None,
-        *,
-        describe: Optional[LayerRecord] = None,
         **opts,
-    ) -> Any:
+    ) -> DrawnLayer:
         """Draw polygons as a value-filled (``values`` given) or outline-only ``PolygonGlyph`` layer.
 
         Consolidates the fill-vs-outline branch shared by :meth:`grid_cells`, :meth:`choropleth`,
@@ -376,14 +827,11 @@ class VectorMixin(_MixinBase):
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
             values: Optional per-polygon scalar values; when ``None`` only the outlines are drawn.
-            describe: What the calling builder drew, for the figure. Each caller builds its own record
-                because only it knows where the polygons came from — a raster's cells, a feature
-                collection, a Voronoi tessellation — and :func:`_polygon_kind` decides the kind from
-                ``values``, which is the one thing they all agree on.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``.
 
         Returns:
-            The ``PolyCollection`` (registered as a Scene layer).
+            What the render produced, as a :class:`~digitalearth.static.renderer.DrawnLayer` — the drawers
+            that call this hand it straight back to the renderer, which is what records the layer.
         """
         scheme = opts.get("scheme")
         # `isinstance` states the intent: cleopatra's `classify` also accepts a list/ndarray of explicit bin
@@ -418,16 +866,12 @@ class VectorMixin(_MixinBase):
             glyph = PolygonGlyph(
                 polygons, values=values, ax=self.ax, fig=self.fig, **opts
             )
-            artist = self._render_glyph(
-                glyph, artist="plot", describe=describe, **plot_style
-            )
+            drawn = self._render_glyph(glyph, artist="plot", **plot_style)
             if classified:
-                _draw_missing_neutral(artist)
-            return artist
+                _draw_missing_neutral(drawn.artist)
+            return drawn
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(
-            glyph, artist="plot", outline_only=True, describe=describe, **plot_style
-        )
+        return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
 
     @_skips_off_limb
     def scatter(
@@ -478,44 +922,21 @@ class VectorMixin(_MixinBase):
             alias=scale,
             caller="Map.scatter()",
         )
-        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
-        fc = self._vector_input(
-            features, name="scatter"
-        )  # empty-guard; any geometry (centroid fallback) OK
-        src = get_source(fc)
-        values = src.z.values if src.z is not None else None
-        sizes = (
-            np.asarray(fc[size_column], dtype=float)
-            if size_column is not None
-            else None
-        )
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`.
-        plot_style = relocate_flat_style(opts, marker_size_for="Map.scatter()")
-        glyph = ScatterGlyph(
-            src.x.values,
-            src.y.values,
-            values=values,
-            sizes=sizes,
-            ax=self.ax,
-            fig=self.fig,
-            **opts,
-        )
-        return self._render_glyph(
-            glyph,
-            artist="plot",
-            describe=LayerRecord(
+        # Resolved here rather than in the drawer so the deprecation warning lands on the caller's own
+        # line: the drawer sits four frames further down, and a `stacklevel` counted that deep is brittle.
+        resolve_marker_size(opts, caller="Map.scatter()")
+        return self._draw(
+            LayerRecord(
                 "points",
                 source=features,
                 symbology=Symbology(
                     props={
                         "via": "scatter",
                         "size_column": size_column,
-                        "opts": asked,
+                        "opts": dict(opts),
                     }
                 ),
-            ),
-            **plot_style,
+            )
         )
 
     def grid_points(
@@ -523,7 +944,7 @@ class VectorMixin(_MixinBase):
         dataset: Any,
         *,
         _alias_caller: str = "Map.grid_points()",
-        _alias_depth: int = 5,
+        _alias_depth: int = 4,
         **opts,
     ) -> Any:
         """Plot raster cell centres as points coloured by value (pyramids ``to_xyz`` → ``ScatterGlyph``).
@@ -534,7 +955,7 @@ class VectorMixin(_MixinBase):
                 Defaults to ``"Map.grid_points()"``; :meth:`point_cloud` passes its own name, so the
                 warning blames the method the caller actually wrote.
             _alias_depth: How many stack frames sit between that warning and the caller's line.
-                Defaults to ``5`` for a direct call; :meth:`point_cloud` passes ``6``, the one extra
+                Defaults to ``4`` for a direct call; :meth:`point_cloud` passes ``5``, the one extra
                 frame its delegation adds.
             **opts: Styling kwargs, filtered to ``ScatterGlyph``'s accepted options. ``size``
                 sets the marker size (the cross-backend spelling); cleopatra's ``point_size``
@@ -561,34 +982,19 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
+        # The caller and frame depth are parameters because :meth:`point_cloud` delegates here: a
+        # deprecation warning must name the method the user actually called, and point at their line.
+        resolve_marker_size(opts, caller=_alias_caller, depth=_alias_depth)
+        record = LayerRecord(
+            "points",
+            source=dataset,
+            symbology=Symbology(props={"via": "grid_points", "opts": dict(opts)}),
+        )
         try:
-            xyz = self._reproject(dataset).to_xyz()
+            return self._draw(record)
         except OffLimbError:
             self._skipped_off_limb("grid_points")
             return None
-        x = xyz.iloc[:, 0].to_numpy()
-        y = xyz.iloc[:, 1].to_numpy()
-        z = xyz.iloc[:, 2].to_numpy()
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        # The caller and frame depth are parameters because :meth:`point_cloud` delegates here: a
-        # deprecation warning must name the method the user actually called, and point at their line.
-        plot_style = relocate_flat_style(
-            opts, marker_size_for=_alias_caller, depth=_alias_depth
-        )  # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`
-        glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(
-            glyph,
-            artist="plot",
-            describe=LayerRecord(
-                "points",
-                source=dataset,
-                symbology=Symbology(
-                    props={"via": "grid_points", "opts": asked},
-                ),
-            ),
-            **plot_style,
-        )
 
     def point_cloud(self, dataset: Any, **opts) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
@@ -609,7 +1015,7 @@ class VectorMixin(_MixinBase):
         return self.grid_points(
             dataset,
             _alias_caller="Map.point_cloud()",
-            _alias_depth=6,  # one frame further out than grid_points: this alias delegates to it
+            _alias_depth=5,  # one frame further out than grid_points: this alias delegates to it
             **opts,
         )
 
@@ -643,39 +1049,21 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        record = LayerRecord(
+            # A raster's cells always carry their band's values, so this layer is always a choropleth —
+            # `_polygon_kind` is named here for the same reason the outline builders name it: what makes a
+            # polygon layer one kind or the other is whether its polygons are filled by a value.
+            _polygon_kind(band),
+            source=dataset,
+            symbology=Symbology(
+                props={"via": "grid_cells", "band": band, "opts": dict(opts)}
+            ),
+        )
         try:
-            ds = self._reproject(dataset)
+            return self._draw(record)
         except OffLimbError:
             self._skipped_off_limb("grid_cells")
             return None
-        if ds.epsg is None:
-            # Work around pyramids#979: get_cell_polygons labels the returned frame with `ds.epsg` and raises
-            # on `None` (pyramids >=0.47 no longer fabricates EPSG:4326 for a CRS with no authority — e.g. an
-            # orthographic globe). We read only the cell geometry, in display-CRS coordinates computed from
-            # the geotransform, so the authority code is cosmetic; give the transient reprojected copy a
-            # placeholder EPSG (coordinates are untouched) so the call runs. Drop this once pyramids#979 ships.
-            ds.epsg = 4326
-        polygons = [
-            np.asarray(g.exterior.coords) for g in ds.get_cell_polygons().geometry
-        ]
-        values = read_masked_band(
-            ds, band
-        ).ravel()  # 1-based band, nodata -> NaN (shared helper)
-        polygons, values = self._finite_polygons(
-            polygons, values
-        )  # drop far-side cells on a globe
-        return self._polygon_layer(
-            polygons,
-            values,
-            describe=LayerRecord(
-                _polygon_kind(values),
-                source=dataset,
-                symbology=Symbology(
-                    props={"via": "grid_cells", "band": band, "opts": dict(opts)}
-                ),
-            ),
-            **opts,
-        )
 
     def _vector(
         self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts
@@ -694,47 +1082,17 @@ class VectorMixin(_MixinBase):
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
         """
-        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
+        record = LayerRecord(
+            _VECTOR_KINDS[kind],
+            # The pair is the source: a field is not drawable from either component alone.
+            source=(u_dataset, v_dataset),
+            symbology=Symbology(props={"via": kind, "band": band, "opts": dict(opts)}),
+        )
         try:
-            su = self._prepare(u_dataset, band)
-            sv = self._prepare(v_dataset, band)
+            return self._draw(record)
         except OffLimbError:
             self._skipped_off_limb(kind)
             return None
-        xs, ys = su.x.values, su.y.values
-        u, v = su.z.values, sv.z.values
-        # streamplot (and a tidy grid generally) needs strictly increasing axes; raster y runs
-        # north->south, so flip any descending axis and its data columns/rows to match.
-        if xs[0] > xs[-1]:
-            xs, u, v = xs[::-1], u[:, ::-1], v[:, ::-1]
-        if ys[0] > ys[-1]:
-            ys, u, v = ys[::-1], u[::-1, :], v[::-1, :]
-        x_grid, y_grid = np.meshgrid(xs, ys)
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        plot_style = relocate_flat_style(opts)
-        glyph = VectorGlyph(
-            x_grid,
-            y_grid,
-            u,
-            v,
-            ax=self.ax,
-            fig=self.fig,
-            **opts,
-        )
-        im = self._render_glyph(
-            glyph,
-            artist="plot",
-            kind=kind,
-            describe=LayerRecord(
-                _VECTOR_KINDS[kind],
-                # The pair is the source: a field is not drawable from either component alone.
-                source=(u_dataset, v_dataset),
-                symbology=Symbology(props={"via": kind, "band": band, "opts": asked}),
-            ),
-            **plot_style,
-        )
-        self._last_vector = (glyph, im, kind)  # remembered for quiverkey()
-        return im
 
     def quiver(self, u_dataset: Any, v_dataset: Any, **kwargs) -> Any:
         """Draw a vector field as arrows (``VectorGlyph`` ``kind="quiver"``).
@@ -836,59 +1194,18 @@ class VectorMixin(_MixinBase):
             ValueError: when fewer than three points were supplied in the first place, which no
                 projection can fix.
         """
-        from matplotlib.tri import Triangulation
-
-        try:
-            x, y, z = self._scattered(data)
-        except OffLimbError:
-            self._skipped_off_limb(kind)
-            return None
-        finite = np.isfinite(x) & np.isfinite(
-            y
-        )  # drop far-side points on a globe (Triangulation needs finite)
-        supplied = np.asarray(x).size
-        x, y, z = np.asarray(x)[finite], np.asarray(y)[finite], np.asarray(z)[finite]
-        if x.size < 3:
-            if supplied < 3:
-                # Never enough points to triangulate, whatever the projection — a caller error, and the
-                # accurate complaint is the one matplotlib would give.
-                raise ValueError(
-                    f"{kind}() needs at least three points to triangulate, got {supplied}"
-                )
-            # There were enough, and the reprojection took them: a vector warp does not raise when the
-            # data is off the view, it sends the points to infinity for the filter above to drop. That
-            # means the same as an OffLimbError does for a raster — nothing on the view to draw.
-            self._skipped_off_limb(kind)
-            return None
-        tri = Triangulation(x, y)
-        glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
         # All three triangulated renders describe one thing — a mesh built from scattered points — which is
         # what the registry calls `unstructured`; the render itself is the `via` property.
-        described = LayerRecord(
+        record = LayerRecord(
             "unstructured",
             source=data,
             symbology=Symbology(props={"via": kind, "opts": dict(opts)}),
         )
-        # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
-        if kind == "tripcolor":
-            face_values = z[tri.triangles].mean(axis=1)
-            return self._render_glyph(
-                glyph,
-                face_values,
-                location="face",
-                colorbar=False,
-                describe=described,
-                **opts,
-            )
-        return self._render_glyph(
-            glyph,
-            z,
-            location="node",
-            filled=(kind == "tricontourf"),
-            colorbar=False,
-            describe=described,
-            **opts,
-        )
+        try:
+            return self._draw(record)
+        except OffLimbError:
+            self._skipped_off_limb(kind)
+            return None
 
     def tricontourf(self, data: Any, **kwargs) -> Any:
         """Filled contours of unstructured/point data (``MeshGlyph`` node data, ``filled=True``).
@@ -1059,27 +1376,10 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        asked = dict(
-            opts
-        )  # before the classification below is folded in (see `RasterMixin._field`)
-        gdf = self._vector_input(
-            features,
-            geom_types=("Polygon", "MultiPolygon"),
-            name="choropleth",
-            geom_label="polygon",
-        )
-        polygons, repeats = self._polygon_vertices(gdf.geometry)
-        values = np.repeat(gdf[column].to_numpy(), repeats)
-        polygons, values = self._finite_polygons(
-            polygons, values
-        )  # drop far-side polygons on a globe
-        if scheme is not None:  # None means a continuous ramp: classify nothing
-            opts["scheme"], opts["k"] = scheme, k
-        return self._polygon_layer(
-            polygons,
-            values,
-            describe=LayerRecord(
-                _polygon_kind(values),
+        return self._draw(
+            LayerRecord(
+                # A column is required, so the polygons are always filled by a value: a choropleth.
+                _polygon_kind(column),
                 source=features,
                 symbology=Symbology(
                     props={
@@ -1087,11 +1387,12 @@ class VectorMixin(_MixinBase):
                         "column": column,
                         "scheme": scheme,
                         "k": k,
-                        "opts": asked,
+                        # The classification is folded into the glyph's keywords by the drawer, so what
+                        # the figure records is the call the caller made.
+                        "opts": dict(opts),
                     }
                 ),
-            ),
-            **opts,
+            )
         )
 
     @_skips_off_limb
@@ -1107,24 +1408,12 @@ class VectorMixin(_MixinBase):
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
         """
-        gdf = self._vector_input(
-            features,
-            geom_types=("Polygon", "MultiPolygon"),
-            name="shapes",
-            geom_label="polygon",
-        )
-        polygons, _ = self._polygon_vertices(gdf.geometry)
-        polygons, _ = self._finite_polygons(
-            polygons
-        )  # drop far-side polygons on a globe
-        return self._polygon_layer(
-            polygons,
-            describe=LayerRecord(
-                _polygon_kind(None),
+        return self._draw(
+            LayerRecord(
+                _polygon_kind(None),  # outlines only, whatever the collection carries
                 source=features,
                 symbology=Symbology(props={"via": "shapes", "opts": dict(opts)}),
-            ),
-            **opts,
+            )
         )
 
     def _clip_geometry(self, clip: Any) -> Any:
@@ -1216,35 +1505,20 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        gdf = self._vector_input(
-            features, geom_types=("Point",), name="voronoi", geom_label="point"
-        )
-        geom = gdf.geometry
-        col_vals = gdf[column].to_numpy() if column is not None else None
-        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS); ordered=True
-        # then keeps cell i aligned with input point i, so values map by position.
-        xs, ys, col_vals = self._finite_point_xy(geom, col_vals)
-        if xs.size == 0:
-            raise ValueError("voronoi: no finite points in the display CRS")
-        cells = voronoi_polygons(MultiPoint(list(zip(xs, ys))), ordered=True)
-        boundary = self._clip_geometry(clip)
-
-        polygons, values = _clipped_cell_rings(cells, boundary, col_vals, column)
-        values_arr = np.asarray(values) if values is not None else None
-        polygons, values_arr = self._finite_polygons(
-            polygons, values_arr
-        )  # drop far-side cells on a globe
-        return self._polygon_layer(
-            polygons,
-            values_arr,
-            describe=LayerRecord(
-                _polygon_kind(values_arr),
+        return self._draw(
+            LayerRecord(
+                # With a column the cells are filled by its value, without one only their outlines are
+                # drawn — the same recipe, two kinds, decided by the argument rather than by the drawing.
+                _polygon_kind(column),
                 source=features,
                 symbology=Symbology(
                     props={"via": "voronoi", "column": column, "opts": dict(opts)}
                 ),
-            ),
-            **opts,
+                # The boundary is a shapely geometry or a feature collection: a figure written to JSON has
+                # no spelling for either, and two symbologies holding a GeoDataFrame cannot be compared at
+                # all. It travels with the scene instead, and is forgotten with the layer.
+                key=clip,
+            )
         )
 
     @staticmethod
@@ -1315,43 +1589,21 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        gdf = self._vector_input(
-            features,
-            geom_types=("Polygon", "MultiPolygon"),
-            name="cartogram",
-            geom_label="polygon",
-        )
-        geom = gdf.geometry
-        factors = self._scale_factors(gdf[scale].to_numpy(dtype=float), limits)
-        scaled = [
-            affine_scale(g, xfact=f, yfact=f, origin="centroid")
-            for g, f in zip(geom, factors)
-        ]
-        polygons, repeats = self._polygon_vertices(scaled)
-        described = {
-            "source": features,
-            "symbology": Symbology(
-                props={
-                    "via": "cartogram",
-                    "scale": scale,
-                    "column": column,
-                    "limits": tuple(limits),
-                    "opts": dict(opts),
-                }
-            ),
-        }
-        if column is not None:
-            values = np.repeat(gdf[column].to_numpy(), repeats)
-            polygons, values = self._finite_polygons(polygons, values)
-            return self._polygon_layer(
-                polygons,
-                values,
-                describe=LayerRecord(_polygon_kind(values), **described),
-                **opts,
+        return self._draw(
+            LayerRecord(
+                # As in `voronoi`: a column fills the scaled polygons, no column leaves their outlines.
+                _polygon_kind(column),
+                source=features,
+                symbology=Symbology(
+                    props={
+                        "via": "cartogram",
+                        "scale": scale,
+                        "column": column,
+                        "limits": tuple(limits),
+                        "opts": dict(opts),
+                    }
+                ),
             )
-        polygons, _ = self._finite_polygons(polygons)
-        return self._polygon_layer(
-            polygons, describe=LayerRecord(_polygon_kind(None), **described), **opts
         )
 
     @staticmethod
@@ -1463,28 +1715,10 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        gdf = self._vector_input(
-            features, geom_types=("Point",), name="quadtree", geom_label="point"
-        )
-        geom = gdf.geometry
-        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before binning.
-        col_vals_full = (
-            gdf[column].to_numpy(dtype=float) if column is not None else None
-        )
-        xs, ys, col_vals = self._finite_point_xy(geom, col_vals_full)
-        if xs.size == 0:
-            raise ValueError("quadtree: no finite points in the display CRS")
-        agg_fn = _quadtree_reducer(agg, column, col_vals)
-        cells = self._quadtree_cells(xs, ys, agg_fn, nmax, nmin)
-        boundary = self._clip_geometry(clip)
-        polygons, values = _clipped_cell_boxes(cells, boundary)
-        values_arr = np.asarray(values, dtype=float)
-        polygons, values_arr = self._finite_polygons(polygons, values_arr)
-        return self._polygon_layer(
-            polygons,
-            values_arr,
-            describe=LayerRecord(
-                _polygon_kind(values_arr),
+        return self._draw(
+            LayerRecord(
+                # A quadtree is always filled — by the column's aggregate, or by the point count.
+                _polygon_kind(column or "count"),
                 source=features,
                 symbology=Symbology(
                     props={
@@ -1495,8 +1729,10 @@ class VectorMixin(_MixinBase):
                         "opts": dict(opts),
                     }
                 ),
-            ),
-            **opts,
+                # Neither travels in a figure: `agg` may be a callable, and `clip` is a geometry (see
+                # `voronoi`). They are held on the scene under this layer's id instead.
+                key=(agg, clip),
+            )
         )
 
     @staticmethod
@@ -1586,36 +1822,13 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
-        gdf = self._vector_input(
-            features, geom_types=("Point",), name="kde", geom_label="point"
-        )
-        geom = gdf.geometry
-        # Drop points with non-finite reprojected coords (far side of a clipped/globe CRS) before the KDE.
-        xs, ys, _ = self._finite_point_xy(geom)
-        if xs.size == 0:
-            raise ValueError("kde: no finite points in the display CRS")
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        plot_style = relocate_flat_style(
-            opts
-        )  # levels/… -> plot() contour/data_style groups
-        glyph = KDEGlyph(
-            xs,
-            ys,
-            clip_path=self._clip_path(clip),
-            ax=self.ax,
-            fig=self.fig,
-            **opts,
-        )
-        return self._render_glyph(
-            glyph,
-            artist="plot",
-            describe=LayerRecord(
+        return self._draw(
+            LayerRecord(
                 "heatmap",
                 source=features,
-                symbology=Symbology(props={"via": "kde", "opts": asked}),
-            ),
-            **plot_style,
+                symbology=Symbology(props={"via": "kde", "opts": dict(opts)}),
+                key=clip,  # a geometry, which a figure cannot carry — see `voronoi`
+            )
         )
 
     @_skips_off_limb
@@ -1668,37 +1881,8 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
-        gdf = self._vector_input(
-            features,
-            geom_types=("LineString", "MultiLineString"),
-            name="sankey",
-            geom_label="line",
-        )
-        geom = gdf.geometry
-        paths: List[np.ndarray] = []
-        repeats: List[int] = []
-        for g in geom:
-            parts = list(g.geoms) if g.geom_type == "MultiLineString" else [g]
-            paths.extend(np.asarray(p.coords) for p in parts)
-            repeats.append(len(parts))
-        rep = np.asarray(repeats)
-        values = np.repeat(gdf[column].to_numpy(), rep) if column is not None else None
-        widths = np.repeat(gdf[scale].to_numpy(), rep) if scale is not None else None
-        opts.setdefault("add_colorbar", False)  # the Scene owns the aggregated colorbar
-        plot_style = relocate_flat_style(opts)  # scheme/k -> plot() classify group
-        glyph = FlowGlyph(
-            paths,
-            values=values,
-            widths=widths,
-            ax=self.ax,
-            fig=self.fig,
-            **opts,
-        )
-        return self._render_glyph(
-            glyph,
-            artist="plot",
-            describe=LayerRecord(
+        return self._draw(
+            LayerRecord(
                 "flow",
                 source=features,
                 symbology=Symbology(
@@ -1706,9 +1890,8 @@ class VectorMixin(_MixinBase):
                         "via": "sankey",
                         "column": column,
                         "scale": scale,
-                        "opts": asked,
+                        "opts": dict(opts),
                     }
                 ),
-            ),
-            **plot_style,
+            )
         )

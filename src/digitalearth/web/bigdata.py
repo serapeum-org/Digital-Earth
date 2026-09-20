@@ -47,10 +47,14 @@ def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
+    paint = required_props(layer, "paint")["paint"]
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
@@ -59,7 +63,7 @@ def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
             id=layer.id,
             type=layer_types.HEATMAP,
             source=source_id,
-            paint=dict(layer.symbology.props["paint"]),
+            paint=dict(paint),
         ),
     )
 
@@ -77,14 +81,18 @@ def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.web.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
-        unclustered points.
+        unclustered points, drawn under the layer's own id suffixed ``-count`` and ``-unclustered``.
+
+    Raises:
+        ValueError: when the description records none of the values the clustering is built from —
+            its colours, its radius or the zoom it stops clustering at — naming the layer, its kind and what is missing.
     """
     from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
-    props = dict(layer.symbology.props)
+    props = required_props(layer, "color", "text_color", "radius", "max_zoom")
     source_id = f"{layer.id}-src"
     color, text_color = props["color"], props["text_color"]
     return DrawnLayer(
@@ -233,7 +241,10 @@ class BigDataMixin(_MixinBase):
         """Render a point ``FeatureCollection`` as MapLibre clustered circles + count labels (recipe W4).
 
         Builds a clustered GeoJSON source and three layers: cluster bubbles (sized by point count), the count
-        label, and the unclustered points.
+        label, and the unclustered points. All three are **one description** under one id — the bubbles'
+        — so a layer switcher lists them once and :meth:`~digitalearth.web.base.WebMapBase.remove_layer`
+        takes all three off together. The count and the loose points are drawn beside it, under that id
+        suffixed ``-count`` and ``-unclustered``.
 
         Args:
             features: A pyramids point ``FeatureCollection`` / GeoDataFrame.

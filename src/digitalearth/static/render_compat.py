@@ -321,6 +321,55 @@ def fold_symbology(symbology: Symbology) -> Tuple[Dict[str, Any], Dict[str, str]
     return flat, unsupported
 
 
+def resolve_marker_size(opts: Dict[str, Any], *, caller: str, depth: int = 4) -> None:
+    """Normalise the deprecated ``point_size=`` spelling to ``size=`` in a point builder's kwargs, in place.
+
+    This runs in the **builder**, not in the drawer, and that is the whole point of it existing. The
+    deprecation warning has to land on the user's own line, and ``stacklevel`` is a hand-counted number of
+    frames: a builder that records its layer and lets a drawer build it puts four more frames between the
+    two, and a count that deep is one refactor away from blaming a line inside this package. Resolving the
+    spelling where the caller's keywords arrive keeps the count short and stable — and leaves
+    :func:`_fold_marker_size` nothing deprecated to warn about when the drawer folds the resolved ``size``
+    onto cleopatra's constructor spelling.
+
+    Args:
+        opts: The caller's styling keywords, mutated in place: ``point_size`` is removed and its value
+            becomes ``size``.
+        caller: The layer method the keywords were written on, named in the warning and the error.
+        depth: Frames between :func:`~digitalearth.base.deprecation.renamed_parameter` and the user's call
+            — ``4`` for a builder that calls this directly (helper -> here -> builder -> user); an alias
+            that delegates to another builder adds one more and passes ``5``.
+
+    Raises:
+        TypeError: if both ``size`` and ``point_size`` are passed. They name one parameter, so preferring
+            either silently would drop the other.
+
+    Warns:
+        DeprecationWarning: when ``point_size=`` is used instead of ``size=``.
+
+    Examples:
+        - The current spelling passes through untouched:
+            ```python
+            >>> from digitalearth.static.render_compat import resolve_marker_size
+            >>> opts = {"size": 12, "cmap": "viridis"}
+            >>> resolve_marker_size(opts, caller="Map.scatter()")
+            >>> sorted(opts.items())
+            [('cmap', 'viridis'), ('size', 12)]
+
+            ```
+    """
+    size = renamed_parameter(
+        new=MARKER_SIZE_KEY,
+        value=opts.pop(MARKER_SIZE_KEY, None),
+        old="point_size",
+        alias=opts.pop("point_size", None),
+        caller=caller,
+        stacklevel=depth,
+    )
+    if size is not None:
+        opts[MARKER_SIZE_KEY] = size
+
+
 def _fold_marker_size(
     opts: Dict[str, Any], plot_style: Dict[str, Any], caller: str, depth: int
 ) -> None:

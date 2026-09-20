@@ -1,6 +1,7 @@
 """InteractiveMapBase — the core HoloViz plumbing the interactive capability mixins build on.
 
-``InteractiveMapBase`` owns the layer registry (HoloViews elements in add order), the display-CRS
+``InteractiveMapBase`` owns the layer registry — what the map draws, described as layers, sources and a view
+(``figure_spec``), and the HoloViews elements those descriptions were drawn into, in draw order — the display-CRS
 reproject-through-pyramids plumbing, and the render/save/show lifecycle. Capability mixins (raster, vector,
 big-data, temporal, decoration, interaction, projection, animation, dashboard) live in sibling modules and add
 ``image()`` / ``points()`` / … builder methods that call ``self.add_element(...)``; the public
@@ -184,7 +185,12 @@ class InteractiveMapBase:
             a per-call ``big_data_threshold=`` override.
 
     Attributes:
-        layers: Registered HoloViews/GeoViews elements, in add (= overlay) order.
+        layers: The HoloViews/GeoViews elements this map overlays, in **draw** order rather than call
+            order: each is placed where its layer's band puts it, so a basemap added last still sits
+            under the data and a graticule added first still sits over it. This is a view of what is
+            drawn, not the map's state — the map is described by :attr:`figure_spec`, and its layers are
+            addressed by id through :attr:`layer_ids`. It is kept because it is the shape this tier's
+            callers and its own tests have always read.
 
     Examples:
         - Construct and inspect the display configuration (needs no HoloViz engine):
@@ -414,6 +420,31 @@ class InteractiveMapBase:
         Returns:
             One id per described layer. A layer the caller named carries that name; an unnamed one gets a
             generated id counting the layers of its kind.
+
+        Examples:
+            - A named layer keeps its name; an unnamed one is numbered after what it is:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().add_element("dem", name="elevation").add_element("obs").layer_ids
+                ['elevation', 'holoviews-1']
+
+                ```
+            - Draw order, not call order: a layer in the reference band added second is listed first,
+              because that is where it is drawn:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_element("obs", name="obs")
+                >>> m.add_element("grid", name="grid", band="reference").layer_ids
+                ['grid', 'obs']
+
+                ```
+            - A map that has drawn nothing has no ids:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().layer_ids
+                []
+
+                ```
         """
         return list(self._layer_tree.ids)
 
@@ -424,6 +455,31 @@ class InteractiveMapBase:
         Returns:
             A :class:`~digitalearth.base.spec.FigureSpec` with one panel, `"main"`, whose layers are the
             tree in draw order and whose sources are what each builder was given.
+
+        Examples:
+            - The panel names the layers it draws, and each layer says what it is:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> figure = InteractiveMap().add_element("dem", name="elevation").figure_spec
+                >>> figure.panels[0].id, figure.panels[0].layers
+                ('main', ('elevation',))
+                >>> figure.layers.get("elevation").kind
+                'custom:holoviews'
+
+                ```
+            - A builder describes its layer by the engine-neutral kind and the recipe it drew by, and
+              files what it drew as the layer's source:
+                ```python
+                >>> import geopandas as gpd                                       # doctest: +SKIP
+                >>> from shapely.geometry import Point                            # doctest: +SKIP
+                >>> from digitalearth.interactive import InteractiveMap           # doctest: +SKIP
+                >>> gdf = gpd.GeoDataFrame(geometry=[Point(4.9, 52.4)], crs=4326) # doctest: +SKIP
+                >>> figure = InteractiveMap().points(gdf).figure_spec             # doctest: +SKIP
+                >>> layer = figure.layers.get("points-1")                         # doctest: +SKIP
+                >>> layer.kind, layer.symbology.props["via"], layer.source_id     # doctest: +SKIP
+                ('points', 'geometry', 'points-1')
+
+                ```
         """
         tree = self._layer_tree
         panel = PanelSpec(
@@ -444,7 +500,27 @@ class InteractiveMapBase:
         """Where the map is looking, as a value.
 
         Returns:
-            A :class:`~digitalearth.base.spec.Viewport` in the CRS this tier places data in.
+            A :class:`~digitalearth.base.spec.Viewport` in the CRS this tier places data in. It carries no
+            centre, zoom or bounds: a Bokeh figure is framed by what the viewer pans and zooms to rather
+            than by a region set before it is drawn, which is what
+            :data:`~digitalearth.interactive.capabilities.CAPABILITIES` records under `absent["domain"]`.
+
+        Examples:
+            - The view reports the CRS the map places data in, Web Mercator by default:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> view = InteractiveMap().viewport
+                >>> view.crs, view.center, view.zoom
+                (3857, None, None)
+
+                ```
+            - A map built in another display CRS says so:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap(crs=4326).viewport.crs
+                4326
+
+                ```
         """
         return Viewport(crs=self.crs)
 
@@ -486,8 +562,6 @@ class InteractiveMapBase:
                 since the engine name says nothing about what it draws.
             source: What the layer draws, recorded under its id; ``None`` for a layer drawn from no data.
             symbology: How it looks, as values — the description its drawer reads.
-            at: Where the element goes in :attr:`layers`; ``None`` (the default) appends it, ``0`` puts it
-                under everything already drawn, which is what an underlay basemap or land fill needs.
             key: A credential the layer's drawer needs, held on the map rather than in ``symbology`` so a
                 figure written to JSON carries no API key. ``None`` for every layer that needs none.
 
@@ -496,9 +570,14 @@ class InteractiveMapBase:
             that declined to draw the layer leaves the map exactly as it was — the description is dropped
             again, so nothing names a layer that was never drawn.
 
+        Raises:
+            KeyError: when ``kind`` is one this tier draws but ``symbology`` records no ``via`` it has a
+                recipe for — a builder routed to a kind without saying how it drew it. The refusal names
+                the recipes that kind is drawn by.
+
         Examples:
-            - Registration appends in order and returns the map for chaining (any object can
-              stand in for a HoloViews element here — the registry does not inspect it):
+            - Two layers of one band register in call order and return the map for chaining (any object
+              can stand in for a HoloViews element here — the registry does not inspect it):
                 ```python
                 >>> from digitalearth.interactive import InteractiveMap
                 >>> m = InteractiveMap()
@@ -506,6 +585,18 @@ class InteractiveMapBase:
                 True
                 >>> m.layers
                 ['raster-layer', 'vector-layer']
+
+                ```
+            - A ``band`` decides where the element lands, not the order it was added in: a reference layer
+              registered second is drawn beneath the data layer registered first:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> m = InteractiveMap().add_element("observations")
+                >>> m = m.add_element("grid", name="grid", band="reference")
+                >>> m.layers
+                ['grid', 'observations']
+                >>> m.layer_ids
+                ['grid', 'holoviews-1']
 
                 ```
             - With the engine installed, real elements register the same way:
@@ -887,7 +978,7 @@ class InteractiveMapBase:
 
     @property
     def layer_styles(self) -> List[dict]:
-        """The recorded style of every registered layer, in add (= overlay) order.
+        """The recorded style of every registered layer, in draw order.
 
         The whole-map view of :meth:`style_of`: one entry per layer, positionally aligned with
         :attr:`layers`, so the styling a builder *requested* can be read back off the map
@@ -917,7 +1008,7 @@ class InteractiveMapBase:
                 []
 
                 ```
-            - With the engine installed, each builder's requested options show up in add order:
+            - With the engine installed, each builder's requested options show up in draw order:
                 ```python
                 >>> from pyramids.dataset import Dataset                       # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap        # doctest: +SKIP
@@ -978,14 +1069,16 @@ class InteractiveMapBase:
         """Compose the registered layers into one HoloViews object (overlaid with ``*``).
 
         Returns:
-            The single element when one layer is registered, an ``hv.Overlay`` of all layers in add
-            order otherwise (an empty map renders as a blank ``hv.Overlay``).
+            The single element when one layer is registered, an ``hv.Overlay`` of all layers in draw
+            order otherwise (an empty map renders as a blank ``hv.Overlay``). The overlay's order is the
+            order :attr:`figure_spec` describes, because each element was placed where its layer's band
+            put it rather than where the builder call happened to arrive.
 
         Raises:
             ImportError: when the ``interactive`` extra is not installed.
 
         Examples:
-            - Two registered layers compose into an overlay in add order (needs the engine):
+            - Two registered layers compose into an overlay in draw order (needs the engine):
                 ```python
                 >>> import holoviews as hv                                   # doctest: +SKIP
                 >>> from digitalearth.interactive import InteractiveMap      # doctest: +SKIP

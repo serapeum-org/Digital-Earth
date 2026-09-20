@@ -134,29 +134,33 @@ class TestRenderGlyph:
     """Tests for Scene._render_glyph (PA-3)."""
 
     def test_im_convention_registers_glyph_im(self):
-        """artist='im' (default) registers and returns glyph.im.
+        """artist='im' (default) registers glyph.im and reports it as what was drawn.
 
         Test scenario:
             The ArrayGlyph/MeshGlyph convention exposes the mappable on .im; that object is the layer.
+            Since #303 the recipe answers in a ``DrawnLayer``, because its callers are drawers and what
+            they hand back is what the renderer records.
         """
         scene = Scene()
         glyph = _FakeGlyph(im="THE_IMAGE")
-        out = scene._render_glyph(glyph)
-        assert out == "THE_IMAGE", f"expected glyph.im returned, got {out}"
+        drawn = scene._render_glyph(glyph)
+        assert drawn.artist == "THE_IMAGE", f"expected glyph.im, got {drawn.artist}"
         assert scene.layers[-1] == (glyph, "THE_IMAGE"), (
             f"layer not registered correctly: {scene.layers[-1]}"
         )
 
     def test_plot_convention_registers_third_element(self):
-        """artist='plot' registers and returns the third element of plot()'s return.
+        """artist='plot' registers and reports the third element of plot()'s return.
 
         Test scenario:
             Scatter/Polygon/Vector/KDE/Flow glyphs return (fig, ax, artist); the artist is the layer.
         """
         scene = Scene()
         glyph = _FakeGlyph(tuple_artist="THE_COLLECTION")
-        out = scene._render_glyph(glyph, artist="plot")
-        assert out == "THE_COLLECTION", f"expected plot()[2] returned, got {out}"
+        drawn = scene._render_glyph(glyph, artist="plot")
+        assert drawn.artist == "THE_COLLECTION", (
+            f"expected plot()[2], got {drawn.artist}"
+        )
         assert scene.layers[-1] == (glyph, "THE_COLLECTION"), (
             f"layer wrong: {scene.layers[-1]}"
         )

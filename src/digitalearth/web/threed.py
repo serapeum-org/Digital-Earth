@@ -46,8 +46,11 @@ def draw_extruded_polygons(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the description records no `paint` for the extrusion, naming the layer, its kind and what is missing.
     """
-    from digitalearth.web.renderer import DrawnLayer
+    from digitalearth.web.renderer import DrawnLayer, required_props
 
     layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
@@ -58,7 +61,7 @@ def draw_extruded_polygons(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
             id=layer.id,
             type=layer_types.FILL_EXTRUSION,
             source=source_id,
-            paint=dict(layer.symbology.props["paint"]),
+            paint=dict(required_props(layer, "paint")["paint"]),
         ),
     )
 

@@ -44,8 +44,10 @@ class DrawnLayer:
 #: without importing every builder module behind them; `drawer_for` resolves them and is checked against
 #: this tuple, which keeps the two from drifting.
 #:
-#: This is a growing subset while the seam is opened (#300). A kind here is built by its drawer and must not
-#: also be built by its builder; a kind not here is still built the old way and simply described.
+#: Every kind this tier declares in :data:`~digitalearth.interactive.capabilities.CAPABILITIES` is here, so
+#: a kind is built by its drawer and never by its builder. The one kind outside it is `custom:holoviews` —
+#: an element a caller built and handed to `add_element`, which has no description to rebuild it from and
+#: so is drawn by being kept.
 DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",
     "text",
