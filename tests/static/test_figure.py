@@ -27,7 +27,8 @@ class TestGrid:
     def test_single_cell_grid(self):
         """grid(1, 1) returns a one-element list (np.atleast_1d handles the scalar axes)."""
         fig, maps = grid(1, 1, crs=4326)
-        assert len(maps) == 1 and maps[0].fig is fig
+        assert len(maps) == 1
+        assert maps[0].fig is fig
 
     def test_globe_panels(self):
         """globe=True makes every panel a globe Map."""

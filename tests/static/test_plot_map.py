@@ -55,8 +55,9 @@ class TestStaticGlyphPlotEdges:
             Passing a numpy array as ``src`` without ``no_data_value`` must raise a clear ValueError
             naming the missing kwarg.
         """
+        ones = np.ones((4, 4), dtype="float32")
         with pytest.raises(ValueError, match="no_data_value"):
-            StaticGlyph.plot(np.ones((4, 4), dtype="float32"))
+            StaticGlyph.plot(ones)
 
     def test_plot_ndarray_with_no_data_value(self):
         """A bare ndarray plots when ``no_data_value`` is supplied (and is not forwarded to ArrayGlyph).

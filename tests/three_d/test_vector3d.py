@@ -95,8 +95,10 @@ def test_multipolygon_yields_one_ring_per_part():
 def test_vectors_length_mismatch_raises():
     """vectors() rejects mismatched points/vectors shapes."""
     scene = Scene3D(off_screen=True)
+    zeros = np.zeros((5, 3))
+    zeros2 = np.zeros((4, 3))
     with pytest.raises(ValueError, match="same shape"):
-        scene.vectors(np.zeros((5, 3)), np.zeros((4, 3)))
+        scene.vectors(zeros, zeros2)
     scene.close()
 
 
@@ -251,8 +253,9 @@ class TestClassifiedExtrusionAnswersForItsOwnKeywords:
         """
         scene = Scene3D(off_screen=True)
         try:
+            not_a_number = float("nan")
             with pytest.raises(ValueError, match="finite extrusion height"):
-                scene.extruded_polygons(squares, height=float("nan"))
+                scene.extruded_polygons(squares, height=not_a_number)
         finally:
             scene.close()
 

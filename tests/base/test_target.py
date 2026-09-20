@@ -185,16 +185,33 @@ class TestTheRequestAViewMakes:
         )
         assert request.crs == crs, request.crs
 
-    def test_a_named_domain_is_refused_rather_than_read_as_the_whole_source(self):
-        """A region name resolves in the static tier, which `base` cannot import, so the request says so.
+    def test_a_named_domain_is_read_as_the_region_it_names(self):
+        """A region name resolves in `base`, so every tier asks the reader for the same box.
 
         Test scenario:
-            ``Viewport(3857, domain="europe")`` made a request with no region at all, reading the whole source for a
-            view of Europe without a word.
+            The table lived in `static/`, which `base` cannot import, so a name was refused outright — and
+            before that it made a request with no region at all, reading the whole source for a view of
+            Europe without a word. The name now resolves to the same box an explicit bbox gives.
         """
-        view = Viewport(3857, domain="europe")
+        from digitalearth.base.domains import DOMAINS
+
+        named = RenderTarget().view_request(Viewport(3857, domain="europe"))
+        spelled = RenderTarget().view_request(Viewport(3857, domain=DOMAINS["europe"]))
+        assert named.as_bbox() == spelled.as_bbox(), (named.bounds, spelled.bounds)
+        # Reprojected out of the degrees the table holds, so the box is in the view's CRS, not lon/lat.
+        assert max(abs(edge) for edge in named.as_bbox()) > 1000.0, named.bounds
+
+    def test_a_domain_name_is_read_without_regard_to_case_or_padding(self):
+        """The resolver is the tiers' one, so a view spells a region however a caller wrote it."""
+        padded = RenderTarget().view_request(Viewport(4326, domain="  Europe  "))
+        plain = RenderTarget().view_request(Viewport(4326, domain="europe"))
+        assert padded.as_bbox() == plain.as_bbox(), padded.bounds
+
+    def test_a_region_nobody_registered_names_the_ones_that_are(self):
+        """A typo should say what it could have been, not read the whole source."""
+        view = Viewport(3857, domain="atlantis")
         target = RenderTarget()
-        with pytest.raises(ValueError, match="named domain 'europe'"):
+        with pytest.raises(KeyError, match="unknown domain 'atlantis'"):
             target.view_request(view)
 
     def test_a_camera_supplies_no_region(self):

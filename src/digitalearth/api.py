@@ -672,6 +672,80 @@ def quickplot(data: PlottableData, **kwargs) -> Any:
     return quickmap(data, **kwargs)
 
 
+#: The interactive tier's renderer for each ``kind`` `quickmap` accepts. A kind absent from this table is
+#: refused by name rather than drawn as something the caller did not ask for.
+_INTERACTIVE_RASTER_KINDS = {
+    "auto": "image",
+    "imshow": "image",
+    "contourf": "filled_contours",
+    "contour": "contours",
+    "pcolormesh": "quadmesh",
+}
+
+
+def _draw_interactive_vector(scene: Any, data: FeatureCollection, kwargs: dict) -> None:
+    """Route a vector collection to the interactive tier's builder for its geometry.
+
+    Args:
+        scene: The ``InteractiveMap`` being built.
+        data: The collection to draw.
+        kwargs: The caller's remaining keywords, consumed in place.
+
+    Raises:
+        ValueError: if `data` is an empty collection, from `_vector_kind`.
+    """
+    if _vector_kind(data, "quickplot") != "polygons":
+        scene.points(data, **kwargs)
+        return
+    column = kwargs.pop("column", None)
+    if column is not None:
+        scene.choropleth(data, column=column, **kwargs)
+    else:
+        scene.polygons(data, **kwargs)
+
+
+def _draw_interactive_raster(
+    scene: Any, data: Dataset, kind: str, kwargs: dict
+) -> None:
+    """Draw a raster with the interactive renderer `kind` names.
+
+    Args:
+        scene: The ``InteractiveMap`` being built.
+        data: The raster to draw.
+        kind: The renderer's `quickmap` spelling.
+        kwargs: The caller's remaining keywords.
+
+    Raises:
+        ValueError: if `kind` names a renderer this tier does not have. It used to fall back to `image`
+            and draw something the caller never asked for; the matplotlib backend has always refused it
+            (review M7).
+    """
+    if kind not in _INTERACTIVE_RASTER_KINDS:
+        renderers = ", ".join(repr(name) for name in sorted(_INTERACTIVE_RASTER_KINDS))
+        raise ValueError(
+            f"kind={kind!r} is not a renderer of backend='interactive'; use one of {renderers}"
+        )
+    getattr(scene, _INTERACTIVE_RASTER_KINDS[kind])(data, **kwargs)
+
+
+def _decorate_interactive(scene: Any, basemap: Any, coastlines: bool) -> None:
+    """Add the decoration `quickmap` asks for, in the order the tier draws it.
+
+    Args:
+        scene: The ``InteractiveMap`` being built.
+        basemap: `True` for the tier default, or the source itself.
+        coastlines: Whether to overlay a coastline.
+    """
+    if basemap:
+        source = _basemap_source(basemap)
+        if source is None:
+            scene.tiles()
+        else:
+            scene.tiles(source)
+    if coastlines:
+        scene.coastlines()
+
+
 def _quickmap_interactive(
     data: PlottableData,
     *,
@@ -710,46 +784,17 @@ def _quickmap_interactive(
     """
     from digitalearth.interactive import InteractiveMap
 
-    _raster_kind = {
-        "auto": "image",
-        "imshow": "image",
-        "contourf": "filled_contours",
-        "contour": "contours",
-        "pcolormesh": "quadmesh",
-    }
     scene = InteractiveMap(crs=crs)
     if isinstance(data, FeatureCollection):
-        if _vector_kind(data, "quickplot") == "polygons":
-            column = kwargs.pop("column", None)
-            if column is not None:
-                scene.choropleth(data, column=column, **kwargs)
-            else:
-                scene.polygons(data, **kwargs)
-        else:
-            scene.points(data, **kwargs)
+        _draw_interactive_vector(scene, data, kwargs)
     elif isinstance(data, Dataset):
-        if kind not in _raster_kind:
-            # A renderer this tier does not have used to fall back to `image` and draw something the caller
-            # never asked for; the matplotlib backend has always refused it (review M7).
-            renderers = ", ".join(repr(name) for name in sorted(_raster_kind))
-            raise ValueError(
-                f"kind={kind!r} is not a renderer of backend='interactive'; use one of {renderers}"
-            )
-        getattr(scene, _raster_kind[kind])(data, **kwargs)
+        _draw_interactive_raster(scene, data, kind, kwargs)
     else:
         raise TypeError(f"quickplot cannot draw a {type(data).__name__}")
-    if (
-        not colorbar and scene.layers
-    ):  # builders draw a colorbar by default; drop it on the data layer
+    if not colorbar and scene.layers:
+        # Builders draw a colorbar by default; drop it on the data layer.
         scene.colorbar(False)
-    if basemap:
-        source = _basemap_source(basemap)
-        if source is None:
-            scene.tiles()
-        else:
-            scene.tiles(source)
-    if coastlines:
-        scene.coastlines()
+    _decorate_interactive(scene, basemap, coastlines)
     return scene
 
 

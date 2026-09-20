@@ -28,7 +28,8 @@ def test_point_cloud_from_xyz_array():
     pts = np.column_stack([np.arange(40.0), np.arange(40.0), np.linspace(0.0, 9.0, 40)])
     scene = Scene3D(off_screen=True)
     actor = scene.point_cloud(pts, values=pts[:, 2])
-    assert actor is not None and len(scene.layers) == 1
+    assert actor is not None
+    assert len(scene.layers) == 1
     cloud = scene.layers[0][0]
     assert cloud.n_points == 40
     assert SCALAR in cloud.point_data
@@ -44,8 +45,9 @@ def test_two_column_table_is_lifted_to_z0():
 
 def test_bad_shape_raises():
     """A non-(N, 2)/(N, 3) array is rejected with a clear error."""
+    zeros = np.zeros((5, 4))
     with pytest.raises(ValueError):
-        _coords_from_array(np.zeros((5, 4)))
+        _coords_from_array(zeros)
 
 
 def test_uncoloured_cloud_has_no_scalar():
@@ -100,6 +102,8 @@ def test_renders_a_nonempty_frame():
 def test_values_length_mismatch_raises():
     """point_cloud() rejects a values array whose length does not match the points."""
     scene = Scene3D(off_screen=True)
+    zeros = np.zeros((10, 3))
+    zeros2 = np.zeros(7)
     with pytest.raises(ValueError, match="does not match"):
-        scene.point_cloud(np.zeros((10, 3)), values=np.zeros(7))
+        scene.point_cloud(zeros, values=zeros2)
     scene.close()

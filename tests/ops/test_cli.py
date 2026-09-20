@@ -84,8 +84,9 @@ class TestLoad:
         """A path that is neither raster nor vector raises the vector error chained from the raster one (L4)."""
         bogus = tmp_path / "not_geo.tif"
         bogus.write_text("this is plain text, not a geospatial file", encoding="utf-8")
+        as_text = str(bogus)
         with pytest.raises(Exception) as exc:
-            _load(str(bogus))
+            _load(as_text)
         assert exc.value.__cause__ is not None, (
             "the raster cause should be chained onto the vector error"
         )
@@ -98,10 +99,11 @@ class TestPlotKwargs:
         """Unset cmap/levels/domain are omitted; the always-present flags remain."""
         args = build_parser().parse_args(["plot", "in.tif"])
         kwargs = _plot_kwargs(args)
-        assert (
-            "cmap" not in kwargs and "levels" not in kwargs and "domain" not in kwargs
-        )
-        assert kwargs["crs"] == 3857 and kwargs["colorbar"] is True
+        assert "cmap" not in kwargs
+        assert "levels" not in kwargs
+        assert "domain" not in kwargs
+        assert kwargs["crs"] == 3857
+        assert kwargs["colorbar"] is True
 
     def test_includes_set_styling(self):
         """Provided cmap/levels/domain are forwarded."""
@@ -118,11 +120,9 @@ class TestPlotKwargs:
             ]
         )
         kwargs = _plot_kwargs(args)
-        assert (
-            kwargs["cmap"] == "terrain"
-            and kwargs["levels"] == 8
-            and kwargs["domain"] == "europe"
-        )
+        assert kwargs["cmap"] == "terrain"
+        assert kwargs["levels"] == 8
+        assert kwargs["domain"] == "europe"
 
 
 class TestBuildParser:
@@ -130,8 +130,9 @@ class TestBuildParser:
 
     def test_missing_subcommand_errors(self):
         """Invoking with no subcommand exits with an error (required subparser)."""
+        build_parser2 = build_parser()
         with pytest.raises(SystemExit):
-            build_parser().parse_args([])
+            build_parser2.parse_args([])
 
 
 class TestMain:

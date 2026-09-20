@@ -16,7 +16,7 @@ gv = pytest.importorskip("geoviews")
 pn = pytest.importorskip("panel")
 
 
-@pytest.fixture()
+@pytest.fixture
 def cube_map() -> InteractiveMap:
     """A map carrying a 3-step timecube."""
     from pyramids.dataset.collection import DatasetCollection
@@ -36,8 +36,9 @@ class TestPlay:
         assert len(players[0].options) == 3, "the Player must span the three frames"
 
     def test_play_without_timecube_raises(self):
+        interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="no time cube"):
-            InteractiveMap().play()
+            interactiveMap.play()
 
 
 class TestSaveAnimation:
@@ -62,5 +63,7 @@ class TestSaveAnimation:
         assert out.stat().st_size > 1_000
 
     def test_save_without_timecube_raises(self, tmp_path):
+        destination = str(tmp_path / "x.gif")
+        interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="no time cube"):
-            InteractiveMap().save_animation(str(tmp_path / "x.gif"))
+            interactiveMap.save_animation(destination)

@@ -196,10 +196,10 @@ class TestOperations:
             The numbers would combine happily and describe a region nobody asked for. Carrying the CRS is what
             lets this be caught; the message says to reproject first.
         """
+        here = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
+        elsewhere = Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs=4326).union(
-                Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)
-            )
+            here.union(elsewhere)
 
     def test_padded_grows_by_a_fraction_of_the_span(self):
         """A margin is proportional to the data, not an absolute distance.
@@ -224,8 +224,9 @@ class TestOperations:
             neither the method, nor the fraction, nor the reason appears, so the caller has to
             reverse-engineer where those numbers came from.
         """
+        bounds = Bounds(0.0, 0.0, 10.0, 10.0, crs=4326)
         with pytest.raises(ValueError, match=r"padded\(-0.75\) would invert"):
-            Bounds(0.0, 0.0, 10.0, 10.0, crs=4326).padded(-0.75)
+            bounds.padded(-0.75)
 
     def test_two_spellings_of_one_crs_are_the_same_crs(self):
         """`4326` and `"EPSG:4326"` name the same system, so a union across them works.
@@ -249,10 +250,10 @@ class TestOperations:
             Guards the boundary of the test above — normalising spellings must not normalise away a real
             mismatch, which would silently union degrees with metres.
         """
+        in_degrees = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
+        in_metres = Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs=4326).union(
-                Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
-            )
+            in_degrees.union(in_metres)
 
     def test_a_crs_object_is_the_same_crs_as_its_own_code(self):
         """`to_crs` into the CRS object a rectangle already carries returns the rectangle, not a reprojection.
@@ -320,10 +321,10 @@ class TestOperations:
             pyramids cannot parse must answer "not the same" rather than raise out of `union`, where the
             caller would get a CRS-parsing traceback for what is really a mismatched-rectangle message.
         """
+        unreadable = Bounds(0.0, 0.0, 1.0, 1.0, crs="not-a-crs-at-all")
+        readable = Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs="not-a-crs-at-all").union(
-                Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
-            )
+            unreadable.union(readable)
 
     @pytest.mark.parametrize(
         "crs", [4326.5, [4326], True], ids=["float", "list", "bool"]
@@ -376,8 +377,10 @@ class TestOperations:
             it re-opened the hole: CPython interns `0`, `''` and `True`, so two rectangles built with `crs=0`
             compared equal and unioned as though they agreed on a CRS neither had.
         """
+        bounds = Bounds(0.0, 0.0, 2.0, 2.0, crs=0)
+        bounds2 = Bounds(0.0, 0.0, 1.0, 1.0, crs=0)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs=0).union(Bounds(0.0, 0.0, 2.0, 2.0, crs=0))
+            bounds2.union(bounds)
 
     def test_two_unset_crss_still_count_as_the_same(self):
         """Two rectangles that declare no CRS need no reprojection between them.

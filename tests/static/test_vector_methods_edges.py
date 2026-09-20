@@ -130,9 +130,8 @@ class TestQuadtreeCells:
         kept = Map._quadtree_cells(
             xs, ys, agg_fn=lambda idx: float(len(idx)), nmax=1, nmin=0
         )
-        assert len(kept) == 1 and kept[0][4] == 5.0, (
-            f"expected one count-5 cell, got {kept}"
-        )
+        assert len(kept) == 1, f"expected one count-5 cell, got {kept}"
+        assert kept[0][4] == 5.0, f"expected one count-5 cell, got {kept}"
 
 
 class TestCartogramMultiPolygon:
@@ -191,20 +190,25 @@ class TestEmptyFeatureCollection:
     )
     def test_point_methods_reject_empty(self, method, kwargs):
         """Point-input methods reject an empty collection up front."""
+        canvas = Map(crs=32618)
+        empty = _empty_points()
+        builder = getattr(canvas, method)
         with pytest.raises(ValueError, match="empty"):
-            getattr(Map(crs=32618), method)(_empty_points(), **kwargs)
+            builder(empty, **kwargs)
 
     def test_cartogram_rejects_empty(self):
         """cartogram rejects an empty polygon collection."""
         empty = _fc(gpd.GeoDataFrame({"v": []}, geometry=[], crs="EPSG:32618"))
+        map = Map(crs=32618)
         with pytest.raises(ValueError, match="empty"):
-            Map(crs=32618).cartogram(empty, scale="v")
+            map.cartogram(empty, scale="v")
 
     def test_sankey_rejects_empty(self):
         """sankey rejects an empty line collection."""
         empty = _fc(gpd.GeoDataFrame({"w": []}, geometry=[], crs="EPSG:32618"))
+        map = Map(crs=32618)
         with pytest.raises(ValueError, match="empty"):
-            Map(crs=32618).sankey(empty, scale="w")
+            map.sankey(empty, scale="w")
 
 
 class TestGlobeNonFinite:

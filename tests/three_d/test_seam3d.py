@@ -412,8 +412,9 @@ class TestTheDeclaration:
         """A caller is told what the tier does instead of what they asked for."""
         from digitalearth import quickmap
 
+        zeros = np.zeros((4, 4))
         with pytest.raises(ValueError, match="framed by its camera"):
-            quickmap(np.zeros((4, 4)), backend="3d", domain="europe")
+            quickmap(zeros, backend="3d", domain="europe")
 
     def test_the_declaration_is_a_capabilities_value(self):
         """It is the shared type, so the support matrix can be built from every tier's row the same way."""

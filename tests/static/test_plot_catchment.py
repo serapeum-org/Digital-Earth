@@ -82,7 +82,8 @@ def test_static_uses_native_scatter_backend():
 
     text = open(glyph_mod.__file__, encoding="utf-8").read()
     assert "from cleopatra.glyphs.primitives.scatter_glyph import ScatterGlyph" in text
-    assert "import cartopy" not in text and " as gplt" not in text
+    assert "import cartopy" not in text
+    assert " as gplt" not in text
 
 
 class TestCatchmentNameAliases:

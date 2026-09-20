@@ -80,8 +80,9 @@ class TestLazyImport:
 
     def test_render_without_engine_raises_actionable_error(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "maplibre", None)
+        webMap = WebMap()
         with pytest.raises(ImportError, match=r"digitalearth\[web\]"):
-            WebMap().render()
+            webMap.render()
 
     def test_repr_mimebundle_degrades_gracefully_without_engine(self, monkeypatch):
         """A bare repr in a notebook must not raise when the extra is missing."""
@@ -206,9 +207,8 @@ class TestRegistryAndRender:
         bundle = WebMap()._repr_mimebundle_()
         # ipywidgets returns the (data, metadata) tuple form of the protocol; older hooks return a bare dict.
         data = bundle[0] if isinstance(bundle, tuple) else bundle
-        assert isinstance(data, dict) and data, (
-            "expected the widget's non-empty mimebundle"
-        )
+        assert isinstance(data, dict), "expected the widget's non-empty mimebundle"
+        assert data, "expected the widget's non-empty mimebundle"
         assert "application/vnd.jupyter.widget-view+json" in data
 
 

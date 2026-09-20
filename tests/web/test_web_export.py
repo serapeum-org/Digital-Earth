@@ -13,7 +13,7 @@ from digitalearth.web import WebMap
 from digitalearth.web.export import _ASSET_RE
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygons_gdf():
     """Two triangles in lon/lat with a ``pop`` column."""
     gpd = pytest.importorskip("geopandas")
@@ -38,15 +38,17 @@ class TestOfflineInliningPure:
     def test_inline_fetch_failure_is_loud(self):
         """A CDN tag pointing at an unreachable host raises a clear RuntimeError (no silent online page)."""
         html = '<link href="https://nonexistent.invalid/x.css">'
+        webMap = WebMap()
         with pytest.raises(RuntimeError, match="offline=True could not fetch"):
-            WebMap()._inline_offline_assets(html)
+            webMap._inline_offline_assets(html)
 
     def test_inline_unmatched_cdn_reference_raises(self):
         """A CDN asset the regex cannot match must raise, not silently ship a still-online page (M2)."""
         # A bare URL (not inside a matchable <script src>/<link href> tag) → zero substitutions but a CDN ref.
         html = "<html><body>see https://cdn.example.com/maplibre-gl.js for the engine</body></html>"
+        webMap = WebMap()
         with pytest.raises(RuntimeError, match="inlined none"):
-            WebMap()._inline_offline_assets(html)
+            webMap._inline_offline_assets(html)
 
 
 class TestExportNeedsEngine:
@@ -76,8 +78,9 @@ class TestExportNeedsEngine:
         monkeypatch.setattr(WebMap, "_png_via_playwright", staticmethod(_no_browser))
         monkeypatch.setattr(WebMap, "_png_via_selenium", staticmethod(_no_browser))
         m = WebMap().polygons(polygons_gdf)
+        destination = str(tmp_path / "m.png")
         with pytest.raises(ImportError, match="headless browser"):
-            m.save(str(tmp_path / "m.png"))
+            m.save(destination)
 
     def test_fmt_png_forces_png_dispatch(self, tmp_path, polygons_gdf, monkeypatch):
         """``fmt='png'`` routes to the PNG path even when the suffix is not .png."""

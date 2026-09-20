@@ -107,8 +107,9 @@ class TestTheDomain:
             a NaN limit does not raise downstream, it silently normalises every value to NaN and draws a
             blank layer.
         """
+        not_a_number = float("nan")
         with pytest.raises(ValueError, match="finite domain"):
-            Scale(float("nan"), 1.0)
+            Scale(not_a_number, 1.0)
 
     def test_from_limits_refuses_a_non_finite_limit(self):
         """The same check on the limits-in builder.
@@ -117,8 +118,9 @@ class TestTheDomain:
             `from_limits` takes a caller's `clim=` directly, so it is the likeliest way an infinity gets in —
             a stack whose measured range came back unbounded, for instance.
         """
+        infinity = float("inf")
         with pytest.raises(ValueError, match="finite limits"):
-            Scale.from_limits(0.0, float("inf"))
+            Scale.from_limits(0.0, infinity)
 
     def test_a_sequence_field_is_stored_as_a_tuple(self):
         """A caller's list does not become the scale's storage.

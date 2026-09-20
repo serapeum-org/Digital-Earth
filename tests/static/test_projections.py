@@ -17,7 +17,9 @@ class TestRegistry:
     def test_parametrised_proj4(self):
         """orthographic builds a proj4 string with the given centre."""
         spec = projections.get("orthographic", lon=-9, lat=39)
-        assert "+proj=ortho" in spec and "+lat_0=39" in spec and "+lon_0=-9" in spec
+        assert "+proj=ortho" in spec
+        assert "+lat_0=39" in spec
+        assert "+lon_0=-9" in spec
 
     def test_case_insensitive(self):
         """Name lookup is case-insensitive."""
@@ -36,7 +38,8 @@ class TestRegistry:
     def test_mollweide_proj4(self):
         """mollweide builds a centred equal-area proj4 string."""
         spec = projections.get("mollweide", lon=20)
-        assert "+proj=moll" in spec and "+lon_0=20" in spec
+        assert "+proj=moll" in spec
+        assert "+lon_0=20" in spec
 
 
 class TestConvexHull:
@@ -45,13 +48,15 @@ class TestConvexHull:
     def test_single_point_closes_to_itself(self):
         """A single point returns itself repeated (a closed degenerate ring)."""
         ring = projections._convex_hull(np.array([[1.0, 2.0]]))
-        assert ring.shape[1] == 2 and len(ring) == 2
+        assert ring.shape[1] == 2
+        assert len(ring) == 2
         np.testing.assert_allclose(ring[0], ring[-1])
 
     def test_two_points_close(self):
         """Two distinct points return a 2-vertex ring (fewer than 3 points -> no hull)."""
         ring = projections._convex_hull(np.array([[0.0, 0.0], [1.0, 1.0]]))
-        assert len(ring) == 3 and ring.shape[1] == 2  # [p0, p1, p0]
+        assert len(ring) == 3
+        assert ring.shape[1] == 2
 
     def test_empty_returns_empty(self):
         """Zero points return an empty (0, 2) array without raising."""
@@ -67,7 +72,8 @@ class TestProjectionFrame:
         ring, xlim, ylim = projections.projection_frame(
             projections.orthographic(0, 0), n=180
         )
-        assert ring.ndim == 2 and ring.shape[1] == 2
+        assert ring.ndim == 2
+        assert ring.shape[1] == 2
         xspan, yspan = xlim[1] - xlim[0], ylim[1] - ylim[0]
         assert abs(xspan - yspan) / max(xspan, yspan) < 0.05  # near-equal => disc
         assert abs(xlim[0] + xlim[1]) < 0.02 * xspan  # centred on 0
@@ -75,7 +81,8 @@ class TestProjectionFrame:
     def test_mercator_is_rectangular(self):
         """A cylindrical CRS boundary is a rectangle (corners near the limit box)."""
         ring, xlim, ylim = projections.projection_frame(3857, n=180)
-        assert xlim[0] < 0 < xlim[1] and ylim[0] < 0 < ylim[1]
+        assert xlim[0] < 0 < xlim[1]
+        assert ylim[0] < 0 < ylim[1]
 
     def test_ring_is_closed(self):
         """The boundary ring is closed (first vertex repeated at the end)."""
@@ -100,7 +107,8 @@ class TestGraticule:
     def test_returns_polylines(self):
         """graticule returns a non-empty list of (M, 2) polylines."""
         lines = projections.graticule(3857, lon_step=60, lat_step=30)
-        assert lines and all(line.shape[1] == 2 and len(line) > 1 for line in lines)
+        assert lines
+        assert all(line.shape[1] == 2 and len(line) > 1 for line in lines)
 
     def test_orthographic_confined_to_disc(self):
         """Orthographic graticule points stay within the projection boundary bbox."""

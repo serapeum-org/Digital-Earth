@@ -149,8 +149,9 @@ class TestTheRegistry:
         Test scenario:
             Both look identical otherwise, and the second is the one a user cannot debug.
         """
+        dataRef = DataRef("nosuchscheme://x")
         with pytest.raises(KeyError, match="known schemes are"):
-            DataRef("nosuchscheme://x").open()
+            dataRef.open()
 
     def test_the_entry_point_group_is_the_shared_contract_string(self):
         """The registry advertises the same group the plugin loader already discovers.
@@ -387,8 +388,9 @@ class TestTheFileResolver:
             whatever the *vector* reader says about it — sending the user to check the format of a file that
             does not exist.
         """
+        missing = DataRef(str(self._DATA / "no-such-file.tif"))
         with pytest.raises(FileNotFoundError, match="no such file"):
-            DataRef(str(self._DATA / "no-such-file.tif")).open()
+            missing.open()
 
     def test_something_readable_as_neither_blames_both_readers(self):
         """A file that exists but is neither raster nor vector reports both failures, chained.
@@ -397,8 +399,9 @@ class TestTheFileResolver:
             Reporting only the last error would blame the vector reader for a corrupt GeoTIFF. The chain is
             what lets whoever reads the traceback see that *both* readers were tried and why each declined.
         """
+        this_source_file = DataRef(str(Path(__file__).resolve()))
         with pytest.raises(Exception) as caught:
-            DataRef(str(Path(__file__).resolve())).open()
+            this_source_file.open()
         assert not isinstance(caught.value, FileNotFoundError), (
             "this file exists, so the failure must be a read failure, not a missing-path one"
         )

@@ -58,8 +58,9 @@ def test_numpy_source_explicit_axes():
 
 def test_numpy_source_rejects_non_2d():
     """A non-2-D array raises a clear error."""
+    arange = np.arange(5)
     with pytest.raises(ValueError, match="2-D"):
-        get_source(np.arange(5))
+        get_source(arange)
 
 
 def test_feature_source():
@@ -107,7 +108,8 @@ def test_netcdf_source():
     assert src.metadata("kind") == "raster"
     assert src.metadata("variable") == "acc"
     assert src.z.values.ndim == 2
-    assert src.x.values.ndim == 1 and src.y.values.ndim == 1
+    assert src.x.values.ndim == 1
+    assert src.y.values.ndim == 1
 
 
 def test_unsupported_type_raises():
@@ -119,7 +121,8 @@ def test_unsupported_type_raises():
 def test_dimension_info_dataclass():
     """DimensionInfo carries values/name/units."""
     di = DimensionInfo(np.array([1.0, 2.0]), "x", "m")
-    assert di.name == "x" and di.units == "m"
+    assert di.name == "x"
+    assert di.units == "m"
     np.testing.assert_array_equal(di.values, [1.0, 2.0])
 
 
@@ -171,8 +174,9 @@ class TestExtractorHelpers:
         class _StubNetCDF:
             variable_names: list = []
 
+        stubNetCDF = _StubNetCDF()
         with pytest.raises(ValueError, match="no variables"):
-            _from_netcdf(_StubNetCDF(), None, None)
+            _from_netcdf(stubNetCDF, None, None)
 
     def test_attr_answers_none_for_anything_that_is_not_a_mapping(self):
         """A CF lookup handed something that is not an attribute mapping answers ``None``.
@@ -378,7 +382,8 @@ def test_raster_source_nodata_is_exact_not_tolerant():
     assert not np.isnan(z[1, 0]), (
         "a value near (but != ) nodata must be kept under exact-compare"
     )
-    assert z[0, 0] == 1.0 and z[1, 1] == 4.0, f"real values changed: {z}"
+    assert z[0, 0] == 1.0, f"real values changed: {z}"
+    assert z[1, 1] == 4.0, f"real values changed: {z}"
 
 
 @pytest.mark.parametrize(

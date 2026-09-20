@@ -128,4 +128,5 @@ def test_streamplot_flips_descending_x(uv, mocker):
     mocker.patch.object(Map, "_prepare", return_value=src)
     m = Map(crs=4326)
     m.streamplot(*uv)
-    assert len(m.layers) == 1 and m.ax.collections
+    assert len(m.layers) == 1
+    assert m.ax.collections

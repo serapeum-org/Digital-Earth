@@ -58,7 +58,8 @@ class TestTimeSeries:
         """plot creates its own figure/axes when none is supplied."""
         result = TimeSeries(collection).plot()
         fig, ax = result[0], result[1]
-        assert ax.lines and fig is not None
+        assert ax.lines
+        assert fig is not None
 
 
 class TestClimatology:

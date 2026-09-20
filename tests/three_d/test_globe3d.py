@@ -45,8 +45,9 @@ def test_globe_missing_geovista_raises_actionable_error(monkeypatch):
 
     monkeypatch.setattr(builtins, "__import__", _no_geovista)
     scene = Scene3D(off_screen=True)
+    global_field = _global_field()
     with pytest.raises(ImportError, match=r"digitalearth\[3d\]"):
-        scene.globe(_global_field(), coastlines=False)
+        scene.globe(global_field, coastlines=False)
     scene.close()
 
 
@@ -259,7 +260,8 @@ def test_globe_renders_field_sphere():
     """globe() drapes the field on a sphere and registers a layer (no coastlines = offline-safe)."""
     scene = Scene3D(off_screen=True)
     actor = scene.globe(_global_field(), coastlines=False)
-    assert actor is not None and len(scene.layers) == 1
+    assert actor is not None
+    assert len(scene.layers) == 1
     assert bool(scene.screenshot().any())
     scene.close()
 

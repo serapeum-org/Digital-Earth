@@ -153,8 +153,9 @@ class TestTheGifEncoder:
         Args:
             tmp_path: pytest's per-test directory.
         """
+        destination = str(tmp_path / "out.gif")
         with pytest.raises(ValueError, match="no frames"):
-            _write_gif([], str(tmp_path / "out.gif"), duration=0.5, loop=0)
+            _write_gif([], destination, duration=0.5, loop=0)
 
 
 class TestWhichStepsAreAnimated:

@@ -13,7 +13,7 @@ hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m(dataset) -> InteractiveMap:
     """A map carrying one raster layer (a tap/hover source)."""
     return InteractiveMap().image(dataset)
@@ -30,8 +30,9 @@ class TestHoverAndTap:
         )
 
     def test_hover_without_layers_raises(self):
+        interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="at least one layer"):
-            InteractiveMap().hover()
+            interactiveMap.hover()
 
     def test_on_tap_returns_dynamicmap_and_fires_callback(self, m):
         seen = {}
@@ -53,8 +54,9 @@ class TestHoverAndTap:
         ), "tap callback must receive the clicked coords"
 
     def test_on_tap_without_source_raises(self):
+        interactiveMap = InteractiveMap()
         with pytest.raises(ValueError, match="needs a source layer"):
-            InteractiveMap().on_tap(lambda x, y: None)
+            interactiveMap.on_tap(lambda x, y: None)
 
     def test_tap_profile_band_zero_raises(self, m):
         """band is 1-based; band<1 must raise rather than underflow read_array (L1)."""
@@ -141,12 +143,14 @@ class TestDrawAOI:
                 return "cropped"
 
         assert m.aoi_crop(_FakeDS()) == "cropped"
-        assert captured["bbox"] == (-1e5, -1e5, 1e5, 1e5) and captured["epsg"] == 3857
+        assert captured["bbox"] == (-1e5, -1e5, 1e5, 1e5)
+        assert captured["epsg"] == 3857
 
     def test_aoi_crop_without_drawing_raises(self, m):
         m.draw("box")
+        object2 = object()
         with pytest.raises(ValueError, match="needs a drawn box"):
-            m.aoi_crop(object())
+            m.aoi_crop(object2)
 
     def test_cross_filter_links_panels(self, m):
         from pyramids.feature import FeatureCollection

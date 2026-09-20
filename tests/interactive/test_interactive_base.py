@@ -74,8 +74,9 @@ class TestLazyImport:
 
     def test_render_without_engine_raises_actionable_error(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "geoviews", None)
+        interactiveMap = InteractiveMap()
         with pytest.raises(ImportError, match=r"digitalearth\[interactive\]"):
-            InteractiveMap().render()
+            interactiveMap.render()
 
     def test_repr_mimebundle_degrades_gracefully_without_engine(self, monkeypatch):
         """A bare repr in a notebook must not raise when the extra is missing."""
@@ -163,7 +164,8 @@ class TestRegistryAndRender:
 
         obj = InteractiveMap().render()
         assert isinstance(obj, hv.core.Dimensioned)
-        assert isinstance(obj, hv.Overlay) and len(obj) == 0
+        assert isinstance(obj, hv.Overlay)
+        assert len(obj) == 0
 
     def test_single_layer_renders_as_the_element(self):
         import holoviews as hv

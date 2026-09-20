@@ -13,13 +13,13 @@ hv = pytest.importorskip("holoviews")
 gv = pytest.importorskip("geoviews")
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
 
 
-@pytest.fixture()
+@pytest.fixture
 def point_fc():
     """The point fixture as a pyramids FeatureCollection (EPSG:32618, numeric 'fid')."""
     from pyramids.feature import FeatureCollection
@@ -27,7 +27,7 @@ def point_fc():
     return FeatureCollection.read_file("tests/data/points.geojson")
 
 
-@pytest.fixture()
+@pytest.fixture
 def polygon_fc(point_fc):
     """A polygon FeatureCollection built by buffering the point fixture (same CRS, 'fid' column)."""
     fc = point_fc.copy()
@@ -69,7 +69,8 @@ class TestPoints:
             "value column must be a vdim for hover"
         )
         style = hv.Store.lookup_options("bokeh", element, "style").kwargs
-        assert style["color"] == "fid" and style["cmap"] == "magma"
+        assert style["color"] == "fid"
+        assert style["cmap"] == "magma"
 
     def test_size_is_recorded(self, m, point_fc):
         m.points(point_fc, size=12.0)
@@ -129,7 +130,8 @@ class TestPolygonsAndChoropleth:
             "choropleth column must be a vdim"
         )
         style = hv.Store.lookup_options("bokeh", element, "style").kwargs
-        assert style["color"] == "fid" and style["cmap"] == "plasma"
+        assert style["color"] == "fid"
+        assert style["cmap"] == "plasma"
         plot = hv.Store.lookup_options("bokeh", element, "plot").kwargs
         assert plot["clim"] == (0.0, 10.0), f"clim not honoured: {plot.get('clim')}"
 

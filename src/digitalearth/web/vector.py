@@ -188,7 +188,30 @@ class VectorMixin(_MixinBase):
                 the column (unknown scheme, no spread, …), naming the scheme and ``k``; or from the
                 categorical helper (no non-null values).
         """
+        if isinstance(scheme, str) and scheme.lower() == "categorical":
+            return self._categorical_color_expr(values, column, cmap)
+        if scheme is not None:
+            return self._graduated_color_expr(values, column, scheme, k, cmap)
+        return self._ramp_color_expr(values, column, cmap)
+
+    def _categorical_color_expr(self, values: Any, column: str, cmap: str) -> list:
+        """Compile a MapLibre ``match`` expression over the column's distinct values (DC.8).
+
+        Args:
+            values: The 1-D value array driving the colour.
+            column: The GeoJSON property the expression reads.
+            cmap: The colormap sampled for the class colours; a qualitative map is resolved for it.
+
+        Returns:
+            The ``["match", …]`` expression, with `last_breaks` and `last_legend` recorded.
+
+        Raises:
+            ValueError: for a non-integral float category, which cannot key a ``match``; or from the
+                categorical helper when the column holds no non-null values.
+        """
         import numpy as np
+
+        from digitalearth.base.symbology import MISSING_COLOR
 
         def _native(value: Any) -> Any:
             """Coerce a category to a JSON-native, MapLibre-legal ``match`` label.
@@ -210,77 +233,107 @@ class VectorMixin(_MixinBase):
                 return int(as_float)
             return value
 
-        # Imported here rather than at module scope so the tier stays importable without matplotlib;
-        # both the categorical and the graduated arm need the shared missing-value colour.
+        from digitalearth.base.symbology import (
+            categorical_colors,
+            resolve_categorical_cmap,
+        )
+
+        categories, colors = categorical_colors(values, resolve_categorical_cmap(cmap))
+        expr = ["match", ["get", column]]
+        for category, color in zip(categories, colors):
+            expr.extend([_native(category), color])
+        expr.append(
+            MISSING_COLOR
+        )  # fallback for values outside the known categories (shared by all tiers)
+        # Derived from the scale that produced the colours, not assembled a second time beside it:
+        # that is what makes the swatches equal what was drawn (#185, DE-19).
+        legend = LegendSpec.from_scale(
+            Scale.categorical([_native(c) for c in categories], list(colors)),
+            title=column,
+        )
+        self.last_breaks = [_native(c) for c in categories]
+        self.last_legend = self._legend_dict(legend, column)
+        return expr
+
+    def _graduated_color_expr(
+        self, values: Any, column: str, scheme: Any, k: int, cmap: str
+    ) -> list:
+        """Compile a MapLibre ``step`` expression over class edges.
+
+        Args:
+            values: The 1-D value array driving the colour.
+            column: The GeoJSON property the expression reads.
+            scheme: A cleopatra classification scheme, or an explicit edge sequence.
+            k: The number of classes.
+            cmap: The colormap sampled for the class colours.
+
+        Returns:
+            The guarded ``["case", …, ["step", …], MISSING_COLOR]`` expression, with `last_breaks`
+            and `last_legend` recorded.
+
+        Raises:
+            ValueError: when the scheme cannot classify the column, naming the column as well as the
+                scheme and `k` that `Scale` already names.
+        """
         from digitalearth.base.symbology import MISSING_COLOR
 
-        if isinstance(scheme, str) and scheme.lower() == "categorical":
-            from digitalearth.base.symbology import (
-                categorical_colors,
-                resolve_categorical_cmap,
-            )
-
-            categories, colors = categorical_colors(
-                values, resolve_categorical_cmap(cmap)
-            )
-            expr = ["match", ["get", column]]
-            for category, color in zip(categories, colors):
-                expr.extend([_native(category), color])
-            expr.append(
-                MISSING_COLOR
-            )  # fallback for values outside the known categories (shared by all tiers)
-            # Derived from the scale that produced the colours, not assembled a second time beside it:
-            # that is what makes the swatches equal what was drawn (#185, DE-19).
-            legend = LegendSpec.from_scale(
-                Scale.categorical([_native(c) for c in categories], list(colors)),
-                title=column,
-            )
-            self.last_breaks = [_native(c) for c in categories]
-            self.last_legend = self._legend_dict(legend, column)
-            return expr
-
-        if scheme is not None:
-            try:
-                edges = Scale.breaks_of(values, scheme, k)
-            except (
-                ValueError
-            ) as err:  # constant / single-feature column, unknown scheme, k<1, …
-                # Scale's own message already names the scheme and `k`; this adds the column, which it
-                # cannot know. Repeating scheme/k here printed both twice in a row.
-                raise ValueError(f"cannot classify column {column!r}: {err}") from err
-            colors = self._cmap_hex(cmap, len(edges) - 1)
-            step: list = ["step", ["get", column], colors[0]]
-            for edge, color in zip(edges[1:-1], colors[1:]):
-                step.extend([float(edge), color])
-            # A feature with no value must read as missing, not as the lowest class: MapLibre's `step`
-            # has no null arm, so it is guarded by a type test, exactly as the categorical `match` above
-            # falls back to MISSING_COLOR. Every tier draws an unclassifiable feature this same grey.
-            expr: list = [
-                "case",
-                ["==", ["typeof", ["get", column]], "number"],
-                step,
-                MISSING_COLOR,
-            ]
-            self.last_breaks = [float(e) for e in edges]
-            # Through from_scale, like the categorical arm: building the rows by hand here was the same
-            # assembly this wave set out to remove, routed through an extra type for no new guarantee — and
-            # it re-spelled the range label a fourth time. Going through the Scale exercises class_ranges()'s
-            # k-classes-from-k+1-edges arithmetic in production rather than only in its own test.
-            self.last_legend = self._legend_dict(
-                LegendSpec.from_scale(
-                    Scale(
-                        self.last_breaks[0],
-                        self.last_breaks[-1],
-                        scheme=scheme,
-                        breaks=tuple(self.last_breaks),
-                    ),
-                    colors=list(colors),
-                    title=column,
+        try:
+            edges = Scale.breaks_of(values, scheme, k)
+        except (
+            ValueError
+        ) as err:  # constant / single-feature column, unknown scheme, k<1, …
+            # Scale's own message already names the scheme and `k`; this adds the column, which it
+            # cannot know. Repeating scheme/k here printed both twice in a row.
+            raise ValueError(f"cannot classify column {column!r}: {err}") from err
+        colors = self._cmap_hex(cmap, len(edges) - 1)
+        step: list = ["step", ["get", column], colors[0]]
+        for edge, color in zip(edges[1:-1], colors[1:]):
+            step.extend([float(edge), color])
+        # A feature with no value must read as missing, not as the lowest class: MapLibre's `step`
+        # has no null arm, so it is guarded by a type test, exactly as the categorical `match` above
+        # falls back to MISSING_COLOR. Every tier draws an unclassifiable feature this same grey.
+        expr: list = [
+            "case",
+            ["==", ["typeof", ["get", column]], "number"],
+            step,
+            MISSING_COLOR,
+        ]
+        self.last_breaks = [float(e) for e in edges]
+        # Through from_scale, like the categorical arm: building the rows by hand here was the same
+        # assembly this wave set out to remove, routed through an extra type for no new guarantee — and
+        # it re-spelled the range label a fourth time. Going through the Scale exercises class_ranges()'s
+        # k-classes-from-k+1-edges arithmetic in production rather than only in its own test.
+        self.last_legend = self._legend_dict(
+            LegendSpec.from_scale(
+                Scale(
+                    self.last_breaks[0],
+                    self.last_breaks[-1],
+                    scheme=scheme,
+                    breaks=tuple(self.last_breaks),
                 ),
-                column,
-                values=self.last_breaks,
-            )
-            return expr
+                colors=list(colors),
+                title=column,
+            ),
+            column,
+            values=self.last_breaks,
+        )
+        return expr
+
+    def _ramp_color_expr(self, values: Any, column: str, cmap: str) -> list:
+        """Compile a MapLibre ``interpolate`` expression over a continuous ramp.
+
+        Args:
+            values: The 1-D value array driving the colour.
+            column: The GeoJSON property the expression reads.
+            cmap: The colormap sampled for the ramp stops.
+
+        Returns:
+            The ``["interpolate", …]`` expression, with `last_breaks` and `last_legend` recorded.
+
+        Raises:
+            ValueError: when the column holds no finite values to colour.
+        """
+        import numpy as np
 
         finite = np.asarray(values, dtype=float)
         finite = finite[np.isfinite(finite)]

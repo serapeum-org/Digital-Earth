@@ -26,9 +26,8 @@ class TestReprojectPoint:
         assert np.isfinite(xy[0]) and np.isfinite(xy[1]), (
             f"expected finite coords, got {xy}"
         )
-        assert xy[0] == 10.0 and xy[1] == 20.0, (
-            f"identity transform changed the point: {xy}"
-        )
+        assert xy[0] == 10.0, f"identity transform changed the point: {xy}"
+        assert xy[1] == 20.0, f"identity transform changed the point: {xy}"
 
     def test_near_side_point_on_globe_is_finite(self):
         """A point near the projection centre on a globe reprojects to finite coords.

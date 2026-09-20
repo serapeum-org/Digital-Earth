@@ -77,7 +77,8 @@ def test_terrain_registers_a_layer_and_renders():
     dem = np.add.outer(np.linspace(0.0, 1.0, 12), np.linspace(0.0, 1.0, 12))
     scene = Scene3D(off_screen=True)
     actor = scene.terrain(get_source(dem), z_exaggeration=3.0)
-    assert actor is not None and len(scene.layers) == 1
+    assert actor is not None
+    assert len(scene.layers) == 1
     img = scene.screenshot()
     assert img.ndim == 3 and bool(img.any())
     scene.close()

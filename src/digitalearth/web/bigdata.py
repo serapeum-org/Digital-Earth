@@ -31,6 +31,12 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+#: deck.gl's JSON layer protocol names the layer class under this key. The ``@@`` prefix is the
+#: converter's marker for "interpret this value, do not pass it through", so it is protocol rather
+#: than a label — worth naming once so a typo cannot silently produce a layer deck.gl ignores.
+DECK_TYPE_KEY = "@@type"
+
+
 class BigDataMixin(_MixinBase):
     """Heatmap / cluster / deck.gl builders for :class:`~digitalearth.web.map.WebMap`.
 
@@ -311,7 +317,7 @@ class BigDataMixin(_MixinBase):
         )
         gdf = self._display_gdf(features, method="deck_scatter")
         layer = {
-            "@@type": "GeoJsonLayer",
+            DECK_TYPE_KEY: "GeoJsonLayer",
             "id": self._uid("deck-scatter"),
             "data": geopandas_to_geojson(gdf),
             "pointType": "circle",
@@ -345,7 +351,7 @@ class BigDataMixin(_MixinBase):
         _require_layer_api()
         gdf = self._display_gdf(features, method="deck_polygons")
         layer = {
-            "@@type": "GeoJsonLayer",
+            DECK_TYPE_KEY: "GeoJsonLayer",
             "id": self._uid("deck-polygons"),
             "data": geopandas_to_geojson(gdf),
             "filled": True,

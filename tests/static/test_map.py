@@ -20,7 +20,8 @@ def test_render_without_auto_cmap(dataset, mocker):
     mocker.patch("digitalearth.static.maps.raster.auto_style", return_value={})
     m = Map(crs=dataset.epsg)
     m.imshow(dataset)  # cmap stays None -> the `opts['cmap'] = cmap` line is skipped
-    assert len(m.layers) == 1 and len(m.ax.images) == 1
+    assert len(m.layers) == 1
+    assert len(m.ax.images) == 1
 
 
 def test_prepare_reprojects(dataset):
@@ -115,8 +116,9 @@ def test_set_extent_rejects_a_sequence_that_is_not_four_values():
         `main` ignored a fifth value, so a caller who passed a bbox in the wrong ordering-and-length got a
         plausible-looking frame instead of an error.
     """
+    map = Map(crs=3857)
     with pytest.raises(ValueError, match="exactly 4 values"):
-        Map(crs=3857).set_extent([0.0, 1.0, 0.0, 1.0, 2.0])
+        map.set_extent([0.0, 1.0, 0.0, 1.0, 2.0])
 
 
 def test_no_cartopy_import():
@@ -284,7 +286,8 @@ def test_text_at_lonlat(dataset):
         crs=dataset.epsg,
     )
     # on a matching CRS the point is finite -> a Text is added
-    assert txt is not None and txt in m.ax.texts
+    assert txt is not None
+    assert txt in m.ax.texts
 
 
 def test_text_far_side_globe_skipped():
@@ -311,7 +314,8 @@ def test_annotate_with_arrow(dataset):
         arrowprops={"arrowstyle": "->"},
         crs=dataset.epsg,
     )
-    assert isinstance(ann, Annotation) and ann in m.ax.texts
+    assert isinstance(ann, Annotation)
+    assert ann in m.ax.texts
 
 
 def test_annotate_far_side_globe_skipped():
@@ -328,7 +332,8 @@ def test_stock_img_dataset_backdrop(dataset):
     data_im = m.imshow(dataset)
     xlim0, ylim0 = m.ax.get_xlim(), m.ax.get_ylim()
     back = m.stock_img(dataset)
-    assert back is not None and back in m.ax.images
+    assert back is not None
+    assert back in m.ax.images
     assert back.get_zorder() < data_im.get_zorder(), "backdrop must sit below the data"
     assert m.ax.get_xlim() == xlim0 and m.ax.get_ylim() == ylim0, (
         "stock_img blew out the extent"
@@ -339,7 +344,8 @@ def test_stock_img_on_empty_map(dataset):
     """stock_img(dataset) on a map with no prior data still draws the backdrop (no extent to preserve)."""
     m = Map(crs=dataset.epsg)
     back = m.stock_img(dataset)
-    assert back is not None and back in m.ax.images
+    assert back is not None
+    assert back in m.ax.images
     assert back.get_zorder() == -3.0
 
 
@@ -373,5 +379,6 @@ def test_set_domain_names_itself_when_a_bbox_is_back_to_front():
         naming only the numbers. The caller wrote `(west, south, east, north)` and sees a complaint about
         `xmin`/`xmax`, mentioning neither the method, nor the ordering, nor the antimeridian.
     """
+    map = Map(crs=4326)
     with pytest.raises(ValueError, match="set_domain got a bbox"):
-        Map(crs=4326).set_domain((170.0, -10.0, -170.0, 10.0))
+        map.set_domain((170.0, -10.0, -170.0, 10.0))

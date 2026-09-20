@@ -568,12 +568,11 @@ class TestTheRefusalNamesWhatTheCallerWrote:
         """
         import numpy as np
 
+        domain = np.array([0.0, 0.0, 1.0, 1.0])
         with pytest.raises(
             ValueError, match=r"domain= is not supported by backend='web'"
         ):
-            qp._reject_unsupported(
-                "web", domain=np.array([0.0, 0.0, 1.0, 1.0]), crs=qp._UNSET
-            )
+            qp._reject_unsupported("web", domain=domain, crs=qp._UNSET)
 
     @pytest.mark.parametrize(
         ("backend", "kwargs"),

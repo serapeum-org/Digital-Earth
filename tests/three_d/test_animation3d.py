@@ -94,8 +94,9 @@ def test_animate_finalizes_writer_even_when_update_raises(tmp_path):
         s.plotter.write_frame()
         raise RuntimeError("frame blew up")
 
+    destination = str(out)
     with pytest.raises(RuntimeError, match="blew up"):
-        scene.record([1, 2], str(out), boom)
+        scene.record([1, 2], destination, boom)
     # finally-block ran: the writer was flushed/closed (no lingering open mwriter)
     assert (
         getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
@@ -324,8 +325,9 @@ def test_orbit_refuses_threaded_rather_than_writing_nothing(tmp_path):
     """
     scene = _terrain_scene()
     out = tmp_path / "threaded.gif"
+    destination = str(out)
     with pytest.raises(ValueError, match="threaded"):
-        scene.orbit(str(out), n_frames=6, threaded=True)
+        scene.orbit(destination, n_frames=6, threaded=True)
     assert not out.exists(), "nothing should be written for a rejected orbit"
     scene.close()
 
@@ -377,8 +379,9 @@ def test_orbit_rejects_degenerate_shapes(tmp_path, kwargs, message):
         deep inside numpy with a message naming neither viewup nor orbit.
     """
     scene = _terrain_scene()
+    destination = str(tmp_path / "bad.gif")
     with pytest.raises(ValueError, match=message):
-        scene.orbit(str(tmp_path / "bad.gif"), **kwargs)
+        scene.orbit(destination, **kwargs)
     scene.close()
 
 
@@ -394,8 +397,9 @@ def test_orbit_finalizes_writer_when_an_unknown_kwarg_raises(tmp_path):
     """
     scene = _terrain_scene()
     out = tmp_path / "boom.gif"
+    destination = str(out)
     with pytest.raises(TypeError, match="not_a_real_orbit_argument"):
-        scene.orbit(str(out), n_frames=4, not_a_real_orbit_argument=1.0)
+        scene.orbit(destination, n_frames=4, not_a_real_orbit_argument=1.0)
     assert (
         getattr(scene.plotter, "mwriter", None) is None or scene.plotter.mwriter.closed
     ), "the frame writer must be closed even when orbit_on_path rejects a keyword"
@@ -457,8 +461,9 @@ def test_orbit_rejects_a_wrongly_shaped_numpy_viewup(tmp_path, bad):
     `len` at all.
     """
     scene = _terrain_scene()
+    destination = str(tmp_path / "bad.gif")
     with pytest.raises(ValueError, match="3-component viewup"):
-        scene.orbit(str(tmp_path / "bad.gif"), n_frames=4, viewup=bad)
+        scene.orbit(destination, n_frames=4, viewup=bad)
     scene.close()
 
 
@@ -620,8 +625,9 @@ def test_orbit_refuses_a_masked_viewup(tmp_path, masked):
         raises, and a fully masked vector names no up direction at all yet would clear the zero-vector check.
     """
     scene = _terrain_scene()
+    destination = str(tmp_path / "masked.gif")
     with pytest.raises(ValueError, match="masked viewup"):
-        scene.orbit(str(tmp_path / "masked.gif"), n_frames=4, viewup=masked)
+        scene.orbit(destination, n_frames=4, viewup=masked)
     scene.close()
 
 
@@ -642,7 +648,8 @@ def test_up_vector_and_finite_number_reject_without_a_scene():
     assert _up_vector(None) is None, "None passes through untouched"
     with pytest.raises(ValueError, match="numeric factor"):
         _finite_number(1 + 2j, "factor")
+    infinity = float("inf")
     with pytest.raises(ValueError, match="finite factor"):
-        _finite_number(float("inf"), "factor")
+        _finite_number(infinity, "factor")
     with pytest.raises(ValueError, match="3-component viewup"):
         _up_vector([1.0, 2.0])

@@ -35,7 +35,7 @@ class _FakeCOG:
         return np.random.default_rng(0).random((dst_height, dst_width))
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     return InteractiveMap(crs=3857)
 
@@ -111,8 +111,9 @@ class TestLargeImage:
         class _Plain:
             epsg = 3857
 
+        plain = _Plain()
         with pytest.raises(AttributeError, match="read_part"):
-            m.large_image(_Plain())
+            m.large_image(plain)
 
     def test_real_dataset_static_frame_is_non_blank(self, dataset):
         """A real pyramids Dataset renders a non-blank decimated preview (band default 1 → 0-based read).

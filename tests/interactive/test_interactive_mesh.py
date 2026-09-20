@@ -15,13 +15,13 @@ gv = pytest.importorskip("geoviews")
 rng = np.random.default_rng(7)
 
 
-@pytest.fixture()
+@pytest.fixture
 def m() -> InteractiveMap:
     """A fresh Web-Mercator map for each test."""
     return InteractiveMap()
 
 
-@pytest.fixture()
+@pytest.fixture
 def point_fc():
     """A scattered point FeatureCollection (EPSG:32618, numeric 'fid')."""
     from pyramids.feature import FeatureCollection
@@ -95,7 +95,7 @@ class TestTrimesh:
 class TestHexbin:
     """``hexbin`` — equal-area hex density binning."""
 
-    @pytest.fixture()
+    @pytest.fixture
     def cloud(self):
         import geopandas as gpd
 

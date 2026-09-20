@@ -105,6 +105,160 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
+def _quadtree_reducer(agg: Any, column: Optional[str], col_vals: Any) -> Any:
+    """Return the function that gives one quadtree cell its value.
+
+    Args:
+        agg: A named reducer, a callable, or ignored when `column` is `None`.
+        column: The column being aggregated, or `None` to count points instead.
+        col_vals: The per-point values, positionally aligned with the points.
+
+    Returns:
+        A callable taking a cell's point indices and returning its scalar value.
+
+    Raises:
+        ValueError: for a named reducer nobody registered, listing the ones that are.
+    """
+    if column is None:
+        return lambda idx: float(len(idx))
+    if callable(agg):
+        reducer = agg
+    elif agg in _QUADTREE_AGG:
+        reducer = _QUADTREE_AGG[agg]
+    else:
+        raise ValueError(
+            f"unknown agg {agg!r}; choose one of {sorted(_QUADTREE_AGG)} or a callable"
+        )
+    return lambda idx: float(reducer(col_vals[idx]))
+
+
+def _clipped_cell_boxes(cells: Any, boundary: Any) -> tuple:
+    """Return each quadtree cell as a ring, clipped to `boundary`, with the value it carries.
+
+    Unclipped, a cell is its own four corners. Clipped, it can vanish, or break into several parts that
+    are not all polygons — an intersection against a globe's limb produces both — so a cell contributes
+    zero, one or several rings, each carrying the cell's value.
+
+    Args:
+        cells: `(xmin, ymin, xmax, ymax, value)` per cell.
+        boundary: The clip geometry, or `None` to keep every cell whole.
+
+    Returns:
+        `(rings, values)`, positionally aligned.
+    """
+    rings: List[np.ndarray] = []
+    values: List[float] = []
+    for xmin, ymin, xmax, ymax, value in cells:
+        if boundary is None:
+            rings.append(
+                np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
+            )
+            values.append(value)
+            continue
+        clipped = box(xmin, ymin, xmax, ymax).intersection(boundary)
+        for ring in _polygon_rings(clipped):
+            rings.append(ring)
+            values.append(value)
+    return rings, values
+
+
+def _quadrants(xs: np.ndarray, ys: np.ndarray, idx: np.ndarray, box: tuple) -> list:
+    """Split one quadtree cell into its four children, partitioning the points that fall in it.
+
+    Args:
+        xs: All point x-coordinates.
+        ys: All point y-coordinates, aligned with `xs`.
+        idx: The indices of the points inside this cell.
+        box: The cell as `(xmin, ymin, xmax, ymax)`.
+
+    Returns:
+        Four `(xmin, ymin, xmax, ymax, indices)` tuples, south-west first then clockwise. A child may hold
+        no points; that is the caller's cue, not an error.
+    """
+    xmin, ymin, xmax, ymax = box
+    xmid, ymid = 0.5 * (xmin + xmax), 0.5 * (ymin + ymax)
+    cx, cy = xs[idx], ys[idx]
+    return [
+        (xmin, ymin, xmid, ymid, idx[(cx <= xmid) & (cy <= ymid)]),
+        (xmid, ymin, xmax, ymid, idx[(cx > xmid) & (cy <= ymid)]),
+        (xmin, ymid, xmid, ymax, idx[(cx <= xmid) & (cy > ymid)]),
+        (xmid, ymid, xmax, ymax, idx[(cx > xmid) & (cy > ymid)]),
+    ]
+
+
+def _split_made_no_progress(quads: list, held: int) -> bool:
+    """Whether splitting a cell moved nothing — every point landed in one child.
+
+    Args:
+        quads: The four children from :func:`_quadrants`.
+        held: How many points the parent held.
+
+    Returns:
+        `True` when one child holds them all, which happens for coincident points and would otherwise
+        recurse until the depth cap.
+    """
+    nonempty = [quad for quad in quads if len(quad[4]) > 0]
+    return len(nonempty) == 1 and len(nonempty[0][4]) == held
+
+
+def _polygon_rings(geometry: Any) -> list:
+    """Return the exterior ring of every polygon part of a geometry.
+
+    A clip can hand back nothing, one polygon, or a multipart geometry whose parts are not all polygons —
+    an intersection against a globe's limb produces both. A part with no area has no exterior ring to read,
+    so it contributes nothing rather than raising from `part.exterior`.
+
+    Note:
+        Only a `Multi*` geometry is unpacked, which is what both callers did inline before sharing this.
+        A `GeometryCollection` is therefore read as a single non-polygon and contributes nothing; that is
+        existing behaviour, preserved deliberately rather than quietly widened here.
+
+    Args:
+        geometry: Any shapely geometry, typically the result of an intersection.
+
+    Returns:
+        One coordinate array per polygon part, in the order the parts are held.
+    """
+    if geometry.is_empty:
+        return []
+    parts = geometry.geoms if geometry.geom_type.startswith("Multi") else [geometry]
+    return [
+        np.asarray(part.exterior.coords)
+        for part in parts
+        if part.geom_type == "Polygon" and not part.is_empty
+    ]
+
+
+def _clipped_cell_rings(
+    cells: Any, boundary: Any, col_vals: Any, column: Optional[str]
+) -> tuple:
+    """Return each Voronoi cell's exterior ring, clipped to `boundary`, with the value it carries.
+
+    A clipped cell can come back empty, or as a multipart geometry whose parts are not all polygons — an
+    intersection against a globe's limb produces both — so a cell contributes zero, one or several rings.
+    `ordered=True` keeps cell *i* aligned with input point *i*, which is what lets the value follow the
+    ring however many parts the cell broke into.
+
+    Args:
+        cells: The `voronoi_polygons` result.
+        boundary: The clip geometry, or `None` to keep every cell whole.
+        col_vals: The per-point values, positionally aligned with `cells`, or `None`.
+        column: The column the values came from, or `None` when the draw is outline-only.
+
+    Returns:
+        `(rings, values)` — the exterior coordinate arrays, and the values beside them or `None`.
+    """
+    rings: List[np.ndarray] = []
+    values: Optional[list] = [] if column is not None else None
+    for index, cell in enumerate(cells.geoms):
+        clipped = cell if boundary is None else cell.intersection(boundary)
+        for ring in _polygon_rings(clipped):
+            rings.append(ring)
+            if values is not None:
+                values.append(col_vals[index])
+    return rings, values
+
+
 class VectorMixin(_MixinBase):
     """Vector-data and vector-field renders for :class:`~digitalearth.static.map.Map`.
 
@@ -941,20 +1095,7 @@ class VectorMixin(_MixinBase):
         cells = voronoi_polygons(MultiPoint(list(zip(xs, ys))), ordered=True)
         boundary = self._clip_geometry(clip)
 
-        polygons: List[np.ndarray] = []
-        values: Optional[list] = [] if column is not None else None
-        for i, cell in enumerate(cells.geoms):
-            if boundary is not None:
-                cell = cell.intersection(boundary)
-            if cell.is_empty:
-                continue
-            parts = cell.geoms if cell.geom_type.startswith("Multi") else [cell]
-            for part in parts:
-                if part.geom_type != "Polygon" or part.is_empty:
-                    continue
-                polygons.append(np.asarray(part.exterior.coords))
-                if values is not None:
-                    values.append(col_vals[i])
+        polygons, values = _clipped_cell_rings(cells, boundary, col_vals, column)
         values_arr = np.asarray(values) if values is not None else None
         polygons, values_arr = self._finite_polygons(
             polygons, values_arr
@@ -1092,18 +1233,10 @@ class VectorMixin(_MixinBase):
                 if n >= nmin:
                     out.append((xmin, ymin, xmax, ymax, float(agg_fn(idx))))
                 continue
-            xmid, ymid = 0.5 * (xmin + xmax), 0.5 * (ymin + ymax)
-            cx, cy = xs[idx], ys[idx]
-            quads = [
-                (xmin, ymin, xmid, ymid, idx[(cx <= xmid) & (cy <= ymid)]),
-                (xmid, ymin, xmax, ymid, idx[(cx > xmid) & (cy <= ymid)]),
-                (xmin, ymid, xmid, ymax, idx[(cx <= xmid) & (cy > ymid)]),
-                (xmid, ymid, xmax, ymax, idx[(cx > xmid) & (cy > ymid)]),
-            ]
-            nonempty = [q for q in quads if len(q[4]) > 0]
-            if (
-                len(nonempty) == 1 and len(nonempty[0][4]) == n
-            ):  # no progress (coincident points)
+            quads = _quadrants(xs, ys, idx, (xmin, ymin, xmax, ymax))
+            if _split_made_no_progress(quads, n):
+                # Coincident points: every child holds the whole cell, so splitting again would recurse
+                # forever. The cell is kept whole instead.
                 if n >= nmin:
                     out.append((xmin, ymin, xmax, ymax, float(agg_fn(idx))))
                 continue
@@ -1177,43 +1310,10 @@ class VectorMixin(_MixinBase):
         xs, ys, col_vals = self._finite_point_xy(geom, col_vals_full)
         if xs.size == 0:
             raise ValueError("quadtree: no finite points in the display CRS")
-        if column is None:
-
-            def agg_fn(idx):
-                return float(len(idx))
-        else:
-            if callable(agg):
-                reducer = agg
-            elif agg in _QUADTREE_AGG:
-                reducer = _QUADTREE_AGG[agg]
-            else:
-                raise ValueError(
-                    f"unknown agg {agg!r}; choose one of {sorted(_QUADTREE_AGG)} or a callable"
-                )
-
-            def agg_fn(idx):
-                return float(reducer(col_vals[idx]))
-
+        agg_fn = _quadtree_reducer(agg, column, col_vals)
         cells = self._quadtree_cells(xs, ys, agg_fn, nmax, nmin)
         boundary = self._clip_geometry(clip)
-        polygons: List[np.ndarray] = []
-        values: List[float] = []
-        for xmin, ymin, xmax, ymax, val in cells:
-            if boundary is None:
-                polygons.append(
-                    np.array([[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]])
-                )
-                values.append(val)
-                continue
-            inter = box(xmin, ymin, xmax, ymax).intersection(boundary)
-            if inter.is_empty:
-                continue
-            parts = inter.geoms if inter.geom_type.startswith("Multi") else [inter]
-            for part in parts:
-                if part.geom_type != "Polygon" or part.is_empty:
-                    continue
-                polygons.append(np.asarray(part.exterior.coords))
-                values.append(val)
+        polygons, values = _clipped_cell_boxes(cells, boundary)
         values_arr = np.asarray(values, dtype=float)
         polygons, values_arr = self._finite_polygons(polygons, values_arr)
         return self._polygon_layer(polygons, values_arr, **opts)
