@@ -196,10 +196,10 @@ class TestOperations:
             The numbers would combine happily and describe a region nobody asked for. Carrying the CRS is what
             lets this be caught; the message says to reproject first.
         """
+        here = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
+        elsewhere = Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs=4326).union(
-                Bounds(0.0, 0.0, 1.0, 1.0, crs=3857)
-            )
+            here.union(elsewhere)
 
     def test_padded_grows_by_a_fraction_of_the_span(self):
         """A margin is proportional to the data, not an absolute distance.
@@ -250,10 +250,10 @@ class TestOperations:
             Guards the boundary of the test above — normalising spellings must not normalise away a real
             mismatch, which would silently union degrees with metres.
         """
+        in_degrees = Bounds(0.0, 0.0, 1.0, 1.0, crs=4326)
+        in_metres = Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs=4326).union(
-                Bounds(0.0, 0.0, 2.0, 2.0, crs=3857)
-            )
+            in_degrees.union(in_metres)
 
     def test_a_crs_object_is_the_same_crs_as_its_own_code(self):
         """`to_crs` into the CRS object a rectangle already carries returns the rectangle, not a reprojection.
@@ -321,10 +321,10 @@ class TestOperations:
             pyramids cannot parse must answer "not the same" rather than raise out of `union`, where the
             caller would get a CRS-parsing traceback for what is really a mismatched-rectangle message.
         """
+        unreadable = Bounds(0.0, 0.0, 1.0, 1.0, crs="not-a-crs-at-all")
+        readable = Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
         with pytest.raises(ValueError, match="one CRS"):
-            Bounds(0.0, 0.0, 1.0, 1.0, crs="not-a-crs-at-all").union(
-                Bounds(0.0, 0.0, 2.0, 2.0, crs=4326)
-            )
+            unreadable.union(readable)
 
     @pytest.mark.parametrize(
         "crs", [4326.5, [4326], True], ids=["float", "list", "bool"]

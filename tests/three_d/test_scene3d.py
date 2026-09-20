@@ -134,8 +134,12 @@ def test_context_manager_closes_plotter():
     # after exit the plotter is closed; re-closing is a no-op (must not raise)
     scene.close()
 
+    # The scene is built outside the block so the only thing inside it is the raise the test is about:
+    # a constructor that threw would satisfy `pytest.raises` just as well, and the test would stop being
+    # evidence that `__exit__` propagates (SonarCloud S5778).
+    scene = Scene3D(off_screen=True)
     with pytest.raises(ValueError):
-        with Scene3D(off_screen=True):
+        with scene:
             raise ValueError("propagates")
 
 

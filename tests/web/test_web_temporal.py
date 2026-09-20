@@ -498,8 +498,9 @@ class TestTimeSliderRasterStack:
         ).to_file(str(empty))
 
         m = WebMap()
+        stack = DatasetCollection.from_files([str(good), str(empty)])
         with pytest.raises(ValueError, match="no finite values"):
-            m.timeslider(DatasetCollection.from_files([str(good), str(empty)]))
+            m.timeslider(stack)
         assert m.layers == [], (
             "a failed stack must not leave half its layers registered"
         )

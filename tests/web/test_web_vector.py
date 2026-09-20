@@ -357,13 +357,13 @@ class TestDecorationNeedsEngine:
         assert isinstance(m.render(), MapWidget)
 
     def test_measure_requires_a_mode(self, polygons_gdf):
+        drawn = WebMap().polygons(polygons_gdf)
         with pytest.raises(ValueError, match="distance and/or area"):
-            WebMap().polygons(polygons_gdf).measure(distance=False, area=False)
+            drawn.measure(distance=False, area=False)
         # the mode guard is checked before position, so it wins when both are invalid (N4)
+        with_bad_position = WebMap().polygons(polygons_gdf)
         with pytest.raises(ValueError, match="distance and/or area"):
-            WebMap().polygons(polygons_gdf).measure(
-                distance=False, area=False, position="bad"
-            )
+            with_bad_position.measure(distance=False, area=False, position="bad")
 
     def test_control_position_is_validated(self):
         """An unknown control corner fails fast with a clear error rather than at render time (N3)."""
@@ -431,8 +431,9 @@ class TestVectorBuilderRasterGuard:
             A ``Dataset`` reaches the shared guard and is rejected with a message quoting the builder that
             was called, so the caller knows both what they did and what to do instead.
         """
+        builder = getattr(WebMap(), method)
         with pytest.raises(TypeError) as excinfo:
-            getattr(WebMap(), method)(dataset, **kwargs)
+            builder(dataset, **kwargs)
         message = str(excinfo.value)
         assert message.startswith(f"{method}()"), (
             f"{method} did not name itself: {message}"

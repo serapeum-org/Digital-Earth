@@ -154,11 +154,12 @@ class TestBinding:
         """
         from digitalearth.base.spec import Scale as _Scale
 
+        categorical = _Scale.categorical(["a"], ["#f00"])
         with pytest.raises(ValueError, match="categorical scale with an output range"):
             Encoding.by_field(
                 "size",
                 "class",
-                scale=_Scale.categorical(["a"], ["#f00"]),
+                scale=categorical,
                 output_range=(1.0, 2.0),
             )
 

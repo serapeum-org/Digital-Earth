@@ -201,10 +201,11 @@ class TestC2Fps:
             raises for an argument given twice, and it is now the one answer all four tiers give (the tier
             used to raise ``ValueError`` here while web silently preferred the old spelling).
         """
+        destination = str(tmp_path / "a.gif")
         with pytest.raises(TypeError) as excinfo:
             scene.record(
                 [1.0],
-                str(tmp_path / "a.gif"),
+                destination,
                 lambda s, f: None,
                 fps=4.0,
                 framerate=9.0,

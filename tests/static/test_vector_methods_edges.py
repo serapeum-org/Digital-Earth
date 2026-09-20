@@ -190,8 +190,11 @@ class TestEmptyFeatureCollection:
     )
     def test_point_methods_reject_empty(self, method, kwargs):
         """Point-input methods reject an empty collection up front."""
+        canvas = Map(crs=32618)
+        empty = _empty_points()
+        builder = getattr(canvas, method)
         with pytest.raises(ValueError, match="empty"):
-            getattr(Map(crs=32618), method)(_empty_points(), **kwargs)
+            builder(empty, **kwargs)
 
     def test_cartogram_rejects_empty(self):
         """cartogram rejects an empty polygon collection."""
