@@ -103,14 +103,14 @@ def _placed_corners(web_map: Any, source: Any, caller: str) -> Any:
     return corners
 
 
-def _image_layer(web_map: Any, layer: LayerSpec, url: str, coordinates: Any) -> Any:
+def _image_layer(_web_map: Any, layer: LayerSpec, url: str, coordinates: Any) -> Any:
     """Package an image source and the raster layer reading it.
 
     Both raster kinds draw the same way — a ``data:`` PNG placed on four lon/lat corners — and differ only
     in how the image is made, so the MapLibre half is written once.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         layer: The layer's description.
         url: The ``data:image/png;base64,`` URI to place.
         coordinates: The four lon/lat corners, clockwise from the north-west.
@@ -120,14 +120,14 @@ def _image_layer(web_map: Any, layer: LayerSpec, url: str, coordinates: Any) -> 
     """
     from digitalearth.web.renderer import DrawnLayer
 
-    Layer, LayerType = _require_layer_api()
+    layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
         source_spec={"type": "image", "url": url, "coordinates": coordinates},
-        layer=Layer(
+        layer=layer_cls(
             id=layer.id,
-            type=LayerType.RASTER,
+            type=layer_types.RASTER,
             source=source_id,
             paint={"raster-opacity": float(layer.symbology.props["opacity"])},
             layout={"visibility": "visible" if layer.visible else "none"},
@@ -401,7 +401,7 @@ class RasterMixin(_MixinBase):
         from digitalearth.base.sources import get_stack
         from digitalearth.base.stretch import require_three_bands
 
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         require_three_bands("rgb_composite", bands)
         data = self._display_raster_or_skip(dataset, layer="rgb_composite")
         if data is None:

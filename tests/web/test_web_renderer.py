@@ -53,13 +53,16 @@ class TestADescriptionItCannotDrawIsRefusedByName:
 
     def test_a_layer_with_no_symbology_names_itself_and_what_is_missing(self):
         """A `LayerSpec` can reach a drawer without what its builder would have recorded."""
+        # Built outside the block, so the only call inside it is the one under test.
+        layer = LayerSpec("x", "points")
         with pytest.raises(ValueError, match="cannot be drawn by the web tier"):
-            required_props(LayerSpec("x", "points"), "paint")
+            required_props(layer, "paint")
 
     def test_the_message_names_the_layer_its_kind_and_the_missing_props(self):
         """Each of the three is something the reader needs to find the malformed description."""
+        layer = LayerSpec("wells", "polygons")
         with pytest.raises(ValueError) as caught:
-            required_props(LayerSpec("wells", "polygons"), "paint", "maplibre_type")
+            required_props(layer, "paint", "maplibre_type")
         message = str(caught.value)
         assert "'wells'" in message, message
         assert "polygons" in message, message

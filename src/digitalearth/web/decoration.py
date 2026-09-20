@@ -307,14 +307,14 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def draw_text(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_text(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre symbol layer for a single text annotation.
 
     An annotation draws from no data: its anchor and its string are what the caller passed, which is why
     `_data` is unused and the layer carries no source.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         _data: Unused — an annotation has no source.
         layer: The layer's description.
 
@@ -323,7 +323,7 @@ def draw_text(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.web.renderer import DrawnLayer
 
-    Layer, LayerType = _require_layer_api()
+    layer_cls, layer_types = _require_layer_api()
     props = dict(layer.symbology.props)
     source_id = f"{layer.id}-src"
     return DrawnLayer(
@@ -339,9 +339,9 @@ def draw_text(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
                 "properties": {"text": props["s"]},
             },
         },
-        layer=Layer(
+        layer=layer_cls(
             id=layer.id,
-            type=LayerType.SYMBOL,
+            type=layer_types.SYMBOL,
             source=source_id,
             layout={
                 "text-field": ["get", "text"],
@@ -357,14 +357,14 @@ def draw_text(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     )
 
 
-def draw_graticule(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre lines (and degree labels) for a graticule layer.
 
     A graticule draws from no data: its geometry is generated from the two steps the caller asked for, which
     is why `_data` is unused and why the layer carries no source. Everything it needs is in its symbology.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         _data: Unused — a graticule has no source.
         layer: The layer's description.
 
@@ -373,15 +373,15 @@ def draw_graticule(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.web.renderer import DrawnLayer
 
-    Layer, LayerType = _require_layer_api()
+    layer_cls, layer_types = _require_layer_api()
     props = dict(layer.symbology.props)
     features = _graticule_features(float(props["lon_step"]), float(props["lat_step"]))
     source_id = f"{layer.id}-src"
     color = props["color"]
     visible = layer.visible
-    line = Layer(
+    line = layer_cls(
         id=layer.id,
-        type=LayerType.LINE,
+        type=layer_types.LINE,
         source=source_id,
         paint={
             "line-color": color,
@@ -401,9 +401,9 @@ def draw_graticule(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
             # Otherwise a hidden graticule leaves its degree numbers floating with nothing to annotate.
             label_layout["visibility"] = "none"
         extra.append(
-            Layer(
+            layer_cls(
                 id=f"{layer.id}-label",
-                type=LayerType.SYMBOL,
+                type=layer_types.SYMBOL,
                 source=source_id,
                 layout=label_layout,
                 paint={
@@ -517,7 +517,7 @@ class DecorationMixin(_MixinBase):
             digitalearth.web.base.WebMapBase.add_underlay: the registration that keeps it at the
                 bottom of the stack.
         """
-        Layer, LayerType = _require_layer_api()
+        layer_cls, layer_types = _require_layer_api()
         src_id, layer_id = self._uid("tiles-src"), self._uid("tiles")
         source = {
             "type": "raster",
@@ -535,9 +535,9 @@ class DecorationMixin(_MixinBase):
                     f"tiles(bounds=...) takes (west, south, east, north) in lon/lat; got {bounds!r}"
                 )
             source["bounds"] = box
-        layer = Layer(
+        layer = layer_cls(
             id=layer_id,
-            type=LayerType.RASTER,
+            type=layer_types.RASTER,
             source=src_id,
             paint={"raster-opacity": float(opacity)},
         )
@@ -868,7 +868,7 @@ class DecorationMixin(_MixinBase):
                 "text() needs the string to draw; pass it as the third argument"
             )
         lon, lat = self._as_display_point(float(lon), float(lat), crs)
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         text_size = renamed_parameter(
             new="text_size",
             value=text_size,
@@ -989,7 +989,7 @@ class DecorationMixin(_MixinBase):
 
                 ```
         """
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         # One step for both is what `spacing=` meant, and it is still the shortest way to ask for a square
         # grid; the two steps are what every other tier takes, and what a reader of a world map usually wants
         # (#263). A tier default of 30 degrees matches the interactive tier's.

@@ -37,11 +37,11 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 DECK_TYPE_KEY = "@@type"
 
 
-def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre heatmap layer over a point collection.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         data: The layer's source — the display-CRS point GeoDataFrame.
         layer: The layer's description.
 
@@ -50,28 +50,28 @@ def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.web.renderer import DrawnLayer
 
-    Layer, LayerType = _require_layer_api()
+    layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
         source_spec=data,
-        layer=Layer(
+        layer=layer_cls(
             id=layer.id,
-            type=LayerType.HEATMAP,
+            type=layer_types.HEATMAP,
             source=source_id,
             paint=dict(layer.symbology.props["paint"]),
         ),
     )
 
 
-def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the clustered source and its three layers: bubbles, counts and loose points.
 
     One description carries all three because they are one thing to a viewer — removing the layer takes
     the counts and the loose points with it.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         data: The layer's source — the display-CRS point GeoDataFrame.
         layer: The layer's description.
 
@@ -83,7 +83,7 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     from digitalearth.web.renderer import DrawnLayer
 
-    Layer, LayerType = _require_layer_api()
+    layer_cls, layer_types = _require_layer_api()
     props = dict(layer.symbology.props)
     source_id = f"{layer.id}-src"
     color, text_color = props["color"], props["text_color"]
@@ -95,9 +95,9 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             cluster_radius=int(props["radius"]),
             cluster_max_zoom=int(props["max_zoom"]),
         ),
-        layer=Layer(
+        layer=layer_cls(
             id=layer.id,
-            type=LayerType.CIRCLE,
+            type=layer_types.CIRCLE,
             source=source_id,
             filter=["has", "point_count"],
             paint={
@@ -106,9 +106,9 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
             },
         ),
         extra_layers=(
-            Layer(
+            layer_cls(
                 id=f"{layer.id}-count",
-                type=LayerType.SYMBOL,
+                type=layer_types.SYMBOL,
                 source=source_id,
                 filter=["has", "point_count"],
                 layout={
@@ -117,9 +117,9 @@ def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
                 },
                 paint={"text-color": text_color},
             ),
-            Layer(
+            layer_cls(
                 id=f"{layer.id}-unclustered",
-                type=LayerType.CIRCLE,
+                type=layer_types.CIRCLE,
                 source=source_id,
                 filter=["!", ["has", "point_count"]],
                 paint={"circle-color": color, "circle-radius": 5},
@@ -187,7 +187,7 @@ class BigDataMixin(_MixinBase):
         """
         import numpy as np
 
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         gdf = self._display_gdf(features, method="heatmap")
         self._require_points(gdf, "heatmap")
         paint: dict = {
@@ -246,7 +246,7 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
 
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
         layer_id = self._uid("clusters")

@@ -115,7 +115,7 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_vector(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre source and typed layer for any of the five vector kinds.
 
     All five — points, lines, polygons, choropleth and labels — are a GeoJSON source plus one typed layer,
@@ -123,7 +123,7 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     reason they shared a registration funnel.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         data: The layer's source — the display-CRS GeoDataFrame served as GeoJSON.
         layer: The layer's description.
 
@@ -132,7 +132,7 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
-    Layer, _ = _require_layer_api()
+    layer_cls, _ = _require_layer_api()
     props = required_props(layer, "maplibre_type", "paint")
     spec_layout = dict(props.get("layout") or {})
     if not layer.visible:
@@ -141,7 +141,7 @@ def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     return DrawnLayer(
         source_id=source_id,
         source_spec=data,
-        layer=Layer(
+        layer=layer_cls(
             id=layer.id,
             type=props[
                 "maplibre_type"
@@ -459,7 +459,7 @@ class VectorMixin(_MixinBase):
         See Also:
             digitalearth.web.decoration.DecorationMixin.text: a single annotation at a coordinate.
         """
-        _, LayerType = _require_layer_api()
+        _, layer_types = _require_layer_api()
         text_size = renamed_parameter(
             new="text_size",
             value=text_size,
@@ -489,7 +489,7 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "label",
-            LayerType.SYMBOL,
+            layer_types.SYMBOL,
             paint,
             kind="labels",
             name=name,
@@ -877,7 +877,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
             digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
-        Layer, LayerType = _require_layer_api()
+        layer_cls, layer_types = _require_layer_api()
         size = renamed_parameter(
             new="size",
             value=size,
@@ -921,7 +921,7 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "circle",
-            LayerType.CIRCLE,
+            layer_types.CIRCLE,
             paint,
             kind="points",
             name=name,
@@ -1000,7 +1000,7 @@ class VectorMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
         """
-        Layer, LayerType = _require_layer_api()
+        layer_cls, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="lines")
         paint: dict = {"line-width": float(width), "line-opacity": float(opacity)}
         if column is not None:
@@ -1012,7 +1012,7 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "line",
-            LayerType.LINE,
+            layer_types.LINE,
             paint,
             kind="lines",
             name=name,
@@ -1111,7 +1111,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.choropleth: the thematic build of this fill.
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
-        Layer, LayerType = _require_layer_api()
+        layer_cls, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
@@ -1150,7 +1150,7 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "fill",
-            LayerType.FILL,
+            layer_types.FILL,
             paint,
             kind="polygons",
             name=name,
@@ -1250,7 +1250,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.polygons: the same fill layer without the thematic
                 classification.
         """
-        Layer, LayerType = _require_layer_api()
+        layer_cls, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
         paint = {
@@ -1261,7 +1261,7 @@ class VectorMixin(_MixinBase):
         return self._vector_layer(
             gdf,
             "fill",
-            LayerType.FILL,
+            layer_types.FILL,
             paint,
             kind="choropleth",
             name=name,

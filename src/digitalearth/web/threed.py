@@ -36,11 +36,11 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+def draw_extruded_polygons(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """Build the MapLibre extruded-fill layer for a polygon collection.
 
     Args:
-        web_map: The map being drawn.
+        _web_map: Unused — every drawer takes the map, and this one draws without it.
         data: The layer's source — the display-CRS polygon GeoDataFrame.
         layer: The layer's description.
 
@@ -49,14 +49,14 @@ def draw_extruded_polygons(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     """
     from digitalearth.web.renderer import DrawnLayer
 
-    Layer, LayerType = _require_layer_api()
+    layer_cls, layer_types = _require_layer_api()
     source_id = f"{layer.id}-src"
     return DrawnLayer(
         source_id=source_id,
         source_spec=data,
-        layer=Layer(
+        layer=layer_cls(
             id=layer.id,
-            type=LayerType.FILL_EXTRUSION,
+            type=layer_types.FILL_EXTRUSION,
             source=source_id,
             paint=dict(layer.symbology.props["paint"]),
         ),
@@ -94,7 +94,7 @@ class ThreeDMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        Layer, LayerType = _require_layer_api()
+        _require_layer_api()
         gdf = self._display_gdf(features, method="extrusion")
         paint: dict = {
             "fill-extrusion-opacity": float(opacity),
