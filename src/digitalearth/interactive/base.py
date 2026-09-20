@@ -298,6 +298,9 @@ class InteractiveMapBase:
         self._objects_ns: str = object_namespace()
         self._id_counter: int = 0
         self._issued_ids: set = set()
+        # A keyed basemap's credential, by the id of the layer that needs it. Deliberately not in the
+        # symbology: a figure is written to JSON and read back, and a key written into one leaks with it.
+        self._layer_keys: Dict[str, Any] = {}
 
     def _raster_element(
         self, x: Any, y: Any, arr: Any, name: str, bounds: Any = None
@@ -455,6 +458,8 @@ class InteractiveMapBase:
         band: Optional[str] = None,
         source: Any = None,
         symbology: Any = None,
+        at: Optional[int] = None,
+        key: Any = None,
     ) -> Self:
         """Register a HoloViews/GeoViews ``element`` as a layer and return ``self`` (chainable).
 
@@ -501,6 +506,8 @@ class InteractiveMapBase:
 
         resolved = kind or custom_kind("holoviews")
         layer_id = self._layer_id(resolved.split(":")[-1], name)
+        if key is not None:
+            self._layer_keys[layer_id] = key
         self._index_layer(
             layer_id,
             name,
@@ -519,7 +526,10 @@ class InteractiveMapBase:
                 self._sources.pop(layer_id, None)
                 return self
             element = drawn.element
-        self.layers.append(element)
+        if at is None:
+            self.layers.append(element)
+        else:
+            self.layers.insert(at, element)
         return self
 
     def _needs_reproject(self, data: Any) -> bool:

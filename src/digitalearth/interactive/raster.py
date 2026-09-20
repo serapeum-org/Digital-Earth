@@ -23,11 +23,13 @@ from digitalearth.base.sources.view import SourceView
 from digitalearth.base.spec import (
     Bounds,
     DataRef,
+    LayerSpec,
     RenderTarget,
     Selection,
     Symbology,
     Viewport,
 )
+from digitalearth.base.spec._serial import thawed_value
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -44,6 +46,160 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the colour-mapped raster a described image layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The raster the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    props = dict(layer.symbology.props)
+    src = interactive_map._to_display_source(data, band=props["band"])
+    common = {
+        "cmap": interactive_map._auto_cmap(src, props.get("cmap")),
+        "clim": props.get("clim"),
+        "alpha": props.get("alpha"),
+        "colorbar": props.get("colorbar"),
+        "clabel": interactive_map._auto_clabel(src, props.get("clabel")),
+        **dict(props.get("opts") or {}),
+    }
+    element = interactive_map._styled(
+        interactive_map._image_from_source(src),
+        common=common,
+        bokeh={"tools": ["hover"]},
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_rgb(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Compose the three-band true-colour image a described RGB layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The multiband raster the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.base.sources import get_stack
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _, hv = _require_holoviz()
+    props = dict(layer.symbology.props)
+    bands = list(props["bands"])
+    # Reproject once into a local handle, then feed both the coordinate extraction (get_source, via
+    # _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
+    # already-reprojected dataset, so a single warp here keeps them consistent (H1).
+    if hasattr(data, "to_crs") and interactive_map._needs_reproject(data):
+        data = reproject(data, interactive_map.crs)
+    src = interactive_map._to_display_source(data, band=bands[0])
+    # One shared stretch for every backend (base/stretch.py). A recorded `limits` holds it fixed across a
+    # sequence of frames, the same way the matplotlib tier freezes an animation.
+    limits = props.get("limits")
+    stretched = stretch_to_unit(get_stack(data, bands), limits)
+    channels = [stretched[:, :, index] for index in range(3)]
+    element = hv.RGB(
+        (src.x.values, src.y.values, *channels),
+        kdims=["x", "y"],
+        vdims=["R", "G", "B"],
+    )
+    common = dict(props.get("opts") or {})
+    return DrawnLayer(
+        element=interactive_map._styled(element, common=common or None), style=common
+    )
+
+
+def draw_quadmesh(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the quadrilateral mesh a described mesh layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The raster the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _, hv = _require_holoviz()
+    props = dict(layer.symbology.props)
+    src = interactive_map._to_display_source(data, band=props["band"])
+    arr = _masked_to_nan(src.z.values)
+    element = hv.QuadMesh(
+        (src.x.values, src.y.values, arr),
+        kdims=["x", "y"],
+        vdims=[interactive_map._vdim_name(src)],
+    )
+    common = {
+        "cmap": interactive_map._auto_cmap(src, props.get("cmap")),
+        "clabel": interactive_map._auto_clabel(src, props.get("clabel")),
+        **dict(props.get("opts") or {}),
+    }
+    element = interactive_map._styled(
+        element, common=common, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Trace the contours a described contour layer asks for, filled or as lines.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The raster the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from holoviews.operation import contours as contour_op
+
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _require_holoviz()
+    props = dict(layer.symbology.props)
+    src = interactive_map._to_display_source(data, band=props["band"])
+    # A caller's `levels` always wins; `None` consults autostyle for the variable's canonical contour
+    # levels (#230) before falling back to the tier's 10.
+    resolved = interactive_map._auto_levels(src, props.get("levels"))
+    element = contour_op(
+        interactive_map._image_from_source(src),
+        levels=10 if resolved is None else thawed_value(resolved),
+        filled=props.get("filled", False),
+    )
+    common = dict(props.get("opts") or {})
+    element = interactive_map._styled(
+        element, common=common or None, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=element, style=common)
+
+
+def draw_large_image(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the windowed-read layer a described large-raster layer asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The raster the layer draws.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    props = dict(layer.symbology.props)
+    element = interactive_map._draw_large_image(data, props)
+    return DrawnLayer(element=element, style=dict(props.get("opts") or {}))
 
 
 class RasterMixin(_MixinBase):
@@ -122,24 +278,22 @@ class RasterMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        src = self._to_display_source(data, band=band)
-        element = self._styled(
-            self._image_from_source(src),
-            common={
-                "cmap": self._auto_cmap(src, cmap),
-                "clim": clim,
-                "alpha": alpha,
-                "colorbar": colorbar,
-                "clabel": self._auto_clabel(src, clabel),
-                **opts,
-            },
-            bokeh={"tools": ["hover"]},
-        )
         return self.add_element(
-            element,
+            None,
             kind="raster",
             source=data,
-            symbology=Symbology(props=dict(opts or {})),
+            symbology=Symbology(
+                props={
+                    "via": "image",
+                    "band": band,
+                    "cmap": cmap,
+                    "clim": clim,
+                    "alpha": alpha,
+                    "colorbar": colorbar,
+                    "clabel": clabel,
+                    "opts": dict(opts),
+                }
+            ),
         )
 
     @_skips_off_limb
@@ -179,31 +333,21 @@ class RasterMixin(_MixinBase):
             ValueError: when ``bands`` does not name exactly three bands, or ``limits`` is given without
                 one ``(lo, hi)`` pair per channel.
         """
-        from digitalearth.base.sources import get_stack
-
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Refused here rather than in the drawer, because the message names the argument the caller wrote.
         require_three_bands("rgb", bands)
-        # Reproject once into a local handle, then feed both the coordinate extraction (get_source,
-        # via _to_display_source) and the band stack (get_stack) from it — get_stack needs the same
-        # already-reprojected dataset, so a single warp here keeps them consistent (H1).
-        if hasattr(data, "to_crs") and self._needs_reproject(data):
-            data = reproject(data, self.crs)
-        src = self._to_display_source(data, band=bands[0])
-        stack = get_stack(data, bands)
-        # One shared stretch for every backend (base/stretch.py). Passing `limits` holds it fixed across a
-        # sequence of frames, the same way the matplotlib tier freezes an animation.
-        stretched = stretch_to_unit(stack, limits)
-        channels = [stretched[:, :, index] for index in range(3)]
-        element = hv.RGB(
-            (src.x.values, src.y.values, *channels),
-            kdims=["x", "y"],
-            vdims=["R", "G", "B"],
-        )
         return self.add_element(
-            self._styled(element, common=opts or None),
+            None,
             kind="rgb",
             source=data,
-            symbology=Symbology(props=dict(opts or {})),
+            symbology=Symbology(
+                props={
+                    "via": "rgb",
+                    "bands": tuple(bands),
+                    "limits": limits,
+                    "opts": dict(opts),
+                }
+            ),
         )
 
     @_skips_off_limb
@@ -244,27 +388,20 @@ class RasterMixin(_MixinBase):
         Returns:
             This map (chainable).
         """
-        gv, hv = _require_holoviz()
-        src = self._to_display_source(data, band=band)
-        arr = _masked_to_nan(src.z.values)
-        name = self._vdim_name(src)
-        element = hv.QuadMesh(
-            (src.x.values, src.y.values, arr), kdims=["x", "y"], vdims=[name]
-        )
-        element = self._styled(
-            element,
-            common={
-                "cmap": self._auto_cmap(src, cmap),
-                "clabel": self._auto_clabel(src, clabel),
-                **opts,
-            },
-            bokeh={"tools": ["hover"]},
-        )
+        _require_holoviz()
         return self.add_element(
-            element,
+            None,
             kind="mesh",
             source=data,
-            symbology=Symbology(props=dict(opts or {})),
+            symbology=Symbology(
+                props={
+                    "via": "quadmesh",
+                    "band": band,
+                    "cmap": cmap,
+                    "clabel": clabel,
+                    "opts": dict(opts),
+                }
+            ),
         )
 
     @_skips_off_limb
@@ -335,22 +472,20 @@ class RasterMixin(_MixinBase):
         A caller's ``levels`` always wins; ``None`` consults ``autostyle.auto_style`` for the variable's
         canonical contour levels (#230) before falling back to the tier's 10.
         """
-        gv, hv = _require_holoviz()
-        from holoviews.operation import contours as contour_op
-
-        src = self._to_display_source(data, band=band)
-        resolved = self._auto_levels(src, levels)
-        element = contour_op(
-            self._image_from_source(src),
-            levels=10 if resolved is None else resolved,
-            filled=filled,
-        )
-        element = self._styled(element, common=opts or None, bokeh={"tools": ["hover"]})
+        _require_holoviz()
         return self.add_element(
-            element,
+            None,
             kind="filled_contours" if filled else "contours",
             source=data,
-            symbology=Symbology(props=dict(opts or {})),
+            symbology=Symbology(
+                props={
+                    "via": "contours",
+                    "band": band,
+                    "levels": levels,
+                    "filled": filled,
+                    "opts": dict(opts),
+                }
+            ),
         )
 
     #: Colour cycle used to distinguish ensemble members in :meth:`spaghetti` (Category10-ish).
@@ -486,7 +621,8 @@ class RasterMixin(_MixinBase):
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Both refusals stay with the builder, because each names an argument the caller wrote.
         if band < 1:
             raise ValueError(f"band is 1-based; got {band!r}")
         if not hasattr(dataset, "read_part") or not hasattr(dataset, "preview"):
@@ -494,12 +630,42 @@ class RasterMixin(_MixinBase):
                 "large_image needs pyramids' COG/overview read surface (Dataset.read_part / "
                 ".preview); upgrade pyramids or use image() for a small raster"
             )
+        return self.add_element(
+            None,
+            kind="raster",
+            source=dataset,
+            symbology=Symbology(
+                props={
+                    "via": "large_image",
+                    "band": band,
+                    "max_pixels": max_pixels,
+                    "dynamic": dynamic,
+                    "cmap": cmap,
+                    "opts": dict(opts),
+                }
+            ),
+        )
+
+    def _draw_large_image(self, dataset: Any, props: dict) -> Any:
+        """Build the windowed-read layer a `large_image` description asks for.
+
+        Args:
+            dataset: The raster the layer draws.
+            props: The layer's recorded properties.
+
+        Returns:
+            The element — a single frame, or the `DynamicMap` that re-reads the window on pan and zoom.
+        """
+        _, hv = _require_holoviz()
+        band = props["band"]
+        opts = dict(props.get("opts") or {})
+        dynamic = props.get("dynamic", True)
         ds = self._windowable(dataset)
         # Resolved once, from the band's name only: reading the array to build a full Source would
         # defeat the whole point of a windowed reader.
-        cmap = self._auto_cmap_for_band(ds, band, cmap)
+        cmap = self._auto_cmap_for_band(ds, band, props.get("cmap"))
         target = RenderTarget(
-            "window", width=self.width, height=self.height, budget=max_pixels
+            "window", width=self.width, height=self.height, budget=props["max_pixels"]
         )
         view = SourceView.of(
             ds,
@@ -544,22 +710,15 @@ class RasterMixin(_MixinBase):
             )
 
         if not dynamic:
-            return self.add_element(
-                _frame(),
-                kind="raster",
-                source=dataset,
-                symbology=Symbology(props=dict(opts or {})),
-            )
+            return _frame()
         from holoviews.streams import RangeXY
 
         dmap = hv.DynamicMap(_frame, streams=[RangeXY()])
         owner["layer"] = dmap
-        return self.add_element(
-            dmap,
-            kind="raster",
-            source=dataset,
-            symbology=Symbology(props=dict(opts or {})),
-        )
+        # Drawn once here as well as on every range event: a `DynamicMap` is lazy, so without this the
+        # layer's first frame — and the style filed against it — would not exist until something rendered.
+        _frame()
+        return dmap
 
     def _windowable(self, dataset: Any) -> Any:
         """Return the raster to read windows from, warped lazily when the display CRS asks for it.

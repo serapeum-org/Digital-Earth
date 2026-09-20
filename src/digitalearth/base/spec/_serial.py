@@ -526,6 +526,44 @@ def frozen_value(value: Any) -> Any:
     return value
 
 
+def thawed_value(value: Any) -> Any:
+    """Return `value` with every tuple in it, however nested, as a list.
+
+    The inverse of :func:`frozen_value`, for a renderer handing a stored property to an engine that reads the
+    two spellings as two different requests. HoloViews is the one that forced it: it reads a tuple of
+    dimensions as a ``(name, label)`` pair, so the `("fid",)` a symbology stores is refused where the
+    `["fid"]` it was built from is accepted.
+
+    Args:
+        value: A stored property, or any part of one.
+
+    Returns:
+        The value with every tuple as a list and the values inside a dict thawed the same way (the dict
+        itself is a fresh dict). Anything else — a scalar, a string, an object — is returned as it is.
+
+    Examples:
+        - Tuples become lists, inside dicts too:
+            ```python
+            >>> from digitalearth.base.spec._serial import thawed_value
+            >>> thawed_value((1, (2, 3))), thawed_value({"levels": (1, 2)})
+            ([1, [2, 3]], {'levels': [1, 2]})
+
+            ```
+        - It undoes a freeze, which is the round trip a drawer depends on:
+            ```python
+            >>> from digitalearth.base.spec._serial import frozen_value, thawed_value
+            >>> thawed_value(frozen_value({"cmap": ["#f00", "#00f"]}))
+            {'cmap': ['#f00', '#00f']}
+
+            ```
+    """
+    if isinstance(value, tuple):
+        return [thawed_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: thawed_value(item) for key, item in value.items()}
+    return value
+
+
 def as_list(owner: str, key: str, value: Any) -> Tuple[Any, ...]:
     """Return a stored list as a tuple, refusing a value of another shape by the key it was stored under.
 

@@ -16,7 +16,7 @@ three tiers can sign it.
 """
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
@@ -50,7 +50,132 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "graticule",
     "text",
     "coastlines",
+    "points",
+    "lines",
+    "polygons",
+    "choropleth",
+    "raster",
+    "rgb",
+    "mesh",
+    "contours",
+    "filled_contours",
+    "hexbin",
+    "kde",
+    "graph",
+    "vectors",
+    "barbs",
+    "streamlines",
+    "basemap",
+    "labels",
+    "land",
+    "ocean",
+    "borders",
+    "rivers",
+    "lakes",
 )
+
+
+def _recipes() -> Dict[str, Dict[str, Any]]:
+    """Return the drawers of this tier, by kind and then by the recipe each was built with.
+
+    A kind is drawn more than one way here — `points` is a frame of geometry or a datashaded aggregate,
+    `lines` a path or a trajectory — and the kind cannot say which, because the kind vocabulary is shared
+    with every other tier and names *what* a layer is. So each builder records *how* it built its layer
+    under `via`, and that is the second key.
+
+    Returns:
+        Kind -> recipe -> ``draw(interactive_map, data, layer) -> DrawnLayer | None``.
+    """
+    # Imported here rather than at module level: every builder module imports the map, so a
+    # module-level import would close a cycle.
+    from digitalearth.interactive import (
+        bigdata,
+        decoration,
+        projection,
+        raster,
+        temporal,
+        vector,
+    )
+
+    return {
+        "graticule": {"graticule": projection.draw_graticule},
+        "text": {"text": decoration.draw_text},
+        "coastlines": {"coastlines": decoration.draw_coastlines},
+        "basemap": {"tiles": decoration.draw_tiles},
+        "labels": {"labels": decoration.draw_labels},
+        "land": {"natural_earth": decoration.draw_natural_earth},
+        "ocean": {"natural_earth": decoration.draw_natural_earth},
+        "borders": {"natural_earth": decoration.draw_natural_earth},
+        "rivers": {"natural_earth": decoration.draw_natural_earth},
+        "lakes": {"natural_earth": decoration.draw_natural_earth},
+        "points": {
+            "geometry": vector.draw_vector,
+            "datashade": bigdata.draw_datashade,
+        },
+        "lines": {
+            "geometry": vector.draw_vector,
+            "trajectory": bigdata.draw_trajectory,
+        },
+        "polygons": {"geometry": vector.draw_vector},
+        "choropleth": {"geometry": vector.draw_vector},
+        "raster": {
+            "image": raster.draw_image,
+            "large_image": raster.draw_large_image,
+            "rasterize": bigdata.draw_rasterize,
+            "timecube": temporal.draw_timecube,
+        },
+        "rgb": {"rgb": raster.draw_rgb},
+        "mesh": {
+            "quadmesh": raster.draw_quadmesh,
+            "trimesh": vector.draw_trimesh,
+        },
+        "contours": {"contours": raster.draw_contours},
+        "hexbin": {"hexbin": vector.draw_hexbin},
+        "kde": {"kde": vector.draw_kde},
+        "graph": {"graph": vector.draw_graph},
+        "vectors": {"vectorfield": vector.draw_uv_field},
+        "barbs": {"barbs": vector.draw_uv_field},
+        "streamlines": {"streamlines": vector.draw_uv_field},
+        "filled_contours": {"contours": raster.draw_contours},
+    }
+
+
+def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
+    """Return the drawer for one kind, which picks between the recipes that kind is drawn by.
+
+    Args:
+        kind: The kind being drawn, used only to name it in a refusal.
+        recipes: Recipe name -> drawer.
+
+    Returns:
+        A callable ``draw(interactive_map, data, layer)`` that reads the layer's recorded `via` and calls
+        the drawer for it.
+    """
+
+    def draw(interactive_map: Any, data: Any, layer: LayerSpec) -> Optional[DrawnLayer]:
+        """Draw the layer with the drawer its recipe names.
+
+        Args:
+            interactive_map: The map being drawn.
+            data: The layer's opened source, or `None`.
+            layer: The layer's description.
+
+        Returns:
+            What the drawer produced.
+
+        Raises:
+            KeyError: when the layer records no recipe this tier knows — a builder that was routed to a
+                kind without recording how it draws it.
+        """
+        via = layer.symbology.props.get("via")
+        if via not in recipes:
+            raise KeyError(
+                f"a {kind!r} layer records {via!r} as how it was drawn; this tier draws one of "
+                f"{sorted(recipes)}"
+            )
+        return recipes[via](interactive_map, data, layer)
+
+    return draw
 
 
 def drawer_for(kind: str) -> Any:
@@ -71,21 +196,13 @@ def drawer_for(kind: str) -> Any:
         raise KeyError(
             f"the interactive tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
         )
-    # Imported here rather than at module level: every builder module imports the map, so a
-    # module-level import would close a cycle.
-    from digitalearth.interactive import decoration, projection
-
-    drawers = {
-        "graticule": projection.draw_graticule,
-        "text": decoration.draw_text,
-        "coastlines": decoration.draw_coastlines,
-    }
-    if set(drawers) != set(DRAWN_KINDS):
+    recipes = _recipes()
+    if set(recipes) != set(DRAWN_KINDS):
         raise KeyError(
             f"the interactive tier's drawer table and DRAWN_KINDS disagree: "
-            f"{sorted(set(drawers).symmetric_difference(DRAWN_KINDS))}"
+            f"{sorted(set(recipes).symmetric_difference(DRAWN_KINDS))}"
         )
-    return drawers[kind]
+    return _dispatch(kind, recipes[kind])
 
 
 class Renderer:

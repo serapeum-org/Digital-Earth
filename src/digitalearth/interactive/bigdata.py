@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self
 
 from loguru import logger
 
+from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.interactive.base import _require_holoviz
 
 #: Datashader reduction names accepted as ``aggregator=`` strings. ``count`` needs no column; the rest
@@ -54,6 +55,152 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.interactive.base import InteractiveMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def _track_path(hv: Any, gdf: Any, track_column: Optional[str], by: Optional[str]) -> Any:
+    """Connect ordered point rows into one NaN-separated path per track.
+
+    Datashader aggregates a path with `Canvas.line`, which needs every track in one table separated by a
+    row of NaNs — otherwise the last point of one track is joined to the first of the next.
+
+    Args:
+        hv: The HoloViews module.
+        gdf: The reprojected point frame, in track order.
+        track_column: The column identifying each track, or `None` for one track.
+        by: A categorical column colouring the tracks, carried as the path's value dimension.
+
+    Returns:
+        A ``hv.Path`` over the concatenated tracks.
+    """
+    import numpy as np
+    import pandas as pd
+
+    groups = gdf.groupby(track_column, sort=False) if track_column else [(None, gdf)]
+    frames = []
+    for _, track in groups:
+        frame = pd.DataFrame(
+            {"x": track.geometry.x.to_numpy(), "y": track.geometry.y.to_numpy()}
+        )
+        if by is not None:
+            frame[by] = track[by].to_numpy()
+        frames.append(frame)
+        frames.append(
+            frame.iloc[:1].assign(x=np.nan, y=np.nan)
+        )  # NaN row separates tracks
+    table = pd.concat(frames[:-1], ignore_index=True)
+    if by is not None:
+        table[by] = table[by].astype("category")
+    return hv.Path(table, kdims=["x", "y"], vdims=[by] if by else [])
+
+
+def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Re-aggregate a layer's rows into a numeric image at the described reduction.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — an element, or a frame that becomes a point layer.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from holoviews.operation.datashader import rasterize as _rasterize
+
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _require_holoviz()
+    props = dict(layer.symbology.props)
+    column = props.get("column")
+    element = interactive_map._as_element(data, vdims=[column] if column else None)
+    rasterized = _rasterize(
+        element,
+        aggregator=_resolve_aggregator(props.get("aggregator"), column),
+        dynamic=props.get("dynamic", True),
+        **dict(props.get("canvas") or {}),
+    )
+    common = dict(props.get("common") or {})
+    rasterized = interactive_map._styled(
+        rasterized, common=common, bokeh={"tools": ["hover"]}
+    )
+    return DrawnLayer(element=rasterized, style=common)
+
+
+def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Shade a layer's rows into an RGB image at the described reduction.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — an element, or a frame that becomes a point layer.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from holoviews.operation.datashader import datashade as _datashade
+
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _require_holoviz()
+    props = dict(layer.symbology.props)
+    column = props.get("column")
+    element = interactive_map._as_element(data, vdims=[column] if column else None)
+    op_kwargs: dict = dict(props.get("canvas") or {})
+    color_key = props.get("color_key")
+    if color_key is not None:
+        op_kwargs["color_key"] = dict(color_key)
+    else:
+        op_kwargs["cmap"] = props.get("cmap")
+    shaded = _datashade(
+        element,
+        aggregator=_resolve_aggregator(props.get("aggregator"), column),
+        dynamic=props.get("dynamic", True),
+        **op_kwargs,
+    )
+    common = dict(props.get("common") or {})
+    return DrawnLayer(
+        element=interactive_map._styled(shaded, common=common or None), style=common
+    )
+
+
+def draw_trajectory(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Shade a layer's ordered points as track density.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the point frame whose row order walks each track.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from holoviews.operation.datashader import datashade as _datashade
+    from holoviews.operation.datashader import dynspread as _dynspread
+
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _, hv = _require_holoviz()
+    props = dict(layer.symbology.props)
+    by = props.get("by")
+    path = _track_path(
+        hv, interactive_map._display_gdf(data), props.get("track_column"), by
+    )
+    op_kwargs: dict = dict(props.get("canvas") or {})
+    if by is not None:
+        import datashader as ds
+
+        op_kwargs["aggregator"] = ds.count_cat(by)
+        color_key = props.get("color_key")
+        if color_key is not None:
+            op_kwargs["color_key"] = dict(color_key)
+    else:
+        op_kwargs["cmap"] = props.get("cmap")
+    shaded = _datashade(path, dynamic=props.get("dynamic", True), **op_kwargs)
+    if props.get("dynspread"):
+        shaded = _dynspread(shaded)
+    common = dict(props.get("common") or {})
+    return DrawnLayer(
+        element=interactive_map._styled(shaded, common=common or None), style=common
+    )
 
 
 class BigDataMixin(_MixinBase):
@@ -119,26 +266,22 @@ class BigDataMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gv, hv = _require_holoviz()
-        from holoviews.operation.datashader import rasterize as _rasterize
-
-        element = self._as_element(layer, vdims=[column] if column else None)
-        op_kwargs = {key: opts.pop(key) for key in ("width", "height") if key in opts}
-        rasterized = _rasterize(
-            element,
-            aggregator=_resolve_aggregator(aggregator, column),
-            dynamic=dynamic,
-            **op_kwargs,
-        )
-        rasterized = self._styled(
-            rasterized,
-            common={"cmap": cmap, "colorbar": True, **opts},
-            bokeh={"tools": ["hover"]},
-        )
+        _require_holoviz()
+        canvas = {key: opts.pop(key) for key in ("width", "height") if key in opts}
         return self.add_element(
-            rasterized,
+            None,
             kind="raster",
             source=layer,
+            symbology=Symbology(
+                props={
+                    "via": "rasterize",
+                    "aggregator": aggregator,
+                    "column": column,
+                    "dynamic": dynamic,
+                    "canvas": canvas,
+                    "common": {"cmap": cmap, "colorbar": True, **opts},
+                }
+            ),
         )
 
     def datashade(
@@ -172,31 +315,30 @@ class BigDataMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gv, hv = _require_holoviz()
-        from holoviews.operation.datashader import datashade as _datashade
-
+        _require_holoviz()
         if color_key is not None and aggregator == "count":
             aggregator = "count_cat"
         if aggregator == "count_cat" and column is not None:
+            # Cast before the source is recorded, so the frame the layer draws is the categorical one the
+            # reduction needs — the drawer opens what was recorded, not what the caller passed.
             layer = self._ensure_categorical(layer, column)
-        element = self._as_element(layer, vdims=[column] if column else None)
-        op_kwargs: dict = {
-            key: opts.pop(key) for key in ("width", "height") if key in opts
-        }
-        if color_key is not None:
-            op_kwargs["color_key"] = color_key
-        else:
-            op_kwargs["cmap"] = cmap
-        shaded = _datashade(
-            element,
-            aggregator=_resolve_aggregator(aggregator, column),
-            dynamic=dynamic,
-            **op_kwargs,
-        )
+        canvas: dict = {key: opts.pop(key) for key in ("width", "height") if key in opts}
         return self.add_element(
-            self._styled(shaded, common=opts or None),
+            None,
             kind="points",
             source=layer,
+            symbology=Symbology(
+                props={
+                    "via": "datashade",
+                    "aggregator": aggregator,
+                    "column": column,
+                    "dynamic": dynamic,
+                    "canvas": canvas,
+                    "color_key": color_key,
+                    "cmap": cmap,
+                    "common": dict(opts),
+                }
+            ),
         )
 
     def trajectory(
@@ -231,51 +373,25 @@ class BigDataMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        import numpy as np
-        import pandas as pd
-
-        gv, hv = _require_holoviz()
-        from holoviews.operation.datashader import datashade as _datashade
-        from holoviews.operation.datashader import dynspread as _dynspread
-
-        gdf = self._display_gdf(features)
-        groups = (
-            gdf.groupby(track_column, sort=False) if track_column else [(None, gdf)]
-        )
-        frames = []
-        for _, track in groups:
-            frame = pd.DataFrame(
-                {"x": track.geometry.x.to_numpy(), "y": track.geometry.y.to_numpy()}
-            )
-            if by is not None:
-                frame[by] = track[by].to_numpy()
-            frames.append(frame)
-            frames.append(
-                frame.iloc[:1].assign(x=np.nan, y=np.nan)
-            )  # NaN row separates tracks
-        table = pd.concat(frames[:-1], ignore_index=True)
-        if by is not None:
-            table[by] = table[by].astype("category")
-        path = hv.Path(table, kdims=["x", "y"], vdims=[by] if by else [])
-
-        op_kwargs: dict = {
-            key: opts.pop(key) for key in ("width", "height") if key in opts
-        }
-        if by is not None:
-            import datashader as ds
-
-            op_kwargs["aggregator"] = ds.count_cat(by)
-            if color_key is not None:
-                op_kwargs["color_key"] = color_key
-        else:
-            op_kwargs["cmap"] = cmap
-        shaded = _datashade(path, dynamic=dynamic, **op_kwargs)
-        if dynspread:
-            shaded = _dynspread(shaded)
+        _require_holoviz()
+        canvas: dict = {key: opts.pop(key) for key in ("width", "height") if key in opts}
         return self.add_element(
-            self._styled(shaded, common=opts or None),
+            None,
             kind="lines",
             source=features,
+            symbology=Symbology(
+                props={
+                    "via": "trajectory",
+                    "track_column": track_column,
+                    "by": by,
+                    "dynspread": dynspread,
+                    "cmap": cmap,
+                    "color_key": color_key,
+                    "dynamic": dynamic,
+                    "canvas": canvas,
+                    "common": dict(opts),
+                }
+            ),
         )
 
     def _ensure_categorical(self, features: Any, column: str) -> Any:

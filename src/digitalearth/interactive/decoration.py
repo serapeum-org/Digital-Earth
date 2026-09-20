@@ -122,6 +122,93 @@ def _upper_placeholders(url: str) -> str:
     return url
 
 
+def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the tile basemap a description asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        _data: Unused — tiles are fetched from a provider, not from a caller's source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    _require_holoviz()
+    props = dict(layer.symbology.props)
+    element = interactive_map._build_tiles(
+        props["provider"],
+        # The credential is the map's, not the figure's: a description that carried it would write it
+        # out with the figure.
+        interactive_map._layer_keys.get(layer.id),
+        **dict(props.get("preset") or {}),
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    element = element.opts(level=props["level"])
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build one piece of Natural-Earth reference geography at the described resolution.
+
+    Args:
+        interactive_map: The map being drawn.
+        _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = dict(layer.symbology.props)
+    # clone: .opts() would otherwise restyle the shared gv.feature singleton
+    element = getattr(gv.feature, props["feature"]).clone().opts(
+        scale=props["resolution"]
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_labels(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the per-feature text labels a description asks for.
+
+    Args:
+        interactive_map: The map being drawn.
+        data: The layer's source — the features whose column is drawn.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = dict(layer.symbology.props)
+    column = props["column"]
+    gdf = interactive_map._display_gdf(data)
+    # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
+    # geometry-bearing GeoDataFrame: gv.Labels mis-projects a GeoDataFrame's point geometry at
+    # render time (a boolean-mask length mismatch). The geometry is already in the display CRS
+    # (reprojected by _display_gdf), so its x/y are the label anchors directly.
+    element = gv.Labels(
+        (gdf.geometry.x.to_numpy(), gdf.geometry.y.to_numpy(), gdf[column].to_numpy()),
+        kdims=["x", "y"],
+        vdims=[column],
+        crs=gv.util.process_crs(interactive_map.crs),
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
 def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the GeoViews text element for a described annotation.
 
@@ -260,28 +347,35 @@ class DecorationMixin(_MixinBase):
                 non-Mercator projection is active, or when a provider name is unknown.
             ImportError: when a keyed provider is requested without an ``api_key``.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Both refusals stay with the builder: each answers the call the caller made.
         self._require_web_mercator("tiles")
         if getattr(self, "_projection", None) is not None:
             raise ValueError(
                 "tiles() cannot compose with a non-Mercator projection() — Bokeh tiles render in "
                 "Web-Mercator only. Drop the projection to use a tile basemap."
             )
-        element = self._build_tiles(provider, api_key, **(preset or {}))
-        if opts:
-            element = element.opts(**opts)
-        element = element.opts(level=level)
         # An explicit tiles() call supersedes any provider passed to the constructor, so render()'s
         # one-shot hook does not also prepend a second basemap (L2).
         self._tiles_provider = None
-        if level == "overlay":
-            self.add_element(
-                element,
-                kind="basemap",
-            )
-        else:
-            self.layers.insert(0, element)
-        return self
+        return self.add_element(
+            None,
+            kind="basemap",
+            band=None if level == "overlay" else "underlay",
+            # Under everything already drawn, which is what an underlay basemap means — and what the
+            # element list used to say by an insert that described nothing.
+            at=None if level == "overlay" else 0,
+            key=api_key,
+            symbology=Symbology(
+                props={
+                    "via": "tiles",
+                    "provider": provider,
+                    "level": level,
+                    "preset": dict(preset or {}),
+                    "opts": dict(opts),
+                }
+            ),
+        )
 
     def _build_tiles(self, provider: Any, api_key: Any, **preset: Any) -> Any:
         """Resolve ``provider`` to a ``gv.WMTS``/``gv.Tiles`` element (name, URL, or xyzservices).
@@ -401,7 +495,11 @@ class DecorationMixin(_MixinBase):
             None,
             kind="coastlines",
             symbology=Symbology(
-                props={"resolution": resolution, "opts": dict(opts or {})}
+                props={
+                    "via": "coastlines",
+                    "resolution": resolution,
+                    "opts": dict(opts or {}),
+                }
             ),
         )
 
@@ -449,27 +547,30 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when the display CRS is not Web Mercator.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
         self._require_web_mercator("features")
-
-        def _styled_feature(feature: Any) -> Any:
-            element = feature.clone().opts(
-                scale=resolution
-            )  # clone: keep the gv singletons pristine
-            return element.opts(**opts) if opts else element
-
-        for underlay, requested in (("land", land), ("ocean", ocean)):
-            if requested:
-                self.layers.insert(0, _styled_feature(getattr(gv.feature, underlay)))
-        for overlay, requested in (
-            ("borders", borders),
-            ("rivers", rivers),
-            ("lakes", lakes),
+        for name, requested, at in (
+            ("land", land, 0),
+            ("ocean", ocean, 0),
+            ("borders", borders, None),
+            ("rivers", rivers, None),
+            ("lakes", lakes, None),
         ):
             if requested:
+                # Each is its own kind, so a figure says which piece of reference geography it drew —
+                # and the registry, not this loop, decides where each is drawn.
                 self.add_element(
-                    _styled_feature(getattr(gv.feature, overlay)),
-                    kind="borders",
+                    None,
+                    kind=name,
+                    at=at,
+                    symbology=Symbology(
+                        props={
+                            "via": "natural_earth",
+                            "feature": name,
+                            "resolution": resolution,
+                            "opts": dict(opts),
+                        }
+                    ),
                 )
         return self
 
@@ -715,7 +816,13 @@ class DecorationMixin(_MixinBase):
             None,
             kind="text",
             symbology=Symbology(
-                props={"x": float(x), "y": float(y), "s": s, "opts": dict(opts or {})}
+                props={
+                    "via": "text",
+                    "x": float(x),
+                    "y": float(y),
+                    "s": s,
+                    "opts": dict(opts or {}),
+                }
             ),
         )
 
@@ -739,31 +846,19 @@ class DecorationMixin(_MixinBase):
         Raises:
             KeyError: when ``column`` is not a column of ``features``.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Refused here, because the message names the column the caller asked for.
         if column not in getattr(features, "columns", [column]):
             raise KeyError(
                 f"labels column {column!r} not found in the feature attributes"
             )
-        gdf = self._display_gdf(features)
-        # Build from explicit display-CRS x/y/text columns rather than handing GeoViews the
-        # geometry-bearing GeoDataFrame: gv.Labels mis-projects a GeoDataFrame's point geometry at
-        # render time (a boolean-mask length mismatch). The geometry is already in the display CRS
-        # (reprojected by _display_gdf), so its x/y are the label anchors directly.
-        xs = gdf.geometry.x.to_numpy()
-        ys = gdf.geometry.y.to_numpy()
-        texts = gdf[column].to_numpy()
-        element = gv.Labels(
-            (xs, ys, texts),
-            kdims=["x", "y"],
-            vdims=[column],
-            crs=gv.util.process_crs(self.crs),
-        )
-        if opts:
-            element = element.opts(**opts)
         return self.add_element(
-            element,
+            None,
             kind="labels",
             source=features,
+            symbology=Symbology(
+                props={"via": "labels", "column": column, "opts": dict(opts)}
+            ),
         )
 
     def colorbar(self, show: bool = True) -> Self:

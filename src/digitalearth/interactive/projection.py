@@ -186,7 +186,7 @@ class ProjectionMixin(_MixinBase):
         return self.add_element(
             None,
             kind="graticule",
-            symbology=Symbology(props={"step": int(step), "opts": dict(opts or {})}),
+            symbology=Symbology(props={"via": "graticule", "step": int(step), "opts": dict(opts or {})}),
         )
 
     @staticmethod
