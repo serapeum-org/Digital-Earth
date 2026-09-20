@@ -68,6 +68,24 @@ _INSTALL_HINT = (
 )
 
 
+def _new_renderer(interactive_map: Any) -> Any:
+    """Return the renderer a map draws through.
+
+    Imported here rather than at module scope: :mod:`digitalearth.interactive.renderer` resolves its
+    drawers from the builder modules, and every one of those imports this module, so a top-level import
+    would close a cycle.
+
+    Args:
+        interactive_map: The map the renderer serves.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.Renderer` bound to it.
+    """
+    from digitalearth.interactive.renderer import Renderer
+
+    return Renderer(interactive_map)
+
+
 def _require_holoviz() -> tuple:
     """Import and return ``(geoviews, holoviews)``, raising an actionable error when absent.
 
@@ -273,6 +291,9 @@ class InteractiveMapBase:
         # and this holds the description each was built from, which is what a figure can be written to and
         # read back from (#300).
         self._layer_tree = LayerTree()
+        # Created once and kept: what it holds is what a converted kind composes into, so a layer drawn
+        # when its builder ran is still there at render time.
+        self._renderer = _new_renderer(self)
         self._sources: Dict[str, DataRef] = {}
         self._objects_ns: str = object_namespace()
         self._id_counter: int = 0
@@ -473,12 +494,15 @@ class InteractiveMapBase:
 
                 ```
         """
-        self.layers.append(element)
-        # A builder that says what it drew is described; one that does not is a caller's own object, which
-        # has no description to write beyond the fact that it exists (:mod:`digitalearth.base.custom`).
+        # A builder that says what it drew is described; one that does not is a caller's own object,
+        # which has no description to write beyond the fact that it exists
+        # (:mod:`digitalearth.base.custom`).
+        from digitalearth.interactive.renderer import DRAWN_KINDS
+
         resolved = kind or custom_kind("holoviews")
+        layer_id = self._layer_id(resolved.split(":")[-1], name)
         self._index_layer(
-            self._layer_id(resolved.split(":")[-1], name),
+            layer_id,
             name,
             kind=resolved,
             visible=visible,
@@ -486,6 +510,16 @@ class InteractiveMapBase:
             source=source,
             symbology=symbology,
         )
+        if resolved in DRAWN_KINDS:
+            # The element is built from the description rather than handed in: the builder passed `None`
+            # and its drawer makes the real one, which is what "render from the description" means.
+            drawn = self._renderer.draw_layer(self.figure_spec, layer_id)
+            if drawn is None:
+                self._layer_tree = self._layer_tree.remove(layer_id)
+                self._sources.pop(layer_id, None)
+                return self
+            element = drawn.element
+        self.layers.append(element)
         return self
 
     def _needs_reproject(self, data: Any) -> bool:
