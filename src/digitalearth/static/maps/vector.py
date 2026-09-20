@@ -156,13 +156,8 @@ def _clipped_cell_boxes(cells: Any, boundary: Any) -> tuple:
             values.append(value)
             continue
         clipped = box(xmin, ymin, xmax, ymax).intersection(boundary)
-        if clipped.is_empty:
-            continue
-        parts = clipped.geoms if clipped.geom_type.startswith("Multi") else [clipped]
-        for part in parts:
-            if part.geom_type != "Polygon" or part.is_empty:
-                continue
-            rings.append(np.asarray(part.exterior.coords))
+        for ring in _polygon_rings(clipped):
+            rings.append(ring)
             values.append(value)
     return rings, values
 
@@ -206,6 +201,34 @@ def _split_made_no_progress(quads: list, held: int) -> bool:
     return len(nonempty) == 1 and len(nonempty[0][4]) == held
 
 
+def _polygon_rings(geometry: Any) -> list:
+    """Return the exterior ring of every polygon part of a geometry.
+
+    A clip can hand back nothing, one polygon, or a multipart geometry whose parts are not all polygons —
+    an intersection against a globe's limb produces both. A part with no area has no exterior ring to read,
+    so it contributes nothing rather than raising from `part.exterior`.
+
+    Note:
+        Only a `Multi*` geometry is unpacked, which is what both callers did inline before sharing this.
+        A `GeometryCollection` is therefore read as a single non-polygon and contributes nothing; that is
+        existing behaviour, preserved deliberately rather than quietly widened here.
+
+    Args:
+        geometry: Any shapely geometry, typically the result of an intersection.
+
+    Returns:
+        One coordinate array per polygon part, in the order the parts are held.
+    """
+    if geometry.is_empty:
+        return []
+    parts = geometry.geoms if geometry.geom_type.startswith("Multi") else [geometry]
+    return [
+        np.asarray(part.exterior.coords)
+        for part in parts
+        if part.geom_type == "Polygon" and not part.is_empty
+    ]
+
+
 def _clipped_cell_rings(
     cells: Any, boundary: Any, col_vals: Any, column: Optional[str]
 ) -> tuple:
@@ -228,15 +251,9 @@ def _clipped_cell_rings(
     rings: List[np.ndarray] = []
     values: Optional[list] = [] if column is not None else None
     for index, cell in enumerate(cells.geoms):
-        if boundary is not None:
-            cell = cell.intersection(boundary)
-        if cell.is_empty:
-            continue
-        parts = cell.geoms if cell.geom_type.startswith("Multi") else [cell]
-        for part in parts:
-            if part.geom_type != "Polygon" or part.is_empty:
-                continue
-            rings.append(np.asarray(part.exterior.coords))
+        clipped = cell if boundary is None else cell.intersection(boundary)
+        for ring in _polygon_rings(clipped):
+            rings.append(ring)
             if values is not None:
                 values.append(col_vals[index])
     return rings, values
