@@ -22,7 +22,7 @@ from loguru import logger
 
 from digitalearth.base.bigdata import validate_big_data_threshold
 from digitalearth.base.deprecation import renamed_parameter
-from digitalearth.base.spec import Scale
+from digitalearth.base.spec import LayerSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -35,6 +35,97 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: converter's marker for "interpret this value, do not pass it through", so it is protocol rather
 #: than a label — worth naming once so a typo cannot silently produce a layer deck.gl ignores.
 DECK_TYPE_KEY = "@@type"
+
+
+def draw_heatmap(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre heatmap layer over a point collection.
+
+    Args:
+        web_map: The map being drawn.
+        data: The layer's source — the display-CRS point GeoDataFrame.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+    """
+    from digitalearth.web.renderer import DrawnLayer
+
+    Layer, LayerType = _require_layer_api()
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=data,
+        layer=Layer(
+            id=layer.id,
+            type=LayerType.HEATMAP,
+            source=source_id,
+            paint=dict(layer.symbology.props["paint"]),
+        ),
+    )
+
+
+def draw_clusters(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the clustered source and its three layers: bubbles, counts and loose points.
+
+    One description carries all three because they are one thing to a viewer — removing the layer takes
+    the counts and the loose points with it.
+
+    Args:
+        web_map: The map being drawn.
+        data: The layer's source — the display-CRS point GeoDataFrame.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer` whose `extra_layers` hold the counts and the
+        unclustered points.
+    """
+    from digitalearth.web.renderer import DrawnLayer
+
+    from maplibre.sources import GeoJSONSource, geopandas_to_geojson
+
+    Layer, LayerType = _require_layer_api()
+    props = dict(layer.symbology.props)
+    source_id = f"{layer.id}-src"
+    color, text_color = props["color"], props["text_color"]
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=GeoJSONSource(
+            data=geopandas_to_geojson(data),
+            cluster=True,
+            cluster_radius=int(props["radius"]),
+            cluster_max_zoom=int(props["max_zoom"]),
+        ),
+        layer=Layer(
+            id=layer.id,
+            type=LayerType.CIRCLE,
+            source=source_id,
+            filter=["has", "point_count"],
+            paint={
+                "circle-color": color,
+                "circle-radius": ["step", ["get", "point_count"], 15, 50, 20, 200, 25],
+            },
+        ),
+        extra_layers=(
+            Layer(
+                id=f"{layer.id}-count",
+                type=LayerType.SYMBOL,
+                source=source_id,
+                filter=["has", "point_count"],
+                layout={
+                    "text-field": ["get", "point_count_abbreviated"],
+                    "text-size": 12,
+                },
+                paint={"text-color": text_color},
+            ),
+            Layer(
+                id=f"{layer.id}-unclustered",
+                type=LayerType.CIRCLE,
+                source=source_id,
+                filter=["!", ["has", "point_count"]],
+                paint={"circle-color": color, "circle-radius": 5},
+            ),
+        ),
+    )
 
 
 class BigDataMixin(_MixinBase):
@@ -119,17 +210,16 @@ class BigDataMixin(_MixinBase):
                 1.0,
             ]
 
-        src_id, layer_id = self._uid("heat-src"), self._uid("heatmap")
-        layer = Layer(id=layer_id, type=LayerType.HEATMAP, source=src_id, paint=paint)
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, gdf)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._last_layer_id = layer_id
-        self._index_layer(layer_id, None, kind="heatmap", source=gdf)
-        return self._queue(apply)
+        layer_id = self._uid("heatmap")
+        if self._index_layer(
+            layer_id,
+            None,
+            kind="heatmap",
+            source=gdf,
+            symbology=Symbology(props={"paint": dict(paint)}),
+        ):
+            self._last_layer_id = layer_id
+        return self
 
     def cluster(
         self,
@@ -160,55 +250,30 @@ class BigDataMixin(_MixinBase):
         Layer, LayerType = _require_layer_api()
         gdf = self._display_gdf(features, method="cluster")
         self._require_points(gdf, "cluster")
-        src_id = self._uid("cluster-src")
-        source = GeoJSONSource(
-            data=geopandas_to_geojson(gdf),
-            cluster=True,
-            cluster_radius=int(radius),
-            cluster_max_zoom=int(max_zoom),
+        layer_id = self._uid("clusters")
+        # One description covers the bubbles, their counts and the loose points, so removing it removes
+        # all three together — they are one thing to a viewer.
+        registered = self._index_layer(
+            layer_id,
+            None,
+            kind="clusters",
+            source=gdf,
+            symbology=Symbology(
+                props={
+                    "color": color,
+                    "text_color": text_color,
+                    "radius": int(radius),
+                    "max_zoom": int(max_zoom),
+                }
+            ),
         )
-        clusters = Layer(
-            id=self._uid("clusters"),
-            type=LayerType.CIRCLE,
-            source=src_id,
-            filter=["has", "point_count"],
-            paint={
-                "circle-color": color,
-                "circle-radius": ["step", ["get", "point_count"], 15, 50, 20, 200, 25],
-            },
-        )
-        count = Layer(
-            id=self._uid("cluster-count"),
-            type=LayerType.SYMBOL,
-            source=src_id,
-            filter=["has", "point_count"],
-            layout={"text-field": ["get", "point_count_abbreviated"], "text-size": 12},
-            paint={"text-color": text_color},
-        )
-        unclustered = Layer(
-            id=self._uid("unclustered"),
-            type=LayerType.CIRCLE,
-            source=src_id,
-            filter=["!", ["has", "point_count"]],
-            paint={"circle-color": color, "circle-radius": 5},
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, source)
-            widget.add_layer(clusters)
-            widget.add_layer(count)
-            widget.add_layer(unclustered)
-
-        # One closure adds the bubbles, their counts and the loose points, so tagging it with the
-        # indexed id removes all three together — they are one thing to a viewer.
-        apply._digitalearth_layer_id = clusters.id  # type: ignore[attr-defined]
-        # The loose points, which are the layer carrying the caller's own columns: the bubbles are
-        # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
-        # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
-        # description is skipped — which is what the guard in `_record_tooltip` is for.
-        self._last_layer_id = unclustered.id
-        self._index_layer(clusters.id, None, kind="clusters", source=gdf)
-        return self._queue(apply)
+        if registered:
+            # The loose points, which are the layer carrying the caller's own columns: the bubbles are
+            # aggregates whose only properties are `cluster`, `cluster_id` and the point counts, so a popup
+            # bound to them shows none of what was asked for (review H8). It is not the indexed id, so the
+            # description is skipped — which is what the guard in `_record_tooltip` is for.
+            self._last_layer_id = f"{layer_id}-unclustered"
+        return self
 
     def _add_deck_layer(self, layer: dict) -> Self:
         """Accumulate a deck.gl JSON ``layer`` and ensure a single ``add_deck_layers`` application.

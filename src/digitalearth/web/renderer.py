@@ -61,6 +61,14 @@ DRAWN_KINDS: Tuple[str, ...] = (
     "text",
     "raster",
     "rgb",
+    "points",
+    "lines",
+    "polygons",
+    "choropleth",
+    "labels",
+    "heatmap",
+    "clusters",
+    "extrusion",
 )
 
 
@@ -88,13 +96,21 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the map, so a module-level
     # import would close a cycle, and a map that draws nothing should not pay for loading all of them.
-    from digitalearth.web import decoration, raster
+    from digitalearth.web import bigdata, decoration, raster, threed, vector
 
     drawers = {
         "graticule": decoration.draw_graticule,
         "text": decoration.draw_text,
         "raster": raster.draw_field,
         "rgb": raster.draw_rgb_composite,
+        "points": vector.draw_vector,
+        "lines": vector.draw_vector,
+        "polygons": vector.draw_vector,
+        "choropleth": vector.draw_vector,
+        "labels": vector.draw_vector,
+        "heatmap": bigdata.draw_heatmap,
+        "clusters": bigdata.draw_clusters,
+        "extrusion": threed.draw_extruded_polygons,
     }
     # The two lists are one list said twice, and drift either way is a defect: a kind in `drawers` and not
     # in `DRAWN_KINDS` would be refused with a message that is false, and one in `DRAWN_KINDS` with no

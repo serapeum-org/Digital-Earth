@@ -1003,7 +1003,10 @@ class TestAPopupOverAnUndescribedLayer:
 
         m = WebMap().cluster(points)
         assert m.popup(["v"]) is not None, "a clustered map must take a popup"
-        assert m.layer_ids == ["clusters-2"], m.layer_ids
+        assert len(m.layer_ids) == 1, (
+            "a cluster is one entry in the tree, whatever its three MapLibre layers are called"
+        )
+        assert m.layer_ids[0].startswith("clusters"), m.layer_ids
 
     def test_a_popup_naming_a_layer_this_map_has_not_drawn_is_refused(self, points):
         """An id a caller wrote is checked; skipping it accepted a typo in silence.
@@ -1080,7 +1083,13 @@ class TestAPopupOverAnUndescribedLayer:
             )
             if "layer_id" in held
         ]
-        assert bound == ["unclustered-4"], bound
+        assert len(bound) == 1, bound
+        assert bound[0].endswith("unclustered"), (
+            f"the popup must bind to the loose points, which carry the columns; got {bound}"
+        )
+        assert bound[0].startswith(m.layer_ids[0]), (
+            f"and to this cluster's own loose points; got {bound} for {m.layer_ids}"
+        )
 
     def test_a_described_layer_still_records_what_pops_up(self, points):
         """The guard skips the description, and must not skip it for a layer that has one.

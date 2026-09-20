@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any, Optional, Self, Union, cast
 from loguru import logger
 
 from digitalearth.base.deprecation import renamed_parameter
-from digitalearth.base.spec import LegendSpec, Scale
+from digitalearth.base.spec import LayerSpec, LegendSpec, Scale, Symbology
 from digitalearth.web.base import _require_layer_api
 
 
@@ -113,6 +113,44 @@ if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at r
     from digitalearth.web.base import WebMapBase as _MixinBase
 else:  # at runtime the mixin stays a plain class, so the composed MRO is unchanged
     _MixinBase = object
+
+
+def draw_vector(web_map: Any, data: Any, layer: LayerSpec) -> Any:
+    """Build the MapLibre source and typed layer for any of the five vector kinds.
+
+    All five — points, lines, polygons, choropleth and labels — are a GeoJSON source plus one typed layer,
+    differing only in the MapLibre type and the paint the builder resolved. They share a drawer for the same
+    reason they shared a registration funnel.
+
+    Args:
+        web_map: The map being drawn.
+        data: The layer's source — the display-CRS GeoDataFrame served as GeoJSON.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.web.renderer.DrawnLayer`.
+    """
+    from digitalearth.web.renderer import DrawnLayer
+
+    Layer, _ = _require_layer_api()
+    props = dict(layer.symbology.props)
+    spec_layout = dict(props.get("layout") or {})
+    if not layer.visible:
+        spec_layout["visibility"] = "none"
+    source_id = f"{layer.id}-src"
+    return DrawnLayer(
+        source_id=source_id,
+        source_spec=data,
+        layer=Layer(
+            id=layer.id,
+            type=props[
+                "maplibre_type"
+            ],  # MapLibre coerces the string back to its own enum
+            source=source_id,
+            paint=dict(props["paint"]),
+            layout=spec_layout or None,
+        ),
+    )
 
 
 class VectorMixin(_MixinBase):
@@ -705,28 +743,31 @@ class VectorMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        Layer, _ = _require_layer_api()
-        src_id = self._uid(f"{prefix}-src")
+        _require_layer_api()
         layer_id = self._layer_id(prefix, name)
-        spec_layout = dict(layout) if layout else {}
-        if not visible:
-            spec_layout["visibility"] = "none"
-        layer = Layer(
-            id=layer_id,
-            type=layer_type,
-            source=src_id,
-            paint=paint,
-            layout=spec_layout or None,
-        )
-
-        def apply(widget: Any) -> None:
-            widget.add_source(src_id, features)
-            widget.add_layer(layer)
-
-        apply._digitalearth_layer_id = layer_id  # type: ignore[attr-defined]
-        self._last_layer_id = layer_id
-        self._index_layer(layer_id, name, kind=kind, visible=visible, source=features)
-        return self._queue_layer(apply, kind)
+        # `paint` and `layout` are MapLibre's own spelling, so they are held under a single prop rather
+        # than spread across the symbology as if they were engine-neutral channels. `draw_vector` reads
+        # them straight back; what makes this a description rather than a closure is that they are
+        # *values in the figure* — a saved figure carries them, and nothing is captured in a lambda.
+        if self._index_layer(
+            layer_id,
+            name,
+            kind=kind,
+            visible=visible,
+            source=features,
+            symbology=Symbology(
+                props={
+                    # The enum's value, not the member: a description holds plain values, so a figure
+                    # written to disk carries a string MapLibre reads back. The spec refuses the member,
+                    # which is how this was caught rather than shipped as an unserialisable figure.
+                    "maplibre_type": getattr(layer_type, "value", layer_type),
+                    "paint": dict(paint),
+                    "layout": dict(layout) if layout else {},
+                }
+            ),
+        ):
+            self._last_layer_id = layer_id
+        return self
 
     @staticmethod
     def _require_column(gdf: Any, column: str) -> Any:
