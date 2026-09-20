@@ -130,7 +130,14 @@ def _drawn(web_map):
     registered = set(web_map.layer_ids)
 
     def identify(layer):
-        """Return the layer id an entry stands for, or `None` when it carries none."""
+        """Return the layer id an entry stands for.
+
+        Args:
+            layer: One entry of the map's `layers`.
+
+        Returns:
+            Its layer id, or `None` when it carries none — a basemap or a control.
+        """
         marker = getattr(layer, "_digitalearth_layer_id", None) or held.get(id(layer))
         if marker is not None:
             return marker

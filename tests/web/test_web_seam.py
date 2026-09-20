@@ -103,10 +103,19 @@ class TestTheTwoPathsAreDisjoint:
             """Stands in for the widget, recording what is added to it."""
 
             def add_source(self, source_id, spec):
-                """Ignore sources; the layers are what must not repeat."""
+                """Ignore the source; only the layers are under test.
+
+                Args:
+                    source_id: Unused.
+                    spec: Unused.
+                """
 
             def add_layer(self, layer):
-                """Record one added layer."""
+                """Record one added layer.
+
+                Args:
+                    layer: The layer reaching the widget.
+                """
                 added.append(getattr(layer, "id", layer))
 
         for entry in m.layers:
@@ -188,6 +197,73 @@ class TestADescriptionIsWhatIsDrawn:
         assert first.layer.id == second.layer.id == "obs", first.layer.id
 
 
+class TestADrawerThatDeclinesLeavesNothingBehind:
+    """A described layer nothing draws is exactly the drift this seam removes."""
+
+    def test_an_unplaceable_raster_is_not_registered(self, monkeypatch, dataset):
+        """The builder's caller sees a map that never registered it.
+
+        Args:
+            monkeypatch: Used to make the raster's corners unrepresentable.
+            dataset: A small raster.
+
+        Test scenario:
+            The description is written before the drawer runs, so a drawer that declines has to take the
+            description with it — otherwise `figure_spec` names a layer the map cannot draw.
+        """
+        from digitalearth.web import WebMap
+
+        monkeypatch.setattr(WebMap, "_lonlat_corners", lambda self, source: None)
+        m = WebMap().field(dataset)
+        assert m.layer_ids == [], m.layer_ids
+        assert m._renderer.drawn == {}, m._renderer.drawn
+        assert m.layers == [], m.layers
+
+    def test_a_custom_layer_this_process_does_not_hold_is_not_drawn(self):
+        """A figure loaded from a dict names the object but cannot rebuild it."""
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.add_layer(_fake_layer("wells"), name="wells")
+        # Forget the object the way loading a saved figure would: the description survives, the object
+        # does not.
+        m._custom.clear()
+        built = m._renderer.draw_layer(m.figure_spec, "wells")
+        assert built is None, built
+
+    def test_a_widget_skips_a_marker_whose_drawing_is_gone(self):
+        """The marker and the drawing are removed together, but the widget must not assume it."""
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        m.add_layer(_fake_layer("wells"), name="wells")
+        m._renderer.remove("wells")
+        added = []
+
+        class Recorder:
+            """Records what reaches the widget."""
+
+            def add_source(self, source_id, spec):
+                """Ignore the source; only the layers are under test.
+
+                Args:
+                    source_id: Unused.
+                    spec: Unused.
+                """
+
+            def add_layer(self, layer):
+                """Record one added layer.
+
+                Args:
+                    layer: The layer reaching the widget.
+                """
+                added.append(layer)
+
+        for entry in m._queued:
+            m._apply_layer(Recorder(), entry)
+        assert added == [], "a marker with no drawing must add nothing"
+
+
 class TestTheBandOfALayerIsItsKinds:
     """Where a layer is drawn is a property of what it is, not of which path drew it."""
 
@@ -229,6 +305,11 @@ def _fake_layer(layer_id: str):
         """A caller's own layer."""
 
         def __init__(self, id_):
+            """Hold the id `add_layer` reads.
+
+            Args:
+                id_: The layer id.
+            """
             self.id = id_
 
     return _Layer(layer_id)

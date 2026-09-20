@@ -749,7 +749,9 @@ class VectorMixin(_MixinBase):
         # than spread across the symbology as if they were engine-neutral channels. `draw_vector` reads
         # them straight back; what makes this a description rather than a closure is that they are
         # *values in the figure* — a saved figure carries them, and nothing is captured in a lambda.
-        if self._index_layer(
+        # Unconditional: `draw_vector` either draws or raises — only the raster drawers decline, and
+        # only they need to ask whether the layer survived.
+        self._index_layer(
             layer_id,
             name,
             kind=kind,
@@ -765,8 +767,8 @@ class VectorMixin(_MixinBase):
                     "layout": dict(layout) if layout else {},
                 }
             ),
-        ):
-            self._last_layer_id = layer_id
+        )
+        self._last_layer_id = layer_id
         return self
 
     @staticmethod

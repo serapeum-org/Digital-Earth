@@ -110,14 +110,14 @@ class ThreeDMixin(_MixinBase):
             paint["fill-extrusion-color"] = color
 
         layer_id = self._uid("extrusion")
-        if self._index_layer(
+        self._index_layer(
             layer_id,
             None,
             kind="extrusion",
             source=gdf,
             symbology=Symbology(props={"paint": dict(paint)}),
-        ):
-            self._last_layer_id = layer_id
+        )
+        self._last_layer_id = layer_id
         return self
 
     def terrain_tiles(

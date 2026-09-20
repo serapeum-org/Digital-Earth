@@ -344,17 +344,21 @@ def draw_custom(web_map: Any, _data: Any, layer: LayerSpec) -> Any:
         A :class:`~digitalearth.web.renderer.DrawnLayer` carrying the object, or `None` when this process
         does not hold it.
     """
-    from digitalearth.base.custom import held_object
+    from digitalearth.base.custom import MissingObject, held_object
     from digitalearth.web.renderer import DrawnLayer
 
-    obj = held_object(
-        layer.id,
-        layer.kind,
-        web_map._custom,
-        engine="maplibre",
-        backend="web",
-    )
-    if obj is None:
+    try:
+        obj = held_object(
+            layer.id,
+            layer.kind,
+            web_map._custom,
+            engine="maplibre",
+            backend="web",
+        )
+    except MissingObject as error:
+        # Contract C7: a figure that names an object this process does not hold is skipped with a warning
+        # naming the layer and its engine, and raised under `strict`. The same answer the 3-D tier gives.
+        web_map._skipped(layer.id, str(error))
         return None
     return DrawnLayer(source_id=None, source_spec=None, layer=obj)
 
@@ -907,7 +911,9 @@ class WebMapBase:
             The layer ids, bottom first, as a new list: the order they were added in, except that a graticule,
             which is drawn in the reference band beneath the data, is listed before every layer that is not a
             graticule, whenever it was added. A layer the caller named carries that name as its id; an unnamed one
-            gets a generated id.
+            gets a generated id. A generated id counts the layers of its kind: a layer no longer takes a
+            second number for the MapLibre source beside it, because that source is named after the layer
+            (#296) rather than allocated next to it.
 
         Examples:
             - Named and unnamed layers, in the order they were added:
@@ -915,7 +921,7 @@ class WebMapBase:
                 >>> from digitalearth.web import WebMap
                 >>> m = WebMap().text(4.9, 52.4, "Amsterdam", name="amsterdam").text(2.35, 48.86, "Paris")
                 >>> m.layer_ids
-                ['amsterdam', 'text-3']
+                ['amsterdam', 'text-1']
 
                 ```
             - A graticule added last is listed first, because it is drawn beneath the data:

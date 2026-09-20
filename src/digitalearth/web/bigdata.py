@@ -211,14 +211,14 @@ class BigDataMixin(_MixinBase):
             ]
 
         layer_id = self._uid("heatmap")
-        if self._index_layer(
+        self._index_layer(
             layer_id,
             None,
             kind="heatmap",
             source=gdf,
             symbology=Symbology(props={"paint": dict(paint)}),
-        ):
-            self._last_layer_id = layer_id
+        )
+        self._last_layer_id = layer_id
         return self
 
     def cluster(
