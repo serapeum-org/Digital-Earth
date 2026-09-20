@@ -5,14 +5,16 @@ globe map, and overrides ``save``/``show`` to apply that frame before output.
 """
 
 import os
+from dataclasses import replace as with_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
 
 from digitalearth.base.domains import DomainLike, resolve_domain
-from digitalearth.base.spec import Bounds
+from digitalearth.base.spec import Bounds, Symbology
 from digitalearth.static import projections
+from digitalearth.static.scene import LayerRecord
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -145,12 +147,31 @@ class ProjectionMixin(_MixinBase):
     def graticule(self, lon_step: float = 30.0, lat_step: float = 30.0) -> None:
         """Add a lon/lat graticule to a projected map (drawn when the frame is applied).
 
+        A second call **replaces** the first — the map holds one set of graticule lines, so it draws one
+        graticule — and the description follows: the layer keeps its id and its place in the tree and only
+        its spacing changes. Describing the second call as a second layer would say the map draws two grids
+        where it draws one.
+
         Args:
             lon_step: Meridian spacing in degrees.
             lat_step: Parallel spacing in degrees.
         """
         self._graticule_lines = projections.graticule(
             self.crs, lon_step=lon_step, lat_step=lat_step
+        )
+        symbology = Symbology(
+            props={"via": "graticule", "lon_step": lon_step, "lat_step": lat_step}
+        )
+        held = self._graticule_id
+        # `_reset_layers` clears the tree between animation frames while the lines themselves survive, so the
+        # remembered id can outlive its layer; the membership test is what keeps that from raising.
+        if held is not None and held in self._layer_tree.ids:
+            self._layer_tree = self._layer_tree.replace(
+                with_fields(self._layer_tree.get(held), symbology=symbology)
+            )
+            return
+        self._graticule_id = self._describe_layer(
+            LayerRecord("graticule", symbology=symbology)
         )
 
     def _frame(self) -> tuple:

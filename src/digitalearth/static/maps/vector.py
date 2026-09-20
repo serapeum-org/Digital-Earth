@@ -25,6 +25,7 @@ from digitalearth.base.crs import reproject
 from digitalearth.base.deprecation import renamed_parameter
 from digitalearth.base.points import PointArrays
 from digitalearth.base.sources import get_source
+from digitalearth.base.spec import Symbology
 from digitalearth.base.symbology import (
     MISSING_COLOR,
     nulls_to_none,
@@ -32,10 +33,38 @@ from digitalearth.base.symbology import (
 )
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
+from digitalearth.static.scene import LayerRecord
 
 #: Per-cell reducers accepted by ``Map.quadtree``'s ``agg`` — the shared NaN-aware registry plus a special
 #: ``"count"`` (``len`` over the per-cell index array, ignoring the column).
 _QUADTREE_AGG = {**NAN_REDUCERS, "count": len}
+
+#: The registered kind each u/v render draws (#303). ``quiver`` and ``barbs`` are two glyphs for one thing —
+#: a vector field — while a streamplot integrates that field into flow lines, which is a different layer.
+_VECTOR_KINDS = {"quiver": "vectors", "barbs": "vectors", "streamplot": "streamlines"}
+
+
+def _polygon_kind(values: Any) -> str:
+    """Return the kind a polygon layer is recorded under, given what it was filled with.
+
+    Args:
+        values: The per-polygon values colouring the fill, or `None` for an outline-only draw.
+
+    Returns:
+        `"choropleth"` when the polygons are coloured by a value, `"polygons"` when only their outlines are
+        drawn. Both come out of the same :meth:`VectorMixin._polygon_layer` recipe and the same cleopatra
+        glyph, so the drawing cannot tell them apart — the values are what makes one a choropleth.
+
+    Examples:
+        - A filled and an outline-only layer are different kinds:
+            ```python
+            >>> from digitalearth.static.maps.vector import _polygon_kind
+            >>> _polygon_kind([1.0, 2.0]), _polygon_kind(None)
+            ('choropleth', 'polygons')
+
+            ```
+    """
+    return "polygons" if values is None else "choropleth"
 
 
 def _draw_missing_neutral(artist: Any) -> None:
@@ -324,7 +353,12 @@ class VectorMixin(_MixinBase):
         return gdf
 
     def _polygon_layer(
-        self, polygons: List[np.ndarray], values: Optional[np.ndarray] = None, **opts
+        self,
+        polygons: List[np.ndarray],
+        values: Optional[np.ndarray] = None,
+        *,
+        describe: Optional[LayerRecord] = None,
+        **opts,
     ) -> Any:
         """Draw polygons as a value-filled (``values`` given) or outline-only ``PolygonGlyph`` layer.
 
@@ -342,6 +376,10 @@ class VectorMixin(_MixinBase):
         Args:
             polygons: Polygon rings as ``(N, 2)`` vertex arrays.
             values: Optional per-polygon scalar values; when ``None`` only the outlines are drawn.
+            describe: What the calling builder drew, for the figure. Each caller builds its own record
+                because only it knows where the polygons came from — a raster's cells, a feature
+                collection, a Voronoi tessellation — and :func:`_polygon_kind` decides the kind from
+                ``values``, which is the one thing they all agree on.
             **opts: Styling kwargs forwarded to ``PolygonGlyph``.
 
         Returns:
@@ -380,12 +418,16 @@ class VectorMixin(_MixinBase):
             glyph = PolygonGlyph(
                 polygons, values=values, ax=self.ax, fig=self.fig, **opts
             )
-            artist = self._render_glyph(glyph, artist="plot", **plot_style)
+            artist = self._render_glyph(
+                glyph, artist="plot", describe=describe, **plot_style
+            )
             if classified:
                 _draw_missing_neutral(artist)
             return artist
         glyph = PolygonGlyph(polygons, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot", outline_only=True, **plot_style)
+        return self._render_glyph(
+            glyph, artist="plot", outline_only=True, describe=describe, **plot_style
+        )
 
     @_skips_off_limb
     def scatter(
@@ -436,6 +478,7 @@ class VectorMixin(_MixinBase):
             alias=scale,
             caller="Map.scatter()",
         )
+        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
         fc = self._vector_input(
             features, name="scatter"
         )  # empty-guard; any geometry (centroid fallback) OK
@@ -458,7 +501,22 @@ class VectorMixin(_MixinBase):
             fig=self.fig,
             **opts,
         )
-        return self._render_glyph(glyph, artist="plot", **plot_style)
+        return self._render_glyph(
+            glyph,
+            artist="plot",
+            describe=LayerRecord(
+                "points",
+                source=features,
+                symbology=Symbology(
+                    props={
+                        "via": "scatter",
+                        "size_column": size_column,
+                        "opts": asked,
+                    }
+                ),
+            ),
+            **plot_style,
+        )
 
     def grid_points(
         self,
@@ -503,6 +561,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
         try:
             xyz = self._reproject(dataset).to_xyz()
         except OffLimbError:
@@ -518,7 +577,18 @@ class VectorMixin(_MixinBase):
             opts, marker_size_for=_alias_caller, depth=_alias_depth
         )  # scheme/k -> plot() classify group; the `size` channel -> the glyph's own `point_size`
         glyph = ScatterGlyph(x, y, values=z, ax=self.ax, fig=self.fig, **opts)
-        return self._render_glyph(glyph, artist="plot", **plot_style)
+        return self._render_glyph(
+            glyph,
+            artist="plot",
+            describe=LayerRecord(
+                "points",
+                source=dataset,
+                symbology=Symbology(
+                    props={"via": "grid_points", "opts": asked},
+                ),
+            ),
+            **plot_style,
+        )
 
     def point_cloud(self, dataset: Any, **opts) -> Any:
         """Alias of :meth:`grid_points` — scatter raster cell centres coloured by value.
@@ -594,7 +664,18 @@ class VectorMixin(_MixinBase):
         polygons, values = self._finite_polygons(
             polygons, values
         )  # drop far-side cells on a globe
-        return self._polygon_layer(polygons, values, **opts)
+        return self._polygon_layer(
+            polygons,
+            values,
+            describe=LayerRecord(
+                _polygon_kind(values),
+                source=dataset,
+                symbology=Symbology(
+                    props={"via": "grid_cells", "band": band, "opts": dict(opts)}
+                ),
+            ),
+            **opts,
+        )
 
     def _vector(
         self, u_dataset: Any, v_dataset: Any, *, kind: str, band: int = 1, **opts
@@ -613,6 +694,7 @@ class VectorMixin(_MixinBase):
             ``None`` instead when the data lies entirely outside what the display CRS shows:
             an off-limb draw renders an empty frame rather than raising.
         """
+        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
         try:
             su = self._prepare(u_dataset, band)
             sv = self._prepare(v_dataset, band)
@@ -639,7 +721,18 @@ class VectorMixin(_MixinBase):
             fig=self.fig,
             **opts,
         )
-        im = self._render_glyph(glyph, artist="plot", kind=kind, **plot_style)
+        im = self._render_glyph(
+            glyph,
+            artist="plot",
+            kind=kind,
+            describe=LayerRecord(
+                _VECTOR_KINDS[kind],
+                # The pair is the source: a field is not drawable from either component alone.
+                source=(u_dataset, v_dataset),
+                symbology=Symbology(props={"via": kind, "band": band, "opts": asked}),
+            ),
+            **plot_style,
+        )
         self._last_vector = (glyph, im, kind)  # remembered for quiverkey()
         return im
 
@@ -769,11 +862,23 @@ class VectorMixin(_MixinBase):
             return None
         tri = Triangulation(x, y)
         glyph = MeshGlyph(x, y, tri.triangles, ax=self.ax, fig=self.fig)
+        # All three triangulated renders describe one thing — a mesh built from scattered points — which is
+        # what the registry calls `unstructured`; the render itself is the `via` property.
+        described = LayerRecord(
+            "unstructured",
+            source=data,
+            symbology=Symbology(props={"via": kind, "opts": dict(opts)}),
+        )
         # cleopatra 0.11.0 exposes the tripcolor/tricontour(f) artist on glyph.im (issue #2).
         if kind == "tripcolor":
             face_values = z[tri.triangles].mean(axis=1)
             return self._render_glyph(
-                glyph, face_values, location="face", colorbar=False, **opts
+                glyph,
+                face_values,
+                location="face",
+                colorbar=False,
+                describe=described,
+                **opts,
             )
         return self._render_glyph(
             glyph,
@@ -781,6 +886,7 @@ class VectorMixin(_MixinBase):
             location="node",
             filled=(kind == "tricontourf"),
             colorbar=False,
+            describe=described,
             **opts,
         )
 
@@ -953,6 +1059,9 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        asked = dict(
+            opts
+        )  # before the classification below is folded in (see `RasterMixin._field`)
         gdf = self._vector_input(
             features,
             geom_types=("Polygon", "MultiPolygon"),
@@ -966,7 +1075,24 @@ class VectorMixin(_MixinBase):
         )  # drop far-side polygons on a globe
         if scheme is not None:  # None means a continuous ramp: classify nothing
             opts["scheme"], opts["k"] = scheme, k
-        return self._polygon_layer(polygons, values, **opts)
+        return self._polygon_layer(
+            polygons,
+            values,
+            describe=LayerRecord(
+                _polygon_kind(values),
+                source=features,
+                symbology=Symbology(
+                    props={
+                        "via": "choropleth",
+                        "column": column,
+                        "scheme": scheme,
+                        "k": k,
+                        "opts": asked,
+                    }
+                ),
+            ),
+            **opts,
+        )
 
     @_skips_off_limb
     def shapes(self, features: Any, **opts) -> Any:
@@ -991,7 +1117,15 @@ class VectorMixin(_MixinBase):
         polygons, _ = self._finite_polygons(
             polygons
         )  # drop far-side polygons on a globe
-        return self._polygon_layer(polygons, **opts)
+        return self._polygon_layer(
+            polygons,
+            describe=LayerRecord(
+                _polygon_kind(None),
+                source=features,
+                symbology=Symbology(props={"via": "shapes", "opts": dict(opts)}),
+            ),
+            **opts,
+        )
 
     def _clip_geometry(self, clip: Any) -> Any:
         """Resolve a clip boundary to a single geometry in the display CRS, or ``None``.
@@ -1100,7 +1234,18 @@ class VectorMixin(_MixinBase):
         polygons, values_arr = self._finite_polygons(
             polygons, values_arr
         )  # drop far-side cells on a globe
-        return self._polygon_layer(polygons, values_arr, **opts)
+        return self._polygon_layer(
+            polygons,
+            values_arr,
+            describe=LayerRecord(
+                _polygon_kind(values_arr),
+                source=features,
+                symbology=Symbology(
+                    props={"via": "voronoi", "column": column, "opts": dict(opts)}
+                ),
+            ),
+            **opts,
+        )
 
     @staticmethod
     def _scale_factors(values: np.ndarray, limits: Tuple[float, float]) -> np.ndarray:
@@ -1183,12 +1328,31 @@ class VectorMixin(_MixinBase):
             for g, f in zip(geom, factors)
         ]
         polygons, repeats = self._polygon_vertices(scaled)
+        described = {
+            "source": features,
+            "symbology": Symbology(
+                props={
+                    "via": "cartogram",
+                    "scale": scale,
+                    "column": column,
+                    "limits": tuple(limits),
+                    "opts": dict(opts),
+                }
+            ),
+        }
         if column is not None:
             values = np.repeat(gdf[column].to_numpy(), repeats)
             polygons, values = self._finite_polygons(polygons, values)
-            return self._polygon_layer(polygons, values, **opts)
+            return self._polygon_layer(
+                polygons,
+                values,
+                describe=LayerRecord(_polygon_kind(values), **described),
+                **opts,
+            )
         polygons, _ = self._finite_polygons(polygons)
-        return self._polygon_layer(polygons, **opts)
+        return self._polygon_layer(
+            polygons, describe=LayerRecord(_polygon_kind(None), **described), **opts
+        )
 
     @staticmethod
     def _quadtree_cells(
@@ -1316,7 +1480,24 @@ class VectorMixin(_MixinBase):
         polygons, values = _clipped_cell_boxes(cells, boundary)
         values_arr = np.asarray(values, dtype=float)
         polygons, values_arr = self._finite_polygons(polygons, values_arr)
-        return self._polygon_layer(polygons, values_arr, **opts)
+        return self._polygon_layer(
+            polygons,
+            values_arr,
+            describe=LayerRecord(
+                _polygon_kind(values_arr),
+                source=features,
+                symbology=Symbology(
+                    props={
+                        "via": "quadtree",
+                        "column": column,
+                        "nmax": nmax,
+                        "nmin": nmin,
+                        "opts": dict(opts),
+                    }
+                ),
+            ),
+            **opts,
+        )
 
     @staticmethod
     def _polygons_of(geom: Any) -> list:
@@ -1405,6 +1586,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
         gdf = self._vector_input(
             features, geom_types=("Point",), name="kde", geom_label="point"
         )
@@ -1425,7 +1607,16 @@ class VectorMixin(_MixinBase):
             fig=self.fig,
             **opts,
         )
-        return self._render_glyph(glyph, artist="plot", **plot_style)
+        return self._render_glyph(
+            glyph,
+            artist="plot",
+            describe=LayerRecord(
+                "heatmap",
+                source=features,
+                symbology=Symbology(props={"via": "kde", "opts": asked}),
+            ),
+            **plot_style,
+        )
 
     @_skips_off_limb
     def sankey(
@@ -1477,6 +1668,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
+        asked = dict(opts)  # before the mutations below (see `RasterMixin._field`)
         gdf = self._vector_input(
             features,
             geom_types=("LineString", "MultiLineString"),
@@ -1503,4 +1695,20 @@ class VectorMixin(_MixinBase):
             fig=self.fig,
             **opts,
         )
-        return self._render_glyph(glyph, artist="plot", **plot_style)
+        return self._render_glyph(
+            glyph,
+            artist="plot",
+            describe=LayerRecord(
+                "flow",
+                source=features,
+                symbology=Symbology(
+                    props={
+                        "via": "sankey",
+                        "column": column,
+                        "scale": scale,
+                        "opts": asked,
+                    }
+                ),
+            ),
+            **plot_style,
+        )

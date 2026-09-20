@@ -15,6 +15,7 @@ from digitalearth.base.crs import OffLimbError, reproject
 from digitalearth.base.display import needs_reproject
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
+from digitalearth.base.spec import Viewport
 from digitalearth.static.scene import Scene
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,24 @@ class GeoLayerBase(Scene):
         )
         self._framed = False
         self._frame_cache: Optional[tuple] = None  # (crs, (boundary, xlim, ylim)) memo
+        self._graticule_id: Optional[str] = (
+            None  # the described graticule, so a redraw replaces it
+        )
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the map is looking, as a value.
+
+        The axes limits are deliberately *not* read here. They are whatever the last draw autoscaled them to
+        — matplotlib's unit square on an empty figure — so a view taken from them would say a map showed a
+        one-by-one metre rectangle off the coast of Africa. What the map was *asked* to show is the display
+        CRS and the domain, and those are what a figure carries.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Viewport` in the CRS this tier places data in, carrying the
+            declared domain and whether the map is drawn on a globe frame.
+        """
+        return Viewport(crs=self.crs, domain=self.domain, globe=bool(self.globe))
 
     def _needs_reproject(self, dataset: Any) -> bool:
         """Whether `dataset` must be reprojected to the display CRS.

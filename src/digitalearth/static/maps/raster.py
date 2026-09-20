@@ -13,7 +13,7 @@ from digitalearth.base.autostyle import auto_style
 from digitalearth.base.display import auto_cmap
 from digitalearth.base.preprocess import add_cyclic_column
 from digitalearth.base.sources import get_stack
-from digitalearth.base.spec import Bounds
+from digitalearth.base.spec import Bounds, Symbology
 from digitalearth.base.stretch import (
     DEFAULT_COMPOSITE_BANDS,
     ChannelLimits,
@@ -22,6 +22,7 @@ from digitalearth.base.stretch import (
 )
 from digitalearth.static.maps.base import OffLimbError
 from digitalearth.static.render_compat import relocate_flat_style
+from digitalearth.static.scene import LayerRecord
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
     from digitalearth.static.maps.base import GeoLayerBase as _MixinBase
@@ -32,6 +33,17 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 #: kept *behind* the lookup rather than in a signature, so one variable-driven default decides the colour of
 #: every backend's render of the same data.
 DEFAULT_FIELD_CMAP = "viridis"
+
+#: cleopatra's render kind -> the registered layer kind that render *is* (#303). The two vocabularies are not
+#: the same word for the same thing: ``"contour"`` names a matplotlib call, ``"contours"`` names iso-value
+#: lines traced from a band, and ``block`` draws a ``pcolormesh`` while being its own entry point. The figure
+#: records the second, so a description written here is readable by a tier that has never heard of cleopatra.
+FIELD_KINDS = {
+    "imshow": "raster",
+    "pcolormesh": "mesh",
+    "contour": "contours",
+    "contourf": "filled_contours",
+}
 
 #: Render kinds that draw contour lines/bands, i.e. the ones a resolved ``levels`` describes. ``auto_style``
 #: contributes canonical contour levels for the operational fields it recognises (ECMWF Magics), and those
@@ -53,6 +65,7 @@ class RasterMixin(_MixinBase):
         levels: Any = None,
         add_colorbar: bool = False,
         default_cmap: str = DEFAULT_FIELD_CMAP,
+        draw_band: Optional[str] = None,
         **opts,
     ) -> Any:
         """Render a raster ``dataset`` on the shared axes via ``cleopatra.ArrayGlyph`` (the canonical recipe).
@@ -72,6 +85,11 @@ class RasterMixin(_MixinBase):
                 ``auto_style`` resolved for the variable — on a contour render only.
             add_colorbar: When ``False`` (default) the Scene owns the colorbar, not the glyph.
             default_cmap: Colormap used when ``cmap`` is ``None`` *and* ``auto_style`` resolves none.
+            draw_band: Where the layer is drawn in the figure's description, overriding the band its kind
+                declares — ``"underlay"`` for a backdrop, which is what
+                :meth:`~digitalearth.static.maps.decoration.DecorationMixin.stock_img` draws. ``None``
+                (default) takes the kind's own band. It changes only the description; the matplotlib
+                ``zorder`` is set by the caller as it always was.
             **opts: Extra styling kwargs; filtered to ``ArrayGlyph``'s accepted options.
 
         Returns:
@@ -79,6 +97,9 @@ class RasterMixin(_MixinBase):
             entirely outside what the display CRS shows — an off-limb frame draws nothing rather than
             raising, so a rotation past the far side of a globe still renders.
         """
+        # Captured before the resolution below rewrites `cmap` and `levels` and `relocate_flat_style` empties
+        # `opts`: what the figure records is the call the caller made, not the call cleopatra received.
+        asked = dict(opts)
         try:
             src = self._prepare(dataset, band)
         except OffLimbError:
@@ -119,7 +140,27 @@ class RasterMixin(_MixinBase):
         )
         units = style.get("units")  # the Scene's colorbar labels itself with it (T6.2)
         return self._render_glyph(
-            glyph, kind=kind, add_colorbar=add_colorbar, label=units, **plot_style
+            glyph,
+            kind=kind,
+            add_colorbar=add_colorbar,
+            label=units,
+            describe=LayerRecord(
+                FIELD_KINDS[kind],
+                source=dataset,
+                band=draw_band,
+                symbology=Symbology(
+                    props={
+                        "via": kind,
+                        "band": band,
+                        "cmap": cmap,
+                        "levels": levels,
+                        "add_colorbar": add_colorbar,
+                        "default_cmap": default_cmap,
+                        "opts": asked,
+                    }
+                ),
+            ),
+            **plot_style,
         )
 
     def imshow(self, dataset: Any, **kwargs) -> Any:
@@ -296,6 +337,7 @@ class RasterMixin(_MixinBase):
         # cleopatra's RgbBands path is band-FIRST: it does array[indices].transpose(1, 2, 0), so feed
         # (n, rows, cols) and let it transpose back to (rows, cols, n) for imshow.
         band_first = np.moveaxis(stretch_to_unit(stack, limits), -1, 0)
+        asked = dict(opts)  # before `relocate_flat_style` empties it (see `_field`)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
             band_first,
@@ -305,7 +347,23 @@ class RasterMixin(_MixinBase):
             fig=self.fig,
             **opts,
         )
-        return self._render_glyph(glyph, **plot_style)
+        return self._render_glyph(
+            glyph,
+            describe=LayerRecord(
+                "rgb",
+                source=dataset,
+                symbology=Symbology(
+                    props={
+                        "via": "rgb_composite",
+                        "bands": tuple(bands),
+                        "mask_nodata": mask_nodata,
+                        "limits": limits,
+                        "opts": asked,
+                    }
+                ),
+            ),
+            **plot_style,
+        )
 
     def hsv_composite(
         self,
@@ -390,6 +448,7 @@ class RasterMixin(_MixinBase):
         rgb = hsv_to_rgb(stretch_to_unit(stack, limits))  # (rows, cols, 3) RGB
         # band-FIRST for cleopatra's RgbBands path (see rgb_composite); it transposes back to band-last.
         band_first = np.moveaxis(rgb, -1, 0)
+        asked = dict(opts)  # before `relocate_flat_style` empties it (see `_field`)
         plot_style = relocate_flat_style(opts)
         glyph = ArrayGlyph(
             band_first,
@@ -399,7 +458,23 @@ class RasterMixin(_MixinBase):
             fig=self.fig,
             **opts,
         )
-        return self._render_glyph(glyph, **plot_style)
+        return self._render_glyph(
+            glyph,
+            describe=LayerRecord(
+                "rgb",
+                source=dataset,
+                symbology=Symbology(
+                    props={
+                        "via": "hsv_composite",
+                        "bands": tuple(bands),
+                        "mask_nodata": mask_nodata,
+                        "limits": limits,
+                        "opts": asked,
+                    }
+                ),
+            ),
+            **plot_style,
+        )
 
     def spaghetti(self, collection: Any, band: int = 1, **opts) -> List[Any]:
         """Overlay each member of a ``DatasetCollection`` as line contours on one axes (ensemble spaghetti).

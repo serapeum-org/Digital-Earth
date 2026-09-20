@@ -27,14 +27,29 @@ from digitalearth.base.basemaps import (
     is_keyed_basemap,
 )
 from digitalearth.base.domains import resolve_domain
+from digitalearth.base.spec import Symbology
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.static import projections
+from digitalearth.static.scene import LayerRecord
 
 logger = logging.getLogger(__name__)
 
 #: Natural-Earth layers that ``cleopatra.basemap.reference`` renders as filled polygons (vs. line layers); used to
 #: translate this package's singular matplotlib style keys to the right collection keys for ``add_features``.
 _POLYGON_LAYERS = frozenset({"land", "ocean", "lakes"})
+
+#: The Natural-Earth layer name cleopatra takes -> the registered kind the figure records (#303). Only
+#: ``coastline`` differs, and it differs in both directions at once: the cross-tier kind is the plural
+#: ``coastlines`` (what :meth:`DecorationMixin.coastlines` is called), while cleopatra's dataset is the
+#: singular. Mapping it here keeps that one-word difference out of six builders.
+_NATURAL_EARTH_KINDS = {
+    "coastline": "coastlines",
+    "borders": "borders",
+    "land": "land",
+    "ocean": "ocean",
+    "lakes": "lakes",
+    "rivers": "rivers",
+}
 
 #: The cross-tier basemap names — :data:`~digitalearth.base.basemaps.DEFAULT_BASEMAP_PROVIDER` among them —
 #: keyed by their lower-cased spelling, mapped to the ``xyzservices`` dot-path
@@ -295,7 +310,25 @@ class DecorationMixin(_MixinBase):
         xy = self._reproject_point(lon, lat, crs)
         if xy is None:
             return None
-        return self.ax.text(xy[0], xy[1], s, **kwargs)
+        drawn = self.ax.text(xy[0], xy[1], s, **kwargs)
+        # Described only once the point placed: a label on the far side of a globe draws no artist, and a
+        # figure naming a layer that was never drawn is exactly the drift the seam removes.
+        self._describe_layer(
+            LayerRecord(
+                "text",
+                symbology=Symbology(
+                    props={
+                        "via": "text",
+                        "lon": float(lon),
+                        "lat": float(lat),
+                        "s": s,
+                        "crs": crs,
+                        "opts": dict(kwargs),
+                    }
+                ),
+            )
+        )
+        return drawn
 
     def annotate(
         self,
@@ -328,7 +361,24 @@ class DecorationMixin(_MixinBase):
         xy = self._reproject_point(lon, lat, crs)
         if xy is None:
             return None
-        return self.ax.annotate(s, xy=xy, xytext=xytext, **kwargs)
+        drawn = self.ax.annotate(s, xy=xy, xytext=xytext, **kwargs)
+        self._describe_layer(
+            LayerRecord(
+                "text",
+                symbology=Symbology(
+                    props={
+                        "via": "annotate",
+                        "lon": float(lon),
+                        "lat": float(lat),
+                        "s": s,
+                        "xytext": xytext,
+                        "crs": crs,
+                        "opts": dict(kwargs),
+                    }
+                ),
+            )
+        )
+        return drawn
 
     def stock_img(
         self,
@@ -369,7 +419,15 @@ class DecorationMixin(_MixinBase):
                 logger.debug("stock_img tile basemap unavailable: %s", exc)
                 return None
         with self._preserve_view():
-            im = self.imshow(dataset, cmap=cmap, default_cmap=STOCK_IMG_CMAP, **kwargs)
+            # `draw_band="underlay"` is the description's half of the `zorder` below: a backdrop is the
+            # `raster` kind drawn somewhere other than where that kind normally goes.
+            im = self.imshow(
+                dataset,
+                cmap=cmap,
+                default_cmap=STOCK_IMG_CMAP,
+                draw_band="underlay",
+                **kwargs,
+            )
             # the backdrop is off-limb: there is nothing to push behind the data
             if im is None:
                 return None
@@ -435,7 +493,12 @@ class DecorationMixin(_MixinBase):
         return rings
 
     def _fill_globe_polygons(
-        self, rings: List[np.ndarray], *, facecolor: Any, zorder: float
+        self,
+        rings: List[np.ndarray],
+        *,
+        facecolor: Any,
+        zorder: float,
+        describe: Optional[LayerRecord] = None,
     ) -> Any:
         """Fill projected rings with a solid colour on a globe (map-specific overlay; clipped at frame time).
 
@@ -448,6 +511,8 @@ class DecorationMixin(_MixinBase):
             rings: Closed, finite projected fill rings (from :meth:`_project_polygon_features`).
             facecolor: Solid fill colour.
             zorder: Draw order (ocean below land below data below coastlines).
+            describe: What the calling builder drew, for the figure. ``None`` records a caller's own
+                artist — see :meth:`~digitalearth.static.scene.Scene._add_layer`.
 
         Returns:
             The ``PolyCollection`` (registered as a Scene layer), or ``None`` when ``rings`` is empty.
@@ -459,7 +524,7 @@ class DecorationMixin(_MixinBase):
                 rings, facecolors=facecolor, edgecolors="none", zorder=zorder
             )
             self.ax.add_collection(pc)
-        return self._add_layer(None, pc)
+        return self._add_layer(None, pc, describe=describe)
 
     def _natural_earth(
         self,
@@ -489,7 +554,23 @@ class DecorationMixin(_MixinBase):
             polygon: When True, treat the layer as filled polygons on a globe (else as lines).
             zorder: Draw order (globe polygon fills; also forwarded to ``add_features`` on a flat map).
             **kwargs: Style overrides merged over ``defaults``.
+
+        Returns:
+            Whatever the path that drew it returns — the ``PolyCollection`` of a globe fill (``None`` when
+            nothing is on the near side), the list of polyline artists of a globe line layer, or the axes on
+            a flat map. All three describe one layer of the reference geography's own kind, whichever
+            matplotlib objects they happened to leave behind.
         """
+        described = LayerRecord(
+            _NATURAL_EARTH_KINDS[layer],
+            symbology=Symbology(
+                props={
+                    "via": layer,
+                    "resolution": resolution,
+                    "opts": {**defaults, **kwargs},
+                }
+            ),
+        )
         if self.globe:
             parts = natural_earth(layer, resolution)
             style = {**defaults, **kwargs}
@@ -499,11 +580,17 @@ class DecorationMixin(_MixinBase):
                     self._project_polygon_features(parts),
                     facecolor=facecolor,
                     zorder=zorder,
+                    describe=described,
                 )
             style.pop("edgecolor", None)
             style.pop("facecolor", None)
             segments = self._project_line_features(parts)
-            return [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in segments]
+            drawn = [self.ax.plot(seg[:, 0], seg[:, 1], **style)[0] for seg in segments]
+            if drawn:
+                # One layer, however many polylines the limb split it into — and none at all when the whole
+                # layer is on the far side, which is a layer that was not drawn rather than an empty one.
+                self._describe_layer(described)
+            return drawn
         kind = "polygon" if layer in _POLYGON_LAYERS else "line"
         style = _to_feature_style(kind, {**defaults, **kwargs})
         had_data = (
@@ -517,6 +604,9 @@ class DecorationMixin(_MixinBase):
             not had_data
         ):  # add_features pinned the (empty) view; fit it to the layer we just drew
             self.ax.autoscale()
+        # Described after the draw: `add_features` reaches the network for the Natural-Earth file, and a
+        # layer the tier could not fetch must not be left named in the figure.
+        self._describe_layer(described)
         return self.ax
 
     def coastlines(self, resolution: str = "110m", **kwargs) -> Any:
@@ -584,7 +674,21 @@ class DecorationMixin(_MixinBase):
         if self.globe:
             boundary = self._frame()[0]
             return self._fill_globe_polygons(
-                [np.asarray(boundary)], facecolor=color, zorder=-2.0
+                [np.asarray(boundary)],
+                facecolor=color,
+                zorder=-2.0,
+                # The disc is the ocean: filling the whole projection boundary and letting land overlay it
+                # is exact and far cheaper than clipping the global ocean polygon, and it is still `ocean`.
+                describe=LayerRecord(
+                    "ocean",
+                    symbology=Symbology(
+                        props={
+                            "via": "ocean",
+                            "resolution": resolution,
+                            "opts": {"color": color, **kwargs},
+                        }
+                    ),
+                ),
             )
         return self._natural_earth(
             "ocean", resolution, {"color": color, "edgecolor": "none"}, **kwargs
@@ -696,16 +800,60 @@ class DecorationMixin(_MixinBase):
                     f"basemap({source!r}) takes no api_key; it is a token-free source. Credentials apply "
                     f"only to a keyed preset such as 'Planet.NICFI'"
                 )
-            return add_tiles(
+            tiles = add_tiles(
                 self.ax, source=_resolve_tile_source(source), crs=self.crs, **kwargs
             )
+            return self._describe_basemap(tiles, source, preset, kwargs)
 
         keyed = get_keyed_basemap(str(source), **(preset or {}))
         keyed.check_bounds(self._coverage_extent())
         provider = _keyed_tile_provider(keyed, api_key)
         kwargs.setdefault("attribution", keyed.attribution)
         with _quiet_tile_urls():
-            return add_tiles(self.ax, source=provider, crs=self.crs, **kwargs)
+            tiles = add_tiles(self.ax, source=provider, crs=self.crs, **kwargs)
+        return self._describe_basemap(tiles, source, preset, kwargs)
+
+    def _describe_basemap(
+        self,
+        tiles: Any,
+        source: Any,
+        preset: Optional[dict],
+        options: dict,
+    ) -> Any:
+        """Record the basemap that was just drawn, and hand its artist back.
+
+        Called *after* ``add_tiles`` rather than before it: tiles come off the network, and a figure must not
+        name a basemap the tier could not fetch. No source is recorded either — a tile set is named by its
+        provider, which is a style property here, not data this process holds and could resolve an
+        ``object:`` reference to.
+
+        The credential is deliberately absent from the record. A figure is written to JSON and read back, and
+        an API key written into one leaks with it; the keyed presets read theirs from the environment, so a
+        reloaded figure asks for the same basemap and authenticates itself.
+
+        Args:
+            tiles: Whatever ``add_tiles`` returned, passed straight through.
+            source: The provider as the caller named it, or ``None`` for the shared default.
+            preset: The keyed preset's own keywords, or ``None``.
+            options: The keywords forwarded to ``add_tiles``, ``attribution`` included.
+
+        Returns:
+            ``tiles``, unchanged.
+        """
+        self._describe_layer(
+            LayerRecord(
+                "basemap",
+                symbology=Symbology(
+                    props={
+                        "via": "basemap",
+                        "source": source,
+                        "preset": dict(preset or {}),
+                        "opts": dict(options),
+                    }
+                ),
+            )
+        )
+        return tiles
 
     def _coverage_extent(self) -> Optional[Tuple[float, float, float, float]]:
         """Return the map's domain as lon/lat ``(west, south, east, north)``, or ``None`` when unset.

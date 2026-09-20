@@ -8,12 +8,21 @@ mappable via :meth:`_add_layer`. The Scene then owns figure-level decoration: on
 Because every cleopatra 0.10.0 glyph accepts a shared ``ax``/``fig`` and can suppress its own colorbar
 (``add_colorbar=False`` on ``ArrayGlyph``), the Scene can stack any number of layers on one axes and draw a
 single colorbar for the layer of interest.
+
+Beside the drawing the Scene keeps a **description** of it (#303): a
+:class:`~digitalearth.base.spec.LayerTree` of what each layer *is*, a table of where each one's data came
+from, and the view they are drawn in — read back as :attr:`Scene.figure_spec`. The two are deliberately
+separate structures: ``layers`` holds the matplotlib artists a colorbar is keyed to, and the tree holds the
+engine-neutral record a renderer could rebuild them from. A layer with no mappable to register (a tile
+basemap, a graticule, a Natural-Earth overlay drawn straight onto the axes) is described without appearing
+in ``layers``, which is why the description is not simply read off that list.
 """
 
 import os
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 
 import matplotlib.pyplot as plt
 from cleopatra.styling.styles import colorbar_legend, disjoint_legend
@@ -21,7 +30,83 @@ from cleopatra.styling.watermark import WatermarkMixin
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
+from digitalearth.base.custom import custom_kind
+from digitalearth.base.registry import forget_object, object_namespace
+from digitalearth.base.spec import (
+    DataRef,
+    FigureSpec,
+    LayerSpec,
+    LayerTree,
+    PanelSpec,
+    Symbology,
+    Viewport,
+)
 from digitalearth.static.render_compat import prepare_plot_kwargs
+
+#: The id of the one panel this tier draws into. A matplotlib ``Scene`` owns one axes, so it is one panel;
+#: the constant is named — and spelled the same as every other tier's — so a reader of :attr:`Scene.figure_spec`
+#: sees the same panel id wherever the figure was built.
+PANEL_ID: str = "main"
+
+#: The engine whose objects a caller hands this tier, for :func:`~digitalearth.base.custom.custom_kind`. An
+#: artist registered without a kind was built by the caller, not by a builder here, and matplotlib is the only
+#: engine it can have come from.
+ENGINE: str = "matplotlib"
+
+
+@dataclass(frozen=True)
+class LayerRecord:
+    """What a builder says about the layer it just drew, so the figure can describe it.
+
+    A builder draws with cleopatra; this is the engine-neutral half of the same call — the registered kind the
+    layer *is*, where its data came from, and how it looks as values rather than as the keyword soup the glyph
+    was handed.
+
+    It travels as **one value** rather than as loose keywords because
+    :meth:`Scene._render_glyph` forwards ``**plot_kwargs`` straight on to ``glyph.plot``, and cleopatra's own
+    ``kind=`` (``"imshow"``, ``"quiver"``, ``"tripcolor"``) travels in that soup: a second ``kind=`` parameter
+    beside it would be two different words spelled the same, one naming a matplotlib call and one naming a
+    layer kind.
+
+    Attributes:
+        kind: The registered, engine-neutral kind — ``"raster"``, ``"points"``, ``"choropleth"`` — never the
+            matplotlib artist class, which cannot tell a choropleth from a plain polygon fill.
+        source: What the layer draws, recorded in the figure's sources under the layer's id: a path, a URL, or
+            the pyramids object itself. ``None`` for a layer drawn from no data, such as a graticule. A u/v
+            field records the **pair**, because neither component alone draws it.
+        name: The caller's own name for the layer, used as its id and its label when it is free. ``None``
+            generates one from the kind.
+        band: Where the layer is drawn, when its kind's band is not where *this* layer belongs — a backdrop
+            raster drawn under the data, or a caller's own artist, since ``custom:matplotlib`` names the engine
+            and says nothing about what it draws. ``None`` takes the kind's band.
+        visible: Whether the layer was built visible.
+        symbology: How it looks, as values. ``None`` records an empty symbology.
+
+    Examples:
+        - The record a raster builder writes, beside the drawing it made:
+            ```python
+            >>> from digitalearth.base.spec import Symbology
+            >>> from digitalearth.static.scene import LayerRecord
+            >>> record = LayerRecord("raster", source="dem.tif", symbology=Symbology.of(opacity=0.5))
+            >>> record.kind, record.source, record.band, record.visible
+            ('raster', 'dem.tif', None, True)
+
+            ```
+        - A backdrop is the same kind drawn somewhere else, which is what ``band`` is for:
+            ```python
+            >>> from digitalearth.static.scene import LayerRecord
+            >>> LayerRecord("raster", source="relief.tif", band="underlay").band
+            'underlay'
+
+            ```
+    """
+
+    kind: str
+    source: Any = None
+    name: Optional[str] = None
+    band: Optional[str] = None
+    visible: bool = True
+    symbology: Optional[Symbology] = None
 
 
 class Scene(WatermarkMixin):
@@ -46,7 +131,7 @@ class Scene(WatermarkMixin):
         strict: Whether a layer that draws nothing raises instead of being skipped.
 
     Examples:
-        - Create a scene; it owns exactly one axes until a colorbar is added:
+        - Create a scene; it owns exactly one axes until a colorbar is added, and describes nothing yet:
             ```python
             >>> import matplotlib
             >>> matplotlib.use("Agg")
@@ -55,6 +140,8 @@ class Scene(WatermarkMixin):
             >>> len(scene.fig.axes)
             1
             >>> scene.layers
+            []
+            >>> scene.layer_ids
             []
 
             ```
@@ -101,8 +188,158 @@ class Scene(WatermarkMixin):
         #: One entry per registered layer (same order as :attr:`layers`): the label :meth:`colorbar` falls
         #: back to when the caller passes none — the layer's resolved ``units``, or ``None``.
         self._layer_labels: List[Optional[str]] = []
+        # What the scene draws, as data. `self.layers` holds the matplotlib artists — the drawing — and this
+        # holds the description each was built from, which is what a figure can be written to and read back
+        # from (#303). They are not the same list: a basemap, a graticule or a Natural-Earth overlay draws
+        # straight onto the axes with no mappable to register, and is described all the same.
+        self._layer_tree: LayerTree = LayerTree()
+        self._sources: Dict[str, DataRef] = {}
+        # Namespaced per scene: every figure restarts its layer numbering, so two maps in one session both
+        # mint `raster-1`, and one process-global object table would have the second silently re-point the
+        # first figure's captured source at its own data.
+        self._objects_ns: str = object_namespace()
+        self._id_counter: int = 0
+        self._issued_ids: Set[str] = set()
 
-    def _add_layer(self, glyph: Any, mappable: Any, label: Optional[str] = None) -> Any:
+    def _layer_id(self, prefix: str, name: Optional[str] = None) -> str:
+        """Return a unique layer id: the caller's name when they gave one, else a generated one.
+
+        Args:
+            prefix: What a generated id counts — the kind, usually.
+            name: The caller's own name for the layer, used as its id when it is free.
+
+        Returns:
+            The id. A caller's name that collides with one already issued is suffixed, because two layers
+            sharing an id makes the second unaddressable.
+        """
+        candidate = name or ""
+        while not candidate or candidate in self._issued_ids:
+            self._id_counter += 1
+            candidate = (
+                f"{name}-{self._id_counter}" if name else f"{prefix}-{self._id_counter}"
+            )
+        self._issued_ids.add(candidate)
+        return candidate
+
+    def _index_layer(
+        self,
+        layer_id: str,
+        label: Optional[str],
+        *,
+        kind: str,
+        visible: bool = True,
+        band: Optional[str] = None,
+        source: Any = None,
+        symbology: Any = None,
+    ) -> None:
+        """Record a layer so the figure describes it rather than only holding its artist.
+
+        Args:
+            layer_id: The layer's id, as :attr:`layer_ids` reports it.
+            label: What a layer switcher should call it; `None` falls back to the id.
+            kind: The registered, engine-neutral kind — `"raster"`, `"points"`, `"choropleth"` — not the
+                matplotlib artist class, which cannot tell a choropleth from a plain polygon fill.
+            visible: Whether the layer was built visible.
+            band: Where it is drawn, when its kind does not say — what a backdrop and a caller's own artist
+                need, since `custom:matplotlib` names the engine rather than what it draws.
+            source: What the layer draws, recorded under its id. `None` for a layer drawn from no data.
+            symbology: How it looks, as values rather than as the flat kwargs the glyph was handed.
+        """
+        if source is not None:
+            self._sources[layer_id] = DataRef.of(
+                source, name=f"{self._objects_ns}:{layer_id}"
+            )
+        self._layer_tree = self._layer_tree.add(
+            LayerSpec(
+                layer_id,
+                kind,
+                source_id=layer_id if source is not None else None,
+                symbology=Symbology() if symbology is None else symbology,
+                label=label or layer_id,
+                # By truthiness, because a builder decides visibility the same loose way it decides every
+                # other flag, and `LayerSpec` takes only a real boolean.
+                visible=bool(visible),
+                band=band,
+            )
+        )
+
+    def _describe_layer(self, record: LayerRecord) -> str:
+        """Record one layer in the figure and return the id it was given.
+
+        The single registration funnel: every builder in this tier ends here, whether or not it also had a
+        mappable to register in :attr:`layers`. Routing them all through one place is what keeps the kind a
+        layer is recorded under an engine-neutral noun rather than whichever cleopatra glyph happened to draw
+        it.
+
+        Args:
+            record: What the builder drew, as :class:`LayerRecord` describes it.
+
+        Returns:
+            The layer's id, which a caller-supplied name becomes when it is free.
+        """
+        # A generated id counts the kind, so `custom:matplotlib` numbers `custom-1`: a colon cannot appear in
+        # the middle of an id, and the engine name is not what a reader is counting anyway.
+        layer_id = self._layer_id(record.kind.split(":")[0], record.name)
+        self._index_layer(
+            layer_id,
+            record.name,
+            kind=record.kind,
+            visible=record.visible,
+            band=record.band,
+            source=record.source,
+            symbology=record.symbology,
+        )
+        return layer_id
+
+    @property
+    def layer_ids(self) -> List[str]:
+        """The ids of the layers this scene draws, in draw order, bottom first.
+
+        Returns:
+            One id per described layer. A layer the caller named carries that name; an unnamed one gets a
+            generated id counting the layers of its kind.
+        """
+        return list(self._layer_tree.ids)
+
+    @property
+    def figure_spec(self) -> FigureSpec:
+        """What the scene draws, as data: its layers, their sources and the view.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.FigureSpec` with one panel, :data:`PANEL_ID`, whose layers are
+            the tree in draw order and whose sources are what each builder was given.
+        """
+        tree = self._layer_tree
+        panel = PanelSpec(PANEL_ID, self.viewport, layers=tuple(tree.ids))
+        return FigureSpec(
+            panels=(panel,),
+            layers=tree,
+            sources={
+                key: ref for key, ref in self._sources.items() if key in set(tree.ids)
+            },
+        )
+
+    @property
+    def viewport(self) -> Viewport:
+        """Where the scene is looking, as a value.
+
+        A bare :class:`Scene` is a figure host rather than a map — it has no display CRS to place anything in
+        — so the view is the default one. :class:`~digitalearth.static.maps.base.GeoLayerBase` overrides this
+        with the CRS, domain and globe flag it was built with.
+
+        Returns:
+            A :class:`~digitalearth.base.spec.Viewport`.
+        """
+        return Viewport()
+
+    def _add_layer(
+        self,
+        glyph: Any,
+        mappable: Any,
+        label: Optional[str] = None,
+        *,
+        describe: Optional[LayerRecord] = None,
+    ) -> Any:
         """Register a rendered glyph and its mappable, returning the mappable.
 
         Args:
@@ -111,18 +348,38 @@ class Scene(WatermarkMixin):
             label: Optional default colorbar label for this layer (e.g. the units resolved by
                 :func:`~digitalearth.base.autostyle.auto_style`); used only when :meth:`colorbar` is
                 called without one.
+            describe: What the builder drew, recorded in the figure. ``None`` means nobody said — the artist
+                is the caller's own, so it is recorded as ``custom:matplotlib`` and described by id, kind and
+                label alone: an artist somebody built by hand has no source to reference and no symbology to
+                read back, so a figure can name it, hide it and reorder it, but never rebuild it.
 
         Returns:
             The ``mappable`` (so callers can chain or attach a colorbar).
         """
         self.layers.append((glyph, mappable))
         self._layer_labels.append(label)
+        self._describe_layer(
+            describe if describe is not None else LayerRecord(custom_kind(ENGINE))
+        )
         return mappable
 
     def _reset_layers(self) -> None:
-        """Forget every registered layer (and its default label), e.g. between animation frames."""
+        """Forget every registered layer — its default label and its description — e.g. between frames.
+
+        The description is reset with the drawing, because an animation redraws every layer on a cleared
+        axes: leaving the tree alone would have frame 50 describe 50 copies of one raster. The id counter
+        goes back with it, so each frame mints the same ids and the in-memory source each one registered is
+        replaced rather than accumulated. Whatever the dropped layers referenced is forgotten too, so a long
+        run does not hold every frame's dataset alive through the process-wide object table.
+        """
+        for ref in self._sources.values():
+            forget_object(ref.uri)
         self.layers = []
         self._layer_labels = []
+        self._layer_tree = LayerTree()
+        self._sources = {}
+        self._id_counter = 0
+        self._issued_ids = set()
 
     def _default_label(self, layer: int) -> Optional[str]:
         """Return the default colorbar label recorded for ``layer``, or ``None`` when there is none.
@@ -146,6 +403,7 @@ class Scene(WatermarkMixin):
         *plot_args: Any,
         artist: str = "im",
         label: Optional[str] = None,
+        describe: Optional[LayerRecord] = None,
         **plot_kwargs: Any,
     ) -> Any:
         """Plot ``glyph`` on the shared axes, register the produced mappable, and return it.
@@ -164,6 +422,9 @@ class Scene(WatermarkMixin):
             artist: Which return convention to read the mappable from (``"im"`` or ``"plot"``).
             label: Optional default colorbar label recorded with the layer (see :meth:`_add_layer`); it is
                 *not* forwarded to ``glyph.plot``.
+            describe: What this layer is, for the figure — see :class:`LayerRecord`. It is not forwarded to
+                ``glyph.plot`` either; it travels as one value precisely so that its ``kind`` (the layer's)
+                cannot be confused with the ``kind`` in ``plot_kwargs`` (cleopatra's render call).
             **plot_kwargs: Keyword arguments forwarded to ``glyph.plot`` (e.g. ``kind``, ``outline_only``).
 
         Returns:
@@ -174,7 +435,7 @@ class Scene(WatermarkMixin):
         mappable = glyph.im if artist == "im" else result[2]
         if deferred_alpha is not None and mappable is not None:
             mappable.set_alpha(deferred_alpha)
-        return self._add_layer(glyph, mappable, label)
+        return self._add_layer(glyph, mappable, label, describe=describe)
 
     @contextmanager
     def _preserve_view(self) -> Iterator[None]:
