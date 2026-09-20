@@ -122,7 +122,7 @@ class Renderer:
         """
         layer = figure.layers.get(layer_id)
         data = self._source_object(figure, layer)
-        drawn = drawer_for(layer.kind)(self._map, data, layer)
+        drawn: Optional[DrawnLayer] = drawer_for(layer.kind)(self._map, data, layer)
         if drawn is not None:
             self._drawn[layer_id] = drawn
         return drawn
