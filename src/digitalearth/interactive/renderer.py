@@ -46,7 +46,11 @@ class DrawnLayer:
 #:
 #: This is a growing subset while the seam is opened (#300). A kind here is built by its drawer and must not
 #: also be built by its builder; a kind not here is still built the old way and simply described.
-DRAWN_KINDS: Tuple[str, ...] = ("graticule",)
+DRAWN_KINDS: Tuple[str, ...] = (
+    "graticule",
+    "text",
+    "coastlines",
+)
 
 
 def drawer_for(kind: str) -> Any:
@@ -69,9 +73,13 @@ def drawer_for(kind: str) -> Any:
         )
     # Imported here rather than at module level: every builder module imports the map, so a
     # module-level import would close a cycle.
-    from digitalearth.interactive import projection
+    from digitalearth.interactive import decoration, projection
 
-    drawers = {"graticule": projection.draw_graticule}
+    drawers = {
+        "graticule": projection.draw_graticule,
+        "text": decoration.draw_text,
+        "coastlines": decoration.draw_coastlines,
+    }
     if set(drawers) != set(DRAWN_KINDS):
         raise KeyError(
             f"the interactive tier's drawer table and DRAWN_KINDS disagree: "

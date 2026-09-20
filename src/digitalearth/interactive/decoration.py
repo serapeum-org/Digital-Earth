@@ -22,6 +22,7 @@ from digitalearth.base.basemaps import (
     get_keyed_basemap,
     is_keyed_basemap,
 )
+from digitalearth.base.spec import LayerSpec, Symbology
 from digitalearth.base.spec.bounds import same_crs
 from digitalearth.interactive.base import _require_holoviz, _skips_off_limb
 
@@ -119,6 +120,56 @@ def _upper_placeholders(url: str) -> str:
     for lower, upper in (("{z}", "{Z}"), ("{x}", "{X}"), ("{y}", "{Y}")):
         url = url.replace(lower, upper)
     return url
+
+
+def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the GeoViews text element for a described annotation.
+
+    Args:
+        interactive_map: The map being drawn.
+        _data: Unused — an annotation has no source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = dict(layer.symbology.props)
+    element = gv.Text(
+        props["x"],
+        props["y"],
+        props["s"],
+        crs=gv.util.process_crs(interactive_map.crs),
+    )
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
+
+
+def draw_coastlines(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+    """Build the GeoViews coastline feature at the described resolution.
+
+    Args:
+        interactive_map: The map being drawn.
+        _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
+        layer: The layer's description.
+
+    Returns:
+        A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+    """
+    from digitalearth.interactive.renderer import DrawnLayer
+
+    gv, _ = _require_holoviz()
+    props = dict(layer.symbology.props)
+    # clone: .opts() would otherwise restyle the shared gv.feature.coastline singleton
+    element = gv.feature.coastline.clone().opts(scale=props["resolution"])
+    opts = dict(props.get("opts") or {})
+    if opts:
+        element = element.opts(**opts)
+    return DrawnLayer(element=element, style=opts)
 
 
 class DecorationMixin(_MixinBase):
@@ -343,15 +394,15 @@ class DecorationMixin(_MixinBase):
         Raises:
             ValueError: when the display CRS is not Web Mercator.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Refused here, because the message names the builder the caller called.
         self._require_web_mercator("coastlines")
-        # clone: .opts() would otherwise restyle the shared gv.feature.coastline singleton
-        element = gv.feature.coastline.clone().opts(scale=resolution)
-        if opts:
-            element = element.opts(**opts)
         return self.add_element(
-            element,
+            None,
             kind="coastlines",
+            symbology=Symbology(
+                props={"resolution": resolution, "opts": dict(opts or {})}
+            ),
         )
 
     def features(
@@ -656,14 +707,16 @@ class DecorationMixin(_MixinBase):
         Returns:
             The same map instance, so builder calls chain.
         """
-        gv, hv = _require_holoviz()
+        _require_holoviz()
+        # Reprojected here, because `crs=` is the caller's own argument and this is where it is answered;
+        # the element itself is built by `draw_text` from the display coordinates this records.
         (x,), (y,) = self._to_display_xy(lon, lat, crs)
-        element = gv.Text(x, y, s, crs=gv.util.process_crs(self.crs))
-        if opts:
-            element = element.opts(**opts)
         return self.add_element(
-            element,
+            None,
             kind="text",
+            symbology=Symbology(
+                props={"x": float(x), "y": float(y), "s": s, "opts": dict(opts or {})}
+            ),
         )
 
     @_skips_off_limb
