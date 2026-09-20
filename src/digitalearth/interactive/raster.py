@@ -3,11 +3,11 @@
 Owns ``image`` / ``rgb`` / ``quadmesh`` / ``contours`` / ``filled_contours`` / ``spaghetti`` (DI.1a);
 ``large_image`` viewport loading lands later (DI.14).
 
-Every builder funnels through ``self._to_display_source`` (reproject in **pyramids**, option A), then
-emits a **plain HoloViews** element (``hv.Image``/``hv.RGB``/``hv.QuadMesh``) whose coordinates are
-already in the display CRS — deliberately *not* ``gv.Image``, whose default PlateCarree ``crs`` would
-re-project already-projected coordinates at render time. NoData arrives as a masked array from pyramids
-and renders transparent (``NaN``).
+Every builder records what it draws; its drawer funnels through ``_to_display_source`` (reproject in
+**pyramids**, option A), then emits a **plain HoloViews** element (``hv.Image``/``hv.RGB``/``hv.QuadMesh``)
+whose coordinates are already in the display CRS — deliberately *not* ``gv.Image``, whose default
+PlateCarree ``crs`` would re-project already-projected coordinates at render time. NoData arrives as a
+masked array from pyramids and renders transparent (``NaN``).
 
 **Naming note** — the interactive builders use HoloViews-idiomatic names that differ from the static
 ``Map``: ``image`` (static ``imshow``), ``rgb`` (static ``rgb_composite``), ``contours``/
@@ -162,11 +162,13 @@ def draw_contours(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
     """
-    from holoviews.operation import contours as contour_op
-
     from digitalearth.interactive.renderer import DrawnLayer
 
+    # Guarded before holoviews is reached, so a missing stack is refused by the message that names the
+    # extra to install rather than by holoviews' own ImportError.
     _require_holoviz()
+    from holoviews.operation import contours as contour_op
+
     props = dict(layer.symbology.props)
     src = interactive_map._to_display_source(data, band=props["band"])
     # A caller's `levels` always wins; `None` consults autostyle for the variable's canonical contour
@@ -223,7 +225,9 @@ class RasterMixin(_MixinBase):
             its axes: a zoom that lands on a single cell leaves an axis with no spacing to derive from,
             and HoloViews answers that with `nan` bounds and a raised frame (#300).
         """
-        gv, hv = _require_holoviz()
+        # Called for its actionable ImportError; the element itself comes from `_raster_element`, which is
+        # the one place either engine module is named.
+        _require_holoviz()
         arr = _masked_to_nan(src.z.values)
         name = vname or self._vdim_name(src)
         window = getattr(src, "window", None)
@@ -467,10 +471,23 @@ class RasterMixin(_MixinBase):
     def _contour_layer(
         self, data: Any, *, band: int, levels: Any, filled: bool, **opts: Any
     ) -> Self:
-        """Shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
+        """Record the shared contour recipe: I1 image → ``holoviews.operation.contours`` → styled layer.
 
-        A caller's ``levels`` always wins; ``None`` consults ``autostyle.auto_style`` for the variable's
-        canonical contour levels (#230) before falling back to the tier's 10.
+        The one place :meth:`contours` and :meth:`filled_contours` describe their layer, so the two cannot
+        drift in what they record; :func:`draw_contours` traces it. A caller's ``levels`` always wins there;
+        ``None`` consults ``autostyle.auto_style`` for the variable's canonical contour levels (#230) before
+        falling back to the tier's 10.
+
+        Args:
+            data: A pyramids ``Dataset`` / ``NetCDF`` / ``Source``; reprojected through pyramids.
+            band: 1-based band to contour.
+            levels: Contour levels — an int (count) or explicit sequence; ``None`` auto-resolves.
+            filled: Whether the bands between the levels are filled, which is also what the layer's kind
+                records: ``"filled_contours"`` against ``"contours"``.
+            **opts: Extra HoloViews style options applied to the element.
+
+        Returns:
+            The same map instance, so builder calls chain.
         """
         _require_holoviz()
         return self.add_element(

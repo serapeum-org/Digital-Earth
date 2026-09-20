@@ -173,7 +173,8 @@ def _dispatch(kind: str, recipes: Dict[str, Any]) -> Any:
                 f"a {kind!r} layer records {via!r} as how it was drawn; this tier draws one of "
                 f"{sorted(recipes)}"
             )
-        return recipes[via](interactive_map, data, layer)
+        drawn: Optional[DrawnLayer] = recipes[via](interactive_map, data, layer)
+        return drawn
 
     return draw
 

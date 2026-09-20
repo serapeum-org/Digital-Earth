@@ -57,7 +57,9 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
     _MixinBase = object
 
 
-def _track_path(hv: Any, gdf: Any, track_column: Optional[str], by: Optional[str]) -> Any:
+def _track_path(
+    hv: Any, gdf: Any, track_column: Optional[str], by: Optional[str]
+) -> Any:
     """Connect ordered point rows into one NaN-separated path per track.
 
     Datashader aggregates a path with `Canvas.line`, which needs every track in one table separated by a
@@ -103,6 +105,10 @@ def draw_rasterize(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded reduction is not one :func:`_resolve_aggregator` knows, or is one
+            that needs a column and none was recorded.
     """
     from holoviews.operation.datashader import rasterize as _rasterize
 
@@ -135,6 +141,10 @@ def draw_datashade(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded reduction is not one :func:`_resolve_aggregator` knows, or is one
+            that needs a column and none was recorded.
     """
     from holoviews.operation.datashader import datashade as _datashade
 
@@ -232,7 +242,7 @@ class BigDataMixin(_MixinBase):
         Returns:
             The HoloViews element to rasterize.
         """
-        gv, hv = _require_holoviz()
+        _, hv = _require_holoviz()
         if isinstance(layer, hv.core.Dimensioned):
             return layer
         gdf = self._display_gdf(layer)
@@ -322,7 +332,9 @@ class BigDataMixin(_MixinBase):
             # Cast before the source is recorded, so the frame the layer draws is the categorical one the
             # reduction needs — the drawer opens what was recorded, not what the caller passed.
             layer = self._ensure_categorical(layer, column)
-        canvas: dict = {key: opts.pop(key) for key in ("width", "height") if key in opts}
+        canvas: dict = {
+            key: opts.pop(key) for key in ("width", "height") if key in opts
+        }
         return self.add_element(
             None,
             kind="points",
@@ -374,7 +386,9 @@ class BigDataMixin(_MixinBase):
             The same map instance, so builder calls chain.
         """
         _require_holoviz()
-        canvas: dict = {key: opts.pop(key) for key in ("width", "height") if key in opts}
+        canvas: dict = {
+            key: opts.pop(key) for key in ("width", "height") if key in opts
+        }
         return self.add_element(
             None,
             kind="lines",

@@ -877,7 +877,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.bigdata.BigDataMixin.deck_scatter: the GPU path for large tables.
             digitalearth.web.vector.VectorMixin.choropleth: the thematic polygon counterpart.
         """
-        layer_cls, layer_types = _require_layer_api()
+        _, layer_types = _require_layer_api()
         size = renamed_parameter(
             new="size",
             value=size,
@@ -1000,7 +1000,7 @@ class VectorMixin(_MixinBase):
         See Also:
             digitalearth.web.vector.VectorMixin.contours: traces a raster into these lines.
         """
-        layer_cls, layer_types = _require_layer_api()
+        _, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="lines")
         paint: dict = {"line-width": float(width), "line-opacity": float(opacity)}
         if column is not None:
@@ -1111,7 +1111,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.choropleth: the thematic build of this fill.
             digitalearth.web.bigdata.BigDataMixin.deck_polygons: the GPU path for large tables.
         """
-        layer_cls, layer_types = _require_layer_api()
+        _, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="polygons")
         # Auto-route to deck.gl only when no column styling would be lost; a forced big=True with a column
         # still routes but warns that the deck path drops the colouring (M1).
@@ -1250,7 +1250,7 @@ class VectorMixin(_MixinBase):
             digitalearth.web.vector.VectorMixin.polygons: the same fill layer without the thematic
                 classification.
         """
-        layer_cls, layer_types = _require_layer_api()
+        _, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="choropleth")
         values = self._require_column(gdf, column)
         paint = {

@@ -35,7 +35,7 @@ from digitalearth.base.display import (
     needs_reproject,
     to_display_source,
 )
-from digitalearth.base.registry import object_namespace
+from digitalearth.base.registry import forget_namespace, object_namespace
 from digitalearth.base.sources import get_source
 from digitalearth.base.sources.source import Source
 from digitalearth.base.spec import (
@@ -465,18 +465,37 @@ class InteractiveMapBase:
 
         The low-level entry point the capability mixins build on — every builder method ends here.
 
+        A builder of a drawn kind passes ``element=None`` and a ``symbology``: the layer is described first
+        and its drawer builds the element from that description, which is what "render from the description"
+        means here.
+
         An object you build yourself is a **custom layer**: what a figure keeps is its description — an id, the
         kind `custom:holoviews`, a label, a band and whether it is visible — and never the object, which has no
         description to write. The object stays with the scene that was handed it, so a figure saved and loaded
         again names the layer but cannot rebuild it, and another backend cannot draw it at all
-        (:mod:`digitalearth.base.custom` says which case a reader is in). The tier records custom layers in its
-        layer tree as its seam lands (#300); until then the object is drawn and nothing else is kept.
+        (:mod:`digitalearth.base.custom` says which case a reader is in).
 
         Args:
-            element: Any HoloViews/GeoViews element (or overlay-able object).
+            element: Any HoloViews/GeoViews element (or overlay-able object), or ``None`` for a layer of a
+                kind this tier draws — that one is built by its drawer from ``symbology``.
+            kind: The registered, engine-neutral kind the layer is — ``"raster"``, ``"points"``, … A kind
+                listed in :data:`~digitalearth.interactive.renderer.DRAWN_KINDS` is drawn from its
+                description; ``None`` makes it a custom layer (``custom:holoviews``).
+            name: The caller's own name for the layer, used as its id when it is free and as its label.
+            visible: Whether the layer is described as visible.
+            band: The draw-order band, for a kind that does not imply one — what a custom layer needs,
+                since the engine name says nothing about what it draws.
+            source: What the layer draws, recorded under its id; ``None`` for a layer drawn from no data.
+            symbology: How it looks, as values — the description its drawer reads.
+            at: Where the element goes in :attr:`layers`; ``None`` (the default) appends it, ``0`` puts it
+                under everything already drawn, which is what an underlay basemap or land fill needs.
+            key: A credential the layer's drawer needs, held on the map rather than in ``symbology`` so a
+                figure written to JSON carries no API key. ``None`` for every layer that needs none.
 
         Returns:
-            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``.
+            The same map instance, so builder calls chain: ``m.image(dem).tiles().coastlines()``. A drawer
+            that declined to draw the layer leaves the map exactly as it was — the description is dropped
+            again, so nothing names a layer that was never drawn.
 
         Examples:
             - Registration appends in order and returns the map for chaining (any object can
@@ -1054,7 +1073,7 @@ class InteractiveMapBase:
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        _, hv = _require_holoviz()
         obj = self.render()
         backend = "bokeh" if str(path).lower().endswith(".html") else "matplotlib"
         hv.save(obj, path, backend=backend, **kwargs)
@@ -1079,6 +1098,47 @@ class InteractiveMapBase:
         ):  # plain-script use: returning the object is all there is to show
             pass
         return obj
+
+    def close(self) -> None:
+        """Let go of the in-memory data this map registered.
+
+        The object registry is process-global and holds strong references, so a session that builds maps
+        keeps every dataset they drew until something says otherwise. This is the caller saying so. Closing
+        twice is harmless, and a map that registered nothing has nothing to forget.
+
+        An `object:` source in a `figure_spec` captured from this map cannot be opened afterwards — which is
+        what "closed" means for a figure whose data lived only in this process. Save the data and reference
+        it by path to keep such a figure readable.
+
+        Examples:
+            - A map that drew nothing closes quietly, with no engine installed:
+                ```python
+                >>> from digitalearth.interactive import InteractiveMap
+                >>> InteractiveMap().close()
+
+                ```
+
+        See Also:
+            __exit__: calls this on the way out of a ``with`` block.
+        """
+        forget_namespace(self._objects_ns)
+
+    def __enter__(self) -> Self:
+        """Enter the runtime context, returning the map.
+
+        Returns:
+            The same map, so ``with InteractiveMap() as m:`` binds this object and :meth:`close` runs on
+            the way out.
+        """
+        return self
+
+    def __exit__(self, *exc: Any) -> None:
+        """Let the map's in-memory data go on the way out of a ``with`` block.
+
+        Args:
+            *exc: The exception triple, ignored — closing is unconditional, as it is for a file.
+        """
+        self.close()
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> Any:
         """Render the map inline in notebooks by delegating to the composed HoloViews object.

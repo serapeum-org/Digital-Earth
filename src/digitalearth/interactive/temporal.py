@@ -47,9 +47,7 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     # One colour range and one colormap for the whole cube, resolved from the collection and its first
     # member, so the colorbar on the last frame is the colorbar on the first.
     clim = props.get("clim")
-    frozen_clim = (
-        clim if clim is not None else interactive_map._global_clim(data, band)
-    )
+    frozen_clim = clim if clim is not None else interactive_map._global_clim(data, band)
     cmap = props.get("cmap")
     if cmap is None and members:
         cmap = interactive_map._auto_cmap(
@@ -85,9 +83,7 @@ def draw_timecube(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
             kdims=["x", "y"],
             vdims=[interactive_map._vdim_name(src)],
         )
-        return interactive_map._styled(
-            image, common=common, bokeh={"tools": ["hover"]}
-        )
+        return interactive_map._styled(image, common=common, bokeh={"tools": ["hover"]})
 
     dmap = hv.DynamicMap(frame, kdims=[props["kdim"]]).redim.values(
         **{props["kdim"]: keys}
@@ -176,7 +172,9 @@ class TemporalMixin(_MixinBase):
             The same map instance, so builder calls chain — one ``DynamicMap`` layer is registered.
 
         Raises:
-            ValueError: when ``labels`` is given but its length differs from the member count.
+            ValueError: when ``labels`` is given but its length differs from the member count, or two of
+                its entries are equal — duplicate keys collapse the slider and make the matching frames
+                unreachable.
 
         Examples:
             - Scrub a 3-step collection with a frozen colour range:

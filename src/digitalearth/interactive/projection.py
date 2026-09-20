@@ -27,14 +27,14 @@ else:  # at runtime the mixin stays a plain class, so the composed MRO is unchan
 _GRATICULE_STEPS = (1, 5, 10, 15, 20, 30)
 
 
-def draw_graticule(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_graticule(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the GeoViews graticule element for a described grid.
 
     A graticule draws from no data: GeoViews cuts it from Natural Earth's pre-made line layers, chosen by
     the step the caller asked for, which is why `_data` is unused.
 
     Args:
-        interactive_map: The map being drawn.
+        _interactive_map: Unused — every drawer takes the map, and this one draws without it.
         _data: Unused — a graticule has no source.
         layer: The layer's description.
 
@@ -93,8 +93,11 @@ class ProjectionMixin(_MixinBase):
         Raises:
             ValueError: when a tile basemap was already requested (tiles are Web-Mercator only and
                 cannot compose with a non-Mercator projection).
+            ImportError: when the ``interactive`` extra is not installed.
         """
-        gv, hv = _require_holoviz()
+        # Called for its actionable ImportError; the cartopy projection itself is resolved through the
+        # modules GeoViews already imported (`_resolve_projection`).
+        _require_holoviz()
         if name is None:
             self._projection = None
             return self
@@ -186,7 +189,9 @@ class ProjectionMixin(_MixinBase):
         return self.add_element(
             None,
             kind="graticule",
-            symbology=Symbology(props={"via": "graticule", "step": int(step), "opts": dict(opts or {})}),
+            symbology=Symbology(
+                props={"via": "graticule", "step": int(step), "opts": dict(opts or {})}
+            ),
         )
 
     @staticmethod

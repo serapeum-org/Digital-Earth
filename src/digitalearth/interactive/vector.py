@@ -167,7 +167,7 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     crs = gv.util.process_crs(interactive_map.crs)
     column = props.get("column")
     if column:
-        reducer = reducers.get(props.get("aggregator"), np.mean)
+        reducer = reducers.get(props.get("aggregator", "mean"), np.mean)
         element = gv.HexTiles(
             (x, y, gdf[column].to_numpy()),
             kdims=["x", "y"],
@@ -177,7 +177,11 @@ def draw_hexbin(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
     else:  # no value column -> count points per hex (np.size), no value dimension
         reducer = np.size
         element = gv.HexTiles((x, y), kdims=["x", "y"], crs=crs)
-    common = {"cmap": props.get("cmap"), "colorbar": True, **dict(props.get("opts") or {})}
+    common = {
+        "cmap": props.get("cmap"),
+        "colorbar": True,
+        **dict(props.get("opts") or {}),
+    }
     element = interactive_map._styled(
         element,
         common=common,
@@ -229,6 +233,10 @@ def draw_uv_field(interactive_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded ``density`` is not in ``(0, 1]`` — the field is decimated by
+            ``round(1 / density)``, which nothing outside that range names.
     """
     from digitalearth.interactive.renderer import DrawnLayer
 
@@ -439,7 +447,7 @@ class VectorMixin(_MixinBase):
         Returns:
             The GeoViews element.
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         crs = gv.util.process_crs(self.crs)
         factory = getattr(gv, kind)
         # geodataframe first so the GeoPandas interface wins at construction; the rest keep
@@ -764,9 +772,10 @@ class VectorMixin(_MixinBase):
             cmap: A qualitative colormap name, already resolved by the caller's default.
 
         Returns:
-            tuple: ``(options, categories, labels)`` — the ``color``/``cmap``/
-            ``colorbar`` options for the element, and the original values in classifier order (what
-            ``last_breaks`` records).
+            tuple: ``(options, categories, labels)`` — the ``color``/``cmap``/``colorbar`` options for the
+            element, the original values in classifier order (what ``last_breaks`` records), and the
+            relabelling the drawer applies: the column to read as discrete strings and the sentinel label
+            missing rows take, as :func:`_as_labels` reads them.
         """
         from digitalearth.base.symbology import (
             MISSING_COLOR,
@@ -1025,6 +1034,9 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
         """
         _require_holoviz()
         return self.add_element(
@@ -1064,6 +1076,9 @@ class VectorMixin(_MixinBase):
 
         Returns:
             The same map instance, so builder calls chain.
+
+        Raises:
+            ValueError: when ``density`` is not in ``(0, 1]``.
         """
         from loguru import logger
 
@@ -1230,7 +1245,7 @@ class VectorMixin(_MixinBase):
 
                 ```
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         threshold = self._resolve_big_data_threshold(
             big_data_threshold, rasterize_threshold, caller="InteractiveMap.trimesh()"
         )
@@ -1275,7 +1290,7 @@ class VectorMixin(_MixinBase):
         """
         import numpy as np
 
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         crs = gv.util.process_crs(self.crs)
         if all(hasattr(data, attr) for attr in ("node_x", "node_y", "fan_triangles")):
             x = np.asarray(data.node_x)
@@ -1429,6 +1444,7 @@ class VectorMixin(_MixinBase):
                 }
             ),
         )
+
     def flow(
         self, nodes: Any, edges: Any, *, weight: Optional[str] = None, **opts: Any
     ) -> Self:

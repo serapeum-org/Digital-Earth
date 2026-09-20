@@ -132,6 +132,11 @@ def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
 
     Returns:
         A :class:`~digitalearth.interactive.renderer.DrawnLayer`.
+
+    Raises:
+        ValueError: when the recorded provider names no tile service :meth:`DecorationMixin._build_tiles`
+            knows, or carries preset keywords a non-keyed provider takes none of.
+        ImportError: when the recorded provider needs a credential and the map holds none for this layer.
     """
     from digitalearth.interactive.renderer import DrawnLayer
 
@@ -151,11 +156,11 @@ def draw_tiles(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     return DrawnLayer(element=element, style=opts)
 
 
-def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_natural_earth(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build one piece of Natural-Earth reference geography at the described resolution.
 
     Args:
-        interactive_map: The map being drawn.
+        _interactive_map: Unused — every drawer takes the map, and this one draws without it.
         _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
         layer: The layer's description.
 
@@ -167,8 +172,8 @@ def draw_natural_earth(interactive_map: Any, _data: Any, layer: LayerSpec) -> An
     gv, _ = _require_holoviz()
     props = dict(layer.symbology.props)
     # clone: .opts() would otherwise restyle the shared gv.feature singleton
-    element = getattr(gv.feature, props["feature"]).clone().opts(
-        scale=props["resolution"]
+    element = (
+        getattr(gv.feature, props["feature"]).clone().opts(scale=props["resolution"])
     )
     opts = dict(props.get("opts") or {})
     if opts:
@@ -236,11 +241,11 @@ def draw_text(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     return DrawnLayer(element=element, style=opts)
 
 
-def draw_coastlines(interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
+def draw_coastlines(_interactive_map: Any, _data: Any, layer: LayerSpec) -> Any:
     """Build the GeoViews coastline feature at the described resolution.
 
     Args:
-        interactive_map: The map being drawn.
+        _interactive_map: Unused — every drawer takes the map, and this one draws without it.
         _data: Unused — reference geography is cut from Natural Earth, not from a caller's source.
         layer: The layer's description.
 
@@ -394,7 +399,7 @@ class DecorationMixin(_MixinBase):
                 that is not a keyed preset.
             ImportError: when a keyed provider needs an ``api_key`` that was not supplied.
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         if is_keyed_basemap(provider):
             # A keyed preset resolves to a URL with the credential already substituted; GeoViews wants the
             # tile placeholders upper-cased.
@@ -462,7 +467,7 @@ class DecorationMixin(_MixinBase):
         Returns:
             The provider names accepted by :meth:`tiles`.
         """
-        gv, hv = _require_holoviz()
+        gv, _ = _require_holoviz()
         return sorted(gv.tile_sources.tile_sources)
 
     def coastlines(self, resolution: str = "110m", **opts: Any) -> Self:
@@ -915,8 +920,11 @@ class DecorationMixin(_MixinBase):
 
         Raises:
             ValueError: when no layer has been added yet.
+            ImportError: when the ``interactive`` extra is not installed.
         """
-        gv, hv = _require_holoviz()
+        # Called for its actionable ImportError: `show_legend` is applied for the Bokeh backend, which
+        # `_require_holoviz` is what registers.
+        _require_holoviz()
         if not self.layers:
             raise ValueError(
                 "legend() needs at least one layer — add a builder call first"
