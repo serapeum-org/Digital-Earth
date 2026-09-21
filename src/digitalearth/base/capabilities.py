@@ -379,6 +379,13 @@ class Capabilities:
                 quickmap needs 'colorbar', which backend='flat' does not support
 
                 ```
+
+        See Also:
+            reason: what to use where the refusal already has a first clause of its own. `api.py`'s
+                `"<name>= is not supported by backend=..."` and a renderer's `"the web tier does not draw
+                '<kind>' layers"` are both pinned wordings a caller reads a keyword or a kind out of, so
+                those sites compose the message themselves and take only the declared sentence from here.
+                This method is for a refusal that has no such clause to keep.
         """
         if self.supports(name):
             return

@@ -3,6 +3,11 @@
 The tier's refusals lived wherever they were raised, and `api.py` held one table about it. These cover the
 declaration that replaces that, and the bug the old per-type restyle caused: a dashboard widget gave every
 raster the style of whichever one was added last.
+
+The declaration checks come in the three shapes every tier now answers to, because a row that claims
+something nothing implements is worse than no row (`planning/refactor/backends/api-unification.md` §2,
+"`hasattr` capability lies"): every declared kind is drawn or kept, every declared channel folds to a
+HoloViews option, and the schemes are the shared classifier's (contract C4).
 """
 
 import subprocess
@@ -103,6 +108,166 @@ class TestTheDeclaration:
     def test_the_declaration_is_a_capabilities_value(self):
         """The shared type, so one support matrix can be built from every tier's row."""
         assert isinstance(CAPABILITIES, Capabilities), type(CAPABILITIES)
+
+
+class TestEveryDeclaredKindIsDrawnOrKept:
+    """Hold `CAPABILITIES.kinds` against what the tier actually draws (#294).
+
+    `test_interactive_seam.py` checks the easy direction — everything the tier draws is declared. The
+    direction that catches a lying declaration is this one: a kind claimed here with nothing behind it.
+    """
+
+    def test_the_only_declared_kind_outside_the_drawer_table_is_the_caller_s_own(self):
+        """One kind is declared and deliberately not drawn from a description; nothing else may be.
+
+        Test scenario:
+            A `custom:holoviews` layer is an element the caller built and handed to `add_element`, so there
+            is no description to rebuild it from — it is drawn by being kept. Asserting the residue is
+            *exactly* that one name is what makes this catch a kind added to the declaration with no drawer
+            and no builder: the seam test's "everything drawn is declared" passes happily for such a kind.
+        """
+        from digitalearth.interactive.renderer import DRAWN_KINDS
+
+        residue = sorted(CAPABILITIES.kinds - set(DRAWN_KINDS))
+        assert residue == ["custom:holoviews"], residue
+
+    def test_the_kind_that_is_kept_rather_than_drawn_is_recorded_by_its_builder(self):
+        """`add_element` records the caller's element under the kind the declaration claims."""
+        import holoviews as hv
+
+        built = InteractiveMap().add_element(hv.Points([(0.0, 0.0)]), name="own")
+        recorded = [layer.kind for layer in built.figure_spec.layers]
+        assert recorded == ["custom:holoviews"], recorded
+
+
+class TestEveryDeclaredChannelFolds:
+    """A channel the row claims has to reach a HoloViews option, on an element that takes it."""
+
+    def test_every_declared_channel_folds_to_its_option(self):
+        """Walk the fold itself rather than the table that describes it.
+
+        Test scenario:
+            `test_the_channels_are_the_ones_the_fold_measured` equates the declaration with
+            `CHANNEL_OPTIONS`, which is a table. This runs each entry through `fold_symbology` on an element
+            the entry says takes it, so a channel whose option stopped folding — renamed upstream, dropped
+            from an element's registered options — fails here rather than staying true on paper.
+        """
+        from digitalearth.base.spec import Symbology
+        from digitalearth.interactive.style_fold import CHANNEL_OPTIONS, fold_symbology
+
+        asked = {
+            "color": "#ff0000",
+            "opacity": 0.5,
+            "size": 6.0,
+            "width": 2.0,
+            "rotation": 30.0,
+            "tooltip": ("value",),
+        }
+        unfolded = []
+        for entry in CHANNEL_OPTIONS:
+            element = sorted(entry.elements)[0]
+            grouped, _ = fold_symbology(
+                Symbology.of(**{entry.channel: asked[entry.channel]}), element
+            )
+            reached = set(grouped["style"]) | set(grouped["plot"])
+            if entry.option not in reached:
+                unfolded.append((entry.channel, entry.option, element))
+        assert unfolded == [], f"declared channels that fold to nothing: {unfolded}"
+
+    def test_the_data_driven_channel_takes_a_column(self):
+        """`color` is the one channel this tier can drive from a field, and it folds to the column."""
+        from digitalearth.base.spec import Encoding, Scale, Symbology
+        from digitalearth.interactive.style_fold import fold_symbology
+
+        driven = Symbology(
+            encodings={
+                "color": Encoding.by_field("color", "value", scale=Scale(0.0, 1.0))
+            }
+        )
+        grouped, _ = fold_symbology(driven, "Points")
+        assert grouped["style"]["color"] == "value", grouped
+
+    def test_a_channel_outside_data_driven_refuses_a_field(self):
+        """The narrower claim has to be narrower, or `data_driven` says nothing.
+
+        Test scenario:
+            `opacity` is declared as a channel and not as a data-driven one, and the fold enforces exactly
+            that: HoloViews takes alpha as a number, so a field-driven opacity is refused rather than
+            resolved. Declaring `opacity` as `data_driven` would make this message a lie.
+        """
+        from digitalearth.base.spec import Encoding, Scale, Symbology
+        from digitalearth.interactive.style_fold import fold_symbology
+
+        assert "opacity" not in CAPABILITIES.data_driven, sorted(
+            CAPABILITIES.data_driven
+        )
+        driven = Symbology(
+            encodings={
+                "opacity": Encoding.by_field("opacity", "value", scale=Scale(0.0, 1.0))
+            }
+        )
+        with pytest.raises(ValueError, match="rather than a column"):
+            fold_symbology(driven, "Points")
+
+
+class TestTheSchemesAreTheSharedClassifiers:
+    """Contract C4 — one `scheme`/`k` pair cuts the same classes here as on every other tier."""
+
+    @pytest.mark.parametrize("scheme", sorted(CAPABILITIES.schemes - {"categorical"}))
+    def test_every_declared_scheme_cuts_classes(self, scheme):
+        """A scheme the shared classifier does not know would be a name nothing accepts.
+
+        Args:
+            scheme: The declared scheme under test.
+        """
+        from digitalearth.base.spec import Scale
+
+        assert len(Scale.breaks_of(list(range(100)), scheme, 3)) >= 2, scheme
+
+    def test_the_nominal_scheme_is_declared(self):
+        """`categorical` is not a classifier scheme; it is the nominal path, and C4 pins its meaning."""
+        assert "categorical" in CAPABILITIES.schemes, sorted(CAPABILITIES.schemes)
+
+
+class TestAKindRefusalReadsTheDeclaration:
+    """The renderer's refusal is composed from the row, not written beside it."""
+
+    def test_a_kind_the_tier_never_spoke_about_gets_no_invented_reason(self):
+        """This tier declares no layer kind absent, so its refusals carry no reason at all.
+
+        Test scenario:
+            `terrain` is another tier's kind and nothing here says anything about it. A clause appended
+            unconditionally would be the hand-written sentence #294 exists to remove, wearing the
+            declaration's clothes.
+        """
+        from digitalearth.interactive.renderer import drawer_for
+
+        assert CAPABILITIES.reason("terrain") is None, CAPABILITIES.absent
+        with pytest.raises(KeyError) as refused:
+            drawer_for("terrain")
+        assert "—" not in str(refused.value), str(refused.value)
+
+    def test_a_declared_reason_is_what_the_refusal_carries(self, monkeypatch):
+        """Swap the row for one that declares a kind absent, and the refusal says so.
+
+        Args:
+            monkeypatch: Replaces the declaration the renderer reads.
+
+        Test scenario:
+            This tier has no absent *kind* today — its `absent` names features — so there is no live case
+            to read the routing off, and a test written only against the live rows would pass just as well
+            against a refusal that ignores the declaration entirely. Handing the renderer a row that does
+            declare one is what separates "reads the declaration" from "happens to say nothing".
+        """
+        from digitalearth.interactive import renderer
+
+        monkeypatch.setattr(
+            renderer,
+            "CAPABILITIES",
+            Capabilities("interactive", absent={"terrain": "a Bokeh figure is flat"}),
+        )
+        with pytest.raises(KeyError, match="a Bokeh figure is flat"):
+            renderer.drawer_for("terrain")
 
 
 class TestEachLayerKeepsItsOwnStyle:

@@ -20,6 +20,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.interactive.capabilities import CAPABILITIES
 
 
 @dataclass(frozen=True)
@@ -190,12 +191,19 @@ def drawer_for(kind: str) -> Any:
         opened source (or `None` for a layer drawn from no source) and `layer` is its `LayerSpec`.
 
     Raises:
-        KeyError: when this tier does not draw `kind`, naming the kinds it does; or when the drawer table
-            and `DRAWN_KINDS` disagree, which is a defect in this module rather than in the caller.
+        KeyError: when this tier does not draw `kind`, naming the kinds it does and, when the tier declared
+            one, the reason it does not draw this one; or when the drawer table and `DRAWN_KINDS` disagree,
+            which is a defect in this module rather than in the caller.
     """
     if kind not in DRAWN_KINDS:
+        # The reason is the tier's own, read from the declaration rather than written again here (#294).
+        # This tier declares no layer kind absent today, so the clause is usually empty — but the rule is
+        # the same on all four tiers, and a kind it later decides against explains itself for free.
+        reason = CAPABILITIES.reason(kind)
         raise KeyError(
-            f"the interactive tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+            f"the interactive tier does not draw {kind!r} layers"
+            + (f" — {reason}" if reason else "")
+            + f"; it draws {sorted(DRAWN_KINDS)}"
         )
     recipes = _recipes()
     if set(recipes) != set(DRAWN_KINDS):

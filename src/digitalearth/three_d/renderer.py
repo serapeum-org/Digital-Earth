@@ -22,6 +22,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from digitalearth.base.custom import MissingObject, held_object
 from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.three_d.capabilities import CAPABILITIES
 
 __all__ = ["Renderer3D", "drawer_for"]
 
@@ -57,8 +58,9 @@ def drawer_for(kind: str) -> Any:
         for a layer that had nothing to draw and was skipped.
 
     Raises:
-        KeyError: for a kind this tier does not draw, naming the kinds it does — the check a figure written
-            for another backend runs into.
+        KeyError: for a kind this tier does not draw, naming the kinds it does and, when the tier declared
+            one, the reason it does not draw this one — the check a figure written for another backend runs
+            into.
 
     Examples:
         - Every kind the tier declares has a drawer:
@@ -82,8 +84,15 @@ def drawer_for(kind: str) -> Any:
     # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
     # without loading every builder behind them (review L4).
     if kind not in DRAWN_KINDS:
+        # The reason is the tier's own, read from the declaration rather than written again here (#294).
+        # This tier declares no layer kind absent today — its `absent` names features, not kinds — so the
+        # clause is usually empty; the rule is the same on all four tiers, and a kind it later decides
+        # against explains itself for free.
+        reason = CAPABILITIES.reason(kind)
         raise KeyError(
-            f"the 3-D tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+            f"the 3-D tier does not draw {kind!r} layers"
+            + (f" — {reason}" if reason else "")
+            + f"; it draws {sorted(DRAWN_KINDS)}"
         )
     # Imported here rather than at module level: every builder module imports the scene, so a module-level
     # import would close a cycle, and a scene that draws nothing should not pay for loading all of them.

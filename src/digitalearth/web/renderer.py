@@ -24,6 +24,7 @@ from typing import Any, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.web.capabilities import CAPABILITIES
 
 
 @dataclass(frozen=True)
@@ -121,8 +122,9 @@ def drawer_for(kind: str) -> Any:
         tier's drawers answer in, so the two renderers stay readable against each other.
 
     Raises:
-        KeyError: when this tier does not draw `kind`, naming the kinds it does; or when the drawer table
-            and `DRAWN_KINDS` disagree, which is a defect in this module rather than in the caller.
+        KeyError: when this tier does not draw `kind`, naming the kinds it does and, when the tier
+            declared one, the reason it does not draw this one; or when the drawer table and `DRAWN_KINDS`
+            disagree, which is a defect in this module rather than in the caller.
 
     Examples:
         - Kinds that differ only in what they mean share the drawer that draws them, because on this tier
@@ -135,21 +137,37 @@ def drawer_for(kind: str) -> Any:
             'draw_field'
 
             ```
-        - A kind another tier draws is refused by name, listing what this one does draw:
+        - A kind this tier deliberately does not have is refused with the reason it declared, so the
+          caller is told what to do instead rather than only that the kind is missing:
             ```python
             >>> from digitalearth.web.renderer import drawer_for
             >>> drawer_for("mesh")  # doctest: +ELLIPSIS
             Traceback (most recent call last):
                 ...
-            KeyError: "the web tier does not draw 'mesh' layers; it draws [...]"
+            KeyError: "the web tier does not draw 'mesh' layers — a raster is drawn as an image ...
+
+            ```
+        - A kind the tier has simply not reached yet carries no reason, because it declared none:
+            ```python
+            >>> from digitalearth.web.renderer import drawer_for
+            >>> drawer_for("terrain")  # doctest: +ELLIPSIS
+            Traceback (most recent call last):
+                ...
+            KeyError: "the web tier does not draw 'terrain' layers; it draws [...]"
 
             ```
     """
     # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
     # without loading every builder behind them.
     if kind not in DRAWN_KINDS:
+        # The reason is the tier's own, read from the declaration rather than written again here: a kind
+        # this tier decided against — a mesh, a u/v field — says why in `absent`, and a caller who reaches
+        # the refusal needs that sentence more than the list of kinds (#294).
+        reason = CAPABILITIES.reason(kind)
         raise KeyError(
-            f"the web tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+            f"the web tier does not draw {kind!r} layers"
+            + (f" — {reason}" if reason else "")
+            + f"; it draws {sorted(DRAWN_KINDS)}"
         )
     # Imported here rather than at module level: every builder module imports the map, so a module-level
     # import would close a cycle, and a map that draws nothing should not pay for loading all of them.

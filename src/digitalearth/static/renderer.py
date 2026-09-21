@@ -31,6 +31,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
 from digitalearth.base.spec._serial import thawed_value
+from digitalearth.static.capabilities import CAPABILITIES
 
 __all__ = ["DRAWN_KINDS", "DrawnLayer", "Renderer", "drawer_for", "drawing_opts"]
 
@@ -281,8 +282,14 @@ def drawer_for(kind: str) -> Any:
     # Before the imports: the point of naming the kinds separately is that what is drawable can be asked
     # without loading every builder behind them.
     if kind not in DRAWN_KINDS:
+        # The reason is the tier's own, read from the declaration rather than written again here: a kind
+        # this tier decided against says why in `absent`, and a caller who reaches the refusal needs that
+        # sentence more than the list of kinds (#294). The other three tiers refuse the same way.
+        reason = CAPABILITIES.reason(kind)
         raise KeyError(
-            f"the static tier does not draw {kind!r} layers; it draws {sorted(DRAWN_KINDS)}"
+            f"the static tier does not draw {kind!r} layers"
+            + (f" — {reason}" if reason else "")
+            + f"; it draws {sorted(DRAWN_KINDS)}"
         )
     recipes = _recipes()
     if set(recipes) != set(DRAWN_KINDS):

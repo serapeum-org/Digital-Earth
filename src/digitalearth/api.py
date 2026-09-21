@@ -20,6 +20,12 @@ that did not apply, so ``quickmap(ds, backend="web", domain="europe")`` returned
 the domain had been ignored. Now each such parameter is checked against
 :data:`BACKEND_CAPABILITIES` and refused by name — see :func:`_reject_unsupported`. Everything a backend *does*
 support is forwarded to it.
+
+**The refusal is the declared one.** Both gates — :func:`_reject_unsupported` and the renderer wrappers
+:func:`imshow`/:func:`contourf`/:func:`contour`/:func:`pcolormesh` — decide from the tier's own
+:class:`~digitalearth.base.capabilities.Capabilities`, carry the reason that declaration gave, and raise its
+:class:`~digitalearth.base.capabilities.CapabilityError`. It subclasses ``ValueError``, so a caller catching
+``ValueError`` around ``quickmap`` keeps catching it, and one that wants only this refusal can now name it.
 """
 
 import logging
@@ -28,7 +34,7 @@ from typing import Any
 from pyramids.dataset import Dataset
 from pyramids.feature import FeatureCollection
 
-from digitalearth.base.capabilities import Capabilities
+from digitalearth.base.capabilities import Capabilities, CapabilityError
 from digitalearth.base.types import PlottableData
 from digitalearth.interactive.capabilities import (
     CAPABILITIES as CAPABILITIES_INTERACTIVE,
@@ -227,8 +233,10 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             named.
 
     Raises:
-        ValueError: for the first parameter that was actually requested and that ``backend`` cannot honour.
-            The message names both, so the caller learns which half to change.
+        CapabilityError: for the first parameter that was actually requested and that ``backend`` cannot
+            honour — a ``ValueError``, so a caller catching that keeps catching this. The message names both
+            halves, so the caller learns which one to change, and carries the tier's own reason when it
+            declared one.
 
     Examples:
         - A domain means nothing to the web tier, and saying so beats returning a world map:
@@ -282,7 +290,7 @@ def _reject_unsupported(backend: str, **passed: Any) -> None:
             if name in BACKEND_CAPABILITIES[other]
         )
         reason = _refusal_reason(backend, name)
-        raise ValueError(
+        raise CapabilityError(
             f"{name}= is not supported by backend={backend!r}; "
             + (f"{reason}. " if reason else "")
             + f"It is honoured by {honoured} — drop the argument, or pick one of those backends"
@@ -496,11 +504,12 @@ def quickmap(
         :class:`Scene3D` when ``backend="3d"``, or a :class:`WebMap` when ``backend="web"``.
 
     Raises:
-        ValueError: for an unknown ``backend``, or for a ``crs``/``domain``/``basemap``/``coastlines`` the
-            chosen backend cannot honour — the message names both the parameter and the backend. Also for a
-            ``kind`` naming a renderer the chosen backend does not have, for ``column`` on point input, and
-            for an empty ``FeatureCollection``, which would otherwise draw nothing in silence.
-            ``colorbar`` is never refused, since every backend honours it.
+        CapabilityError: for a ``crs``/``domain``/``basemap``/``coastlines``/``kind`` the chosen backend
+            cannot honour — the message names both the parameter and the backend, and adds the reason that
+            tier's own declaration gave. It subclasses ``ValueError``, so existing handlers still catch it.
+        ValueError: for an unknown ``backend``, for ``column`` on point input, and for an empty
+            ``FeatureCollection``, which would otherwise draw nothing in silence. ``colorbar`` is never
+            refused, since every backend honours it.
         TypeError: if ``data`` is neither a ``Dataset`` nor a ``FeatureCollection`` — and, on
             ``backend="3d"``, for a line ``FeatureCollection`` too, which has no 3-D builder.
 
@@ -1030,6 +1039,11 @@ def _method(name: str):
     keyword the caller never typed (review L5). The wrapper answers for its own injection instead, naming
     itself and the call that does work.
 
+    Its refusal is the declared one, like :func:`_reject_unsupported`'s: the tier that has no
+    ``raster_renderer`` said why in its own `absent`, and that sentence is carried here rather than
+    rewritten. A wrapper is the one gate a caller reaches without naming ``kind=``, so without the reason
+    they were told a renderer is missing and never what the tier does instead.
+
     Args:
         name: The ``Map`` renderer the wrapper draws with, also the wrapper's own name.
 
@@ -1046,9 +1060,11 @@ def _method(name: str):
                 for other in sorted(BACKEND_CAPABILITIES)
                 if "kind" in BACKEND_CAPABILITIES[other]
             )
-            raise ValueError(
+            reason = _refusal_reason(backend, "kind")
+            raise CapabilityError(
                 f"{name}() draws with the {name!r} renderer, which backend={backend!r} does not have; "
-                f"it is honoured by {honoured} — call quickmap(data, backend={backend!r}) instead"
+                + (f"{reason}. " if reason else "")
+                + f"It is honoured by {honoured} — call quickmap(data, backend={backend!r}) instead"
             )
         return quickmap(data, kind=name, **kwargs)
 
@@ -1068,10 +1084,11 @@ def _method(name: str):
         The finished map :func:`quickmap` built.
 
     Raises:
-        ValueError: when ``backend=`` names a backend that has no renderer selector, since the
+        CapabilityError: when ``backend=`` names a backend that has no renderer selector, since the
             {name!r} renderer is this wrapper's own injection rather than something the caller
-            asked for; the message names the backends that do honour it, and points at
-            :func:`quickmap` for the chosen one.
+            asked for. A ``ValueError``, so catching that still works. The message carries the
+            tier's own reason for having no renderer selector, names the backends that do honour
+            one, and points at :func:`quickmap` for the chosen one.
     """
     return _fn
 

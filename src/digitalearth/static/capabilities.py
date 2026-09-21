@@ -17,6 +17,13 @@ Two fields are worth reading twice, because they are where this tier differs mos
   unsupported rather than pretends to do.
 - **`export_vector` is this tier's alone.** A matplotlib figure is written as PDF, SVG or EPS; the other
   three draw onto a canvas and say so in their own `absent`.
+**Unlike the other three tiers, this module does not promise an engine-free import.** `three_d`,
+`web` and `interactive` keep their declaration readable without pyvista, maplibre or holoviews,
+because each of those is an optional extra and `api.py` has to answer for a backend nobody installed.
+matplotlib is a core dependency, and `digitalearth.static` imports `Map` eagerly, so importing this
+module loads it. There is nothing to defer: a caller who can import `digitalearth` at all already has
+matplotlib (#294).
+
 """
 
 from digitalearth.base.capabilities import Capabilities
