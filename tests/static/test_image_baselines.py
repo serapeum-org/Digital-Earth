@@ -438,3 +438,23 @@ def test_grid_panels_with_shared_colorbar(dataset):
     maps[1].contourf(dataset, cmap="viridis", levels=6)
     shared_colorbar(fig, first, maps, label="accumulation")
     return fig
+
+
+@pytest.mark.mpl_image_compare(**_BASELINE)
+def test_composed_field_and_contours(dataset):
+    """Two clearing glyph renders on one axes both survive into the picture.
+
+    Test scenario:
+        The other 18 baselines each put at most one clearing glyph on an axes — the multi-layer ones layer a
+        graticule, a Natural-Earth overlay or a basemap over a single render, and the grid figure uses two
+        axes. So none of them could catch a layer that silently replaced another, which is exactly what the
+        tier did before #313: `imshow` then `contour` left the raster gone and the isolines on white. This
+        is the case the visual suite could not see.
+
+    Returns:
+        Figure: the rendered map.
+    """
+    m = Map(crs=dataset.epsg, figsize=_FIGSIZE)
+    m.imshow(dataset, cmap="viridis")
+    m.contour(dataset, cmap="autumn", levels=6)
+    return m.fig
