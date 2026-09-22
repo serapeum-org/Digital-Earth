@@ -1207,3 +1207,78 @@ class TestStaticRendererConformance(RendererConformance):
     """
 
     contract = StaticContract()
+
+
+#: The tiers whose `Renderer.apply` rolls its own record back, as importable module names. The 3-D tier is
+#: deliberately absent: its rollback is the scene's `_change` (`three_d/base.py`), which re-applies the
+#: figure the scene still shows, so its `apply` has no handler of its own to agree with.
+_RENDERERS_THAT_ROLL_BACK = (
+    "digitalearth.static.renderer",
+    "digitalearth.web.renderer",
+    "digitalearth.interactive.renderer",
+)
+
+
+def _caught_by(method) -> tuple:
+    """Return the exception class names one method's `except` clauses name.
+
+    Read from the source rather than provoked, because what separates the two answers is an interruption —
+    `KeyboardInterrupt`, `SystemExit` — and raising one of those through a tier to watch it be caught is a
+    worse test than reading the clause that decides it.
+
+    Args:
+        method: The function or method to read.
+
+    Returns:
+        The class names, sorted and de-duplicated.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    tree = ast.parse(textwrap.dedent(inspect.getsource(method)))
+    return tuple(
+        sorted(
+            {
+                handler.type.id
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Try)
+                for handler in node.handlers
+                if isinstance(handler.type, ast.Name)
+            }
+        )
+    )
+
+
+class TestTheTiersAgreeOnWhatARefusalIs:
+    """`apply` rolls its record back on the way out, and the tiers disagreed on what triggers that (N2)."""
+
+    def test_every_rolling_back_apply_catches_the_same_class(self):
+        """One contract, one answer: a rollback either covers an interruption everywhere or nowhere.
+
+        Test scenario:
+            Static caught `BaseException`, web and interactive `Exception`. So a `KeyboardInterrupt` part-way
+            through a change left the static record consistent and the other two holding layers no figure
+            owned — three tiers signing one contract with two answers to what a refusal is. Cosmetic while
+            `apply` is record-only, and not once it is wired into what a viewer sees.
+        """
+        import importlib
+
+        caught = {
+            name: _caught_by(importlib.import_module(name).Renderer.apply)
+            for name in _RENDERERS_THAT_ROLL_BACK
+        }
+        assert len(set(caught.values())) == 1, (
+            f"the tiers' rollbacks catch different things: {caught}"
+        )
+
+    def test_the_class_they_agree_on_covers_an_interruption(self):
+        """Agreeing on `Exception` would be agreeing to leave the record broken by a Ctrl-C."""
+        import importlib
+
+        static = _caught_by(
+            importlib.import_module("digitalearth.static.renderer").Renderer.apply
+        )
+        assert static == ("BaseException",), (
+            f"a rollback has to survive an interruption, not only an error; static catches {static}"
+        )

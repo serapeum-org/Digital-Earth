@@ -390,7 +390,10 @@ class Renderer:
         held = dict(self._drawn)
         try:
             self._reconcile(before, after)
-        except Exception:
+        except BaseException:
+            # `BaseException`, the same class the static tier catches: what the record must survive is a
+            # change stopping part-way, and a `KeyboardInterrupt` stops it exactly as an error does. Three
+            # tiers signing one contract with two answers to "what is a refusal" is the drift (review N2).
             self._drawn = held
             raise
 
