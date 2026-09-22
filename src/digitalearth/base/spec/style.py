@@ -33,6 +33,7 @@ from digitalearth.base.spec._serial import (
     FrozenDict,
     as_mapping,
     frozen_value,
+    hashable_value,
     plain_text,
     read_entry,
     refuse_unknown,
@@ -194,14 +195,16 @@ class Symbology:
             a cache on a layer's style.
 
         Raises:
-            TypeError: if any value in it is itself unhashable — a dict held as a property,
-                say. A list is not among them: lists are stored as tuples, so ``Symbology.of(color=[1, 0, 0])``
-                hashes. Nor is a numpy array, which is stored as nested tuples of its elements.
+            TypeError: if any value in it is itself unhashable. Neither a list nor a dict is among them: a list
+                is stored as a tuple, so ``Symbology.of(color=[1, 0, 0])`` hashes, and a mapping is hashed as
+                its sorted items wherever it sits — which is what every tier needs, since each records one
+                (MapLibre's ``paint``, the resolved HoloViews style, a tile preset). Nor is a numpy array,
+                which is stored as nested tuples of its elements.
         """
         return hash(
             (
                 tuple(sorted(self.encodings.items(), key=lambda item: item[0])),
-                tuple(sorted(self.props.items(), key=lambda item: item[0])),
+                hashable_value(dict(self.props)),
             )
         )
 

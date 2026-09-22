@@ -78,6 +78,34 @@ class TestSymbology:
             "two equal symbologies must collapse to one entry"
         )
 
+    def test_a_nested_mapping_property_still_lets_the_symbology_hash(self):
+        """A property that holds a mapping must not make the style the one part of a figure that cannot hash.
+
+        Test scenario:
+            Every tier records a mapping as a property — MapLibre's `paint`, HoloViews' resolved style, a tile
+            preset — so a dict held one level down made almost every real symbology raise
+            `unhashable type: 'dict'`, while `Bounds`, `Scale`, `Selection` and `Encoding` all hash.
+            `FigureSpec.__hash__` had already met the same wall with `sources` and answered it by hashing a
+            mapping as its sorted items; this is that answer applied where the mappings actually are.
+        """
+        paint = Symbology(props={"paint": {"circle-color": "#f00", "circle-radius": 4}})
+        same = Symbology(props={"paint": {"circle-radius": 4, "circle-color": "#f00"}})
+        assert hash(paint) == hash(same), "two equal symbologies must hash alike"
+        assert len({paint, same}) == 1, "and a set must hold them once"
+
+    def test_a_nested_mapping_that_differs_is_a_different_key(self):
+        """Hashing a mapping by its items must still tell two different styles apart."""
+        red = Symbology(props={"paint": {"circle-color": "#f00"}})
+        blue = Symbology(props={"paint": {"circle-color": "#00f"}})
+        assert len({red, blue}) == 2, "two different styles must keep two entries"
+
+    def test_a_mapping_inside_a_sequence_property_hashes_too(self):
+        """The recursion has to reach a mapping wherever the description puts one."""
+        stops = Symbology(props={"stops": ({"at": 0.0}, {"at": 1.0})})
+        assert hash(stops) is not None, (
+            "a mapping inside a tuple must not break the hash"
+        )
+
     def test_a_list_property_is_copied_to_a_tuple(self):
         """A list given as a property is stored as a tuple, so the caller's later changes do not reach it.
 

@@ -526,6 +526,46 @@ def frozen_value(value: Any) -> Any:
     return value
 
 
+def hashable_value(value: Any) -> Any:
+    """Return `value` in a form that hashes, with every mapping in it as its sorted items.
+
+    The vocabulary freezes a list to a tuple so a spec holding one still hashes, but it leaves a mapping a
+    mapping — and every tier records at least one: MapLibre's `paint`, the resolved HoloViews style, a tile
+    preset. So almost every real `Symbology` raised `unhashable type: 'dict'`, while `Bounds`, `Scale`,
+    `Selection` and `Encoding` all hashed. :meth:`~digitalearth.base.spec.FigureSpec.__hash__` met the same
+    wall with its `sources` and answered it this way; this is that answer, reaching wherever a mapping is.
+
+    Args:
+        value: A stored property, or any part of one.
+
+    Returns:
+        The value with each mapping as a tuple of its sorted ``(key, value)`` pairs, applied inside sequences
+        and mappings alike. Anything else is returned as it is — a value that is unhashable for its own
+        reasons still raises when it is hashed, which is the honest outcome.
+
+    Examples:
+        - Two mappings written in a different order hash alike, because the items are sorted:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hashable_value({"b": 1, "a": 2}) == hashable_value({"a": 2, "b": 1})
+            True
+
+            ```
+        - It reaches a mapping held inside a sequence:
+            ```python
+            >>> from digitalearth.base.spec._serial import hashable_value
+            >>> hash(hashable_value(({"at": 0.0}, {"at": 1.0}))) is not None
+            True
+
+            ```
+    """
+    if isinstance(value, Mapping):
+        return tuple(sorted((key, hashable_value(item)) for key, item in value.items()))
+    if isinstance(value, tuple):
+        return tuple(hashable_value(item) for item in value)
+    return value
+
+
 def thawed_value(value: Any) -> Any:
     """Return `value` with every tuple in it, however nested, as a list.
 
