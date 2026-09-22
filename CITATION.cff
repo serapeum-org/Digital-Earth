@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "digitalearth"
+abstract: "Geospatial visualization package for rasters and vector data"
+authors:
+  - family-names: Farrag
+    given-names: Mostafa
+    email: moah.farag@gmail.com
+version: "0.10.0"
+date-released: 2026-09-09
+license: GPL-3.0
+repository-code: "https://github.com/serapeum-org/Digital-Earth"
+keywords:
+  - "matplotlib"
+  - "maps"
+  - "visualization"
+  - "GIS"
