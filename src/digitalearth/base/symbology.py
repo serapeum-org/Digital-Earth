@@ -238,13 +238,17 @@ def as_colormap(cmap: Any) -> Any:
     classified layer refused the very object the unclassified builders accept (#315).
 
     Args:
-        cmap: A registered colormap name, or a `matplotlib.colors.Colormap`.
+        cmap: A registered colormap name, or a `matplotlib.colors.Colormap`. Not a sequence of colours —
+            that is a palette, and the two callers that accept one resolve it before they ask here.
 
     Returns:
         The colormap. An object is returned as it is; a name is looked up.
 
     Raises:
         KeyError: when a name is not registered, which is matplotlib's own message naming the colormap.
+        TypeError: when `cmap` is neither a name nor a `Colormap`, because the lookup uses it as a dict key
+            and most other things have no hash — a list of colours reads as ``unhashable type: 'list'``
+            (review L9).
 
     Examples:
         - A name and the colormap it names resolve to the same ramp:
@@ -263,7 +267,7 @@ def as_colormap(cmap: Any) -> Any:
 
 
 def categorical_colors(
-    values: Any, cmap: str = _DEFAULT_CATEGORICAL_CMAP
+    values: Any, cmap: Any = _DEFAULT_CATEGORICAL_CMAP
 ) -> Tuple[List[Any], List[str]]:
     """Map the distinct values of a field to colours from a qualitative colormap (DC.8).
 
@@ -279,16 +283,19 @@ def categorical_colors(
     Args:
         values: An array-like of category labels (strings or numbers); nulls (``None``/``NaN``/``pd.NA``) are
             ignored (see :func:`is_null`).
-        cmap: A matplotlib colormap name or a `Colormap` itself; a qualitative one
-            (``"tab10"``/``"tab20"``/``"Set2"``) is preferred, but a continuous map is sampled evenly and
-            honoured too.
+        cmap: A matplotlib colormap name, a `Colormap` itself, or an already-built sequence of colours; a
+            qualitative map (``"tab10"``/``"tab20"``/``"Set2"``) is preferred, but a continuous map is
+            sampled evenly and honoured too. The three spellings are the ones :func:`sample_cmap` takes,
+            deliberately: the tiers hand a caller's ``cmap`` to whichever of the two the scheme picks, so
+            one argument has to mean one thing in both (review L9).
 
     Returns:
         tuple[list, list[str]]: ``(categories, colors)`` — the distinct categories (sorted when sortable) and a
         ``#rrggbb`` hex colour per category, aligned by index.
 
     Raises:
-        ValueError: if there are no non-null values to colour.
+        ValueError: if there are no non-null values to colour, or if `cmap` is an empty sequence — cycling
+            an empty palette would divide by zero, naming neither the argument nor this helper.
 
     Examples:
         - Distinct string categories get distinct colours:
@@ -308,6 +315,12 @@ def categorical_colors(
             >>> len(colors)
             12
 
+        - An already-built sequence of colours is the palette, exactly as it is for :func:`sample_cmap`:
+            ```python
+            >>> from digitalearth.base.symbology import categorical_colors
+            >>> categorical_colors(["a", "b", "c"], ["#ff0000", "#00ff00"])[1]
+            ['#ff0000', '#00ff00', '#ff0000']
+
             ```
     """
     from matplotlib.colors import to_hex
@@ -315,8 +328,39 @@ def categorical_colors(
     categories = _categories(values)
     if not categories:
         raise ValueError("no non-null values to colour categorically")
-    colormap = as_colormap(cmap)
     n = len(categories)
+    base_colors = _palette(cmap, n)
+    colors = [to_hex(base_colors[i % len(base_colors)]) for i in range(n)]
+    return categories, colors
+
+
+def _palette(cmap: Any, n: int) -> List[Any]:
+    """Return the colours `cmap` offers `n` categories, in the order they are handed out.
+
+    Args:
+        cmap: A colormap name, a `Colormap`, or an already-built sequence of colours.
+        n: How many categories are being coloured, for the continuous case.
+
+    Returns:
+        The palette to cycle: a sequence of colours as given; a ``ListedColormap``'s own entries; or a
+        continuous map sampled at `n` evenly-spaced points.
+
+    Raises:
+        ValueError: when `cmap` is an empty sequence, which the caller would then cycle by ``% 0``.
+    """
+    from matplotlib.colors import Colormap
+
+    # Asked in the order `sample_cmap` asks it, because a colormap is neither a name nor a sequence of
+    # colours and the two helpers have to read one argument the same way (review L9).
+    if not isinstance(cmap, (str, Colormap)):
+        given = list(cmap)
+        if not given:
+            raise ValueError(
+                "cmap is an empty sequence, so there is no colour to give a category; pass a colormap "
+                "name, a Colormap, or a non-empty sequence of colours"
+            )
+        return given
+    colormap = as_colormap(cmap)
     # Match cleopatra.styling.styles.categorize exactly: a ListedColormap exposes its palette as `.colors` and cycles;
     # a LinearSegmentedColormap has none, so sample it at n evenly-spaced points (not the first n LUT entries,
     # which on a 256-entry map are near-identical). Keeping this identical to cleopatra is what makes one cmap
@@ -324,8 +368,7 @@ def categorical_colors(
     base_colors = getattr(colormap, "colors", None)
     if base_colors is None:
         base_colors = [colormap(x) for x in np.linspace(0.0, 1.0, n)]
-    colors = [to_hex(base_colors[i % len(base_colors)]) for i in range(n)]
-    return categories, colors
+    return list(base_colors)
 
 
 def sample_cmap(cmap: Any, n: int) -> List[str]:
@@ -337,7 +380,9 @@ def sample_cmap(cmap: Any, n: int) -> List[str]:
     (only when a builder actually classifies something), so importing a tier stays engine-free.
 
     An already-built sequence of colours is returned as a plain list, untouched. That is what lets a caller
-    pass either spelling of ``cmap`` down one code path, rather than branching before every call.
+    pass either spelling of ``cmap`` down one code path, rather than branching before every call —
+    :func:`categorical_colors` reads a sequence as the same thing, a palette, so the tiers can hand one
+    caller's ``cmap`` to whichever of the two the scheme picks (review L9).
 
     Args:
         cmap: A matplotlib colormap name, a `Colormap` itself, or an already-built sequence of colours.

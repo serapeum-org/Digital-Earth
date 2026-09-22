@@ -222,3 +222,41 @@ class TestAColormapObjectIsAcceptedWhereItsNameIs:
         assert sample_cmap(given, 5) == given, (
             "an already-built sequence of colours is returned untouched, whatever n is"
         )
+
+
+class TestTheTwoHelpersReadASequenceTheSameWay:
+    """`sample_cmap` takes a sequence of colours as a palette; its neighbour raised on one (review L9)."""
+
+    def test_colouring_categories_from_a_sequence_of_colours_uses_them(self):
+        """One argument, read one way, whether the caller classifies or not.
+
+        Test scenario:
+            `sample_cmap(['#f00', '#0f0'], 2)` answers `['#f00', '#0f0']` — a sequence is a palette there —
+            while `categorical_colors(values, cmap=['#f00', '#0f0'])` reached `as_colormap`, which used the
+            list as a dict key and raised `TypeError: unhashable type: 'list'`. Two neighbours reading the
+            same argument two ways is a trap for the tier code that passes a caller's `cmap` down both.
+        """
+        _, colours = categorical_colors(["a", "b"], ["#ff0000", "#00ff00"])
+        assert colours == ["#ff0000", "#00ff00"], (
+            f"a sequence of colours must be the palette, as it is for sample_cmap; got {colours}"
+        )
+
+    def test_a_palette_shorter_than_the_categories_cycles(self):
+        """A palette is cycled the way a `ListedColormap`'s own colours are."""
+        _, colours = categorical_colors(["a", "b", "c"], ["#ff0000", "#00ff00"])
+        assert colours == ["#ff0000", "#00ff00", "#ff0000"], (
+            f"a short palette must cycle, as a ListedColormap's does; got {colours}"
+        )
+
+    def test_an_empty_palette_is_refused_by_name(self):
+        """Cycling an empty palette divides by zero, which names neither the argument nor the helper."""
+        values = ["a", "b"]
+        with pytest.raises(ValueError, match="cmap"):
+            categorical_colors(values, [])
+
+    def test_a_colormap_name_is_unaffected(self):
+        """Reading a sequence as a palette must not change what a name means."""
+        _, named = categorical_colors(["a", "b", "c"], "tab10")
+        assert len(named) == 3, (
+            f"a name still samples one colour per category; got {named}"
+        )
