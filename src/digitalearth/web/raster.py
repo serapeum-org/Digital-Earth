@@ -74,6 +74,49 @@ def _colour_limits(
         ) from None
 
 
+def _grid_pixels(data: Any) -> Optional[int]:
+    """Return how many cells a raster's grid holds, or ``None`` when it does not report one.
+
+    Read from the grid rather than from a band's values: the composite builder holds the warped dataset and
+    not a band, and reading one only to measure it would cost a whole band read.
+
+    Args:
+        data: A pyramids ``Dataset`` in the display CRS.
+
+    Returns:
+        ``rows * columns``, or ``None`` for an input that reports neither as a plain integer — a raster is
+        the only thing that does, and a size that cannot be measured is not worth guessing at.
+    """
+    rows, columns = getattr(data, "rows", None), getattr(data, "columns", None)
+    if isinstance(rows, int) and isinstance(columns, int):
+        return rows * columns
+    return None
+
+
+def _warn_if_large(caller: str, noun: str, pixels: Optional[int]) -> None:
+    """Warn, at the call, when a raster is too large to inline as a ``data:`` image source.
+
+    Both raster builders embed their pixels in the page as a base64 PNG, so both have the same ceiling and
+    the same advice. The warning belongs to the **builder**: a drawer runs again every time the layer is
+    drawn back from its description, so a stored composite repeated the advice once per draw for an input
+    the caller chose once — while its sibling ``field`` warned from the call (review N7).
+
+    Args:
+        caller: The builder's name, which opens the message.
+        noun: What is being inlined — a ``"band"`` or a ``"composite"``.
+        pixels: How many cells it holds, or ``None`` when that could not be measured.
+    """
+    if pixels is None or pixels <= _LARGE_RASTER_PIXELS:
+        return
+    logger.warning(
+        "{}: inlining a {}-pixel {} as a data-URI image source bloats the page; for large rasters serve "
+        "COG/XYZ tiles from pyramids instead",
+        caller,
+        pixels,
+        noun,
+    )
+
+
 def _recorded_limits(limits: Any) -> Any:
     """Return per-channel stretch limits in the spelling a figure can be written in.
 
@@ -289,13 +332,6 @@ def draw_rgb_composite(web_map: Any, data: Any, layer: LayerSpec) -> Any:
     if data is None:
         return None
     stack = get_stack(data, bands, mask=props["mask_nodata"])
-    pixels = int(stack.size // max(stack.shape[-1], 1))
-    if pixels > _LARGE_RASTER_PIXELS:
-        logger.warning(
-            "rgb_composite: inlining a {}-pixel composite as a data-URI image source bloats the page; "
-            "for large rasters serve COG/XYZ tiles from pyramids instead",
-            pixels,
-        )
     source = web_map._to_display_source(data, band=bands[0])
     y = np.asarray(source.y.values, dtype=float)
     if y.size > 1 and y[0] < y[-1]:
@@ -420,13 +456,7 @@ class RasterMixin(_MixinBase):
         # Carried for a key built from this band's values (see `_auto_units`); `None` when unknown.
         self.last_units = self._auto_units(source, units)
 
-        values = source.z.values
-        if getattr(values, "size", 0) > _LARGE_RASTER_PIXELS:
-            logger.warning(
-                "field: inlining a {}-pixel band as a data-URI image source bloats the page; for large "
-                "rasters serve COG/XYZ tiles from pyramids instead",
-                getattr(values, "size", 0),
-            )
+        _warn_if_large("field", "band", int(getattr(source.z.values, "size", 0)))
         layer_id = self._layer_id("raster", name)
         # The colour map is resolved here because `_auto_cmap` reads the band's own metadata, which is the
         # caller's request as much as `cmap=` is. The image — orientation included — is encoded by
@@ -515,6 +545,9 @@ class RasterMixin(_MixinBase):
         data = self._display_raster_or_skip(dataset, layer="rgb_composite")
         if data is None:
             return self
+        # At the call, like `field`'s: the drawer runs again on every redraw, and the size of the input is
+        # the caller's one-time choice (review N7).
+        _warn_if_large("rgb_composite", "composite", _grid_pixels(data))
         layer_id = self._layer_id("rgb", name)
         if self._index_layer(
             layer_id,

@@ -416,6 +416,36 @@ class TestTheCompositeSizeWarning:
             logger.remove(sink_id)
         assert not [r for r in records if "rgb_composite" in str(r)], records
 
+    def test_the_warning_belongs_to_the_call_and_not_to_every_draw(
+        self, dataset, monkeypatch
+    ):
+        """Review N7 — a drawer runs again on every redraw; the size of the input was chosen once.
+
+        Args:
+            dataset: The shared pyramids raster fixture.
+            monkeypatch: pytest's patcher, used to lower the ceiling rather than build a huge raster.
+
+        Test scenario:
+            `field` warns from its builder and `rgb_composite` warned from its drawer, so drawing a stored
+            composite back repeated the advice once per draw — and the two sibling builders answered the
+            same question from two different places.
+        """
+        from loguru import logger
+
+        from digitalearth.web import raster as raster_module
+
+        monkeypatch.setattr(raster_module, "_LARGE_RASTER_PIXELS", 1)
+        records, sink_id = self._capture()
+        try:
+            built = WebMap().rgb_composite(dataset, bands=(1, 1, 1))
+            after_building = len([r for r in records if "rgb_composite" in str(r)])
+            figure = built.figure_spec
+            WebMap()._renderer.draw_layer(figure, figure.layers.ids[0])
+            after_redrawing = len([r for r in records if "rgb_composite" in str(r)])
+        finally:
+            logger.remove(sink_id)
+        assert (after_building, after_redrawing) == (1, 1), records
+
 
 class TestNorthUpOrientation:
     """PNG row 0 is the northern edge, so a source whose rows run south-first has to be flipped."""
