@@ -30,6 +30,7 @@ from digitalearth.interactive.base import (
     describe,
     describe_style,
     held_props,
+    style_value,
 )
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -783,7 +784,7 @@ class VectorMixin(_MixinBase):
             common.update(
                 {
                     "color": column,
-                    "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                    "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
                     "colorbar": True,
                 }
             )

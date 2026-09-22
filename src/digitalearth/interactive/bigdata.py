@@ -20,6 +20,7 @@ from digitalearth.interactive.base import (
     cmap_name,
     describe,
     held_props,
+    style_value,
 )
 
 #: Datashader reduction names accepted as ``aggregator=`` strings. ``count`` needs no column; the rest
@@ -323,7 +324,7 @@ class BigDataMixin(_MixinBase):
                     "dynamic": dynamic,
                     "canvas": canvas,
                     "common": {
-                        "cmap": describe(held, "cmap", cmap, cmap_name(cmap)),
+                        "cmap": style_value(held, "cmap", cmap, cmap_name(cmap)),
                         "colorbar": True,
                     },
                 }

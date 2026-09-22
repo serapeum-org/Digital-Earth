@@ -165,6 +165,86 @@ def _builder_calls(dataset, collection, point_fc, polygon_fc):
     }
 
 
+class TestAHeldColormapStillReachesTheEngine:
+    """Holding a value beside the layer must not stop the drawer from using it (round 2, H4)."""
+
+    #: A colormap matplotlib does not know, so its *name* cannot stand in for the object anywhere.
+    RAMP = ("#ff0000", "#00ff00", "#0000ff")
+
+    @staticmethod
+    def _engine_cmap(element):
+        """Return the colormap the engine will draw an element with.
+
+        Args:
+            element: A HoloViews element the map has drawn.
+
+        Returns:
+            The `cmap` HoloViews holds for it, which is what Bokeh renders from.
+        """
+        import holoviews as hv
+
+        return hv.Store.lookup_options("bokeh", element, "style").kwargs.get("cmap")
+
+    def _drawn_from_the_ramp(self, element):
+        """Whether an element is coloured by the caller's ramp, passed whole or sampled.
+
+        Args:
+            element: The drawn element.
+
+        Returns:
+            `True` when the engine holds the ramp itself, or colours taken from it — a graduated layer
+            samples the ramp into one colour per class rather than handing the object over.
+        """
+        drawn = self._engine_cmap(element)
+        if list(getattr(drawn, "colors", ())) == list(self.RAMP):
+            return True
+        sampled = list(drawn) if isinstance(drawn, (list, tuple)) else []
+        return bool(sampled) and set(sampled) <= set(self.RAMP)
+
+    @pytest.mark.parametrize(
+        "builder", ["points", "polygons", "choropleth", "rasterize"]
+    )
+    def test_the_caller_s_colormap_reaches_the_drawn_element(
+        self, new_map, point_fc, polygon_fc, builder
+    ):
+        """A colormap object held beside the layer must still colour the layer.
+
+        Test scenario:
+            Describing a held value put it at the top level of the held dict, while `draw_vector` and
+            `draw_rasterize` build their style from `props["common"]` — so the object was held and never
+            read, and HoloViews drew its own default. The two tests written alongside that code asserted
+            on the *description* and used a registered colormap, whose name makes the description right
+            while the draw stays wrong, so the whole suite stayed green. This one reads the engine, with a
+            colormap matplotlib does not know.
+
+        Args:
+            new_map: The map factory.
+            point_fc: A point collection.
+            polygon_fc: A polygon collection.
+            builder: The builder under test.
+        """
+        from matplotlib.colors import ListedColormap
+
+        ramp = ListedColormap(list(self.RAMP), name="homemade-ramp")
+        interactive_map = new_map()
+        if builder == "points":
+            interactive_map.points(point_fc, value_column="fid", cmap=ramp)
+        elif builder == "polygons":
+            interactive_map.polygons(polygon_fc, column="fid", cmap=ramp)
+        elif builder == "choropleth":
+            interactive_map.choropleth(
+                polygon_fc, "fid", scheme="quantiles", k=2, cmap=ramp
+            )
+        else:
+            # `dynamic=False` so the style lands on an element: a `DynamicMap` styles its frames, and
+            # reading the map itself would report nothing whatever the drawer did.
+            interactive_map.rasterize(point_fc, column="fid", cmap=ramp, dynamic=False)
+        assert self._drawn_from_the_ramp(interactive_map.layers[-1]), (
+            f"{builder} drew with {self._engine_cmap(interactive_map.layers[-1])!r}, "
+            "not with the caller's colormap"
+        )
+
+
 class TestAStyleDictDescribesItsColormapByName:
     """A resolved style dict must spell a held colormap, whichever builder resolved it."""
 

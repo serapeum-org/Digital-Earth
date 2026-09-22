@@ -213,6 +213,32 @@ def cmap_name(cmap: Any) -> Optional[str]:
     return name if isinstance(name, str) and name in colormaps else None
 
 
+#: The property every builder records its resolved style under, and every drawer reads it back from.
+STYLE_KEY = "common"
+
+
+def style_value(
+    held: Dict[str, Any], name: str, value: Any, spelling: Any = None
+) -> Any:
+    """Describe one value that belongs inside a layer's recorded style.
+
+    The sibling of :func:`describe` for a property written inside the `common` dict rather than beside it.
+    Which one a builder wants is decided by where it records the value, because that is where its drawer
+    reads it back: a value held at the top level while the drawer reads `props["common"]` is held and never
+    used, and the engine quietly draws its own default instead (round 2, H4).
+
+    Args:
+        held: The values held beside this layer.
+        name: The property's name, under which the drawer reads it back.
+        value: The caller's value.
+        spelling: What to describe a held value as — a colormap's registered name, say.
+
+    Returns:
+        The value to record inside the style.
+    """
+    return describe(held.setdefault(STYLE_KEY, {}), name, value, spelling)
+
+
 def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any]:
     """Describe a whole resolved style dict, spelling a colormap by its name.
 
@@ -229,8 +255,13 @@ def describe_style(held: Dict[str, Any], style: Dict[str, Any]) -> Dict[str, Any
     Returns:
         The style to record in `Symbology.props`, with each value described.
     """
+    # Held under the same key the description writes, because that is the key the drawers read: a style
+    # value kept at the top level of `held` was merged back at the top level of `props`, while every drawer
+    # builds its style from `props["common"]`. So the caller's colormap was held and never used, and the
+    # engine drew its own default (round 2, H4).
+    bucket = held.setdefault(STYLE_KEY, {})
     return {
-        key: describe(held, key, value, cmap_name(value) if key == "cmap" else None)
+        key: describe(bucket, key, value, cmap_name(value) if key == "cmap" else None)
         for key, value in style.items()
     }
 
@@ -276,7 +307,16 @@ def held_props(interactive_map: Any, layer: Any) -> Dict[str, Any]:
         The merged properties.
     """
     props = dict(layer.symbology.props)
-    props.update(interactive_map._held_for(layer.id))
+    for key, value in interactive_map._held_for(layer.id).items():
+        described = props.get(key)
+        if isinstance(value, Mapping) and isinstance(described, Mapping):
+            # One level deep, so a held style value joins the described ones under the same key rather
+            # than replacing the whole dict the builder recorded.
+            merged = dict(described)
+            merged.update(value)
+            props[key] = merged
+        else:
+            props[key] = value
     return props
 
 
