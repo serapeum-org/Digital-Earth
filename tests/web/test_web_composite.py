@@ -473,3 +473,90 @@ class TestNorthUpOrientation:
         assert np.allclose(captured["stack"], expected, equal_nan=True), (
             f"rows are not north-first for y={y_values}"
         )
+
+
+class TestLimitsShapedLikeSomethingElse:
+    """Both limit translators hand back what they cannot read, so the stretch refuses it in its words."""
+
+    @pytest.mark.parametrize(
+        "limits",
+        [
+            pytest.param(7.5, id="not-a-sequence-at-all"),
+            pytest.param(((1.0, 2.0, 3.0),), id="a-triple-where-a-pair-belongs"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "translate",
+        [
+            pytest.param("_recorded_limits", id="writing-it-down"),
+            pytest.param("_stretch_limits", id="reading-it-back"),
+        ],
+    )
+    def test_it_is_handed_back_untouched(self, translate, limits):
+        """Neither translator is the place a malformed ``limits=`` is diagnosed.
+
+        Args:
+            translate: The name of the translator under test.
+            limits: A value shaped like neither `None` nor a sequence of pairs.
+
+        Test scenario:
+            ``stretch_to_unit`` owns the message that tells a caller what per-channel limits look like,
+            and it names the argument. A translator that instead fails on the value first — iterating a
+            float, or unpacking a triple — replaces that message with a `TypeError` from inside the web
+            tier, about a private helper the caller never called.
+        """
+        from digitalearth.web import raster as web_raster
+
+        assert getattr(web_raster, translate)(limits) is limits, (
+            f"{translate} rewrote a value it cannot read: {limits!r}"
+        )
+
+    def test_a_bound_that_is_not_a_number_is_handed_back_too(self):
+        """A pair of the right *shape* can still hold something `float()` refuses.
+
+        Test scenario:
+            The length check passes for ``("a", "b")``, so only the conversion can catch it — and the
+            conversion is inside a comprehension whose `ValueError` would otherwise escape from
+            `rgb_composite` as if the builder itself were broken.
+        """
+        from digitalearth.web.raster import _recorded_limits
+
+        limits = (("a", "b"),)
+        assert _recorded_limits(limits) is limits, (
+            "a pair holding something that is not a number must not be rewritten"
+        )
+
+
+class TestACompositeTheViewCannotPlace:
+    """The drawer warps for itself, so it meets the off-limb answer the builder already handled."""
+
+    @pytest.fixture(autouse=True)
+    def _need_engine(self):
+        """Skip when the web extra is absent."""
+        pytest.importorskip("maplibre")
+
+    def test_the_drawer_skips_it_instead_of_stacking_nothing(
+        self, mercator_rgb, monkeypatch
+    ):
+        """A described composite can be re-drawn onto a view its data no longer reaches.
+
+        Args:
+            mercator_rgb: A three-band EPSG:3857 raster.
+            monkeypatch: Used to make the warp answer "off-limb" the way it does for real data.
+
+        Test scenario:
+            `rgb_composite` refuses an off-limb dataset before it records anything, so the drawer's own
+            copy of that guard is only reached on a re-draw — a figure captured on one view and applied to
+            another. Without it the `None` goes straight into `get_stack`, and the layer fails with an
+            `AttributeError` on `NoneType` rather than being skipped like every other off-limb layer.
+        """
+        web_map = WebMap().rgb_composite(mercator_rgb, bands=(1, 2, 3), name="rgb")
+        figure = web_map.figure_spec
+        monkeypatch.setattr(
+            WebMap,
+            "_display_raster_or_skip",
+            lambda self, dataset, *, layer: None,
+        )
+        assert web_map._renderer.draw_layer(figure, "rgb") is None, (
+            "a composite whose data cannot be placed must be skipped, not drawn"
+        )
