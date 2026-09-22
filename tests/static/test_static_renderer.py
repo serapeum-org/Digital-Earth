@@ -21,7 +21,7 @@ from pyramids.feature import FeatureCollection
 from digitalearth.base.custom import MissingObject
 from digitalearth.base.registry import _OBJECTS, band_of
 from digitalearth.base.spec import LayerSpec, Symbology
-from digitalearth.static import Map, Scene
+from digitalearth.static import Map, Scene, projections
 from digitalearth.static.capabilities import CAPABILITIES
 from digitalearth.static.renderer import (
     DRAWN_KINDS,
@@ -744,6 +744,62 @@ class TestADrawerThatFailsPartWay:
         canvas.close()
         assert registered == [kept], registered
         assert painted == [kept], painted
+
+
+class TestAGraticuleOwnsTheLinesTheFramePutOnTheAxes:
+    """A graticule is the one decoration layer that did not own what it drew.
+
+    Its lines are computed when the layer is described and put on the axes later, by the projection frame —
+    so the record the drawer returned carried no artists, and hiding or removing the layer reached nothing
+    (round 2, N5). The frame hands them over once it has drawn them; the boundary patch is the *frame's*,
+    not the graticule's, and stays out of the layer.
+    """
+
+    @staticmethod
+    def _framed_globe():
+        """Return an orthographic globe with a graticule, framed.
+
+        Returns:
+            The map, with the projection frame already applied.
+        """
+        canvas = Map(crs=projections.orthographic(-9, 39), globe=True)
+        canvas.graticule(lon_step=30.0, lat_step=30.0)
+        canvas.render()
+        return canvas
+
+    def test_the_layer_owns_one_artist_per_line(self):
+        """What the frame drew for this layer is what the layer holds."""
+        canvas = self._framed_globe()
+        owned = len(canvas._renderer.drawn["graticule-1"].artists)
+        expected = len(canvas._graticule_lines)
+        canvas.close()
+        assert owned == expected, (owned, expected)
+
+    def test_hiding_a_graticule_hides_its_lines(self):
+        """``set_visible`` toggles the artists the layer owns, which used to be none of them."""
+        canvas = self._framed_globe()
+        canvas._renderer.set_visible("graticule-1", False)
+        shown = {line.get_visible() for line in canvas.ax.lines}
+        canvas.close()
+        assert shown == {False}, shown
+
+    def test_hiding_a_graticule_leaves_the_projection_boundary_drawn(self):
+        """The boundary patch belongs to the frame, not to the graticule layer."""
+        canvas = self._framed_globe()
+        canvas._renderer.set_visible("graticule-1", False)
+        framed = [patch.get_visible() for patch in canvas.ax.patches]
+        canvas.close()
+        assert framed == [True], framed
+
+    def test_removing_a_graticule_takes_its_lines_off_the_axes(self):
+        """``remove`` reaches the same artists, so the grid really goes."""
+        canvas = self._framed_globe()
+        canvas._renderer.remove("graticule-1")
+        left = len(canvas.ax.lines)
+        attached = len(canvas.ax.patches)
+        canvas.close()
+        assert left == 0, left
+        assert attached == 1, attached
 
 
 class TestAFailingGraticuleLeavesNothingBehind:

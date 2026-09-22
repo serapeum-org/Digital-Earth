@@ -7,14 +7,14 @@ globe map, and overrides ``save``/``show`` to apply that frame before output.
 import os
 from dataclasses import replace as with_fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
 
 from cleopatra.basemap.projection import apply_projection_frame
 
 from digitalearth.base.domains import DomainLike, resolve_domain
 from digitalearth.base.spec import Bounds, LayerSpec, Symbology
 from digitalearth.static import projections
-from digitalearth.static.renderer import DrawnLayer
+from digitalearth.static.renderer import DrawnLayer, artists_added
 from digitalearth.static.scene import LayerRecord
 
 if TYPE_CHECKING:  # pragma: no cover - resolved by the type checker, never at runtime
@@ -37,8 +37,10 @@ def draw_graticule(scene: Any, _data: Any, layer: LayerSpec) -> DrawnLayer:
         layer: The layer's description.
 
     Returns:
-        A :class:`~digitalearth.static.renderer.DrawnLayer` carrying the projected lines, with no artists:
-        there is nothing on the axes yet to hide or remove.
+        A :class:`~digitalearth.static.renderer.DrawnLayer` carrying the projected lines, with no artists
+        **yet**: there is nothing on the axes to hide or remove until the frame goes on. It is
+        :meth:`ProjectionMixin._apply_frame` that then hands the layer the line artists it drew, so hiding
+        or removing the graticule reaches them like any other decoration layer's.
     """
     props = layer.symbology.props
     scene._graticule_lines = projections.graticule(
@@ -242,6 +244,10 @@ class ProjectionMixin(_MixinBase):
     def _apply_frame(self) -> Any:
         """Draw the projection boundary + graticule and clip the layers to it (once, at render time).
 
+        This is also where the graticule layer is handed the artists it owns. Its lines are computed when
+        the layer is described and only put on the axes here, so the record its drawer returned carried
+        none — and hiding or removing the layer reached nothing (round 2, N5).
+
         Returns:
             The boundary patch the frame put on the axes, or ``None`` when there was nothing to do — the
             map is flat, or the frame has already been applied. It is idempotent for that reason: a scene
@@ -250,15 +256,41 @@ class ProjectionMixin(_MixinBase):
         if not self.globe or self._framed:
             return None
         boundary, xlim, ylim = self._frame()
-        patch = apply_projection_frame(
-            self.ax,
-            boundary_xy=boundary,
-            xlim=xlim,
-            ylim=ylim,
-            graticule_lines=self._graticule_lines,
-        )
+        with artists_added(self.ax) as drawn_by_frame:
+            patch = apply_projection_frame(
+                self.ax,
+                boundary_xy=boundary,
+                xlim=xlim,
+                ylim=ylim,
+                graticule_lines=self._graticule_lines,
+            )
         self._framed = True
+        # Everything but the patch: `apply_projection_frame` adds the boundary and then one line per
+        # graticule polyline, and the boundary is the *frame's* — hiding the grid must not take the globe's
+        # outline with it.
+        self._own_the_graticule(
+            tuple(artist for artist in drawn_by_frame if artist is not patch)
+        )
         return patch
+
+    def _own_the_graticule(self, artists: Tuple[Any, ...]) -> None:
+        """Give the described graticule layer the artists the projection frame drew for it.
+
+        Args:
+            artists: The line artists the frame added, in the order it added them.
+
+        Note:
+            This writes into the renderer's record of what it drew, which no public method reaches — every
+            other layer's artists are known to its drawer, and a graticule's are not. A
+            ``Renderer.attach_artists`` would be the tidier home for it.
+        """
+        layer_id = self._graticule_id
+        if layer_id is None or not artists:
+            return
+        drawn = self._renderer.drawn.get(layer_id)
+        if drawn is None:
+            return
+        self._renderer._drawn[layer_id] = with_fields(drawn, artists=artists)
 
     def render(self) -> None:
         """Apply the projection frame if this is a globe map (idempotent). Call before showing/saving."""
