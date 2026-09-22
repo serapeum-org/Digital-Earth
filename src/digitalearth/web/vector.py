@@ -570,6 +570,13 @@ class VectorMixin(_MixinBase):
             opacity: Layer opacity in `[0, 1]`.
             name: What a layer switcher calls the layer.
             visible: Whether the layer starts visible.
+
+        Raises:
+            KeyError: naming ``column`` when the traced features carry no such attribute (see
+                :meth:`_require_column`). The layer is dropped from the description again before it
+                propagates, so a refused trace leaves the map with no layer and no source.
+            ImportError: when the `web` extra is not installed, so there is no MapLibre layer API to
+                describe the layer against.
         """
         _, layer_types = _require_layer_api()
         gdf = self._display_gdf(features, method="contours")
@@ -818,7 +825,19 @@ class VectorMixin(_MixinBase):
 
     @staticmethod
     def _require_column(gdf: Any, column: str) -> Any:
-        """Return ``gdf[column]`` as a numpy array, raising a clear error when the column is absent."""
+        """Return ``gdf[column]`` as a numpy array, raising a clear error when the column is absent.
+
+        Args:
+            gdf: The feature attributes the column is read from — the display-CRS GeoDataFrame.
+            column: The attribute name the caller asked to colour or label by.
+
+        Returns:
+            The column's values as a numpy array, in feature order.
+
+        Raises:
+            KeyError: naming the column that is not there, rather than letting pandas raise from inside a
+                builder several frames deeper.
+        """
         if column not in getattr(gdf, "columns", []):
             raise KeyError(f"column {column!r} not found in the feature attributes")
         return gdf[column].to_numpy()

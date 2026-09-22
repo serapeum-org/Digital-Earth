@@ -48,7 +48,8 @@ def draw_extruded_polygons(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
 
     Raises:
-        ValueError: when the description records no `paint` for the extrusion, naming the layer, its kind and what is missing.
+        ValueError: when the description records no `paint` for the extrusion, naming the layer, its kind
+            and what is missing.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 

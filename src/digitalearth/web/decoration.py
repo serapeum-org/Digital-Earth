@@ -383,7 +383,8 @@ def draw_graticule(_web_map: Any, _data: Any, layer: LayerSpec) -> Any:
 
     Raises:
         ValueError: when the description carries none of the values the grid is generated from — its
-            two steps, its colour, width and opacity, or whether it is labelled — naming the layer, its kind and what is missing.
+            two steps, its colour, width and opacity, or whether it is labelled — naming the layer, its
+            kind and what is missing.
     """
     from digitalearth.web.renderer import DrawnLayer, derived_ids, required_props
 

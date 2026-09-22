@@ -11,6 +11,12 @@ This module is the other half. A builder now records what it drew — kind, sour
 The description becomes the single source of truth, which is what makes `to_dict`/`from_dict` round-trip a
 real figure rather than a label for one.
 
+**Which figures can be written, and which only drawn.** `to_dict` refuses an `object:` source, so a map whose
+builders were handed a GeoDataFrame or a dataset in memory describes itself and draws from that description,
+but cannot be stored; give a builder a path or a URL for a figure that survives leaving the process. The
+layers a description cannot rebuild at all — a basemap, a point cloud, terrain, a glTF model — are drawn
+straight onto the widget and are named in `DRAWN_KINDS`' own note below.
+
 **This tier rebuilds rather than mutates.** PyVista hands out a live plotter whose actors are mutated in
 place, so :mod:`digitalearth.three_d.renderer` reconciles a diff against it. MapLibre's widget is built
 fresh on every ``render()``, from the map's queue, so there is no long-lived engine object to reconcile

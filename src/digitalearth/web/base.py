@@ -454,11 +454,12 @@ class WebMapBase:
         ValueError: when ``crs`` is not EPSG:4326 (see :meth:`_validate_display_crs`).
 
     Attributes:
-        layers: What the map draws, in add (= draw) order — a **derived view**, not the map's state. A
-            layer drawn from its description resolves to the ``maplibre`` ``Layer`` the renderer built for
-            it; one still drawn the old way is the callable ``apply(widget)`` or ``Layer``/spec that was
-            queued. The map itself is described by :attr:`figure_spec` and addressed by id through
-            :attr:`layer_ids`.
+        layers: What the map draws, in **draw order** — a **derived view**, not the map's state. Draw
+            order is the layer tree's, not the order the builders were called in: a graticule sits in the
+            reference band and is listed before the data whenever it was added. A layer drawn from its
+            description resolves to the ``maplibre`` ``Layer`` the renderer built for it; one still drawn
+            the old way is the callable ``apply(widget)`` or ``Layer``/spec that was queued. The map
+            itself is described by :attr:`figure_spec` and addressed by id through :attr:`layer_ids`.
 
     Examples:
         - Construct and inspect the display configuration (needs no engine):
@@ -1006,6 +1007,11 @@ class WebMapBase:
             the centre, zoom and fitted bounds the map was asked for. The panel also holds the title and the
             furniture: the navigation, scale-bar, fullscreen, measure, layer-switcher and time-slider controls,
             each under the name #292 registers it with.
+
+            A map built from a GeoDataFrame or a dataset already in memory can be handed straight to
+            :class:`~digitalearth.web.renderer.Renderer`, but not written: `to_dict()` refuses an `object:`
+            source, since a reference into this process's memory would be unreadable everywhere else. Give a
+            builder a path or a URL to get a figure that can be stored.
 
         Examples:
             - A map describes what it drew, and where it is looking:

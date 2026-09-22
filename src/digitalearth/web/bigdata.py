@@ -49,7 +49,8 @@ def draw_heatmap(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
 
     Raises:
-        ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind and what is missing.
+        ValueError: when the description records no `paint` for the heatmap, naming the layer, its kind
+            and what is missing.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
@@ -85,7 +86,8 @@ def draw_clusters(_web_map: Any, data: Any, layer: LayerSpec) -> Any:
 
     Raises:
         ValueError: when the description records none of the values the clustering is built from —
-            its colours, its radius or the zoom it stops clustering at — naming the layer, its kind and what is missing.
+            its colours, its radius or the zoom it stops clustering at — naming the layer, its kind and
+            what is missing.
     """
     from maplibre.sources import GeoJSONSource, geopandas_to_geojson
 

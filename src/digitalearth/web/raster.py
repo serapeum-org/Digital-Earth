@@ -190,7 +190,8 @@ def _image_layer(_web_map: Any, layer: LayerSpec, url: str, coordinates: Any) ->
         A :class:`~digitalearth.web.renderer.DrawnLayer`.
 
     Raises:
-        ValueError: when the description records no `opacity` for the raster, naming the layer, its kind and what is missing.
+        ValueError: when the description records no `opacity` for the raster, naming the layer, its kind
+            and what is missing.
     """
     from digitalearth.web.renderer import DrawnLayer, required_props
 
