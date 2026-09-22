@@ -25,6 +25,7 @@ from typing import Any, Mapping, Optional, Tuple
 
 from digitalearth.base.registry import band_of
 from digitalearth.base.spec import FigureSpec, LayerSpec
+from digitalearth.base.spec._serial import thawed_value
 from digitalearth.web.capabilities import CAPABILITIES
 
 
@@ -277,7 +278,12 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
         *names: The props its drawer reads.
 
     Returns:
-        The props, as a plain dict.
+        The props, as a plain dict of the shapes MapLibre's JSON takes: every sequence a list and every
+        mapping a fresh plain dict, however nested. A description freezes its sequences to tuples so it can
+        be compared and hashed; handed to MapLibre as they are, those tuples reached the drawn layers, and
+        `WebMap.layers[i].paint["circle-color"]` read `('interpolate', ('linear',), ...)` where it had read
+        a list (review L5). Thawed here, once, so no drawer can forget to — and the recorded mappings are
+        copied rather than handed out, so a drawer never writes through to the description.
 
     Raises:
         ValueError: naming the layer, its kind and what is missing.
@@ -310,7 +316,7 @@ def required_props(layer: LayerSpec, *names: str) -> dict:
 
             ```
     """
-    props = dict(layer.symbology.props)
+    props = thawed_value(dict(layer.symbology.props))
     missing = [name for name in names if name not in props]
     if missing:
         raise ValueError(

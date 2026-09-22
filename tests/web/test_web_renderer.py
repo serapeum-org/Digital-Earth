@@ -346,6 +346,120 @@ class TestVisibilityReachesEveryLayerADescriptionDraws:
         assert shown == {}, f"{kind}: these are drawn visible though described hidden"
 
 
+def _tuples_in(value, path="") -> list:
+    """Return where a tuple sits anywhere inside `value`.
+
+    Args:
+        value: A MapLibre paint or layout value, or any part of one.
+        path: Where `value` itself sits, for the report.
+
+    Returns:
+        The path of every tuple found, outermost first — empty when there is none.
+    """
+    if isinstance(value, tuple):
+        return [path or "<root>"]
+    if isinstance(value, dict):
+        return [
+            found
+            for key, item in value.items()
+            for found in _tuples_in(item, f"{path}.{key}")
+        ]
+    if isinstance(value, list):
+        return [
+            found
+            for index, item in enumerate(value)
+            for found in _tuples_in(item, f"{path}[{index}]")
+        ]
+    return []
+
+
+#: Builder calls whose paint or layout holds a MapLibre *expression* — a nested sequence — which is where a
+#: frozen tuple would show. Every drawn kind's plain call is covered by `DESCRIBED_AND_DRAWN` as well.
+_EXPRESSION_BUILDS = {
+    "points-by-column": lambda m: m.points(_frame(), column="value"),
+    "lines-by-column": lambda m: m.lines(_frame("lines"), column="value"),
+    "polygons-by-column": lambda m: m.polygons(_frame("polygons"), column="value"),
+    "choropleth-graduated": lambda m: m.choropleth(
+        _frame("polygons"), column="value", scheme="quantiles", k=2
+    ),
+    "choropleth-categorical": lambda m: m.choropleth(
+        _frame("polygons"), column="value", scheme="categorical"
+    ),
+    "labels-with-offset": lambda m: m.labels(_frame(), "value", offset=(0.0, -1.2)),
+    "heatmap-weighted": lambda m: m.heatmap(_frame(), weight="value"),
+    "extrusion-by-column": lambda m: m.extrusion(
+        _frame("polygons"), height="value", column="value"
+    ),
+}
+
+
+def _frame(geometry: str = "points"):
+    """Return two features of one geometry type in EPSG:4326, with a numeric `value` column.
+
+    Args:
+        geometry: `"points"`, `"lines"` or `"polygons"`.
+
+    Returns:
+        A GeoDataFrame.
+    """
+    import geopandas as gpd
+    from shapely.geometry import LineString, Point, Polygon
+
+    shapes = {
+        "points": [Point(4.9, 52.4), Point(5.1, 52.1)],
+        "lines": [
+            LineString([(4.0, 52.0), (5.0, 53.0)]),
+            LineString([(5.0, 52.0), (6.0, 53.0)]),
+        ],
+        "polygons": [
+            Polygon([(4.0, 52.0), (5.0, 52.0), (5.0, 53.0), (4.0, 53.0)]),
+            Polygon([(5.0, 52.0), (6.0, 52.0), (6.0, 53.0), (5.0, 53.0)]),
+        ],
+    }
+    return gpd.GeoDataFrame({"value": [1.0, 2.0]}, geometry=shapes[geometry], crs=4326)
+
+
+class TestTheDrawnLayersCarryLists:
+    """Review L5: `WebMap.layers` hands MapLibre's JSON shapes back, not the description's frozen tuples."""
+
+    @pytest.mark.parametrize(
+        "build",
+        [*DESCRIBED_AND_DRAWN.values(), *_EXPRESSION_BUILDS.values()],
+        ids=[*DESCRIBED_AND_DRAWN, *_EXPRESSION_BUILDS],
+    )
+    def test_no_drawn_paint_or_layout_holds_a_tuple(self, build):
+        """A description freezes its sequences to tuples; what a drawer hands MapLibre is thawed back.
+
+        Args:
+            build: The builder call under test.
+
+        Test scenario:
+            The emitted page was unaffected — a tuple serialises as a JSON array — but the public
+            `layers` view changed type: `paint["circle-color"]` read `('interpolate', ('linear',), ...)`
+            where it had read a list. Every drawn layer, extra layers included, is walked for a tuple.
+        """
+        from digitalearth.web import WebMap
+
+        m = WebMap()
+        build(m)
+        found = {
+            layer.id: _tuples_in(
+                {"paint": layer.paint or {}, "layout": layer.layout or {}}
+            )
+            for built in m._renderer.drawn.values()
+            for layer in (built.layer, *built.extra_layers)
+            if not isinstance(layer, dict)
+        }
+        assert {key: paths for key, paths in found.items() if paths} == {}, found
+
+    def test_the_colour_expression_reads_back_as_a_list(self):
+        """The review's own reading: `layers[i].paint["circle-color"]` of a column-coloured layer."""
+        from digitalearth.web import WebMap
+
+        paint = WebMap().points(_frame(), column="value").layers[0].paint
+        assert paint["circle-color"][:2] == ["interpolate", ["linear"]], paint
+
+
 class TestWhatTheRendererReports:
     """The record is read by `WebMap.layers` and by the widget builder."""
 
