@@ -550,6 +550,47 @@ class TestAskingWhetherALayerIsDrawn:
         )
 
 
+class TestALayerDrawnByAProducerReadsBackHidden:
+    """A `DynamicMap` layer must answer `is_visible` about the frames it draws (round 2 `/test`)."""
+
+    def test_a_hidden_dynamic_layer_is_not_reported_as_drawn(self, dataset):
+        """Hiding a windowed raster must be visible to the read-back, not only to Bokeh.
+
+        Test scenario:
+            `_visibility_keywords` resolves a `DynamicMap` to the type of the element it produces, but the
+            read-back then looked the applied options up against the `DynamicMap` itself, whose own style
+            kwargs are empty — so the defaults won and a hidden layer answered "drawn". The hide reached
+            Bokeh correctly; only the answer was wrong, and wrong exactly for the layers the shared
+            contract's visibility check covers.
+        """
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.large_image(dataset, dynamic=True)
+            layer_id = interactive_map.layer_ids[-1]
+            interactive_map.layers[-1][
+                ()
+            ]  # realise a frame, which is what carries the style
+            interactive_map._renderer.set_visible(layer_id, False)
+            assert interactive_map._renderer.is_visible(layer_id) is False, (
+                "a hidden producer-drawn layer must read back hidden"
+            )
+        finally:
+            interactive_map.close()
+
+    def test_a_dynamic_layer_left_alone_still_reads_back_drawn(self, dataset):
+        """The fix must not make every producer-drawn layer look hidden."""
+        interactive_map = InteractiveMap()
+        try:
+            interactive_map.large_image(dataset, dynamic=True)
+            layer_id = interactive_map.layer_ids[-1]
+            interactive_map.layers[-1][()]
+            assert interactive_map._renderer.is_visible(layer_id) is True, (
+                "a layer nobody hid must read back drawn"
+            )
+        finally:
+            interactive_map.close()
+
+
 class TestAnElementBokehGivesNoWayToHide:
     """The tier says so rather than saying nothing — the silence review M4 reports, one kind narrower."""
 

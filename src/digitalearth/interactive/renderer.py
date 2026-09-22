@@ -199,7 +199,15 @@ def _is_shown(element: Any) -> bool:
     keywords = _visibility_keywords(element)
     if not keywords:
         return True
-    applied = hv.Store.lookup_options("bokeh", element, "style").kwargs
+    # Asked of the frame, not of the producer: a `DynamicMap` carries no style of its own, so looking the
+    # applied options up against it returns nothing and the defaults answer "drawn" for a layer that is
+    # hidden. `_visibility_keywords` already resolves the producer to the type it makes; this resolves it to
+    # the object that holds what was applied. Before a frame exists there is nothing to ask, and a layer
+    # nobody has drawn yet is drawn.
+    asked = element
+    if type(element).__name__ in ("DynamicMap", "HoloMap"):
+        asked = getattr(element, "last", None) or element
+    applied = hv.Store.lookup_options("bokeh", asked, "style").kwargs
     return all(bool(applied.get(keyword, True)) for keyword in keywords)
 
 
