@@ -458,6 +458,15 @@ class Renderer:
         elements the map's `render()` overlays and the figure its `figure_spec` reports are the map's own,
         and neither follows. Nothing in the tier calls it yet; wiring it into the map is Wave 7 (order 23).
 
+        **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
+        difference between two figures is read off their descriptions, and a keyword JSON cannot write
+        down — a colormap built on the spot, a callable hook — is held on the map beside the layer rather
+        than described (:func:`~digitalearth.interactive.base.describe_opts`). Two layers differing only in
+        one of those therefore compare **equal**: `diff` reports no restyle, :meth:`_reaches_holoviews`
+        answers `False`, and nothing is redrawn, although the two draw different pictures. A plainly
+        JSON-safe keyword is described and does reach here, so this is now exactly the set the writer itself
+        refuses, and no wider (review M3, M5).
+
         Args:
             before: The figure the record currently holds.
             after: The figure it should hold.

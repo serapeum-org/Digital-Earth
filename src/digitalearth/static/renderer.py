@@ -700,6 +700,14 @@ class Renderer:
         applied a figure still describes the one its builders made. Nothing in ``src/`` calls this yet —
         routing a map-level change through it is Wave 7 (order 23), and the description follows then.
 
+        **A restyle expressed only in a value the figure cannot carry is invisible to this path.** The
+        difference between two figures is read off their descriptions, and a keyword JSON cannot write
+        down — a callable, a colormap built on the spot — is held on the scene beside the layer rather than
+        described (:func:`drawing_opts`). Two layers differing only in one of those therefore compare
+        **equal**: ``diff`` reports no restyle and nothing is redrawn, although the two draw different
+        pictures. A plainly JSON-safe keyword is described and does reach here, so this is now exactly the
+        set the writer itself refuses, and no wider (review M3, M5).
+
         Args:
             before: The figure the axes currently shows.
             after: The figure it should show.
